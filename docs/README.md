@@ -95,8 +95,12 @@ start of the task, not after implementation has already started.
   - target-scoped MCP/skill runtime manifests, lazy artifact/credential
     resolution, and the Desktop/worker gap-fill boundary
 - `docs/architecture/agent-llm-auth-gateway-spec.md`
-  - centralized agent LLM auth gateway, LiteLLM routing/budget enforcement,
-    runtime grants, synced-path cutover, and sandbox agent-auth selections
+  - historical centralized agent LLM auth gateway design, runtime grants,
+    synced-path cutover, and sandbox agent-auth selections
+- `docs/architecture/bifrost-byok-onboarding-spec.md`
+  - Bifrost-backed agent LLM data plane, managed onboarding credits, BYOK
+    materialization, E2B sandbox auth application, usage import, and local
+    AWS/E2B/Bifrost validation
 - `docs/architecture/shared-sandbox-config-admin-ui-spec.md`
   - personal/shared sandbox profile configuration, admin UI ownership, public
     MCP/skill publication, and shared sandbox consumption of agent auth
@@ -135,8 +139,8 @@ start of the task, not after implementation has already started.
     admin/user configuration UI
 - `docs/architecture/agent-llm-auth-gateway-spec.md`
   - proposed centralized agent LLM auth gateway model for Proliferate managed
-    credits, BYOK credentials, synced-path auth selections, LiteLLM
-    provisioning, and sandbox runtime grants
+    credits, BYOK credentials, synced-path auth selections, and sandbox runtime
+    grants; superseded for routing by the Bifrost spec above
 - `docs/architecture/plugins-and-skills.md`
   - legacy/current-state reference for plugin packages, skill bundles,
     plugin-owned MCP servers, the plugins UI, and the current session bundle
@@ -164,10 +168,10 @@ start of the task, not after implementation has already started.
     future credential sync
 - `docs/notes/model-gateway-auth-facts.md`
   - empirical source-inspection facts for Claude, Codex, OpenCode, Gemini, and
-    LiteLLM gateway auth compatibility
+    gateway auth compatibility
 - `docs/notes/agent-gateway-phase0-compatibility.md`
-  - runnable Phase 0B proof matrix for LiteLLM team routing, Claude streaming,
-    Codex Responses, and OpenCode isolation gates
+  - runnable Phase 0B proof matrix for Bifrost routing, Claude streaming, Codex
+    Responses, and OpenCode isolation gates
 - `docs/reference/self-hosted-deploy.md`
   - canonical Docker Compose self-hosted deployment
 - `docs/reference/self-hosted-aws.md`

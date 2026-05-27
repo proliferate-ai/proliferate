@@ -58,7 +58,7 @@ export function agentAuthHarnessDescription(agentKind: string): string {
     return "Anthropic or OpenAI models - OpenCode harness";
   }
   if (agentKind === "gemini") {
-    return "Google models - Gemini CLI harness";
+    return "Google or cross-provider models - Gemini CLI harness";
   }
   return "Agent harness";
 }
@@ -77,6 +77,9 @@ export function agentAuthCredentialKindLabel(credential: AgentAuthCredential): s
     }
     if (providerKind === "openai_api_key") {
       return "OpenAI API key";
+    }
+    if (providerKind === "gemini_api_key") {
+      return "Gemini API key";
     }
     if (providerKind === "openai_compatible") {
       return "OpenAI-compatible provider";
@@ -97,6 +100,16 @@ export function agentAuthCredentialOwnerLabel(credential: AgentAuthCredential): 
     return "Organization";
   }
   return "Personal";
+}
+
+export function agentAuthCredentialDisplayLabel(credential: AgentAuthCredential): string {
+  if (
+    isProliferateManagedCreditsCredential(credential)
+    && credential.ownerScope === "personal"
+  ) {
+    return "Proliferate Default Free credits";
+  }
+  return credential.displayName;
 }
 
 export function agentAuthCredentialStatusTone(status: string): AgentAuthBadgeTone {
@@ -319,6 +332,9 @@ export function agentAuthCanCreateGatewayCredentialForAgent(
     return capabilities.byokProviders.openaiApiKey
       || capabilities.byokProviders.openaiCompatible;
   }
+  if (agentKind === "gemini") {
+    return capabilities.byokProviders.geminiApiKey;
+  }
   if (agentKind === "opencode") {
     return capabilities.opencodeGatewayEnabled === true
       && (
@@ -348,6 +364,9 @@ export function gatewayByokCredentialEnabled(
   }
   if (providerKind === "openai_api_key") {
     return capabilities.byokProviders.openaiApiKey;
+  }
+  if (providerKind === "gemini_api_key") {
+    return capabilities.byokProviders.geminiApiKey;
   }
   if (providerKind === "bedrock_assume_role") {
     return capabilities.byokProviders.bedrockAssumeRole;

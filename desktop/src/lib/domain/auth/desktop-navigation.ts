@@ -17,6 +17,22 @@ export function desktopNavigationTarget(url: string): string | null {
     return `/settings?${params.toString()}`;
   }
 
+  if (parsed.hostname === "settings" && parsed.pathname === "/billing") {
+    const params = new URLSearchParams(parsed.search);
+    params.set("section", "billing");
+    return `/settings?${params.toString()}`;
+  }
+
+  if (
+    parsed.hostname === "billing"
+    && (parsed.pathname === "/success" || parsed.pathname === "/cancel")
+  ) {
+    const params = new URLSearchParams(parsed.search);
+    params.set("checkout", parsed.pathname === "/success" ? "success" : "cancel");
+    params.set("section", "billing");
+    return `/settings?${params.toString()}`;
+  }
+
   if (parsed.hostname === "settings" && parsed.pathname === "/organization") {
     const params = new URLSearchParams(parsed.search);
     params.set("section", "organization");

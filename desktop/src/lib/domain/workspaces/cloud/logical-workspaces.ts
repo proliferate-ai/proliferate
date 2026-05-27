@@ -11,6 +11,7 @@ import {
 import {
   cloudWorkspaceGroupKey,
   localWorkspaceGroupKey,
+  repoRootGroupKey,
 } from "@/lib/domain/workspaces/cloud/collections";
 import {
   buildLocalSlotLogicalWorkspaceId,
@@ -38,7 +39,51 @@ function cloudBranchKey(workspace: CloudWorkspaceSummary): string {
   return normalizeLogicalWorkspaceBranchKey(workspace.repo.branch);
 }
 
-function buildBaseLogicalWorkspaceIdForLocalWorkspace(workspace: Workspace): string {
+function remoteRepoKey(
+  provider: string | null | undefined,
+  owner: string | null | undefined,
+  repoName: string | null | undefined,
+): string | null {
+  if (!provider || !owner || !repoName) {
+    return null;
+  }
+
+  return `${provider.trim()}:${owner.trim()}:${repoName.trim()}`;
+}
+
+function resolveLocalWorkspaceRepoRoot(
+  workspace: Workspace,
+  repoRootsById: Map<string, RepoRoot>,
+  repoRootsByRemoteKey: Map<string, RepoRoot>,
+): RepoRoot | null {
+  if (workspace.repoRootId) {
+    const repoRoot = repoRootsById.get(workspace.repoRootId);
+    if (repoRoot) {
+      return repoRoot;
+    }
+  }
+
+  const workspaceRemoteKey = remoteRepoKey(
+    workspace.gitProvider,
+    workspace.gitOwner,
+    workspace.gitRepoName,
+  );
+  return workspaceRemoteKey ? repoRootsByRemoteKey.get(workspaceRemoteKey) ?? null : null;
+}
+
+function buildBaseLogicalWorkspaceIdForLocalWorkspace(
+  workspace: Workspace,
+  repoRoot: RepoRoot | null,
+): string {
+  if (repoRoot?.remoteProvider && repoRoot.remoteOwner && repoRoot.remoteRepoName) {
+    return buildRemoteLogicalWorkspaceId(
+      repoRoot.remoteProvider,
+      repoRoot.remoteOwner,
+      repoRoot.remoteRepoName,
+      workspaceBranchKey(workspace),
+    );
+  }
+
   if (workspace.gitProvider && workspace.gitOwner && workspace.gitRepoName) {
     return buildRemoteLogicalWorkspaceId(
       workspace.gitProvider,
@@ -186,12 +231,13 @@ export function buildLogicalWorkspaces(args: {
   const repoRootsById = new Map(args.repoRoots.map((repoRoot) => [repoRoot.id, repoRoot]));
   const repoRootsByRemoteKey = new Map(
     args.repoRoots
-      .filter((repoRoot) =>
+      .filter((repoRoot) => (
         repoRoot.remoteProvider
         && repoRoot.remoteOwner
-        && repoRoot.remoteRepoName)
+        && repoRoot.remoteRepoName
+      ))
       .map((repoRoot) => [
-        `${repoRoot.remoteProvider}:${repoRoot.remoteOwner}:${repoRoot.remoteRepoName}`,
+        remoteRepoKey(repoRoot.remoteProvider, repoRoot.remoteOwner, repoRoot.remoteRepoName)!,
         repoRoot,
       ]),
   );
@@ -203,7 +249,8 @@ export function buildLogicalWorkspaces(args: {
 
   const localBuckets = new Map<string, Workspace[]>();
   for (const workspace of args.localWorkspaces) {
-    const baseLogicalId = buildBaseLogicalWorkspaceIdForLocalWorkspace(workspace);
+    const repoRoot = resolveLocalWorkspaceRepoRoot(workspace, repoRootsById, repoRootsByRemoteKey);
+    const baseLogicalId = buildBaseLogicalWorkspaceIdForLocalWorkspace(workspace, repoRoot);
     const bucket = localBuckets.get(baseLogicalId);
     if (bucket) {
       bucket.push(workspace);
@@ -274,28 +321,34 @@ export function buildLogicalWorkspaces(args: {
         args.currentSelectionId ?? null,
         effectiveOwnerHint,
       );
+      const repoRoot = entry.localWorkspace
+        ? resolveLocalWorkspaceRepoRoot(entry.localWorkspace, repoRootsById, repoRootsByRemoteKey)
+        : entry.cloudWorkspace
+          ? repoRootsByRemoteKey.get(
+            remoteRepoKey(
+              entry.cloudWorkspace.repo.provider,
+              entry.cloudWorkspace.repo.owner,
+              entry.cloudWorkspace.repo.name,
+            )!,
+          ) ?? null
+          : entry.mobilityWorkspace
+            ? repoRootsByRemoteKey.get(
+              remoteRepoKey(
+                entry.mobilityWorkspace.repo.provider,
+                entry.mobilityWorkspace.repo.owner,
+                entry.mobilityWorkspace.repo.name,
+              )!,
+            ) ?? null
+            : null;
       const repoKey = entry.localWorkspace
-        ? localWorkspaceGroupKey(entry.localWorkspace)
+        ? repoRoot
+          ? repoRootGroupKey(repoRoot)
+          : localWorkspaceGroupKey(entry.localWorkspace)
         : entry.cloudWorkspace
           ? cloudWorkspaceGroupKey(entry.cloudWorkspace)
           : entry.mobilityWorkspace
             ? cloudWorkspaceGroupKey(entry.mobilityWorkspace)
             : id;
-      const repoRoot = entry.localWorkspace?.repoRootId
-        ? repoRootsById.get(entry.localWorkspace.repoRootId) ?? null
-        : entry.localWorkspace?.gitProvider && entry.localWorkspace.gitOwner && entry.localWorkspace.gitRepoName
-          ? repoRootsByRemoteKey.get(
-            `${entry.localWorkspace.gitProvider}:${entry.localWorkspace.gitOwner}:${entry.localWorkspace.gitRepoName}`,
-          ) ?? null
-          : entry.cloudWorkspace
-            ? repoRootsByRemoteKey.get(
-              `${entry.cloudWorkspace.repo.provider}:${entry.cloudWorkspace.repo.owner}:${entry.cloudWorkspace.repo.name}`,
-            ) ?? null
-            : entry.mobilityWorkspace
-              ? repoRootsByRemoteKey.get(
-                `${entry.mobilityWorkspace.repo.provider}:${entry.mobilityWorkspace.repo.owner}:${entry.mobilityWorkspace.repo.name}`,
-              ) ?? null
-              : null;
       const sourceRoot = entry.localWorkspace?.sourceRepoRootPath
         ?? repoRoot?.path
         ?? entry.localWorkspace?.repoRootId
@@ -315,17 +368,20 @@ export function buildLogicalWorkspaces(args: {
         sourceRoot,
         repoRoot,
         provider:
-          entry.localWorkspace?.gitProvider
+          repoRoot?.remoteProvider
+          ?? entry.localWorkspace?.gitProvider
           ?? entry.cloudWorkspace?.repo.provider
           ?? entry.mobilityWorkspace?.repo.provider
           ?? null,
         owner:
-          entry.localWorkspace?.gitOwner
+          repoRoot?.remoteOwner
+          ?? entry.localWorkspace?.gitOwner
           ?? entry.cloudWorkspace?.repo.owner
           ?? entry.mobilityWorkspace?.repo.owner
           ?? null,
         repoName:
-          entry.localWorkspace?.gitRepoName
+          repoRoot?.remoteRepoName
+          ?? entry.localWorkspace?.gitRepoName
           ?? entry.cloudWorkspace?.repo.name
           ?? entry.mobilityWorkspace?.repo.name
           ?? null,

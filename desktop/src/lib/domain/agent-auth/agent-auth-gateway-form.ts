@@ -7,6 +7,7 @@ import type {
 export type AgentAuthGatewayProviderChoice =
   | "anthropic_api_key"
   | "openai_api_key"
+  | "gemini_api_key"
   | "bedrock_assume_role"
   | "openai_compatible";
 
@@ -18,6 +19,10 @@ export type AgentAuthGatewayProviderOption = {
 export type AgentAuthGatewayOpenAiAgentKind = Extract<
   AgentAuthAgentKind,
   "codex" | "opencode"
+>;
+export type AgentAuthGatewaySelectableAgentKind = Extract<
+  AgentAuthAgentKind,
+  "codex" | "opencode" | "gemini"
 >;
 
 export interface AgentAuthGatewayFormValues {
@@ -31,6 +36,7 @@ export interface AgentAuthGatewayFormValues {
 export const AGENT_AUTH_GATEWAY_PROVIDER_OPTIONS: AgentAuthGatewayProviderOption[] = [
   { value: "anthropic_api_key", label: "Anthropic API key" },
   { value: "openai_api_key", label: "OpenAI API key" },
+  { value: "gemini_api_key", label: "Gemini API key" },
   { value: "bedrock_assume_role", label: "AWS Bedrock role" },
   { value: "openai_compatible", label: "OpenAI-compatible provider" },
 ];
@@ -51,6 +57,9 @@ export function agentAuthGatewayProviderOptionsForCapabilities(
     }
     if (option.value === "openai_api_key") {
       return capabilities.byokProviders.openaiApiKey;
+    }
+    if (option.value === "gemini_api_key") {
+      return capabilities.byokProviders.geminiApiKey;
     }
     if (option.value === "bedrock_assume_role") {
       return capabilities.byokProviders.bedrockAssumeRole;
@@ -86,6 +95,12 @@ export function preferredAgentAuthGatewayProviderForAgent(
     }
     return null;
   }
+  if (agentKind === "gemini") {
+    if (available.has("gemini_api_key")) {
+      return "gemini_api_key";
+    }
+    return null;
+  }
   if (agentKind === "opencode") {
     if (capabilities?.opencodeGatewayEnabled !== true) {
       return null;
@@ -104,7 +119,11 @@ export function agentAuthGatewayCreatePayloadReady(
   providerKind: AgentAuthGatewayProviderChoice,
   values: AgentAuthGatewayFormValues,
 ) {
-  if (providerKind === "anthropic_api_key" || providerKind === "openai_api_key") {
+  if (
+    providerKind === "anthropic_api_key"
+    || providerKind === "openai_api_key"
+    || providerKind === "gemini_api_key"
+  ) {
     return values.apiKey.trim().length > 0;
   }
   if (providerKind === "openai_compatible") {
@@ -117,16 +136,17 @@ export function agentAuthGatewayCreatePayloadReady(
 
 export function buildAgentAuthGatewayCredentialRequest(input: {
   providerKind: AgentAuthGatewayProviderChoice;
-  agentKind: AgentAuthGatewayOpenAiAgentKind;
+  agentKind: AgentAuthGatewaySelectableAgentKind;
   ownerScope: "personal" | "organization";
   organizationId: string | null;
   displayName: string;
   values: AgentAuthGatewayFormValues;
 }): CreateGatewayCredentialRequest {
-  const agentKind = input.providerKind === "openai_api_key"
-    || input.providerKind === "openai_compatible"
-    ? input.agentKind
-    : "claude";
+  const agentKind = input.providerKind === "gemini_api_key"
+    ? "gemini"
+    : input.providerKind === "openai_api_key" || input.providerKind === "openai_compatible"
+      ? input.agentKind
+      : "claude";
   const payload: Record<string, string> = input.providerKind === "bedrock_assume_role"
     ? {
         roleArn: input.values.roleArn.trim(),

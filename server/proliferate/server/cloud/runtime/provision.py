@@ -966,6 +966,8 @@ async def _wait_for_agent_auth_target_current(
 ) -> None:
     last_status = "missing"
     last_applied_revision: int | None = None
+    last_slot_generation: int | None = None
+    last_active_slot_generation: int | None = None
     last_error: str | None = None
     for _attempt in range(max(1, total_attempts)):
         async with db_engine.async_session_factory() as db:
@@ -974,10 +976,17 @@ async def _wait_for_agent_auth_target_current(
                 sandbox_profile_id=ctx.sandbox_profile_id,
                 target_id=ctx.target_id,
             )
+            active_slot = await cloud_sandboxes.load_active_slot_for_profile_target(
+                db,
+                sandbox_profile_id=ctx.sandbox_profile_id,
+                target_id=ctx.target_id,
+            )
         if state is not None:
             last_status = state.status
             last_applied_revision = state.applied_revision
+            last_slot_generation = state.slot_generation
             last_error = state.last_error_message
+            last_active_slot_generation = active_slot.slot_generation if active_slot else None
             if state.status == "failed":
                 raise CloudApiError(
                     "agent_auth_apply_failed",
@@ -988,6 +997,9 @@ async def _wait_for_agent_auth_target_current(
                 state.status == "applied"
                 and state.applied_revision is not None
                 and state.applied_revision >= ctx.required_agent_auth_revision
+                and active_slot is not None
+                and state.active_sandbox_id == active_slot.id
+                and state.slot_generation == active_slot.slot_generation
                 and not state.force_restart_required
             ):
                 return
@@ -998,6 +1010,8 @@ async def _wait_for_agent_auth_target_current(
         f"for target {ctx.target_id}; last_status={last_status}; "
         f"last_applied_revision={last_applied_revision}; "
         f"required_revision={ctx.required_agent_auth_revision}; "
+        f"last_slot_generation={last_slot_generation}; "
+        f"active_slot_generation={last_active_slot_generation}; "
         f"last_error={last_error or '<none>'}."
     )
 
@@ -1291,6 +1305,7 @@ async def _prepare_workspace_in_runtime(
         runtime_token,
         workspace_id=ctx.workspace_id,
         required_agent_kinds=required_agent_kinds,
+        auth_overlay_agent_kinds=ctx.agent_auth_agent_kinds,
     )
     tracker.complete(ready_agents=",".join(ready_agents))
 
@@ -1563,6 +1578,7 @@ async def provision_workspace(
             runtime_token_ciphertext=runtime_token_ciphertext,
             root_anyharness_workspace_id=handshake.root_anyharness_workspace_id,
             root_anyharness_repo_root_id=handshake.anyharness_repo_root_id,
+            active_sandbox_id=sandbox_record_id,
             launched_runtime=launched_runtime_this_attempt,
             repo_env_applied_version=ctx.repo_env_version,
         )

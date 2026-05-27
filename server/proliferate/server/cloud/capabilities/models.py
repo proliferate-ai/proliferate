@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 class AgentGatewayByokProviderCapabilities(BaseModel):
     anthropic_api_key: bool = Field(alias="anthropicApiKey")
     openai_api_key: bool = Field(alias="openaiApiKey")
+    gemini_api_key: bool = Field(alias="geminiApiKey")
     bedrock_assume_role: bool = Field(alias="bedrockAssumeRole")
     openai_compatible: bool = Field(alias="openaiCompatible")
 

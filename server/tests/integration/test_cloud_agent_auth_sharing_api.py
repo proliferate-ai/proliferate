@@ -233,12 +233,8 @@ async def test_managed_credits_do_not_reuse_org_byok_credential_with_same_name(
         True,
     )
     monkeypatch.setattr(
-        "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_litellm_topology",
-        "enterprise_shared",
-    )
-    monkeypatch.setattr(
         "proliferate.server.cloud.agent_auth.service.settings."
-        "agent_gateway_litellm_customer_secret_isolation_verified",
+        "agent_gateway_bifrost_isolation_verified",
         True,
     )
     monkeypatch.setattr(

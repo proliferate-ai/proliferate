@@ -38,6 +38,9 @@ from proliferate.db.store.billing import (
 from proliferate.db.store.cloud_profile_target_guard import require_primary_managed_profile_target
 from proliferate.db.store.cloud_runtime_environments import ensure_runtime_environment_for_repo
 from proliferate.db.store.cloud_sandboxes import ACTIVE_SLOT_STATUSES
+from proliferate.db.store.cloud_sync.sandbox_profile_target_state import (
+    invalidate_applied_on_slot_replacement,
+)
 from proliferate.utils.time import utcnow
 
 _UNSET: Final = object()
@@ -879,6 +882,18 @@ async def persist_sandbox_provider_state(
     if last_provider_event_kind is not _UNSET:
         sandbox.last_provider_event_kind = last_provider_event_kind
     sandbox.updated_at = utcnow()
+    if (
+        status in {"destroyed", "killed", "terminated"}
+        and sandbox.sandbox_profile_id is not None
+        and sandbox.target_id is not None
+    ):
+        await invalidate_applied_on_slot_replacement(
+            db,
+            sandbox_profile_id=sandbox.sandbox_profile_id,
+            target_id=sandbox.target_id,
+            replaced_sandbox_id=sandbox.id,
+            replaced_slot_generation=sandbox.slot_generation,
+        )
     await db.commit()
     await db.refresh(sandbox)
     return sandbox

@@ -3,6 +3,7 @@ import type { AgentAuthCredential, AgentGatewayCapabilities } from "@proliferate
 import {
   agentAuthCanCreateGatewayCredentialForAgent,
   agentAuthCredentialAvailability,
+  agentAuthCredentialDisplayLabel,
   agentAuthCredentialSection,
   agentAuthCredentialShareLabel,
   agentAuthManagedCreditsCapabilityLabel,
@@ -52,6 +53,7 @@ function capabilities(
     byokProviders: {
       anthropicApiKey: false,
       openaiApiKey: false,
+      geminiApiKey: false,
       bedrockAssumeRole: false,
       openaiCompatible: false,
     },
@@ -110,6 +112,35 @@ describe("isProliferateManagedCreditsCredential", () => {
   });
 });
 
+describe("agentAuthCredentialDisplayLabel", () => {
+  it("uses a product label for personal free-credit credentials", () => {
+    expect(
+      agentAuthCredentialDisplayLabel(
+        credential({
+          credentialKind: "managed_gateway",
+          displayName: "Proliferate free credits",
+          redactedSummary: { providerKind: "proliferate_bedrock_pool" },
+        }),
+      ),
+    ).toBe("Proliferate Default Free credits");
+  });
+
+  it("preserves organization managed credit labels", () => {
+    expect(
+      agentAuthCredentialDisplayLabel(
+        credential({
+          ownerScope: "organization",
+          ownerUserId: null,
+          organizationId: "org-1",
+          credentialKind: "managed_gateway",
+          displayName: "Proliferate managed credits",
+          redactedSummary: { providerKind: "proliferate_bedrock_pool" },
+        }),
+      ),
+    ).toBe("Proliferate managed credits");
+  });
+});
+
 describe("agentAuthCredentialAvailability", () => {
   it("marks BYOK credentials unavailable when hosted BYOK is disabled", () => {
     const availability = agentAuthCredentialAvailability(
@@ -122,6 +153,7 @@ describe("agentAuthCredentialAvailability", () => {
         byokProviders: {
           anthropicApiKey: false,
           openaiApiKey: false,
+          geminiApiKey: false,
           bedrockAssumeRole: false,
           openaiCompatible: false,
         },
@@ -142,6 +174,7 @@ describe("agentAuthCredentialAvailability", () => {
         byokProviders: {
           anthropicApiKey: false,
           openaiApiKey: true,
+          geminiApiKey: false,
           bedrockAssumeRole: false,
           openaiCompatible: false,
         },
@@ -206,6 +239,7 @@ describe("agentAuthCanCreateGatewayCredentialForAgent", () => {
       byokProviders: {
         anthropicApiKey: true,
         openaiApiKey: true,
+        geminiApiKey: true,
         bedrockAssumeRole: false,
         openaiCompatible: false,
       },
@@ -214,7 +248,7 @@ describe("agentAuthCanCreateGatewayCredentialForAgent", () => {
     expect(agentAuthCanCreateGatewayCredentialForAgent("claude", inputCapabilities)).toBe(true);
     expect(agentAuthCanCreateGatewayCredentialForAgent("codex", inputCapabilities)).toBe(true);
     expect(agentAuthCanCreateGatewayCredentialForAgent("opencode", inputCapabilities)).toBe(false);
-    expect(agentAuthCanCreateGatewayCredentialForAgent("gemini", inputCapabilities)).toBe(false);
+    expect(agentAuthCanCreateGatewayCredentialForAgent("gemini", inputCapabilities)).toBe(true);
   });
 });
 

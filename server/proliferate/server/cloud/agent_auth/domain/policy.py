@@ -12,7 +12,7 @@ from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS
 @dataclass(frozen=True)
 class SelectionPlan:
     materialization_mode: Literal["gateway_env", "synced_files"]
-    protocol_facade: Literal["anthropic", "openai"] | None
+    protocol_facade: Literal["anthropic", "openai", "genai"] | None
 
 
 def is_supported_agent_kind(agent_kind: str) -> bool:
@@ -36,6 +36,8 @@ def selection_plan_for_credential(
         return SelectionPlan(materialization_mode="gateway_env", protocol_facade="anthropic")
     if agent_kind in {"codex", "opencode"}:
         return SelectionPlan(materialization_mode="gateway_env", protocol_facade="openai")
+    if agent_kind == "gemini":
+        return SelectionPlan(materialization_mode="gateway_env", protocol_facade="genai")
     return PolicyDenied(
         code="gateway_not_supported_for_agent",
         message="Gateway auth is not supported for this agent.",

@@ -258,6 +258,71 @@ class AgentGatewayRuntimeGrantRecord:
 
 
 @dataclass(frozen=True)
+class AgentGatewayRouterMaterializationRecord:
+    id: UUID
+    router_kind: str
+    router_object_kind: str
+    object_scope: str
+    policy_id: UUID | None
+    provider_credential_id: UUID | None
+    budget_subject_id: UUID | None
+    selection_id: UUID | None
+    sandbox_profile_id: UUID | None
+    target_id: UUID | None
+    cloud_sandbox_id: UUID | None
+    slot_generation: int | None
+    agent_kind: str | None
+    protocol_facade: str | None
+    router_object_id: str | None
+    router_object_secret_ciphertext: str | None
+    router_object_secret_ciphertext_key_id: str | None
+    sync_status: str
+    sync_fingerprint: str | None
+    status: str
+    last_reconciled_at: datetime | None
+    last_error_code: str | None
+    last_error_message: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
+class AgentGatewayLlmUsageEventRecord:
+    id: UUID
+    router_kind: str
+    router_log_id: str
+    router_virtual_key_id: str | None
+    router_provider_key_id: str | None
+    materialization_id: UUID | None
+    policy_id: UUID | None
+    budget_subject_id: UUID | None
+    owner_scope: str | None
+    owner_user_id: UUID | None
+    organization_id: UUID | None
+    agent_kind: str | None
+    protocol_facade: str | None
+    provider: str | None
+    model: str | None
+    status: str | None
+    cost_usd: str
+    prompt_tokens: int | None
+    completion_tokens: int | None
+    total_tokens: int | None
+    occurred_at: datetime | None
+    imported_at: datetime
+    raw_usage_json: str
+
+
+@dataclass(frozen=True)
+class AgentGatewayUsageImportCursorRecord:
+    id: UUID
+    router_kind: str
+    last_seen_at: datetime | None
+    last_seen_router_log_id: str | None
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
 class AgentAuthAuditEventRecord:
     id: UUID
     action: str

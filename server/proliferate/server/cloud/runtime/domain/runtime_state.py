@@ -62,6 +62,7 @@ def runtime_ready_update(
     runtime_token_ciphertext: str,
     root_anyharness_workspace_id: str,
     root_anyharness_repo_root_id: str,
+    active_sandbox_id: UUID,
     launched_runtime: bool,
     repo_env_applied_version: int,
 ) -> RuntimeStateUpdate:
@@ -71,6 +72,7 @@ def runtime_ready_update(
         "runtime_token_ciphertext": runtime_token_ciphertext,
         "root_anyharness_workspace_id": root_anyharness_workspace_id,
         "root_anyharness_repo_root_id": root_anyharness_repo_root_id,
+        "active_sandbox_id": active_sandbox_id,
         "increment_runtime_generation": launched_runtime,
         "repo_env_applied_version": repo_env_applied_version,
         "last_error": None,

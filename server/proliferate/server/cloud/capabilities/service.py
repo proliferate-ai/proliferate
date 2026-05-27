@@ -31,18 +31,15 @@ def cloud_capabilities() -> CloudCapabilitiesResponse:
         and _positive_decimal_string(personal_managed_budget)
     )
     managed_credits_organization_enabled = gateway_enabled and default_managed_budget is not None
-    topology = settings.agent_gateway_litellm_topology.strip().lower() or "oss_shared"
-    route_isolation = _route_isolation_label(topology)
+    topology = "bifrost"
+    route_isolation = "bifrost_virtual_key"
     live_proof_status = (
         "passed"
-        if settings.agent_gateway_litellm_customer_secret_isolation_verified
+        if settings.agent_gateway_bifrost_isolation_verified
         else "not_run"
     )
     route_isolation_ready = gateway_route_isolation_ready(
-        litellm_topology=topology,
-        customer_secret_isolation_verified=(
-            settings.agent_gateway_litellm_customer_secret_isolation_verified
-        ),
+        bifrost_isolation_verified=settings.agent_gateway_bifrost_isolation_verified,
     )
     org_byok_enabled = (
         gateway_enabled and settings.agent_gateway_byok_enabled and route_isolation_ready
@@ -80,16 +77,17 @@ def cloud_capabilities() -> CloudCapabilitiesResponse:
                     and settings.agent_gateway_byok_enabled
                     and settings.agent_gateway_openai_byok_enabled
                 ),
+                geminiApiKey=(
+                    gateway_enabled
+                    and settings.agent_gateway_byok_enabled
+                    and settings.agent_gateway_gemini_byok_enabled
+                ),
                 bedrockAssumeRole=(
                     gateway_enabled
                     and settings.agent_gateway_byok_enabled
                     and settings.agent_gateway_bedrock_byok_enabled
                 ),
-                openaiCompatible=(
-                    gateway_enabled
-                    and settings.agent_gateway_byok_enabled
-                    and settings.agent_gateway_openai_compatible_byok_enabled
-                ),
+                openaiCompatible=False,
             ),
             opencodeGatewayEnabled=gateway_enabled and settings.agent_gateway_opencode_enabled,
         )
@@ -114,11 +112,3 @@ def _managed_credit_agent_kinds() -> list[str]:
         item for item in configured if item in {"claude", "codex", "opencode", "gemini"}
     ]
     return agent_kinds or ["claude"]
-
-
-def _route_isolation_label(topology: str) -> str:
-    if topology == "enterprise_shared":
-        return "enterprise_team_project"
-    if topology == "isolated_router":
-        return "isolated_router"
-    return "none"

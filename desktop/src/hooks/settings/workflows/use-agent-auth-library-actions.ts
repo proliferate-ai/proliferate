@@ -25,7 +25,9 @@ export type AgentAuthLibraryOrganizationOption =
 export function useAgentAuthLibraryActions(
   initialAgentKind: AgentAuthAgentKind | null,
   initialOrganizationId: string | null = null,
+  options: { autoLoadPersonalProfile?: boolean } = {},
 ) {
+  const autoLoadPersonalProfile = options.autoLoadPersonalProfile ?? true;
   const organizations = useOrganizations();
   const organizationOptions = organizations.data?.organizations ?? [];
   const organizationIdsKey = organizationOptions.map((organization) => organization.id).join(":");
@@ -56,7 +58,9 @@ export function useAgentAuthLibraryActions(
   const [organizationProfile, setOrganizationProfile] = useState<SandboxProfile | null>(null);
   const [personalProfile, setPersonalProfile] = useState<SandboxProfile | null>(null);
   const [organizationProfileLoading, setOrganizationProfileLoading] = useState(false);
+  const [personalProfileLoading, setPersonalProfileLoading] = useState(false);
   const autoLoadedOrganizationProfileIdRef = useRef<string | null>(null);
+  const autoLoadedPersonalProfileRef = useRef(false);
   const [focusedAgentKind, setFocusedAgentKind] = useState<AgentAuthAgentKind | null>(
     initialAgentKind,
   );
@@ -147,6 +151,43 @@ export function useAgentAuthLibraryActions(
       cancelled = true;
     };
   }, [initialOrganizationId, organizationProfile, selectedOrganizationId]);
+
+  useEffect(() => {
+    if (
+      !autoLoadPersonalProfile
+      || personalProfile !== null
+      || autoLoadedPersonalProfileRef.current
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    autoLoadedPersonalProfileRef.current = true;
+    setPersonalProfileLoading(true);
+    void mutations.ensurePersonalProfile()
+      .then((nextProfile) => {
+        if (!cancelled) {
+          setPersonalProfile(nextProfile);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          autoLoadedPersonalProfileRef.current = false;
+          setFeedback(error instanceof Error
+            ? error.message
+            : "Could not load personal cloud defaults.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setPersonalProfileLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [autoLoadPersonalProfile, mutations.ensurePersonalProfile, personalProfile]);
 
   useEffect(() => {
     if (!initialAgentKind) {
@@ -347,6 +388,21 @@ export function useAgentAuthLibraryActions(
     }
   }
 
+  async function handleEnsureFreeCredits() {
+    setFeedback(null);
+    try {
+      await ensurePersonalProfileLoaded();
+      const result = await mutations.ensureFreeCredits({});
+      if (result.launchEnabled) {
+        setFeedback("Proliferate default free credits are ready.");
+        return;
+      }
+      setFeedback(result.lastErrorMessage ?? "Proliferate default free credits are not ready yet.");
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Could not provision free credits.");
+    }
+  }
+
   async function handleSelectTeamDefault(
     agentKind: AgentAuthAgentKind,
     credentialId: string,
@@ -391,6 +447,8 @@ export function useAgentAuthLibraryActions(
     organizationSelectionsLoading: organizationProfileLoading
       || (organizationProfile !== null && (selections.isLoading || selections.isFetching)),
     personalCredentialsLoading: personalCredentials.isLoading,
+    personalSelectionsLoading: personalProfileLoading
+      || (personalProfile !== null && (personalSelections.isLoading || personalSelections.isFetching)),
     organizationCredentialsError: organizationCredentials.error,
     personalCredentialsError: personalCredentials.error,
     capabilities: agentGatewayCapabilities,
@@ -407,6 +465,7 @@ export function useAgentAuthLibraryActions(
     revokingCredentialId,
     ensuringProfile: mutations.isEnsuringProfile,
     ensuringManagedCredits: mutations.isEnsuringManagedCredits,
+    ensuringFreeCredits: mutations.isEnsuringFreeCredits,
     selectingTeamDefault: mutations.isSelectingCredential,
     handleRescan,
     handleSyncLocalCredential,
@@ -416,6 +475,7 @@ export function useAgentAuthLibraryActions(
     handleEnsureOrganizationProfile,
     handleEnsurePersonalProfile,
     handleEnsureManagedCredits,
+    handleEnsureFreeCredits,
     handleSelectPersonalDefault,
     handleSelectTeamDefault,
   };

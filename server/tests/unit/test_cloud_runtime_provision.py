@@ -1135,6 +1135,7 @@ class TestProvisionWorkspaceGitSetup:
             "https://worker-control.invalid",
         )
         calls: list[str] = []
+        runtime_state_kwargs: list[dict[str, object]] = []
         ctx = _make_provision_input(codex_enabled=True)
         provider = SimpleNamespace(
             kind=SandboxProviderKind.daytona,
@@ -1202,15 +1203,12 @@ class TestProvisionWorkspaceGitSetup:
             calls.append("finalize_workspace")
 
         async def _save_runtime_environment_state(*args, **kwargs) -> None:
-            return None
+            runtime_state_kwargs.append(kwargs)
 
         async def _load_cloud_workspace_by_id(*args, **kwargs):
             return None
 
         async def _apply_workspace_repo_config_after_provision(*args, **kwargs) -> None:
-            return None
-
-        async def _save_runtime_environment_state(*args, **kwargs) -> None:
             return None
 
         async def _persist_target_runtime_access(*args, **kwargs) -> None:
@@ -1305,6 +1303,7 @@ class TestProvisionWorkspaceGitSetup:
             "finalize_workspace",
         ]
         assert slot_kwargs["status"] == "creating"
+        assert runtime_state_kwargs[-1]["active_sandbox_id"] == sandbox_record.id
 
     @pytest.mark.asyncio
     async def test_provision_workspace_reuses_existing_runtime_without_relaunch(
@@ -1466,6 +1465,7 @@ class TestProvisionWorkspaceGitSetup:
             "finalize_workspace",
         ]
         assert runtime_state_kwargs[-1]["increment_runtime_generation"] is False
+        assert runtime_state_kwargs[-1]["active_sandbox_id"] == sandbox_record_id
 
     @pytest.mark.asyncio
     async def test_provision_workspace_blocks_when_authorization_denies_start(

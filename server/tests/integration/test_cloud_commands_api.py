@@ -3035,6 +3035,201 @@ class TestCloudCommandsApi:
         assert state.last_command_id == UUID(second_command["commandId"])
 
     @pytest.mark.asyncio
+    async def test_agent_auth_refresh_requeues_when_applied_state_belongs_to_stale_slot(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-agent-auth-stale-slot-requeue",
+        )
+        target_id, first_worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="agent-auth-stale-slot-requeue",
+        )
+        target_uuid = UUID(target_id)
+        first_slot = await ensure_profile_slot(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+        )
+        profile = await agent_auth_store.bump_sandbox_profile_agent_auth_revision(
+            db_session,
+            sandbox_profile_id=profile.id,
+            reason="test_stale_slot_requeue",
+            actor_user_id=UUID(auth.user_id),
+            force_restart=False,
+        )
+        assert profile is not None
+        await request_agent_auth_refresh_for_profile_target(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+            actor_user_id=UUID(auth.user_id),
+            reason="test_stale_slot_requeue",
+            force_restart=False,
+        )
+        await db_session.commit()
+
+        first_lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=first_worker_headers,
+            json={
+                "supportedKinds": ["refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert first_lease.status_code == 200
+        first_command = first_lease.json()["command"]
+        assert first_command["kind"] == "refresh_agent_auth_config"
+        first_result = await client.post(
+            f"/v1/cloud/worker/commands/{first_command['commandId']}/result",
+            headers=first_worker_headers,
+            json={
+                "leaseId": first_command["leaseId"],
+                "slotGeneration": first_command["slotGeneration"],
+                "status": "accepted",
+                "result": {
+                    "applied": True,
+                    "currentRevision": profile.agent_auth_revision,
+                },
+            },
+        )
+        assert first_result.status_code == 200
+
+        await db_session.rollback()
+        applied_to_first_slot = await agent_auth_store.get_target_state(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+        )
+        assert applied_to_first_slot is not None
+        assert applied_to_first_slot.status == "applied"
+        assert applied_to_first_slot.applied_revision == profile.agent_auth_revision
+        assert applied_to_first_slot.active_sandbox_id == first_slot.id
+        assert applied_to_first_slot.slot_generation == first_slot.slot_generation
+
+        await supersede_slot(db_session, sandbox_id=first_slot.id)
+        second_slot = await ensure_profile_slot(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+        )
+        second_worker_token = f"managed-profile-stale-slot-requeue-{uuid4()}"
+        second_worker = await worker_auth_store.create_worker(
+            db_session,
+            target_id=target_uuid,
+            cloud_sandbox_id=second_slot.id,
+            slot_generation=second_slot.slot_generation,
+            token_hash=worker_service._hash_token(
+                domain=CLOUD_WORKER_TOKEN_DOMAIN,
+                token=second_worker_token,
+            ),
+            machine_fingerprint="managed-profile-stale-slot-requeue-second",
+            hostname="managed-profile-stale-slot-requeue-second",
+            worker_version="0.1.0",
+            anyharness_version="0.1.0",
+            supervisor_version=None,
+            now=utcnow(),
+        )
+        stale_state = (
+            await db_session.execute(
+                select(SandboxProfileTargetState).where(
+                    SandboxProfileTargetState.sandbox_profile_id == profile.id,
+                    SandboxProfileTargetState.target_id == target_uuid,
+                )
+            )
+        ).scalar_one()
+        stale_state.agent_auth_status = "applied"
+        stale_state.applied_agent_auth_revision = profile.agent_auth_revision
+        stale_state.active_sandbox_id = first_slot.id
+        stale_state.slot_generation = first_slot.slot_generation
+        stale_state.last_agent_auth_command_id = UUID(first_command["commandId"])
+        stale_state.last_agent_auth_worker_id = applied_to_first_slot.last_worker_id
+        stale_state.updated_at = utcnow()
+        await db_session.commit()
+
+        await request_agent_auth_refresh_for_profile_target(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+            actor_user_id=UUID(auth.user_id),
+            reason="test_stale_slot_requeue",
+            force_restart=False,
+        )
+        await db_session.commit()
+
+        await db_session.rollback()
+        pending_second_slot = await agent_auth_store.get_target_state(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+        )
+        assert pending_second_slot is not None
+        assert pending_second_slot.status == "pending"
+        assert pending_second_slot.applied_revision is None
+        assert pending_second_slot.last_command_id != UUID(first_command["commandId"])
+
+        second_worker_headers = {"Authorization": f"Bearer {second_worker_token}"}
+        second_lease = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=second_worker_headers,
+            json={
+                "supportedKinds": ["refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+        assert second_lease.status_code == 200
+        second_command = second_lease.json()["command"]
+        assert second_command["commandId"] == str(pending_second_slot.last_command_id)
+        materialization = await client.get(
+            f"/v1/cloud/worker/agent-auth-configs/{profile.id}/materialization",
+            headers=second_worker_headers,
+            params={
+                "command_id": second_command["commandId"],
+                "revision": second_command["payload"]["revision"],
+                "lease_id": second_command["leaseId"],
+            },
+        )
+        assert materialization.status_code == 200
+        materialization_plan = materialization.json()
+        assert materialization_plan["applied"] is True
+        assert materialization_plan["slotGeneration"] == second_slot.slot_generation
+        assert materialization_plan["slotGeneration"] == second_command["slotGeneration"]
+
+        second_result = await client.post(
+            f"/v1/cloud/worker/commands/{second_command['commandId']}/result",
+            headers=second_worker_headers,
+            json={
+                "leaseId": second_command["leaseId"],
+                "slotGeneration": second_command["slotGeneration"],
+                "status": "accepted",
+                "result": {
+                    "applied": True,
+                    "currentRevision": profile.agent_auth_revision,
+                },
+            },
+        )
+        assert second_result.status_code == 200
+
+        await db_session.rollback()
+        applied_to_second_slot = await agent_auth_store.get_target_state(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=target_uuid,
+        )
+        assert applied_to_second_slot is not None
+        assert applied_to_second_slot.status == "applied"
+        assert applied_to_second_slot.applied_revision == profile.agent_auth_revision
+        assert applied_to_second_slot.active_sandbox_id == second_slot.id
+        assert applied_to_second_slot.slot_generation == second_slot.slot_generation
+        assert applied_to_second_slot.last_worker_id == second_worker.id
+
+    @pytest.mark.asyncio
     async def test_stale_agent_auth_refresh_result_does_not_regress_target_state(
         self,
         client: AsyncClient,
@@ -3882,6 +4077,54 @@ class TestCloudCommandsApi:
         )
         assert response.status_code == 409
         assert response.json()["detail"]["code"] == "cloud_command_agent_auth_not_ready"
+        await db_session.rollback()
+        refresh_commands = (
+            (
+                await db_session.execute(
+                    select(CloudCommand)
+                    .where(
+                        CloudCommand.target_id == target_uuid,
+                        CloudCommand.kind == CloudCommandKind.refresh_agent_auth_config.value,
+                    )
+                    .order_by(CloudCommand.created_at.asc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(refresh_commands) == 1
+        assert refresh_commands[0].status == CloudCommandStatus.queued.value
+
+        repeated_response = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "agent-auth-preflight-stale-slot-repeat",
+                "targetId": target_id,
+                "workspaceId": cloud_workspace_id,
+                "kind": "start_session",
+                "payload": {
+                    "agentKind": "claude",
+                    "sandboxProfileId": str(profile.id),
+                    "requiredAgentAuthRevision": profile.agent_auth_revision,
+                },
+            },
+        )
+        assert repeated_response.status_code == 409
+        await db_session.rollback()
+        repeated_refresh_commands = (
+            (
+                await db_session.execute(
+                    select(CloudCommand).where(
+                        CloudCommand.target_id == target_uuid,
+                        CloudCommand.kind == CloudCommandKind.refresh_agent_auth_config.value,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(repeated_refresh_commands) == 1
 
     @pytest.mark.asyncio
     async def test_agent_auth_preflight_command_requires_refresh_capable_worker(

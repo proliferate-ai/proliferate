@@ -225,8 +225,8 @@ async def test_ensure_environment_runtime_ready_refreshes_worker_before_forced_r
         user_id=uuid4(),
         active_sandbox_id=uuid4(),
         target_id=target_id,
-        git_owner="BerriAI",
-        git_repo_name="litellm",
+        git_owner="proliferate-ai",
+        git_repo_name="proliferate",
         runtime_url="https://runtime.invalid",
     )
     sandbox_record = SimpleNamespace(
@@ -415,8 +415,8 @@ async def test_refresh_worker_enrollment_stops_and_resets_sidecars_before_write(
         id=uuid4(),
         user_id=uuid4(),
         target_id=target_id,
-        git_owner="BerriAI",
-        git_repo_name="litellm",
+        git_owner="proliferate-ai",
+        git_repo_name="proliferate",
     )
     sandbox_record = SimpleNamespace(
         id=uuid4(),
@@ -507,8 +507,8 @@ async def test_refresh_worker_enrollment_reset_failure_stops_before_write(
         id=uuid4(),
         user_id=uuid4(),
         target_id=target_id,
-        git_owner="BerriAI",
-        git_repo_name="litellm",
+        git_owner="proliferate-ai",
+        git_repo_name="proliferate",
     )
     sandbox_record = SimpleNamespace(
         id=uuid4(),
@@ -573,8 +573,8 @@ async def test_refresh_worker_enrollment_url_failure_does_not_touch_sandbox(
         id=uuid4(),
         user_id=uuid4(),
         target_id=target_id,
-        git_owner="BerriAI",
-        git_repo_name="litellm",
+        git_owner="proliferate-ai",
+        git_repo_name="proliferate",
     )
     sandbox_record = SimpleNamespace(
         id=uuid4(),

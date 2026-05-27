@@ -169,12 +169,26 @@ impl SessionService {
                 required_agent_auth_revision,
             )
             .map_err(map_agent_auth_launch_error_to_create)?;
+        let auth_support_env_keys: Vec<String> =
+            agent_auth_overlay.support_env.keys().cloned().collect();
+        let auth_protected_env_keys: Vec<String> =
+            agent_auth_overlay.protected_env.keys().cloned().collect();
         let mut readiness_env = workspace_env.clone();
         readiness_env.extend(agent_auth_overlay.support_env);
         readiness_env.extend(agent_auth_overlay.protected_env);
         let agent_resolution_started = Instant::now();
         let resolved = resolve_agent_with_env(descriptor, &self.runtime_home, &readiness_env);
         if resolved.status != ResolvedAgentStatus::Ready {
+            tracing::warn!(
+                workspace_id = %workspace_id,
+                agent_kind = %agent_kind,
+                status = ?resolved.status,
+                credential_state = ?resolved.credential_state,
+                descriptor_auth_env_vars = ?descriptor.auth.env_vars,
+                auth_support_env_keys = ?auth_support_env_keys,
+                auth_protected_env_keys = ?auth_protected_env_keys,
+                "Agent auth launch overlay did not satisfy agent readiness"
+            );
             let detail = resolved.agent_process.message.clone().or_else(|| {
                 resolved
                     .native

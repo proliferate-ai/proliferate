@@ -8,6 +8,7 @@ import type {
   CloudCapabilities,
   CreateAnthropicApiKeyCredentialInput,
   CreateBedrockAssumeRoleCredentialInput,
+  CreateGeminiApiKeyCredentialInput,
   CreateGatewayCredentialRequest,
   CreateGatewayCredentialResponse,
   CreateOpenAiApiKeyCredentialInput,
@@ -124,6 +125,24 @@ export function createOpenAiCompatibleCredential(
         baseUrl: input.baseUrl,
         apiKey: input.apiKey,
       },
+    },
+    client,
+  );
+}
+
+export function createGeminiApiKeyCredential(
+  input: CreateGeminiApiKeyCredentialInput,
+  client?: ProliferateCloudClient,
+): Promise<CreateGatewayCredentialResponse> {
+  return createGatewayCredential(
+    {
+      ownerScope: input.ownerScope,
+      organizationId: input.organizationId ?? null,
+      agentKind: "gemini",
+      displayName: input.displayName,
+      policyKind: policyKindForOwner(input.ownerScope),
+      providerKind: "gemini_api_key",
+      payload: { apiKey: input.apiKey },
     },
     client,
   );

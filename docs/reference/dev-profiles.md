@@ -12,7 +12,13 @@ make dev-list                      # list profiles and TCP-probed status
 make dev PROFILE=<name>            # full stack for this profile
 make dev PROFILE=<name> STRIPE=1   # also run Stripe webhook forwarding
 make dev PROFILE=<name> AGENT_GATEWAY=1
-                                    # also run local private LiteLLM for gateway work
+                                    # also run/reuse local Bifrost for gateway work
+make dev PROFILE=<name> AGENT_GATEWAY=bifrost
+                                    # also run/reuse local Bifrost for gateway work
+make dev PROFILE=<name> AGENT_GATEWAY=bifrost AGENT_GATEWAY_TUNNEL=ngrok
+                                    # expose Bifrost and API worker callbacks through ngrok for E2B/public sandbox tests
+make dev PROFILE=<name> CLOUD_WORKER_TUNNEL=ngrok
+                                    # expose only API worker callbacks through ngrok
 make dev-web-auth                  # standalone web auth helper with ngrok callbacks
 ```
 
@@ -62,21 +68,46 @@ those credentials are user-level local secrets, not profile state.
 
 ## Agent Gateway Local Dev
 
-`make dev PROFILE=<name> AGENT_GATEWAY=1` starts the private LiteLLM proxy from
-`server/docker-compose.yml` through the `agent-gateway` compose profile and
-exports the gateway env needed by the API process:
+`make dev PROFILE=<name> AGENT_GATEWAY=1` and
+`make dev PROFILE=<name> AGENT_GATEWAY=bifrost` start or reuse a local Bifrost
+gateway and export the API env needed for Bifrost-backed managed credits and
+personal BYOK development:
 
 ```text
 AGENT_GATEWAY_ENABLED=true
-AGENT_GATEWAY_LITELLM_BASE_URL=http://127.0.0.1:4000
-AGENT_GATEWAY_PUBLIC_BASE_URL=http://127.0.0.1:<profile-api-port>
+AGENT_GATEWAY_BIFROST_BASE_URL=http://127.0.0.1:8080
+AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL=http://127.0.0.1:8080
 AGENT_GATEWAY_RECONCILER_ENABLED=true
+AGENT_GATEWAY_USER_FREE_CREDIT_ENABLED=true
+AGENT_GATEWAY_USER_FREE_CREDIT_USD=5
+AGENT_GATEWAY_MANAGED_CREDIT_AGENT_KINDS=claude,codex
+AGENT_GATEWAY_BYOK_ENABLED=true
+AGENT_GATEWAY_PERSONAL_BYOK_ENABLED=true
+AGENT_GATEWAY_BIFROST_ISOLATION_VERIFIED=true
+AGENT_GATEWAY_ANTHROPIC_BYOK_ENABLED=true
+AGENT_GATEWAY_OPENAI_BYOK_ENABLED=true
+AGENT_GATEWAY_BEDROCK_BYOK_ENABLED=true
+AGENT_GATEWAY_GEMINI_BYOK_ENABLED=true
 ```
 
-The default local LiteLLM master key is `sk-local-dev-agent-gateway`. Override it
-with `AGENT_GATEWAY_LITELLM_MASTER_KEY=...` or `LOCAL_LITELLM_MASTER_KEY=...`
-when a test needs a different key. `make server-litellm-up` starts only the
-local LiteLLM stack, and `make server-litellm-down` stops it.
+For local UI testing, the public Bifrost URL can stay loopback. For E2B or any
+remote managed sandbox that must reach the gateway and enroll its worker, pass
+`AGENT_GATEWAY_TUNNEL=ngrok`. The dev command starts or reuses ngrok tunnels
+for both the API worker callback port and the Bifrost port, then writes those
+HTTPS URLs to `CLOUD_WORKER_BASE_URL`,
+`CLOUD_MCP_OAUTH_CALLBACK_BASE_URL`, and
+`AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL`. If a test only needs the worker/API
+callback tunnel, use `CLOUD_WORKER_TUNNEL=ngrok`.
+
+The dev launcher reads `.env`, `.env.local`, `server/.env`, and
+`server/.env.local`. In Bifrost mode it automatically seeds managed-credit
+provider env from `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` when the dedicated
+`AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY` or
+`AGENT_GATEWAY_MANAGED_OPENAI_API_KEY` variables are not already set. The
+current managed-credit implementation chooses one backing provider for the
+default free-credit pool; if both Anthropic and OpenAI managed keys are set,
+Anthropic is selected first. Personal BYOK forms can still expose both provider
+types at the same time.
 
 ## Ports And UI Identity
 

@@ -18,6 +18,7 @@ _ALLOWLIST: dict[tuple[str, str], frozenset[str]] = {
     ),
     ("codex", "gateway_env"): frozenset({"CODEX_API_KEY", "CODEX_HOME"}),
     ("opencode", "gateway_env"): frozenset({"OPENAI_API_KEY", "OPENAI_BASE_URL"}),
+    ("gemini", "gateway_env"): frozenset({"GEMINI_API_KEY", "GOOGLE_GEMINI_BASE_URL"}),
     ("claude", "synced_files"): frozenset(),
     (
         "gemini",

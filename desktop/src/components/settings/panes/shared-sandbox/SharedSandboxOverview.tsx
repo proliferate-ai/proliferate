@@ -37,7 +37,9 @@ export function SharedSandboxOverview({
 }: {
   organizationId: string;
 }) {
-  const agentAuthLibrary = useAgentAuthLibraryActions(null, organizationId);
+  const agentAuthLibrary = useAgentAuthLibraryActions(null, organizationId, {
+    autoLoadPersonalProfile: false,
+  });
   const connectorsQuery = useConnectors();
   const connectorActions = useInstalledConnectorActions();
   const installedPlugins = connectorsQuery.data?.installed ?? [];
@@ -339,7 +341,11 @@ function sharedCredentialTypeBadgeLabel(credential: AgentAuthCredential): string
   if (providerKind === "proliferate_bedrock_pool") {
     return "Managed";
   }
-  if (providerKind === "anthropic_api_key" || providerKind === "openai_api_key") {
+  if (
+    providerKind === "anthropic_api_key"
+    || providerKind === "openai_api_key"
+    || providerKind === "gemini_api_key"
+  ) {
     return "API key";
   }
   if (providerKind === "bedrock_assume_role") {

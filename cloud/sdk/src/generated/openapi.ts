@@ -2795,23 +2795,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agent-gateway/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Agent Gateway Health */
-        get: operations["agent_gateway_health_agent_gateway_health_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/support/messages": {
         parameters: {
             query?: never;
@@ -3803,6 +3786,8 @@ export interface components {
             anthropicApiKey: boolean;
             /** Openaiapikey */
             openaiApiKey: boolean;
+            /** Geminiapikey */
+            geminiApiKey: boolean;
             /** Bedrockassumerole */
             bedrockAssumeRole: boolean;
             /** Openaicompatible */
@@ -4493,6 +4478,12 @@ export interface components {
             ownerScope: "personal" | "organization";
             /** Organizationid */
             organizationId?: string | null;
+            /**
+             * Returnsurface
+             * @default web
+             * @enum {string}
+             */
+            returnSurface: "desktop" | "web";
         };
         /** BillingUrlResponse */
         BillingUrlResponse: {
@@ -5603,7 +5594,7 @@ export interface components {
              * Providerkind
              * @enum {string}
              */
-            providerKind: "anthropic_api_key" | "openai_api_key" | "bedrock_assume_role" | "openai_compatible";
+            providerKind: "anthropic_api_key" | "openai_api_key" | "gemini_api_key" | "bedrock_assume_role" | "openai_compatible";
             /** Payload */
             payload: {
                 [key: string]: string;
@@ -7502,6 +7493,12 @@ export interface components {
             teamName: string;
             /** Inviteemails */
             inviteEmails?: string[];
+            /**
+             * Returnsurface
+             * @default web
+             * @enum {string}
+             */
+            returnSurface: "desktop" | "web";
         };
         /** TeamCheckoutResponse */
         TeamCheckoutResponse: {
@@ -14867,28 +14864,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    agent_gateway_health_agent_gateway_health_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
                 };
             };
         };

@@ -19,6 +19,7 @@ const CLAUDE_GATEWAY_PROTECTED_ENV: &[&str] = &[
 ];
 const CODEX_GATEWAY_PROTECTED_ENV: &[&str] = &["CODEX_API_KEY", "CODEX_HOME"];
 const OPENCODE_GATEWAY_PROTECTED_ENV: &[&str] = &["OPENAI_API_KEY", "OPENAI_BASE_URL"];
+const GEMINI_GATEWAY_PROTECTED_ENV: &[&str] = &["GEMINI_API_KEY", "GOOGLE_GEMINI_BASE_URL"];
 const CLAUDE_SYNCED_PROTECTED_ENV: &[&str] = &[];
 const GEMINI_SYNCED_PROTECTED_ENV: &[&str] = &[
     "GEMINI_API_KEY",
@@ -369,6 +370,7 @@ fn require_allowed_protected_env(
         ("claude", "gateway_env") => CLAUDE_GATEWAY_PROTECTED_ENV,
         ("codex", "gateway_env") => CODEX_GATEWAY_PROTECTED_ENV,
         ("opencode", "gateway_env") => OPENCODE_GATEWAY_PROTECTED_ENV,
+        ("gemini", "gateway_env") => GEMINI_GATEWAY_PROTECTED_ENV,
         ("claude", "synced_files") => CLAUDE_SYNCED_PROTECTED_ENV,
         ("gemini", "synced_files") => GEMINI_SYNCED_PROTECTED_ENV,
         ("codex", "synced_files") | ("opencode", "synced_files") => &[],

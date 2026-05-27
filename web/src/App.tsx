@@ -8,6 +8,7 @@ import { routes } from "./config/routes";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { AuthErrorPage } from "./pages/AuthErrorPage";
 import { AutomationsPage } from "./pages/AutomationsPage";
+import { BillingReturnHandoffPage } from "./pages/BillingReturnHandoffPage";
 import { ChatPage } from "./pages/ChatPage";
 import { DesktopHandoffPage } from "./pages/DesktopHandoffPage";
 import { HomePage } from "./pages/HomePage";
@@ -25,6 +26,7 @@ export function App() {
       <Route path="auth/desktop/handoff" element={<DesktopHandoffPage />} />
       <Route path="auth/error" element={<AuthErrorPage />} />
       <Route path="connect-github" element={<ConnectGitHubScreen />} />
+      <Route path="settings/cloud" element={<BillingReturnHandoffPage />} />
       <Route
         element={
           <AuthGate>

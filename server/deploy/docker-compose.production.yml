@@ -30,44 +30,6 @@ services:
       timeout: 3s
       retries: 10
 
-  litellm-db:
-    image: postgres:16-alpine
-    profiles: ["agent-gateway"]
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${LITELLM_POSTGRES_DB}
-      POSTGRES_USER: ${LITELLM_POSTGRES_USER}
-      POSTGRES_PASSWORD: ${LITELLM_POSTGRES_PASSWORD}
-    volumes:
-      - litellm_pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  litellm:
-    image: ${LITELLM_IMAGE:-ghcr.io/berriai/litellm:main-stable}
-    profiles: ["agent-gateway"]
-    restart: unless-stopped
-    environment:
-      DATABASE_URL: postgresql://${LITELLM_POSTGRES_USER}:${LITELLM_POSTGRES_PASSWORD}@litellm-db:5432/${LITELLM_POSTGRES_DB}
-      LITELLM_MASTER_KEY: ${AGENT_GATEWAY_LITELLM_MASTER_KEY}
-      STORE_MODEL_IN_DB: "True"
-    depends_on:
-      litellm-db:
-        condition: service_healthy
-    command: ["--host", "0.0.0.0", "--port", "4000"]
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=3)\"",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-
   migrate:
     image: ${PROLIFERATE_SERVER_IMAGE:-ghcr.io/proliferate-ai/proliferate-server}:${PROLIFERATE_SERVER_IMAGE_TAG:-stable}
     restart: "no"
@@ -105,6 +67,5 @@ services:
 
 volumes:
   pgdata:
-  litellm_pgdata:
   caddy_data:
   caddy_config:

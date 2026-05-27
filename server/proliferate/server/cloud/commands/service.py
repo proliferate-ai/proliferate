@@ -29,6 +29,9 @@ from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud._logging import log_cloud_event
+from proliferate.server.cloud.agent_auth.service import (
+    request_agent_auth_refresh_for_profile_target,
+)
 from proliferate.server.cloud.claims.access import require_workspace_interact
 from proliferate.server.cloud.commands.domain.rules import (
     compact_command_json,
@@ -1083,6 +1086,11 @@ async def _validate_agent_auth_preflight(
         )
         or (requires_slot and active_slot is None)
     ):
+        await _queue_agent_auth_refresh_for_not_ready_preflight(
+            sandbox_profile_id=profile.id,
+            target_id=target.id,
+            actor_user_id=actor_user_id,
+        )
         raise CloudApiError(
             "cloud_command_agent_auth_not_ready",
             "Agent auth config has not been applied to this target.",
@@ -1093,6 +1101,31 @@ async def _validate_agent_auth_preflight(
             "cloud_command_agent_auth_restart_required",
             "Agent auth changes require the session to restart before this command can run.",
             status_code=409,
+        )
+
+
+async def _queue_agent_auth_refresh_for_not_ready_preflight(
+    *,
+    sandbox_profile_id: UUID,
+    target_id: UUID,
+    actor_user_id: UUID,
+) -> None:
+    try:
+        async with db_engine.async_session_factory() as refresh_db, refresh_db.begin():
+            await request_agent_auth_refresh_for_profile_target(
+                refresh_db,
+                sandbox_profile_id=sandbox_profile_id,
+                target_id=target_id,
+                actor_user_id=actor_user_id,
+                reason="command_preflight",
+                force_restart=False,
+            )
+    except Exception as exc:
+        log_cloud_event(
+            "cloud command preflight agent auth refresh request failed",
+            target_id=target_id,
+            sandbox_profile_id=sandbox_profile_id,
+            error=str(exc),
         )
 
 

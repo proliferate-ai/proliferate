@@ -23,6 +23,7 @@ import {
   AGENT_AUTH_AGENT_ORDER,
   agentAuthAgentLabel,
   agentAuthCredentialAvailability,
+  agentAuthCredentialDisplayLabel,
   agentAuthCredentialKindLabel,
   agentAuthHarnessDescription,
   credentialSelectableReason,
@@ -89,8 +90,10 @@ export function CloudAgentAuthLibrary({ initialAgentKind = null }: CloudAgentAut
         localSourcesByProvider={library.localSourcesByProvider}
         personalSelections={library.personalSelections}
         rescanning={library.rescanning}
+        ensuringFreeCredits={library.ensuringFreeCredits}
         selecting={library.selectingTeamDefault}
         syncingLocalProvider={library.syncingLocalProvider}
+        onEnsureFreeCredits={library.handleEnsureFreeCredits}
         onEnsurePersonalProfile={library.handleEnsurePersonalProfile}
         onRescan={library.handleRescan}
         onSelectPersonalDefault={library.handleSelectPersonalDefault}
@@ -104,12 +107,14 @@ export function CloudAgentAuthLibrary({ initialAgentKind = null }: CloudAgentAut
         personalCredentials={personalCredentials}
         rescanning={library.rescanning}
         revokingCredentialId={library.revokingCredentialId}
+        ensuringFreeCredits={library.ensuringFreeCredits}
         syncingLocalProvider={library.syncingLocalProvider}
         organizations={library.organizationOptions}
         selectedOrganizationId={library.selectedOrganizationId}
         onSelectedOrganizationChange={library.setSelectedOrganizationId}
         onRescan={library.handleRescan}
         onRevokeCredential={library.handleRevokeCredential}
+        onEnsureFreeCredits={library.handleEnsureFreeCredits}
         onSyncLocalCredential={library.handleSyncLocalCredential}
       />
     </div>
@@ -124,8 +129,10 @@ function PersonalAuthInUseSection({
   localSourcesByProvider,
   personalSelections,
   rescanning,
+  ensuringFreeCredits,
   selecting,
   syncingLocalProvider,
+  onEnsureFreeCredits,
   onEnsurePersonalProfile,
   onRescan,
   onSelectPersonalDefault,
@@ -138,8 +145,10 @@ function PersonalAuthInUseSection({
   localSourcesByProvider: Map<AgentAuthProvider, LocalAgentAuthSource>;
   personalSelections: SandboxAgentAuthSelection[];
   rescanning: boolean;
+  ensuringFreeCredits: boolean;
   selecting: boolean;
   syncingLocalProvider: AgentAuthProvider | null;
+  onEnsureFreeCredits: () => void;
   onEnsurePersonalProfile: () => void;
   onRescan: () => void;
   onSelectPersonalDefault: (agentKind: AgentAuthAgentKind, credentialId: string) => void;
@@ -197,8 +206,10 @@ function PersonalAuthInUseSection({
                 capabilities={capabilities}
                 credentials={credentialsByAgent.get(agentKind) ?? []}
                 credentialsLoading={credentialsLoading}
+                ensuringFreeCredits={ensuringFreeCredits}
                 selecting={selecting}
                 selection={selectionsByAgent.get(agentKind)}
+                onEnsureFreeCredits={onEnsureFreeCredits}
                 onEnsurePersonalProfile={onEnsurePersonalProfile}
                 onSelectPersonalDefault={onSelectPersonalDefault}
               />
@@ -280,8 +291,10 @@ function PersonalCloudAuthCell({
   capabilities,
   credentials,
   credentialsLoading,
+  ensuringFreeCredits,
   selecting,
   selection,
+  onEnsureFreeCredits,
   onEnsurePersonalProfile,
   onSelectPersonalDefault,
 }: {
@@ -289,8 +302,10 @@ function PersonalCloudAuthCell({
   capabilities: AgentGatewayCapabilities | null;
   credentials: AgentAuthCredential[];
   credentialsLoading: boolean;
+  ensuringFreeCredits: boolean;
   selecting: boolean;
   selection: SandboxAgentAuthSelection | undefined;
+  onEnsureFreeCredits: () => void;
   onEnsurePersonalProfile: () => void;
   onSelectPersonalDefault: (agentKind: AgentAuthAgentKind, credentialId: string) => void;
 }) {
@@ -307,23 +322,35 @@ function PersonalCloudAuthCell({
   }
 
   if (credentials.length === 0) {
+    const canUseFreeCredits = capabilities?.enabled === true
+      && capabilities.managedCreditsPersonalEnabled
+      && capabilities.managedCreditAgentKinds.includes(agentKind);
     return (
       <Button
         type="button"
         variant="outline"
         size="sm"
         className="w-full justify-start"
-        onClick={() => onEnsurePersonalProfile()}
+        loading={canUseFreeCredits && ensuringFreeCredits}
+        onClick={() => {
+          if (canUseFreeCredits) {
+            onEnsureFreeCredits();
+            return;
+          }
+          onEnsurePersonalProfile();
+        }}
       >
         <ProviderIcon kind={agentKind} className="size-3.5 shrink-0 text-muted-foreground" />
-        No credential
+        {canUseFreeCredits ? "Use free credits" : "No credential"}
       </Button>
     );
   }
 
   return (
     <SettingsMenu
-      label={selectedCredential?.displayName ?? "Choose credential"}
+      label={selectedCredential
+        ? agentAuthCredentialDisplayLabel(selectedCredential)
+        : "Choose credential"}
       leading={<ProviderIcon kind={agentKind} className="size-3.5 shrink-0 text-muted-foreground" />}
       className="w-full"
       menuClassName="w-72"
@@ -337,7 +364,7 @@ function PersonalCloudAuthCell({
               ?? credentialSelectableReason(credential, "personal");
             return {
               id: credential.id,
-              label: credential.displayName,
+              label: agentAuthCredentialDisplayLabel(credential),
               icon: <ProviderIcon kind={credential.agentKind} className="size-3.5" />,
               detail: disabledReason
                 ?? (credentialSummaryDetails(credential)

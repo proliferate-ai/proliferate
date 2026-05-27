@@ -311,6 +311,17 @@ async def test_slot_generation_and_runtime_access_reject_stale_slot_reports(
     assert state.active_sandbox_id == second_slot.id
     assert state.slot_generation == second_slot.slot_generation
 
+    await supersede_slot(db_session, sandbox_id=first_slot.id)
+    stale_slot_touch_state = await agent_auth_store.get_target_state(
+        db_session,
+        sandbox_profile_id=profile_id,
+        target_id=target_id,
+    )
+    assert stale_slot_touch_state is not None
+    assert stale_slot_touch_state.agent_auth_status == "applied"
+    assert stale_slot_touch_state.active_sandbox_id == second_slot.id
+    assert stale_slot_touch_state.slot_generation == second_slot.slot_generation
+
     await supersede_slot(db_session, sandbox_id=second_slot.id)
     invalidated_state = await agent_auth_store.get_target_state(
         db_session,

@@ -63,10 +63,6 @@ Services:
 
 - `caddy`: public HTTPS endpoint
 - `db`: bundled Postgres 16
-- `litellm-db`: optional private LiteLLM Postgres, enabled by the
-  `agent-gateway` compose profile
-- `litellm`: optional private LiteLLM proxy, enabled by the `agent-gateway`
-  compose profile
 - `migrate`: one-shot Alembic job
 - `api`: Proliferate control plane
 
@@ -90,16 +86,16 @@ Desktop -> https://api.company.com -> Caddy -> API
 Cloud workspace runtimes are still provider-hosted. The control plane returns a
 `runtimeUrl`, and the desktop talks to that runtime directly.
 
-The agent LLM gateway uses the same public control-plane hostname for sandbox
-model traffic:
+The agent LLM gateway uses a Bifrost inference endpoint for sandbox model
+traffic:
 
 ```text
-Sandbox harness -> https://api.company.com/anthropic/... -> Caddy -> API gateway routes
-API gateway routes -> private LiteLLM service -> provider API
+Sandbox harness -> https://llm.company.com/anthropic/... -> Bifrost -> provider API
 ```
 
-LiteLLM is not exposed on the public host. The API talks to it through
-`AGENT_GATEWAY_LITELLM_BASE_URL=http://litellm:4000` inside the Docker network.
+The Proliferate API talks to the protected Bifrost management API through
+`AGENT_GATEWAY_BIFROST_BASE_URL`. Sandboxes receive only virtual keys and
+`AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL`.
 
 ## First-Time Setup
 
@@ -118,7 +114,8 @@ LiteLLM is not exposed on the public host. The API talks to it through
    - `E2B_API_KEY` or `DAYTONA_API_KEY`
    - optional agent gateway:
      - `AGENT_GATEWAY_ENABLED=true`
-     - `AGENT_GATEWAY_PUBLIC_BASE_URL=https://api.company.com`
+     - `AGENT_GATEWAY_BIFROST_BASE_URL=https://bifrost-admin.company.com`
+     - `AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL=https://llm.company.com`
      - `AGENT_GATEWAY_RECONCILER_ENABLED=true`
      - `AGENT_GATEWAY_DEFAULT_MANAGED_BUDGET_USD` if managed credits should be
        available
@@ -128,11 +125,9 @@ LiteLLM is not exposed on the public host. The API talks to it through
    - for advanced auth-flow, sandbox template, timeout, or runtime-path
      overrides, add the extra env vars manually from
      [docs/reference/env-secrets-matrix.md](/Users/pablo/proliferate/docs/reference/env-secrets-matrix.md)
-5. Leave `POSTGRES_PASSWORD`, `JWT_SECRET`, `CLOUD_SECRET_KEY`,
-   `LITELLM_POSTGRES_PASSWORD`, and `AGENT_GATEWAY_LITELLM_MASTER_KEY` blank if
-   you want `bootstrap.sh` to generate and persist them in
-   `server/deploy/.env.generated` on first startup. LiteLLM master keys must
-   start with `sk-`; generated keys do.
+5. Leave `POSTGRES_PASSWORD`, `JWT_SECRET`, and `CLOUD_SECRET_KEY` blank if you
+   want `bootstrap.sh` to generate and persist them in
+   `server/deploy/.env.generated` on first startup.
 6. Optionally put host-local overrides in `server/deploy/.env.local`.
    `ensure-secrets.sh` merges `.env.static` with `.env.local` into
    `.env.runtime`, and `.env.local` wins for non-secret operator settings. This
@@ -195,11 +190,9 @@ docker compose -f docker-compose.production.yml run --rm migrate
 docker compose -f docker-compose.production.yml up -d
 ```
 
-When `AGENT_GATEWAY_ENABLED=true`, `bootstrap.sh` and `update.sh` automatically
-pass `--profile agent-gateway` to Docker Compose so `litellm-db` and `litellm`
-are created and updated with the rest of the stack. If the gateway is later
-disabled, `update.sh` stops and removes the LiteLLM containers while preserving
-the `litellm_pgdata` volume.
+When `AGENT_GATEWAY_ENABLED=true`, `bootstrap.sh` and `update.sh` start the same
+API stack and expect the configured Bifrost endpoints to be reachable. The
+Compose stack no longer creates a bundled gateway service.
 
 Recommended image strategy:
 

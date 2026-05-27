@@ -9,7 +9,7 @@ import logging
 import math
 import secrets
 from datetime import datetime, timedelta
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -146,6 +146,7 @@ from proliferate.server.billing.domain.webhooks import (
 )
 from proliferate.server.billing.models import (
     BillingOverview,
+    BillingReturnSurface,
     BillingServiceError,
     BillingSnapshot,
     BillingUrlResponse,
@@ -718,7 +719,21 @@ def _map_stripe_error(error: stripe_billing.StripeBillingError) -> BillingServic
     return BillingServiceError(error.code, error.message, status_code=error.status_code)
 
 
-def _require_redirect_urls() -> tuple[str, str, str]:
+def _with_billing_return_surface(url: str, return_surface: BillingReturnSurface) -> str:
+    if return_surface == "web":
+        return url
+    parts = urlsplit(url)
+    params = parse_qsl(parts.query, keep_blank_values=True)
+    params = [(key, value) for key, value in params if key != "returnSurface"]
+    params.append(("returnSurface", return_surface))
+    return urlunsplit(
+        (parts.scheme, parts.netloc, parts.path, urlencode(params), parts.fragment)
+    )
+
+
+def _require_redirect_urls(
+    return_surface: BillingReturnSurface = "web",
+) -> tuple[str, str, str]:
     success_url = settings.stripe_checkout_success_url
     cancel_url = settings.stripe_checkout_cancel_url
     portal_return_url = settings.stripe_customer_portal_return_url
@@ -728,7 +743,11 @@ def _require_redirect_urls() -> tuple[str, str, str]:
             "Stripe redirect URLs are not configured.",
             status_code=503,
         )
-    return success_url, cancel_url, portal_return_url
+    return (
+        _with_billing_return_surface(success_url, return_surface),
+        _with_billing_return_surface(cancel_url, return_surface),
+        _with_billing_return_surface(portal_return_url, return_surface),
+    )
 
 
 def _idempotency_shape_suffix(*parts: str | int | None) -> str:
@@ -1062,70 +1081,24 @@ async def _ensure_stripe_customer_for_team_checkout(
     return customer_id
 
 
-async def create_team_checkout_session(
+async def _create_stripe_session_for_team_checkout_intent(
     db: AsyncSession,
-    user: User,
     *,
-    team_name: str,
-    invite_emails: list[str],
+    user: User,
+    intent_record: CheckoutIntentWithOrganizationRecord,
+    success_url: str,
+    cancel_url: str,
 ) -> TeamCheckoutResponse:
-    if not settings.pro_billing_enabled:
-        raise BillingServiceError(
-            "org_pro_billing_disabled",
-            "Team billing is not available yet.",
-            status_code=409,
-        )
-    clean_name = _raise_team_name_issue(team_name)
-    normalized_invites = sorted({email.strip().lower() for email in invite_emails if email})
-    success_url, cancel_url, _portal_return_url = _require_redirect_urls()
-    try:
-        await stripe_billing.validate_pro_subscription_price_configuration()
-    except stripe_billing.StripeBillingError as error:
-        raise _map_stripe_error(error) from error
-
-    async with db.begin():
-        await acquire_membership_activation_lock(db, user.id)
-        current = await get_current_membership_for_user(db, user.id)
-        if current is not None:
-            raise BillingServiceError(
-                "already_in_organization",
-                "You already belong to a team.",
-                status_code=409,
-            )
-        existing = await get_current_team_checkout_intent(db, user.id)
-        if existing is not None and existing.intent.checkout_url:
-            return TeamCheckoutResponse(
-                url=existing.intent.checkout_url,
-                intent_id=str(existing.intent.id),
-            )
-        if existing is not None:
-            await cancel_team_checkout_intent(
-                db,
-                intent_id=existing.intent.id,
-                created_by_user_id=user.id,
-            )
-        intent_record = await create_pending_team_checkout_intent(
-            db,
-            created_by_user_id=user.id,
-            team_name=clean_name,
-            logo_domain=derive_logo_domain_from_email(user.email),
-            idempotency_key=(
-                f"team-checkout-intent:{user.id}:"
-                f"{_idempotency_shape_suffix(clean_name, len(normalized_invites))}"
-            ),
-            invite_emails=normalized_invites,
-            expires_at=utcnow() + timedelta(hours=24),
-        )
-
     stripe_customer_id = await _ensure_stripe_customer_for_team_checkout(
         db,
         user=user,
         organization_id=intent_record.organization.id,
         billing_subject_id=intent_record.intent.billing_subject_id,
-        team_name=clean_name,
+        team_name=intent_record.intent.team_name,
     )
     monthly_price_id = configured_pro_monthly_price_id()
     overage_price_id = configured_managed_cloud_overage_price_id()
+    previous_session_id = intent_record.intent.stripe_checkout_session_id or "initial"
     checkout_shape = _idempotency_shape_suffix(
         monthly_price_id,
         overage_price_id,
@@ -1133,6 +1106,7 @@ async def create_team_checkout_session(
         success_url,
         cancel_url,
         intent_record.intent.id,
+        previous_session_id,
     )
     try:
         checkout = await stripe_billing.create_subscription_checkout_session(
@@ -1172,6 +1146,63 @@ async def create_team_checkout_session(
             status_code=409,
         )
     return TeamCheckoutResponse(url=checkout.url, intent_id=str(intent_record.intent.id))
+
+
+async def create_team_checkout_session(
+    db: AsyncSession,
+    user: User,
+    *,
+    team_name: str,
+    invite_emails: list[str],
+    return_surface: BillingReturnSurface = "web",
+) -> TeamCheckoutResponse:
+    if not settings.pro_billing_enabled:
+        raise BillingServiceError(
+            "org_pro_billing_disabled",
+            "Team billing is not available yet.",
+            status_code=409,
+        )
+    clean_name = _raise_team_name_issue(team_name)
+    normalized_invites = sorted({email.strip().lower() for email in invite_emails if email})
+    success_url, cancel_url, _portal_return_url = _require_redirect_urls(return_surface)
+    try:
+        await stripe_billing.validate_pro_subscription_price_configuration()
+    except stripe_billing.StripeBillingError as error:
+        raise _map_stripe_error(error) from error
+
+    async with db.begin():
+        await acquire_membership_activation_lock(db, user.id)
+        current = await get_current_membership_for_user(db, user.id)
+        if current is not None:
+            raise BillingServiceError(
+                "already_in_organization",
+                "You already belong to a team.",
+                status_code=409,
+            )
+        existing = await get_current_team_checkout_intent(db, user.id)
+        if existing is not None:
+            intent_record = existing
+        else:
+            intent_record = await create_pending_team_checkout_intent(
+                db,
+                created_by_user_id=user.id,
+                team_name=clean_name,
+                logo_domain=derive_logo_domain_from_email(user.email),
+                idempotency_key=(
+                    f"team-checkout-intent:{user.id}:"
+                    f"{_idempotency_shape_suffix(clean_name, len(normalized_invites))}"
+                ),
+                invite_emails=normalized_invites,
+                expires_at=utcnow() + timedelta(hours=24),
+            )
+
+    return await _create_stripe_session_for_team_checkout_intent(
+        db,
+        user=user,
+        intent_record=intent_record,
+        success_url=success_url,
+        cancel_url=cancel_url,
+    )
 
 
 async def get_current_team_checkout(
@@ -1432,6 +1463,7 @@ async def create_cloud_checkout_session(
     db: AsyncSession,
     user: User,
     owner_selection: OwnerSelection | None = None,
+    return_surface: BillingReturnSurface = "web",
 ) -> BillingUrlResponse:
     selection = owner_selection or OwnerSelection()
     org_context: OwnerContext | None = None
@@ -1452,7 +1484,7 @@ async def create_cloud_checkout_session(
                 "Organization Pro billing is not available yet.",
                 status_code=409,
             )
-    success_url, cancel_url, portal_return_url = _require_redirect_urls()
+    success_url, cancel_url, portal_return_url = _require_redirect_urls(return_surface)
     try:
         if settings.pro_billing_enabled:
             await stripe_billing.validate_pro_subscription_price_configuration()
@@ -1533,6 +1565,7 @@ async def create_refill_checkout_session(
     db: AsyncSession,
     user: User,
     owner_selection: OwnerSelection | None = None,
+    return_surface: BillingReturnSurface = "web",
 ) -> BillingUrlResponse:
     selection = owner_selection or OwnerSelection()
     if selection.owner_scope == "organization":
@@ -1547,7 +1580,7 @@ async def create_refill_checkout_session(
             "Refill checkout is not available for Pro billing.",
             status_code=409,
         )
-    success_url, cancel_url, _portal_return_url = _require_redirect_urls()
+    success_url, cancel_url, _portal_return_url = _require_redirect_urls(return_surface)
     try:
         await stripe_billing.validate_refill_price_configuration()
     except stripe_billing.StripeBillingError as error:
@@ -1580,8 +1613,9 @@ async def create_customer_portal_session(
     db: AsyncSession,
     user: User,
     owner_selection: OwnerSelection | None = None,
+    return_surface: BillingReturnSurface = "web",
 ) -> BillingUrlResponse:
-    _success_url, _cancel_url, portal_return_url = _require_redirect_urls()
+    _success_url, _cancel_url, portal_return_url = _require_redirect_urls(return_surface)
     subject_id, stripe_customer_id = await _ensure_stripe_customer_for_owner(
         db,
         user,

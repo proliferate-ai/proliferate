@@ -139,6 +139,7 @@ class AgentGatewayProviderKind(StrEnum):
     proliferate_bedrock_pool = "proliferate_bedrock_pool"
     anthropic_api_key = "anthropic_api_key"
     openai_api_key = "openai_api_key"
+    gemini_api_key = "gemini_api_key"
     bedrock_assume_role = "bedrock_assume_role"
     openai_compatible = "openai_compatible"
 
@@ -171,6 +172,29 @@ class SandboxAgentAuthTargetStateStatus(StrEnum):
 class AgentGatewayProtocolFacade(StrEnum):
     anthropic = "anthropic"
     openai = "openai"
+    genai = "genai"
+
+
+class AgentGatewayRouterKind(StrEnum):
+    bifrost = "bifrost"
+
+
+class AgentGatewayRouterObjectKind(StrEnum):
+    provider_key = "provider_key"
+    virtual_key = "virtual_key"
+
+
+class AgentGatewayRouterObjectScope(StrEnum):
+    budget_subject = "budget_subject"
+    policy = "policy"
+    runtime_selection = "runtime_selection"
+
+
+class AgentGatewayRouterMaterializationStatus(StrEnum):
+    active = "active"
+    disabled = "disabled"
+    failed = "failed"
+    revoked = "revoked"
 
 
 SUPPORTED_SANDBOX_PROFILE_OWNER_SCOPES: tuple[str, ...] = tuple(
@@ -230,9 +254,19 @@ SUPPORTED_SANDBOX_PROFILE_TARGET_STATE_STATUSES: tuple[str, ...] = (
 SUPPORTED_AGENT_GATEWAY_PROTOCOL_FACADES: tuple[str, ...] = tuple(
     facade.value for facade in AgentGatewayProtocolFacade
 )
+SUPPORTED_AGENT_GATEWAY_ROUTER_KINDS: tuple[str, ...] = tuple(
+    kind.value for kind in AgentGatewayRouterKind
+)
+SUPPORTED_AGENT_GATEWAY_ROUTER_OBJECT_KINDS: tuple[str, ...] = tuple(
+    kind.value for kind in AgentGatewayRouterObjectKind
+)
+SUPPORTED_AGENT_GATEWAY_ROUTER_OBJECT_SCOPES: tuple[str, ...] = tuple(
+    scope.value for scope in AgentGatewayRouterObjectScope
+)
+SUPPORTED_AGENT_GATEWAY_ROUTER_MATERIALIZATION_STATUSES: tuple[str, ...] = tuple(
+    status.value for status in AgentGatewayRouterMaterializationStatus
+)
 
-AGENT_GATEWAY_RUNTIME_GRANT_TOKEN_DOMAIN: Final = "agent-gateway-runtime-grant"
-AGENT_GATEWAY_TOKEN_HASH_KEY_ID: Final = "cloud_secret_key:v1"
 AGENT_GATEWAY_CIPHERTEXT_KEY_ID: Final = "cloud_secret_key:v1"
 AGENT_GATEWAY_BUDGET_DURATION_V1: Final = "30d"
 

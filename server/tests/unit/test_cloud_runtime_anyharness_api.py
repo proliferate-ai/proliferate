@@ -10,6 +10,7 @@ from proliferate.integrations.anyharness import (
 )
 from proliferate.server.cloud.runtime import anyharness_api
 from proliferate.server.cloud.runtime.anyharness_api import (
+    _auth_overlay_ready_agent_kinds,
     _install_required_agent_kinds,
     _ready_required_agent_kinds,
 )
@@ -197,6 +198,40 @@ async def test_reconcile_remote_agents_installs_only_install_required_agents(
     assert install_calls == ["codex"]
 
 
+@pytest.mark.asyncio
+async def test_reconcile_remote_agents_accepts_auth_overlay_credential_gated_agents(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _list_remote_agents(*_args: object, **_kwargs: object) -> list[RemoteAgentSummary]:
+        return [
+            RemoteAgentSummary(
+                kind="claude",
+                readiness="login_required",
+                credential_state="login_required",
+            ),
+            RemoteAgentSummary(
+                kind="codex",
+                readiness="credentials_required",
+                credential_state="missing_env",
+            ),
+        ]
+
+    async def _install_remote_agent(*_args: object, **_kwargs: object) -> RemoteAgentSummary:
+        raise AssertionError("credential-gated agents should not be installed")
+
+    monkeypatch.setattr(anyharness_api, "_list_remote_agents", _list_remote_agents)
+    monkeypatch.setattr(anyharness_api, "_install_remote_agent", _install_remote_agent)
+
+    ready_agents = await anyharness_api.reconcile_remote_agents(
+        "https://runtime.invalid",
+        "runtime-token",
+        required_agent_kinds=["claude", "codex"],
+        auth_overlay_agent_kinds=["claude", "codex"],
+    )
+
+    assert ready_agents == ["claude", "codex"]
+
+
 def test_install_required_agent_kinds_includes_gemini() -> None:
     providers = _install_required_agent_kinds(
         [
@@ -211,6 +246,32 @@ def test_install_required_agent_kinds_includes_gemini() -> None:
     )
 
     assert providers == ["gemini"]
+
+
+def test_auth_overlay_ready_agent_kinds_only_accepts_credential_gated_agents() -> None:
+    providers = _auth_overlay_ready_agent_kinds(
+        [
+            RemoteAgentSummary(
+                kind="claude",
+                readiness="login_required",
+                credential_state="login_required",
+            ),
+            RemoteAgentSummary(
+                kind="codex",
+                readiness="credentials_required",
+                credential_state="missing_env",
+            ),
+            RemoteAgentSummary(
+                kind="gemini",
+                readiness="install_required",
+                credential_state=None,
+            ),
+            RemoteAgentSummary(kind="opencode", readiness="error", credential_state=None),
+        ],
+        ["claude", "codex", "gemini", "opencode"],
+    )
+
+    assert providers == ["claude", "codex"]
 
 
 def test_ready_required_agent_kinds_includes_gemini() -> None:

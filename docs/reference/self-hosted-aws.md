@@ -16,8 +16,6 @@ The host then runs the same production deployment from `server/deploy/**`:
 
 - `caddy`
 - `db`
-- optional `litellm-db` through the `agent-gateway` compose profile
-- optional `litellm` through the `agent-gateway` compose profile
 - `migrate`
 - `api`
 
@@ -65,8 +63,6 @@ bootstrap if you leave them blank:
 - `JWT_SECRET`
 - `CLOUD_SECRET_KEY`
 - `POSTGRES_PASSWORD`
-- `LITELLM_POSTGRES_PASSWORD`
-- `AGENT_GATEWAY_LITELLM_MASTER_KEY`
 
 For a real domain:
 
@@ -129,14 +125,15 @@ overrides should go in `/opt/proliferate/server/deploy/.env.local`:
 
 ```text
 AGENT_GATEWAY_ENABLED=true
-AGENT_GATEWAY_PUBLIC_BASE_URL=https://<site-address>
+AGENT_GATEWAY_BIFROST_BASE_URL=https://<private-or-protected-bifrost-admin>
+AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL=https://<public-bifrost-inference>
 AGENT_GATEWAY_RECONCILER_ENABLED=true
 ```
 
 Then run `/opt/proliferate/server/deploy/update.sh`. The update script merges
-`.env.static` with `.env.local`, starts the private LiteLLM services through the
-`agent-gateway` compose profile, and preserves the override across later stack
-updates.
+`.env.static` with `.env.local` and preserves the override across later stack
+updates. Self-hosted agent gateway deployments now point at Bifrost; the Compose
+stack no longer includes a bundled LiteLLM service.
 
 ## Update Flow
 

@@ -168,6 +168,7 @@ export type OrganizationInvitationAcceptResponse =
 export interface TeamCheckoutRequest {
   teamName: string;
   inviteEmails?: string[];
+  returnSurface?: "desktop" | "web";
 }
 export interface TeamCheckoutResponse {
   url: string;

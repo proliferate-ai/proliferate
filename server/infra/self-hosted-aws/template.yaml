@@ -411,43 +411,6 @@ Resources:
                       timeout: 3s
                       retries: 10
 
-                  litellm-db:
-                    image: postgres:16-alpine
-                    profiles: ["agent-gateway"]
-                    restart: unless-stopped
-                    environment:
-                      POSTGRES_DB: ${LITELLM_POSTGRES_DB}
-                      POSTGRES_USER: ${LITELLM_POSTGRES_USER}
-                      POSTGRES_PASSWORD: ${LITELLM_POSTGRES_PASSWORD}
-                    volumes:
-                      - litellm_pgdata:/var/lib/postgresql/data
-                    healthcheck:
-                      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
-                      interval: 5s
-                      timeout: 3s
-                      retries: 10
-
-                  litellm:
-                    image: ${LITELLM_IMAGE:-ghcr.io/berriai/litellm:main-stable}
-                    profiles: ["agent-gateway"]
-                    restart: unless-stopped
-                    environment:
-                      DATABASE_URL: postgresql://${LITELLM_POSTGRES_USER}:${LITELLM_POSTGRES_PASSWORD}@litellm-db:5432/${LITELLM_POSTGRES_DB}
-                      LITELLM_MASTER_KEY: ${AGENT_GATEWAY_LITELLM_MASTER_KEY}
-                      STORE_MODEL_IN_DB: "True"
-                    depends_on:
-                      litellm-db:
-                        condition: service_healthy
-                    command: ["--host", "0.0.0.0", "--port", "4000"]
-                    healthcheck:
-                      test:
-                        [
-                          "CMD-SHELL",
-                          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=3)\"",
-                        ]
-                      interval: 10s
-                      timeout: 5s
-                      retries: 12
 
                   migrate:
                     image: ${PROLIFERATE_SERVER_IMAGE:-ghcr.io/proliferate-ai/proliferate-server}:${PROLIFERATE_SERVER_IMAGE_TAG:-stable}
@@ -486,7 +449,6 @@ Resources:
 
                 volumes:
                   pgdata:
-                  litellm_pgdata:
                   caddy_data:
                   caddy_config:
 
@@ -546,14 +508,8 @@ Resources:
                 "$SCRIPT_DIR/install-runtime.sh"
 
                 COMPOSE_ARGS=(--env-file "$RUNTIME_ENV_FILE" -f "$SCRIPT_DIR/docker-compose.production.yml")
-                if grep -Eiq '^AGENT_GATEWAY_ENABLED=(true|1|yes)$' "$RUNTIME_ENV_FILE"; then
-                  COMPOSE_ARGS+=(--profile agent-gateway)
-                fi
 
                 docker compose "${COMPOSE_ARGS[@]}" up -d db
-                if grep -Eiq '^AGENT_GATEWAY_ENABLED=(true|1|yes)$' "$RUNTIME_ENV_FILE"; then
-                  docker compose "${COMPOSE_ARGS[@]}" up -d litellm
-                fi
                 docker compose "${COMPOSE_ARGS[@]}" run --rm migrate
                 docker compose "${COMPOSE_ARGS[@]}" up -d api caddy
 
@@ -593,12 +549,6 @@ Resources:
                 "$SCRIPT_DIR/install-runtime.sh"
 
                 COMPOSE_ARGS=(--env-file "$RUNTIME_ENV_FILE" -f "$COMPOSE_FILE")
-                if grep -Eiq '^AGENT_GATEWAY_ENABLED=(true|1|yes)$' "$RUNTIME_ENV_FILE"; then
-                  COMPOSE_ARGS+=(--profile agent-gateway)
-                else
-                  docker compose --env-file "$RUNTIME_ENV_FILE" -f "$COMPOSE_FILE" --profile agent-gateway stop litellm litellm-db || true
-                  docker compose --env-file "$RUNTIME_ENV_FILE" -f "$COMPOSE_FILE" --profile agent-gateway rm -f litellm litellm-db || true
-                fi
 
                 docker compose "${COMPOSE_ARGS[@]}" pull
                 docker compose "${COMPOSE_ARGS[@]}" run --rm migrate
@@ -670,7 +620,7 @@ Resources:
                     return 0
                   fi
 
-                  managed_pattern="^(POSTGRES_PASSWORD|DATABASE_URL|JWT_SECRET|CLOUD_SECRET_KEY|LITELLM_POSTGRES_DB|LITELLM_POSTGRES_USER|LITELLM_POSTGRES_PASSWORD|AGENT_GATEWAY_LITELLM_BASE_URL|AGENT_GATEWAY_LITELLM_MASTER_KEY|AGENT_GATEWAY_PUBLIC_BASE_URL|SITE_ADDRESS|PROLIFERATE_PUBLIC_HEALTHCHECK_URL|PROLIFERATE_USE_SSLIP_FALLBACK)$"
+                  managed_pattern="^(POSTGRES_PASSWORD|DATABASE_URL|JWT_SECRET|CLOUD_SECRET_KEY|SITE_ADDRESS|PROLIFERATE_PUBLIC_HEALTHCHECK_URL|PROLIFERATE_USE_SSLIP_FALLBACK)$"
 
                   if [[ -n "$override_file" && -f "$override_file" ]]; then
                     awk -F= -v managed_pattern="$managed_pattern" '
@@ -766,37 +716,13 @@ Resources:
                   random_hex "$random_bytes"
                 }
 
-                resolve_litellm_master_key() {
-                  local generated_value="$1"
-                  local static_value="$2"
-
-                  if [[ -n "$generated_value" ]]; then
-                    printf '%s' "$generated_value"
-                    return 0
-                  fi
-
-                  if [[ -n "$static_value" ]]; then
-                    printf '%s' "$static_value"
-                    return 0
-                  fi
-
-                  printf 'sk-proliferate-%s' "$(random_hex 24)"
-                }
-
                 POSTGRES_DB="$(read_config_env_value POSTGRES_DB)"
                 POSTGRES_USER="$(read_config_env_value POSTGRES_USER)"
-                LITELLM_POSTGRES_DB="$(read_config_env_value LITELLM_POSTGRES_DB)"
-                LITELLM_POSTGRES_USER="$(read_config_env_value LITELLM_POSTGRES_USER)"
                 POSTGRES_DB="${POSTGRES_DB:-proliferate}"
                 POSTGRES_USER="${POSTGRES_USER:-proliferate}"
-                LITELLM_POSTGRES_DB="${LITELLM_POSTGRES_DB:-litellm}"
-                LITELLM_POSTGRES_USER="${LITELLM_POSTGRES_USER:-litellm}"
                 SITE_ADDRESS="$(read_config_env_value SITE_ADDRESS)"
                 PUBLIC_HEALTHCHECK_URL="$(read_config_env_value PROLIFERATE_PUBLIC_HEALTHCHECK_URL)"
                 USE_SSLIP_FALLBACK="$(read_config_env_value PROLIFERATE_USE_SSLIP_FALLBACK)"
-                AGENT_GATEWAY_ENABLED="$(read_config_env_value AGENT_GATEWAY_ENABLED)"
-                AGENT_GATEWAY_LITELLM_BASE_URL="$(read_config_env_value AGENT_GATEWAY_LITELLM_BASE_URL)"
-                AGENT_GATEWAY_PUBLIC_BASE_URL="$(read_config_env_value AGENT_GATEWAY_PUBLIC_BASE_URL)"
 
                 if [[ -z "$SITE_ADDRESS" && "$USE_SSLIP_FALLBACK" == "true" ]]; then
                   SITE_ADDRESS="$(resolve_instance_public_ip).sslip.io"
@@ -809,19 +735,6 @@ Resources:
 
                 if [[ -z "$PUBLIC_HEALTHCHECK_URL" ]]; then
                   PUBLIC_HEALTHCHECK_URL="https://${SITE_ADDRESS}/health"
-                fi
-
-                if printf '%s' "$AGENT_GATEWAY_ENABLED" | grep -Eiq '^(true|1|yes)$' \
-                  && {
-                    [[ -z "$AGENT_GATEWAY_LITELLM_BASE_URL" ]] \
-                      || [[ "$AGENT_GATEWAY_LITELLM_BASE_URL" == "http://127.0.0.1:4000" ]] \
-                      || [[ "$AGENT_GATEWAY_LITELLM_BASE_URL" == "http://localhost:4000" ]]
-                  }; then
-                  AGENT_GATEWAY_LITELLM_BASE_URL="http://litellm:4000"
-                fi
-
-                if [[ -z "$AGENT_GATEWAY_PUBLIC_BASE_URL" || "$AGENT_GATEWAY_PUBLIC_BASE_URL" == "https://" ]]; then
-                  AGENT_GATEWAY_PUBLIC_BASE_URL="https://${SITE_ADDRESS}"
                 fi
 
                 POSTGRES_PASSWORD="$(resolve_value \
@@ -839,27 +752,12 @@ Resources:
                   "$(read_env_value "$GENERATED_ENV_FILE" CLOUD_SECRET_KEY)" \
                   "$(read_config_env_value CLOUD_SECRET_KEY)" \
                   32)"
-                LITELLM_POSTGRES_PASSWORD="$(resolve_value \
-                  LITELLM_POSTGRES_PASSWORD \
-                  "$(read_env_value "$GENERATED_ENV_FILE" LITELLM_POSTGRES_PASSWORD)" \
-                  "$(read_config_env_value LITELLM_POSTGRES_PASSWORD)" \
-                  24)"
-                AGENT_GATEWAY_LITELLM_MASTER_KEY="$(resolve_litellm_master_key \
-                  "$(read_env_value "$GENERATED_ENV_FILE" AGENT_GATEWAY_LITELLM_MASTER_KEY)" \
-                  "$(read_config_env_value AGENT_GATEWAY_LITELLM_MASTER_KEY)")"
-
-                if [[ "$AGENT_GATEWAY_LITELLM_MASTER_KEY" != sk-* ]]; then
-                  echo "AGENT_GATEWAY_LITELLM_MASTER_KEY must start with 'sk-' for LiteLLM." >&2
-                  exit 1
-                fi
 
                 cat >"$GENERATED_ENV_FILE" <<EOF
                 # Generated on first bootstrap. Preserve this file to keep stack-managed secrets stable.
                 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
                 JWT_SECRET=$JWT_SECRET
                 CLOUD_SECRET_KEY=$CLOUD_SECRET_KEY
-                LITELLM_POSTGRES_PASSWORD=$LITELLM_POSTGRES_PASSWORD
-                AGENT_GATEWAY_LITELLM_MASTER_KEY=$AGENT_GATEWAY_LITELLM_MASTER_KEY
                 EOF
 
                 {
@@ -869,15 +767,9 @@ Resources:
                   printf 'SITE_ADDRESS=%s\n' "$SITE_ADDRESS"
                   printf 'PROLIFERATE_PUBLIC_HEALTHCHECK_URL=%s\n' "$PUBLIC_HEALTHCHECK_URL"
                   printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
-                  printf 'LITELLM_POSTGRES_DB=%s\n' "$LITELLM_POSTGRES_DB"
-                  printf 'LITELLM_POSTGRES_USER=%s\n' "$LITELLM_POSTGRES_USER"
-                  printf 'LITELLM_POSTGRES_PASSWORD=%s\n' "$LITELLM_POSTGRES_PASSWORD"
                   printf 'DATABASE_URL=postgresql+asyncpg://%s:%s@db:5432/%s\n' "$POSTGRES_USER" "$POSTGRES_PASSWORD" "$POSTGRES_DB"
                   printf 'JWT_SECRET=%s\n' "$JWT_SECRET"
                   printf 'CLOUD_SECRET_KEY=%s\n' "$CLOUD_SECRET_KEY"
-                  printf 'AGENT_GATEWAY_LITELLM_BASE_URL=%s\n' "$AGENT_GATEWAY_LITELLM_BASE_URL"
-                  printf 'AGENT_GATEWAY_LITELLM_MASTER_KEY=%s\n' "$AGENT_GATEWAY_LITELLM_MASTER_KEY"
-                  printf 'AGENT_GATEWAY_PUBLIC_BASE_URL=%s\n' "$AGENT_GATEWAY_PUBLIC_BASE_URL"
                 } >"$RUNTIME_ENV_FILE"
 
                 chmod 600 "$GENERATED_ENV_FILE" "$RUNTIME_ENV_FILE"
@@ -1108,30 +1000,23 @@ Resources:
                 GITHUB_OAUTH_CLIENT_ID=
                 GITHUB_OAUTH_CLIENT_SECRET=
                 AGENT_GATEWAY_ENABLED=false
-                AGENT_GATEWAY_LITELLM_BASE_URL=http://litellm:4000
-                AGENT_GATEWAY_LITELLM_MASTER_KEY=
-                AGENT_GATEWAY_PUBLIC_BASE_URL=https://api.company.com
-                AGENT_GATEWAY_MANAGED_BUDGET_FREE_USD=0
-                AGENT_GATEWAY_MANAGED_BUDGET_PRO_USD=0
-                AGENT_GATEWAY_MANAGED_BUDGET_UNLIMITED_USD=0
+                AGENT_GATEWAY_BIFROST_BASE_URL=http://127.0.0.1:8080
+                AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL=https://gateway.company.com
+                AGENT_GATEWAY_BIFROST_ADMIN_TOKEN=
+                AGENT_GATEWAY_BIFROST_ISOLATION_VERIFIED=false
+                AGENT_GATEWAY_DEFAULT_MANAGED_BUDGET_USD=0
                 AGENT_GATEWAY_USER_FREE_CREDIT_ENABLED=false
                 AGENT_GATEWAY_USER_FREE_CREDIT_USD=0
                 AGENT_GATEWAY_USER_FREE_CREDIT_PERIOD=registration
                 AGENT_GATEWAY_MANAGED_CREDIT_AGENT_KINDS=claude
                 AGENT_GATEWAY_BYOK_ENABLED=false
                 AGENT_GATEWAY_PERSONAL_BYOK_ENABLED=false
-                AGENT_GATEWAY_LITELLM_TOPOLOGY=oss_shared
-                AGENT_GATEWAY_LITELLM_CUSTOMER_SECRET_ISOLATION_VERIFIED=false
                 AGENT_GATEWAY_MAX_REQUEST_BYTES=4194304
                 AGENT_GATEWAY_REQUEST_TIMEOUT_SECONDS=120.0
                 AGENT_GATEWAY_OPENCODE_ENABLED=false
                 AGENT_GATEWAY_RECONCILER_ENABLED=false
                 AGENT_GATEWAY_RECONCILER_INTERVAL_SECONDS=300.0
                 AGENT_GATEWAY_RECONCILER_BATCH_SIZE=50
-                LITELLM_IMAGE=ghcr.io/berriai/litellm:main-stable
-                LITELLM_POSTGRES_DB=litellm
-                LITELLM_POSTGRES_USER=litellm
-                LITELLM_POSTGRES_PASSWORD=
                 SANDBOX_PROVIDER=e2b
                 E2B_API_KEY=
                 # Use the published cloud runtime template for hosted E2B workspaces.
@@ -1196,30 +1081,23 @@ Resources:
                   GITHUB_OAUTH_CLIENT_ID=${GitHubOAuthClientId}
                   GITHUB_OAUTH_CLIENT_SECRET=${GitHubOAuthClientSecret}
                   AGENT_GATEWAY_ENABLED=false
-                  AGENT_GATEWAY_LITELLM_BASE_URL=http://litellm:4000
-                  AGENT_GATEWAY_LITELLM_MASTER_KEY=
-                  AGENT_GATEWAY_PUBLIC_BASE_URL=
-                  AGENT_GATEWAY_MANAGED_BUDGET_FREE_USD=0
-                  AGENT_GATEWAY_MANAGED_BUDGET_PRO_USD=0
-                  AGENT_GATEWAY_MANAGED_BUDGET_UNLIMITED_USD=0
+                  AGENT_GATEWAY_BIFROST_BASE_URL=http://127.0.0.1:8080
+                  AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL=
+                  AGENT_GATEWAY_BIFROST_ADMIN_TOKEN=
+                  AGENT_GATEWAY_BIFROST_ISOLATION_VERIFIED=false
+                  AGENT_GATEWAY_DEFAULT_MANAGED_BUDGET_USD=0
                   AGENT_GATEWAY_USER_FREE_CREDIT_ENABLED=false
                   AGENT_GATEWAY_USER_FREE_CREDIT_USD=0
                   AGENT_GATEWAY_USER_FREE_CREDIT_PERIOD=registration
                   AGENT_GATEWAY_MANAGED_CREDIT_AGENT_KINDS=claude
                   AGENT_GATEWAY_BYOK_ENABLED=false
                   AGENT_GATEWAY_PERSONAL_BYOK_ENABLED=false
-                  AGENT_GATEWAY_LITELLM_TOPOLOGY=oss_shared
-                  AGENT_GATEWAY_LITELLM_CUSTOMER_SECRET_ISOLATION_VERIFIED=false
                   AGENT_GATEWAY_MAX_REQUEST_BYTES=4194304
                   AGENT_GATEWAY_REQUEST_TIMEOUT_SECONDS=120.0
                   AGENT_GATEWAY_OPENCODE_ENABLED=false
                   AGENT_GATEWAY_RECONCILER_ENABLED=false
                   AGENT_GATEWAY_RECONCILER_INTERVAL_SECONDS=300.0
                   AGENT_GATEWAY_RECONCILER_BATCH_SIZE=50
-                  LITELLM_IMAGE=ghcr.io/berriai/litellm:main-stable
-                  LITELLM_POSTGRES_DB=litellm
-                  LITELLM_POSTGRES_USER=litellm
-                  LITELLM_POSTGRES_PASSWORD=
                   SANDBOX_PROVIDER=${SandboxProvider}
                   E2B_API_KEY=${E2BApiKey}
                   E2B_TEMPLATE_NAME=${E2BTemplateName}

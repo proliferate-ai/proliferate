@@ -237,6 +237,94 @@ describe("logical workspaces", () => {
     expect(groups[0]?.items.map((item) => item.id)).toHaveLength(2);
   });
 
+  it("canonicalizes repo-root-backed local workspaces before merging cloud materializations", () => {
+    const repoRoot = makeRepoRoot({
+      id: "proliferate-root",
+      sourceRoot: "/tmp/proliferate",
+    });
+    const localWorkspace = {
+      ...makeWorkspace({
+        id: "local-porcupine",
+        branch: "porcupine",
+        sourceRoot: "/tmp/proliferate",
+      }),
+      gitProvider: null,
+      gitOwner: null,
+      gitRepoName: null,
+    };
+    const cloudWorkspace = makeCloudWorkspace({
+      id: "cloud-porcupine",
+      branch: "porcupine",
+    });
+
+    const logicalWorkspaces = buildLogicalWorkspaces({
+      localWorkspaces: [localWorkspace],
+      repoRoots: [repoRoot],
+      cloudWorkspaces: [cloudWorkspace],
+      currentSelectionId: null,
+    });
+
+    expect(logicalWorkspaces).toHaveLength(1);
+    expect(logicalWorkspaces[0]?.id).toBe(
+      buildRemoteLogicalWorkspaceId("github", "proliferate-ai", "proliferate", "porcupine"),
+    );
+    expect(logicalWorkspaces[0]?.repoKey).toBe("github:proliferate-ai:proliferate");
+    expect(logicalWorkspaces[0]?.localWorkspace?.id).toBe("local-porcupine");
+    expect(logicalWorkspaces[0]?.cloudWorkspace?.id).toBe("cloud-porcupine");
+
+    const groups = buildGroups({
+      repoRoots: [repoRoot],
+      logicalWorkspaces,
+    });
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.items.map((item) => item.id)).toEqual([
+      "remote:github:proliferate-ai:proliferate:porcupine",
+    ]);
+  });
+
+  it("keeps different branches separate while sharing the repo-root-backed group", () => {
+    const repoRoot = makeRepoRoot({
+      id: "proliferate-root",
+      sourceRoot: "/tmp/proliferate",
+    });
+    const localWorkspace = {
+      ...makeWorkspace({
+        id: "local-porcupine",
+        branch: "porcupine",
+        sourceRoot: "/tmp/proliferate",
+      }),
+      gitProvider: null,
+      gitOwner: null,
+      gitRepoName: null,
+    };
+    const cloudWorkspace = makeCloudWorkspace({
+      id: "cloud-raven",
+      branch: "raven",
+    });
+
+    const logicalWorkspaces = buildLogicalWorkspaces({
+      localWorkspaces: [localWorkspace],
+      repoRoots: [repoRoot],
+      cloudWorkspaces: [cloudWorkspace],
+      currentSelectionId: null,
+    });
+
+    expect(logicalWorkspaces.map((workspace) => workspace.branchKey).sort()).toEqual([
+      "porcupine",
+      "raven",
+    ]);
+
+    const groups = buildGroups({
+      repoRoots: [repoRoot],
+      logicalWorkspaces,
+    });
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.items.map((item) => item.id).sort()).toEqual([
+      "remote:github:proliferate-ai:proliferate:porcupine",
+      "remote:github:proliferate-ai:proliferate:raven",
+    ]);
+  });
+
   it("honors a local mobility owner over a stale selected cloud materialization", () => {
     const localWorkspace = makeWorkspace({
       id: "local-1",

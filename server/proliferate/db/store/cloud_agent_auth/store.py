@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
 from sqlalchemy import and_, or_, select, text
@@ -15,9 +16,12 @@ from proliferate.db.models.cloud.agent_auth import (
     AgentAuthCredentialShare,
     AgentGatewayBudgetSubject,
     AgentGatewayFreeCreditEntitlement,
+    AgentGatewayLlmUsageEvent,
     AgentGatewayPolicy,
     AgentGatewayProviderCredential,
+    AgentGatewayRouterMaterialization,
     AgentGatewayRuntimeGrant,
+    AgentGatewayUsageImportCursor,
     SandboxAgentAuthSelection,
     SandboxProfile,
     SandboxProfileAgentAuthRevision,
@@ -35,9 +39,12 @@ from proliferate.db.store.cloud_agent_auth.records import (
     AgentAuthCredentialShareRecord,
     AgentGatewayBudgetSubjectRecord,
     AgentGatewayFreeCreditEntitlementRecord,
+    AgentGatewayLlmUsageEventRecord,
     AgentGatewayPolicyRecord,
     AgentGatewayProviderCredentialRecord,
+    AgentGatewayRouterMaterializationRecord,
     AgentGatewayRuntimeGrantRecord,
+    AgentGatewayUsageImportCursorRecord,
     SandboxAgentAuthSelectionRecord,
     SandboxProfileAgentAuthTargetStateRecord,
     SandboxProfileRecord,
@@ -272,6 +279,78 @@ def _runtime_grant_record(row: AgentGatewayRuntimeGrant) -> AgentGatewayRuntimeG
         revoked_at=row.revoked_at,
         last_used_at=row.last_used_at,
         created_at=row.created_at,
+    )
+
+
+def _router_materialization_record(
+    row: AgentGatewayRouterMaterialization,
+) -> AgentGatewayRouterMaterializationRecord:
+    return AgentGatewayRouterMaterializationRecord(
+        id=row.id,
+        router_kind=row.router_kind,
+        router_object_kind=row.router_object_kind,
+        object_scope=row.object_scope,
+        policy_id=row.policy_id,
+        provider_credential_id=row.provider_credential_id,
+        budget_subject_id=row.budget_subject_id,
+        selection_id=row.selection_id,
+        sandbox_profile_id=row.sandbox_profile_id,
+        target_id=row.target_id,
+        cloud_sandbox_id=row.cloud_sandbox_id,
+        slot_generation=row.slot_generation,
+        agent_kind=row.agent_kind,
+        protocol_facade=row.protocol_facade,
+        router_object_id=row.router_object_id,
+        router_object_secret_ciphertext=row.router_object_secret_ciphertext,
+        router_object_secret_ciphertext_key_id=row.router_object_secret_ciphertext_key_id,
+        sync_status=row.sync_status,
+        sync_fingerprint=row.sync_fingerprint,
+        status=row.status,
+        last_reconciled_at=row.last_reconciled_at,
+        last_error_code=row.last_error_code,
+        last_error_message=row.last_error_message,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def _llm_usage_event_record(row: AgentGatewayLlmUsageEvent) -> AgentGatewayLlmUsageEventRecord:
+    return AgentGatewayLlmUsageEventRecord(
+        id=row.id,
+        router_kind=row.router_kind,
+        router_log_id=row.router_log_id,
+        router_virtual_key_id=row.router_virtual_key_id,
+        router_provider_key_id=row.router_provider_key_id,
+        materialization_id=row.materialization_id,
+        policy_id=row.policy_id,
+        budget_subject_id=row.budget_subject_id,
+        owner_scope=row.owner_scope,
+        owner_user_id=row.owner_user_id,
+        organization_id=row.organization_id,
+        agent_kind=row.agent_kind,
+        protocol_facade=row.protocol_facade,
+        provider=row.provider,
+        model=row.model,
+        status=row.status,
+        cost_usd=row.cost_usd,
+        prompt_tokens=row.prompt_tokens,
+        completion_tokens=row.completion_tokens,
+        total_tokens=row.total_tokens,
+        occurred_at=row.occurred_at,
+        imported_at=row.imported_at,
+        raw_usage_json=row.raw_usage_json,
+    )
+
+
+def _usage_import_cursor_record(
+    row: AgentGatewayUsageImportCursor,
+) -> AgentGatewayUsageImportCursorRecord:
+    return AgentGatewayUsageImportCursorRecord(
+        id=row.id,
+        router_kind=row.router_kind,
+        last_seen_at=row.last_seen_at,
+        last_seen_router_log_id=row.last_seen_router_log_id,
+        updated_at=row.updated_at,
     )
 
 
@@ -2057,6 +2136,431 @@ async def revoke_runtime_grants_for_profile_target(
     return len(rows)
 
 
+async def upsert_router_materialization(
+    db: AsyncSession,
+    *,
+    router_kind: str,
+    router_object_kind: str,
+    object_scope: str,
+    policy_id: UUID | None,
+    provider_credential_id: UUID | None,
+    budget_subject_id: UUID | None,
+    selection_id: UUID | None,
+    sandbox_profile_id: UUID | None,
+    target_id: UUID | None,
+    cloud_sandbox_id: UUID | None,
+    slot_generation: int | None,
+    agent_kind: str | None,
+    protocol_facade: str | None,
+    router_object_id: str | None,
+    router_object_secret_ciphertext: str | None,
+    router_object_secret_ciphertext_key_id: str | None,
+    sync_status: str,
+    sync_fingerprint: str | None,
+    status: str,
+    last_error_code: str | None = None,
+    last_error_message: str | None = None,
+) -> AgentGatewayRouterMaterializationRecord:
+    filters = [
+        AgentGatewayRouterMaterialization.router_kind == router_kind,
+        AgentGatewayRouterMaterialization.router_object_kind == router_object_kind,
+        AgentGatewayRouterMaterialization.object_scope == object_scope,
+        AgentGatewayRouterMaterialization.status != "revoked",
+    ]
+    if object_scope == "runtime_selection":
+        filters.extend(
+            [
+                AgentGatewayRouterMaterialization.selection_id == selection_id,
+                AgentGatewayRouterMaterialization.target_id == target_id,
+                AgentGatewayRouterMaterialization.cloud_sandbox_id == cloud_sandbox_id,
+                AgentGatewayRouterMaterialization.slot_generation == slot_generation,
+            ]
+        )
+    elif object_scope == "policy":
+        filters.append(AgentGatewayRouterMaterialization.policy_id == policy_id)
+    elif object_scope == "budget_subject":
+        filters.append(AgentGatewayRouterMaterialization.budget_subject_id == budget_subject_id)
+    else:
+        filters.append(AgentGatewayRouterMaterialization.id.is_(None))
+    row = (
+        await db.execute(
+            select(AgentGatewayRouterMaterialization).where(*filters).with_for_update()
+        )
+    ).scalar_one_or_none()
+    now = utcnow()
+    if row is None:
+        row = AgentGatewayRouterMaterialization(
+            router_kind=router_kind,
+            router_object_kind=router_object_kind,
+            object_scope=object_scope,
+            policy_id=policy_id,
+            provider_credential_id=provider_credential_id,
+            budget_subject_id=budget_subject_id,
+            selection_id=selection_id,
+            sandbox_profile_id=sandbox_profile_id,
+            target_id=target_id,
+            cloud_sandbox_id=cloud_sandbox_id,
+            slot_generation=slot_generation,
+            agent_kind=agent_kind,
+            protocol_facade=protocol_facade,
+            router_object_id=router_object_id,
+            router_object_secret_ciphertext=router_object_secret_ciphertext,
+            router_object_secret_ciphertext_key_id=router_object_secret_ciphertext_key_id,
+            sync_status=sync_status,
+            sync_fingerprint=sync_fingerprint,
+            status=status,
+            last_reconciled_at=now if sync_status == "synced" else None,
+            last_error_code=last_error_code,
+            last_error_message=last_error_message,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(row)
+    else:
+        row.policy_id = policy_id
+        row.provider_credential_id = provider_credential_id
+        row.budget_subject_id = budget_subject_id
+        row.selection_id = selection_id
+        row.sandbox_profile_id = sandbox_profile_id
+        row.target_id = target_id
+        row.cloud_sandbox_id = cloud_sandbox_id
+        row.slot_generation = slot_generation
+        row.agent_kind = agent_kind
+        row.protocol_facade = protocol_facade
+        row.router_object_id = router_object_id
+        row.router_object_secret_ciphertext = router_object_secret_ciphertext
+        row.router_object_secret_ciphertext_key_id = router_object_secret_ciphertext_key_id
+        row.sync_status = sync_status
+        row.sync_fingerprint = sync_fingerprint
+        row.status = status
+        row.last_error_code = last_error_code
+        row.last_error_message = last_error_message
+        if sync_status == "synced":
+            row.last_reconciled_at = now
+        row.updated_at = now
+    await db.flush()
+    return _router_materialization_record(row)
+
+
+async def get_runtime_router_materialization(
+    db: AsyncSession,
+    *,
+    router_kind: str,
+    selection_id: UUID,
+    target_id: UUID,
+    cloud_sandbox_id: UUID,
+    slot_generation: int,
+    router_object_kind: str = "virtual_key",
+) -> AgentGatewayRouterMaterializationRecord | None:
+    row = (
+        await db.execute(
+            select(AgentGatewayRouterMaterialization).where(
+                AgentGatewayRouterMaterialization.router_kind == router_kind,
+                AgentGatewayRouterMaterialization.router_object_kind == router_object_kind,
+                AgentGatewayRouterMaterialization.object_scope == "runtime_selection",
+                AgentGatewayRouterMaterialization.selection_id == selection_id,
+                AgentGatewayRouterMaterialization.target_id == target_id,
+                AgentGatewayRouterMaterialization.cloud_sandbox_id == cloud_sandbox_id,
+                AgentGatewayRouterMaterialization.slot_generation == slot_generation,
+                AgentGatewayRouterMaterialization.status != "revoked",
+            )
+        )
+    ).scalar_one_or_none()
+    return _router_materialization_record(row) if row is not None else None
+
+
+async def get_router_materialization_by_object_id(
+    db: AsyncSession,
+    *,
+    router_kind: str,
+    router_object_id: str,
+    router_object_kind: str | None = None,
+) -> AgentGatewayRouterMaterializationRecord | None:
+    filters = [
+        AgentGatewayRouterMaterialization.router_kind == router_kind,
+        AgentGatewayRouterMaterialization.router_object_id == router_object_id,
+        AgentGatewayRouterMaterialization.status != "revoked",
+    ]
+    if router_object_kind is not None:
+        filters.append(AgentGatewayRouterMaterialization.router_object_kind == router_object_kind)
+    row = (
+        await db.execute(
+            select(AgentGatewayRouterMaterialization)
+            .where(*filters)
+            .order_by(AgentGatewayRouterMaterialization.updated_at.desc())
+        )
+    ).scalar_one_or_none()
+    return _router_materialization_record(row) if row is not None else None
+
+
+async def update_router_materialization_status(
+    db: AsyncSession,
+    *,
+    materialization_id: UUID,
+    status: str,
+    sync_status: str | None = None,
+    last_error_code: str | None = None,
+    last_error_message: str | None = None,
+) -> AgentGatewayRouterMaterializationRecord | None:
+    row = await db.get(AgentGatewayRouterMaterialization, materialization_id)
+    if row is None:
+        return None
+    row.status = status
+    if sync_status is not None:
+        row.sync_status = sync_status
+    row.last_error_code = last_error_code
+    row.last_error_message = last_error_message
+    row.updated_at = utcnow()
+    await db.flush()
+    return _router_materialization_record(row)
+
+
+async def list_active_router_virtual_key_ids(
+    db: AsyncSession,
+    *,
+    router_kind: str,
+    limit: int = 1000,
+) -> tuple[str, ...]:
+    rows = (
+        (
+            await db.execute(
+                select(AgentGatewayRouterMaterialization.router_object_id)
+                .where(
+                    AgentGatewayRouterMaterialization.router_kind == router_kind,
+                    AgentGatewayRouterMaterialization.router_object_kind == "virtual_key",
+                    AgentGatewayRouterMaterialization.router_object_id.is_not(None),
+                    AgentGatewayRouterMaterialization.status == "active",
+                )
+                .order_by(AgentGatewayRouterMaterialization.updated_at.desc())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return tuple(str(row) for row in rows if row)
+
+
+async def list_active_router_virtual_key_materializations_for_budget(
+    db: AsyncSession,
+    *,
+    router_kind: str,
+    budget_subject_id: UUID,
+    limit: int = 1000,
+) -> tuple[AgentGatewayRouterMaterializationRecord, ...]:
+    rows = (
+        (
+            await db.execute(
+                select(AgentGatewayRouterMaterialization)
+                .where(
+                    AgentGatewayRouterMaterialization.router_kind == router_kind,
+                    AgentGatewayRouterMaterialization.router_object_kind == "virtual_key",
+                    AgentGatewayRouterMaterialization.object_scope == "runtime_selection",
+                    AgentGatewayRouterMaterialization.budget_subject_id == budget_subject_id,
+                    AgentGatewayRouterMaterialization.router_object_id.is_not(None),
+                    AgentGatewayRouterMaterialization.status == "active",
+                )
+                .order_by(AgentGatewayRouterMaterialization.updated_at.desc())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return tuple(_router_materialization_record(row) for row in rows)
+
+
+async def list_active_router_materializations_for_policy(
+    db: AsyncSession,
+    *,
+    router_kind: str,
+    policy_id: UUID,
+    router_object_kind: str | None = None,
+    limit: int = 1000,
+) -> tuple[AgentGatewayRouterMaterializationRecord, ...]:
+    filters = [
+        AgentGatewayRouterMaterialization.router_kind == router_kind,
+        AgentGatewayRouterMaterialization.policy_id == policy_id,
+        AgentGatewayRouterMaterialization.router_object_id.is_not(None),
+        AgentGatewayRouterMaterialization.status == "active",
+    ]
+    if router_object_kind is not None:
+        filters.append(AgentGatewayRouterMaterialization.router_object_kind == router_object_kind)
+    rows = (
+        (
+            await db.execute(
+                select(AgentGatewayRouterMaterialization)
+                .where(*filters)
+                .order_by(AgentGatewayRouterMaterialization.updated_at.desc())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return tuple(_router_materialization_record(row) for row in rows)
+
+
+async def list_active_runtime_router_materializations_for_selection(
+    db: AsyncSession,
+    *,
+    router_kind: str,
+    selection_id: UUID,
+    router_object_kind: str = "virtual_key",
+    limit: int = 1000,
+) -> tuple[AgentGatewayRouterMaterializationRecord, ...]:
+    rows = (
+        (
+            await db.execute(
+                select(AgentGatewayRouterMaterialization)
+                .where(
+                    AgentGatewayRouterMaterialization.router_kind == router_kind,
+                    AgentGatewayRouterMaterialization.router_object_kind == router_object_kind,
+                    AgentGatewayRouterMaterialization.object_scope == "runtime_selection",
+                    AgentGatewayRouterMaterialization.selection_id == selection_id,
+                    AgentGatewayRouterMaterialization.router_object_id.is_not(None),
+                    AgentGatewayRouterMaterialization.status == "active",
+                )
+                .order_by(AgentGatewayRouterMaterialization.updated_at.desc())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return tuple(_router_materialization_record(row) for row in rows)
+
+
+async def get_usage_import_cursor(
+    db: AsyncSession,
+    *,
+    router_kind: str,
+) -> AgentGatewayUsageImportCursorRecord | None:
+    row = (
+        await db.execute(
+            select(AgentGatewayUsageImportCursor).where(
+                AgentGatewayUsageImportCursor.router_kind == router_kind
+            )
+        )
+    ).scalar_one_or_none()
+    return _usage_import_cursor_record(row) if row is not None else None
+
+
+async def upsert_usage_import_cursor(
+    db: AsyncSession,
+    *,
+    router_kind: str,
+    last_seen_at: datetime | None,
+    last_seen_router_log_id: str | None,
+) -> AgentGatewayUsageImportCursorRecord:
+    row = (
+        await db.execute(
+            select(AgentGatewayUsageImportCursor)
+            .where(AgentGatewayUsageImportCursor.router_kind == router_kind)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    now = utcnow()
+    if row is None:
+        row = AgentGatewayUsageImportCursor(
+            router_kind=router_kind,
+            last_seen_at=last_seen_at,
+            last_seen_router_log_id=last_seen_router_log_id,
+            updated_at=now,
+        )
+        db.add(row)
+    else:
+        row.last_seen_at = last_seen_at
+        row.last_seen_router_log_id = last_seen_router_log_id
+        row.updated_at = now
+    await db.flush()
+    return _usage_import_cursor_record(row)
+
+
+async def insert_llm_usage_event_once(
+    db: AsyncSession,
+    *,
+    router_kind: str,
+    router_log_id: str,
+    router_virtual_key_id: str | None,
+    router_provider_key_id: str | None,
+    materialization: AgentGatewayRouterMaterializationRecord | None,
+    policy: AgentGatewayPolicyRecord | None,
+    budget: AgentGatewayBudgetSubjectRecord | None,
+    provider: str | None,
+    model: str | None,
+    status: str | None,
+    cost_usd: str,
+    prompt_tokens: int | None,
+    completion_tokens: int | None,
+    total_tokens: int | None,
+    occurred_at: datetime | None,
+    raw_usage_json: str,
+) -> AgentGatewayLlmUsageEventRecord | None:
+    existing = (
+        await db.execute(
+            select(AgentGatewayLlmUsageEvent).where(
+                AgentGatewayLlmUsageEvent.router_kind == router_kind,
+                AgentGatewayLlmUsageEvent.router_log_id == router_log_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        return None
+    row = AgentGatewayLlmUsageEvent(
+        router_kind=router_kind,
+        router_log_id=router_log_id,
+        router_virtual_key_id=router_virtual_key_id,
+        router_provider_key_id=router_provider_key_id,
+        materialization_id=materialization.id if materialization is not None else None,
+        policy_id=policy.id if policy is not None else None,
+        budget_subject_id=budget.id if budget is not None else None,
+        owner_scope=policy.owner_scope if policy is not None else None,
+        owner_user_id=policy.owner_user_id if policy is not None else None,
+        organization_id=policy.organization_id if policy is not None else None,
+        agent_kind=materialization.agent_kind if materialization is not None else None,
+        protocol_facade=materialization.protocol_facade if materialization is not None else None,
+        provider=provider,
+        model=model,
+        status=status,
+        cost_usd=cost_usd,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=total_tokens,
+        occurred_at=occurred_at,
+        imported_at=utcnow(),
+        raw_usage_json=raw_usage_json,
+    )
+    db.add(row)
+    await db.flush()
+    return _llm_usage_event_record(row)
+
+
+async def sum_llm_usage_cost_for_budget_subject(
+    db: AsyncSession,
+    *,
+    budget_subject_id: UUID,
+) -> Decimal:
+    values = (
+        (
+            await db.execute(
+                select(AgentGatewayLlmUsageEvent.cost_usd).where(
+                    AgentGatewayLlmUsageEvent.budget_subject_id == budget_subject_id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    total = Decimal("0")
+    for value in values:
+        try:
+            total += Decimal(value)
+        except InvalidOperation:
+            continue
+    return total
+
+
 async def record_audit_event(
     db: AsyncSession,
     *,
@@ -2090,7 +2594,7 @@ async def record_audit_event(
 async def try_acquire_agent_gateway_reconciler_lock(db: AsyncSession) -> bool:
     result = await db.scalar(
         text("SELECT pg_try_advisory_lock(hashtextextended(:lock_key, 0))"),
-        {"lock_key": "agent_gateway_litellm_reconciler"},
+        {"lock_key": "agent_gateway_bifrost_reconciler"},
     )
     return bool(result)
 
@@ -2098,5 +2602,5 @@ async def try_acquire_agent_gateway_reconciler_lock(db: AsyncSession) -> bool:
 async def release_agent_gateway_reconciler_lock(db: AsyncSession) -> None:
     await db.execute(
         text("SELECT pg_advisory_unlock(hashtextextended(:lock_key, 0))"),
-        {"lock_key": "agent_gateway_litellm_reconciler"},
+        {"lock_key": "agent_gateway_bifrost_reconciler"},
     )

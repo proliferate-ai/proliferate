@@ -163,5 +163,7 @@ async def supersede_slot(
             db,
             sandbox_profile_id=row.sandbox_profile_id,
             target_id=row.target_id,
+            replaced_sandbox_id=row.id,
+            replaced_slot_generation=row.slot_generation,
         )
     return _slot_snapshot(row)

@@ -33,7 +33,7 @@ class EnsureOrganizationSandboxProfileRequest(BaseModel):
     pass
 
 
-class LiteLLMModelDeploymentRequest(BaseModel):
+class GatewayModelDeploymentRequest(BaseModel):
     public_model_name: str = Field(alias="publicModelName")
     provider_model: str = Field(alias="providerModel")
 
@@ -56,6 +56,7 @@ class CreateGatewayCredentialRequest(BaseModel):
     provider_kind: Literal[
         "anthropic_api_key",
         "openai_api_key",
+        "gemini_api_key",
         "bedrock_assume_role",
         "openai_compatible",
     ] = Field(alias="providerKind")
