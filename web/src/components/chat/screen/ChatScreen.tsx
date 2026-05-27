@@ -253,6 +253,8 @@ export function ChatScreen() {
   const isUnclaimed = workspace?.visibility === "shared_unclaimed";
   const workspaceReadyAgentKindsKey = workspace?.readyAgentKinds?.join("\0") ?? "";
   const workspaceAllowedAgentKindsKey = workspace?.allowedAgentKinds?.join("\0") ?? "";
+  const workspaceUsesManagedRuntime =
+    !workspace || workspace.sandboxType === "managed_personal" || workspace.sandboxType === "managed_shared";
   const agentGateway = cloudCapabilities.data?.agentGateway;
   const readySyncedAgentKinds = useMemo(
     () => readySyncedCloudAgentKinds(agentAuthCredentials.data),
@@ -264,8 +266,12 @@ export function ChatScreen() {
   const workspaceHarnessAvailability = useMemo(() => resolveCloudHarnessAvailability({
     catalogAgentKinds: agentCatalog.data?.agents.map((agent) => agent.kind),
     allowedAgentKinds: workspace?.allowedAgentKinds,
-    readyAgentKinds: workspace?.readyAgentKinds ?? readySyncedAgentKinds,
-    agentGateway,
+    readyAgentKinds: workspace?.readyAgentKinds
+      ?? (workspaceUsesManagedRuntime
+        ? readySyncedAgentKinds
+        : agentCatalog.data?.agents.map((agent) => agent.kind)),
+    agentGateway: workspaceUsesManagedRuntime ? agentGateway : null,
+    assumeFallbackAgentKindsLaunchable: !workspaceUsesManagedRuntime,
   }), [
     agentCatalog.data,
     readySyncedAgentKindsKey,
@@ -277,6 +283,7 @@ export function ChatScreen() {
     catalogAgentKindsKey,
     workspaceAllowedAgentKindsKey,
     workspaceReadyAgentKindsKey,
+    workspaceUsesManagedRuntime,
   ]);
   const workspaceLaunchableAgentKinds = workspaceHarnessAvailability.launchableAgentKinds;
   const canStartNewSession = workspaceLaunchableAgentKinds.length > 0;

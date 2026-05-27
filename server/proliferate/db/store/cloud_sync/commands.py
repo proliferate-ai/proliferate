@@ -298,6 +298,12 @@ async def expire_stale_queued_commands(
                 CloudCommand.lease_expires_at.is_not(None),
                 CloudCommand.lease_expires_at <= now,
             ),
+            and_(
+                CloudCommand.status == CloudCommandStatus.delivered.value,
+                CloudCommand.created_at <= older_than,
+                CloudCommand.lease_expires_at.is_not(None),
+                CloudCommand.lease_expires_at <= now,
+            ),
         )
     )
     if target_id is not None:

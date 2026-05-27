@@ -27,6 +27,7 @@ from proliferate.constants.cloud import (
     SUPPORTED_GIT_PROVIDER,
     CloudCommandKind,
     CloudCommandSource,
+    CloudCommandStatus,
     CloudTargetKind,
     CloudTargetStatus,
     CloudWorkspaceCleanupState,
@@ -126,8 +127,12 @@ from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kind
 from proliferate.server.cloud.claims.access import load_workspace_exposure_and_claim
 from proliferate.server.cloud.claims.domain.policy import is_org_admin_role
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
-from proliferate.server.cloud.commands.service import enqueue_command
+from proliferate.server.cloud.commands.service import (
+    enqueue_command,
+    mark_pending_prompt_interaction_failed_for_command,
+)
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.live.service import publish_command_status_after_commit
 from proliferate.server.cloud.repo_config.service import (
     bootstrap_repo_config,
     load_repo_config_value,
@@ -838,7 +843,7 @@ async def launch_workspace_on_target(
             db,
             user=user,
             target_id=target.id,
-            cloud_workspace_id=workspace_id,
+            cloud_workspace_id=None,
             kind=CloudCommandKind.materialize_workspace.value,
             payload=MaterializeWorkspacePayload(
                 mode="existing_path",
@@ -914,7 +919,10 @@ async def launch_workspace_on_target(
                 source=body.source,
             )
             config_command_ids.append(str(config_command.id))
-            await _wait_for_target_launch_command(config_command, workspace_id=workspace_id)
+            await _wait_for_target_launch_command(
+                config_command,
+                workspace_id=workspace_id,
+            )
 
         prompt_id = body.prompt_id or f"target-launch:{workspace_id}:prompt:{uuid4().hex}"
         send_command = await _enqueue_target_launch_command(
@@ -929,6 +937,14 @@ async def launch_workspace_on_target(
             source=body.source,
         )
         await _wait_for_target_launch_command(send_command, workspace_id=workspace_id)
+    except CloudApiError as exc:
+        message = format_exception_message(exc) or exc.message
+        await mark_workspace_error_by_id(
+            workspace_id,
+            message,
+            status_detail="Desktop dispatch failed",
+        )
+        raise
     except (RuntimeError, TimeoutError, ValueError) as exc:
         message = format_exception_message(exc) or str(exc)
         await mark_workspace_error_by_id(
@@ -1095,7 +1111,7 @@ async def _enqueue_target_launch_command(
     *,
     user: User,
     target_id: UUID,
-    cloud_workspace_id: UUID,
+    cloud_workspace_id: UUID | None,
     kind: str,
     payload: dict[str, object],
     idempotency_key: str,
@@ -1127,10 +1143,33 @@ async def _wait_for_target_launch_command(
     workspace_id: UUID,
 ) -> AutomationCommandResult:
     del workspace_id
-    return await wait_for_command_result(
-        command,
-        timeout=TARGET_LAUNCH_COMMAND_WAIT_TIMEOUT,
-    )
+    try:
+        return await wait_for_command_result(
+            command,
+            timeout=TARGET_LAUNCH_COMMAND_WAIT_TIMEOUT,
+        )
+    except (RuntimeError, TimeoutError):
+        await _mark_target_launch_command_failed_interaction_if_needed(command.id)
+        raise
+
+
+async def _mark_target_launch_command_failed_interaction_if_needed(
+    command_id: UUID,
+) -> None:
+    async with db_engine.async_session_factory() as fresh_db:
+        latest = await command_store.get_command_by_id(fresh_db, command_id)
+        if latest is None:
+            return
+        if latest.status not in {
+            CloudCommandStatus.rejected.value,
+            CloudCommandStatus.failed_delivery.value,
+            CloudCommandStatus.expired.value,
+            CloudCommandStatus.superseded.value,
+        }:
+            return
+        await mark_pending_prompt_interaction_failed_for_command(fresh_db, latest)
+        await publish_command_status_after_commit(fresh_db, latest)
+        await db_engine.commit_session(fresh_db)
 
 
 async def enable_cloud_workspace_remote_access(

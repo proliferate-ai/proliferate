@@ -1282,14 +1282,23 @@ async def _expire_stale_client_command_if_needed(
     db: AsyncSession,
     command: commands_store.CloudCommandSnapshot,
 ) -> commands_store.CloudCommandSnapshot:
-    if command.status != CloudCommandStatus.queued.value:
-        return command
     if command.source not in _CLIENT_EXPIRABLE_QUEUED_COMMAND_SOURCES:
         return command
     if command.kind not in _CLIENT_EXPIRABLE_QUEUED_COMMAND_KINDS:
         return command
     now = utcnow()
-    if now - command.created_at < _CLIENT_COMMAND_QUEUE_EXPIRATION:
+    if command.status == CloudCommandStatus.queued.value:
+        if now - command.created_at < _CLIENT_COMMAND_QUEUE_EXPIRATION:
+            return command
+    elif command.status in {
+        CloudCommandStatus.leased.value,
+        CloudCommandStatus.delivered.value,
+    }:
+        if now - command.created_at < _CLIENT_COMMAND_QUEUE_EXPIRATION:
+            return command
+        if command.lease_expires_at is None or command.lease_expires_at > now:
+            return command
+    else:
         return command
     expired = await commands_store.expire_command_if_not_terminal(
         db,
@@ -1297,7 +1306,11 @@ async def _expire_stale_client_command_if_needed(
         error_code=_CLIENT_COMMAND_QUEUE_TIMEOUT_CODE,
         error_message=_CLIENT_COMMAND_QUEUE_TIMEOUT_MESSAGE,
         now=now,
-        eligible_statuses=(CloudCommandStatus.queued.value,),
+        eligible_statuses=(
+            CloudCommandStatus.queued.value,
+            CloudCommandStatus.leased.value,
+            CloudCommandStatus.delivered.value,
+        ),
     )
     if expired is None:
         return command

@@ -634,7 +634,7 @@ export function MobileChatScreen({
     if (!pendingPrompt || !workspace || pendingPromptFailed) {
       return;
     }
-    if (pendingPrompt.dispatchedSessionId) {
+    if (pendingPrompt.dispatchedSessionId && pendingPromptDurable) {
       return;
     }
     if (workspaceStatus === "error" || workspaceStatus === "archived") {
@@ -658,6 +658,15 @@ export function MobileChatScreen({
       );
       return;
     }
+    if (pendingPrompt.dispatchedSessionId && pendingPrompt.sendCommandId) {
+      setNewSessionMode(false);
+      setSelectedSessionId(pendingPrompt.dispatchedSessionId);
+      onSessionSelected?.(pendingPrompt.dispatchedSessionId);
+      setLatestCommandId(pendingPrompt.sendCommandId);
+      setPendingPromptStatus("Queued prompt; waiting for transcript.");
+      setPendingPromptFailed(false);
+      return;
+    }
 
     const runKey = `${workspace.id}:${pendingPrompt.id}`;
     const currentRun = pendingDispatchRunRef.current;
@@ -668,6 +677,8 @@ export function MobileChatScreen({
     const run = { key: runKey, active: true };
     pendingDispatchRunRef.current = run;
     const isCurrentRun = () => pendingDispatchRunRef.current === run && run.active;
+    let startedSessionId: string | null = pendingPrompt.dispatchedSessionId ?? null;
+    let enqueuedSendCommandId: string | null = pendingPrompt.sendCommandId ?? null;
     setPendingPromptStatus("Starting a session for the queued prompt.");
     setPendingPromptFailed(false);
 
@@ -684,17 +695,11 @@ export function MobileChatScreen({
           setLatestCommandId(commandId);
         }
       },
-      onStatus: (status) => {
-        if (isCurrentRun()) {
-          setPendingPromptStatus(status);
-        }
-      },
-      shouldContinue: isCurrentRun,
-    })
-      .then((sessionId) => {
+      onSessionStarted: (sessionId) => {
         if (!isCurrentRun()) {
           return;
         }
+        startedSessionId = sessionId;
         const dispatchedPrompt: MobilePendingPrompt = {
           ...pendingPrompt,
           dispatchedSessionId: sessionId,
@@ -704,6 +709,47 @@ export function MobileChatScreen({
         setNewSessionMode(false);
         setSelectedSessionId(sessionId);
         onSessionSelected?.(sessionId);
+        if (ownerUserId) {
+          void savePendingMobilePrompt(workspace.id, ownerUserId, dispatchedPrompt);
+        }
+      },
+      onPromptEnqueued: (commandId) => {
+        if (!isCurrentRun() || !startedSessionId) {
+          return;
+        }
+        enqueuedSendCommandId = commandId;
+        const enqueuedPrompt: MobilePendingPrompt = {
+          ...pendingPrompt,
+          dispatchedSessionId: startedSessionId,
+          sendCommandId: commandId,
+          failedAt: null,
+          failureMessage: null,
+        };
+        if (ownerUserId) {
+          void savePendingMobilePrompt(workspace.id, ownerUserId, enqueuedPrompt);
+        }
+      },
+      onStatus: (status) => {
+        if (isCurrentRun()) {
+          setPendingPromptStatus(status);
+        }
+      },
+      shouldContinue: isCurrentRun,
+    })
+      .then((result) => {
+        if (!isCurrentRun()) {
+          return;
+        }
+        const dispatchedPrompt: MobilePendingPrompt = {
+          ...pendingPrompt,
+          dispatchedSessionId: result.sessionId,
+          sendCommandId: result.sendCommandId,
+          failedAt: null,
+          failureMessage: null,
+        };
+        setNewSessionMode(false);
+        setSelectedSessionId(result.sessionId);
+        onSessionSelected?.(result.sessionId);
         setPendingPrompt(dispatchedPrompt);
         setPendingPromptStatus(null);
         setPendingPromptFailed(false);
@@ -738,7 +784,16 @@ export function MobileChatScreen({
           }, 2500);
           return;
         }
-        const failedPrompt = markPendingPromptFailed(pendingPrompt, message);
+        const failedPrompt = markPendingPromptFailed(
+          startedSessionId
+            ? {
+                ...pendingPrompt,
+                dispatchedSessionId: startedSessionId,
+                sendCommandId: enqueuedSendCommandId,
+              }
+            : pendingPrompt,
+          message,
+        );
         setPendingPrompt(failedPrompt);
         setPendingPromptStatus(message);
         setPendingPromptFailed(true);
@@ -761,6 +816,7 @@ export function MobileChatScreen({
     enqueueStartSession.mutateAsync,
     ownerUserId,
     pendingPrompt,
+    pendingPromptDurable,
     pendingPromptFailed,
     queryClient,
     workspace?.actionBlockReason,

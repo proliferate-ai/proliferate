@@ -375,7 +375,13 @@ async def test_launch_workspace_on_target_keeps_workspace_id_after_expire_all(
     async def _enqueue_target_launch_command(_db, **kwargs):
         command = SimpleNamespace(id=uuid4(), kind=kwargs["kind"], payload=kwargs["payload"])
         command_calls.append({**kwargs, "command": command})
-        assert kwargs["cloud_workspace_id"] == expected_workspace_id
+        if command.kind == workspace_service.CloudCommandKind.materialize_workspace.value:
+            if command.payload["mode"] == "existing_path":
+                assert kwargs["cloud_workspace_id"] is None
+            else:
+                assert kwargs["cloud_workspace_id"] == expected_workspace_id
+        else:
+            assert kwargs["cloud_workspace_id"] == expected_workspace_id
         return command
 
     async def _wait_for_target_launch_command(command, *, workspace_id: object):
@@ -482,6 +488,93 @@ async def test_launch_workspace_on_target_keeps_workspace_id_after_expire_all(
         workspace_service.CloudCommandKind.start_session.value,
         workspace_service.CloudCommandKind.send_prompt.value,
     }
+
+
+@pytest.mark.asyncio
+async def test_target_launch_wait_marks_pending_prompt_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    command_id = uuid4()
+    failed_command = SimpleNamespace(
+        id=command_id,
+        status=workspace_service.CloudCommandStatus.expired.value,
+    )
+    calls: list[tuple[str, object]] = []
+
+    async def _wait_for_command_result(_command, *, timeout):
+        calls.append(("wait", timeout))
+        raise TimeoutError("Timed out waiting for cloud command completion.")
+
+    async def _get_command_by_id(_db, requested_command_id):
+        assert requested_command_id == command_id
+        calls.append(("load", requested_command_id))
+        return failed_command
+
+    async def _mark_pending(_db, command):
+        assert command is failed_command
+        calls.append(("mark", command.id))
+
+    async def _publish(_db, command):
+        assert command is failed_command
+        calls.append(("publish", command.id))
+
+    async def _commit(_db):
+        calls.append(("commit", "db"))
+
+    class FakeSessionFactory:
+        def __call__(self):
+            return self
+
+        async def __aenter__(self):
+            calls.append(("fresh_session", "open"))
+            return SimpleNamespace()
+
+        async def __aexit__(self, _exc_type, _exc, _traceback):
+            calls.append(("fresh_session", "close"))
+            return False
+
+    monkeypatch.setattr(
+        workspace_service,
+        "wait_for_command_result",
+        _wait_for_command_result,
+    )
+    monkeypatch.setattr(
+        workspace_service.command_store,
+        "get_command_by_id",
+        _get_command_by_id,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "mark_pending_prompt_interaction_failed_for_command",
+        _mark_pending,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "publish_command_status_after_commit",
+        _publish,
+    )
+    monkeypatch.setattr(
+        workspace_service.db_engine,
+        "async_session_factory",
+        FakeSessionFactory(),
+    )
+    monkeypatch.setattr(workspace_service.db_engine, "commit_session", _commit)
+
+    with pytest.raises(TimeoutError):
+        await workspace_service._wait_for_target_launch_command(
+            SimpleNamespace(id=command_id),
+            workspace_id=uuid4(),
+        )
+
+    assert calls == [
+        ("wait", workspace_service.TARGET_LAUNCH_COMMAND_WAIT_TIMEOUT),
+        ("fresh_session", "open"),
+        ("load", command_id),
+        ("mark", command_id),
+        ("publish", command_id),
+        ("commit", "db"),
+        ("fresh_session", "close"),
+    ]
 
 
 @pytest.mark.asyncio

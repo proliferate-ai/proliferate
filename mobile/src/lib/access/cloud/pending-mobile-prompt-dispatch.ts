@@ -43,6 +43,11 @@ type EnqueueCloudCommand<TPayload> = (
   command: CloudCommandEnvelope<TPayload>,
 ) => Promise<CloudCommandResponse>;
 
+export type PendingMobilePromptDispatchResult = {
+  sessionId: string;
+  sendCommandId: string;
+};
+
 const RETRYABLE_READINESS_ERROR_CODES = new Set([
   "cloud_command_target_config_required",
   "cloud_command_runtime_config_missing",
@@ -93,11 +98,18 @@ export async function dispatchPendingMobilePrompt(args: {
   enqueueConfig: EnqueueCloudCommand<UpdateSessionConfigPayload>;
   enqueuePrompt: EnqueueCloudCommand<SendPromptPayload>;
   setLatestCommandId: (commandId: string) => void;
+  onSessionStarted?: (sessionId: string) => void;
+  onPromptEnqueued?: (commandId: string) => void;
   onStatus: (status: string) => void;
   shouldContinue: () => boolean;
-}): Promise<string> {
-  const session = await startSessionForPrompt(args);
+}): Promise<PendingMobilePromptDispatchResult> {
+  const session = args.pendingPrompt.dispatchedSessionId
+    ? await resumeSessionForPrompt(args)
+    : await startSessionForPrompt(args);
   assertStillCurrent(args.shouldContinue);
+  if (!args.pendingPrompt.dispatchedSessionId) {
+    args.onSessionStarted?.(session.sessionId);
+  }
   await applyPendingSessionConfigUpdates({
     client: args.client,
     workspace: args.workspace,
@@ -125,8 +137,61 @@ export async function dispatchPendingMobilePrompt(args: {
   });
   args.setLatestCommandId(command.commandId);
   assertCommandEnqueued(command);
+  args.onPromptEnqueued?.(command.commandId);
   await waitForCommandAccepted(command, args.client, args.shouldContinue);
-  return session.sessionId;
+  return {
+    sessionId: session.sessionId,
+    sendCommandId: command.commandId,
+  };
+}
+
+async function resumeSessionForPrompt(args: {
+  client: ProliferateCloudClient;
+  workspace: CloudWorkspaceDetail;
+  pendingPrompt: MobilePendingPrompt;
+  modelId: string | null;
+  setLatestCommandId: (commandId: string) => void;
+  onStatus: (status: string) => void;
+  shouldContinue: () => boolean;
+}): Promise<CloudSessionProjection> {
+  const dispatchedSessionId = args.pendingPrompt.dispatchedSessionId;
+  if (!dispatchedSessionId) {
+    throw new Error("Queued prompt is missing a dispatched session.");
+  }
+  const agentKind = args.pendingPrompt.agentKind ?? resolveAgentKind(args.workspace);
+  const modelId = args.pendingPrompt.modelId ?? args.modelId;
+  const workspace = await ensureMobileWorkspaceReadyForCloudCommands({
+    client: args.client,
+    workspace: args.workspace,
+    agentKind,
+    modelId,
+    idempotencyKey: `${args.pendingPrompt.id}:target-config`,
+    setLatestCommandId: args.setLatestCommandId,
+    onStatus: args.onStatus,
+    shouldContinue: args.shouldContinue,
+  });
+  const targetId = workspace.targetId;
+  const anyharnessWorkspaceId = workspace.anyharnessWorkspaceId;
+  if (!targetId || !anyharnessWorkspaceId) {
+    throw new Error("Workspace is ready but missing runtime command routing.");
+  }
+  args.onStatus("Resuming queued prompt.");
+  const snapshot = await getWorkspaceSnapshot(workspace.id, args.client);
+  assertStillCurrent(args.shouldContinue);
+  const session = snapshot.sessions.find((candidate) =>
+    candidate.sessionId === dispatchedSessionId
+    && (!candidate.targetId || candidate.targetId === targetId)
+  );
+  if (!session) {
+    throw new RetryablePendingPromptDispatchError(
+      "Still waiting for the cloud session to resume. Retrying queued prompt handoff.",
+    );
+  }
+  return {
+    ...session,
+    workspaceId: session.workspaceId || anyharnessWorkspaceId,
+    targetId: session.targetId || targetId,
+  };
 }
 
 async function startSessionForPrompt(args: {
@@ -567,7 +632,9 @@ function sessionMatchesExpectedAgent(
   session: CloudSessionProjection,
   expectedAgentKind: string | null,
 ): boolean {
-  return !expectedAgentKind || session.sourceAgentKind === expectedAgentKind;
+  return !expectedAgentKind
+    || !session.sourceAgentKind
+    || session.sourceAgentKind === expectedAgentKind;
 }
 
 function sessionStartedAfter(

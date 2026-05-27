@@ -2036,6 +2036,52 @@ class TestCloudCommandsApi:
         assert interaction_payload["status"] == "expired"
         assert interaction_payload["errorCode"] == "client_command_queue_timeout"
 
+        delivered_created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": f"{source}-stale-delivered-command-status",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": f"session-{source}-expire",
+                "kind": "send_prompt",
+                "source": source,
+                "payload": {
+                    "text": f"stale delivered {source} prompt",
+                    "promptId": f"{source}:stale-delivered-prompt-status",
+                },
+            },
+        )
+        assert delivered_created.status_code == 200
+        delivered_command_id = UUID(delivered_created.json()["commandId"])
+        delivered_command = await db_session.get(CloudCommand, delivered_command_id)
+        assert delivered_command is not None
+        delivered_command.status = "delivered"
+        delivered_command.lease_id = "stale-delivered-lease"
+        delivered_command.lease_expires_at = datetime.now(UTC) - timedelta(minutes=1)
+        delivered_command.delivered_at = datetime.now(UTC) - timedelta(minutes=4)
+        delivered_command.created_at = datetime.now(UTC) - timedelta(minutes=5)
+        delivered_command.updated_at = delivered_command.delivered_at
+        await db_session.commit()
+
+        delivered_status = await client.get(
+            f"/v1/cloud/commands/{delivered_command_id}",
+            headers=auth.headers,
+        )
+
+        assert delivered_status.status_code == 200
+        delivered_payload = delivered_status.json()
+        assert delivered_payload["status"] == "expired"
+        assert delivered_payload["errorCode"] == "client_command_queue_timeout"
+        delivered_pending = (
+            await db_session.execute(
+                select(CloudPendingInteraction).where(
+                    CloudPendingInteraction.request_id == f"{source}:stale-delivered-prompt-status"
+                )
+            )
+        ).scalar_one()
+        assert delivered_pending.status == "failed"
+
     @pytest.mark.asyncio
     @pytest.mark.parametrize("source", ["web", "mobile"])
     async def test_worker_lease_expires_stale_client_command(
@@ -2169,6 +2215,57 @@ class TestCloudCommandsApi:
         await db_session.refresh(leased_command)
         assert leased_command.status == "expired"
         assert leased_command.error_code == "client_command_queue_timeout"
+
+        delivered_created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": f"{source}-stale-delivered-command",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": f"session-{source}-expire-lease",
+                "kind": "send_prompt",
+                "source": source,
+                "payload": {
+                    "text": f"stale delivered {source} prompt",
+                    "promptId": f"{source}:stale-delivered-prompt",
+                },
+            },
+        )
+        assert delivered_created.status_code == 200
+        delivered_command_id = UUID(delivered_created.json()["commandId"])
+        delivered_command = await db_session.get(CloudCommand, delivered_command_id)
+        assert delivered_command is not None
+        delivered_command.status = "delivered"
+        delivered_command.lease_id = "stale-delivered-lease"
+        delivered_command.lease_expires_at = datetime.now(UTC) - timedelta(minutes=1)
+        delivered_command.delivered_at = datetime.now(UTC) - timedelta(minutes=4)
+        delivered_command.created_at = datetime.now(UTC) - timedelta(minutes=5)
+        delivered_command.updated_at = delivered_command.delivered_at
+        await db_session.commit()
+
+        delivered_retry = await client.post(
+            "/v1/cloud/worker/commands/lease",
+            headers=worker_headers,
+            json={
+                "supportedKinds": ["send_prompt", "refresh_agent_auth_config"],
+                "leaseTimeoutSeconds": 30,
+            },
+        )
+
+        assert delivered_retry.status_code == 200
+        assert delivered_retry.json()["command"] is None
+        await db_session.refresh(delivered_command)
+        assert delivered_command.status == "expired"
+        assert delivered_command.error_code == "client_command_queue_timeout"
+        delivered_pending = (
+            await db_session.execute(
+                select(CloudPendingInteraction).where(
+                    CloudPendingInteraction.request_id == f"{source}:stale-delivered-prompt"
+                )
+            )
+        ).scalar_one()
+        assert delivered_pending.status == "failed"
 
     @pytest.mark.asyncio
     async def test_managed_slot_wake_resumes_command_runtime_environment(
