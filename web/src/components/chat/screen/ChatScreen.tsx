@@ -74,6 +74,7 @@ import {
 type PendingHomePromptDispatchRun = {
   key: string;
   active: boolean;
+  started: boolean;
 };
 
 type OptimisticPromptStatus = "sending" | "queued" | "failed";
@@ -265,6 +266,20 @@ export function ChatScreen() {
     onSessionConfigSelect: (rawConfigId, value) => {
       void submitSessionConfig(rawConfigId, value);
     },
+    onSessionAgentModelSelect: ({ agentKind, modelId }) => {
+      setLaunchSelection({
+        agentKind,
+        modelId,
+        modeId: null,
+        controlValues: {},
+      });
+      setPendingConfigChanges({});
+      if (workspaceId) {
+        navigate(routes.workspace(workspaceId), {
+          state: { startNewSession: true },
+        });
+      }
+    },
   });
 
   useEffect(() => {
@@ -342,7 +357,7 @@ export function ChatScreen() {
       return;
     }
 
-    const run: PendingHomePromptDispatchRun = { key: runKey, active: true };
+    const run: PendingHomePromptDispatchRun = { key: runKey, active: true, started: false };
     pendingHomePromptDispatchRunRef.current = run;
     const isCurrentRun = () => pendingHomePromptDispatchRunRef.current === run && run.active;
     const setCurrentStatus = (status: string) => {
@@ -356,6 +371,7 @@ export function ChatScreen() {
       if (!isCurrentRun()) {
         return;
       }
+      run.started = true;
       void dispatchPendingHomePrompt({
         client,
         workspace,
@@ -426,7 +442,9 @@ export function ChatScreen() {
         });
     }, 0);
     return () => {
-      run.active = false;
+      if (!run.started) {
+        run.active = false;
+      }
       window.clearTimeout(timeoutId);
     };
   }, [

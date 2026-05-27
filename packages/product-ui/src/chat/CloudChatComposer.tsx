@@ -398,7 +398,7 @@ function CloudChatModelConfigControl({
       />
       {open && !disabled ? (
         <div
-          className="absolute bottom-full right-0 z-30 mb-1"
+          className="absolute bottom-full right-0 z-[80] mb-1"
           onMouseLeave={() => setActiveSubmenuId(null)}
         >
           <ComposerPopoverSurface className="w-72 max-w-[calc(100vw-1rem)] p-1">
@@ -438,7 +438,7 @@ function CloudChatModelConfigControl({
             </div>
           </ComposerPopoverSurface>
           {activeSubmenuId === modelControl?.id && modelControl ? (
-            <ComposerPopoverSurface className="absolute bottom-0 right-[calc(100%+0.25rem)] z-10 w-56 max-w-[calc(100vw-1rem)] p-1">
+            <ComposerPopoverSurface className="absolute bottom-0 left-[calc(100%+0.25rem)] z-[81] w-56 max-w-[calc(100vw-1rem)] p-1">
               <ComposerHarnessMenuRows
                 control={modelControl}
                 onClose={() => {
@@ -449,7 +449,7 @@ function CloudChatModelConfigControl({
               />
             </ComposerPopoverSurface>
           ) : activeConfigSubmenuControl ? (
-            <ComposerPopoverSurface className="absolute bottom-0 right-[calc(100%+0.25rem)] z-10 w-56 max-w-[calc(100vw-1rem)] p-1">
+            <ComposerPopoverSurface className="absolute bottom-0 left-[calc(100%+0.25rem)] z-[81] w-56 max-w-[calc(100vw-1rem)] p-1">
               <ComposerControlMenuRows
                 control={activeConfigSubmenuControl}
                 onClose={() => {

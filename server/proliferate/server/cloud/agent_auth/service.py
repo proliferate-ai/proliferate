@@ -2839,7 +2839,8 @@ async def _worker_gateway_config(
             protectedEnv={
                 "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST": "1",
                 "ANTHROPIC_BASE_URL": facade_base,
-                "ANTHROPIC_AUTH_TOKEN": result.virtual_key,
+                "ANTHROPIC_CUSTOM_HEADERS": f"x-bf-vk: {result.virtual_key}",
+                "ANTHROPIC_AUTH_TOKEN": "",
             },
             supportEnv={},
             protectedConfig={},

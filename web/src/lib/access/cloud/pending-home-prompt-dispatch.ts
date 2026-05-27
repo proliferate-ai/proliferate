@@ -1,7 +1,6 @@
 import {
   getCommandStatus,
   getWorkspaceSnapshot,
-  ensureFreeManagedCredits,
   materializeTargetConfig,
   type CloudCommandEnvelope,
   type CloudCommandResponse,
@@ -15,6 +14,7 @@ import {
 } from "@proliferate/product-model/workspaces/cloud-work-inventory";
 
 import type { PendingHomePrompt } from "./pending-home-prompt-store";
+import { ensurePersonalAgentAuthLaunchReady } from "./agent-auth-launch-readiness";
 
 export type SendPromptPayload = {
   text: string;
@@ -200,19 +200,12 @@ async function ensurePersonalManagedAgentAuthReady(args: {
   modelId?: string | null;
   onStatus: (status: string) => void;
 }): Promise<void> {
-  args.onStatus("Checking cloud agent credits.");
-  const result = await ensureFreeManagedCredits({
+  await ensurePersonalAgentAuthLaunchReady({
+    client: args.client,
     agentKind: normalizeAgentAuthAgentKind(args.agentKind),
     modelId: args.modelId,
-  }, args.client);
-  if (!result.launchEnabled) {
-    throw new Error(
-      result.lastErrorMessage
-        ?? (result.status === "gateway_disabled"
-          ? "Cloud agent launch is disabled for this account."
-          : "Cloud agent credits are not ready yet. Please retry in a moment."),
-    );
-  }
+    onStatus: args.onStatus,
+  });
 }
 
 async function applyPendingSessionConfigUpdates(args: {

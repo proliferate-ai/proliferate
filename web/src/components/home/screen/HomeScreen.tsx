@@ -2,12 +2,11 @@ import { Bot, Cloud, GitBranch, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  useAgentAuthMutations,
   useCloudAgentCatalog,
+  useCloudClient,
   useCloudRepoConfigs,
   useCreateCloudWorkspace,
 } from "@proliferate/cloud-sdk-react";
-import type { AgentAuthAgentKind } from "@proliferate/cloud-sdk";
 import {
   buildCloudLaunchComposerControls,
   buildLaunchSessionConfigUpdates,
@@ -32,6 +31,7 @@ import type { CloudChatTranscriptRowView } from "@proliferate/product-ui/chat/Cl
 
 import { webEnv } from "../../../config/env";
 import { routes } from "../../../config/routes";
+import { ensurePersonalAgentAuthLaunchReady } from "../../../lib/access/cloud/agent-auth-launch-readiness";
 import { savePendingHomePrompt } from "../../../lib/access/cloud/pending-home-prompt-store";
 import { AddCloudEnvironmentDialogController } from "../../environments/screen/AddCloudEnvironmentDialogController";
 
@@ -54,6 +54,7 @@ interface HomePendingPrompt {
 
 export function HomeScreen() {
   const navigate = useNavigate();
+  const client = useCloudClient();
   const submitInFlightRef = useRef(false);
   const [draft, setDraft] = useState("");
   const [repoId, setRepoId] = useState(() =>
@@ -71,7 +72,6 @@ export function HomeScreen() {
   const repoConfigs = useCloudRepoConfigs();
   const agentCatalog = useCloudAgentCatalog();
   const createWorkspace = useCreateCloudWorkspace();
-  const agentAuthMutations = useAgentAuthMutations();
   const repoOptions = useMemo(
     () => buildRepoOptions(repoConfigs.data?.configs ?? [], webEnv.defaultCloudRepo),
     [repoConfigs.data?.configs],
@@ -170,20 +170,12 @@ export function HomeScreen() {
         }),
         createdAt: Date.now(),
       };
-      const freeCredits = await agentAuthMutations.ensureFreeCredits({
+      await ensurePersonalAgentAuthLaunchReady({
+        client,
         agentKind: normalizeAgentAuthAgentKind(resolvedLaunchSelection.agentKind),
         modelId: resolvedLaunchSelection.modelId,
+        allowUnavailableFreeCredits: true,
       });
-      if (
-        freeCredits.status !== "not_entitled"
-        && freeCredits.status !== "gateway_disabled"
-        && !freeCredits.launchEnabled
-      ) {
-        throw new Error(
-          freeCredits.lastErrorMessage
-            ?? "Cloud agent credits are not ready yet. Please retry in a moment.",
-        );
-      }
       const workspace = await createWorkspace.mutateAsync({
         gitProvider: "github",
         gitOwner: selectedRepo.gitOwner,
@@ -209,7 +201,6 @@ export function HomeScreen() {
   }
 
   const submitting = createWorkspace.isPending
-    || agentAuthMutations.isEnsuringFreeCredits
     || submitInFlightRef.current;
   const transcriptRows = useMemo(
     () => buildPendingPromptRows(pendingPrompt),
@@ -327,7 +318,7 @@ function waitForNextPaint(): Promise<void> {
   });
 }
 
-function normalizeAgentAuthAgentKind(agentKind: string): AgentAuthAgentKind | null {
+function normalizeAgentAuthAgentKind(agentKind: string) {
   return agentKind === "claude"
     || agentKind === "codex"
     || agentKind === "opencode"

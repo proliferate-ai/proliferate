@@ -85,6 +85,11 @@ export interface CloudLaunchComposerControlSelection {
   value: string;
 }
 
+export interface CloudSessionAgentModelSelection {
+  agentKind: string;
+  modelId: string;
+}
+
 export function readSessionLiveConfig(
   session: CloudSessionProjection | null,
 ): SessionLiveConfigSnapshot | null {
@@ -106,6 +111,7 @@ export function buildCloudChatComposerControls(input: {
   onLaunchControlSelect?: (selection: CloudLaunchComposerControlSelection) => void;
   onLaunchModelSelect: (modelId: string) => void;
   onSessionConfigSelect: (rawConfigId: string, value: string) => void;
+  onSessionAgentModelSelect?: (selection: CloudSessionAgentModelSelection) => void;
 }): CloudChatComposerControlView[] {
   if (!input.session) {
     return buildCloudLaunchComposerControls({
@@ -134,6 +140,7 @@ export function buildCloudChatComposerControls(input: {
       placement: control.rawConfigId === leadingModeControl?.rawConfigId ? "leading" : "trailing",
       pendingConfigChanges: input.pendingConfigChanges,
       onSelect: input.onSessionConfigSelect,
+      onAgentModelSelect: input.onSessionAgentModelSelect,
     })
   );
 }
@@ -561,6 +568,7 @@ function buildSessionConfigComposerControl(input: {
   placement: "leading" | "trailing";
   pendingConfigChanges: Record<string, PendingConfigChange>;
   onSelect: (rawConfigId: string, value: string) => void;
+  onAgentModelSelect?: (selection: CloudSessionAgentModelSelection) => void;
 }): CloudChatComposerControlView {
   const pendingChange =
     input.pendingConfigChanges[pendingConfigChangeKey(input.sessionId, input.control.rawConfigId)]
@@ -598,15 +606,30 @@ function buildSessionConfigComposerControl(input: {
     key: input.control.key,
     label: controlLabel(input.control),
     detail: selectedPresentation?.shortLabel ?? selectedOption?.label ?? null,
-    icon: selectedPresentation?.icon ?? controlIcon(input.control, input.placement),
+    icon: input.control.key === "model"
+      ? agentModelIcon(agentKind ?? DEFAULT_DIRECT_PROMPT_AGENT_KIND)
+      : selectedPresentation?.icon ?? controlIcon(input.control, input.placement),
     placement: input.placement,
     disabled: !input.control.settable,
     active: isActiveControl(input.control, selectedOption?.value ?? selectedValue),
     pendingState: pendingChange?.status ?? null,
     groups,
     onSelect: (value) => {
-      if (value !== selectedValue) {
-        input.onSelect(input.control.rawConfigId, value);
+      const selectedModel = input.control.key === "model"
+        ? parseLaunchAgentModelOptionId(value)
+        : null;
+      if (
+        selectedModel
+        && input.agentKind
+        && selectedModel.agentKind !== input.agentKind
+        && input.onAgentModelSelect
+      ) {
+        input.onAgentModelSelect(selectedModel);
+        return;
+      }
+      const configValue = selectedModel?.modelId ?? value;
+      if (configValue !== selectedValue) {
+        input.onSelect(input.control.rawConfigId, configValue);
       }
     },
   };
@@ -652,9 +675,10 @@ function sessionModelGroupsFromCatalog(input: {
     const options = agent.session.models
       .filter(isLaunchVisibleModel)
       .map((model) => ({
-        id: model.id,
+        id: launchAgentModelOptionId(agent.kind, model.id),
         label: model.displayName,
         description: model.description ?? null,
+        icon: agentModelIcon(agent.kind),
         selected: agent.kind === input.agentKind && modelMatchesSelectedValue({
           displayName: model.displayName,
           id: model.id,
