@@ -38,6 +38,42 @@ export interface BootstrapCloudWorkspaceRemoteAccessRequest {
   } | null;
 }
 
+export interface LaunchCloudWorkspaceOnTargetRequest {
+  targetId: string;
+  gitProvider: "github";
+  gitOwner: string;
+  gitRepoName: string;
+  baseBranch?: string | null;
+  branchName: string;
+  displayName?: string | null;
+  prompt: string;
+  promptId?: string | null;
+  agentKind: string;
+  modelId?: string | null;
+  modeId?: string | null;
+  sessionConfigUpdates?: Array<{
+    configId: string;
+    value: string;
+  }>;
+  source?: "mobile" | "web" | "api";
+}
+
+export interface WorkspaceTargetLaunchCommandIds {
+  ensureRepoCheckout: string;
+  materializeRoot: string;
+  materializeWorktree: string;
+  startSession: string;
+  sendPrompt: string;
+  updateSessionConfig: string[];
+}
+
+export interface WorkspaceTargetLaunchResponse {
+  workspace: CloudWorkspaceDetail;
+  sessionId: string;
+  sendCommandId: string;
+  commandIds: WorkspaceTargetLaunchCommandIds;
+}
+
 type CloudWorkspaceTransport = Record<string, unknown> & {
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
@@ -155,6 +191,23 @@ export async function bootstrapCloudWorkspaceRemoteAccess(
     body: input,
   });
   return normalizeCloudWorkspace(data) as CloudWorkspaceDetail;
+}
+
+export async function launchCloudWorkspaceOnTarget(
+  input: LaunchCloudWorkspaceOnTargetRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<WorkspaceTargetLaunchResponse> {
+  const data = await client.requestJson<WorkspaceTargetLaunchResponse>({
+    method: "POST",
+    path: "/v1/cloud/workspaces/target-launch",
+    body: input,
+  });
+  return {
+    ...data,
+    workspace: normalizeCloudWorkspace(
+      data.workspace as unknown as CloudWorkspaceTransport,
+    ) as CloudWorkspaceDetail,
+  };
 }
 
 export async function startCloudWorkspace(workspaceId: string): Promise<CloudWorkspaceDetail> {

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import logging
 import time
 from dataclasses import dataclass
+from datetime import timedelta
 from types import SimpleNamespace
 from typing import NoReturn
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,8 +68,10 @@ from proliferate.db.store.cloud_workspaces import (
     CloudRepoLimitExceededError,
     archive_cloud_workspace_record,
     create_cloud_workspace_for_user,
+    create_direct_target_cloud_workspace,
     delete_cloud_workspace_records_for_workspace,
     get_cloud_workspace_by_id,
+    get_existing_cloud_workspace,
     get_existing_managed_cloud_workspace_for_profile,
     list_claimed_organization_workspaces_for_user,
     list_exposed_cloud_workspaces_for_user,
@@ -92,6 +96,19 @@ from proliferate.db.store.cloud_workspaces import (
 )
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError
 from proliferate.integrations.sandbox import get_configured_sandbox_provider, get_sandbox_provider
+from proliferate.server.automations.worker.cloud_execution.command_models import (
+    EnsureRepoCheckoutPayload,
+    MaterializeWorkspacePayload,
+    SendPromptPayload,
+    StartSessionPayload,
+)
+from proliferate.server.automations.worker.cloud_execution.commands import (
+    parse_materialize_workspace_result,
+    parse_start_session_result,
+)
+from proliferate.server.automations.worker.cloud_executor_commands import (
+    wait_for_command_result,
+)
 from proliferate.server.automations.domain.claim_lifecycle import (
     CLOUD_WORKSPACE_CREATION_TRANSITION,
     claim_is_active,
@@ -145,10 +162,13 @@ from proliferate.server.cloud.workspaces.domain.lifecycle import (
 )
 from proliferate.server.cloud.workspaces.models import (
     BootstrapWorkspaceRemoteAccessRequest,
+    LaunchWorkspaceOnTargetRequest,
     WorkspaceConnection,
     WorkspaceCreatorContext,
     WorkspaceDetail,
     WorkspaceDirectTargetContext,
+    WorkspaceTargetLaunchCommandIds,
+    WorkspaceTargetLaunchResponse,
     WorkspaceSummary,
     runtime_auth_payload,
     workspace_detail_payload,
@@ -165,6 +185,8 @@ CLOUD_HUMAN_ORIGIN_JSON = '{"kind":"human","entrypoint":"cloud"}'
 CLOUD_DESKTOP_REMOTE_ACCESS_ORIGIN_JSON = '{"kind":"human","entrypoint":"desktop"}'
 CLOUD_SYSTEM_ORIGIN_JSON = '{"kind":"system","entrypoint":"cloud"}'
 CLOUD_REMOTE_ACCESS_TEMPLATE_VERSION = "desktop-remote-access-v1"
+CLOUD_TARGET_LAUNCH_TEMPLATE_VERSION = "desktop-target-launch-v1"
+TARGET_LAUNCH_COMMAND_WAIT_TIMEOUT = timedelta(seconds=240)
 
 
 def _raise_org_cloud_not_ready() -> NoReturn:
@@ -697,6 +719,409 @@ async def bootstrap_workspace_remote_access(
         ),
     )
     return await _build_workspace_detail_for_request(db, workspace)
+
+
+async def launch_workspace_on_target(
+    db: AsyncSession,
+    user: User,
+    body: LaunchWorkspaceOnTargetRequest,
+) -> WorkspaceTargetLaunchResponse:
+    prompt_text = body.prompt.strip()
+    if not prompt_text:
+        raise CloudApiError(
+            "target_launch_prompt_required",
+            "Enter a prompt before launching desktop dispatch.",
+            status_code=400,
+        )
+    target = await targets_store.get_visible_target_by_id(
+        db,
+        target_id=body.target_id,
+        user_id=user.id,
+    )
+    if target is None:
+        raise CloudApiError(
+            "target_launch_target_not_found",
+            "Target not found.",
+            status_code=404,
+        )
+    if target.owner_scope != "personal" or target.owner_user_id != user.id:
+        raise CloudApiError(
+            "target_launch_target_not_personal",
+            "Launching on a desktop target requires a personal target.",
+            status_code=409,
+        )
+    if target.kind not in {
+        CloudTargetKind.desktop_dispatch.value,
+        CloudTargetKind.ssh.value,
+        CloudTargetKind.self_hosted_cloud.value,
+    }:
+        raise CloudApiError(
+            "target_launch_target_kind_unsupported",
+            "This target cannot launch new workspaces.",
+            status_code=409,
+        )
+    if target.status != CloudTargetStatus.online.value:
+        raise CloudApiError(
+            "target_launch_target_offline",
+            "Desktop dispatch requires the target worker to be online.",
+            status_code=409,
+        )
+
+    resolved = await _resolve_new_direct_target_workspace_create(
+        db,
+        user=user,
+        body=body,
+    )
+    repo_root_path, worktree_path = _direct_target_workspace_paths(
+        git_owner=resolved.git_owner,
+        git_repo_name=resolved.git_repo_name,
+        branch_name=resolved.git_branch,
+        target_kind=target.kind,
+        workspace_root=target.default_workspace_root,
+    )
+    billing_subject = await ensure_personal_billing_subject(db, user.id)
+    workspace = await create_direct_target_cloud_workspace(
+        db,
+        target_id=target.id,
+        user_id=user.id,
+        billing_subject_id=billing_subject.id,
+        created_by_user_id=user.id,
+        display_name=resolved.display_name,
+        git_provider=resolved.git_provider,
+        git_owner=resolved.git_owner,
+        git_repo_name=resolved.git_repo_name,
+        git_branch=resolved.git_branch,
+        git_base_branch=resolved.git_base_branch,
+        worktree_path=worktree_path,
+        origin_json=json.dumps(
+            {
+                "kind": "human",
+                "entrypoint": body.source,
+                "targetId": str(target.id),
+                "agentKind": body.agent_kind,
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        ),
+        template_version=CLOUD_TARGET_LAUNCH_TEMPLATE_VERSION,
+        origin="manual_mobile" if body.source == "mobile" else "manual_web",
+    )
+    await db_engine.commit_session(db)
+
+    try:
+        checkout = await _enqueue_target_launch_command(
+            db,
+            user=user,
+            target_id=target.id,
+            cloud_workspace_id=workspace.id,
+            kind=CloudCommandKind.ensure_repo_checkout.value,
+            payload=EnsureRepoCheckoutPayload(
+                provider=resolved.git_provider,
+                owner=resolved.git_owner,
+                name=resolved.git_repo_name,
+                path=repo_root_path,
+                base_branch=resolved.git_base_branch,
+            ).to_json(),
+            idempotency_key=f"target-launch:{workspace.id}:checkout",
+            source=body.source,
+        )
+        await _wait_for_target_launch_command(checkout, workspace_id=workspace.id)
+
+        root_command = await _enqueue_target_launch_command(
+            db,
+            user=user,
+            target_id=target.id,
+            cloud_workspace_id=workspace.id,
+            kind=CloudCommandKind.materialize_workspace.value,
+            payload=MaterializeWorkspacePayload(
+                mode="existing_path",
+                path=repo_root_path,
+                display_name=f"{resolved.git_owner}/{resolved.git_repo_name}",
+                origin={"kind": "system", "entrypoint": "cloud"},
+                creator_context={"kind": "human", "label": "Mobile"},
+            ).to_json(),
+            idempotency_key=f"target-launch:{workspace.id}:materialize-root",
+            source=body.source,
+        )
+        root_result = parse_materialize_workspace_result(
+            await _wait_for_target_launch_command(root_command, workspace_id=workspace.id),
+        )
+
+        worktree_command = await _enqueue_target_launch_command(
+            db,
+            user=user,
+            target_id=target.id,
+            cloud_workspace_id=workspace.id,
+            kind=CloudCommandKind.materialize_workspace.value,
+            payload=MaterializeWorkspacePayload(
+                mode="worktree",
+                repo_root_id=root_result.repo_root_id,
+                target_path=worktree_path,
+                new_branch_name=resolved.git_branch,
+                base_branch=resolved.git_base_branch,
+                origin={"kind": "system", "entrypoint": "cloud"},
+                creator_context={"kind": "human", "label": "Mobile"},
+            ).to_json(),
+            idempotency_key=f"target-launch:{workspace.id}:materialize-worktree",
+            source=body.source,
+        )
+        materialized = parse_materialize_workspace_result(
+            await _wait_for_target_launch_command(worktree_command, workspace_id=workspace.id),
+        )
+
+        start_payload = StartSessionPayload(
+            workspace_id=materialized.anyharness_workspace_id,
+            agent_kind=body.agent_kind,
+            model_id=body.model_id,
+            mode_id=body.mode_id,
+            origin={"kind": "system", "entrypoint": "cloud"},
+        ).to_json()
+        start_payload["subagentsEnabled"] = False
+        start_command = await _enqueue_target_launch_command(
+            db,
+            user=user,
+            target_id=target.id,
+            cloud_workspace_id=workspace.id,
+            kind=CloudCommandKind.start_session.value,
+            payload=start_payload,
+            idempotency_key=f"target-launch:{workspace.id}:start-session",
+            source=body.source,
+        )
+        started = parse_start_session_result(
+            await _wait_for_target_launch_command(start_command, workspace_id=workspace.id),
+        )
+
+        config_command_ids: list[str] = []
+        for update in body.session_config_updates:
+            config_command = await _enqueue_target_launch_command(
+                db,
+                user=user,
+                target_id=target.id,
+                cloud_workspace_id=workspace.id,
+                session_id=started.session_id,
+                kind=CloudCommandKind.update_session_config.value,
+                payload={"configId": update.config_id, "value": update.value},
+                idempotency_key=(
+                    f"target-launch:{workspace.id}:config:{update.config_id}:{update.value}"
+                ),
+                source=body.source,
+            )
+            config_command_ids.append(str(config_command.id))
+            await _wait_for_target_launch_command(config_command, workspace_id=workspace.id)
+
+        prompt_id = body.prompt_id or f"target-launch:{workspace.id}:prompt:{uuid4().hex}"
+        send_command = await _enqueue_target_launch_command(
+            db,
+            user=user,
+            target_id=target.id,
+            cloud_workspace_id=workspace.id,
+            session_id=started.session_id,
+            kind=CloudCommandKind.send_prompt.value,
+            payload=SendPromptPayload(text=prompt_text, prompt_id=prompt_id).to_json(),
+            idempotency_key=f"target-launch:{workspace.id}:send-prompt:{prompt_id}",
+            source=body.source,
+        )
+        await _wait_for_target_launch_command(send_command, workspace_id=workspace.id)
+    except (RuntimeError, TimeoutError, ValueError) as exc:
+        message = format_exception_message(exc) or str(exc)
+        await mark_workspace_error_by_id(
+            workspace.id,
+            message,
+            status_detail="Desktop dispatch failed",
+        )
+        raise CloudApiError(
+            "target_launch_failed",
+            message or "Desktop dispatch failed before the prompt could be sent.",
+            status_code=502,
+        ) from exc
+
+    db.expire_all()
+    refreshed = await get_cloud_workspace_by_id(db, workspace.id)
+    if refreshed is None:
+        raise CloudApiError(
+            "target_launch_workspace_missing",
+            "Launched workspace could not be loaded.",
+            status_code=500,
+        )
+    return WorkspaceTargetLaunchResponse(
+        workspace=await _build_workspace_detail_for_request(db, refreshed),
+        session_id=started.session_id,
+        send_command_id=str(send_command.id),
+        command_ids=WorkspaceTargetLaunchCommandIds(
+            ensure_repo_checkout=str(checkout.id),
+            materialize_root=str(root_command.id),
+            materialize_worktree=str(worktree_command.id),
+            start_session=str(start_command.id),
+            send_prompt=str(send_command.id),
+            update_session_config=config_command_ids,
+        ),
+    )
+
+
+async def _resolve_new_direct_target_workspace_create(
+    db: AsyncSession,
+    *,
+    user: User,
+    body: LaunchWorkspaceOnTargetRequest,
+) -> ResolvedCloudWorkspaceCreate:
+    if body.git_provider != SUPPORTED_GIT_PROVIDER:
+        raise CloudApiError(
+            "unsupported_repo_provider",
+            "Only GitHub repositories are supported for desktop dispatch.",
+            status_code=400,
+        )
+    if get_linked_github_account(user) is None:
+        raise CloudApiError(
+            "github_link_required",
+            "Connect a GitHub account before launching desktop dispatch.",
+            status_code=400,
+        )
+    cleaned_branch_name = body.branch_name.strip()
+    if not cleaned_branch_name:
+        raise CloudApiError(
+            "invalid_branch_request",
+            "Choose a new branch before launching desktop dispatch.",
+            status_code=400,
+        )
+    if body.agent_kind not in allowed_agent_kinds():
+        raise CloudApiError(
+            "unsupported_agent_kind",
+            "The selected agent is not supported for desktop dispatch.",
+            status_code=400,
+        )
+
+    repo_config = await get_cloud_repo_config(
+        db,
+        user_id=user.id,
+        git_owner=body.git_owner,
+        git_repo_name=body.git_repo_name,
+    )
+    if repo_config is None or not repo_config.configured:
+        raise CloudApiError(
+            "cloud_repo_not_configured",
+            "Configure cloud settings for this repo before launching desktop dispatch.",
+            status_code=409,
+        )
+
+    repo_branches = await get_github_repo_branches(
+        user,
+        git_owner=body.git_owner,
+        git_repo_name=body.git_repo_name,
+        missing_access_message="Connect a GitHub account before launching desktop dispatch.",
+        repo_access_required_message=(
+            "Reconnect GitHub and grant repository access before launching desktop dispatch."
+        ),
+    )
+    cleaned_base_branch = body.base_branch.strip() if body.base_branch else ""
+    resolved_base_branch = cleaned_base_branch or (repo_config.default_branch or "").strip()
+    if not resolved_base_branch:
+        resolved_base_branch = repo_branches.default_branch.strip()
+    if resolved_base_branch not in repo_branches.branches:
+        raise CloudApiError(
+            "github_branch_not_found",
+            f"The base branch '{resolved_base_branch}' was not found on GitHub.",
+            status_code=400,
+        )
+    if cleaned_branch_name in repo_branches.branches:
+        raise CloudApiError(
+            "github_branch_already_exists",
+            f"The branch '{cleaned_branch_name}' already exists on GitHub.",
+            status_code=400,
+        )
+    existing_cloud_workspace = await get_existing_cloud_workspace(
+        db,
+        user_id=user.id,
+        git_provider=body.git_provider,
+        git_owner=body.git_owner,
+        git_repo_name=body.git_repo_name,
+        git_branch=cleaned_branch_name,
+    )
+    if existing_cloud_workspace is not None:
+        raise CloudApiError(
+            "cloud_branch_already_exists",
+            (
+                f"A cloud workspace already exists for branch '{cleaned_branch_name}'. "
+                "Open the existing workspace or choose a different branch."
+            ),
+            status_code=400,
+        )
+    return ResolvedCloudWorkspaceCreate(
+        git_provider=body.git_provider,
+        git_owner=body.git_owner,
+        git_repo_name=body.git_repo_name,
+        git_branch=cleaned_branch_name,
+        git_base_branch=resolved_base_branch,
+        display_name=(
+            body.display_name.strip()
+            if body.display_name and body.display_name.strip()
+            else None
+        ),
+        active_sandbox_count=0,
+        selected_agent_kinds=(body.agent_kind,),
+        cloud_repo_limit=None,
+    )
+
+
+def _direct_target_workspace_paths(
+    *,
+    git_owner: str,
+    git_repo_name: str,
+    branch_name: str,
+    target_kind: str,
+    workspace_root: str | None,
+) -> tuple[str, str]:
+    default_root = (
+        "~/Proliferate/workspaces"
+        if target_kind == CloudTargetKind.desktop_dispatch.value
+        else "~/proliferate-workspaces"
+    )
+    root = (workspace_root or default_root).rstrip("/") or default_root
+    owner = git_owner.strip().replace("/", "-")
+    name = git_repo_name.strip().replace("/", "-")
+    branch_segment = branch_name.strip().replace("/", "-")
+    return (
+        f"{root}/repos/{owner}/{name}",
+        f"{root}/worktrees/{owner}/{name}/{branch_segment}",
+    )
+
+
+async def _enqueue_target_launch_command(
+    db: AsyncSession,
+    *,
+    user: User,
+    target_id: UUID,
+    cloud_workspace_id: UUID,
+    kind: str,
+    payload: dict[str, object],
+    idempotency_key: str,
+    source: str,
+    session_id: str | None = None,
+):
+    command = await enqueue_command(
+        db,
+        user=user,
+        body=CreateCloudCommandRequest.model_validate(
+            {
+                "idempotencyKey": idempotency_key,
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": session_id,
+                "kind": kind,
+                "payload": payload,
+                "source": source,
+            }
+        ),
+    )
+    await db_engine.commit_session(db)
+    return command
+
+
+async def _wait_for_target_launch_command(command, *, workspace_id: UUID):
+    del workspace_id
+    return await wait_for_command_result(
+        command,
+        timeout=TARGET_LAUNCH_COMMAND_WAIT_TIMEOUT,
+    )
 
 
 async def enable_cloud_workspace_remote_access(

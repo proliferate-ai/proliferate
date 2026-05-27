@@ -84,6 +84,8 @@ Specs:
 - [specs/mobile-cloud-client.md](specs/mobile-cloud-client.md) for the mobile
   cloud client, native chat parity, workspace/session flows, automations, and
   settings.
+- [specs/mobile-claude-ui-alignment.md](specs/mobile-claude-ui-alignment.md)
+  for the screenshot-backed mobile UI alignment pass against Claude mobile.
 - [specs/workspace-files.md](specs/workspace-files.md) for workspace file
   browsing, file viewing, diff viewing, Changes, or all-changes review.
 
