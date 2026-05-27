@@ -18,6 +18,7 @@ describe("ProductSidebar", () => {
       <ProductSidebar
         brand={<span>P</span>}
         title="Proliferate"
+        headerLeadingAction={{ id: "toggle-sidebar", label: "Hide sidebar", icon: <span>Toggle</span> }}
         navItems={[
           { id: "home", label: "Home", icon: <span>H</span>, active: true, shortcutLabel: "⌘B" },
           { id: "settings", label: "Settings", icon: <span>S</span>, active: false },
@@ -81,6 +82,9 @@ describe("ProductSidebar", () => {
     expect(screen.getByText("Pablo")).toBeTruthy();
     expect(screen.getByText("⌘B").className).toContain("opacity-100");
     expect(screen.getByText("⌥⌘1").className).toContain("opacity-100");
+
+    fireEvent.click(screen.getByRole("button", { name: "Hide sidebar" }));
+    expect(onAction).toHaveBeenCalledWith({ scope: "header", actionId: "toggle-sidebar" });
 
     fireEvent.click(screen.getByText("Settings"));
     expect(onNavSelect).toHaveBeenCalledWith("settings");

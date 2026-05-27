@@ -557,6 +557,96 @@ async def create_managed_cloud_workspace_for_profile(
     return workspace
 
 
+async def create_direct_target_cloud_workspace(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    user_id: UUID,
+    billing_subject_id: UUID,
+    created_by_user_id: UUID,
+    display_name: str | None,
+    git_provider: str,
+    git_owner: str,
+    git_repo_name: str,
+    git_branch: str,
+    git_base_branch: str | None,
+    worktree_path: str | None,
+    origin_json: str | None,
+    template_version: str,
+    origin: str = "manual_mobile",
+) -> CloudWorkspace:
+    now = utcnow()
+    workspace = CloudWorkspace(
+        user_id=user_id,
+        owner_scope="personal",
+        owner_user_id=user_id,
+        organization_id=None,
+        created_by_user_id=created_by_user_id,
+        billing_subject_id=billing_subject_id,
+        runtime_environment_id=None,
+        sandbox_profile_id=None,
+        target_id=target_id,
+        display_name=display_name,
+        git_provider=git_provider,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        normalized_repo_key=normalized_repo_key(
+            git_provider=git_provider,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+        ),
+        git_branch=git_branch,
+        git_base_branch=git_base_branch,
+        worktree_path=worktree_path,
+        origin=origin,
+        origin_json=origin_json,
+        status=CloudWorkspaceStatus.pending.value,
+        status_detail="Preparing target workspace",
+        last_error=None,
+        template_version=template_version,
+        runtime_generation=0,
+        materialized_slot_generation=None,
+        required_runtime_config_sequence=0,
+        required_runtime_config_revision_id=None,
+        required_agent_auth_revision=None,
+        repo_env_vars_ciphertext=None,
+        repo_files_applied_version=0,
+        repo_setup_applied_version=0,
+        repo_post_ready_phase=WorkspacePostReadyPhase.idle.value,
+        repo_post_ready_files_total=0,
+        repo_post_ready_files_applied=0,
+        repo_post_ready_apply_token=None,
+        repo_files_last_failed_path=None,
+        repo_files_last_error=None,
+        cleanup_state=CloudWorkspaceCleanupState.none.value,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(workspace)
+    await db.flush()
+    db.add(
+        CloudWorkspaceExposure(
+            target_id=target_id,
+            cloud_workspace_id=workspace.id,
+            anyharness_workspace_id=None,
+            owner_scope="personal",
+            owner_user_id=user_id,
+            organization_id=None,
+            visibility="private",
+            claimed_by_user_id=None,
+            default_projection_level="live",
+            commandable=True,
+            status="active",
+            revision=1,
+            origin=workspace.origin,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await db.flush()
+    return workspace
+
+
 async def delete_cloud_workspace_records(
     db: AsyncSession,
     workspace: CloudWorkspace,

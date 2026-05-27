@@ -6,33 +6,41 @@ import {
   ChevronDown,
   Clock3,
   Cloud,
+  ExternalLink,
   GitBranch,
+  Globe,
   Loader2,
-  Terminal,
+  Plus,
+  Sparkles,
   Users,
   Wrench,
 } from "lucide-react";
+import type { SessionControlIconKey } from "@proliferate/product-model/chats/session-controls/presentation";
+import { Input } from "@proliferate/ui/primitives/Input";
 import {
   useMemo,
   useState,
-  type ButtonHTMLAttributes,
   type ComponentType,
   type FormEvent,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
 import { twMerge } from "tailwind-merge";
+import { PopoverMenuItem } from "../popover/PopoverMenuItem";
+import { ChatComposerControlRowFrame } from "./composer/ChatComposerControlRowFrame";
 import { ChatComposerSurface } from "./composer/ChatComposerSurface";
 import { ComposerActionButton } from "./composer/ComposerActionButton";
 import { ComposerControlButton } from "./composer/ComposerControlButton";
 import { ComposerPopoverSurface } from "./composer/ComposerPopoverSurface";
 import { ComposerTextarea } from "./composer/ComposerTextarea";
 import { ComposerTextareaFrame } from "./composer/ComposerTextareaFrame";
+import { SessionControlIcon } from "./session-controls/SessionControlIcon";
 
 export interface CloudChatComposerControlOptionView {
   id: string;
   label: string;
   description?: string | null;
+  icon?: SessionControlIconKey | null;
   selected?: boolean;
   disabled?: boolean;
 }
@@ -48,7 +56,7 @@ export interface CloudChatComposerControlView {
   key?: string | null;
   label: string;
   detail?: string | null;
-  icon?: "bot" | "brain" | "cloud" | "settings";
+  icon?: "bot" | "brain" | "settings" | SessionControlIconKey;
   placement?: "leading" | "trailing";
   disabled?: boolean;
   active?: boolean;
@@ -73,7 +81,7 @@ export interface CloudChatComposerFooterControlView {
   id: string;
   label: string;
   detail?: string | null;
-  icon?: "branch" | "cloud" | "repo" | "users";
+  icon?: "branch" | "cloud" | "external" | "globe" | "repo" | "sparkles" | "users";
   active?: boolean;
   disabled?: boolean;
   pending?: boolean;
@@ -113,8 +121,8 @@ export function CloudChatComposer({ composer }: { composer: CloudChatComposerVie
   }
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col">
-      <ChatComposerSurface>
+    <div className="mx-auto flex w-full max-w-3xl flex-col">
+      <ChatComposerSurface overflowMode="visible">
         <form onSubmit={submitComposer} className="relative flex flex-col">
           <ComposerTextareaFrame topInset="standard">
             <ComposerTextarea
@@ -141,22 +149,50 @@ export function CloudChatComposer({ composer }: { composer: CloudChatComposerVie
 }
 
 function CloudChatComposerControlRow({ composer }: { composer: CloudChatComposerView }) {
+  const leadingControls = (composer.controls ?? []).filter((control) => control.placement === "leading");
+  const modelConfigControls = (composer.controls ?? []).filter((control) => control.placement !== "leading");
+
   return (
-    <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-[5px] px-2">
-      <CloudChatComposerControlStrip
-        controls={composer.controls ?? []}
-        disabled={composer.disabled}
-      />
-      <ComposerActionButton
-        type="submit"
-        aria-label="Send message"
-        disabled={!composer.canSubmit || composer.disabled || composer.isSubmitting}
-        loading={composer.isSubmitting}
-        data-chat-send-button
-      >
-        {composer.isSubmitting ? null : <ArrowUp size={14} />}
-      </ComposerActionButton>
-    </div>
+    <ChatComposerControlRowFrame
+      leading={(
+        <>
+          <ComposerControlButton
+            type="button"
+            icon={<Plus size={17} />}
+            iconOnly
+            label="Add context"
+            disabled={composer.disabled}
+            className="text-[color:var(--color-composer-control-foreground)]"
+          />
+          {leadingControls.map((control) => (
+            <CloudChatSingleControl
+              key={control.id}
+              control={control}
+              composerDisabled={composer.disabled}
+            />
+          ))}
+        </>
+      )}
+      trailing={(
+        modelConfigControls.length > 0 ? (
+          <CloudChatModelConfigControl
+            controls={modelConfigControls}
+            composerDisabled={composer.disabled}
+          />
+        ) : null
+      )}
+      action={(
+        <ComposerActionButton
+          type="submit"
+          aria-label="Send message"
+          disabled={!composer.canSubmit || composer.disabled || composer.isSubmitting}
+          loading={composer.isSubmitting}
+          data-chat-send-button
+        >
+          {composer.isSubmitting ? null : <ArrowUp size={14} />}
+        </ComposerActionButton>
+      )}
+    />
   );
 }
 
@@ -208,7 +244,7 @@ function CloudChatComposerFooter({
   }
 
   return (
-    <div className="rounded-[var(--radius-composer)] px-2 pt-2">
+    <div className="rounded-[var(--radius-composer,1.5rem)] px-2 pt-2">
       <div className="flex min-w-0 flex-wrap items-center gap-1">
         {controls.map((control) => {
           const Icon = iconForComposerFooterControl(control.icon);
@@ -247,7 +283,7 @@ function CloudChatSingleControl({
   const [open, setOpen] = useState(false);
   const selected = useMemo(() => selectedComposerOption(control), [control]);
   const disabled = composerDisabled || isControlDisabled(control);
-  const Icon = iconForComposerControl(control.icon);
+  const icon = iconNodeForComposerControl(selected?.icon ?? control.icon, "size-3.5");
   const displayLabel = selected?.label ?? control.label;
   const displayDetail = control.detail && control.detail !== displayLabel
     ? control.detail
@@ -259,7 +295,7 @@ function CloudChatSingleControl({
         disabled
         tone={control.active ? "accent" : "quiet"}
         active={control.active}
-        icon={<Icon size={14} />}
+        icon={icon}
         label={displayLabel}
         detail={displayDetail}
         trailing={<PendingComposerConfigIndicator pendingState={control.pendingState ?? null} />}
@@ -272,7 +308,7 @@ function CloudChatSingleControl({
     <div className="relative min-w-0">
       <ComposerControlButton
         tone={control.active ? "accent" : "neutral"}
-        icon={<Icon size={14} />}
+        icon={icon}
         label={displayLabel}
         detail={displayDetail}
         trailing={(
@@ -311,9 +347,18 @@ function CloudChatModelConfigControl({
   composerDisabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [activeSubmenuId, setActiveSubmenuId] = useState<string | null>(null);
   const modelControl = controls.find((control) => isModelControl(control)) ?? controls[0] ?? null;
   const configControls = controls.filter((control) => control !== modelControl);
   const selectedModel = modelControl ? selectedComposerOption(modelControl) : null;
+  const activeModelGroup = modelControl ? activeComposerModelGroup(modelControl) : null;
+  const filteredModelControl = modelControl && activeModelGroup
+    ? filterModelControlOptions({ ...modelControl, groups: [activeModelGroup] }, search)
+    : null;
+  const activeConfigSubmenuControl = configControls.find((control) => control.id === activeSubmenuId) ?? null;
+  const showHarnessSubmenu = Boolean(modelControl && modelControl.groups.length > 1);
+  const showSubmenuRows = configControls.length > 0 || showHarnessSubmenu;
   const pendingState = controls.find((control) => control.pendingState)?.pendingState ?? null;
   const disabled = composerDisabled || controls.every(isControlDisabled);
   const triggerLabel = selectedModel?.label ?? modelControl?.detail ?? modelControl?.label ?? "Configure";
@@ -323,7 +368,7 @@ function CloudChatModelConfigControl({
     <div className="relative min-w-0">
       <ComposerControlButton
         disabled={disabled}
-        icon={<Bot size={16} />}
+        icon={iconNodeForComposerControl(selectedModel?.icon ?? modelControl?.icon ?? "claude", "size-4")}
         label={triggerLabel}
         detail={triggerDetail}
         trailing={(
@@ -340,75 +385,185 @@ function CloudChatModelConfigControl({
         aria-label={`Model and configuration: ${triggerLabel}${triggerDetail ? `, ${triggerDetail}` : ""}`}
         data-state={open ? "open" : "closed"}
         className="max-w-[18rem]"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          setOpen((value) => {
+            const nextOpen = !value;
+            if (!nextOpen) {
+              setSearch("");
+              setActiveSubmenuId(null);
+            }
+            return nextOpen;
+          });
+        }}
       />
       {open && !disabled ? (
-        <ComposerPopoverSurface className="absolute bottom-full right-0 z-30 mb-1 w-72 max-w-[calc(100vw-1rem)] p-1">
-          <div className="flex max-h-[min(24rem,calc(100vh-8rem))] min-h-0 flex-col overflow-y-auto">
-            {modelControl ? (
-              <ComposerControlMenuSection
+        <div
+          className="absolute bottom-full right-0 z-[80] mb-1"
+          onMouseLeave={() => setActiveSubmenuId(null)}
+        >
+          <ComposerPopoverSurface className="w-72 max-w-[calc(100vw-1rem)] p-1">
+            <div className="flex max-h-[min(20rem,calc(100vh-8rem))] min-h-0 flex-col">
+              {modelControl ? (
+                <ComposerModelPickerMenu
+                  control={filteredModelControl ?? modelControl}
+                  search={search}
+                  onSearchChange={setSearch}
+                  onClose={() => {
+                    setOpen(false);
+                    setSearch("");
+                    setActiveSubmenuId(null);
+                  }}
+                />
+              ) : null}
+              {showSubmenuRows ? (
+                <div className="shrink-0">
+                  <ComposerMenuSeparator />
+                  {showHarnessSubmenu && modelControl ? (
+                    <ComposerConfigSubmenuButton
+                      active={activeSubmenuId === modelControl.id}
+                      control={modelControl}
+                      onOpen={() => setActiveSubmenuId(modelControl.id)}
+                    />
+                  ) : null}
+                  {configControls.map((control) => (
+                    <ComposerConfigSubmenuButton
+                      key={control.id}
+                      active={activeSubmenuId === control.id}
+                      control={control}
+                      onOpen={() => setActiveSubmenuId(control.id)}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </ComposerPopoverSurface>
+          {activeSubmenuId === modelControl?.id && modelControl ? (
+            <ComposerPopoverSurface className="absolute bottom-0 left-[calc(100%+0.25rem)] z-[81] w-56 max-w-[calc(100vw-1rem)] p-1">
+              <ComposerHarnessMenuRows
                 control={modelControl}
-                showLabel
-                onClose={() => setOpen(false)}
+                onClose={() => {
+                  setOpen(false);
+                  setSearch("");
+                  setActiveSubmenuId(null);
+                }}
               />
-            ) : null}
-            {configControls.map((control) => (
-              <ComposerControlMenuSection
-                key={control.id}
-                control={control}
-                showLabel
-                showSeparator
-                onClose={() => setOpen(false)}
+            </ComposerPopoverSurface>
+          ) : activeConfigSubmenuControl ? (
+            <ComposerPopoverSurface className="absolute bottom-0 left-[calc(100%+0.25rem)] z-[81] w-56 max-w-[calc(100vw-1rem)] p-1">
+              <ComposerControlMenuRows
+                control={activeConfigSubmenuControl}
+                onClose={() => {
+                  setOpen(false);
+                  setSearch("");
+                  setActiveSubmenuId(null);
+                }}
               />
-            ))}
-          </div>
-        </ComposerPopoverSurface>
+            </ComposerPopoverSurface>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
 }
 
-function ComposerControlMenuSection({
+function ComposerModelPickerMenu({
   control,
-  showLabel = false,
-  showSeparator = false,
+  search,
+  onSearchChange,
   onClose,
 }: {
   control: CloudChatComposerControlView;
-  showLabel?: boolean;
-  showSeparator?: boolean;
+  search: string;
+  onSearchChange: (value: string) => void;
   onClose: () => void;
 }) {
+  const hasModelOptions = control.groups.some((group) => group.options.length > 0);
+
   return (
-    <div>
-      {showSeparator ? <ComposerMenuSeparator /> : null}
-      {showLabel ? (
-        <div className="min-h-5 truncate px-2 py-0.5 text-sm font-[430] leading-4 text-muted-foreground/70">
-          {control.label}
+    <div className="flex min-h-0 flex-1 flex-col space-y-1">
+      <div className="space-y-1">
+        <div className="px-1">
+          <div className="flex h-7 items-center rounded-lg border border-border bg-surface-control px-2.5">
+            <Input
+              value={search}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="Search models"
+              className="h-auto min-w-0 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
+              data-telemetry-mask
+            />
+          </div>
         </div>
-      ) : null}
-      <ComposerControlMenuRows control={control} onClose={onClose} />
+      </div>
+      <div className="min-h-0 max-h-[11rem] overflow-y-auto">
+        {control.groups.map((group, index) => (
+          <div key={group.id}>
+            {index > 0 ? <ComposerMenuSeparator /> : null}
+            {modelGroupLabel(control, group) ? (
+              <div className="min-h-5 truncate px-2 py-0.5 text-sm font-[430] leading-4 text-muted-foreground/70">
+                {modelGroupLabel(control, group)}
+              </div>
+            ) : null}
+            <ComposerControlMenuRows
+              control={{ ...control, groups: [group] }}
+              showDescriptions={!isModelControl(control)}
+              onClose={onClose}
+            />
+          </div>
+        ))}
+        {!hasModelOptions ? (
+          <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+            No models matching "{search}"
+          </p>
+        ) : null}
+      </div>
     </div>
+  );
+}
+
+function ComposerConfigSubmenuButton({
+  active,
+  control,
+  onOpen,
+}: {
+  active: boolean;
+  control: CloudChatComposerControlView;
+  onOpen: () => void;
+}) {
+  return (
+    <PopoverMenuItem
+      label={modelConfigSubmenuLabel(control)}
+      trailing={<ChevronDown className="-rotate-90 size-3.5 shrink-0" />}
+      className={active ? "bg-popover-accent text-popover-foreground" : ""}
+      aria-haspopup="menu"
+      aria-expanded={active}
+      data-state={active ? "open" : "closed"}
+      onClick={onOpen}
+      onFocus={onOpen}
+      onMouseEnter={onOpen}
+    />
   );
 }
 
 function ComposerControlMenuRows({
   control,
+  showDescriptions = true,
   onClose,
 }: {
   control: CloudChatComposerControlView;
+  showDescriptions?: boolean;
   onClose: () => void;
 }) {
   return (
     <>
       {control.groups.flatMap((group) =>
         group.options.map((option) => (
-          <ComposerMenuItem
+          <PopoverMenuItem
             key={`${group.id}:${option.id}`}
             label={option.label}
+            icon={option.icon ? <SessionControlIcon icon={option.icon} className="size-3.5" /> : undefined}
             trailing={(
               <span className="flex items-center gap-1">
-                {option.selected ? <Check size={14} className="shrink-0" /> : null}
+                {option.selected ? <Check className="size-3.5 shrink-0" /> : null}
                 {option.selected ? (
                   <PendingComposerConfigIndicator pendingState={control.pendingState ?? null} />
                 ) : null}
@@ -420,61 +575,50 @@ function ComposerControlMenuRows({
               onClose();
             }}
           >
-            {option.description}
-          </ComposerMenuItem>
+            {showDescriptions ? option.description : null}
+          </PopoverMenuItem>
         ))
       )}
     </>
   );
 }
 
-function ComposerMenuItem({
-  label,
-  trailing,
-  className = "",
-  children,
-  type = "button",
-  onClick,
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  label: string;
-  trailing?: ReactNode;
-}) {
-  const hasDescription = children !== undefined && children !== null && children !== false;
+function ComposerMenuSeparator() {
   return (
-    <button
-      type={type}
-      className={twMerge(
-        "group/menu-item flex w-full cursor-default select-none flex-col rounded-lg px-2.5 py-1.5 text-sm font-[430] leading-5 text-popover-foreground outline-none transition-colors hover:bg-popover-accent focus:bg-popover-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent",
-        className,
-      )}
-      {...props}
-      onClick={(event) => {
-        event.stopPropagation();
-        onClick?.(event);
-      }}
-    >
-      <span className="flex w-full items-center gap-2">
-        <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-        {trailing ? (
-          <span className="flex shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100 [&_*]:text-xs [&_*]:leading-4">
-            {trailing}
-          </span>
-        ) : null}
-      </span>
-      {hasDescription ? (
-        <span className="mt-0.5 flex w-full items-center gap-2">
-          <span className="min-w-0 flex-1 text-left text-xs leading-4 text-muted-foreground [&>*]:!mt-0 [&_*]:text-xs [&_*]:leading-4">
-            {children}
-          </span>
-        </span>
-      ) : null}
-    </button>
+    <div className="w-full px-2 py-0.5">
+      <div className="h-px w-full bg-border/60" />
+    </div>
   );
 }
 
-function ComposerMenuSeparator() {
-  return <div className="mx-2 my-1 border-t border-border/60" />;
+function ComposerHarnessMenuRows({
+  control,
+  onClose,
+}: {
+  control: CloudChatComposerControlView;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      {control.groups.map((group) => {
+        const selected = group.options.find((option) => option.selected) ?? group.options[0] ?? null;
+        return (
+          <PopoverMenuItem
+            key={group.id}
+            label={group.label ?? group.id}
+            trailing={selected?.selected ? <Check className="size-3.5 shrink-0" /> : null}
+            disabled={!selected}
+            onClick={() => {
+              if (selected) {
+                control.onSelect?.(selected.id);
+              }
+              onClose();
+            }}
+          />
+        );
+      })}
+    </>
+  );
 }
 
 function PendingComposerConfigIndicator({
@@ -504,6 +648,74 @@ function summarizeComposerModelConfigControls(
   return labels.length > 0 ? labels.slice(0, 3).join(" · ") : null;
 }
 
+function filterModelControlOptions(
+  control: CloudChatComposerControlView,
+  search: string,
+): CloudChatComposerControlView {
+  const normalizedSearch = search.trim().toLowerCase();
+  if (!normalizedSearch) {
+    return control;
+  }
+
+  return {
+    ...control,
+    groups: control.groups.flatMap((group) => {
+      const groupMatches = (group.label ?? group.id).toLowerCase().includes(normalizedSearch);
+      const options = groupMatches
+        ? group.options
+        : group.options.filter((option) =>
+          `${option.label} ${option.description ?? ""}`.toLowerCase().includes(normalizedSearch)
+        );
+      return options.length > 0 ? [{ ...group, options }] : [];
+    }),
+  };
+}
+
+function modelConfigSubmenuLabel(control: CloudChatComposerControlView): string {
+  switch (control.key) {
+    case "effort":
+    case "reasoning":
+      return "Reasoning";
+    case "fast_mode":
+      return "Speed";
+    case "model":
+      return activeComposerModelGroup(control)?.label ?? selectedComposerOption(control)?.label ?? control.label;
+    default:
+      return control.label;
+  }
+}
+
+function activeComposerModelGroup(
+  control: CloudChatComposerControlView,
+): CloudChatComposerControlGroupView | null {
+  return control.groups.find((group) =>
+    group.options.some((option) => option.selected)
+  ) ?? control.groups[0] ?? null;
+}
+
+function modelGroupLabel(
+  control: CloudChatComposerControlView,
+  group: CloudChatComposerControlGroupView,
+): string | null {
+  const label = group.label ?? null;
+  if (!isModelControl(control)) {
+    return label;
+  }
+  if (label && label !== "Model") {
+    return label;
+  }
+
+  const optionText = group.options
+    .map((option) => `${option.label} ${option.description ?? ""}`)
+    .join(" ")
+    .toLowerCase();
+  if (optionText.includes("sonnet") || optionText.includes("haiku") || optionText.includes("claude")) {
+    return "Claude";
+  }
+
+  return label;
+}
+
 function selectedComposerOption(
   control: CloudChatComposerControlView,
 ): CloudChatComposerControlOptionView | null {
@@ -526,19 +738,22 @@ function isControlDisabled(control: CloudChatComposerControlView): boolean {
   );
 }
 
-function iconForComposerControl(
+function iconNodeForComposerControl(
   icon: CloudChatComposerControlView["icon"],
-): ComponentType<{ size?: number; className?: string }> {
+  className: string,
+): ReactNode {
   switch (icon) {
     case "brain":
-      return Brain;
-    case "cloud":
-      return Terminal;
+      return <Brain size={14} className={className} />;
     case "settings":
-      return Wrench;
+      return <Wrench size={14} className={className} />;
     case "bot":
+      return <Bot size={14} className={className} />;
+    case undefined:
+    case null:
+      return <Bot size={14} className={className} />;
     default:
-      return Bot;
+      return <SessionControlIcon icon={icon} className={className} />;
   }
 }
 
@@ -548,6 +763,12 @@ function iconForComposerFooterControl(
   switch (icon) {
     case "branch":
       return GitBranch;
+    case "external":
+      return ExternalLink;
+    case "globe":
+      return Globe;
+    case "sparkles":
+      return Sparkles;
     case "users":
       return Users;
     case "cloud":

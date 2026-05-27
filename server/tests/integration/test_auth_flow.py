@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import time
+from unittest.mock import Mock
 from urllib.parse import parse_qs, urlparse
 from uuid import UUID
 
@@ -725,6 +726,134 @@ class TestWebMobileProductAuthFlow:
             "get_github_user_profile",
             fake_get_github_user_profile,
         )
+
+    @pytest.mark.asyncio
+    async def test_desktop_github_login_uses_shared_identity_callback(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        verifier, challenge = _make_pkce_pair()
+        self._enable_identity_github(monkeypatch, "desktop-shared-github@example.com")
+        schedule_mock = Mock()
+        monkeypatch.setattr(
+            desktop_service,
+            "schedule_customerio_desktop_authenticated_user_sync",
+            schedule_mock,
+        )
+        schedule_signup_mock = Mock()
+        monkeypatch.setattr(
+            desktop_service,
+            "schedule_signup_slack_notification",
+            schedule_signup_mock,
+        )
+
+        started = await client.post(
+            "/auth/desktop/github/start",
+            json={
+                "purpose": "login",
+                "clientState": "desktop-shared-github-state",
+                "codeChallenge": challenge,
+                "codeChallengeMethod": "S256",
+                "redirectUri": "proliferate://auth/callback",
+                "prompt": "select_account",
+            },
+        )
+        assert started.status_code == 200
+        authorization_url = urlparse(started.json()["authorizationUrl"])
+        authorization_query = parse_qs(authorization_url.query)
+        assert authorization_query["redirect_uri"][0].endswith("/auth/github/callback")
+        oauth_state = authorization_query["state"][0]
+
+        callback = await client.get(
+            "/auth/github/callback",
+            params={"code": "github-code", "state": oauth_state},
+            follow_redirects=False,
+        )
+        assert callback.status_code == 302
+        callback_url = urlparse(callback.headers["location"])
+        assert f"{callback_url.scheme}://{callback_url.netloc}{callback_url.path}" == (
+            "proliferate://auth/callback"
+        )
+        callback_query = parse_qs(callback_url.query)
+        assert callback_query["state"] == ["desktop-shared-github-state"]
+        schedule_mock.assert_called_once()
+        assert schedule_mock.call_args.args[0].email == "desktop-shared-github@example.com"
+        schedule_signup_mock.assert_called_once()
+        signup_notification = schedule_signup_mock.call_args.args[0]
+        assert signup_notification.name == "GitHub Tester"
+        assert signup_notification.email == "desktop-shared-github@example.com"
+        assert signup_notification.github == "github-desktop-shared-github"
+        assert schedule_signup_mock.call_args.kwargs == {
+            "dedupe_key": "github:github-account-desktop-shared-github@example.com",
+        }
+
+        token = await client.post(
+            "/auth/desktop/token",
+            json={
+                "code": callback_query["code"][0],
+                "code_verifier": verifier,
+                "grant_type": "authorization_code",
+            },
+        )
+        assert token.status_code == 200
+        assert token.json()["user"]["email"] == "desktop-shared-github@example.com"
+
+    @pytest.mark.asyncio
+    async def test_desktop_github_shared_callback_does_not_send_signup_for_existing_email(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        await _create_user_via_manager("desktop-existing-github@example.com")
+        verifier, challenge = _make_pkce_pair()
+        self._enable_identity_github(monkeypatch, "desktop-existing-github@example.com")
+        schedule_mock = Mock()
+        monkeypatch.setattr(
+            desktop_service,
+            "schedule_customerio_desktop_authenticated_user_sync",
+            schedule_mock,
+        )
+        schedule_signup_mock = Mock()
+        monkeypatch.setattr(
+            desktop_service,
+            "schedule_signup_slack_notification",
+            schedule_signup_mock,
+        )
+
+        started = await client.post(
+            "/auth/desktop/github/start",
+            json={
+                "purpose": "login",
+                "clientState": "desktop-existing-github-state",
+                "codeChallenge": challenge,
+                "codeChallengeMethod": "S256",
+                "redirectUri": "proliferate://auth/callback",
+            },
+        )
+        assert started.status_code == 200
+        oauth_state = parse_qs(urlparse(started.json()["authorizationUrl"]).query)["state"][0]
+
+        callback = await client.get(
+            "/auth/github/callback",
+            params={"code": "github-code", "state": oauth_state},
+            follow_redirects=False,
+        )
+        assert callback.status_code == 302
+        callback_query = parse_qs(urlparse(callback.headers["location"]).query)
+        schedule_mock.assert_called_once()
+        schedule_signup_mock.assert_not_called()
+
+        token = await client.post(
+            "/auth/desktop/token",
+            json={
+                "code": callback_query["code"][0],
+                "code_verifier": verifier,
+                "grant_type": "authorization_code",
+            },
+        )
+        assert token.status_code == 200
+        assert token.json()["user"]["email"] == "desktop-existing-github@example.com"
 
     @staticmethod
     def _enable_google(

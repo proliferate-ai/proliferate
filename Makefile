@@ -330,6 +330,7 @@ dev-local: sdk-build
 # --- Individual dev targets ---
 
 dev-desktop: export ANYHARNESS_DEV_URL := http://127.0.0.1:8457
+dev-desktop: export VITE_ANYHARNESS_DEV_URL := http://127.0.0.1:8457
 dev-desktop: export PROLIFERATE_DEV := 1
 dev-desktop:
 	cd desktop && pnpm tauri dev --config src-tauri/tauri.dev.json

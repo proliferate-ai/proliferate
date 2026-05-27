@@ -89,13 +89,13 @@ Parameters:
   GitHubOAuthClientId:
     Type: String
     Default: ""
-    Description: GitHub OAuth client id for desktop sign-in.
+    Description: GitHub OAuth client id for the shared sign-in callback.
 
   GitHubOAuthClientSecret:
     Type: String
     NoEcho: true
     Default: ""
-    Description: GitHub OAuth client secret for desktop sign-in.
+    Description: GitHub OAuth client secret for the shared sign-in callback.
 
   SandboxProvider:
     Type: String

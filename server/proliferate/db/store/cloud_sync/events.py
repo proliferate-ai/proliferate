@@ -828,13 +828,17 @@ async def list_session_projections_for_workspace(
     db: AsyncSession,
     *,
     cloud_workspace_id: UUID,
+    target_id: UUID | None = None,
     limit: int = 100,
 ) -> tuple[CloudSessionProjectionSnapshot, ...]:
+    query = select(CloudSessionProjection).where(
+        CloudSessionProjection.cloud_workspace_id == cloud_workspace_id
+    )
+    if target_id is not None:
+        query = query.where(CloudSessionProjection.target_id == target_id)
     rows = (
         await db.execute(
-            select(CloudSessionProjection)
-            .where(CloudSessionProjection.cloud_workspace_id == cloud_workspace_id)
-            .order_by(
+            query.order_by(
                 CloudSessionProjection.updated_at.desc(),
                 CloudSessionProjection.last_event_seq.desc(),
             )

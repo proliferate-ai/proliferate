@@ -17,7 +17,7 @@ describe("WorkspacesSurface", () => {
     vi.unstubAllGlobals();
   });
 
-  it("opens filter and group popovers from the toolbar controls", () => {
+  it("opens workspace view options from the toolbar control", () => {
     const onFilterChange = vi.fn();
     const onGroupChange = vi.fn();
 
@@ -32,10 +32,16 @@ describe("WorkspacesSurface", () => {
               {
                 id: "workspace-1",
                 title: "Workspace",
-                sourceKind: "chat",
-                sourceLabel: "Chat",
+                sourceKind: "web",
+                sourceLabel: "Web",
                 locationKind: "cloud",
                 locationLabel: "Cloud",
+                runtimeLocation: "cloud_sandbox",
+                runtimeLocationLabel: "Cloud runtime",
+                cloudAccessState: "enabled",
+                cloudAccessLabel: "Cloud access enabled",
+                commandability: "commandable",
+                commandabilityLabel: "Ready for commands",
                 statusKind: "working",
                 statusLabel: "Running",
                 updatedLabel: "now",
@@ -63,15 +69,14 @@ describe("WorkspacesSurface", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Filter workspaces" }));
-    const filterMenu = screen.getByRole("group", { name: "Workspace filters" });
+    fireEvent.click(screen.getByRole("button", { name: "Workspace view options" }));
+    const filterMenu = screen.getByRole("group", { name: "Filter" });
     fireEvent.click(
-      within(filterMenu).getByRole("button", { name: "Unclaimed, 0 workspaces" }),
+      within(filterMenu).getByRole("button", { name: "Unclaimed" }),
     );
     expect(onFilterChange).toHaveBeenCalledWith("unclaimed");
 
-    fireEvent.click(screen.getByRole("button", { name: "Group workspaces by Source" }));
-    const groupMenu = screen.getByRole("group", { name: "Workspace grouping" });
+    const groupMenu = screen.getByRole("group", { name: "Group by" });
     fireEvent.click(within(groupMenu).getByRole("button", { name: "Status" }));
     expect(onGroupChange).toHaveBeenCalledWith("status");
   });

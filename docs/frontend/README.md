@@ -78,9 +78,14 @@ Specs:
   classification.
 - [specs/web-desktop-parity.md](specs/web-desktop-parity.md) for Web matching
   Desktop chat/workspace UX through shared product-ui/product-model surfaces.
+- [specs/web-cloud-local-parity.md](specs/web-cloud-local-parity.md) for Web
+  cloud/local workspace identity, recents/sidebar, session switching, settings
+  modal migration, and mobile cloud UI alignment.
 - [specs/mobile-cloud-client.md](specs/mobile-cloud-client.md) for the mobile
   cloud client, native chat parity, workspace/session flows, automations, and
   settings.
+- [specs/mobile-claude-ui-alignment.md](specs/mobile-claude-ui-alignment.md)
+  for the screenshot-backed mobile UI alignment pass against Claude mobile.
 - [specs/workspace-files.md](specs/workspace-files.md) for workspace file
   browsing, file viewing, diff viewing, Changes, or all-changes review.
 

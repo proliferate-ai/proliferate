@@ -91,6 +91,12 @@ pub async fn ensure_desktop_dispatch_worker(
     let launcher = find_proliferate_worker_launcher()
         .ok_or_else(|| "Proliferate Worker binary was not found.".to_string())?;
     let paths = worker_paths(&target_id)?;
+    if enrollment_token.is_none() && !worker_identity_exists(&paths.database)? {
+        return Err(
+            "Desktop dispatch worker is missing local credentials and needs a fresh enrollment token."
+                .to_string(),
+        );
+    }
     write_worker_config(
         &paths.config,
         &cloud_base_url,
@@ -176,6 +182,41 @@ fn worker_paths(target_id: &str) -> Result<WorkerPaths, String> {
         config: root.join("config.toml"),
         database: root.join("worker.sqlite3"),
     })
+}
+
+fn worker_identity_exists(path: &Path) -> Result<bool, String> {
+    if !path.exists() {
+        return Ok(false);
+    }
+    let connection = match rusqlite::Connection::open_with_flags(
+        path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    ) {
+        Ok(connection) => connection,
+        Err(error) if matches!(error, rusqlite::Error::SqliteFailure(_, _)) => return Ok(false),
+        Err(error) => {
+            return Err(format!(
+                "Failed to inspect worker identity at {}: {error}",
+                path.display()
+            ));
+        }
+    };
+    match connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM identity WHERE id = 1 AND worker_token <> '')",
+        [],
+        |row| row.get::<_, i64>(0),
+    ) {
+        Ok(value) => Ok(value == 1),
+        Err(rusqlite::Error::SqliteFailure(error, _))
+            if error.code == rusqlite::ErrorCode::Unknown =>
+        {
+            Ok(false)
+        }
+        Err(error) => Err(format!(
+            "Failed to inspect worker identity at {}: {error}",
+            path.display()
+        )),
+    }
 }
 
 fn write_worker_config(

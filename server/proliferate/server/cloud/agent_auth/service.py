@@ -1043,7 +1043,22 @@ async def ensure_free_managed_credits_for_user(
                     credential_id=credential.id,
                 )
             )
-            if existing_selections.get(agent_kind) is None:
+            existing_selection = existing_selections.get(agent_kind)
+            should_select_managed_credential = existing_selection is None
+            if (
+                existing_selection is not None
+                and body.agent_kind == agent_kind
+            ):
+                existing_credential = await store.get_credential(
+                    db,
+                    existing_selection.credential_id,
+                )
+                should_select_managed_credential = (
+                    existing_credential is None
+                    or existing_credential.credential_kind != "managed_gateway"
+                    or existing_selection.credential_id != credential.id
+                )
+            if should_select_managed_credential:
                 await select_credential_for_profile(
                     db,
                     actor_user_id=actor_user_id,
@@ -1051,7 +1066,7 @@ async def ensure_free_managed_credits_for_user(
                     agent_kind=agent_kind,
                     credential_id=credential.id,
                     credential_share_id=None,
-                    force_restart=False,
+                    force_restart=existing_selection is not None,
                 )
 
     launch_enabled = bool(ready_models)
@@ -2824,7 +2839,8 @@ async def _worker_gateway_config(
             protectedEnv={
                 "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST": "1",
                 "ANTHROPIC_BASE_URL": facade_base,
-                "ANTHROPIC_AUTH_TOKEN": result.virtual_key,
+                "ANTHROPIC_CUSTOM_HEADERS": f"x-bf-vk: {result.virtual_key}",
+                "ANTHROPIC_AUTH_TOKEN": "",
             },
             supportEnv={},
             protectedConfig={},

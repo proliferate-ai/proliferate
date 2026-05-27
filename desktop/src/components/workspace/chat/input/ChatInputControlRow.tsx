@@ -8,6 +8,7 @@ import { SessionModeControl } from "./SessionModeControl";
 import {
   buildComposerSessionControlGroups,
 } from "@/lib/domain/chat/session-controls/composer-control-groups";
+import { ChatComposerControlRowFrame } from "@proliferate/product-ui/chat/composer/ChatComposerControlRowFrame";
 
 export interface ChatInputControlRowProps {
   runtimeControlsDisabled: boolean;
@@ -95,8 +96,9 @@ export function ChatInputControlRow({
         : "Review agents are unavailable right now";
 
   return (
-    <div className="mb-2 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[5px] px-2">
-      <div className="flex min-w-0 items-center gap-[5px]">
+    <ChatComposerControlRowFrame
+      leading={(
+        <>
         {!isEditingQueuedPrompt && (
           <ComposerAddActionPopover
             canAttachFile={canAttachFile}
@@ -125,11 +127,10 @@ export function ChatInputControlRow({
             />
           </span>
         )}
-      </div>
-
-      <div className="min-w-0" aria-hidden="true" />
-
-      <div className="flex min-w-0 items-center gap-[5px]">
+        </>
+      )}
+      trailing={(
+        <>
         <div
           className={`flex min-w-0 items-center gap-[5px] ${
             runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
@@ -141,6 +142,9 @@ export function ChatInputControlRow({
             controls={controlGroups.modelConfigControls}
           />
         </div>
+        </>
+      )}
+      action={(
         <ChatComposerActions
           isRunning={isRunning}
           isEmpty={isEmpty}
@@ -149,7 +153,7 @@ export function ChatInputControlRow({
           onSubmit={onSubmit}
           onCancel={onCancel}
         />
-      </div>
-    </div>
+      )}
+    />
   );
 }

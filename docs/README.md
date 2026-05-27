@@ -38,6 +38,12 @@ start of the task, not after implementation has already started.
 - `docs/frontend/specs/mobile-cloud-client.md`
   - mobile cloud client parity, native chat UI, workspace/session workflows,
     automations, and settings
+- `docs/frontend/specs/mobile-claude-ui-alignment.md`
+  - screenshot-backed mobile UI alignment against Claude mobile for drawer,
+    home/new chat, workspaces, chat, automations, and settings
+- `docs/frontend/specs/web-cloud-local-parity.md`
+  - Web cloud/local workspace identity, recents/sidebar, session switching,
+    settings modal migration, and mobile cloud UI alignment
 - `docs/frontend/specs/workspace-files.md`
   - workspace file browsing, file viewing, diff viewing, and Changes
 

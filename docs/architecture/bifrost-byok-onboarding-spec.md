@@ -724,21 +724,19 @@ Local development should be explicit and reproducible:
 
 ## Bifrost Capabilities This Relies On
 
-Bifrost virtual keys are the request auth unit. They can be sent with:
+Bifrost virtual keys are the request auth unit. The local Bifrost gateway
+expects the virtual key in:
 
 - `x-bf-vk: sk-bf-*`
-- `Authorization: Bearer sk-bf-*`
-- `x-api-key: sk-bf-*`
-- `x-goog-api-key: sk-bf-*`
 
 This matches the major harness conventions:
 
 - Codex/OpenAI-compatible clients can use the existing Codex provider config
   with `CODEX_API_KEY`.
 - Claude/Anthropic-compatible clients should prefer
-  `ANTHROPIC_AUTH_TOKEN=<virtual-key>`, which Claude Code sends as
-  `Authorization: Bearer <virtual-key>` and Bifrost records as the virtual-key
-  identity for usage attribution.
+  `ANTHROPIC_CUSTOM_HEADERS=x-bf-vk: <virtual-key>`, which Claude Code forwards
+  to the Anthropic client and Bifrost records as the virtual-key identity for
+  usage attribution.
 - Gemini-style clients can use `x-goog-api-key` if the CLI can be pointed at a
   compatible base URL.
 
@@ -828,7 +826,8 @@ or Bifrost Enterprise/HA.
 Claude Code in E2B
   ANTHROPIC_BASE_URL=https://llm.proliferate.ai/anthropic
   CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST=1
-  ANTHROPIC_AUTH_TOKEN=sk-bf-...
+  ANTHROPIC_CUSTOM_HEADERS="x-bf-vk: sk-bf-..."
+  ANTHROPIC_AUTH_TOKEN=
   -> Bifrost
   -> Anthropic or Bedrock
 
@@ -1353,7 +1352,8 @@ Example plan:
   "virtual_key_ref": "encrypted-materialization-id",
   "env": {
     "ANTHROPIC_BASE_URL": "https://llm.proliferate.ai/anthropic",
-    "ANTHROPIC_AUTH_TOKEN": "<resolved in worker>"
+    "ANTHROPIC_CUSTOM_HEADERS": "x-bf-vk: <resolved in worker>",
+    "ANTHROPIC_AUTH_TOKEN": ""
   }
 }
 ```
@@ -1363,7 +1363,8 @@ Harness env mapping:
 ```text
 claude
   ANTHROPIC_BASE_URL
-  ANTHROPIC_AUTH_TOKEN = <virtual-key>
+  ANTHROPIC_CUSTOM_HEADERS = x-bf-vk: <virtual-key>
+  ANTHROPIC_AUTH_TOKEN = ""
   CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST = 1
 
 codex

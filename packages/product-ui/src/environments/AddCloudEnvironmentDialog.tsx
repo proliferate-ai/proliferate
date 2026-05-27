@@ -176,18 +176,9 @@ export function AddCloudEnvironmentDialog({
 
         <div className="web-scrollbar min-h-0 flex-1 overflow-y-auto">
           {loading && repositories.length === 0 ? (
-            <div className="grid gap-2 px-4 py-4">
-              {Array.from({ length: 5 }).map((_, index) => (
-                <div
-                  key={index}
-                  className="h-14 animate-pulse rounded-lg border border-border-light bg-background/50"
-                />
-              ))}
-            </div>
+            <LoadingRepositoryRows />
           ) : repositories.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-              No repositories found.
-            </div>
+            <EmptyRepositoryState query={query} />
           ) : (
             <div className="divide-y divide-border-light">
               {repositories.map((repo) => (
@@ -217,6 +208,53 @@ export function AddCloudEnvironmentDialog({
           </div>
         ) : null}
       </section>
+    </div>
+  );
+}
+
+function LoadingRepositoryRows() {
+  return (
+    <div
+      className="grid gap-2 px-4 py-4"
+      role="status"
+      aria-label="Loading GitHub repositories"
+    >
+      <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+        <RotateCw className="size-3.5 animate-spin" aria-hidden />
+        Loading repositories from GitHub...
+      </div>
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div
+          key={index}
+          className="flex h-16 min-w-0 items-center gap-3 rounded-lg border border-border-light bg-background/45 px-3"
+        >
+          <div className="size-8 shrink-0 animate-pulse rounded-md bg-muted" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="h-3 w-1/2 animate-pulse rounded-full bg-muted" />
+            <div className="h-2.5 w-1/3 animate-pulse rounded-full bg-muted/75" />
+          </div>
+          <div className="h-7 w-14 shrink-0 animate-pulse rounded-md bg-muted" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EmptyRepositoryState({ query }: { query: string }) {
+  const trimmedQuery = query.trim();
+  return (
+    <div className="px-4 py-10 text-center">
+      <div className="mx-auto flex size-9 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground">
+        <Search className="size-4" aria-hidden />
+      </div>
+      <div className="mt-3 text-sm font-medium text-foreground">
+        {trimmedQuery ? "No matching repositories" : "No repositories found"}
+      </div>
+      <p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-muted-foreground">
+        {trimmedQuery
+          ? "Try another owner, repository name, or paste an owner/repo value above."
+          : "Paste an owner/repo value above, or connect a GitHub account with repository access."}
+      </p>
     </div>
   );
 }

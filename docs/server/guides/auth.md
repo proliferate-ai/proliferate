@@ -50,6 +50,22 @@ policy.
 
 `auth/dependencies.py` owns the authentication layer.
 
+Product OAuth lives under `auth/identity/**`. GitHub uses the shared
+`/auth/github/callback` provider callback for desktop, web, and mobile. The
+surface is recovered from the stored auth challenge, so GitHub OAuth app setup
+only needs one callback URL:
+
+```text
+<API_BASE_URL>/auth/github/callback
+```
+
+Desktop GitHub still starts through the desktop boundary
+`POST /auth/desktop/github/start`, exchanges desktop auth codes through
+`/auth/desktop/token`, and handles `proliferate://auth/callback` deep links.
+The older `/auth/desktop/github/authorize` and
+`/auth/desktop/github/callback` routes remain compatibility routes and should
+not be configured as the current GitHub OAuth callback.
+
 ### Allowed
 
 - `Depends(...)` functions returning `User`.

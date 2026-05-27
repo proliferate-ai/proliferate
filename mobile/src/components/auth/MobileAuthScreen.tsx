@@ -1,6 +1,11 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { AuthProviderName } from "@proliferate/cloud-sdk";
+import {
+  AUTH_PROVIDER_ORDER,
+  AUTH_SIGN_IN_COPY,
+  authProviderPresentation,
+} from "@proliferate/product-model/auth/presentation";
 
 import { MobileIcon, type MobileIconName } from "../primitives/MobileIcon";
 import { MobileProliferateMark } from "../primitives/MobileProliferateMark";
@@ -78,56 +83,44 @@ export function MobileAuthScreen({
     <View style={styles.root}>
       <View style={styles.content}>
         <View style={styles.brand}>
-          <MobileProliferateMark size={42} />
-          <Text style={styles.wordmark}>Proliferate</Text>
+          <MobileProliferateMark size={40} />
+          <Text style={styles.title}>{AUTH_SIGN_IN_COPY.title}</Text>
+          <Text style={styles.subtitle}>{AUTH_SIGN_IN_COPY.subtitle}</Text>
         </View>
-        <Text style={styles.tagline}>
-          Run and orchestrate coding agents.
-          {"\n"}
-          Sign in to get started.
-        </Text>
 
         <View style={styles.actions}>
-          <ProviderButton
-            label="Continue with GitHub"
-            icon="github"
-            provider="github"
-            onPress={onProvider}
-            loading={loadingAction === "github"}
-            disabled={busy}
-            primary
-          />
-          <ProviderButton
-            label="Continue with Apple"
-            icon="apple"
-            provider="apple"
-            onPress={onProvider}
-            loading={loadingAction === "apple"}
-            disabled={busy}
-          />
-          <ProviderButton
-            label="Continue with Google"
-            icon="google"
-            provider="google"
-            onPress={onProvider}
-            loading={loadingAction === "google"}
-            disabled={busy}
-          />
+          {AUTH_PROVIDER_ORDER.map((provider) => (
+            <ProviderButton
+              key={provider}
+              label={authProviderPresentation(provider).actionLabel}
+              icon={providerIcon(provider)}
+              provider={provider}
+              onPress={onProvider}
+              loading={loadingAction === provider}
+              disabled={busy}
+              primary={provider === "github"}
+            />
+          ))}
         </View>
 
-        <Text style={styles.note}>
-          GitHub is required for cloud workspaces and automations. You can link it
-          after signing in with Apple or Google.
-        </Text>
+        <Text style={styles.note}>{AUTH_SIGN_IN_COPY.note}</Text>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
 
-      <Text style={styles.legal}>
-        By continuing you agree to the Proliferate{"\n"}Terms and Privacy Policy.
-      </Text>
+      <Text style={styles.legal}>{AUTH_SIGN_IN_COPY.footer}</Text>
     </View>
   );
+}
+
+function providerIcon(provider: AuthProviderName): Extract<MobileIconName, "github" | "apple" | "google"> {
+  if (provider === "github") {
+    return "github";
+  }
+  if (provider === "apple") {
+    return "apple";
+  }
+  return "google";
 }
 
 const styles = StyleSheet.create({
@@ -140,39 +133,38 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    alignItems: "center",
+    alignItems: "stretch",
     justifyContent: "center",
   },
   brand: {
-    alignItems: "center",
-    gap: spacing[3],
+    alignItems: "flex-start",
+    gap: spacing[4],
   },
-  wordmark: {
+  title: {
     color: colors.fg,
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: "600",
-    letterSpacing: -0.4,
+    letterSpacing: -0.2,
+    lineHeight: 36,
   },
-  tagline: {
+  subtitle: {
     color: colors.mutedForeground,
-    fontSize: 15,
+    fontSize: 14.5,
     lineHeight: 22,
-    marginTop: spacing[3],
-    textAlign: "center",
-    maxWidth: 280,
+    maxWidth: 340,
   },
   actions: {
     alignSelf: "stretch",
     gap: spacing[2],
-    marginTop: spacing[10],
+    marginTop: spacing[8],
   },
   providerButton: {
-    minHeight: 52,
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: spacing[2],
-    borderRadius: radius.xl,
+    borderRadius: radius.md,
   },
   providerPrimary: {
     backgroundColor: colors.fg,
@@ -194,18 +186,18 @@ const styles = StyleSheet.create({
     color: colors.fg,
   },
   note: {
-    marginTop: spacing[6],
+    marginTop: spacing[5],
     color: colors.faint,
     fontSize: 12.5,
     lineHeight: 18,
-    textAlign: "center",
-    maxWidth: 280,
+    textAlign: "left",
+    maxWidth: 340,
   },
   legal: {
     color: colors.sidebarMutedForeground,
     fontSize: 11.5,
     lineHeight: 17,
-    textAlign: "center",
+    textAlign: "left",
   },
   pressed: {
     opacity: 0.78,
@@ -225,6 +217,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    textAlign: "center",
+    textAlign: "left",
   },
 });

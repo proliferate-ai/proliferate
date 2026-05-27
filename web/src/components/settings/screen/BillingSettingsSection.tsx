@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import type { CloudOwnerSelection } from "@proliferate/cloud-sdk";
 import {
@@ -23,6 +23,7 @@ import { routes } from "../../../config/routes";
 
 export function BillingSettingsSection() {
   const navigate = useNavigate();
+  const location = useLocation();
   const currentTeam = useCurrentTeam();
   const [searchParams] = useSearchParams();
   const team = currentTeam.data ?? null;
@@ -41,7 +42,9 @@ export function BillingSettingsSection() {
   async function openComparisonBillingAction() {
     setComparisonActionError(null);
     if (!team) {
-      navigate(routes.settingsSection("organization"));
+      navigate(routes.settingsSection("organization"), {
+        state: settingsNavigationState(location.state),
+      });
       return;
     }
     if (!canManageTeam) {
@@ -111,7 +114,9 @@ export function BillingSettingsSection() {
                 type="button"
                 size="sm"
                 variant="secondary"
-                onClick={() => navigate(routes.settingsSection("organization"))}
+                onClick={() => navigate(routes.settingsSection("organization"), {
+                  state: settingsNavigationState(location.state),
+                })}
               >
                 Open Organization
               </Button>
@@ -138,6 +143,17 @@ export function BillingSettingsSection() {
       </BillingSettingsPane>
     </section>
   );
+}
+
+function settingsNavigationState(state: unknown): unknown {
+  if (
+    state &&
+    typeof state === "object" &&
+    "backgroundLocation" in state
+  ) {
+    return state;
+  }
+  return undefined;
 }
 
 function BillingOwnerController({

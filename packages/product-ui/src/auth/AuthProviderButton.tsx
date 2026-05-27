@@ -5,12 +5,14 @@ import { Spinner } from "@proliferate/ui/primitives/Spinner";
 interface AuthProviderButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode;
   loading?: boolean;
+  variant?: "primary" | "secondary";
 }
 
 export const AuthProviderButton = forwardRef<HTMLButtonElement, AuthProviderButtonProps>(
   function AuthProviderButton({
     icon,
     loading = false,
+    variant = "secondary",
     disabled,
     className = "",
     children,
@@ -23,7 +25,10 @@ export const AuthProviderButton = forwardRef<HTMLButtonElement, AuthProviderButt
         type={type}
         disabled={disabled || loading}
         className={twMerge(
-          "relative flex h-14 w-full items-center justify-center gap-3 rounded-xl border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-60",
+          "relative flex h-11 w-full items-center justify-center gap-2.5 rounded-lg border px-4 text-sm font-semibold transition-colors disabled:pointer-events-none disabled:opacity-60",
+          variant === "primary"
+            ? "border-transparent bg-foreground text-background hover:bg-foreground/90"
+            : "border-border bg-card text-foreground hover:bg-accent",
           className,
         )}
         {...props}

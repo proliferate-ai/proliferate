@@ -47,6 +47,7 @@ export function AuthCallbackPage() {
       }
       statusLabel={error ? "Auth error" : "Exchanging auth code"}
       brandMark={<ProliferateMark size={32} />}
+      brandLabel={null}
     />
   );
 }

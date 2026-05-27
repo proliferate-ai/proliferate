@@ -1,14 +1,19 @@
-import { Apple, CircleUserRound, CreditCard, Github, GitBranch, LifeBuoy, UsersRound } from "lucide-react";
+import { CircleUserRound, CreditCard, GitBranch, LifeBuoy, UsersRound } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import type { AuthProviderName } from "@proliferate/cloud-sdk";
+import {
+  normalizeCloudSettingsSectionId,
+  WEB_CLOUD_SETTINGS_SECTIONS,
+  type CloudSettingsIconToken,
+} from "@proliferate/product-model/settings/cloud-settings";
 import type {
   AccountProviderView,
   AccountSettingsPaneProps,
 } from "@proliferate/product-ui/account/AccountSettingsPane";
 import { AccountSettingsPane } from "@proliferate/product-ui/account/AccountSettingsPane";
-import { GoogleGlyph } from "@proliferate/product-ui/auth/GoogleGlyph";
+import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
 import { SettingsCardRow } from "@proliferate/product-ui/settings/SettingsCardRow";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
@@ -28,19 +33,15 @@ import { useAuthToken } from "../../../providers/WebCloudProvider";
 import { BillingSettingsSection } from "./BillingSettingsSection";
 import { EnvironmentsSettingsSection } from "./EnvironmentsSettingsSection";
 
-type SettingsSectionId = "account" | "environments" | "organization" | "teams" | "billing" | "support";
 const SETTINGS_ICON_SIZE = 14;
 
 export function SettingsScreen() {
   const viewer = useAuthViewer();
   const { token, clearToken } = useAuthToken();
   const navigate = useNavigate();
+  const location = useLocation();
   const { sectionId } = useParams();
-  const activeSection = sectionId === "teams"
-    ? "organization"
-    : isSettingsSectionId(sectionId)
-      ? sectionId
-      : "account";
+  const activeSection = normalizeCloudSettingsSectionId(sectionId);
   const [loadingProvider, setLoadingProvider] = useState<AuthProviderName | "sign-out" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,39 +78,17 @@ export function SettingsScreen() {
         activeSectionId={activeSection}
         groups={[
           {
-            items: [
-              {
-                id: "account",
-                label: "Account",
-                icon: <CircleUserRound size={SETTINGS_ICON_SIZE} />,
-              },
-              {
-                id: "environments",
-                label: "Environments",
-                icon: <GitBranch size={SETTINGS_ICON_SIZE} />,
-              },
-              {
-                id: "organization",
-                label: "Organization",
-                icon: <UsersRound size={SETTINGS_ICON_SIZE} />,
-              },
-              {
-                id: "billing",
-                label: "Billing",
-                icon: <CreditCard size={SETTINGS_ICON_SIZE} />,
-              },
-              {
-                id: "support",
-                label: "Support",
-                icon: <LifeBuoy size={SETTINGS_ICON_SIZE} />,
-              },
-            ],
+            items: WEB_CLOUD_SETTINGS_SECTIONS.map((section) => ({
+              id: section.id,
+              label: section.label,
+              icon: settingsIcon(section.iconToken),
+            })),
           },
         ]}
         onSelectSection={(id) => {
-          if (isSettingsSectionId(id)) {
-            navigate(routes.settingsSection(id));
-          }
+          navigate(routes.settingsSection(normalizeCloudSettingsSectionId(id)), {
+            state: settingsNavigationState(location.state),
+          });
         }}
         contentClassName={activeSection === "billing" ? "max-w-6xl" : undefined}
       >
@@ -139,15 +118,30 @@ export function SettingsScreen() {
   );
 }
 
-function isSettingsSectionId(value: string | undefined): value is SettingsSectionId {
-  return (
-    value === "account"
-    || value === "environments"
-    || value === "organization"
-    || value === "teams"
-    || value === "billing"
-    || value === "support"
-  );
+function settingsNavigationState(state: unknown): unknown {
+  if (
+    state &&
+    typeof state === "object" &&
+    "backgroundLocation" in state
+  ) {
+    return state;
+  }
+  return undefined;
+}
+
+function settingsIcon(token: CloudSettingsIconToken) {
+  switch (token) {
+    case "account":
+      return <CircleUserRound size={SETTINGS_ICON_SIZE} />;
+    case "branch":
+      return <GitBranch size={SETTINGS_ICON_SIZE} />;
+    case "organization":
+      return <UsersRound size={SETTINGS_ICON_SIZE} />;
+    case "billing":
+      return <CreditCard size={SETTINGS_ICON_SIZE} />;
+    case "support":
+      return <LifeBuoy size={SETTINGS_ICON_SIZE} />;
+  }
 }
 
 function AccountSection({ props }: { props: AccountSettingsPaneProps }) {
@@ -389,21 +383,21 @@ function buildAccountSettingsProps({
         ? undefined
         : {
             label: "Connect GitHub",
-            icon: <Github size={13} />,
+            icon: <ProviderBrandIcon provider="github" className="size-[13px]" />,
             loading: loadingProvider === "github",
             disabled: Boolean(loadingProvider),
             onClick: connectGitHub,
           },
       connectGoogle: {
         label: "Add Google",
-        icon: <GoogleGlyph className="text-[13px]" />,
+        icon: <ProviderBrandIcon provider="google" className="size-[13px]" />,
         loading: loadingProvider === "google",
         disabled: Boolean(loadingProvider) || !providerEnabled(providerAvailability, "google"),
         onClick: connectGoogle,
       },
       connectApple: {
         label: "Add Apple",
-        icon: <Apple size={13} />,
+        icon: <ProviderBrandIcon provider="apple" className="size-[13px]" />,
         loading: loadingProvider === "apple",
         disabled: Boolean(loadingProvider) || !providerEnabled(providerAvailability, "apple"),
         onClick: connectApple,

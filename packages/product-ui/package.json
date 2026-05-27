@@ -43,6 +43,10 @@
       "types": "./dist/auth/GoogleGlyph.d.ts",
       "import": "./dist/auth/GoogleGlyph.js"
     },
+    "./auth/ProviderBrandIcon": {
+      "types": "./dist/auth/ProviderBrandIcon.d.ts",
+      "import": "./dist/auth/ProviderBrandIcon.js"
+    },
     "./auth/LegalLinks": {
       "types": "./dist/auth/LegalLinks.d.ts",
       "import": "./dist/auth/LegalLinks.js"
@@ -111,6 +115,10 @@
       "types": "./dist/chat/composer/ChatComposerSurface.d.ts",
       "import": "./dist/chat/composer/ChatComposerSurface.js"
     },
+    "./chat/composer/ChatComposerControlRowFrame": {
+      "types": "./dist/chat/composer/ChatComposerControlRowFrame.d.ts",
+      "import": "./dist/chat/composer/ChatComposerControlRowFrame.js"
+    },
     "./chat/composer/ComposerActionButton": {
       "types": "./dist/chat/composer/ComposerActionButton.d.ts",
       "import": "./dist/chat/composer/ComposerActionButton.js"
@@ -131,6 +139,18 @@
       "types": "./dist/chat/composer/ComposerTextareaFrame.d.ts",
       "import": "./dist/chat/composer/ComposerTextareaFrame.js"
     },
+    "./chat/session-controls/SessionControlIcon": {
+      "types": "./dist/chat/session-controls/SessionControlIcon.d.ts",
+      "import": "./dist/chat/session-controls/SessionControlIcon.js"
+    },
+    "./chat/transcript/AssistantMessage": {
+      "types": "./dist/chat/transcript/AssistantMessage.d.ts",
+      "import": "./dist/chat/transcript/AssistantMessage.js"
+    },
+    "./chat/transcript/CopyMessageButton": {
+      "types": "./dist/chat/transcript/CopyMessageButton.d.ts",
+      "import": "./dist/chat/transcript/CopyMessageButton.js"
+    },
     "./feedback/LoadingState": {
       "types": "./dist/feedback/LoadingState.d.ts",
       "import": "./dist/feedback/LoadingState.js"
@@ -146,6 +166,10 @@
     "./plugins/PluginAccessList": {
       "types": "./dist/plugins/PluginAccessList.d.ts",
       "import": "./dist/plugins/PluginAccessList.js"
+    },
+    "./popover/PopoverMenuItem": {
+      "types": "./dist/popover/PopoverMenuItem.d.ts",
+      "import": "./dist/popover/PopoverMenuItem.js"
     },
     "./settings/SettingsCard": {
       "types": "./dist/settings/SettingsCard.d.ts",

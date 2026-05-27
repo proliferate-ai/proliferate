@@ -8,6 +8,7 @@ import {
 import {
   archiveCloudWorkspace,
   createCloudWorkspace,
+  launchCloudWorkspaceOnTarget,
   listCloudWorkspaces,
   purgeCloudWorkspace,
   restoreCloudWorkspace,
@@ -19,6 +20,8 @@ import {
   type CloudWorkspaceListScope,
   type CloudWorkspaceLifecycleFilter,
   type CreateCloudWorkspaceRequest,
+  type LaunchCloudWorkspaceOnTargetRequest,
+  type WorkspaceTargetLaunchResponse,
 } from "@proliferate/cloud-sdk";
 import {
   cloudRootKey,
@@ -76,6 +79,7 @@ export function useVisibleCloudWorkspaces(enabled = true) {
     mine,
     exposed,
     error: mine.error ?? exposed.error,
+    dataUpdatedAt: Math.max(mine.dataUpdatedAt, exposed.dataUpdatedAt),
     isError: mine.isError || exposed.isError,
     isFetching: mine.isFetching || exposed.isFetching,
     isLoading: mine.isLoading || exposed.isLoading,
@@ -160,6 +164,27 @@ export function useRestoreCloudWorkspace() {
     mutationFn: (workspaceId) => restoreCloudWorkspace(workspaceId, client),
     onSuccess(_data, workspaceId) {
       invalidateCloudWorkspaceLifecycleQueries(queryClient, workspaceId);
+    },
+  });
+}
+
+export function useLaunchCloudWorkspaceOnTarget() {
+  const client = useCloudClient();
+  const queryClient = useQueryClient();
+  return useMutation<
+    WorkspaceTargetLaunchResponse,
+    Error,
+    LaunchCloudWorkspaceOnTargetRequest
+  >({
+    mutationFn: (input) => launchCloudWorkspaceOnTarget(input, client),
+    onSuccess(result) {
+      invalidateCloudWorkspaceLists(queryClient);
+      void queryClient.invalidateQueries({
+        queryKey: [...cloudRootKey(), "workspaces"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: cloudWorkspaceSnapshotKey(result.workspace.id),
+      });
     },
   });
 }

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import type { CloudWorkspaceLifecycleFilter, CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
+import type { CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
 import { webWorkspaceDeepLink } from "@proliferate/cloud-sdk";
 import {
   buildCloudWorkspaceInventoryItems,
@@ -15,8 +15,9 @@ import {
 import { WorkspacesSurface } from "@proliferate/product-ui/workspaces/WorkspacesSurface";
 
 import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
+import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useCloudWorkspaceActions } from "@/hooks/cloud/workflows/use-cloud-workspace-actions";
-import { useCloudExposedWorkspaces } from "@/hooks/access/cloud/workspaces/use-cloud-exposed-workspaces";
+import { useCloudVisibleWorkspaces } from "@/hooks/access/cloud/workspaces/use-cloud-visible-workspaces";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 import { getProliferateWebBaseUrl } from "@/lib/infra/proliferate-web";
@@ -25,24 +26,12 @@ import { useToastStore } from "@/stores/toast/toast-store";
 
 const EMPTY_WORKSPACES: readonly CloudWorkspaceSummary[] = [];
 
-interface CloudWorkspacesScreenProps {
-  lifecycle?: CloudWorkspaceLifecycleFilter;
-  title?: string;
-  emptyTitle?: string;
-  emptyDescription?: string;
-}
-
-export function CloudWorkspacesScreen({
-  lifecycle = "active",
-  title = "Workspaces",
-  emptyTitle,
-  emptyDescription,
-}: CloudWorkspacesScreenProps = {}) {
-  const workspaces = useCloudExposedWorkspaces({ lifecycle });
+export function CloudWorkspacesScreen() {
+  const { cloudActive, cloudRequiresSignIn } = useCloudAvailabilityState();
+  const workspaces = useCloudVisibleWorkspaces();
   const { openExternal } = useTauriShellActions();
   const {
     refreshCloudWorkspace,
-    restoreCloudWorkspace,
   } = useCloudWorkspaceActions();
   const { selectWorkspaceFromSurface } = useWorkspaceNavigationWorkflow();
   const showToast = useToastStore((state) => state.show);
@@ -53,7 +42,7 @@ export function CloudWorkspacesScreen({
   );
 
   const workspaceItems = workspaces.data ?? EMPTY_WORKSPACES;
-  const hasResolvedData = workspaces.data !== undefined;
+  const hasResolvedData = !cloudActive || workspaces.data !== undefined;
   const backgroundRefreshFailed = Boolean(workspaces.error) && hasResolvedData;
 
   const allItems = useMemo(
@@ -99,9 +88,7 @@ export function CloudWorkspacesScreen({
 
     void (async () => {
       try {
-        const workspace = lifecycle === "archived"
-          ? await restoreCloudWorkspace(workspaceId)
-          : await refreshCloudWorkspace(workspaceId);
+        const workspace = await refreshCloudWorkspace(workspaceId);
         selectWorkspaceFromSurface(
           cloudWorkspaceSyntheticId(workspace.id),
           "workspaces",
@@ -114,8 +101,6 @@ export function CloudWorkspacesScreen({
   }, [
     openExternal,
     refreshCloudWorkspace,
-    restoreCloudWorkspace,
-    lifecycle,
     selectWorkspaceFromSurface,
     showToast,
     workspaceItems,
@@ -124,7 +109,6 @@ export function CloudWorkspacesScreen({
   return (
     <MainSidebarPageShell>
       <WorkspacesSurface
-        title={title}
         groups={groups}
         filterOptions={filterOptions}
         selectedFilterId={filterId}
@@ -138,13 +122,19 @@ export function CloudWorkspacesScreen({
         isRefreshing={workspaces.isFetching}
         externalOpenWorkspaceIds={externalOpenWorkspaceIds}
         emptyTitle={
-          filterId === "all"
-            ? emptyTitle ?? "No cloud-visible workspaces"
-            : "No matching workspaces"
+          !cloudActive
+            ? "Sign in to see cloud workspaces"
+            : filterId === "all"
+              ? "No cloud-visible workspaces"
+              : "No matching workspaces"
         }
         emptyDescription={
-          filterId === "all"
-            ? emptyDescription ?? "Workspaces from Desktop, Web, Slack, or automations appear here."
+          !cloudActive
+            ? cloudRequiresSignIn
+              ? "Desktop needs a cloud session before it can list workspaces from Desktop, Web, Slack, or automations."
+              : "Cloud is not active for this desktop profile."
+            : filterId === "all"
+            ? "Workspaces from Desktop, Web, Slack, or automations appear here."
             : "Try a different filter."
         }
         onFilterChange={(nextFilterId) => {

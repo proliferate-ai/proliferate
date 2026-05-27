@@ -1,6 +1,18 @@
 import { type CSSProperties, useId } from "react";
 import { twMerge } from "tailwind-merge";
-import { ChevronRight, ExternalLink } from "lucide-react";
+import {
+  Bot,
+  Braces,
+  CalendarClock,
+  ChevronRight,
+  Cloud,
+  ExternalLink,
+  Globe2,
+  HelpCircle,
+  Monitor,
+  Smartphone,
+  UsersRound,
+} from "lucide-react";
 
 import { EmptyState } from "@proliferate/ui/layout/EmptyState";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -8,6 +20,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import type {
   WorkspaceInventoryGroupView,
   WorkspaceInventoryItemView,
+  WorkspaceInventorySourceKind,
   WorkspaceInventoryStatusKind,
 } from "@proliferate/product-model/workspaces/inventory";
 
@@ -222,7 +235,7 @@ function InventoryRow({
 }) {
   const hasAction = typeof onWorkspaceSelect === "function";
   const ariaLabel = buildRowAriaLabel(item, showExternalOpenAction);
-  const targetLabel = [item.scopeLabel, item.locationLabel].filter(Boolean).join(" · ");
+  const targetLabel = [item.runtimeLocationLabel, item.cloudAccessLabel].filter(Boolean).join(" · ");
   const subtitle = rowSubtitle(item);
 
   const rowClass = twMerge(
@@ -240,7 +253,7 @@ function InventoryRow({
   const inner = (
     <>
       <span className="inline-flex shrink-0 items-center justify-center">
-        <StatusGlyph status={item.statusKind} size={14} />
+        <SourceGlyph source={item.sourceKind} label={item.sourceLabel} />
       </span>
 
       {!suppressSourceLabel && (
@@ -354,6 +367,47 @@ function MetadataCell({
   );
 }
 
+function SourceGlyph({
+  source,
+  label,
+}: {
+  source: WorkspaceInventorySourceKind;
+  label: string;
+}) {
+  const iconClass = "size-3.5";
+  const icon = (() => {
+    switch (source) {
+      case "desktop_exposed":
+        return <Monitor className={iconClass} aria-hidden />;
+      case "cloud_sandbox":
+        return <Cloud className={iconClass} aria-hidden />;
+      case "web":
+        return <Globe2 className={iconClass} aria-hidden />;
+      case "mobile":
+        return <Smartphone className={iconClass} aria-hidden />;
+      case "personal_automation":
+        return <CalendarClock className={iconClass} aria-hidden />;
+      case "team_automation":
+        return <Bot className={iconClass} aria-hidden />;
+      case "slack":
+        return <UsersRound className={iconClass} aria-hidden />;
+      case "api":
+        return <Braces className={iconClass} aria-hidden />;
+      case "unknown":
+        return <HelpCircle className={iconClass} aria-hidden />;
+    }
+  })();
+  return (
+    <span
+      title={label}
+      aria-label={label}
+      className="flex size-[18px] items-center justify-center text-muted-foreground"
+    >
+      {icon}
+    </span>
+  );
+}
+
 function buildRowAriaLabel(
   item: WorkspaceInventoryItemView,
   opensExternally: boolean,
@@ -365,7 +419,9 @@ function buildRowAriaLabel(
     item.sessionLabel ? `session ${item.sessionLabel}` : null,
     `source ${item.sourceLabel}`,
     item.scopeLabel ? `scope ${item.scopeLabel}` : null,
-    `location ${item.locationLabel}`,
+    `runtime ${item.runtimeLocationLabel}`,
+    item.cloudAccessLabel ? item.cloudAccessLabel : null,
+    item.commandabilityLabel ? item.commandabilityLabel : null,
     `status ${item.statusLabel}`,
     item.ownerLabel ? `owner ${item.ownerLabel}` : null,
     item.exposureLabel ? `exposure ${item.exposureLabel}` : null,
@@ -378,9 +434,12 @@ function buildRowAriaLabel(
 
 function rowSubtitle(item: WorkspaceInventoryItemView): string | null {
   return (
-    item.repoLabel ??
-    item.sessionLabel ??
-    item.description ??
+    [
+      item.repoLabel,
+      item.sessionLabel,
+      item.commandabilityLabel,
+    ].filter(Boolean).join(" · ") ||
+    item.description ||
     null
   );
 }

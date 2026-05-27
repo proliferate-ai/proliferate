@@ -48,8 +48,8 @@ describe("workspace inventory model", () => {
       updatedLabel: "5m",
     });
     expect(items[1]).toMatchObject({
-      sourceKind: "automation",
-      sourceLabel: "Automation",
+      sourceKind: "personal_automation",
+      sourceLabel: "Personal automation",
       statusKind: "review",
       statusLabel: "Ready for review",
       sessionLabel: "Rebuild skills",
@@ -79,7 +79,7 @@ describe("workspace inventory model", () => {
       }),
     ];
 
-    expect(buildWorkspaceInventoryFilterOptions(items)).toEqual([
+    expect(buildWorkspaceInventoryFilterOptions(items).slice(0, 4)).toEqual([
       { id: "all", label: "All", count: 3 },
       { id: "mine", label: "Mine", count: 1 },
       { id: "unclaimed", label: "Unclaimed", count: 1 },
@@ -123,10 +123,16 @@ function inventoryItem(
     title: "Workspace",
     repoLabel: "proliferate-ai/proliferate",
     branchLabel: "main",
-    sourceKind: "chat",
-    sourceLabel: "Chat",
+    sourceKind: "web",
+    sourceLabel: "Web",
     locationKind: "cloud",
     locationLabel: "Cloud",
+    runtimeLocation: "cloud_sandbox",
+    runtimeLocationLabel: "Cloud runtime",
+    cloudAccessState: "enabled",
+    cloudAccessLabel: "Cloud access enabled",
+    commandability: "commandable",
+    commandabilityLabel: "Ready for commands",
     scopeLabel: "Personal",
     statusKind: "waiting",
     statusLabel: "Waiting",

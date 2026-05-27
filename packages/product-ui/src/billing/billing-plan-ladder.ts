@@ -85,7 +85,7 @@ export const BILLING_PLAN_SECTIONS: BillingPlanSection[] = [
       { label: "Shared cloud sandbox", values: { free: false, team: "1 per org", enterprise: "Custom" } },
       { label: "Included managed cloud", values: { free: "Starter runtime", team: "20 hr / user / month", enterprise: "Custom" } },
       { label: "Active cloud environments", values: { free: "1", team: "2 / user", enterprise: "Custom" } },
-      { label: "Cloud repo environments", values: { free: "1", team: "4 / user", enterprise: "Custom" } },
+      { label: "Cloud repo environments", values: { free: "2", team: "4 / user", enterprise: "Custom" } },
       { label: "Managed cloud overage", values: { free: false, team: "$2 / hr, capped", enterprise: "Custom" } },
       { label: "Managed LLM credits", values: { free: "Starter credits", team: "Included per seat", enterprise: "Custom / BYOK" } },
       { label: "SSH targets", values: { free: "1", team: "Unlimited", enterprise: "Unlimited" } },

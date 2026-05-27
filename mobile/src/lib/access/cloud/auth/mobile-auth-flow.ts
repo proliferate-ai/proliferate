@@ -1,5 +1,5 @@
 import * as AppleAuthentication from "expo-apple-authentication";
-import { Linking } from "react-native";
+import { Linking, Platform } from "react-native";
 
 import {
   completeAppleMobileAuth,
@@ -15,18 +15,32 @@ import { createOAuthState, createPkcePair } from "../../../infra/auth/pkce";
 import { createMobileCloudClient } from "../client";
 
 const MOBILE_AUTH_TIMEOUT_MS = 5 * 60 * 1000;
+const MOBILE_WEB_AUTH_CALLBACK_PATH = "/auth/callback";
+const PENDING_MOBILE_WEB_AUTH_KEY = "proliferate.mobile.pendingAuth";
+
+interface PendingMobileWebAuth {
+  provider: Exclude<AuthProviderName, "apple">;
+  purpose: AuthPurpose;
+  state: string;
+  codeVerifier: string;
+  createdAt: number;
+}
 
 export async function runMobileOAuthFlow(input: {
   provider: Exclude<AuthProviderName, "apple">;
   purpose?: AuthPurpose;
   accessToken?: string | null;
 }): Promise<AuthSessionResponse> {
+  if (Platform.OS === "web") {
+    return startMobileWebOAuthFlow(input);
+  }
+
   const purpose = input.purpose ?? "login";
   const client = createMobileCloudClient(mobileEnv.apiBaseUrl, null);
   const pkce = await createPkcePair();
   const clientState = await createOAuthState();
   const start = await startAuthProvider(
-    "mobile",
+    "web",
     input.provider,
     {
       purpose,
@@ -61,6 +75,83 @@ export async function runMobileOAuthFlow(input: {
     },
     client,
   );
+}
+
+export async function completeMobileWebOAuthFlow(): Promise<AuthSessionResponse | null> {
+  if (Platform.OS !== "web") {
+    return null;
+  }
+
+  const location = webLocation();
+  if (!location || !location.pathname.endsWith(MOBILE_WEB_AUTH_CALLBACK_PATH)) {
+    return null;
+  }
+
+  const params = new URLSearchParams(location.search);
+  const code = params.get("code");
+  const state = params.get("state");
+  const error = params.get("error");
+  if (!code && !state && !error) {
+    return null;
+  }
+
+  const pending = readPendingMobileWebAuth();
+  clearPendingMobileWebAuth();
+  stripMobileWebAuthParams();
+
+  if (error) {
+    throw new Error(error);
+  }
+  if (!pending || !code || state !== pending.state) {
+    throw new Error("The auth callback did not match this app session.");
+  }
+
+  const client = createMobileCloudClient(mobileEnv.apiBaseUrl, null);
+  return exchangeMobileAuthCode(
+    {
+      code,
+      codeVerifier: pending.codeVerifier,
+      grantType: "authorization_code",
+    },
+    client,
+  );
+}
+
+async function startMobileWebOAuthFlow(input: {
+  provider: Exclude<AuthProviderName, "apple">;
+  purpose?: AuthPurpose;
+  accessToken?: string | null;
+}): Promise<AuthSessionResponse> {
+  const purpose = input.purpose ?? "login";
+  const client = createMobileCloudClient(mobileEnv.apiBaseUrl, null);
+  const pkce = await createPkcePair();
+  const clientState = await createOAuthState();
+  const start = await startAuthProvider(
+    "web",
+    input.provider,
+    {
+      purpose,
+      clientState,
+      codeChallenge: pkce.challenge,
+      codeChallengeMethod: "S256",
+      redirectUri: mobileWebRedirectUri(),
+      prompt: "select_account",
+    },
+    client,
+    { accessToken: input.accessToken },
+  );
+  if (!start.authorizationUrl) {
+    throw new Error(`${input.provider} did not return an authorization URL.`);
+  }
+  writePendingMobileWebAuth({
+    provider: input.provider,
+    purpose,
+    state: clientState,
+    codeVerifier: pkce.verifier,
+    createdAt: Date.now(),
+  });
+  webLocation()?.assign(start.authorizationUrl);
+  return new Promise<AuthSessionResponse>(() => undefined);
 }
 
 export async function runMobileAppleFlow(input: {
@@ -162,4 +253,59 @@ function isMobileAuthCallback(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+function mobileWebRedirectUri(): string {
+  const origin = webLocation()?.origin;
+  if (!origin) {
+    throw new Error("Mobile web auth requires a browser origin.");
+  }
+  return new URL(MOBILE_WEB_AUTH_CALLBACK_PATH, origin).toString();
+}
+
+function writePendingMobileWebAuth(pending: PendingMobileWebAuth): void {
+  webSessionStorage()?.setItem(PENDING_MOBILE_WEB_AUTH_KEY, JSON.stringify(pending));
+}
+
+function readPendingMobileWebAuth(): PendingMobileWebAuth | null {
+  const raw = webSessionStorage()?.getItem(PENDING_MOBILE_WEB_AUTH_KEY);
+  if (!raw) {
+    return null;
+  }
+  try {
+    return JSON.parse(raw) as PendingMobileWebAuth;
+  } catch {
+    return null;
+  }
+}
+
+function clearPendingMobileWebAuth(): void {
+  webSessionStorage()?.removeItem(PENDING_MOBILE_WEB_AUTH_KEY);
+}
+
+function stripMobileWebAuthParams(): void {
+  const location = webLocation();
+  const history = webHistory();
+  if (!location || !history?.replaceState) {
+    return;
+  }
+  history.replaceState(null, "", "/");
+}
+
+function webLocation():
+  | (Location & { assign: (url: string) => void })
+  | undefined {
+  return typeof window !== "undefined" ? window.location : undefined;
+}
+
+function webHistory():
+  | { replaceState: (data: unknown, unused: string, url?: string) => void }
+  | undefined {
+  return typeof window !== "undefined" ? window.history : undefined;
+}
+
+function webSessionStorage():
+  | Pick<Storage, "getItem" | "removeItem" | "setItem">
+  | undefined {
+  return typeof window !== "undefined" ? window.sessionStorage : undefined;
 }

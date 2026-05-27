@@ -59,6 +59,10 @@
       "types": "./dist/chats/cloud/transcript-view.d.ts",
       "import": "./dist/chats/cloud/transcript-view.js"
     },
+    "./chats/session-controls/presentation": {
+      "types": "./dist/chats/session-controls/presentation.d.ts",
+      "import": "./dist/chats/session-controls/presentation.js"
+    },
     "./chats/transcript/envelope-to-state": {
       "types": "./dist/chats/transcript/envelope-to-state.d.ts",
       "import": "./dist/chats/transcript/envelope-to-state.js"
@@ -250,6 +254,10 @@
     "./sessions/pending-config": {
       "types": "./dist/sessions/pending-config.d.ts",
       "import": "./dist/sessions/pending-config.js"
+    },
+    "./settings/cloud-settings": {
+      "types": "./dist/settings/cloud-settings.d.ts",
+      "import": "./dist/settings/cloud-settings.js"
     },
     "./sessions/intents/prompt-dispatch-failure": {
       "types": "./dist/sessions/intents/prompt-dispatch-failure.d.ts",

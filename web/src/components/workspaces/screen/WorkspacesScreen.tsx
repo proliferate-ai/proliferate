@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
-import { useCloudWorkspaces } from "@proliferate/cloud-sdk-react";
+import { useVisibleCloudWorkspaces } from "@proliferate/cloud-sdk-react";
 import {
   buildCloudWorkspaceInventoryItems,
   buildWorkspaceInventoryFilterOptions,
@@ -20,7 +20,7 @@ import { routes } from "../../../config/routes";
 const EMPTY_CLOUD_WORKSPACES: readonly CloudWorkspaceSummary[] = [];
 
 export function WorkspacesScreen() {
-  const workspaces = useCloudWorkspaces({ scope: "exposed" });
+  const workspaces = useVisibleCloudWorkspaces();
   const navigate = useNavigate();
   const [filterId, setFilterId] = useState<WorkspaceInventoryFilterId>("all");
   const [groupBy, setGroupBy] = useState<WorkspaceInventoryGroupBy>("source");
@@ -29,7 +29,7 @@ export function WorkspacesScreen() {
   );
   const [syncLabelNow, setSyncLabelNow] = useState(() => Date.now());
   const workspaceItems = workspaces.data ?? EMPTY_CLOUD_WORKSPACES;
-  const hasResolvedWorkspaceData = workspaces.data !== undefined;
+  const hasResolvedWorkspaceData = !workspaces.isLoading || workspaceItems.length > 0;
   const backgroundRefreshFailed = Boolean(workspaces.error) && hasResolvedWorkspaceData;
 
   const allItems = useMemo(

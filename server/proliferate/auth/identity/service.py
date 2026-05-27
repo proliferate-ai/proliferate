@@ -83,13 +83,18 @@ def validate_redirect_uri(surface: str, redirect_uri: str) -> None:
             )
         return
     if surface == "web":
-        parsed = urlparse(redirect_uri)
-        allowed = _allowed_web_redirect_origins()
-        origin = f"{parsed.scheme}://{parsed.netloc}"
-        if origin not in allowed:
+        if not _is_allowed_web_redirect_uri(redirect_uri):
             raise HTTPException(status_code=400, detail="Web redirect URI origin is not allowed.")
         return
     raise HTTPException(status_code=400, detail="Unsupported auth surface.")
+
+
+def _is_allowed_web_redirect_uri(redirect_uri: str) -> bool:
+    parsed = urlparse(redirect_uri)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return False
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    return origin in _allowed_web_redirect_origins()
 
 
 def _allowed_web_redirect_origins() -> set[str]:
@@ -102,6 +107,10 @@ def _allowed_web_redirect_origins() -> set[str]:
     if settings.frontend_base_url:
         parsed = urlparse(settings.frontend_base_url.strip())
         origins.update(_loopback_origin_aliases(parsed.scheme, parsed.hostname, parsed.port))
+    for raw_origin in settings.cors_allow_origins.split(","):
+        parsed = urlparse(raw_origin.strip())
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            origins.update(_loopback_origin_aliases(parsed.scheme, parsed.hostname, parsed.port))
     return origins
 
 
@@ -209,6 +218,12 @@ async def complete_oauth_provider_callback(
             surface=callback_surface,
         ),
     )
+    desktop_github_account_or_email_exists = True
+    if callback_surface == "desktop" and provider == "github":
+        desktop_github_account_or_email_exists = await _desktop_github_account_or_email_exists(
+            db,
+            verified=verified,
+        )
     user = await resolve_provider_user(db, verified=verified, challenge=challenge)
     auth_code = await create_auth_code(
         db,
@@ -218,7 +233,60 @@ async def complete_oauth_provider_callback(
         state=challenge.client_state,
         redirect_uri=challenge.redirect_uri,
     )
+    if callback_surface == "desktop" and provider == "github":
+        _schedule_desktop_github_login_side_effects(
+            user,
+            verified=verified,
+            notify_signup=not desktop_github_account_or_email_exists,
+        )
     return append_query(challenge.redirect_uri, code=auth_code.code, state=challenge.client_state)
+
+
+async def _desktop_github_account_or_email_exists(
+    db: AsyncSession,
+    *,
+    verified: VerifiedProviderIdentity,
+) -> bool:
+    if not verified.email:
+        identity = await get_identity_by_provider_subject(
+            db,
+            provider=verified.provider,
+            provider_subject=verified.provider_subject,
+        )
+        return identity is not None
+
+    from proliferate.db.store.users import github_oauth_account_or_email_exists
+
+    return await github_oauth_account_or_email_exists(
+        db,
+        account_id=verified.provider_subject,
+        account_email=verified.email,
+    )
+
+
+def _schedule_desktop_github_login_side_effects(
+    user: User,
+    *,
+    verified: VerifiedProviderIdentity,
+    notify_signup: bool,
+) -> None:
+    from proliferate.auth.desktop.service import (
+        schedule_customerio_desktop_authenticated_user_sync,
+        schedule_signup_slack_notification,
+    )
+    from proliferate.server.notifications import SignupSlackNotification
+
+    schedule_customerio_desktop_authenticated_user_sync(user)
+    if notify_signup:
+        schedule_signup_slack_notification(
+            SignupSlackNotification(
+                name=user.display_name or verified.display_name or user.email,
+                email=user.email,
+                github=user.github_login or verified.provider_login or verified.provider_subject,
+                user_created_at=user.created_at,
+            ),
+            dedupe_key=f"github:{verified.provider_subject}",
+        )
 
 
 async def complete_oauth_provider_error_callback(

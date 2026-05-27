@@ -100,7 +100,7 @@ export function NewChatSurface({
   onAction,
 }: NewChatSurfaceProps) {
   const composerControls = [
-    pickerToComposerControl("target", target, "cloud", "leading", onPickerSelect),
+    pickerToComposerControl("target", target, "sparkles", "leading", onPickerSelect),
     ...(extraComposerControls ?? [
       pickerToComposerControl("model", model, "bot", "trailing", onPickerSelect),
       pickerToComposerControl("mode", mode, "settings", "trailing", onPickerSelect),

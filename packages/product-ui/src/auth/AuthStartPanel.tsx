@@ -8,6 +8,7 @@ export interface AuthProviderActionView {
   icon?: ReactNode;
   loading?: boolean;
   disabled?: boolean;
+  primary?: boolean;
   onClick: () => void;
 }
 
@@ -40,6 +41,7 @@ export function AuthStartPanel({
           icon={provider.icon}
           loading={provider.loading}
           disabled={provider.disabled}
+          variant={provider.primary ? "primary" : "secondary"}
           onClick={provider.onClick}
         >
           {provider.label}

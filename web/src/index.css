@@ -1,1 +1,5 @@
 @import "@proliferate/design/dom.css";
+
+:root {
+  --radius-composer: 1.5rem;
+}

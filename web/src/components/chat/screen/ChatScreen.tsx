@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   desktopWorkspaceDeepLink,
   getCommandStatus,
+  type CloudCommandResponse,
   type CloudCommandStatus,
   type CloudPendingInteraction,
   type CloudSessionEvent,
@@ -48,11 +49,17 @@ import {
   type CloudLaunchComposerSelection,
   type PendingConfigChange,
 } from "@proliferate/product-model/chats/cloud/composer-controls";
+import {
+  cloudCommandReadiness,
+  recentWorkCloudAccessState,
+  recentWorkCommandability,
+  recentWorkRuntimeLocationForWorkspace,
+} from "@proliferate/product-model/workspaces/cloud-work-inventory";
 
 import { routes } from "../../../config/routes";
 import {
   dispatchPendingHomePrompt,
-  ensureManagedWorkspaceTargetConfigReady,
+  prepareManagedWorkspaceForCloudCommands,
   type SendPromptPayload,
   type StartSessionPayload,
   type UpdateSessionConfigPayload,
@@ -67,6 +74,7 @@ import {
 type PendingHomePromptDispatchRun = {
   key: string;
   active: boolean;
+  started: boolean;
 };
 
 type OptimisticPromptStatus = "sending" | "queued" | "failed";
@@ -80,8 +88,6 @@ type OptimisticPrompt = {
   status: OptimisticPromptStatus;
   commandId?: string | null;
 };
-
-type ClipboardWriteStatus = "copied" | "selected" | "failed";
 
 const EMPTY_SESSION_EVENTS: CloudSessionEvent[] = [];
 const EMPTY_TRANSCRIPT_ITEMS: CloudTranscriptItem[] = [];
@@ -111,6 +117,7 @@ export function ChatScreen() {
   const [pendingHomePromptStatus, setPendingHomePromptStatus] = useState<string | null>(null);
   const pendingHomePromptDispatchRunRef = useRef<PendingHomePromptDispatchRun | null>(null);
   const pendingConfigMutationIdRef = useRef(0);
+  const mountedRef = useRef(true);
   const workspaceQuery = useCloudWorkspaceSnapshot(workspaceId ?? null, Boolean(workspaceId));
   const agentCatalog = useCloudAgentCatalog();
   const workspaceLive = useWorkspaceLive(workspaceId ?? null, { enabled: Boolean(workspaceId) });
@@ -128,6 +135,7 @@ export function ChatScreen() {
   const session = chatId
     ? sessions.find((candidate) => candidate.sessionId === chatId) ?? null
     : null;
+  const activeTranscriptSessionId = session?.sessionId ?? chatId ?? null;
   const sessionLive = useSessionLive(session?.sessionId ?? null, {
     targetId: session?.targetId ?? null,
     enabled: Boolean(session),
@@ -148,6 +156,9 @@ export function ChatScreen() {
   const pendingInteractions = sessionLive.snapshot?.pendingInteractions
     ?? transcriptQuery.data?.pendingInteractions
     ?? EMPTY_PENDING_INTERACTIONS;
+  const visiblePendingHomePromptStatus = isCopyFeedbackStatus(pendingHomePromptStatus)
+    ? null
+    : friendlyCommandStatusMessage(pendingHomePromptStatus) ?? pendingHomePromptStatus;
   const pendingPromptCommandId = useMemo(
     () => latestPendingPromptCommandId(pendingInteractions),
     [pendingInteractions],
@@ -178,7 +189,8 @@ export function ChatScreen() {
       ...buildOptimisticPromptRows({
         prompts: optimisticPrompts,
         workspaceId: workspace?.id ?? null,
-        sessionId: session?.sessionId ?? null,
+        sessionId: activeTranscriptSessionId,
+        status: visiblePendingHomePromptStatus,
         transcriptItems,
         transcriptRows: transcriptView.rows,
         pendingInteractions,
@@ -187,17 +199,17 @@ export function ChatScreen() {
       ...buildPendingHomePromptRows({
         pendingPrompt: pendingHomePrompt,
         workspaceId: workspace?.id ?? null,
-        sessionId: session?.sessionId ?? null,
-        status: pendingHomePromptStatus,
+        sessionId: activeTranscriptSessionId,
+        status: visiblePendingHomePromptStatus,
         optimisticPrompts,
       }),
     ],
     [
       optimisticPrompts,
       pendingHomePrompt,
-      pendingHomePromptStatus,
+      visiblePendingHomePromptStatus,
       pendingInteractions,
-      session?.sessionId,
+      activeTranscriptSessionId,
       transcriptItems,
       transcriptView.rows,
       workspace?.id,
@@ -220,6 +232,7 @@ export function ChatScreen() {
     }),
     [agentCatalog.data, launchSelection],
   );
+  const sessionModelId = session && liveConfig ? getLiveConfigControlValue(liveConfig, "model") : null;
   const composerControls = buildCloudChatComposerControls({
     session,
     liveConfig,
@@ -255,7 +268,31 @@ export function ChatScreen() {
     onSessionConfigSelect: (rawConfigId, value) => {
       void submitSessionConfig(rawConfigId, value);
     },
+    onSessionAgentModelSelect: ({ agentKind, modelId }) => {
+      setLaunchSelection({
+        agentKind,
+        modelId,
+        modeId: null,
+        controlValues: {},
+      });
+      setPendingConfigChanges({});
+      if (workspaceId) {
+        navigate(routes.workspace(workspaceId), {
+          state: { startNewSession: true },
+        });
+      }
+    },
   });
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (pendingHomePromptDispatchRunRef.current) {
+        pendingHomePromptDispatchRunRef.current.active = false;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     setPendingHomePrompt(workspaceId ? loadPendingHomePrompt(workspaceId) : null);
@@ -305,15 +342,20 @@ export function ChatScreen() {
     if (!pendingHomePrompt || !workspace) {
       return;
     }
+    const workspaceFailureMessage = workspaceFailureStatusMessage(workspace);
     if (pendingHomePrompt.status === "failed") {
       setPendingHomePromptStatus(
-        pendingHomePrompt.errorMessage ?? "Queued prompt could not be sent.",
+        workspaceFailureMessage
+          ?? pendingHomePrompt.errorMessage
+          ?? "Queued prompt could not be sent.",
       );
       setDraft((current) => current.trim() ? current : pendingHomePrompt.text);
       return;
     }
     if (workspaceStatus === "error" || workspaceStatus === "archived") {
-      setPendingHomePromptStatus("Workspace creation failed before the prompt could be sent.");
+      setPendingHomePromptStatus(
+        workspaceFailureMessage ?? "Workspace creation failed before the prompt could be sent.",
+      );
       return;
     }
     if (workspaceStatus !== "ready") {
@@ -327,9 +369,10 @@ export function ChatScreen() {
       return;
     }
 
-    const run: PendingHomePromptDispatchRun = { key: runKey, active: true };
+    const run: PendingHomePromptDispatchRun = { key: runKey, active: true, started: false };
     pendingHomePromptDispatchRunRef.current = run;
-    const isCurrentRun = () => pendingHomePromptDispatchRunRef.current === run && run.active;
+    const isCurrentRun = () =>
+      mountedRef.current && pendingHomePromptDispatchRunRef.current === run && run.active;
     const setCurrentStatus = (status: string) => {
       if (isCurrentRun()) {
         setPendingHomePromptStatus(status);
@@ -341,6 +384,7 @@ export function ChatScreen() {
       if (!isCurrentRun()) {
         return;
       }
+      run.started = true;
       void dispatchPendingHomePrompt({
         client,
         workspace,
@@ -388,13 +432,19 @@ export function ChatScreen() {
             return;
           }
           const message = error instanceof Error ? error.message : "Queued prompt could not be sent.";
-          const failedPrompt: PendingHomePrompt = {
-            ...pendingHomePrompt,
-            status: "failed",
-            errorMessage: message,
-          };
-          savePendingHomePrompt(workspace.id, failedPrompt);
-          setPendingHomePrompt(failedPrompt);
+          const prompt: PendingHomePrompt = isWorkspacePreparationStatus(message)
+            ? {
+              ...pendingHomePrompt,
+              status: "pending",
+              errorMessage: message,
+            }
+            : {
+              ...pendingHomePrompt,
+              status: "failed",
+              errorMessage: message,
+            };
+          savePendingHomePrompt(workspace.id, prompt);
+          setPendingHomePrompt(prompt);
           setPendingHomePromptStatus(message);
           setDraft((current) => current.trim() ? current : pendingHomePrompt.text);
         })
@@ -405,7 +455,9 @@ export function ChatScreen() {
         });
     }, 0);
     return () => {
-      run.active = false;
+      if (!run.started) {
+        run.active = false;
+      }
       window.clearTimeout(timeoutId);
     };
   }, [
@@ -492,17 +544,19 @@ export function ChatScreen() {
     if (!hasMatchingOptimisticPrompt && !isPersistedPendingPromptCommand) {
       return;
     }
+    const message = command.errorMessage || promptCommandFailureMessage(command.status);
+    const isPreparing = isWorkspacePreparationStatus(message);
     if (hasMatchingOptimisticPrompt) {
       setOptimisticPrompts((current) =>
         current.map((prompt) =>
-          prompt.commandId === command.commandId ? { ...prompt, status: "failed" } : prompt
+          prompt.commandId === command.commandId
+            ? { ...prompt, status: isPreparing ? "queued" : "failed" }
+            : prompt
         )
       );
     }
     if (hasMatchingOptimisticPrompt) {
-      setPendingHomePromptStatus(
-        command.errorMessage || promptCommandFailureMessage(command.status),
-      );
+      setPendingHomePromptStatus(message);
     }
     if (isPersistedPendingPromptCommand) {
       void transcriptQuery.refetch();
@@ -638,16 +692,16 @@ export function ChatScreen() {
     )) {
       return;
     }
+    const message = command.errorMessage || promptCommandFailureMessage(command.status);
+    const isPreparing = isWorkspacePreparationStatus(message);
     setOptimisticPrompts((current) =>
       current.map((prompt) =>
         prompt.commandId === command.commandId && prompt.status !== "failed"
-          ? { ...prompt, status: "failed" }
+          ? { ...prompt, status: isPreparing ? "queued" : "failed" }
           : prompt
       ),
     );
-    setPendingHomePromptStatus(
-      command.errorMessage || promptCommandFailureMessage(command.status),
-    );
+    setPendingHomePromptStatus(message);
   }, [
     commandStatus.data?.commandId,
     commandStatus.data?.errorMessage,
@@ -658,6 +712,15 @@ export function ChatScreen() {
   async function submitPrompt() {
     const text = draft.trim();
     if (!text || !workspace) {
+      return;
+    }
+    if (isUnclaimed) {
+      setPendingHomePromptStatus("Claim this shared workspace before sending prompts.");
+      return;
+    }
+    const readiness = cloudCommandReadiness(workspace);
+    if (!readiness.commandable) {
+      setPendingHomePromptStatus(readiness.message ?? "This workspace cannot accept cloud commands right now.");
       return;
     }
     if (!session) {
@@ -708,7 +771,7 @@ export function ChatScreen() {
           enqueuePrompt: enqueuePrompt.mutateAsync,
           setLatestCommandId,
           onStatus: setPendingHomePromptStatus,
-          shouldContinue: () => true,
+          shouldContinue: () => mountedRef.current,
         });
         setOptimisticPrompts((current) =>
           current.map((prompt) =>
@@ -728,20 +791,23 @@ export function ChatScreen() {
         await workspaceQuery.refetch();
         navigate(routes.chat(workspace.id, result.sessionId));
       } catch (error) {
+        const message = error instanceof Error ? error.message : "Prompt could not be sent.";
+        const isPreparing = isWorkspacePreparationStatus(message);
         setOptimisticPrompts((current) =>
           current.map((prompt) =>
-            prompt.id === optimisticPrompt.id ? { ...prompt, status: "failed" } : prompt
+            prompt.id === optimisticPrompt.id
+              ? { ...prompt, status: isPreparing ? "queued" : "failed" }
+              : prompt
           )
         );
-        const message = error instanceof Error ? error.message : "Prompt could not be sent.";
         setDraft((current) => current.trim() ? current : text);
-        const failedPrompt: PendingHomePrompt = {
+        const prompt: PendingHomePrompt = {
           ...pendingPrompt,
-          status: "failed",
+          status: isPreparing ? "pending" : "failed",
           errorMessage: message,
         };
-        savePendingHomePrompt(workspace.id, failedPrompt);
-        setPendingHomePrompt(failedPrompt);
+        savePendingHomePrompt(workspace.id, prompt);
+        setPendingHomePrompt(prompt);
         setPendingHomePromptStatus(message);
       } finally {
         setDirectPromptDispatching(false);
@@ -763,24 +829,29 @@ export function ChatScreen() {
     setDraft("");
     setPendingHomePromptStatus(null);
     try {
-      await ensureManagedWorkspaceTargetConfigReady({
+      const commandWorkspace = await prepareManagedWorkspaceForCloudCommands({
         client,
         workspace,
+        agentKind: session.sourceAgentKind ?? resolvedLaunchSelection.agentKind,
+        modelId: sessionModelId,
         idempotencyKey: `${optimisticPrompt.id}:target-config`,
         setLatestCommandId,
         onStatus: setPendingHomePromptStatus,
-        shouldContinue: () => true,
+        shouldContinue: () => mountedRef.current,
       });
       const command = await enqueuePrompt.mutateAsync({
         idempotencyKey: optimisticPrompt.id,
         targetId: session.targetId,
         workspaceId: session.workspaceId,
-        cloudWorkspaceId: workspace.id,
+        cloudWorkspaceId: commandWorkspace.id,
         sessionId: session.sessionId,
         kind: "send_prompt",
         source: "web",
         payload: { text, promptId: optimisticPrompt.id },
       });
+      if (!mountedRef.current) {
+        return;
+      }
       setLatestCommandId(command.commandId);
       if (isRejectedCommandStatus(command.status)) {
         throw new Error(command.errorMessage || promptCommandFailureMessage(command.status));
@@ -796,6 +867,9 @@ export function ChatScreen() {
       void transcriptQuery.refetch();
       void sessionEventsQuery.refetch();
     } catch (error) {
+      if (!mountedRef.current) {
+        return;
+      }
       setOptimisticPrompts((current) =>
         current.map((prompt) =>
           prompt.id === optimisticPrompt.id ? { ...prompt, status: "failed" } : prompt
@@ -815,6 +889,15 @@ export function ChatScreen() {
     const mutationId = pendingConfigMutationIdRef.current + 1;
     pendingConfigMutationIdRef.current = mutationId;
     const changeKey = pendingConfigChangeKey(session.sessionId, rawConfigId);
+    if (isUnclaimed) {
+      setPendingHomePromptStatus("Claim this shared workspace before changing session settings.");
+      return;
+    }
+    const readiness = cloudCommandReadiness(workspace);
+    if (!readiness.commandable) {
+      setPendingHomePromptStatus(readiness.message ?? "This workspace cannot accept cloud commands right now.");
+      return;
+    }
     setPendingConfigChanges((current) => ({
       ...current,
       [changeKey]: {
@@ -826,17 +909,30 @@ export function ChatScreen() {
       },
     }));
     try {
+      const commandWorkspace = await prepareManagedWorkspaceForCloudCommands({
+        client,
+        workspace,
+        agentKind: session.sourceAgentKind ?? resolvedLaunchSelection.agentKind,
+        modelId: sessionModelId,
+        idempotencyKey: `web:${workspace.id}:${session.sessionId}:config:${rawConfigId}:${mutationId}:target-config`,
+        setLatestCommandId,
+        onStatus: setPendingHomePromptStatus,
+        shouldContinue: () => mountedRef.current,
+      });
       const command = await enqueueConfig.mutateAsync({
         idempotencyKey: `web:${workspace.id}:${session.sessionId}:config:${rawConfigId}:${value}:${mutationId}`,
         targetId: session.targetId,
         workspaceId: session.workspaceId,
-        cloudWorkspaceId: workspace.id,
+        cloudWorkspaceId: commandWorkspace.id,
         sessionId: session.sessionId,
         kind: "update_session_config",
         source: "web",
         observedEventSeq: session.lastEventSeq ?? null,
         payload: { configId: rawConfigId, value },
       });
+      if (!mountedRef.current) {
+        return;
+      }
       setLatestCommandId(command.commandId);
       setPendingConfigChanges((current) => {
         const existing = current[changeKey];
@@ -849,6 +945,9 @@ export function ChatScreen() {
         };
       });
     } catch (error) {
+      if (!mountedRef.current) {
+        return;
+      }
       setPendingConfigChanges((current) => {
         const existing = current[changeKey];
         if (!existing || existing.mutationId !== mutationId) {
@@ -879,6 +978,15 @@ export function ChatScreen() {
     }
   }
 
+  async function copyComposerFooterValue(value: string, label: string) {
+    setPendingHomePromptStatus((current) => isCopyFeedbackStatus(current) ? null : current);
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      console.warn(`${label} could not be copied.`);
+    }
+  }
+
   if (!workspaceId) {
     return <MissingState title="Workspace not found" />;
   }
@@ -891,30 +999,47 @@ export function ChatScreen() {
     return <MissingState title="Workspace not available" />;
   }
 
+  const workspaceCommandability = recentWorkCommandability(workspace);
+  const commandReadiness = cloudCommandReadiness(workspace);
   const workspaceCommandReady = workspaceStatus === "ready"
     && Boolean(workspace.targetId)
-    && Boolean(workspace.anyharnessWorkspaceId);
+    && Boolean(workspace.anyharnessWorkspaceId)
+    && commandReadiness.commandable;
   const promptSubmitting = enqueuePrompt.isPending || directPromptDispatching;
   const canSubmit = Boolean(
     draft.trim()
       && !promptSubmitting
-      && (session ? true : workspaceCommandReady),
+      && !isUnclaimed
+      && workspaceCommandReady,
   );
-  const sessionTitle = session?.title ?? workspace.displayName ?? workspace.repo.name;
+  const branchName = workspace.repo.branch ?? workspace.repo.baseBranch ?? "main";
+  const repoLabel = `${workspace.repo.owner}/${workspace.repo.name}`;
+  const workspaceTitle = branchName || repoLabel;
+  const activeSessionLabel = session
+    ? sessionOptionLabel(session)
+    : "New session";
   const commandStatusMessage = commandStatus.data?.commandId === pendingPromptCommandId
     ? null
-    : commandStatus.data?.errorMessage
-      ?? (commandStatus.data?.status ? `Command ${commandStatus.data.status}` : null);
+    : commandStatusMessageForNotice(commandStatus.data);
+  const commandabilityLabel = workspaceCommandabilityLabel(workspaceCommandability);
   const commandMessage =
-    pendingHomePromptStatus ??
-    commandStatusMessage;
+    visiblePendingHomePromptStatus ??
+    commandStatusMessage ??
+    (!workspaceCommandReady
+      ? friendlyCommandStatusMessage(commandReadiness.message)
+        ?? commandReadiness.message
+        ?? commandabilityLabel
+      : null);
+  const workspaceStatusNotice = commandMessage && !isUnclaimed
+    ? workspaceNoticeForCommandMessage(commandMessage)
+    : null;
   const transcriptSourceLabel = transcriptView.source === "events"
     ? "Event transcript"
     : transcriptView.source === "projection"
       ? "Projection fallback"
       : "No transcript";
-  const branchName = workspace.repo.branch ?? workspace.repo.baseBranch ?? "main";
-  const repoLabel = `${workspace.repo.owner}/${workspace.repo.name}`;
+  const runtimeLabel = workspaceRuntimeLabel(recentWorkRuntimeLocationForWorkspace(workspace));
+  const cloudAccessLabel = workspaceCloudAccessLabel(recentWorkCloudAccessState(workspace));
   const claimFooterControl: CloudChatComposerFooterControlView | null = isUnclaimed
     ? {
       id: "claim",
@@ -930,43 +1055,35 @@ export function ChatScreen() {
   const composerFooterControls: CloudChatComposerFooterControlView[] = [
     ...(claimFooterControl ? [claimFooterControl] : []),
     {
-      id: "branch",
+      id: "copy-branch",
       label: branchName,
       detail: "Branch",
       icon: "branch",
       title: "Copy branch name",
-      onClick: () => copyComposerValue("Branch", branchName, setPendingHomePromptStatus),
+      onClick: () => void copyComposerFooterValue(branchName, "Branch name"),
     },
     {
-      id: "repo",
+      id: "copy-repo",
       label: repoLabel,
       detail: "Repo",
       icon: "repo",
       title: "Copy repository name",
-      onClick: () => copyComposerValue("Repository", repoLabel, setPendingHomePromptStatus),
-    },
-    {
-      id: "cloud-status",
-      label: sessionLive.isConnected ? "Live" : workspaceStatusLabel(workspaceStatus),
-      detail: sessionLive.isConnected ? "Runtime" : "Workspace",
-      icon: "cloud",
-      active: sessionLive.isConnected,
-      title: sessionLive.isConnected ? "Cloud runtime stream is connected" : "Cloud workspace status",
+      onClick: () => void copyComposerFooterValue(repoLabel, "Repository"),
     },
   ];
   const emptyTitle = !session
-    ? "No active session yet."
+    ? `Start the first session in ${workspaceTitle}`
     : sessionEventsQuery.isLoading && transcriptView.source === "empty"
       ? "Loading transcript"
       : "Waiting for the first projected transcript event.";
 
   return (
     <CloudChatSurface
-      title={sessionTitle}
+      title={workspaceTitle}
       eyebrowItems={[
-        workspace.sandboxType ?? "cloud",
-        workspace.exposureState ?? "tracked",
-        session?.status ?? workspaceStatus ?? "unknown",
+        runtimeLabel,
+        cloudAccessLabel,
+        commandabilityLabel,
       ]}
       chips={[
         {
@@ -983,19 +1100,25 @@ export function ChatScreen() {
           : []),
         {
           id: "live",
-          label: sessionLive.isConnected ? "Live" : "Snapshot",
+          label: sessionLive.isConnected ? "Live stream" : "Snapshot",
         },
         {
           id: "source",
           label: transcriptSourceLabel,
         },
+        ...(session
+          ? [{
+            id: "session",
+            label: `Session: ${activeSessionLabel}`,
+          }]
+          : []),
       ]}
       transcriptRows={visibleTranscriptRows}
       emptyTitle={emptyTitle}
       emptyDescription={
-        !session ? "Send a prompt below to start the first projected session." : undefined
+        !session ? `Send a message below to start the first session in ${workspaceTitle}.` : undefined
       }
-      commandMessage={commandMessage}
+      commandMessage={null}
       primaryAction={isUnclaimed
         ? {
           label: "Claim",
@@ -1004,20 +1127,26 @@ export function ChatScreen() {
           onClick: () => void claimCurrentWorkspace(),
         }
         : null}
-      headerActions={session
-        ? [{
-          id: "new-session",
-          label: "New chat",
-          kind: "new-session",
-          onClick: () => navigate(routes.workspace(workspace.id), {
-            state: { startNewSession: true },
-          }),
-        }]
-        : []}
+      sessionSwitcher={{
+        workspaceLabel: workspaceTitle,
+        activeSessionId: session?.sessionId ?? null,
+        activeSessionLabel,
+        sessions: sessions.map((candidate) => ({
+          id: candidate.sessionId,
+          label: sessionOptionLabel(candidate),
+          detail: relativeSessionTime(candidate.lastEventAt ?? candidate.startedAt ?? null),
+          statusLabel: sessionStatusLabel(candidate.status),
+        })),
+        newSessionLabel: "New session",
+        onSelectSession: (sessionId: string) => navigate(routes.chat(workspace.id, sessionId)),
+        onNewSession: () => navigate(routes.workspace(workspace.id), {
+          state: { startNewSession: true },
+        }),
+      }}
       topNotice={isUnclaimed
         ? {
           title: "Unclaimed shared workspace.",
-          description: "You can chat here; claim it to take ownership and expose team git actions.",
+          description: "Claim this workspace before sending prompts or changing session settings.",
           action: {
             label: "Claim",
             kind: "claim",
@@ -1025,7 +1154,7 @@ export function ChatScreen() {
             onClick: () => void claimCurrentWorkspace(),
           },
         }
-        : null}
+        : workspaceStatusNotice}
       desktopHref={desktopWorkspaceDeepLink(workspace.id)}
       composer={{
         value: draft,
@@ -1033,16 +1162,18 @@ export function ChatScreen() {
         onSubmit: () => void submitPrompt(),
         controls: composerControls,
         footerControls: composerFooterControls,
-        disabled: !session && !workspaceCommandReady,
+        disabled: !workspaceCommandReady || isUnclaimed,
         canSubmit,
         isSubmitting: promptSubmitting,
         placeholder: isUnclaimed
-          ? "Message this shared workspace"
+          ? "Claim this shared workspace to reply"
           : session
-            ? "Message this session"
+            ? "Describe a task"
             : workspaceCommandReady
-              ? "Start a session with a message"
-              : "Waiting for workspace",
+              ? "Describe a task"
+              : workspaceCommandability === "stale"
+                ? "Desktop or remote runtime is offline"
+                : "Waiting for workspace",
       }}
       onBack={() => navigate(routes.workspaces)}
     />
@@ -1064,7 +1195,213 @@ function MissingState({ title }: { title: string }) {
 }
 
 function compareSessions(left: CloudSessionProjection, right: CloudSessionProjection): number {
-  return (right.lastEventSeq ?? 0) - (left.lastEventSeq ?? 0);
+  return sessionRecencyMs(right) - sessionRecencyMs(left)
+    || (right.lastEventSeq ?? 0) - (left.lastEventSeq ?? 0);
+}
+
+function sessionRecencyMs(
+  session: Pick<CloudSessionProjection, "lastEventAt" | "startedAt">,
+): number {
+  return Date.parse(session.lastEventAt ?? session.startedAt ?? "") || 0;
+}
+
+function sessionOptionLabel(session: Pick<CloudSessionProjection, "sessionId" | "title">): string {
+  return cleanSessionTitle(session.title) ?? `Session ${session.sessionId.slice(0, 8)}`;
+}
+
+function cleanSessionTitle(title: string | null | undefined): string | null {
+  const value = title?.trim();
+  if (!value) {
+    return null;
+  }
+  const normalized = value.toLowerCase();
+  if (
+    normalized === "invalid input"
+    || normalized === "unclear input"
+    || normalized === "stray keystroke"
+    || normalized === "single character input"
+  ) {
+    return null;
+  }
+  return value;
+}
+
+function sessionStatusLabel(status: string): string {
+  return status
+    .split(/[_\s-]+/u)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || "Session";
+}
+
+function friendlyCommandStatusMessage(message: string | null | undefined): string | null {
+  if (!message) {
+    return null;
+  }
+  if (isManagedCloudWorkerBaseUrlMessage(message)) {
+    return "Cloud sandbox setup cannot reach this local dev server. Configure a public HTTPS tunnel for CLOUD_WORKER_BASE_URL, then retry the workspace.";
+  }
+  if (isManagedTargetConfigMessage(message)) {
+    return "Workspace accepted. Preparing the selected runtime so this session can start.";
+  }
+  if (isCloudRuntimeProfileMessage(message)) {
+    return "Workspace accepted. Preparing cloud runtime access for this target.";
+  }
+  return message;
+}
+
+function isWorkspacePreparationStatus(message: string | null | undefined): boolean {
+  return friendlyCommandStatusMessage(message)?.startsWith("Workspace accepted.") ?? false;
+}
+
+function workspaceNoticeForCommandMessage(message: string) {
+  if (message.startsWith("Workspace accepted.")) {
+    return {
+      title: "Workspace accepted.",
+      description: "Preparing the selected runtime so this session can start.",
+    };
+  }
+  if (message.startsWith("Cloud sandbox setup cannot reach")) {
+    return {
+      title: "Workspace setup failed.",
+      description: message,
+    };
+  }
+  return {
+    title: "Workspace is not ready yet",
+    description: message,
+  };
+}
+
+function commandStatusMessageForNotice(
+  command: CloudCommandResponse | undefined,
+): string | null {
+  if (!command) {
+    return null;
+  }
+  const errorMessage = friendlyCommandStatusMessage(command.errorMessage);
+  if (errorMessage) {
+    return errorMessage;
+  }
+  switch (command.status) {
+    case "queued":
+      return "Command queued; waiting for the cloud runtime.";
+    case "leased":
+      return "Cloud runtime is picking up the command.";
+    case "delivered":
+      return "Command delivered; waiting for runtime acknowledgement.";
+    case "rejected":
+    case "expired":
+    case "superseded":
+    case "failed_delivery":
+      return promptCommandFailureMessage(command.status);
+    case "accepted":
+    case "accepted_but_queued":
+    default:
+      return null;
+  }
+}
+
+function workspaceFailureStatusMessage(
+  workspace: { lastError?: string | null; statusDetail?: string | null },
+): string | null {
+  return friendlyCommandStatusMessage(workspace.lastError)
+    ?? friendlyCommandStatusMessage(workspace.statusDetail)
+    ?? null;
+}
+
+function isManagedCloudWorkerBaseUrlMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("cloud_worker_base_url")
+    && normalized.includes("public url")
+    && normalized.includes("reachable from the sandbox");
+}
+
+function isManagedTargetConfigMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("managed targets require")
+    && normalized.includes("materialized target config");
+}
+
+function isCloudRuntimeProfileMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (normalized.includes("agent auth sandbox profile")
+    || normalized.includes("runtime config sandbox profile"))
+    && (normalized.includes("not attached")
+      || normalized.includes("does not match")
+      || normalized.includes("target mismatch")
+      || normalized.includes("target_mismatch"));
+}
+
+function isCopyFeedbackStatus(message: string | null): boolean {
+  const normalized = message?.trim().toLowerCase() ?? "";
+  return normalized === "branch name copied."
+    || normalized === "branch name could not be copied."
+    || normalized === "repository copied."
+    || normalized === "repository could not be copied.";
+}
+
+function relativeSessionTime(value: string | null): string | null {
+  const timestamp = value ? Date.parse(value) : 0;
+  if (!timestamp) {
+    return null;
+  }
+  const elapsedMs = Math.max(0, Date.now() - timestamp);
+  if (elapsedMs < 60_000) {
+    return "now";
+  }
+  const minutes = Math.floor(elapsedMs / 60_000);
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours}h`;
+  }
+  return `${Math.floor(hours / 24)}d`;
+}
+
+function workspaceRuntimeLabel(runtime: ReturnType<typeof recentWorkRuntimeLocationForWorkspace>): string {
+  switch (runtime) {
+    case "local_desktop":
+      return "Local Desktop runtime";
+    case "cloud_sandbox":
+      return "Cloud runtime";
+    case "ssh_remote":
+      return "SSH runtime";
+    case "offline":
+      return "Runtime offline";
+    case "unknown":
+      return "Runtime unknown";
+  }
+}
+
+function workspaceCloudAccessLabel(
+  state: ReturnType<typeof recentWorkCloudAccessState>,
+): string {
+  switch (state) {
+    case "enabled":
+      return "Cloud access enabled";
+    case "not_enabled":
+      return "Cloud access off";
+    case "unknown":
+      return "Cloud access unknown";
+  }
+}
+
+function workspaceCommandabilityLabel(
+  commandability: ReturnType<typeof recentWorkCommandability>,
+): string {
+  switch (commandability) {
+    case "commandable":
+      return "Commands ready";
+    case "not_commandable":
+      return "Commands unavailable";
+    case "stale":
+      return "Runtime offline";
+    case "unknown":
+      return "Command status unknown";
+  }
 }
 
 function shouldSuppressWorkspaceSessionRedirect(state: unknown): boolean {
@@ -1117,6 +1454,7 @@ function buildOptimisticPromptRows(input: {
   prompts: readonly OptimisticPrompt[];
   workspaceId: string | null;
   sessionId: string | null;
+  status: string | null;
   transcriptItems: readonly CloudTranscriptItem[];
   transcriptRows: readonly CloudChatTranscriptRowView[];
   pendingInteractions: readonly CloudPendingInteraction[];
@@ -1172,6 +1510,12 @@ function buildOptimisticPromptRows(input: {
         body: prompt.status === "sending" ? "Sending message..." : "Waiting for response...",
         streaming: true,
       });
+    } else if (prompt.status === "failed" && input.status) {
+      rows.push({
+        id: `${prompt.id}:assistant-error`,
+        kind: "error",
+        body: input.status,
+      });
     }
   }
   return rows;
@@ -1195,14 +1539,19 @@ function buildPendingHomePromptRows(input: {
   if (duplicateOptimisticPrompt) {
     return [];
   }
-  const failed = input.pendingPrompt.status === "failed" || isFailureStatusText(input.status);
-  const failureMessage = input.pendingPrompt.errorMessage ?? input.status;
+  const preparationStatus = isWorkspacePreparationStatus(
+    input.status ?? input.pendingPrompt.errorMessage,
+  );
+  const failed = !preparationStatus
+    && (input.pendingPrompt.status === "failed" || isFailureStatusText(input.status));
+  const failureMessage = friendlyCommandStatusMessage(input.pendingPrompt.errorMessage)
+    ?? input.status;
   return [
     {
       id: `${input.pendingPrompt.id}:user`,
       kind: "user",
       body: input.pendingPrompt.text,
-      status: failed ? "Failed" : "Queued",
+      status: preparationStatus ? "Preparing" : failed ? "Failed" : "Queued",
       streaming: !failed,
     },
     {
@@ -1210,7 +1559,11 @@ function buildPendingHomePromptRows(input: {
       kind: failed ? "error" : "assistant",
       body: failed
         ? failureMessage ?? "Queued prompt could not be sent."
-        : input.status ?? "Waiting for the workspace to be ready...",
+        : input.status ?? (
+          preparationStatus
+            ? "Preparing the selected runtime so this session can start."
+            : "Waiting for the workspace to be ready..."
+        ),
       streaming: !failed,
     },
   ];
@@ -1382,77 +1735,5 @@ function workspaceStatusLabel(status: string | null): string {
       return "Archived";
     default:
       return status ?? "Cloud";
-  }
-}
-
-function copyComposerValue(
-  label: string,
-  value: string,
-  setStatus: (status: string | null) => void,
-): void {
-  void writeClipboardText(value)
-    .then((status) => {
-      switch (status) {
-        case "copied":
-          setStatus(`${label} copied.`);
-          break;
-        case "selected":
-          setStatus(`${label} selected for copy.`);
-          break;
-        case "failed":
-        default:
-          setStatus(`${label} could not be copied.`);
-          break;
-      }
-    });
-}
-
-async function writeClipboardText(value: string): Promise<ClipboardWriteStatus> {
-  const fallback = selectClipboardTextFallback(value);
-  if (fallback.copied) {
-    fallback.cleanup();
-    return "copied";
-  }
-  const clipboard = window.navigator.clipboard;
-  if (clipboard?.writeText) {
-    try {
-      await clipboard.writeText(value);
-      fallback.cleanup();
-      return "copied";
-    } catch {
-      return fallback.selected ? "selected" : "failed";
-    }
-  }
-  return fallback.selected ? "selected" : "failed";
-}
-
-function selectClipboardTextFallback(value: string): {
-  copied: boolean;
-  selected: boolean;
-  cleanup: () => void;
-} {
-  const input = document.createElement("textarea");
-  input.value = value;
-  input.setAttribute("readonly", "true");
-  input.style.position = "fixed";
-  input.style.left = "-9999px";
-  input.style.top = "0";
-  document.body.appendChild(input);
-  input.focus();
-  input.select();
-  const cleanup = () => {
-    if (document.body.contains(input)) {
-      document.body.removeChild(input);
-    }
-  };
-  try {
-    const copied = document.execCommand("copy");
-    if (!copied) {
-      window.setTimeout(cleanup, 5000);
-    }
-    return { copied, selected: true, cleanup };
-  } catch {
-    cleanup();
-    return { copied: false, selected: false, cleanup };
   }
 }

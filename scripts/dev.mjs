@@ -583,6 +583,7 @@ function writeLaunchEnv(paths, env) {
     DEBUG: "true",
     ...orderedEnv(env, persistedKeys),
     ANYHARNESS_DEV_URL: `http://127.0.0.1:${env.ANYHARNESS_PORT}`,
+    VITE_ANYHARNESS_DEV_URL: `http://127.0.0.1:${env.ANYHARNESS_PORT}`,
     VITE_PROLIFERATE_API_BASE_URL: `http://127.0.0.1:${env.PROLIFERATE_API_PORT}`,
     VITE_PROLIFERATE_WEB_BASE_URL: `http://127.0.0.1:${env.PROLIFERATE_HOSTED_WEB_PORT}`,
     EXPO_PUBLIC_PROLIFERATE_API_BASE_URL: `http://127.0.0.1:${env.PROLIFERATE_API_PORT}`,

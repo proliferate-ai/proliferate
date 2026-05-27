@@ -98,19 +98,19 @@ export function RedirectCallbackScreen({
   return (
     <div
       className={twMerge(
-        "flex min-h-screen items-center justify-center bg-background px-6 py-10 text-foreground",
+        "flex min-h-screen items-center justify-center bg-background p-8 text-foreground",
         className,
       )}
     >
-      <main className="w-full max-w-md">
+      <main className="w-full max-w-md space-y-8">
         {brandMark ? (
-          <div className="mb-10 flex items-center gap-3 text-foreground">
-            <span className="flex size-8 shrink-0 items-center justify-center">{brandMark}</span>
-            <span className="text-sm font-semibold">{brandLabel}</span>
+          <div className="flex items-center gap-3 text-foreground">
+            <span className="flex size-10 shrink-0 items-center justify-start">{brandMark}</span>
+            {brandLabel ? <span className="text-sm font-semibold">{brandLabel}</span> : null}
           </div>
         ) : null}
 
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div
             className={twMerge(
               "inline-flex max-w-full items-center gap-2 rounded-md px-2.5 py-1 text-xs font-medium",
@@ -121,8 +121,8 @@ export function RedirectCallbackScreen({
             <span className="min-w-0 truncate">{statusLabel}</span>
           </div>
 
-          <div className="space-y-3">
-            <h1 className="text-2xl font-semibold leading-tight text-foreground">{title}</h1>
+          <div className="space-y-2.5">
+            <h1 className="text-3xl font-semibold leading-tight text-foreground">{title}</h1>
             <p className="text-sm leading-6 text-muted-foreground">{description}</p>
             {detail ? (
               <p className="text-sm leading-6 text-muted-foreground">{detail}</p>
@@ -131,7 +131,7 @@ export function RedirectCallbackScreen({
         </div>
 
         {primaryAction || secondaryAction ? (
-          <div className="mt-8 flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-2 sm:flex-row">
             {primaryAction ? (
               <RedirectCallbackButton action={primaryAction} className="w-full sm:w-auto" />
             ) : null}

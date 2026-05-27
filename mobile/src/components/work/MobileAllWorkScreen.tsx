@@ -13,6 +13,7 @@ import type {
   CloudWorkOwnerFilter,
   CloudWorkSource,
   CloudWorkStatusFilter,
+  RecentWorkSourceKind,
 } from "@proliferate/product-model/workspaces/cloud-work-inventory";
 
 import { useMobileWorkInventory, type MobileWorkItem } from "../../hooks/work/derived/use-mobile-work-inventory";
@@ -181,11 +182,11 @@ function WorkRow({ item, onPress }: { item: MobileWorkItem; onPress: () => void 
     <MobileListRow
       leading={
         <View style={styles.iconBox}>
-          <SourceGlyph source={item.view.source} />
+          <SourceGlyph source={item.view.sourceKind} />
         </View>
       }
       title={item.view.title}
-      subtitle={`${item.view.repoLabel} - ${item.view.branchLabel}`}
+      subtitle={`${item.view.repoLabel} - ${item.view.branchLabel} - ${item.view.runtimeLocationLabel}`}
       trailing={
         <View style={styles.trailing}>
           <Text style={styles.last}>{item.view.lastActivityLabel}</Text>
@@ -204,7 +205,7 @@ function WorkRow({ item, onPress }: { item: MobileWorkItem; onPress: () => void 
               item.view.status === "active" && styles.statusTextActive,
               item.view.unclaimed && styles.statusTextUnclaimed,
             ]}>
-              {item.view.unclaimed ? "Claim" : item.view.statusLabel}
+              {item.view.unclaimed ? "Claim" : item.view.commandabilityLabel}
             </Text>
           </View>
         </View>
@@ -215,15 +216,43 @@ function WorkRow({ item, onPress }: { item: MobileWorkItem; onPress: () => void 
   );
 }
 
-function SourceGlyph({ source }: { source: CloudWorkSource }) {
+function SourceGlyph({ source }: { source: CloudWorkSource | RecentWorkSourceKind }) {
   const option = SOURCE_OPTIONS.find((candidate) => candidate.id === source);
+  const semanticIcon = semanticSourceIcon(source);
   return (
     <MobileIcon
-      name={option?.icon ?? "workspaces"}
+      name={option?.icon ?? semanticIcon}
       size={16}
       color={source === "slack" ? colors.success : colors.mutedForeground}
     />
   );
+}
+
+function semanticSourceIcon(source: CloudWorkSource | RecentWorkSourceKind): MobileIconName {
+  switch (source) {
+    case "desktop_exposed":
+      return "folder";
+    case "cloud_sandbox":
+      return "cloud";
+    case "web":
+      return "workspaces";
+    case "mobile":
+      return "smartphone";
+    case "personal_automation":
+    case "team_automation":
+      return "calendar-clock";
+    case "slack":
+      return "slack";
+    case "api":
+      return "cloud";
+    case "chats":
+      return "sessions";
+    case "automation":
+      return "calendar-clock";
+    case "unknown":
+    default:
+      return "workspaces";
+  }
 }
 
 function FilterSheet({

@@ -1,10 +1,15 @@
 import {
-  SESSION_CONTROL_PRESENTATIONS,
-  type ConfiguredSessionControlKey,
+  inferSessionControlPresentation,
+  isConfiguredSessionControlKey,
+  launchControlToConfiguredSessionControlValues as sharedLaunchControlToConfiguredSessionControlValues,
+  listConfiguredSessionControlValues,
+  resolveConfiguredSessionControlValue,
+  resolveEffectiveConfiguredSessionControlValue,
+  resolveSessionControlPresentation,
   type ConfiguredSessionControlValue,
   type SessionControlIconKey,
   type SessionControlTone,
-} from "@/lib/domain/chat/session-controls/presentation";
+} from "@proliferate/product-model/chats/session-controls/presentation";
 import type { DesktopAgentLaunchControl } from "@/lib/domain/agents/cloud-launch-catalog";
 
 export type SessionModeTone = SessionControlTone;
@@ -16,77 +21,11 @@ export interface SessionModePresentation {
   shortLabel?: string | null;
 }
 
-const FALLBACK_PRESENTATION: SessionModePresentation = {
-  icon: null,
-  tone: "neutral",
-  shortLabel: null,
-};
-
-const EMPTY_CONFIGURED_VALUES: ConfiguredSessionControlValue[] = [];
-
-export function listConfiguredSessionControlValues(
-  agentKind: string | null | undefined,
-  controlKey: ConfiguredSessionControlKey,
-): ConfiguredSessionControlValue[] {
-  if (!agentKind) {
-    return EMPTY_CONFIGURED_VALUES;
-  }
-
-  return SESSION_CONTROL_PRESENTATIONS[agentKind]?.[controlKey] ?? EMPTY_CONFIGURED_VALUES;
-}
-
-export function resolveConfiguredSessionControlValue(
-  agentKind: string | null | undefined,
-  controlKey: ConfiguredSessionControlKey,
-  value: string | null | undefined,
-): ConfiguredSessionControlValue | null {
-  if (!value) {
-    return null;
-  }
-
-  return listConfiguredSessionControlValues(agentKind, controlKey).find(
-    (candidate) => candidate.value === value,
-  ) ?? null;
-}
-
-export function resolveEffectiveConfiguredSessionControlValue(
-  agentKind: string | null | undefined,
-  controlKey: ConfiguredSessionControlKey,
-  preferredValue: string | null | undefined,
-): ConfiguredSessionControlValue | null {
-  const exactMatch = resolveConfiguredSessionControlValue(agentKind, controlKey, preferredValue);
-  if (exactMatch) {
-    return exactMatch;
-  }
-
-  const configuredValues = listConfiguredSessionControlValues(agentKind, controlKey);
-  return configuredValues.find((candidate) => candidate.isDefault)
-    ?? configuredValues[0]
-    ?? null;
-}
-
 export function launchControlToConfiguredSessionControlValues(
   agentKind: string | null | undefined,
   control: DesktopAgentLaunchControl | null | undefined,
 ): ConfiguredSessionControlValue[] {
-  if (!agentKind || !control || !isConfiguredSessionControlKey(control.key)) {
-    return EMPTY_CONFIGURED_VALUES;
-  }
-
-  const presentations = listConfiguredSessionControlValues(agentKind, control.key);
-  return control.values.map((value) => {
-    const presentation = presentations.find((candidate) => candidate.value === value.value);
-    const inferred = inferSessionControlPresentation(value.value);
-    return {
-      value: value.value,
-      label: value.label,
-      shortLabel: presentation?.shortLabel ?? value.label,
-      description: value.description ?? presentation?.description ?? null,
-      tone: presentation?.tone ?? inferred.tone,
-      icon: presentation?.icon ?? inferred.icon,
-      isDefault: value.isDefault,
-    };
-  });
+  return sharedLaunchControlToConfiguredSessionControlValues(agentKind, control);
 }
 
 export function withUpdatedDefaultSessionModeByAgentKind(
@@ -110,21 +49,6 @@ export function withUpdatedDefaultSessionModeByAgentKind(
   };
 }
 
-export function resolveSessionControlPresentation(
-  agentKind: string | null | undefined,
-  controlKey: ConfiguredSessionControlKey,
-  value: string | null | undefined,
-): SessionModePresentation {
-  const configured = resolveConfiguredSessionControlValue(agentKind, controlKey, value);
-  return configured
-    ? {
-      icon: configured.icon,
-      tone: configured.tone,
-      shortLabel: configured.shortLabel ?? null,
-    }
-    : FALLBACK_PRESENTATION;
-}
-
 export function getPreviousSessionModeValue(
   options: Array<{ value: string }>,
   currentValue: string | null,
@@ -141,37 +65,11 @@ export function getPreviousSessionModeValue(
   return options[currentIndex - 1]?.value ?? null;
 }
 
-function isConfiguredSessionControlKey(
-  key: DesktopAgentLaunchControl["key"],
-): key is ConfiguredSessionControlKey {
-  return key === "mode" || key === "collaboration_mode";
-}
-
-function inferSessionControlPresentation(value: string): {
-  tone: SessionControlTone;
-  icon: SessionControlIconKey;
-} {
-  const normalized = value.toLowerCase();
-  if (normalized.includes("plan")) {
-    return { tone: "accent", icon: "plan" };
-  }
-  if (
-    normalized.includes("yolo")
-    || normalized.includes("bypass")
-    || normalized.includes("full")
-  ) {
-    return { tone: "destructive", icon: "zap" };
-  }
-  if (
-    normalized.includes("auto")
-    || normalized.includes("agent")
-    || normalized.includes("build")
-    || normalized.includes("edit")
-  ) {
-    return { tone: "success", icon: "edit" };
-  }
-  if (normalized.includes("ask") || normalized.includes("read")) {
-    return { tone: "info", icon: "read" };
-  }
-  return { tone: "neutral", icon: "read" };
-}
+export {
+  inferSessionControlPresentation,
+  isConfiguredSessionControlKey,
+  listConfiguredSessionControlValues,
+  resolveConfiguredSessionControlValue,
+  resolveEffectiveConfiguredSessionControlValue,
+  resolveSessionControlPresentation,
+};

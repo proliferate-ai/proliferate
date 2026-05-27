@@ -325,17 +325,10 @@ export async function beginGitHubDesktopSignIn(
   redirectUri = DESKTOP_AUTH_REDIRECT_URI,
   options?: GitHubDesktopSignInOptions,
 ): Promise<void> {
-  const codeChallenge = await sha256Base64Url(codeVerifier)
-  const authorizeUrl = new URL(buildUrl("/auth/desktop/github/authorize"))
-  authorizeUrl.searchParams.set("state", state)
-  authorizeUrl.searchParams.set("code_challenge", codeChallenge)
-  authorizeUrl.searchParams.set("code_challenge_method", "S256")
-  authorizeUrl.searchParams.set("redirect_uri", redirectUri)
-  if (options?.prompt) {
-    authorizeUrl.searchParams.set("prompt", options.prompt)
-  }
-
-  await openAuthSessionUrl(authorizeUrl.toString())
+  await beginDesktopProviderAuth("github", state, codeVerifier, redirectUri, {
+    purpose: "login",
+    prompt: options?.prompt,
+  })
 }
 
 export async function beginDesktopProviderAuth(

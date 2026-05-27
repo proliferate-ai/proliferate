@@ -16,6 +16,7 @@ import {
 } from "@proliferate/cloud-sdk";
 
 import {
+  completeMobileWebOAuthFlow,
   runMobileAppleFlow,
   runMobileOAuthFlow,
 } from "../lib/access/cloud/auth/mobile-auth-flow";
@@ -201,6 +202,11 @@ export function useMobileAuth() {
 }
 
 async function bootstrapSession(): Promise<AuthSessionResponse | null> {
+  const mobileWebAuthSession = await completeMobileWebOAuthFlow();
+  if (mobileWebAuthSession) {
+    return mobileWebAuthSession;
+  }
+
   const devRefreshTokenFromLocation = readDevWebRefreshTokenFromLocation();
   if (await getSecureMobileStorageItem(SIGNED_OUT_KEY)) {
     if (devRefreshTokenFromLocation) {

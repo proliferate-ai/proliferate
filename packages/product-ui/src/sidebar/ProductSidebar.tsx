@@ -94,12 +94,16 @@ export interface ProductSidebarProps {
   brand?: ReactNode;
   title?: string;
   showHeader?: boolean;
+  headerLeadingAction?: SidebarActionView | null;
   headerAction?: SidebarActionView | null;
   navItems: SidebarNavItemView[];
   workspaceGroups: SidebarWorkspaceGroupView[];
   chatRows?: SidebarChatRowView[];
   account?: SidebarAccountView | null;
   footerActions?: SidebarActionView[];
+  workspaceSectionLabel?: string;
+  workspaceSectionActions?: ReactNode;
+  workspaceSectionPanel?: ReactNode;
   workspaceSectionMessage?: SidebarSectionMessageView | null;
   shortcutRevealVisible?: boolean;
   onNavSelect: (id: string) => void;
@@ -114,12 +118,16 @@ export function ProductSidebar({
   brand,
   title,
   showHeader,
+  headerLeadingAction = null,
   headerAction = null,
   navItems,
   workspaceGroups,
   chatRows = [],
   account = null,
   footerActions = [],
+  workspaceSectionLabel = "Repositories",
+  workspaceSectionActions = null,
+  workspaceSectionPanel = null,
   workspaceSectionMessage = null,
   shortcutRevealVisible = false,
   onNavSelect,
@@ -145,6 +153,7 @@ export function ProductSidebar({
         <ProductSidebarHeader
           brand={brand}
           title={title}
+          headerLeadingAction={headerLeadingAction}
           headerAction={headerAction}
           onAction={onAction}
         />
@@ -158,6 +167,9 @@ export function ProductSidebar({
 
         <ProductSidebarScrollableContent>
           <ProductSidebarRepositoriesSection
+            label={workspaceSectionLabel}
+            actions={workspaceSectionActions}
+            panel={workspaceSectionPanel}
             groups={workspaceGroups}
             message={workspaceSectionMessage}
             onGroupToggle={onGroupToggle}
@@ -298,16 +310,26 @@ export function ProductSidebarPrimaryNavigation({
 function ProductSidebarHeader({
   brand,
   title,
+  headerLeadingAction,
   headerAction,
   onAction,
 }: {
   brand?: ReactNode;
   title?: string;
+  headerLeadingAction?: SidebarActionView | null;
   headerAction?: SidebarActionView | null;
   onAction: (event: SidebarActionEvent) => void;
 }) {
   return (
-    <div className="flex h-10 shrink-0 items-center gap-2 px-3">
+    <div className="flex h-12 shrink-0 items-center gap-2 px-3">
+      {headerLeadingAction ? (
+        <SidebarActionIconButton
+          action={headerLeadingAction}
+          scope="header"
+          onAction={onAction}
+          alwaysVisible
+        />
+      ) : null}
       {brand ? (
         <div className="flex size-6 shrink-0 items-center justify-center rounded-md text-sidebar-foreground">
           {brand}
@@ -399,6 +421,9 @@ function ProductSidebarThreadSection({
 }
 
 function ProductSidebarRepositoriesSection({
+  label,
+  actions,
+  panel,
   groups,
   message,
   onGroupToggle,
@@ -406,6 +431,9 @@ function ProductSidebarRepositoriesSection({
   onAction,
   shortcutRevealVisible,
 }: {
+  label: string;
+  actions?: ReactNode;
+  panel?: ReactNode;
   groups: SidebarWorkspaceGroupView[];
   message?: SidebarSectionMessageView | null;
   onGroupToggle: (id: string) => void;
@@ -415,7 +443,12 @@ function ProductSidebarRepositoriesSection({
 }) {
   return (
     <section>
-      <ProductSidebarSectionHeader label="Repositories" />
+      <ProductSidebarSectionHeader label={label} actions={actions} />
+      {panel ? (
+        <div className="px-2 pb-1">
+          {panel}
+        </div>
+      ) : null}
       <div className="flex flex-col gap-px">
         {groups.length > 0 ? groups.map((group) => (
           <WorkspaceGroup
@@ -474,9 +507,9 @@ export function ProductSidebarSectionHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="pl-2 pt-3 pb-1 text-base leading-5 text-sidebar-muted-foreground opacity-75">
+    <div className="pl-2 pt-3 pb-1 text-base leading-5 text-sidebar-muted-foreground">
       <div className="flex items-center justify-between gap-2">
-        <span>{label}</span>
+        <span className="opacity-75">{label}</span>
         {actions ? (
           <div className="flex shrink-0 items-center gap-1">
             {actions}

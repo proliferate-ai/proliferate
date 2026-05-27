@@ -1,5 +1,10 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
+import {
+  AUTH_REQUIRED_GITHUB_COPY,
+  authProviderPresentation,
+} from "@proliferate/product-model/auth/presentation";
+
 import { MobileIcon } from "../primitives/MobileIcon";
 import { MobileProliferateMark } from "../primitives/MobileProliferateMark";
 import { colors, radius, spacing } from "../../styles/tokens";
@@ -20,12 +25,11 @@ export function MobileConnectGitHubScreen({
   return (
     <View style={styles.root}>
       <View style={styles.content}>
-        <MobileProliferateMark size={36} />
-        <Text style={styles.title}>Connect GitHub</Text>
-        <Text style={styles.body}>
-          Proliferate runs cloud sessions on your behalf. Linking GitHub gives
-          agents the access they need to read and modify your repos.
-        </Text>
+        <View style={styles.header}>
+          <MobileProliferateMark size={36} />
+          <Text style={styles.title}>{AUTH_REQUIRED_GITHUB_COPY.title}</Text>
+          <Text style={styles.body}>{AUTH_REQUIRED_GITHUB_COPY.subtitle}</Text>
+        </View>
 
         <View style={styles.actions}>
           <Pressable
@@ -44,7 +48,9 @@ export function MobileConnectGitHubScreen({
             ) : (
               <MobileIcon name="github" size={18} color={colors.background} />
             )}
-            <Text style={styles.primaryLabel}>Continue with GitHub</Text>
+            <Text style={styles.primaryLabel}>
+              {authProviderPresentation("github").actionLabel}
+            </Text>
           </Pressable>
 
           <Pressable
@@ -59,10 +65,7 @@ export function MobileConnectGitHubScreen({
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </View>
 
-      <Text style={styles.fineprint}>
-        We only request the permissions needed to materialize sandboxes and
-        push branches.
-      </Text>
+      <Text style={styles.fineprint}>{AUTH_REQUIRED_GITHUB_COPY.footer}</Text>
     </View>
   );
 }
@@ -77,24 +80,25 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    alignItems: "center",
+    alignItems: "stretch",
     justifyContent: "center",
+  },
+  header: {
+    alignItems: "flex-start",
+    gap: spacing[4],
   },
   title: {
     color: colors.fg,
-    fontSize: 24,
+    fontSize: 30,
     fontWeight: "600",
-    letterSpacing: -0.3,
-    marginTop: spacing[4],
-    textAlign: "center",
+    letterSpacing: -0.2,
+    lineHeight: 36,
   },
   body: {
     color: colors.mutedForeground,
     fontSize: 14.5,
-    lineHeight: 21,
-    marginTop: spacing[2],
-    textAlign: "center",
-    maxWidth: 320,
+    lineHeight: 22,
+    maxWidth: 340,
   },
   actions: {
     alignSelf: "stretch",
@@ -102,13 +106,13 @@ const styles = StyleSheet.create({
     marginTop: spacing[8],
   },
   primary: {
-    minHeight: 52,
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: spacing[2],
     backgroundColor: colors.fg,
-    borderRadius: radius.xl,
+    borderRadius: radius.md,
   },
   primaryLabel: {
     color: colors.background,
@@ -129,8 +133,7 @@ const styles = StyleSheet.create({
     color: colors.sidebarMutedForeground,
     fontSize: 11.5,
     lineHeight: 17,
-    textAlign: "center",
-    paddingHorizontal: spacing[4],
+    textAlign: "left",
   },
   pressed: {
     opacity: 0.78,
@@ -150,6 +153,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    textAlign: "center",
+    textAlign: "left",
   },
 });
