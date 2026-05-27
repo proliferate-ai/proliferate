@@ -163,8 +163,7 @@ async def _resume_target_runtime_environment(
             environment.active_sandbox_id = runtime_access.active_sandbox_id
             environment.runtime_url = runtime_access.anyharness_base_url or environment.runtime_url
             environment.runtime_token_ciphertext = (
-                runtime_access.runtime_token_ciphertext
-                or environment.runtime_token_ciphertext
+                runtime_access.runtime_token_ciphertext or environment.runtime_token_ciphertext
             )
             environment.anyharness_data_key_ciphertext = (
                 runtime_access.anyharness_data_key_ciphertext

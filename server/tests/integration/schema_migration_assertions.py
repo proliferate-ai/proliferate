@@ -687,9 +687,7 @@ async def assert_current_schema(
     router_materialization_indexes = await conn.run_sync(
         lambda sync_conn: {
             index["name"]
-            for index in inspect(sync_conn).get_indexes(
-                "agent_gateway_router_materialization"
-            )
+            for index in inspect(sync_conn).get_indexes("agent_gateway_router_materialization")
         }
     )
     assert {

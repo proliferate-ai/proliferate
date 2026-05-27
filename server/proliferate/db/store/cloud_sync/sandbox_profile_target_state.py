@@ -45,13 +45,10 @@ async def invalidate_applied_on_slot_replacement(
         sandbox_profile_id=sandbox_profile_id,
         target_id=target_id,
     )
-    slot_matches_state = (
-        replaced_sandbox_id is None
-        or (
-            state is not None
-            and state.active_sandbox_id == replaced_sandbox_id
-            and state.slot_generation == replaced_slot_generation
-        )
+    slot_matches_state = replaced_sandbox_id is None or (
+        state is not None
+        and state.active_sandbox_id == replaced_sandbox_id
+        and state.slot_generation == replaced_slot_generation
     )
     if state is not None and slot_matches_state:
         state.active_sandbox_id = None

@@ -488,9 +488,7 @@ class TestCloudBackfillApi:
             created_by_user_id=UUID(auth.user_id),
         )
         target = (
-            await db_session.execute(
-                select(CloudTarget).where(CloudTarget.id == UUID(target_id))
-            )
+            await db_session.execute(select(CloudTarget).where(CloudTarget.id == UUID(target_id)))
         ).scalar_one()
         target.sandbox_profile_id = profile.id
         target.profile_target_role = "none"

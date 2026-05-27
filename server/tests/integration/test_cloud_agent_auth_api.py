@@ -1101,10 +1101,7 @@ async def test_bifrost_worker_materialization_uses_direct_virtual_key_env(
     assert claude["baseUrls"]["anthropic"] == "https://bifrost.test/anthropic"
     assert claude["runtimeGrantToken"] == "sk-bf-runtime-1"
     assert claude["protectedEnv"]["ANTHROPIC_AUTH_TOKEN"] == ""
-    assert (
-        claude["protectedEnv"]["ANTHROPIC_CUSTOM_HEADERS"]
-        == "x-bf-vk: sk-bf-runtime-1"
-    )
+    assert claude["protectedEnv"]["ANTHROPIC_CUSTOM_HEADERS"] == "x-bf-vk: sk-bf-runtime-1"
     gemini = selections["gemini"]["gateway"]
     assert gemini["protocolFacade"] == "genai"
     assert gemini["baseUrls"]["genai"] == "https://bifrost.test/genai"
@@ -1521,8 +1518,7 @@ async def test_bifrost_selection_change_disables_old_runtime_virtual_key(
     await db_session.commit()
 
     name_prefix = (
-        f"proliferate-claude-{selection.id.hex[:12]}-"
-        f"{slot.id.hex[:12]}-{slot.slot_generation}-"
+        f"proliferate-claude-{selection.id.hex[:12]}-{slot.id.hex[:12]}-{slot.slot_generation}-"
     )
     assert all(item["name"].startswith(name_prefix) for item in fake_bifrost.virtual_keys)
     assert fake_bifrost.virtual_keys[0]["name"] != fake_bifrost.virtual_keys[1]["name"]

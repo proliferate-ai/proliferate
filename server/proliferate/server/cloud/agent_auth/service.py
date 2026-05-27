@@ -1045,10 +1045,7 @@ async def ensure_free_managed_credits_for_user(
             )
             existing_selection = existing_selections.get(agent_kind)
             should_select_managed_credential = existing_selection is None
-            if (
-                existing_selection is not None
-                and body.agent_kind == agent_kind
-            ):
+            if existing_selection is not None and body.agent_kind == agent_kind:
                 existing_credential = await store.get_credential(
                     db,
                     existing_selection.credential_id,
@@ -2583,10 +2580,7 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
         existing is not None
         and existing.status == "active"
         and existing.router_object_id
-        and (
-            existing.sync_fingerprint != fingerprint
-            or existing.sync_status != "synced"
-        )
+        and (existing.sync_fingerprint != fingerprint or existing.sync_status != "synced")
     ):
         await _disable_bifrost_virtual_key_materialization(
             db,
@@ -3449,9 +3443,7 @@ def _bifrost_managed_provider_key_plan(
 
 def _bifrost_provider_key_fingerprint(plan: dict[str, object]) -> str:
     payload = {
-        key: value
-        for key, value in plan.items()
-        if key not in {"value", "bedrock_key_config"}
+        key: value for key, value in plan.items() if key not in {"value", "bedrock_key_config"}
     }
     value = plan.get("value")
     if isinstance(value, str) and value:
@@ -3463,9 +3455,7 @@ def _bifrost_provider_key_fingerprint(plan: dict[str, object]) -> str:
             separators=(",", ":"),
             sort_keys=True,
         ).encode("utf-8")
-        payload["bedrock_key_config_sha256"] = hashlib.sha256(
-            encoded_bedrock_config
-        ).hexdigest()
+        payload["bedrock_key_config_sha256"] = hashlib.sha256(encoded_bedrock_config).hexdigest()
     encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
@@ -4566,13 +4556,10 @@ def _agent_auth_target_state_is_current(
     force_restart: bool,
     active_slot: cloud_sandboxes.SlotSnapshot | None = None,
 ) -> bool:
-    slot_matches = (
-        active_slot is None
-        or (
-            state is not None
-            and state.active_sandbox_id == active_slot.id
-            and state.slot_generation == active_slot.slot_generation
-        )
+    slot_matches = active_slot is None or (
+        state is not None
+        and state.active_sandbox_id == active_slot.id
+        and state.slot_generation == active_slot.slot_generation
     )
     return (
         not force_restart
