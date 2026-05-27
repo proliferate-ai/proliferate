@@ -31,9 +31,7 @@ class BifrostAdminClient:
     ) -> None:
         self._base_url = (base_url or settings.agent_gateway_bifrost_base_url).rstrip("/")
         self._admin_token = (
-            admin_token
-            if admin_token is not None
-            else settings.agent_gateway_bifrost_admin_token
+            admin_token if admin_token is not None else settings.agent_gateway_bifrost_admin_token
         )
         self._timeout_seconds = (
             timeout_seconds

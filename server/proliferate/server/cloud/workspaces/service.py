@@ -1053,9 +1053,7 @@ async def _resolve_new_direct_target_workspace_create(
         git_branch=cleaned_branch_name,
         git_base_branch=resolved_base_branch,
         display_name=(
-            body.display_name.strip()
-            if body.display_name and body.display_name.strip()
-            else None
+            body.display_name.strip() if body.display_name and body.display_name.strip() else None
         ),
         active_sandbox_count=0,
         selected_agent_kinds=(body.agent_kind,),

@@ -841,8 +841,7 @@ async def list_session_projections_for_workspace(
             query.order_by(
                 CloudSessionProjection.updated_at.desc(),
                 CloudSessionProjection.last_event_seq.desc(),
-            )
-            .limit(limit)
+            ).limit(limit)
         )
     ).scalars()
     return tuple(_session_snapshot(row) for row in rows)

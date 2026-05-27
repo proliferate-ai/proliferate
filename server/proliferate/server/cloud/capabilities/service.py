@@ -34,9 +34,7 @@ def cloud_capabilities() -> CloudCapabilitiesResponse:
     topology = "bifrost"
     route_isolation = "bifrost_virtual_key"
     live_proof_status = (
-        "passed"
-        if settings.agent_gateway_bifrost_isolation_verified
-        else "not_run"
+        "passed" if settings.agent_gateway_bifrost_isolation_verified else "not_run"
     )
     route_isolation_ready = gateway_route_isolation_ready(
         bifrost_isolation_verified=settings.agent_gateway_bifrost_isolation_verified,

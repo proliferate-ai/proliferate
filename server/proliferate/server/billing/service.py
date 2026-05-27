@@ -726,9 +726,7 @@ def _with_billing_return_surface(url: str, return_surface: BillingReturnSurface)
     params = parse_qsl(parts.query, keep_blank_values=True)
     params = [(key, value) for key, value in params if key != "returnSurface"]
     params.append(("returnSurface", return_surface))
-    return urlunsplit(
-        (parts.scheme, parts.netloc, parts.path, urlencode(params), parts.fragment)
-    )
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(params), parts.fragment))
 
 
 def _require_redirect_urls(
