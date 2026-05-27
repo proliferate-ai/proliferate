@@ -96,6 +96,10 @@ from proliferate.db.store.cloud_workspaces import (
 )
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError
 from proliferate.integrations.sandbox import get_configured_sandbox_provider, get_sandbox_provider
+from proliferate.server.automations.domain.claim_lifecycle import (
+    CLOUD_WORKSPACE_CREATION_TRANSITION,
+    claim_is_active,
+)
 from proliferate.server.automations.worker.cloud_execution.command_models import (
     EnsureRepoCheckoutPayload,
     MaterializeWorkspacePayload,
@@ -107,11 +111,8 @@ from proliferate.server.automations.worker.cloud_execution.commands import (
     parse_start_session_result,
 )
 from proliferate.server.automations.worker.cloud_executor_commands import (
+    AutomationCommandResult,
     wait_for_command_result,
-)
-from proliferate.server.automations.domain.claim_lifecycle import (
-    CLOUD_WORKSPACE_CREATION_TRANSITION,
-    claim_is_active,
 )
 from proliferate.server.billing.models import BillingSnapshot, SandboxStartAuthorization
 from proliferate.server.billing.service import (
@@ -167,9 +168,9 @@ from proliferate.server.cloud.workspaces.models import (
     WorkspaceCreatorContext,
     WorkspaceDetail,
     WorkspaceDirectTargetContext,
+    WorkspaceSummary,
     WorkspaceTargetLaunchCommandIds,
     WorkspaceTargetLaunchResponse,
-    WorkspaceSummary,
     runtime_auth_payload,
     workspace_detail_payload,
     workspace_summary_payload,
@@ -1096,7 +1097,7 @@ async def _enqueue_target_launch_command(
     idempotency_key: str,
     source: str,
     session_id: str | None = None,
-):
+) -> command_store.CloudCommandSnapshot:
     command = await enqueue_command(
         db,
         user=user,
@@ -1116,7 +1117,11 @@ async def _enqueue_target_launch_command(
     return command
 
 
-async def _wait_for_target_launch_command(command, *, workspace_id: UUID):
+async def _wait_for_target_launch_command(
+    command: command_store.CloudCommandSnapshot,
+    *,
+    workspace_id: UUID,
+) -> AutomationCommandResult:
     del workspace_id
     return await wait_for_command_result(
         command,
