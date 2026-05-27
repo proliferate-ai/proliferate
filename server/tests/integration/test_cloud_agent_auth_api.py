@@ -920,6 +920,16 @@ async def test_managed_credits_route_uses_server_entitlement_budget(
         "agent_gateway_managed_budget_free_usd",
         "12.50",
     )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_managed_credit_agent_kinds",
+        "claude",
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_managed_anthropic_api_key",
+        "sk-ant-managed-test",
+    )
     tokens = await _create_user_and_get_tokens(
         client,
         db_session,
