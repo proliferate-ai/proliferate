@@ -766,7 +766,7 @@ protectedEnv:
   CODEX_API_KEY = {runtime_grant}
 
 protectedConfig.codex:
-  model_provider_id = "proliferate"
+  model_provider = "proliferate"
   model_providers.proliferate.base_url = {gateway}/openai/v1
   model_providers.proliferate.env_key = "CODEX_API_KEY"
   model_providers.proliferate.wire_api = "responses"
@@ -905,7 +905,7 @@ It sets CODEX_HOME to runtime_home/agent-auth/codex
 This matches Codex's provider config shape:
 
 ```toml
-model_provider_id = "proliferate"
+model_provider = "proliferate"
 
 [model_providers.proliferate]
 name = "Proliferate Gateway"

@@ -114,6 +114,7 @@ _CLEANUP_SELECTION_ERROR_CODES = {
     "credential_revoked",
     "credential_share_revoked",
 }
+_MANAGED_CODEX_HOME = "/home/user/.proliferate/anyharness/agent-auth/codex"
 _OPENCODE_ALLOWED_AUTH_FILES: frozenset[str] = frozenset({".config/opencode/auth.json"})
 _TERMINAL_AGENT_AUTH_REFRESH_COMMAND_STATUSES = frozenset(
     {
@@ -653,10 +654,7 @@ async def ensure_managed_credits_for_organization(
     managed_deployments = tuple(
         deployment
         for agent_kind in requested_agent_kinds
-        for deployment in _gateway_deployments_for_credential(
-            agent_kind=agent_kind,
-            provider_kind="proliferate_bedrock_pool",
-        )
+        for deployment in _managed_credit_deployments_for_agent(agent_kind)[1]
     )
     initial_error_code = (
         "managed_credit_models_not_configured"
@@ -692,10 +690,8 @@ async def ensure_managed_credits_for_organization(
     credentials: list[AgentAuthCredentialRecord] = []
     policies: list[AgentGatewayPolicyRecord] = []
     for agent_kind in requested_agent_kinds:
-        if not _gateway_deployments_for_credential(
-            agent_kind=agent_kind,
-            provider_kind="proliferate_bedrock_pool",
-        ):
+        provider_kind, deployments = _managed_credit_deployments_for_agent(agent_kind)
+        if not deployments:
             continue
         credential = await store.get_managed_gateway_credential(
             db,
@@ -714,7 +710,7 @@ async def ensure_managed_credits_for_organization(
                 display_name="Proliferate managed credits",
                 redacted_summary_json=json.dumps(
                     {
-                        "providerKind": "proliferate_bedrock_pool",
+                        "providerKind": provider_kind,
                         "budgetSubjectId": str(budget.id),
                     },
                     sort_keys=True,
@@ -882,10 +878,7 @@ async def ensure_free_managed_credits_for_user(
     managed_deployments = tuple(
         deployment
         for agent_kind in requested_agent_kinds
-        for deployment in _gateway_deployments_for_credential(
-            agent_kind=agent_kind,
-            provider_kind="proliferate_bedrock_pool",
-        )
+        for deployment in _managed_credit_deployments_for_agent(agent_kind)[1]
     )
     sync_status = "failed"
     status = "invalid"
@@ -897,7 +890,7 @@ async def ensure_free_managed_credits_for_user(
             policy_kind="proliferate_managed",
             router_object_id=existing_budget.litellm_team_id,
             budget_subject_id=None,
-            provider_kind="proliferate_bedrock_pool",
+            provider_kind="proliferate_managed",
             deployments=managed_deployments,
         )
         if (
@@ -961,10 +954,7 @@ async def ensure_free_managed_credits_for_user(
         for selection in await store.list_selections_for_profile(db, profile.id)
     }
     for agent_kind in requested_agent_kinds:
-        deployments = _gateway_deployments_for_credential(
-            agent_kind=agent_kind,
-            provider_kind="proliferate_bedrock_pool",
-        )
+        provider_kind, deployments = _managed_credit_deployments_for_agent(agent_kind)
         if not deployments:
             continue
         credential = await store.get_managed_gateway_credential_for_owner(
@@ -976,7 +966,7 @@ async def ensure_free_managed_credits_for_user(
         )
         redacted_summary_json = json.dumps(
             {
-                "providerKind": "proliferate_bedrock_pool",
+                "providerKind": provider_kind,
                 "budgetSubjectId": str(budget.id),
                 "freeCreditEntitlementId": str(entitlement.id),
             },
@@ -1045,15 +1035,31 @@ async def ensure_free_managed_credits_for_user(
             )
             existing_selection = existing_selections.get(agent_kind)
             should_select_managed_credential = existing_selection is None
-            if existing_selection is not None and body.agent_kind == agent_kind:
+            if existing_selection is not None:
                 existing_credential = await store.get_credential(
                     db,
                     existing_selection.credential_id,
                 )
-                should_select_managed_credential = (
+                existing_is_managed_gateway = (
+                    existing_credential is not None
+                    and existing_credential.credential_kind == "managed_gateway"
+                )
+                managed_selection_needs_refresh = existing_is_managed_gateway and (
+                    existing_selection.status != "active"
+                    or existing_selection.credential_id != credential.id
+                    or existing_selection.credential_share_id is not None
+                    or existing_selection.materialization_mode != "gateway_env"
+                    or existing_selection.selected_revision != credential.revision
+                    or existing_selection.last_error_code is not None
+                    or existing_selection.last_error_message is not None
+                )
+                explicit_agent_refresh = body.agent_kind == agent_kind and (
                     existing_credential is None
                     or existing_credential.credential_kind != "managed_gateway"
                     or existing_selection.credential_id != credential.id
+                )
+                should_select_managed_credential = (
+                    managed_selection_needs_refresh or explicit_agent_refresh
                 )
             if should_select_managed_credential:
                 await select_credential_for_profile(
@@ -2670,8 +2676,8 @@ async def _bifrost_provider_key_for_policy(
     policy: AgentGatewayPolicyRecord,
     agent_kind: str,
 ) -> dict[str, object]:
-    provider_kind = "proliferate_bedrock_pool"
     if policy.policy_kind == "proliferate_managed":
+        provider_kind = _managed_credit_provider_kind_for_agent(agent_kind)
         if policy.budget_subject_id is None:
             raise AgentAuthError(
                 "Managed gateway policy is missing a budget subject.",
@@ -2703,7 +2709,7 @@ async def _bifrost_provider_key_for_policy(
             )
         deployments = _gateway_deployments_for_credential(
             agent_kind=agent_kind,
-            provider_kind="proliferate_bedrock_pool",
+            provider_kind=provider_kind,
         )
         if not deployments:
             raise AgentAuthError(
@@ -2715,8 +2721,9 @@ async def _bifrost_provider_key_for_policy(
             db,
             budget=budget,
             deployments=deployments,
+            provider_kind=provider_kind,
         )
-        provider = _bifrost_managed_provider_name()
+        provider = _bifrost_provider_name_for_provider_kind(provider_kind)
     else:
         provider_credential = await store.get_provider_credential_for_policy(db, policy.id)
         if provider_credential is None:
@@ -2853,14 +2860,20 @@ async def _worker_gateway_config(
             baseUrls={"openai": facade_base},
             runtimeGrantToken=result.virtual_key,
             expiresAt=result.expires_at_iso,
-            protectedEnv={"CODEX_API_KEY": result.virtual_key},
+            protectedEnv={
+                "CODEX_API_KEY": result.virtual_key,
+                "OPENAI_API_KEY": result.virtual_key,
+                "CODEX_HOME": _MANAGED_CODEX_HOME,
+            },
             supportEnv={},
             protectedConfig={
                 "codex": {
-                    "model_provider_id": "proliferate-bifrost",
+                    "openai_base_url": facade_base,
+                    "env_key": "CODEX_API_KEY",
+                    "model_provider": "proliferate",
                     "model_providers": {
-                        "proliferate-bifrost": {
-                            "name": "Proliferate Bifrost",
+                        "proliferate": {
+                            "name": "Proliferate Gateway",
                             "base_url": facade_base,
                             "env_key": "CODEX_API_KEY",
                             "wire_api": "responses",
@@ -3033,8 +3046,22 @@ async def _reconcile_bifrost_managed_budget_subject(
         entitlement_period_key = budget.entitlement_period_key
         budget_duration = budget.budget_duration or AGENT_GATEWAY_BUDGET_DURATION_V1
 
-    deployments = _bifrost_deployments_for_managed_credits()
-    if not deployments:
+    managed_provider_plans: list[
+        tuple[str, tuple[GatewayModelDeploymentRequest, ...]]
+    ] = []
+    seen_provider_kinds: set[str] = set()
+    for agent_kind in _managed_credit_agent_kinds():
+        provider_kind = _managed_credit_provider_kind_for_agent(agent_kind)
+        if provider_kind in seen_provider_kinds:
+            continue
+        deployments = _gateway_deployments_for_credential(
+            agent_kind=agent_kind,
+            provider_kind=provider_kind,
+        )
+        if deployments:
+            managed_provider_plans.append((provider_kind, deployments))
+            seen_provider_kinds.add(provider_kind)
+    if not managed_provider_plans:
         return await _mark_bifrost_budget_failed(
             db,
             budget=budget,
@@ -3054,12 +3081,18 @@ async def _reconcile_bifrost_managed_budget_subject(
     router_object_id = budget.litellm_team_id
     if settings.agent_gateway_enabled and _bifrost_admin_ready():
         try:
-            materialization = await _ensure_bifrost_provider_key_for_managed_budget(
-                db,
-                budget=budget,
-                deployments=deployments,
+            materializations = [
+                await _ensure_bifrost_provider_key_for_managed_budget(
+                    db,
+                    budget=budget,
+                    deployments=deployments,
+                    provider_kind=provider_kind,
+                )
+                for provider_kind, deployments in managed_provider_plans
+            ]
+            router_object_id = (
+                materializations[0].router_object_id if materializations else None
             )
-            router_object_id = materialization.router_object_id
             used = await store.sum_llm_usage_cost_for_budget_subject(
                 db,
                 budget_subject_id=budget.id,
@@ -3070,7 +3103,9 @@ async def _reconcile_bifrost_managed_budget_subject(
                 if Decimal(included_budget_usd) <= 0 or used >= Decimal(included_budget_usd)
                 else "ready"
             )
-            fingerprint = materialization.sync_fingerprint
+            fingerprint = _managed_budget_provider_keys_fingerprint(
+                materializations
+            )
             error_code = None
             error_message = None
         except (BifrostIntegrationError, AgentAuthError) as exc:
@@ -3135,13 +3170,17 @@ async def _ensure_bifrost_provider_key_for_managed_budget(
     *,
     budget: AgentGatewayBudgetSubjectRecord,
     deployments: Sequence[GatewayModelDeploymentRequest],
+    provider_kind: str,
 ) -> store.AgentGatewayRouterMaterializationRecord:
     key_plan = _bifrost_provider_key_plan(
-        provider_kind="proliferate_bedrock_pool",
+        provider_kind=provider_kind,
         provider_payload={},
         deployments=deployments,
         object_id=str(budget.id),
-        display_name=f"Proliferate managed credits {budget.id}",
+        display_name=(
+            "Proliferate managed "
+            f"{_managed_provider_display_label(provider_kind)} credits {budget.id}"
+        ),
     )
     fingerprint = _bifrost_provider_key_fingerprint(key_plan)
     existing = await store.get_router_materialization_by_object_id(
@@ -3320,8 +3359,14 @@ def _bifrost_provider_key_plan(
     display_name: str,
 ) -> dict[str, object]:
     models = [deployment.provider_model for deployment in deployments]
-    if provider_kind == "proliferate_bedrock_pool":
+    if provider_kind in {
+        "proliferate_bedrock_pool",
+        "proliferate_managed_anthropic",
+        "proliferate_managed_openai",
+        "proliferate_managed_gemini",
+    }:
         return _bifrost_managed_provider_key_plan(
+            provider_kind=provider_kind,
             object_id=object_id,
             display_name=display_name,
             models=models,
@@ -3373,7 +3418,13 @@ def _bifrost_provider_key_plan(
 
 def _bifrost_provider_name_for_provider_kind(provider_kind: str) -> str:
     if provider_kind == "proliferate_bedrock_pool":
-        return _bifrost_managed_provider_name()
+        return "bedrock"
+    if provider_kind == "proliferate_managed_anthropic":
+        return "anthropic"
+    if provider_kind == "proliferate_managed_openai":
+        return "openai"
+    if provider_kind == "proliferate_managed_gemini":
+        return "gemini"
     if provider_kind == "anthropic_api_key":
         return "anthropic"
     if provider_kind == "openai_api_key":
@@ -3385,15 +3436,34 @@ def _bifrost_provider_name_for_provider_kind(provider_kind: str) -> str:
     raise BifrostIntegrationError(f"Provider kind is not supported by Bifrost: {provider_kind}.")
 
 
+def _managed_provider_display_label(provider_kind: str) -> str:
+    if provider_kind == "proliferate_bedrock_pool":
+        return "Bedrock"
+    if provider_kind == "proliferate_managed_anthropic":
+        return "Anthropic"
+    if provider_kind == "proliferate_managed_openai":
+        return "OpenAI"
+    if provider_kind == "proliferate_managed_gemini":
+        return "Gemini"
+    raise BifrostIntegrationError(
+        f"Provider kind is not supported by managed credits: {provider_kind}."
+    )
+
+
 def _bifrost_managed_provider_key_plan(
     *,
+    provider_kind: str,
     object_id: str,
     display_name: str,
     models: Sequence[str],
 ) -> dict[str, object]:
+    provider_slug = provider_kind.removeprefix("proliferate_managed_").replace("_", "-")
+    key_id_prefix = f"proliferate-managed-{provider_slug}"
+    if provider_kind == "proliferate_bedrock_pool":
+        key_id_prefix = "proliferate-managed-bedrock"
     region = settings.agent_gateway_managed_bedrock_region.strip()
     role_arn = settings.agent_gateway_managed_bedrock_role_arn.strip()
-    if region and role_arn:
+    if provider_kind == "proliferate_bedrock_pool" and region and role_arn:
         config: dict[str, object] = {
             "role_arn": bifrost_env_var(role_arn),
             "region": bifrost_env_var(region),
@@ -3404,41 +3474,52 @@ def _bifrost_managed_provider_key_plan(
             config["external_id"] = bifrost_env_var(external_id)
         return {
             "provider": "bedrock",
-            "key_id": f"proliferate-managed-{object_id}",
+            "key_id": f"{key_id_prefix}-{object_id}",
             "name": display_name,
             "value": None,
             "models": list(models),
             "aliases": {},
             "bedrock_key_config": config,
         }
-    if settings.agent_gateway_managed_anthropic_api_key.strip():
+    if (
+        provider_kind == "proliferate_managed_anthropic"
+        and settings.agent_gateway_managed_anthropic_api_key.strip()
+    ):
         return {
             "provider": "anthropic",
-            "key_id": f"proliferate-managed-{object_id}",
+            "key_id": f"{key_id_prefix}-{object_id}",
             "name": display_name,
             "value": settings.agent_gateway_managed_anthropic_api_key.strip(),
             "models": list(models),
             "aliases": {},
         }
-    if settings.agent_gateway_managed_openai_api_key.strip():
+    if (
+        provider_kind == "proliferate_managed_openai"
+        and settings.agent_gateway_managed_openai_api_key.strip()
+    ):
         return {
             "provider": "openai",
-            "key_id": f"proliferate-managed-{object_id}",
+            "key_id": f"{key_id_prefix}-{object_id}",
             "name": display_name,
             "value": settings.agent_gateway_managed_openai_api_key.strip(),
             "models": list(models),
             "aliases": {},
         }
-    if settings.agent_gateway_managed_gemini_api_key.strip():
+    if (
+        provider_kind == "proliferate_managed_gemini"
+        and settings.agent_gateway_managed_gemini_api_key.strip()
+    ):
         return {
             "provider": "gemini",
-            "key_id": f"proliferate-managed-{object_id}",
+            "key_id": f"{key_id_prefix}-{object_id}",
             "name": display_name,
             "value": settings.agent_gateway_managed_gemini_api_key.strip(),
             "models": list(models),
             "aliases": {},
         }
-    raise BifrostIntegrationError("No managed provider credential is configured for Bifrost.")
+    raise BifrostIntegrationError(
+        f"No managed provider credential is configured for Bifrost provider kind: {provider_kind}."
+    )
 
 
 def _bifrost_provider_key_fingerprint(plan: dict[str, object]) -> str:
@@ -3483,22 +3564,67 @@ def _bifrost_virtual_key_fingerprint(
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _bifrost_deployments_for_managed_credits() -> tuple[GatewayModelDeploymentRequest, ...]:
-    provider = _bifrost_managed_provider_name()
-    if provider == "openai":
-        model = "gpt-5.5"
-    elif provider == "gemini":
-        model = "gemini-2.5-pro"
-    elif provider == "anthropic":
-        model = "claude-sonnet-4-6"
-    else:
-        model = "us.anthropic.claude-sonnet-4-6"
-    return (
-        GatewayModelDeploymentRequest(
-            publicModelName=model,
-            providerModel=model,
-        ),
-    )
+def _managed_budget_provider_keys_fingerprint(
+    materializations: Sequence[store.AgentGatewayRouterMaterializationRecord],
+) -> str | None:
+    if not materializations:
+        return None
+    payload = [
+        {
+            "routerObjectId": materialization.router_object_id,
+            "syncFingerprint": materialization.sync_fingerprint,
+        }
+        for materialization in sorted(
+            materializations,
+            key=lambda item: item.router_object_id or "",
+        )
+    ]
+    encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _bifrost_deployments_for_managed_credits(
+    *,
+    agent_kind: str,
+    provider_kind: str,
+) -> tuple[GatewayModelDeploymentRequest, ...]:
+    if agent_kind == "claude":
+        if provider_kind == "proliferate_bedrock_pool":
+            return (
+                GatewayModelDeploymentRequest(
+                    publicModelName="us.anthropic.claude-sonnet-4-6",
+                    providerModel="us.anthropic.claude-sonnet-4-6",
+                ),
+            )
+        if provider_kind == "proliferate_managed_anthropic":
+            return (
+                GatewayModelDeploymentRequest(
+                    publicModelName="claude-sonnet-4-6",
+                    providerModel="claude-sonnet-4-6",
+                ),
+            )
+    if agent_kind == "codex" and provider_kind == "proliferate_managed_openai":
+        return (
+            GatewayModelDeploymentRequest(
+                publicModelName="gpt-5.5",
+                providerModel="gpt-5.5",
+            ),
+        )
+    if agent_kind == "opencode" and provider_kind == "proliferate_managed_openai":
+        return (
+            GatewayModelDeploymentRequest(
+                publicModelName="opencode/big-pickle",
+                providerModel="gpt-5.5",
+            ),
+        )
+    if agent_kind == "gemini" and provider_kind == "proliferate_managed_gemini":
+        return (
+            GatewayModelDeploymentRequest(
+                publicModelName="gemini-2.5-pro",
+                providerModel="gemini-2.5-pro",
+            ),
+        )
+    return ()
 
 
 def _bifrost_managed_provider_name() -> str:
@@ -3891,13 +4017,16 @@ def _gateway_deployments_for_credential(
     agent_kind: str,
     provider_kind: str,
 ) -> tuple[GatewayModelDeploymentRequest, ...]:
-    if provider_kind == "proliferate_bedrock_pool" and agent_kind in {
-        "claude",
-        "codex",
-        "opencode",
-        "gemini",
+    if provider_kind in {
+        "proliferate_bedrock_pool",
+        "proliferate_managed_anthropic",
+        "proliferate_managed_openai",
+        "proliferate_managed_gemini",
     }:
-        return _bifrost_deployments_for_managed_credits()
+        return _bifrost_deployments_for_managed_credits(
+            agent_kind=agent_kind,
+            provider_kind=provider_kind,
+        )
     if agent_kind == "claude":
         if provider_kind in {"bedrock_assume_role", "proliferate_bedrock_pool"}:
             return (
@@ -4636,9 +4765,69 @@ def _managed_credit_agent_kinds() -> tuple[CloudAgentKind, ...]:
         if item.strip()
     ]
     agent_kinds = tuple(
-        item for item in configured if item in {"claude", "codex", "opencode", "gemini"}
+        item
+        for item in configured
+        if item in {"claude", "codex", "opencode", "gemini"}
+        and _managed_credit_agent_kind_has_provider(item)
     )
-    return agent_kinds or _DEFAULT_MANAGED_CREDIT_AGENT_KINDS
+    if agent_kinds:
+        return agent_kinds
+    if not configured:
+        return tuple(
+            item
+            for item in _DEFAULT_MANAGED_CREDIT_AGENT_KINDS
+            if _managed_credit_agent_kind_has_provider(item)
+        )
+    return ()
+
+
+def _managed_credit_agent_kind_has_provider(agent_kind: str) -> bool:
+    if agent_kind == "claude":
+        return bool(
+            (
+                settings.agent_gateway_managed_bedrock_region.strip()
+                and settings.agent_gateway_managed_bedrock_role_arn.strip()
+            )
+            or settings.agent_gateway_managed_anthropic_api_key.strip()
+        )
+    if agent_kind in {"codex", "opencode"}:
+        return bool(settings.agent_gateway_managed_openai_api_key.strip())
+    if agent_kind == "gemini":
+        return bool(settings.agent_gateway_managed_gemini_api_key.strip())
+    return False
+
+
+def _managed_credit_provider_kind_for_agent(agent_kind: str) -> str:
+    if agent_kind == "claude":
+        if (
+            settings.agent_gateway_managed_bedrock_region.strip()
+            and settings.agent_gateway_managed_bedrock_role_arn.strip()
+        ):
+            return "proliferate_bedrock_pool"
+        if settings.agent_gateway_managed_anthropic_api_key.strip():
+            return "proliferate_managed_anthropic"
+    elif agent_kind in {"codex", "opencode"}:
+        if settings.agent_gateway_managed_openai_api_key.strip():
+            return "proliferate_managed_openai"
+    elif agent_kind == "gemini":
+        if settings.agent_gateway_managed_gemini_api_key.strip():
+            return "proliferate_managed_gemini"
+    raise AgentAuthError(
+        "No managed-credit provider is configured for this agent.",
+        code="managed_credit_provider_not_configured",
+        status_code=409,
+    )
+
+
+def _managed_credit_deployments_for_agent(
+    agent_kind: str,
+) -> tuple[str, tuple[GatewayModelDeploymentRequest, ...]]:
+    provider_kind = _managed_credit_provider_kind_for_agent(agent_kind)
+    deployments = _gateway_deployments_for_credential(
+        agent_kind=agent_kind,
+        provider_kind=provider_kind,
+    )
+    return provider_kind, deployments
 
 
 def _user_free_credit_period_key() -> str:

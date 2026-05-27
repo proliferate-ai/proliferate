@@ -231,6 +231,75 @@ class TestCloudEventSyncApi:
         assert duplicate_mismatch.json()["detail"]["code"] == "cloud_event_duplicate_mismatch"
 
     @pytest.mark.asyncio
+    async def test_worker_error_event_unblocks_session_projection(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-event-sync-error",
+        )
+        target_id, worker_headers = await create_enrolled_target(client, db_session, auth)
+        await seed_exposed_session_projection(
+            db_session,
+            target_id=target_id,
+            auth=auth,
+            workspace_id="workspace-error",
+            session_id="session-error",
+        )
+
+        uploaded = await client.post(
+            "/v1/cloud/worker/events/batches",
+            headers=worker_headers,
+            json={
+                "events": [
+                    {
+                        "workspaceId": "workspace-error",
+                        "sessionId": "session-error",
+                        "seq": 1,
+                        "timestamp": "2026-05-13T00:00:00Z",
+                        "event": {
+                            "type": "session_started",
+                            "nativeSessionId": "native-error",
+                            "sourceAgentKind": "codex",
+                        },
+                    },
+                    {
+                        "workspaceId": "workspace-error",
+                        "sessionId": "session-error",
+                        "seq": 2,
+                        "timestamp": "2026-05-13T00:00:01Z",
+                        "event": {"type": "turn_started"},
+                    },
+                    {
+                        "workspaceId": "workspace-error",
+                        "sessionId": "session-error",
+                        "seq": 3,
+                        "timestamp": "2026-05-13T00:00:02Z",
+                        "event": {
+                            "type": "error",
+                            "message": "agent request failed",
+                        },
+                    },
+                ]
+            },
+        )
+        assert uploaded.status_code == 200
+        assert uploaded.json()["acceptedEvents"] == 3
+
+        snapshot = await client.get(
+            f"/v1/cloud/sessions/session-error/snapshot?targetId={target_id}",
+            headers=auth.headers,
+        )
+        assert snapshot.status_code == 200
+        session = snapshot.json()["session"]
+        assert session["status"] == "idle"
+        assert session["phase"] == "idle"
+        assert session["lastEventSeq"] == 3
+
+    @pytest.mark.asyncio
     async def test_worker_event_batch_discards_revoked_exposure_projection(
         self,
         client: AsyncClient,

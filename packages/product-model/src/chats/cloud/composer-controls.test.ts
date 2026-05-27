@@ -7,6 +7,7 @@ import {
   resolveCloudLaunchSelection,
   type CloudLaunchComposerSelection,
 } from "./composer-controls";
+import { resolveCloudHarnessAvailability } from "./harness-availability";
 
 type Catalog = NonNullable<Parameters<typeof buildCloudLaunchComposerControls>[0]["catalog"]>;
 type ChatControlsInput = Parameters<typeof buildCloudChatComposerControls>[0];
@@ -201,11 +202,22 @@ function multiAgentCatalog(): Catalog {
   const catalog = claudeCatalog() as unknown as {
     agents: Array<{
       session: {
+        modelDisplayPolicy: Catalog["agents"][number]["session"]["modelDisplayPolicy"];
         models: unknown[];
       };
     }>;
   };
 
+  if (catalog.agents[0]) {
+    catalog.agents[0].session.modelDisplayPolicy = {
+      defaultVisibleModelIds: [
+        "us.anthropic.claude-opus-4-6",
+        "us.anthropic.claude-sonnet-4-6",
+      ],
+      allowUserVisibleModelSelection: true,
+      moreModelsSource: "none",
+    };
+  }
   catalog.agents[0]?.session.models.push({
     id: "us.anthropic.claude-sonnet-4-6",
     displayName: "Claude Sonnet 4.6",
@@ -214,6 +226,20 @@ function multiAgentCatalog(): Catalog {
     status: "active",
     isDefault: false,
     defaultOptIn: null,
+    provider: "anthropic",
+    tags: [],
+    capabilities: null,
+    compatibility: null,
+    launchRemediation: null,
+  });
+  catalog.agents[0]?.session.models.push({
+    id: "us.anthropic.claude-hidden-4-6",
+    displayName: "Claude Hidden 4.6",
+    description: null,
+    aliases: [],
+    status: "active",
+    isDefault: false,
+    defaultOptIn: false,
     provider: "anthropic",
     tags: [],
     capabilities: null,
@@ -291,6 +317,15 @@ function claudeSession(modelId: string): NonNullable<ChatControlsInput["session"
   } as unknown as NonNullable<ChatControlsInput["session"]>;
 }
 
+function claudeSessionWithoutSourceAgentKind(
+  modelId: string,
+): NonNullable<ChatControlsInput["session"]> {
+  return {
+    sessionId: "session-1",
+    liveConfig: liveConfigWithModel(modelId),
+  } as unknown as NonNullable<ChatControlsInput["session"]>;
+}
+
 describe("buildCloudLaunchComposerControls", () => {
   it("shows queueable session controls before launch", () => {
     const catalog = claudeCatalog();
@@ -356,6 +391,83 @@ describe("buildCloudLaunchComposerControls", () => {
       agentKind: "claude",
       modelId: "us.anthropic.claude-opus-4-6",
     });
+  });
+
+  it("renders disabled launch controls when no cloud harness can start", () => {
+    const controls = buildCloudLaunchComposerControls({
+      catalog: multiAgentCatalog(),
+      launchableAgentKinds: [],
+      selection: {
+        agentKind: "claude",
+        modelId: "us.anthropic.claude-opus-4-6",
+        modeId: null,
+        controlValues: {},
+      },
+      onAgentModelSelect: () => {},
+      onControlSelect: () => {},
+    });
+
+    expect(controls.map((control) => [control.key, control.disabled])).toEqual([
+      ["model", true],
+      ["mode", true],
+    ]);
+    expect(controls[0]?.groups[0]?.options[0]).toMatchObject({
+      id: "unavailable",
+      label: "No cloud agents ready",
+      disabled: true,
+    });
+    expect(resolveCloudLaunchSelection({
+      catalog: multiAgentCatalog(),
+      launchableAgentKinds: [],
+      selection: {
+        agentKind: "claude",
+        modelId: "us.anthropic.claude-opus-4-6",
+        modeId: "default",
+        controlValues: {},
+      },
+    })).toMatchObject({
+      modelId: null,
+      modeId: null,
+    });
+  });
+});
+
+describe("resolveCloudHarnessAvailability", () => {
+  it("combines workspace-ready auth with managed-credit harnesses", () => {
+    expect(resolveCloudHarnessAvailability({
+      allowedAgentKinds: ["claude", "codex", "gemini", "opencode"],
+      readyAgentKinds: ["gemini"],
+      agentGateway: {
+        enabled: true,
+        managedCreditsPersonalEnabled: true,
+        managedCreditsOrganizationEnabled: false,
+        managedCreditAgentKinds: ["claude", "codex", "opencode"],
+        opencodeGatewayEnabled: false,
+      },
+    })).toMatchObject({
+      launchableAgentKinds: ["claude", "codex", "gemini"],
+      message: null,
+    });
+  });
+
+  it("returns a precise blocked state when gateway and synced auth are unavailable", () => {
+    const availability = resolveCloudHarnessAvailability({
+      allowedAgentKinds: ["claude", "codex"],
+      readyAgentKinds: [],
+      agentGateway: {
+        enabled: false,
+        managedCreditsPersonalEnabled: false,
+        managedCreditsOrganizationEnabled: false,
+        managedCreditAgentKinds: ["claude", "codex"],
+      },
+    });
+
+    expect(availability.launchableAgentKinds).toEqual([]);
+    expect(availability.unavailableAgentKinds.map((item) => item.reason)).toEqual([
+      "agent_gateway_disabled",
+      "agent_gateway_disabled",
+    ]);
+    expect(availability.message).toContain("Agent Gateway is disabled");
   });
 });
 
@@ -423,6 +535,64 @@ describe("buildCloudChatComposerControls", () => {
     expect(configUpdates).toEqual([]);
     expect(sessionSwitches).toEqual([
       { agentKind: "codex", modelId: "gpt-5-codex" },
+    ]);
+  });
+
+  it("infers session harness from the live model when sourceAgentKind is missing", () => {
+    const configUpdates: Array<{ rawConfigId: string; value: string }> = [];
+    const sessionSwitches: Array<{ agentKind: string; modelId: string }> = [];
+
+    const controls = buildCloudChatComposerControls({
+      session: claudeSessionWithoutSourceAgentKind("us.anthropic.claude-opus-4-6"),
+      liveConfig: liveConfigWithModel("us.anthropic.claude-opus-4-6"),
+      pendingConfigChanges: {},
+      launchCatalog: multiAgentCatalog(),
+      launchModelId: "us.anthropic.claude-opus-4-6",
+      onLaunchModelSelect: () => {},
+      onSessionConfigSelect: (rawConfigId, value) => {
+        configUpdates.push({ rawConfigId, value });
+      },
+      onSessionAgentModelSelect: (selection) => {
+        sessionSwitches.push(selection);
+      },
+    });
+
+    const modelControl = controls.find((control) => control.key === "model");
+    const codexGroup = modelControl?.groups.find((group) => group.id === "codex");
+    const codexOption = codexGroup?.options[0];
+
+    expect(codexOption).toBeDefined();
+    modelControl?.onSelect?.(codexOption!.id);
+
+    expect(configUpdates).toEqual([]);
+    expect(sessionSwitches).toEqual([
+      { agentKind: "codex", modelId: "gpt-5-codex" },
+    ]);
+  });
+
+  it("keeps cross-harness session model menus focused on catalog-default models", () => {
+    const controls = buildCloudChatComposerControls({
+      session: claudeSession("us.anthropic.claude-opus-4-6"),
+      liveConfig: liveConfigWithModel("us.anthropic.claude-opus-4-6"),
+      pendingConfigChanges: {},
+      launchCatalog: multiAgentCatalog(),
+      launchableAgentKinds: ["claude", "codex"],
+      launchModelId: "us.anthropic.claude-opus-4-6",
+      onLaunchModelSelect: () => {},
+      onSessionConfigSelect: () => {},
+      onSessionAgentModelSelect: () => {},
+    });
+
+    const modelControl = controls.find((control) => control.key === "model");
+    const claudeGroup = modelControl?.groups.find((group) => group.id === "claude");
+    const codexGroup = modelControl?.groups.find((group) => group.id === "codex");
+
+    expect(claudeGroup?.options.map((option) => option.label)).toEqual([
+      "Claude Opus 4.6",
+      "Claude Sonnet 4.6",
+    ]);
+    expect(codexGroup?.options.map((option) => option.label)).toEqual([
+      "GPT-5 Codex",
     ]);
   });
 

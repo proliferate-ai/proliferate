@@ -40,12 +40,14 @@ import {
 import {
   buildCloudLaunchComposerControls,
   buildLaunchRunConfigControlValues,
-  DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS,
   DEFAULT_DIRECT_PROMPT_AGENT_KIND,
   DEFAULT_DIRECT_PROMPT_MODEL_ID,
   resolveCloudLaunchSelection,
   type CloudLaunchComposerSelection,
 } from "@proliferate/product-model/chats/cloud/composer-controls";
+import {
+  resolveCloudHarnessAvailability,
+} from "@proliferate/product-model/chats/cloud/harness-availability";
 import {
   AutomationCreatePanel,
   type AutomationCreateFormValues,
@@ -181,13 +183,23 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     () => buildRepoOptions(repoConfigs.data?.configs ?? EMPTY_REPO_CONFIGS),
     [repoConfigs.data?.configs],
   );
-  const launchableAgentKinds = useMemo(() => {
-    const managedCreditKinds = cloudCapabilities.data?.agentGateway.managedCreditAgentKinds
-      ?? DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS;
-    return managedCreditKinds.length > 0
-      ? managedCreditKinds
-      : [DEFAULT_DIRECT_PROMPT_AGENT_KIND];
-  }, [cloudCapabilities.data?.agentGateway.managedCreditAgentKinds]);
+  const agentGateway = cloudCapabilities.data?.agentGateway;
+  const agentGatewayManagedCreditKindsKey = agentGateway?.managedCreditAgentKinds?.join("\0") ?? "";
+  const catalogAgentKindsKey = agentCatalog.data?.agents.map((agent) => agent.kind).join("\0") ?? "";
+  const harnessAvailability = useMemo(() => resolveCloudHarnessAvailability({
+    catalogAgentKinds: agentCatalog.data?.agents.map((agent) => agent.kind),
+    agentGateway,
+  }), [
+    agentCatalog.data,
+    agentGateway?.enabled,
+    agentGateway?.managedCreditsOrganizationEnabled,
+    agentGateway?.managedCreditsPersonalEnabled,
+    agentGateway?.opencodeGatewayEnabled,
+    agentGatewayManagedCreditKindsKey,
+    catalogAgentKindsKey,
+  ]);
+  const launchableAgentKinds = harnessAvailability.launchableAgentKinds;
+  const canStartCloudHarness = launchableAgentKinds.length > 0;
   const resolvedLaunchSelection = useMemo(
     () => resolveCloudLaunchSelection({
       catalog: agentCatalog.data,
@@ -258,6 +270,12 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     setActionError(null);
     if (optionsUnavailable) {
       setCreateError(optionLoadError ?? "Automation options are still loading.");
+      return;
+    }
+    if (!canStartCloudHarness) {
+      setCreateError(
+        harnessAvailability.message ?? "No cloud agent is ready to create this automation.",
+      );
       return;
     }
     const title = createValues.title.trim();
@@ -381,11 +399,14 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
 
   const optionLoadError = repoConfigs.error || agentCatalog.error
     ? "Could not load repo or agent options. Retry from the page or refresh."
+    : !canStartCloudHarness && harnessAvailability.message
+      ? harnessAvailability.message
     : null;
   const optionsUnavailable = repoConfigs.isLoading
     || agentCatalog.isLoading
     || Boolean(repoConfigs.error)
-    || Boolean(agentCatalog.error);
+    || Boolean(agentCatalog.error)
+    || !canStartCloudHarness;
   const submitting = actions.creatingAutomation || runConfigActions.creatingAgentRunConfig;
   const busy = actions.creatingAutomation
     || actions.updatingAutomation

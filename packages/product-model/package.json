@@ -55,6 +55,10 @@
       "types": "./dist/chats/cloud/composer-controls.d.ts",
       "import": "./dist/chats/cloud/composer-controls.js"
     },
+    "./chats/cloud/harness-availability": {
+      "types": "./dist/chats/cloud/harness-availability.d.ts",
+      "import": "./dist/chats/cloud/harness-availability.js"
+    },
     "./chats/cloud/transcript-view": {
       "types": "./dist/chats/cloud/transcript-view.d.ts",
       "import": "./dist/chats/cloud/transcript-view.js"

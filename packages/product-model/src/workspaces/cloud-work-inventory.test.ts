@@ -423,6 +423,29 @@ describe("cloud work inventory", () => {
     }).state).toBe("workspace_not_ready");
   });
 
+  it("trusts active managed cloud exposure routing when runtime summary lags", () => {
+    const readiness = cloudCommandReadiness({
+      ...workspace({
+        sandboxType: "managed_personal",
+        targetId: "target",
+        runtime: runtime("pending"),
+        exposureState: "tracked",
+        exposure: {
+          id: "exposure",
+          visibility: "private",
+          claimedByUserId: null,
+          defaultProjectionLevel: "live",
+          commandable: true,
+          status: "active",
+        },
+      }),
+      anyharnessWorkspaceId: "runtime-workspace",
+    });
+
+    expect(readiness.state).toBe("ready");
+    expect(readiness.commandable).toBe(true);
+  });
+
   it("surfaces workspace provisioning errors before generic not-ready copy", () => {
     const readiness = cloudCommandReadiness(workspace({
       workspaceStatus: "error",

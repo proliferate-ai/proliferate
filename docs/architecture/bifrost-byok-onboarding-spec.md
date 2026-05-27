@@ -835,7 +835,7 @@ Claude Code in E2B
 Codex in E2B
   CODEX_API_KEY=sk-bf-...
   protected Codex config:
-    model_provider_id=proliferate
+    model_provider=proliferate
     model_providers.proliferate.base_url=https://llm.proliferate.ai/openai/v1
     model_providers.proliferate.env_key=CODEX_API_KEY
     model_providers.proliferate.wire_api=responses
@@ -1370,7 +1370,7 @@ claude
 
 codex
   CODEX_API_KEY = <virtual-key>
-  protectedConfig.codex.model_provider_id = proliferate
+  protectedConfig.codex.model_provider = proliferate
   protectedConfig.codex.model_providers.proliferate.base_url = <public>/openai/v1
   protectedConfig.codex.model_providers.proliferate.env_key = CODEX_API_KEY
   protectedConfig.codex.model_providers.proliferate.wire_api = responses

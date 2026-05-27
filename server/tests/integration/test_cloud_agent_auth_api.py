@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import uuid
 from base64 import b64encode
 from datetime import UTC, datetime
@@ -22,6 +23,7 @@ from proliferate.db.store.cloud_agent_auth import store
 from proliferate.db.store.cloud_sandboxes import ensure_profile_slot
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.integrations.bifrost import (
+    BifrostIntegrationError,
     BifrostLogEntry,
     BifrostLogSearchResult,
     BifrostProviderKeyResult,
@@ -157,7 +159,23 @@ class _FakeBifrostAdminClient:
         self.log_calls: list[dict[str, object]] = []
 
     async def upsert_provider_key(self, **kwargs: object) -> BifrostProviderKeyResult:
-        self.provider_keys.append(dict(kwargs))
+        existing = next(
+            (
+                item
+                for item in self.provider_keys
+                if item["provider"] == kwargs["provider"] and item["key_id"] == kwargs["key_id"]
+            ),
+            None,
+        )
+        if existing is None and any(item["name"] == kwargs["name"] for item in self.provider_keys):
+            raise BifrostIntegrationError(
+                "Bifrost request failed with HTTP 500: API key names must be unique "
+                "across providers."
+            )
+        if existing is None:
+            self.provider_keys.append(dict(kwargs))
+        else:
+            existing.update(dict(kwargs))
         return BifrostProviderKeyResult(
             key_id=str(kwargs["key_id"]),
             provider=str(kwargs["provider"]),
@@ -943,7 +961,17 @@ async def test_free_managed_credits_use_bifrost_provider_key_materialization(
     monkeypatch.setattr(
         "proliferate.server.cloud.agent_auth.service.settings."
         "agent_gateway_managed_credit_agent_kinds",
-        "claude,gemini",
+        "claude,codex,gemini",
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_managed_openai_api_key",
+        "sk-openai-managed-test",
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_managed_gemini_api_key",
+        "sk-gemini-managed-test",
     )
 
     tokens = await _create_user_and_get_tokens(
@@ -964,15 +992,27 @@ async def test_free_managed_credits_use_bifrost_provider_key_materialization(
     assert body["launchEnabled"] is True
     assert body["budgetSubject"]["litellmSyncStatus"] == "synced"
     assert body["budgetSubject"]["litellmTeamId"].startswith("proliferate-managed-")
-    assert {item["agentKind"] for item in body["readyAgentModels"]} == {"claude", "gemini"}
-    assert {credential["agentKind"] for credential in body["credentials"]} == {
+    assert {item["agentKind"] for item in body["readyAgentModels"]} == {
         "claude",
+        "codex",
         "gemini",
     }
-    assert len(fake_bifrost.provider_keys) == 1
-    provider_key = fake_bifrost.provider_keys[0]
-    assert provider_key["provider"] == "anthropic"
-    assert provider_key["key_id"] == body["budgetSubject"]["litellmTeamId"]
+    assert {credential["agentKind"] for credential in body["credentials"]} == {
+        "claude",
+        "codex",
+        "gemini",
+    }
+    assert len(fake_bifrost.provider_keys) == 3
+    providers = {provider_key["provider"] for provider_key in fake_bifrost.provider_keys}
+    assert providers == {"anthropic", "openai", "gemini"}
+    provider_key_names = {str(provider_key["name"]) for provider_key in fake_bifrost.provider_keys}
+    assert len(provider_key_names) == 3
+    assert any("Anthropic" in name for name in provider_key_names)
+    assert any("OpenAI" in name for name in provider_key_names)
+    assert any("Gemini" in name for name in provider_key_names)
+    assert body["budgetSubject"]["litellmTeamId"] in {
+        provider_key["key_id"] for provider_key in fake_bifrost.provider_keys
+    }
     assert "sk-ant-managed-test" not in str(body)
 
     repeat = await client.post(
@@ -983,7 +1023,48 @@ async def test_free_managed_credits_use_bifrost_provider_key_materialization(
 
     assert repeat.status_code == 200
     assert repeat.json()["status"] == "ready"
-    assert len(fake_bifrost.provider_keys) == 1
+    assert len(fake_bifrost.provider_keys) == 3
+
+    profile = await store.get_active_personal_sandbox_profile_for_user(
+        db_session,
+        UUID(tokens["user_id"]),
+    )
+    assert profile is not None
+    codex_credential_id = next(
+        UUID(credential["id"])
+        for credential in body["credentials"]
+        if credential["agentKind"] == "codex"
+    )
+    stale_credential = await store.update_credential_status(
+        db_session,
+        credential_id=codex_credential_id,
+        status="ready",
+        redacted_summary_json=json.dumps({"stale": True}, sort_keys=True),
+    )
+    assert stale_credential is not None
+    stale_selection = next(
+        selection
+        for selection in await store.list_selections_for_profile(db_session, profile.id)
+        if selection.agent_kind == "codex"
+    )
+    assert stale_selection.selected_revision != stale_credential.revision
+    await db_session.commit()
+
+    selection_refresh = await client.post(
+        "/v1/cloud/agent-auth/free-credits/ensure",
+        headers=_headers(tokens),
+        json={},
+    )
+
+    assert selection_refresh.status_code == 200
+    refreshed_credential = await store.get_credential(db_session, codex_credential_id)
+    assert refreshed_credential is not None
+    refreshed_selection = next(
+        selection
+        for selection in await store.list_selections_for_profile(db_session, profile.id)
+        if selection.agent_kind == "codex"
+    )
+    assert refreshed_selection.selected_revision == refreshed_credential.revision
 
 
 @pytest.mark.asyncio
@@ -1005,7 +1086,17 @@ async def test_bifrost_worker_materialization_uses_direct_virtual_key_env(
     monkeypatch.setattr(
         "proliferate.server.cloud.agent_auth.service.settings."
         "agent_gateway_managed_credit_agent_kinds",
-        "claude,gemini",
+        "claude,codex,gemini",
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_managed_openai_api_key",
+        "sk-openai-managed-test",
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.agent_auth.service.settings."
+        "agent_gateway_managed_gemini_api_key",
+        "sk-gemini-managed-test",
     )
 
     tokens = await _create_user_and_get_tokens(
@@ -1102,19 +1193,48 @@ async def test_bifrost_worker_materialization_uses_direct_virtual_key_env(
     assert claude["runtimeGrantToken"] == "sk-bf-runtime-1"
     assert claude["protectedEnv"]["ANTHROPIC_AUTH_TOKEN"] == "sk-bf-runtime-1"
     assert claude["protectedEnv"]["ANTHROPIC_CUSTOM_HEADERS"] == "x-bf-vk: sk-bf-runtime-1"
+    codex = selections["codex"]["gateway"]
+    assert codex["protocolFacade"] == "openai"
+    assert codex["baseUrls"]["openai"] == "https://bifrost.test/openai/v1"
+    assert codex["runtimeGrantToken"] == "sk-bf-runtime-2"
+    assert codex["protectedEnv"] == {
+        "CODEX_API_KEY": "sk-bf-runtime-2",
+        "OPENAI_API_KEY": "sk-bf-runtime-2",
+        "CODEX_HOME": "/home/user/.proliferate/anyharness/agent-auth/codex",
+    }
+    assert codex["protectedConfig"]["codex"] == {
+        "openai_base_url": "https://bifrost.test/openai/v1",
+        "env_key": "CODEX_API_KEY",
+        "model_provider": "proliferate",
+        "model_providers": {
+            "proliferate": {
+                "name": "Proliferate Gateway",
+                "base_url": "https://bifrost.test/openai/v1",
+                "env_key": "CODEX_API_KEY",
+                "wire_api": "responses",
+                "requires_openai_auth": False,
+            }
+        },
+    }
     gemini = selections["gemini"]["gateway"]
     assert gemini["protocolFacade"] == "genai"
     assert gemini["baseUrls"]["genai"] == "https://bifrost.test/genai"
-    assert gemini["runtimeGrantToken"] == "sk-bf-runtime-2"
+    assert gemini["runtimeGrantToken"] == "sk-bf-runtime-3"
     assert gemini["protectedEnv"] == {
-        "GEMINI_API_KEY": "sk-bf-runtime-2",
+        "GEMINI_API_KEY": "sk-bf-runtime-3",
         "GOOGLE_GEMINI_BASE_URL": "https://bifrost.test/genai",
     }
-    assert len(fake_bifrost.virtual_keys) == 2
+    assert len(fake_bifrost.provider_keys) == 3
+    provider_key_ids_by_provider = {
+        str(provider_key["provider"]): str(provider_key["key_id"])
+        for provider_key in fake_bifrost.provider_keys
+    }
+    assert len(fake_bifrost.virtual_keys) == 3
     for virtual_key in fake_bifrost.virtual_keys:
         provider_configs = virtual_key["provider_configs"]
         assert isinstance(provider_configs, list)
-        assert provider_configs[0]["key_ids"] == [ensure.json()["budgetSubject"]["litellmTeamId"]]
+        provider = str(provider_configs[0]["provider"])
+        assert provider_configs[0]["key_ids"] == [provider_key_ids_by_provider[provider]]
         assert provider_configs[0]["allowed_models"] != ["*"]
         assert provider_configs[0]["budgets"][0]["max_limit"] == 5.0
 

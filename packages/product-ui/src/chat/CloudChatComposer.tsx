@@ -679,6 +679,9 @@ function modelConfigSubmenuLabel(control: CloudChatComposerControlView): string 
     case "fast_mode":
       return "Speed";
     case "model":
+      if (control.groups.length > 1) {
+        return "Agent";
+      }
       return activeComposerModelGroup(control)?.label ?? selectedComposerOption(control)?.label ?? control.label;
     default:
       return control.label;

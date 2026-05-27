@@ -16,6 +16,12 @@ import {
   type ConfiguredSessionControlKey,
   type SessionControlIconKey,
 } from "../session-controls/presentation";
+import {
+  DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS,
+  normalizeCloudAgentKindList,
+} from "./harness-availability";
+
+export { DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS } from "./harness-availability";
 
 export interface CloudChatComposerControlOptionView {
   id: string;
@@ -65,7 +71,6 @@ export type PendingConfigChange = {
 
 export const DEFAULT_DIRECT_PROMPT_MODEL_ID = "us.anthropic.claude-sonnet-4-6";
 export const DEFAULT_DIRECT_PROMPT_AGENT_KIND = "claude";
-export const DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS = ["claude", "codex"] as const;
 
 const CLOUD_MODEL_OPTIONS = [
   {
@@ -167,6 +172,12 @@ export function buildCloudLaunchComposerControls(input: {
     launchableAgentKinds: input.launchableAgentKinds,
   });
   if (catalogAgents.length === 0) {
+    if (shouldShowUnavailableLaunchControls({
+      catalog: input.catalog,
+      launchableAgentKinds: input.launchableAgentKinds,
+    })) {
+      return unavailableLaunchComposerControls();
+    }
     return fallbackLaunchComposerControls({
       modelId: input.selection.modelId ?? DEFAULT_DIRECT_PROMPT_MODEL_ID,
       onModelSelect: (modelId) =>
@@ -206,6 +217,17 @@ export function resolveCloudLaunchSelection(input: {
   });
   const agent = selectLaunchAgent(agents, input.selection.agentKind);
   if (!agent) {
+    if (shouldShowUnavailableLaunchControls({
+      catalog: input.catalog,
+      launchableAgentKinds: input.launchableAgentKinds,
+    })) {
+      return {
+        ...input.selection,
+        agentKind: input.selection.agentKind || "",
+        modelId: null,
+        modeId: null,
+      };
+    }
     return {
       ...input.selection,
       agentKind: input.selection.agentKind || DEFAULT_DIRECT_PROMPT_AGENT_KIND,
@@ -481,6 +503,60 @@ function fallbackLaunchComposerControls(input: {
   ];
 }
 
+function unavailableLaunchComposerControls(): CloudChatComposerControlView[] {
+  return [
+    {
+      id: "launch-agent-unavailable",
+      key: "model",
+      label: "Agent",
+      detail: "Unavailable",
+      icon: "bot",
+      placement: "trailing",
+      disabled: true,
+      active: false,
+      groups: [
+        {
+          id: "agents",
+          label: "Cloud agents",
+          options: [
+            {
+              id: "unavailable",
+              label: "No cloud agents ready",
+              description: "Configure agent auth or managed credits before starting a session.",
+              disabled: true,
+              selected: true,
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "launch-mode-unavailable",
+      key: "mode",
+      label: "Cloud task",
+      detail: "Waiting",
+      icon: "sparkles",
+      placement: "leading",
+      disabled: true,
+      active: false,
+      groups: [
+        {
+          id: "mode",
+          options: [
+            {
+              id: "cloud-task",
+              label: "Cloud task",
+              description: "Start a session in this workspace",
+              selected: true,
+              disabled: true,
+            },
+          ],
+        },
+      ],
+    },
+  ];
+}
+
 function buildLaunchAgentModelControl(input: {
   agents: readonly CloudAgentCatalogAgent[];
   selectedAgentKind: string;
@@ -498,15 +574,16 @@ function buildLaunchAgentModelControl(input: {
     groups: input.agents.map((agent) => ({
       id: agent.kind,
       label: agent.displayName,
-      options: agent.session.models
-        .filter(isLaunchVisibleModel)
-        .map((model) => ({
-          id: launchAgentModelOptionId(agent.kind, model.id),
-          label: `${agent.displayName} · ${model.displayName}`,
-          description: model.description ?? agent.description ?? null,
-          icon: agentModelIcon(agent.kind),
-          selected: agent.kind === input.selectedAgentKind && model.id === input.selectedModelId,
-        })),
+      options: visibleComposerModels({
+        agent,
+        selectedModelId: agent.kind === input.selectedAgentKind ? input.selectedModelId : null,
+      }).map((model) => ({
+        id: launchAgentModelOptionId(agent.kind, model.id),
+        label: `${agent.displayName} · ${model.displayName}`,
+        description: model.description ?? agent.description ?? null,
+        icon: agentModelIcon(agent.kind),
+        selected: agent.kind === input.selectedAgentKind && model.id === input.selectedModelId,
+      })),
     })).filter((group) => group.options.length > 0),
     onSelect: (optionId) => {
       const parsed = parseLaunchAgentModelOptionId(optionId);
@@ -597,15 +674,25 @@ function launchableCatalogAgents(input: {
   launchableAgentKinds?: readonly string[] | null;
   includeAgentKind?: string | null;
 }): CloudAgentCatalogAgent[] {
-  const launchableKinds = input.launchableAgentKinds?.filter(Boolean) ?? [];
-  if (launchableKinds.length === 0) {
-    return [...input.agents];
-  }
+  const launchableKinds = normalizeCloudAgentKindList(
+    input.launchableAgentKinds ?? DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS,
+  );
   const allowed = new Set(launchableKinds);
   if (input.includeAgentKind) {
     allowed.add(input.includeAgentKind);
   }
   return input.agents.filter((agent) => allowed.has(agent.kind));
+}
+
+function shouldShowUnavailableLaunchControls(input: {
+  catalog?: CloudAgentCatalogResponse | null;
+  launchableAgentKinds?: readonly string[] | null;
+}): boolean {
+  if (input.launchableAgentKinds !== undefined && input.launchableAgentKinds !== null) {
+    return normalizeCloudAgentKindList(input.launchableAgentKinds).length === 0
+      || Boolean(input.catalog?.agents?.length);
+  }
+  return Boolean(input.catalog?.agents?.length);
 }
 
 function selectLaunchModel(
@@ -658,6 +745,55 @@ function isLaunchComposerControl(control: CloudAgentCatalogControl): boolean {
 
 function isLaunchVisibleModel(model: CloudAgentCatalogAgent["session"]["models"][number]): boolean {
   return model.status === "active" || model.status === "candidate";
+}
+
+function visibleComposerModels(input: {
+  agent: CloudAgentCatalogAgent;
+  selectedModelId?: string | null;
+  selectedLabel?: string | null;
+  selectedValue?: string | null;
+}): CloudAgentCatalogAgent["session"]["models"] {
+  const selectedModelId = input.selectedModelId ?? null;
+  const selectedLabel = input.selectedLabel ?? null;
+  const selectedValue = input.selectedValue ?? selectedModelId;
+  const models = input.agent.session.models.filter((model) =>
+    isLaunchVisibleModel(model)
+    && (
+      isCatalogDefaultVisibleModel(input.agent, model)
+      || modelMatchesSelectedValue({
+        displayName: model.displayName,
+        id: model.id,
+        selectedLabel,
+        selectedValue,
+      })
+    )
+  );
+  const fallback = input.agent.session.models.find((model) =>
+    isLaunchVisibleModel(model)
+    && (
+      model.id === selectedModelId
+      || model.id === input.agent.session.defaultModelId
+      || model.isDefault
+    )
+  ) ?? input.agent.session.models.find(isLaunchVisibleModel) ?? null;
+  if (models.length === 0 && fallback) {
+    return [fallback];
+  }
+  return models;
+}
+
+function isCatalogDefaultVisibleModel(
+  agent: CloudAgentCatalogAgent,
+  model: CloudAgentCatalogAgent["session"]["models"][number],
+): boolean {
+  if (typeof model.defaultOptIn === "boolean") {
+    return model.defaultOptIn;
+  }
+  return Boolean(
+    agent.session.modelDisplayPolicy?.defaultVisibleModelIds.includes(model.id)
+    || model.isDefault
+    || model.tags.includes("recommended")
+  );
 }
 
 function isLaunchVisibleControlValue(
@@ -732,7 +868,15 @@ function buildSessionConfigComposerControl(input: {
   const selectedOption = input.control.values.find((option) => option.value === selectedValue)
     ?? input.control.values[0]
     ?? null;
-  const agentKind = input.agentKind ?? agentKindForSessionConfig(input.control);
+  const agentKind = input.agentKind
+    ?? agentKindForSessionConfig(input.control)
+    ?? (input.control.key === "model"
+      ? agentKindForSessionModelValue({
+        catalog: input.catalog ?? null,
+        selectedLabel: selectedOption?.label ?? null,
+        selectedValue,
+      })
+      : null);
   const controlKey = isConfiguredSessionControlKey(input.control.key) ? input.control.key : null;
   const selectedPresentation = controlKey
     ? resolveSessionControlPresentation(agentKind, controlKey, selectedValue)
@@ -776,8 +920,8 @@ function buildSessionConfigComposerControl(input: {
         : null;
       if (
         selectedModel
-        && input.agentKind
-        && selectedModel.agentKind !== input.agentKind
+        && agentKind
+        && selectedModel.agentKind !== agentKind
         && input.onAgentModelSelect
       ) {
         input.onAgentModelSelect(selectedModel);
@@ -833,8 +977,11 @@ function sessionModelGroupsFromCatalog(input: {
     includeAgentKind: input.agentKind,
   });
   const groups = agents.flatMap((agent) => {
-    const options = agent.session.models
-      .filter(isLaunchVisibleModel)
+    const options = visibleComposerModels({
+      agent,
+      selectedLabel: agent.kind === input.agentKind ? input.selectedLabel : null,
+      selectedValue: agent.kind === input.agentKind ? input.selectedValue : null,
+    })
       .map((model) => ({
         id: launchAgentModelOptionId(agent.kind, model.id),
         label: model.displayName,
@@ -935,6 +1082,29 @@ function agentKindForSessionConfig(control: NormalizedSessionControl): string | 
   const source = control.rawConfigId || control.key;
   const separator = source.indexOf(".");
   return separator > 0 ? source.slice(0, separator) : null;
+}
+
+function agentKindForSessionModelValue(input: {
+  catalog: CloudAgentCatalogResponse | null;
+  selectedLabel: string | null;
+  selectedValue: string | null;
+}): string | null {
+  const selectedValue = input.selectedValue?.trim().toLowerCase() ?? "";
+  const selectedLabel = input.selectedLabel?.trim().toLowerCase() ?? "";
+  if (!selectedValue && !selectedLabel) {
+    return null;
+  }
+  for (const agent of input.catalog?.agents ?? []) {
+    if (
+      agent.session.models.some((model) =>
+        model.id.toLowerCase() === selectedValue
+        || model.displayName.toLowerCase() === selectedLabel
+      )
+    ) {
+      return agent.kind;
+    }
+  }
+  return null;
 }
 
 function isLeadingModeControl(control: NormalizedSessionControl): boolean {

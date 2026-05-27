@@ -166,7 +166,7 @@ async function startSessionForPrompt(args: {
     client: args.client,
     workspaceId: workspace.id,
     targetId,
-  }).catch(() => new Set<string>());
+  });
   const command = await args.enqueueStartSession({
     idempotencyKey: `${args.pendingPrompt.id}:start-session`,
     targetId,
@@ -437,7 +437,13 @@ async function waitForCommandTerminal(
 ): Promise<CloudCommandResponse> {
   const deadline = Date.now() + 240_000;
   assertStillCurrent(shouldContinue);
-  let latest = await getCommandStatus(commandId, client);
+  let latest = await getCommandStatusWithRecoverableRetry({
+    commandId,
+    client,
+    shouldContinue,
+    deadline,
+  });
+  let delayMs = 500;
   let lastStatusMessage: string | null = null;
   while (!isTerminalStatus(latest.status)) {
     assertStillCurrent(shouldContinue);
@@ -449,12 +455,44 @@ async function waitForCommandTerminal(
       onStatus?.(nextStatusMessage);
       lastStatusMessage = nextStatusMessage;
     }
-    await sleep(500);
+    await sleep(delayMs);
+    delayMs = nextPollDelay(delayMs);
     assertStillCurrent(shouldContinue);
-    latest = await getCommandStatus(commandId, client);
+    latest = await getCommandStatusWithRecoverableRetry({
+      commandId,
+      client,
+      shouldContinue,
+      deadline,
+    });
   }
   assertStillCurrent(shouldContinue);
   return latest;
+}
+
+async function getCommandStatusWithRecoverableRetry(args: {
+  commandId: string;
+  client: ProliferateCloudClient;
+  shouldContinue: () => boolean;
+  deadline: number;
+}): Promise<CloudCommandResponse> {
+  let delayMs = 500;
+  let lastError: unknown = null;
+  while (Date.now() < args.deadline) {
+    assertStillCurrent(args.shouldContinue);
+    try {
+      return await getCommandStatus(args.commandId, args.client);
+    } catch (error) {
+      lastError = error;
+      if (!isRecoverableCloudDispatchError(error)) {
+        throw error;
+      }
+      await sleep(delayMs);
+      delayMs = nextPollDelay(delayMs);
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Timed out waiting for the cloud command to finish.");
 }
 
 async function waitForStartedSession(args: {

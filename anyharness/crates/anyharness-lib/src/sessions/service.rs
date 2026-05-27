@@ -325,11 +325,10 @@ impl SessionService {
                 .session_store
                 .list_events_after_oldest_limited(session_id, seq, limit)
                 .map(Some),
-            (Some(seq), None, Some(limit), None) => {
-                self.session_store
-                    .list_events_after_limited(session_id, seq, limit)
-                    .map(Some)
-            }
+            (Some(seq), None, Some(limit), None) => self
+                .session_store
+                .list_events_after_limited(session_id, seq, limit)
+                .map(Some),
             (Some(seq), None, None, None) => self
                 .session_store
                 .list_events_after(session_id, seq)

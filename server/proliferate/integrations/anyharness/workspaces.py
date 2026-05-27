@@ -11,6 +11,8 @@ from proliferate.integrations.anyharness.models import (
     ResolvedRemoteWorkspace,
 )
 
+_MOBILITY_DESTINATION_PREPARE_TIMEOUT_SECONDS = 180.0
+
 
 def _parse_resolved_workspace(
     payload: object,
@@ -89,7 +91,9 @@ async def prepare_runtime_mobility_destination(
     preferred_workspace_name: str | None = None,
 ) -> ResolvedRemoteWorkspace:
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(
+            timeout=_MOBILITY_DESTINATION_PREPARE_TIMEOUT_SECONDS
+        ) as client:
             response = await client.post(
                 f"{runtime_url}/v1/repo-roots/{repo_root_id}/mobility/prepare-destination",
                 headers=auth_headers(access_token),

@@ -826,6 +826,7 @@ class AgentGatewayRouterMaterialization(Base):
             "router_object_kind",
             "object_scope",
             "budget_subject_id",
+            "router_object_id",
             unique=True,
             postgresql_where=text("object_scope = 'budget_subject' AND status != 'revoked'"),
         ),

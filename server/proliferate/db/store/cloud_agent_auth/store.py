@@ -2180,6 +2180,7 @@ async def upsert_router_materialization(
         filters.append(AgentGatewayRouterMaterialization.policy_id == policy_id)
     elif object_scope == "budget_subject":
         filters.append(AgentGatewayRouterMaterialization.budget_subject_id == budget_subject_id)
+        filters.append(AgentGatewayRouterMaterialization.router_object_id == router_object_id)
     else:
         filters.append(AgentGatewayRouterMaterialization.id.is_(None))
     row = (

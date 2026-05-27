@@ -10,7 +10,7 @@ use anyharness_contract::v1::{
 };
 use chrono::{DateTime, Utc};
 use rusqlite::{params, OptionalExtension};
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 
 use crate::persistence::Db;
 use crate::sessions::mcp_bindings::crypto::{decrypt_bytes, encrypt_bytes, SessionDataCipher};
@@ -39,7 +39,7 @@ const CLAUDE_GATEWAY_PROTECTED_ENV: &[&str] = &[
     "ANTHROPIC_CUSTOM_HEADERS",
     "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
 ];
-const CODEX_GATEWAY_PROTECTED_ENV: &[&str] = &["CODEX_API_KEY", "CODEX_HOME"];
+const CODEX_GATEWAY_PROTECTED_ENV: &[&str] = &["CODEX_API_KEY", "OPENAI_API_KEY", "CODEX_HOME"];
 const OPENCODE_GATEWAY_PROTECTED_ENV: &[&str] = &["OPENAI_API_KEY", "OPENAI_BASE_URL"];
 const GEMINI_GATEWAY_PROTECTED_ENV: &[&str] = &["GEMINI_API_KEY", "GOOGLE_GEMINI_BASE_URL"];
 const CLAUDE_SYNCED_PROTECTED_ENV: &[&str] = &[];
@@ -391,7 +391,15 @@ impl AgentAuthConfigService {
             let Some(config) = selection.protected_config.get("codex") else {
                 continue;
             };
-            write_codex_config(&self.codex_home_dir(), config)?;
+            write_codex_config(
+                &self.codex_home_dir(),
+                config,
+                selection
+                    .protected_env
+                    .get("OPENAI_API_KEY")
+                    .or_else(|| selection.protected_env.get("CODEX_API_KEY"))
+                    .map(String::as_str),
+            )?;
         }
         Ok(())
     }
@@ -599,12 +607,17 @@ fn sanitize_scope_part(value: &str) -> String {
         .collect()
 }
 
-fn write_codex_config(codex_home: &PathBuf, config: &Value) -> anyhow::Result<()> {
+fn write_codex_config(
+    codex_home: &PathBuf,
+    config: &Value,
+    api_key: Option<&str>,
+) -> anyhow::Result<()> {
     let object = config
         .as_object()
         .ok_or_else(|| anyhow::anyhow!("codex protectedConfig must be an object"))?;
-    let provider_id = string_value(object, "model_provider_id")
-        .ok_or_else(|| anyhow::anyhow!("codex protectedConfig missing model_provider_id"))?;
+    let provider_id = string_value(object, "model_provider")
+        .or_else(|| string_value(object, "model_provider_id"))
+        .ok_or_else(|| anyhow::anyhow!("codex protectedConfig missing model_provider"))?;
     let providers = object
         .get("model_providers")
         .and_then(Value::as_object)
@@ -625,7 +638,9 @@ fn write_codex_config(codex_home: &PathBuf, config: &Value) -> anyhow::Result<()
         .unwrap_or(false);
 
     let contents = format!(
-        "model_provider_id = {}\n\n[model_providers.{}]\nname = {}\nbase_url = {}\nenv_key = {}\nwire_api = {}\nrequires_openai_auth = {}\n",
+        "openai_base_url = {}\nenv_key = {}\n\nmodel_provider = {}\n\n[model_providers.{}]\nname = {}\nbase_url = {}\nenv_key = {}\nwire_api = {}\nrequires_openai_auth = {}\n",
+        toml_string(base_url),
+        toml_string(env_key),
         toml_string(provider_id),
         provider_id,
         toml_string(name),
@@ -636,6 +651,21 @@ fn write_codex_config(codex_home: &PathBuf, config: &Value) -> anyhow::Result<()
     );
     fs::create_dir_all(codex_home)?;
     let path = codex_home.join("config.toml");
+    fs::write(&path, contents)?;
+    set_private_file_permissions(&path)?;
+    if let Some(api_key) = api_key.map(str::trim).filter(|value| !value.is_empty()) {
+        write_codex_auth(codex_home, api_key)?;
+    }
+    Ok(())
+}
+
+fn write_codex_auth(codex_home: &PathBuf, api_key: &str) -> anyhow::Result<()> {
+    fs::create_dir_all(codex_home)?;
+    let path = codex_home.join("auth.json");
+    let contents = serde_json::to_vec_pretty(&json!({
+        "auth_mode": "apikey",
+        "OPENAI_API_KEY": api_key,
+    }))?;
     fs::write(&path, contents)?;
     set_private_file_permissions(&path)?;
     Ok(())

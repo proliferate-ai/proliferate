@@ -558,6 +558,21 @@ export function cloudCommandReadiness(
       message: statusDetail ?? "Workspace runtime is not ready yet. Try again when setup finishes.",
     };
   }
+  const activeExposureCommandable =
+    workspace.exposure?.commandable === true &&
+    workspace.exposure.status === "active" &&
+    (workspace.exposureState === "live" || workspace.exposureState === "tracked");
+  const managedWorkspace =
+    workspace.sandboxType === "managed_personal" || workspace.sandboxType === "managed_shared";
+  const routedManagedWorkspace =
+    managedWorkspace && Boolean(workspace.targetId && workspace.anyharnessWorkspaceId);
+  if (activeExposureCommandable && (routedManagedWorkspace || !managedWorkspace)) {
+    return {
+      state: "ready",
+      commandable: true,
+      message: null,
+    };
+  }
   const runtimeLocation = recentWorkRuntimeLocationForWorkspace(workspace);
   if (runtimeLocation === "offline" || recentWorkCommandability(workspace) === "stale") {
     return {
@@ -581,17 +596,6 @@ export function cloudCommandReadiness(
         message: "Workspace is ready but missing runtime command routing.",
       };
     }
-    return {
-      state: "ready",
-      commandable: true,
-      message: null,
-    };
-  }
-  const activeExposureCommandable =
-    workspace.exposure?.commandable === true &&
-    workspace.exposure.status === "active" &&
-    (workspace.exposureState === "live" || workspace.exposureState === "tracked");
-  if (activeExposureCommandable) {
     return {
       state: "ready",
       commandable: true,
