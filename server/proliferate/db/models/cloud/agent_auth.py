@@ -18,7 +18,6 @@ from proliferate.constants.cloud import (
     SUPPORTED_AGENT_GATEWAY_PROTOCOL_FACADES,
     SUPPORTED_AGENT_GATEWAY_PROVIDER_KINDS,
     SUPPORTED_AGENT_GATEWAY_PROVIDER_VALIDATION_STATUSES,
-    SUPPORTED_AGENT_GATEWAY_ROUTER_KINDS,
     SUPPORTED_AGENT_GATEWAY_ROUTER_MATERIALIZATION_STATUSES,
     SUPPORTED_AGENT_GATEWAY_ROUTER_OBJECT_KINDS,
     SUPPORTED_AGENT_GATEWAY_ROUTER_OBJECT_SCOPES,
@@ -781,7 +780,7 @@ class AgentGatewayRouterMaterialization(Base):
     __tablename__ = "agent_gateway_router_materialization"
     __table_args__ = (
         CheckConstraint(
-            f"router_kind IN {SUPPORTED_AGENT_GATEWAY_ROUTER_KINDS}",
+            "router_kind = 'bifrost'",
             name="ck_agent_gateway_router_materialization_router_kind",
         ),
         CheckConstraint(
