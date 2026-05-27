@@ -4,7 +4,6 @@ import uuid
 from base64 import b64encode
 from datetime import UTC, datetime
 from decimal import Decimal
-from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
@@ -31,7 +30,7 @@ from proliferate.integrations.bifrost import (
 from proliferate.server.cloud.agent_auth import service as agent_auth_service
 from proliferate.server.cloud.worker import service as worker_service
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
-from proliferate.utils.crypto import decrypt_text, encrypt_json, encrypt_text
+from proliferate.utils.crypto import encrypt_text
 from proliferate.utils.time import utcnow
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
