@@ -96,10 +96,6 @@ from proliferate.db.store.cloud_workspaces import (
 )
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError
 from proliferate.integrations.sandbox import get_configured_sandbox_provider, get_sandbox_provider
-from proliferate.server.automations.domain.claim_lifecycle import (
-    CLOUD_WORKSPACE_CREATION_TRANSITION,
-    claim_is_active,
-)
 from proliferate.server.automations.worker.cloud_execution.command_models import (
     EnsureRepoCheckoutPayload,
     MaterializeWorkspacePayload,
@@ -109,6 +105,10 @@ from proliferate.server.automations.worker.cloud_execution.command_models import
 from proliferate.server.automations.worker.cloud_execution.commands import (
     parse_materialize_workspace_result,
     parse_start_session_result,
+)
+from proliferate.server.automations.domain.claim_lifecycle import (
+    CLOUD_WORKSPACE_CREATION_TRANSITION,
+    claim_is_active,
 )
 from proliferate.server.automations.worker.cloud_executor_commands import (
     AutomationCommandResult,
@@ -168,9 +168,9 @@ from proliferate.server.cloud.workspaces.models import (
     WorkspaceCreatorContext,
     WorkspaceDetail,
     WorkspaceDirectTargetContext,
-    WorkspaceSummary,
     WorkspaceTargetLaunchCommandIds,
     WorkspaceTargetLaunchResponse,
+    WorkspaceSummary,
     runtime_auth_payload,
     workspace_detail_payload,
     workspace_summary_payload,
