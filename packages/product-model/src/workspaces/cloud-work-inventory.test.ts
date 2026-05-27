@@ -3,6 +3,7 @@ import type { CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
 
 import {
   buildCloudWorkInventory,
+  buildCloudWorkRecencyInventory,
   buildRecentWorkItems,
   cloudWorkItemForWorkspace,
   cloudCommandReadiness,
@@ -41,6 +42,18 @@ describe("cloud work inventory", () => {
     expect(cloudWorkStatusForWorkspace(workspace({ workspaceStatus: "materializing" }))).toBe("active");
     expect(cloudWorkStatusForWorkspace(workspace({ workspaceStatus: "needs_rematerialization" }))).toBe("active");
     expect(cloudWorkStatusForWorkspace(workspace({ workspaceStatus: "ready", runtime: runtime("running") }))).toBe("ready");
+    expect(cloudWorkStatusForWorkspace(workspace({
+      workspaceStatus: "ready",
+      runtime: runtime("running"),
+      lastSessionSummary: {
+        targetId: "target",
+        workspaceId: "runtime",
+        sessionId: "session",
+        title: "Running session",
+        status: "running",
+        lastEventAt: "2026-05-23T11:55:00Z",
+      },
+    }))).toBe("running");
     expect(cloudWorkStatusForWorkspace(workspace({ workspaceStatus: "ready", runtime: runtime("paused") }))).toBe("ready");
   });
 
@@ -169,6 +182,107 @@ describe("cloud work inventory", () => {
     expect(filterCloudWorkItems(items, { search: "loader" }).map((item) => item.id)).toEqual(["private"]);
   });
 
+  it("filters by semantic source and runtime location for mobile workspace views", () => {
+    const items = [
+      cloudWorkItemForWorkspace(workspace({
+        id: "desktop",
+        displayName: "Desktop dispatch",
+        sandboxType: "local",
+        origin: { kind: "human", entrypoint: "desktop" },
+        exposureState: "live",
+      }), { nowMs: NOW }),
+      cloudWorkItemForWorkspace(workspace({
+        id: "cloud",
+        displayName: "Cloud launch",
+        sandboxType: "managed_personal",
+        origin: { kind: "human", entrypoint: "web" },
+      }), { nowMs: NOW }),
+      cloudWorkItemForWorkspace(workspace({
+        id: "slack",
+        displayName: "Slack handoff",
+        origin: { kind: "human", entrypoint: "slack" },
+        claimSourceKind: "slack",
+        visibility: "shared_unclaimed",
+      }), { nowMs: NOW }),
+      cloudWorkItemForWorkspace(workspace({
+        id: "mobile-dispatch",
+        displayName: "Mobile dispatch",
+        sandboxType: "local",
+        origin: { kind: "human", entrypoint: "mobile" },
+      }), { nowMs: NOW }),
+    ];
+
+    expect(
+      filterCloudWorkItems(items, { semanticSources: new Set(["desktop_exposed"]) })
+        .map((item) => item.id),
+    ).toEqual(["desktop"]);
+    expect(
+      filterCloudWorkItems(items, { semanticSources: new Set(["slack"]) })
+        .map((item) => item.id),
+    ).toEqual(["slack"]);
+    expect(
+      filterCloudWorkItems(items, { runtimeLocations: new Set(["cloud_sandbox"]) })
+        .map((item) => item.id),
+    ).toEqual(["cloud", "slack"]);
+    expect(
+      filterCloudWorkItems(items, { needsAttention: true })
+        .map((item) => item.id),
+    ).toEqual(["slack"]);
+    expect(
+      filterCloudWorkItems(items, { semanticSources: new Set(["mobile"]) })
+        .map((item) => item.id),
+    ).toEqual(["mobile-dispatch"]);
+  });
+
+  it("filters by repo label and sorts workspace rows for mobile sheets", () => {
+    const groups = buildCloudWorkRecencyInventory([
+      workspace({
+        id: "zeta",
+        displayName: "Zeta work",
+        repo: { owner: "proliferate-ai", name: "proliferate", branch: "main", baseBranch: "main" },
+        lastActivityAt: "2026-05-23T11:59:00Z",
+      }),
+      workspace({
+        id: "alpha",
+        displayName: "Alpha work",
+        repo: { owner: "proliferate-ai", name: "proliferate", branch: "main", baseBranch: "main" },
+        lastActivityAt: "2026-05-23T11:00:00Z",
+      }),
+      workspace({
+        id: "other-repo",
+        displayName: "Beta work",
+        repo: { owner: "proliferate-ai", name: "website", branch: "main", baseBranch: "main" },
+        lastActivityAt: "2026-05-23T11:30:00Z",
+      }),
+    ], {
+      nowMs: NOW,
+      filters: {
+        repoLabels: new Set(["proliferate-ai/proliferate"]),
+        sort: "name",
+      },
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.items.map((item) => item.id)).toEqual(["alpha", "zeta"]);
+  });
+
+  it("groups workspace rows by recency for mobile lists", () => {
+    const groups = buildCloudWorkRecencyInventory([
+      workspace({ id: "today", lastActivityAt: "2026-05-23T11:00:00Z" }),
+      workspace({ id: "this-week", lastActivityAt: "2026-05-20T12:00:00Z" }),
+      workspace({ id: "last-week", lastActivityAt: "2026-05-12T12:00:00Z" }),
+      workspace({ id: "earlier", lastActivityAt: "2026-04-01T12:00:00Z" }),
+    ], { nowMs: NOW });
+
+    expect(groups.map((group) => group.id)).toEqual(["today", "this_week", "last_week", "earlier"]);
+    expect(groups.map((group) => group.items.map((item) => item.id))).toEqual([
+      ["today"],
+      ["this-week"],
+      ["last-week"],
+      ["earlier"],
+    ]);
+  });
+
   it("searches by latest session title even when the workspace has a display name", () => {
     const items = [
       cloudWorkItemForWorkspace(workspace({
@@ -252,6 +366,7 @@ describe("cloud work inventory", () => {
   it("distinguishes cloud access from cloud runtime", () => {
     const localWorkspace = workspace({
       sandboxType: "local",
+      origin: { kind: "human", entrypoint: "desktop" },
       exposureState: "stale",
       exposure: {
         id: "exposure",

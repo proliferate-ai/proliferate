@@ -1,465 +1,523 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
 import {
-  useCloudRepoConfigs,
-  useCreateCloudWorkspace,
-} from "@proliferate/cloud-sdk-react";
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import type { CloudChatComposerControlView } from "@proliferate/product-model/chats/cloud/composer-controls";
 
-import {
-  MobileScreen,
-  MobileScreenHeader,
-  MobileSectionLabel,
-  MobileStack,
-} from "../primitives/MobileLayout";
-import { MobileIcon } from "../primitives/MobileIcon";
-import { MobileListRow } from "../primitives/MobileListRow";
+import { useMobileHomeLaunchModel } from "../../hooks/home/derived/use-mobile-home-launch-model";
+import { useMobileHomeLaunchActions } from "../../hooks/home/workflows/use-mobile-home-launch-actions";
+import type { MobileCloudChat } from "../../navigation/navigation-model";
+import { MobileIcon, type MobileIconName } from "../primitives/MobileIcon";
 import { MobileTextInput } from "../primitives/MobileTextInput";
-import type {
-  MobileCloudChat,
-  MobilePendingPrompt,
-} from "../../navigation/navigation-model";
-import {
-  useMobileWorkInventory,
-  type MobileWorkItem,
-} from "../../hooks/work/derived/use-mobile-work-inventory";
-import { savePendingMobilePrompt } from "../../lib/access/cloud/pending-mobile-prompt-store";
+import { MobilePopover } from "../primitives/popover/MobilePopover";
+import { MobilePopoverDisclosure } from "../primitives/popover/MobilePopoverDisclosure";
+import { MobilePopoverDivider } from "../primitives/popover/MobilePopoverDivider";
+import { MobilePopoverGroup } from "../primitives/popover/MobilePopoverGroup";
+import { MobilePopoverOption } from "../primitives/popover/MobilePopoverOption";
+import { MobilePopoverRow } from "../primitives/popover/MobilePopoverRow";
 import { colors, radius, spacing } from "../../styles/tokens";
-
-const DEFAULT_MODEL_ID = "gpt-5.4";
-
-interface RepoOption {
-  id: string;
-  gitOwner: string;
-  gitRepoName: string;
-  label: string;
-  description: string;
-}
-
-interface ModelOption {
-  id: string;
-  label: string;
-  description: string;
-}
-
-const MODEL_OPTIONS: ModelOption[] = [
-  { id: "gpt-5.4", label: "GPT-5.4", description: "Balanced cloud work" },
-  { id: "gpt-5.4-mini", label: "GPT-5.4 Mini", description: "Fast lighter tasks" },
-  { id: "gpt-5.3-codex", label: "GPT-5.3 Codex", description: "Coding-heavy work" },
-];
 
 interface MobileHomeScreenProps {
   ownerUserId: string | null;
   onOpenChat: (chat: MobileCloudChat) => void;
+  onOpenDrawer: () => void;
+  onConfigureRepos: () => void;
 }
 
-export function MobileHomeScreen({ ownerUserId, onOpenChat }: MobileHomeScreenProps) {
-  const submitInFlightRef = useRef(false);
+type HomeSheet = "repo" | "runtime" | "config" | null;
+
+export function MobileHomeScreen({
+  ownerUserId,
+  onOpenChat,
+  onOpenDrawer,
+  onConfigureRepos,
+}: MobileHomeScreenProps) {
   const [draft, setDraft] = useState("");
-  const [repoId, setRepoId] = useState("");
-  const [modelId, setModelId] = useState(DEFAULT_MODEL_ID);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const repoConfigs = useCloudRepoConfigs();
-  const createWorkspace = useCreateCloudWorkspace();
-  const workInventory = useMobileWorkInventory();
-  const repoOptions = useMemo(
-    () => buildRepoOptions(repoConfigs.data?.configs ?? []),
-    [repoConfigs.data?.configs],
-  );
-  const selectedRepo = repoOptions.find((repo) => repo.id === repoId) ?? repoOptions[0] ?? null;
-  const selectedModel = MODEL_OPTIONS.find((model) => model.id === modelId) ?? MODEL_OPTIONS[0];
+  const [sheet, setSheet] = useState<HomeSheet>(null);
+  const launchModel = useMobileHomeLaunchModel();
+  const launchActions = useMobileHomeLaunchActions({
+    ownerUserId,
+    catalog: launchModel.agentCatalog.data,
+    selectedRepo: launchModel.selectedRepo,
+    selectedRuntime: launchModel.selectedRuntime,
+    selection: launchModel.resolvedLaunchSelection,
+    onOpenChat,
+    onSubmitted: () => setDraft(""),
+  });
+  const primaryModelControl =
+    launchModel.launchComposerControls.find((control) => control.key === "model")
+    ?? launchModel.launchComposerControls[launchModel.launchComposerControls.length - 1]
+    ?? null;
+  const canSubmit = Boolean(draft.trim())
+    && Boolean(launchModel.selectedRepo)
+    && Boolean(launchModel.selectedRuntime)
+    && !launchActions.submitting
+    && (launchModel.selectedRuntime?.kind !== "target" || launchModel.selectedRuntime.online);
+  const runtimeBlocker = launchModel.selectedRuntime?.kind === "target" && !launchModel.selectedRuntime.online
+    ? `${launchModel.selectedRuntime.label} is offline. Open Desktop or choose Cloud sandbox to start this chat.`
+    : null;
 
-  useEffect(() => {
-    if (!selectedRepo && repoOptions[0]) {
-      setRepoId(repoOptions[0].id);
-    }
-  }, [repoOptions, selectedRepo]);
-
-  async function submitPrompt() {
-    const text = draft.trim();
-    if (!text || !selectedRepo || submitInFlightRef.current) {
-      return;
-    }
-    if (!ownerUserId) {
-      setSubmitError("Account is still loading. Try again in a moment.");
-      return;
-    }
-
-    submitInFlightRef.current = true;
-    setSubmitError(null);
-    const pendingPrompt: MobilePendingPrompt = {
-      id: `mobile-home:${Date.now().toString(36)}`,
-      text,
-      modelId,
-      modeId: null,
-      createdAt: Date.now(),
-    };
-
-    try {
-      const workspace = await createWorkspace.mutateAsync({
-        gitProvider: "github",
-        gitOwner: selectedRepo.gitOwner,
-        gitRepoName: selectedRepo.gitRepoName,
-        branchName: buildBranchName(text),
-        displayName: buildWorkspaceDisplayName(text),
-        ownerScope: "personal",
-      });
-      await savePendingMobilePrompt(workspace.id, ownerUserId, pendingPrompt).catch(() => undefined);
-      setDraft("");
-      onOpenChat({
-        workspaceId: workspace.id,
-        workspaceName: workspace.displayName ?? workspace.repo.name,
-        repoLabel: `${workspace.repo.owner}/${workspace.repo.name}`,
-        branchLabel: workspace.repo.branch ?? workspace.repo.baseBranch ?? "main",
-        targetId: workspace.targetId ?? null,
-        workspaceRuntimeId: workspace.anyharnessWorkspaceId ?? null,
-        sessionId: null,
-        title: workspace.displayName ?? workspace.repo.name,
-        status: workspace.workspaceStatus ?? workspace.status,
-        visibility: workspace.visibility,
-        initialPendingPrompt: pendingPrompt,
-      });
-    } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "Could not create workspace.");
-    } finally {
-      submitInFlightRef.current = false;
-    }
+  function closeSheet() {
+    setSheet(null);
   }
 
-  const submitting = createWorkspace.isPending || submitInFlightRef.current;
-  const canSubmit = Boolean(draft.trim()) && Boolean(selectedRepo) && !submitting;
-
   return (
-    <MobileScreen>
-      <MobileStack gap={spacing[5]}>
-        <MobileScreenHeader
-          eyebrow="Home"
-          title="What should we run?"
-          description="Start cloud work, then come back to anything recent from the drawer."
-        />
+    <KeyboardAvoidingView
+      style={styles.root}
+      behavior={Platform.select({ ios: "padding", default: undefined })}
+      keyboardVerticalOffset={0}
+    >
+      <View style={styles.header}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open navigation"
+          onPress={onOpenDrawer}
+          style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
+        >
+          <MobileIcon name="menu" size={20} color={colors.fg} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Change model"
+          onPress={() => setSheet("config")}
+          style={({ pressed }) => [styles.modelSelector, pressed && styles.pressed]}
+        >
+          <Text style={styles.modelSelectorText} numberOfLines={1}>
+            {controlValueLabel(primaryModelControl) ?? "Model"}
+          </Text>
+          <MobileIcon name="chevron-down" size={14} color={colors.faint} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open chat settings"
+          onPress={() => setSheet("config")}
+          style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
+        >
+          <MobileIcon name="controls" size={19} color={colors.fg} />
+        </Pressable>
+      </View>
 
-        <View>
-          <MobileSectionLabel>Prompt</MobileSectionLabel>
-          <View style={styles.composer}>
+      <Text style={styles.newChatLabel}>New chat</Text>
+
+      <View style={styles.runtimeRow}>
+        <View style={styles.runtimeRowLine} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Choose runtime"
+          onPress={() => setSheet("runtime")}
+          style={({ pressed }) => [styles.runtimeSelector, pressed && styles.pressed]}
+        >
+          <MobileIcon
+            name={launchModel.selectedRuntime?.icon ?? "cloud"}
+            size={15}
+            color={colors.fg}
+          />
+          <Text style={styles.runtimeSelectorText} numberOfLines={1}>
+            {launchModel.selectedRuntime?.label ?? "Choose runtime"}
+          </Text>
+          <View
+            style={[
+              styles.runtimeDot,
+              launchModel.selectedRuntime?.kind === "target" && !launchModel.selectedRuntime.online && styles.runtimeDotOffline,
+            ]}
+          />
+        </Pressable>
+        <View style={styles.runtimeRowLine} />
+      </View>
+      {runtimeBlocker ? (
+        <View style={styles.runtimeBlocker}>
+          <MobileIcon name="lock" size={13} color={colors.destructive} />
+          <Text style={styles.runtimeBlockerText}>{runtimeBlocker}</Text>
+        </View>
+      ) : null}
+
+      <View style={styles.spacer} />
+
+      {launchActions.status || launchActions.error ? (
+        <Text style={[styles.launchNote, launchActions.error && styles.launchError]}>
+          {launchActions.error ?? launchActions.status}
+        </Text>
+      ) : null}
+
+      <View style={styles.composer}>
+        <View style={styles.composerCluster}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Choose repository"
+            onPress={() => setSheet("repo")}
+            style={({ pressed }) => [styles.repoPill, pressed && styles.pressed]}
+          >
+            <MobileIcon name="git-branch" size={15} color={colors.fg} />
+            <Text style={styles.repoPillText} numberOfLines={1}>
+              {launchModel.selectedRepo?.label ?? "Choose a GitHub repo"}
+            </Text>
+            <MobileIcon name="chevron-right" size={14} color={colors.faint} />
+          </Pressable>
+
+          <View style={styles.composerCard}>
             <MobileTextInput
               multiline
               value={draft}
               onChangeText={setDraft}
-              placeholder="Ask Proliferate to work in this repo..."
+              placeholder="Describe a task"
               style={styles.composerInput}
             />
             <View style={styles.composerFooter}>
-              <View style={styles.context}>
-                <MobileIcon name="git-branch" size={13} color={colors.faint} />
-                <Text style={styles.contextText} numberOfLines={1}>
-                  {selectedRepo?.label ?? "Select a repository"}
-                </Text>
-              </View>
-              <View style={styles.context}>
-                <MobileIcon name="cloud" size={13} color={colors.faint} />
-                <Text style={styles.contextText} numberOfLines={1}>
-                  {selectedModel.label}
-                </Text>
-              </View>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Start cloud chat"
+                accessibilityLabel="Send"
+                accessibilityState={{ disabled: !canSubmit }}
                 disabled={!canSubmit}
-                onPress={() => void submitPrompt()}
+                onPress={() => {
+                  void launchActions.submit(draft);
+                }}
                 style={({ pressed }) => [
                   styles.send,
                   !canSubmit && styles.sendDisabled,
                   pressed && styles.sendPressed,
                 ]}
               >
-                <MobileIcon
-                  name="send"
-                  size={16}
-                  color={canSubmit ? colors.background : colors.faint}
-                />
+                <MobileIcon name="send" size={18} color={canSubmit ? colors.background : colors.faint} />
               </Pressable>
             </View>
           </View>
-          {submitError ? <Text style={styles.errorText}>{submitError}</Text> : null}
         </View>
+      </View>
 
-        <View>
-          <MobileSectionLabel>Repository</MobileSectionLabel>
-          <View style={styles.optionGroup}>
-            {repoConfigs.isLoading ? (
-              <Text style={styles.loadingText}>Loading configured repositories...</Text>
-            ) : repoOptions.length === 0 ? (
-              <Text style={styles.loadingText}>
-                No configured cloud repositories are available for mobile.
-              </Text>
-            ) : (
-              repoOptions.map((repo) => (
-                <OptionRow
-                  key={repo.id}
-                  title={repo.label}
-                  description={repo.description}
-                  icon="git-branch"
-                  selected={repo.id === selectedRepo?.id}
-                  onPress={() => setRepoId(repo.id)}
-                />
-              ))
-            )}
-          </View>
-        </View>
-
-        <View>
-          <MobileSectionLabel>Model</MobileSectionLabel>
-          <View style={styles.optionGroup}>
-            {MODEL_OPTIONS.map((model) => (
-              <OptionRow
-                key={model.id}
-                title={model.label}
-                description={model.description}
-                icon="cloud"
-                selected={model.id === selectedModel.id}
-                onPress={() => setModelId(model.id)}
+      <MobilePopover
+        visible={sheet === "repo"}
+        onClose={closeSheet}
+        anchor="bottom-left"
+        insetSide={20}
+        insetBottom={140}
+        width={300}
+      >
+        <MobilePopoverGroup>
+          {launchModel.repoConfigs.isLoading ? (
+            <MobilePopoverRow id="loading" icon="git-branch" title="Loading repositories..." disabled />
+          ) : launchModel.repoOptions.length === 0 ? (
+            <MobilePopoverRow id="empty" icon="git-branch" title="No configured repositories" disabled />
+          ) : (
+            launchModel.repoOptions.map((repo) => (
+              <MobilePopoverOption
+                key={repo.id}
+                title={repo.label}
+                subtitle={repo.description ?? undefined}
+                selected={repo.id === launchModel.selectedRepo?.id}
+                onSelect={() => {
+                  launchModel.setRepoId(repo.id);
+                  closeSheet();
+                }}
               />
-            ))}
-          </View>
-        </View>
+            ))
+          )}
+          <MobilePopoverDivider />
+          <MobilePopoverRow
+            id="configure-repos"
+            icon="settings"
+            title="Configure on GitHub"
+            subtitle="Add or manage repos in Settings"
+            onPress={() => {
+              closeSheet();
+              onConfigureRepos();
+            }}
+          />
+        </MobilePopoverGroup>
+      </MobilePopover>
 
-        <View>
-          <MobileSectionLabel>Recent work</MobileSectionLabel>
-          <View style={styles.recentList}>
-            {workInventory.isLoading ? (
-              <Text style={styles.loadingText}>Loading recent work...</Text>
-            ) : workInventory.recentItems.length === 0 ? (
-              <Text style={styles.loadingText}>No recent cloud work yet.</Text>
-            ) : (
-              workInventory.recentItems.map((item) => (
-                <RecentWorkRow
-                  key={item.view.id}
-                  item={item}
-                  onPress={() => onOpenChat(item.chat)}
-                />
-              ))
-            )}
-          </View>
-        </View>
-      </MobileStack>
-    </MobileScreen>
+      <MobilePopover
+        visible={sheet === "runtime"}
+        onClose={closeSheet}
+        anchor="top-center"
+        insetTop={138}
+      >
+        <MobilePopoverGroup>
+          {launchModel.runtimeOptions.map((runtime) => {
+            const offlineTarget = runtime.kind === "target" && !runtime.online;
+            return (
+              <MobilePopoverOption
+                key={runtime.id}
+                title={runtime.label}
+                subtitle={offlineTarget ? `${runtime.description ?? ""} · Offline`.trim() : runtime.description ?? undefined}
+                selected={runtime.id === launchModel.selectedRuntime?.id}
+                disabled={offlineTarget}
+                onSelect={() => {
+                  launchModel.setRuntimeId(runtime.id);
+                  closeSheet();
+                }}
+              />
+            );
+          })}
+        </MobilePopoverGroup>
+      </MobilePopover>
+
+      <MobilePopover
+        visible={sheet === "config"}
+        onClose={closeSheet}
+        anchor="top-right"
+        insetTop={58}
+      >
+        <MobilePopoverGroup>
+          {launchModel.launchComposerControls.map((control) => (
+            <MobilePopoverDisclosure
+              key={control.id}
+              id={`control:${control.id}`}
+              icon={controlIcon(control)}
+              title={topLevelControlTitle(control)}
+              value={controlValueLabel(control) ?? "Choose"}
+              disabled={control.disabled}
+            >
+              {control.groups.flatMap((group) =>
+                group.options.map((option) => (
+                  <MobilePopoverOption
+                    key={`${group.id}:${option.id}`}
+                    title={normalizeModelLabel(option.label)}
+                    subtitle={option.description ?? undefined}
+                    selected={Boolean(option.selected)}
+                    disabled={option.disabled}
+                    onSelect={() => {
+                      control.onSelect?.(option.id);
+                    }}
+                  />
+                )),
+              )}
+            </MobilePopoverDisclosure>
+          ))}
+        </MobilePopoverGroup>
+      </MobilePopover>
+    </KeyboardAvoidingView>
   );
 }
 
-function RecentWorkRow({ item, onPress }: { item: MobileWorkItem; onPress: () => void }) {
-  return (
-    <MobileListRow
-      leading={<MobileIcon name={item.view.source === "slack" ? "slack" : "workspaces"} size={17} color={colors.faint} />}
-      title={item.view.title}
-      subtitle={`${item.view.sourceLabel} - ${item.view.repoLabel}`}
-      trailing={<Text style={styles.recentMeta}>{item.view.lastActivityLabel}</Text>}
-      showChevron
-      onPress={onPress}
-    />
-  );
-}
-
-function OptionRow({
-  title,
-  description,
-  icon,
-  selected,
-  onPress,
-}: {
-  title: string;
-  description: string;
-  icon: "cloud" | "git-branch";
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.optionRow,
-        selected && styles.optionRowActive,
-        pressed && styles.optionRowPressed,
-      ]}
-    >
-      <View style={[styles.optionIcon, selected && styles.optionIconActive]}>
-        <MobileIcon
-          name={icon}
-          size={18}
-          color={selected ? colors.fg : colors.mutedForeground}
-        />
-      </View>
-      <View style={styles.optionText}>
-        <Text style={styles.optionTitle}>{title}</Text>
-        <Text style={styles.optionDescription}>{description}</Text>
-      </View>
-      <View style={styles.radio}>{selected ? <View style={styles.radioDot} /> : null}</View>
-    </Pressable>
-  );
-}
-
-function buildRepoOptions(
-  configs: readonly {
-    gitOwner: string;
-    gitRepoName: string;
-    configured: boolean;
-  }[],
-): RepoOption[] {
-  return configs
-    .filter((config) => config.configured)
-    .map((config) => ({
-      id: `${config.gitOwner}/${config.gitRepoName}`,
-      gitOwner: config.gitOwner,
-      gitRepoName: config.gitRepoName,
-      label: `${config.gitOwner}/${config.gitRepoName}`,
-      description: "Configured cloud repo",
-    }));
-}
-
-function buildBranchName(prompt: string): string {
-  const slug = prompt
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 32)
-    || "mobile-chat";
-  return `proliferate/${slug}-${Date.now().toString(36).slice(-6)}`;
-}
-
-function buildWorkspaceDisplayName(prompt: string): string {
-  const normalized = prompt.replace(/\s+/g, " ").trim();
-  if (normalized.length <= 42) {
-    return normalized || "Mobile chat";
+function controlIcon(control: CloudChatComposerControlView | null): MobileIconName {
+  switch (control?.icon) {
+    case "brain":
+      return "brain";
+    case "sparkles":
+      return "sparkles";
+    case "openai":
+      return "openai";
+    case "claude":
+      return "claude";
+    case "gemini":
+      return "gemini";
+    case "opencodeBuild":
+    case "bot":
+      return "sparkles";
+    case "settings":
+      return "settings";
+    default:
+      return "cloud";
   }
-  return `${normalized.slice(0, 39).trimEnd()}...`;
+}
+
+function topLevelControlTitle(control: CloudChatComposerControlView): string {
+  if (control.key === "model") {
+    return "Model";
+  }
+  if (control.key === "mode") {
+    return "Mode";
+  }
+  return control.label;
+}
+
+function controlValueLabel(control: CloudChatComposerControlView | null): string | null {
+  if (!control) {
+    return null;
+  }
+  const selected = selectedOptionLabel(control);
+  const detail = control.detail;
+  const value = detail && detail !== control.label && detail.toLowerCase() !== "mode"
+    ? normalizeModelLabel(detail)
+    : selected;
+  if (!value) {
+    return null;
+  }
+  return control.pendingState ? `Updating ${value}` : value;
+}
+
+function selectedOptionLabel(control: CloudChatComposerControlView): string | null {
+  for (const group of control.groups) {
+    const selected = group.options.find((option) => option.selected);
+    if (selected) {
+      return normalizeModelLabel(selected.label);
+    }
+  }
+  return null;
+}
+
+function normalizeModelLabel(label: string): string {
+  return label
+    .replace(/^Claude\s*·\s*/i, "")
+    .replace(/^Claude\s+(?=Sonnet|Haiku|Opus)/i, "")
+    .replace(/^OpenAI\s*·\s*/i, "")
+    .replace(/^Gemini\s*·\s*/i, "")
+    .replace(/^Codex\s*·\s*/i, "");
 }
 
 const styles = StyleSheet.create({
-  optionGroup: {
-    marginTop: spacing[2],
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    overflow: "hidden",
+  root: {
+    flex: 1,
+    backgroundColor: colors.background,
   },
-  optionRow: {
+  header: {
+    minHeight: Platform.OS === "web" ? 48 : 58,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing[3],
+  },
+  headerButton: {
+    width: 38,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.full,
+  },
+  modelSelector: {
+    maxWidth: "56%",
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing[2],
+  },
+  modelSelectorText: {
+    minWidth: 0,
+    color: colors.fg,
+    fontSize: 15.5,
+    fontWeight: "600",
+  },
+  newChatLabel: {
+    alignSelf: "center",
+    color: colors.faint,
+    fontSize: 12,
+    fontWeight: "500",
+    marginTop: spacing[6],
+    marginBottom: spacing[2],
+  },
+  runtimeRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing[3],
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[3],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderLight,
+    paddingHorizontal: spacing[5],
   },
-  optionRowActive: {
-    backgroundColor: colors.accent,
-  },
-  optionRowPressed: {
-    opacity: 0.85,
-  },
-  optionIcon: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radius.md,
-    backgroundColor: colors.background,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  optionIconActive: {
-    backgroundColor: colors.sidebar,
-    borderColor: colors.borderHeavy,
-  },
-  optionText: {
+  runtimeRowLine: {
     flex: 1,
-    minWidth: 0,
-    gap: 2,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
   },
-  optionTitle: {
+  runtimeSelector: {
+    minHeight: 34,
+    maxWidth: "72%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderRadius: radius.full,
+    backgroundColor: colors.accent,
+    paddingHorizontal: spacing[3],
+  },
+  runtimeSelectorText: {
+    minWidth: 0,
     color: colors.fg,
-    fontSize: 14.5,
+    fontSize: 13,
     fontWeight: "600",
   },
-  optionDescription: {
-    color: colors.faint,
-    fontSize: 12.5,
-    lineHeight: 17,
-  },
-  radio: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 1.4,
-    borderColor: colors.borderHeavy,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  radioDot: {
-    width: 8,
-    height: 8,
+  runtimeDot: {
+    width: 7,
+    height: 7,
     borderRadius: 4,
-    backgroundColor: colors.fg,
+    backgroundColor: colors.success,
   },
-  loadingText: {
-    padding: spacing[3],
-    color: colors.faint,
-    fontSize: 13,
-    lineHeight: 18,
+  runtimeDotOffline: {
+    backgroundColor: colors.destructive,
   },
-  recentList: {
+  runtimeBlocker: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    alignSelf: "center",
+    maxWidth: 340,
     marginTop: spacing[2],
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    overflow: "hidden",
+    backgroundColor: colors.destructiveSubtle,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
   },
-  recentMeta: {
-    color: colors.faint,
-    fontSize: 11.5,
+  runtimeBlockerText: {
+    flex: 1,
+    color: colors.destructive,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: "600",
+  },
+  spacer: {
+    flex: 1,
   },
   composer: {
-    marginTop: spacing[2],
-    borderRadius: radius.lg,
+    paddingHorizontal: spacing[3],
+    paddingTop: spacing[2],
+    paddingBottom: spacing[3],
+    backgroundColor: colors.background,
+  },
+  composerCluster: {
+    gap: spacing[3],
+  },
+  repoPill: {
+    alignSelf: "flex-start",
+    maxWidth: "100%",
+    minHeight: 36,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    borderRadius: radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.card,
     paddingHorizontal: spacing[3],
-    paddingVertical: spacing[3],
+  },
+  repoPillText: {
+    minWidth: 0,
+    color: colors.fg,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  composerCard: {
+    borderRadius: 28,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[3],
+    paddingBottom: spacing[3],
     gap: spacing[2],
   },
   composerInput: {
-    minHeight: 112,
-    backgroundColor: "transparent",
+    minHeight: 23,
+    maxHeight: 200,
     borderWidth: 0,
+    backgroundColor: "transparent",
     paddingHorizontal: 0,
     paddingTop: 0,
-    fontSize: 15,
-    lineHeight: 22,
+    paddingBottom: 0,
+    color: colors.fg,
+    fontSize: 17,
+    lineHeight: 23,
   },
   composerFooter: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing[2],
-  },
-  context: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  contextText: {
-    color: colors.faint,
-    fontSize: 12,
+    justifyContent: "flex-end",
   },
   send: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: radius.full,
@@ -471,10 +529,18 @@ const styles = StyleSheet.create({
   sendPressed: {
     opacity: 0.85,
   },
-  errorText: {
-    marginTop: spacing[2],
-    color: colors.destructive,
+  launchNote: {
+    minHeight: 18,
+    color: colors.faint,
     fontSize: 12.5,
-    lineHeight: 17,
+    lineHeight: 18,
+    marginTop: spacing[2],
+    textAlign: "center",
+  },
+  launchError: {
+    color: colors.destructive,
+  },
+  pressed: {
+    opacity: 0.7,
   },
 });

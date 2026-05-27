@@ -2,9 +2,9 @@ import { useMemo } from "react";
 import type { CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
 import { useVisibleCloudWorkspaces } from "@proliferate/cloud-sdk-react";
 import {
-  buildCloudWorkInventory,
+  buildCloudWorkRecencyInventory,
   type CloudWorkFilters,
-  type CloudWorkGroupView,
+  type CloudWorkRecencyGroupView,
   type CloudWorkItemView,
 } from "@proliferate/product-model/workspaces/cloud-work-inventory";
 
@@ -17,7 +17,7 @@ export interface MobileWorkItem {
 }
 
 export interface MobileWorkGroup {
-  view: CloudWorkGroupView;
+  view: CloudWorkRecencyGroupView;
   items: MobileWorkItem[];
 }
 
@@ -37,7 +37,7 @@ export function useMobileWorkInventory(filters?: CloudWorkFilters): MobileWorkIn
 
   const inventory = useMemo(() => {
     const workspaceById = new Map(data.map((workspace) => [workspace.id, workspace]));
-    const groups = buildCloudWorkInventory(data, { filters }).map((group) => ({
+    const groups = buildCloudWorkRecencyInventory(data, { filters }).map((group) => ({
       view: group,
       items: group.items.flatMap((item) => {
         const workspace = workspaceById.get(item.id);

@@ -1,42 +1,46 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import type { CloudSessionProjection } from "@proliferate/cloud-sdk";
+import type { CloudChatComposerControlView } from "@proliferate/product-model/chats/cloud/composer-controls";
 
-import { colors, radius, spacing } from "../../styles/tokens";
-import { MobileIcon } from "../primitives/MobileIcon";
+import { type MobileIconName } from "../primitives/MobileIcon";
+import { MobilePopover } from "../primitives/popover/MobilePopover";
+import { MobilePopoverDisclosure } from "../primitives/popover/MobilePopoverDisclosure";
+import { MobilePopoverGroup } from "../primitives/popover/MobilePopoverGroup";
+import { MobilePopoverOption } from "../primitives/popover/MobilePopoverOption";
+import { MobilePopoverRow } from "../primitives/popover/MobilePopoverRow";
 
 interface MobileWorkspaceActionSheetProps {
   visible: boolean;
   branchLabel: string;
-  visibilityLabel: string;
-  liveLabel: string;
-  transcriptLabel: string;
   unclaimed: boolean;
   claimPending: boolean;
+  promptSubmitting: boolean;
+  sessions: readonly CloudSessionProjection[];
+  activeSessionId: string | null;
+  newSessionMode: boolean;
+  composerControls: readonly CloudChatComposerControlView[];
   onClaim: () => boolean | Promise<boolean>;
   onNewSession: () => void;
-  onOpenSessions: () => void;
-  onShareBranch: () => void;
+  onSelectSession: (sessionId: string) => void;
+  onCopyBranch: () => void;
   onClose: () => void;
 }
 
 export function MobileWorkspaceActionSheet({
   visible,
   branchLabel,
-  visibilityLabel,
-  liveLabel,
-  transcriptLabel,
   unclaimed,
   claimPending,
+  promptSubmitting,
+  sessions,
+  activeSessionId,
+  newSessionMode,
+  composerControls,
   onClaim,
   onNewSession,
-  onOpenSessions,
-  onShareBranch,
+  onSelectSession,
+  onCopyBranch,
   onClose,
 }: MobileWorkspaceActionSheetProps) {
-  function run(action: () => void) {
-    action();
-    onClose();
-  }
-
   async function runClaim() {
     const claimed = await onClaim();
     if (claimed) {
@@ -45,245 +49,201 @@ export function MobileWorkspaceActionSheet({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.layer}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close workspace actions"
-          style={styles.scrim}
-          onPress={onClose}
+    <MobilePopover visible={visible} onClose={onClose} anchor="top-right" insetTop={58} insetSide={8}>
+      <MobilePopoverGroup>
+        {unclaimed ? (
+          <MobilePopoverRow
+            id="claim"
+            icon="hand"
+            title={claimPending ? "Claiming workspace" : "Claim workspace"}
+            subtitle="Unlock replies and sessions."
+            disabled={claimPending}
+            onPress={() => {
+              void runClaim();
+            }}
+          />
+        ) : null}
+        <MobilePopoverRow
+          id="copy-branch"
+          icon="copy"
+          title="Copy branch"
+          subtitle={branchLabel}
+          onPress={() => {
+            onCopyBranch();
+            onClose();
+          }}
         />
-        <View style={styles.sheet}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Workspace</Text>
-            {unclaimed ? (
-              <View style={styles.lockedPill}>
-                <MobileIcon name="lock" size={11} color={colors.warning} />
-                <Text style={styles.lockedText}>Read-only</Text>
-              </View>
-            ) : null}
-          </View>
-
-          <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetScrollContent}>
-            <View style={styles.summary}>
-              <SummaryChip label={branchLabel} icon="git-branch" />
-              <SummaryChip label={visibilityLabel} icon={unclaimed ? "lock" : "cloud"} />
-              <SummaryChip label={liveLabel} icon="cloud" />
-              <SummaryChip label={transcriptLabel} icon="sessions" />
-            </View>
-
-            {unclaimed ? (
-              <ActionRow
-                icon="hand"
-                title={claimPending ? "Claiming workspace" : "Claim workspace"}
-                subtitle="Unlock replies, new sessions, and git actions."
-                disabled={claimPending}
-                onPress={() => {
-                  void runClaim();
+        {composerControls.map((control) => (
+          <MobilePopoverDisclosure
+            key={control.id}
+            id={`control:${control.id}`}
+            icon={controlIcon(control)}
+            title={topLevelControlTitle(control)}
+            value={controlValueLabel(control)}
+            disabled={unclaimed || control.disabled}
+          >
+            {control.groups.flatMap((group) =>
+              group.options.map((option) => (
+                <MobilePopoverOption
+                  key={`${group.id}:${option.id}`}
+                  title={normalizeModelLabel(option.label)}
+                  subtitle={option.description ?? undefined}
+                  selected={Boolean(option.selected)}
+                  disabled={option.disabled}
+                  onSelect={() => {
+                    control.onSelect?.(option.id);
+                  }}
+                />
+              )),
+            )}
+          </MobilePopoverDisclosure>
+        ))}
+        <MobilePopoverDisclosure
+          id="sessions"
+          icon="sessions"
+          title="Switch session"
+          value={activeSessionLabel(sessions, activeSessionId, newSessionMode)}
+          disabled={unclaimed}
+        >
+          <MobilePopoverOption
+            title="New session"
+            subtitle={
+              promptSubmitting
+                ? "Wait for the current prompt first."
+                : "Start a separate chat here."
+            }
+            selected={newSessionMode}
+            disabled={promptSubmitting}
+            onSelect={() => {
+              onNewSession();
+              onClose();
+            }}
+          />
+          {sessions.map((session, index) => {
+            const selected = session.sessionId === activeSessionId && !newSessionMode;
+            return (
+              <MobilePopoverOption
+                key={session.sessionId}
+                title={sessionDisplayTitle(session, index)}
+                subtitle={sessionDisplaySubtitle(session)}
+                selected={selected}
+                onSelect={() => {
+                  onSelectSession(session.sessionId);
+                  onClose();
                 }}
               />
-            ) : null}
-            <ActionRow
-              icon="sessions"
-              title="Sessions"
-              subtitle="Switch sessions or create a new one."
-              onPress={() => run(onOpenSessions)}
-            />
-            <ActionRow
-              icon="plus"
-              title="New session"
-              subtitle={unclaimed ? "Claim this workspace before starting a session." : "Start a fresh session in this workspace."}
-              disabled={unclaimed}
-              onPress={() => run(onNewSession)}
-            />
-            <ActionRow
-              icon="git-branch"
-              title="Copy branch name"
-              subtitle={branchLabel}
-              onPress={() => run(onShareBranch)}
-            />
-            <ActionRow
-              icon="external"
-              title="Git actions"
-              subtitle={unclaimed ? "Claim this workspace before git actions." : "PR and diff actions are not available on mobile yet."}
-              disabled
-              onPress={onClose}
-            />
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
+            );
+          })}
+        </MobilePopoverDisclosure>
+        <MobilePopoverRow
+          id="new-session"
+          icon="plus"
+          title="New session"
+          subtitle={promptSubmitting ? "Wait for this prompt first." : "Start a fresh session here."}
+          disabled={unclaimed || promptSubmitting}
+          onPress={() => {
+            onNewSession();
+            onClose();
+          }}
+        />
+      </MobilePopoverGroup>
+    </MobilePopover>
   );
 }
 
-function SummaryChip({
-  label,
-  icon,
-}: {
-  label: string;
-  icon: "git-branch" | "lock" | "cloud" | "sessions";
-}) {
-  return (
-    <View style={styles.summaryChip}>
-      <MobileIcon name={icon} size={12} color={colors.faint} />
-      <Text style={styles.summaryChipText} numberOfLines={1}>{label}</Text>
-    </View>
-  );
+function topLevelControlTitle(control: CloudChatComposerControlView): string {
+  if (control.key === "model") {
+    return "Model";
+  }
+  if (control.key === "mode") {
+    return "Mode";
+  }
+  return control.label;
 }
 
-function ActionRow({
-  icon,
-  title,
-  subtitle,
-  disabled,
-  onPress,
-}: {
-  icon: "hand" | "sessions" | "plus" | "git-branch" | "external";
-  title: string;
-  subtitle: string;
-  disabled?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.action,
-        disabled && styles.actionDisabled,
-        pressed && styles.pressed,
-      ]}
-    >
-      <View style={styles.actionIcon}>
-        <MobileIcon name={icon} size={17} color={disabled ? colors.faint : colors.fg} />
-      </View>
-      <View style={styles.actionText}>
-        <Text style={[styles.actionTitle, disabled && styles.actionTitleDisabled]}>{title}</Text>
-        <Text style={styles.actionSubtitle}>{subtitle}</Text>
-      </View>
-    </Pressable>
-  );
+function controlValueLabel(control: CloudChatComposerControlView): string {
+  const selected = selectedOptionLabel(control);
+  const detail = control.detail;
+  const value = detail && detail !== control.label && detail.toLowerCase() !== "mode"
+    ? normalizeModelLabel(detail)
+    : selected ?? "Choose";
+  return control.pendingState ? `Updating ${value}` : value;
 }
 
-const styles = StyleSheet.create({
-  layer: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  scrim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.overlayStrong,
-  },
-  sheet: {
-    maxHeight: "82%",
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-    paddingHorizontal: spacing[5],
-    paddingTop: spacing[4],
-    paddingBottom: spacing[6],
-    gap: spacing[3],
-  },
-  sheetScroll: {
-    minHeight: 0,
-  },
-  sheetScrollContent: {
-    gap: spacing[3],
-    paddingBottom: spacing[1],
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  title: {
-    color: colors.fg,
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  lockedPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    borderRadius: radius.full,
-    backgroundColor: colors.warningSubtle,
-    paddingHorizontal: spacing[2],
-    paddingVertical: 3,
-  },
-  lockedText: {
-    color: colors.warning,
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  summary: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing[2],
-    paddingBottom: spacing[1],
-  },
-  summaryChip: {
-    maxWidth: "48%",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    paddingHorizontal: spacing[2],
-    paddingVertical: 4,
-  },
-  summaryChipText: {
-    color: colors.faint,
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  action: {
-    minHeight: 58,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[3],
-    borderRadius: radius.lg,
-    backgroundColor: colors.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-  },
-  actionDisabled: {
-    opacity: 0.52,
-  },
-  actionIcon: {
-    width: 34,
-    height: 34,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radius.md,
-    backgroundColor: colors.background,
-  },
-  actionText: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  actionTitle: {
-    color: colors.fg,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  actionTitleDisabled: {
-    color: colors.faint,
-  },
-  actionSubtitle: {
-    color: colors.faint,
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-});
+function selectedOptionLabel(control: CloudChatComposerControlView): string | null {
+  for (const group of control.groups) {
+    const selected = group.options.find((option) => option.selected);
+    if (selected) {
+      return normalizeModelLabel(selected.label);
+    }
+  }
+  return null;
+}
+
+function activeSessionLabel(
+  sessions: readonly CloudSessionProjection[],
+  activeSessionId: string | null,
+  newSessionMode: boolean,
+): string {
+  if (newSessionMode) {
+    return "New session";
+  }
+  if (!activeSessionId) {
+    return sessions.length ? "Choose" : "No sessions";
+  }
+  const index = sessions.findIndex((session) => session.sessionId === activeSessionId);
+  if (index === -1) {
+    return activeSessionId.slice(0, 8);
+  }
+  return sessionDisplayTitle(sessions[index], index);
+}
+
+function normalizeModelLabel(label: string): string {
+  return label
+    .replace(/^Claude\s*·\s*/i, "")
+    .replace(/^Claude\s+(?=Sonnet|Haiku|Opus)/i, "")
+    .replace(/^OpenAI\s*·\s*/i, "")
+    .replace(/^Gemini\s*·\s*/i, "")
+    .replace(/^Codex\s*·\s*/i, "");
+}
+
+function controlIcon(control: CloudChatComposerControlView): MobileIconName {
+  switch (control.icon) {
+    case "brain":
+      return "brain";
+    case "sparkles":
+      return "sparkles";
+    case "shieldCheck":
+      return "shield";
+    case "settings":
+      return "settings";
+    case "zap":
+      return "sparkles";
+    case "build":
+    case "edit":
+    case "opencodePlan":
+    case "plan":
+    case "read":
+      return "settings";
+    case "claude":
+      return "claude";
+    case "openai":
+      return "openai";
+    case "gemini":
+      return "gemini";
+    case "opencodeBuild":
+    case "bot":
+      return "sparkles";
+    default:
+      return "settings";
+  }
+}
+
+function sessionDisplayTitle(session: CloudSessionProjection, index: number): string {
+  const title = session.title?.trim();
+  return title || `Session ${index + 1}`;
+}
+
+function sessionDisplaySubtitle(session: CloudSessionProjection): string {
+  return `${session.status} · ${session.sessionId.slice(0, 8)}`;
+}

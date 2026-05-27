@@ -2,8 +2,13 @@ import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   BackHandler,
+  Dimensions,
+  Easing,
+  Keyboard,
   Linking,
+  PanResponder,
   Pressable,
   StyleSheet,
   Text,
@@ -16,17 +21,17 @@ import { useCloudWorkspaceSnapshot } from "@proliferate/cloud-sdk-react";
 
 import { MobileAuthScreen } from "../auth/MobileAuthScreen";
 import { MobileConnectGitHubScreen } from "../auth/MobileConnectGitHubScreen";
+import { MobileOnboardingScreen } from "../onboarding/MobileOnboardingScreen";
 import { MobileAutomationsScreen } from "../automations/MobileAutomationsScreen";
 import { MobileChatScreen } from "../chat/MobileChatScreen";
 import { MobileHomeScreen } from "../home/MobileHomeScreen";
-import { MobileIcon } from "../primitives/MobileIcon";
 import { MobileSettingsScreen } from "../settings/MobileSettingsScreen";
 import {
   MobileDrawer,
   type MobileDrawerAccountSummary,
 } from "./drawer/MobileDrawer";
-import { MobileTopBar, MobileTopBarIconButton } from "../primitives/MobileTopBar";
-import { MobileAllWorkScreen } from "../work/MobileAllWorkScreen";
+import { MobileTopBar } from "../primitives/MobileTopBar";
+import { MobileWorkspacesScreen } from "../work/MobileAllWorkScreen";
 import { useMobileClientDailyActivity } from "../../hooks/telemetry/use-mobile-client-daily-activity";
 import { useMobileScreenTelemetry } from "../../hooks/telemetry/use-mobile-screen-telemetry";
 import {
@@ -42,11 +47,13 @@ import {
   type RouteId,
 } from "../../navigation/navigation-model";
 import { useMobileAuth } from "../../providers/MobileAuthProvider";
-import { colors, shadow, spacing } from "../../styles/tokens";
+import { colors, spacing } from "../../styles/tokens";
 
 const SHELL_ROUTE_KEY = "proliferate.mobile.shell.route";
 const SHELL_CHAT_KEY = "proliferate.mobile.shell.chat";
 const SHELL_STORAGE_VERSION = 1;
+const ONBOARDING_FLAG_KEY = "proliferate.mobile.onboarded.v1";
+const DRAWER_WIDTH = Math.min(300, Math.round(Dimensions.get("window").width * 0.76));
 
 export function MobileShell() {
   const {
@@ -62,6 +69,7 @@ export function MobileShell() {
   const [route, setRoute] = useState<RouteId>("home");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedChat, setSelectedChat] = useState<MobileCloudChat | null>(null);
+  const [onboardingStatus, setOnboardingStatus] = useState<"checking" | "needed" | "done">("checking");
   const [linkedWorkspaceId, setLinkedWorkspaceId] = useState<string | null>(null);
   const [linkedWorkspaceSessionId, setLinkedWorkspaceSessionId] = useState<string | null>(null);
   const [initialLinkChecked, setInitialLinkChecked] = useState(false);
@@ -120,6 +128,34 @@ export function MobileShell() {
       subscription.remove();
     };
   }, [applyWorkspaceLink]);
+
+  useEffect(() => {
+    if (authState !== "active") {
+      setOnboardingStatus("checking");
+      return;
+    }
+    let cancelled = false;
+    void getMobileStorageItem(ONBOARDING_FLAG_KEY)
+      .then((value) => {
+        if (cancelled) return;
+        setOnboardingStatus(value === "true" ? "done" : "needed");
+      })
+      .catch(() => {
+        if (!cancelled) setOnboardingStatus("needed");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authState]);
+
+  const completeOnboarding = useCallback(async () => {
+    try {
+      await setMobileStorageItem(ONBOARDING_FLAG_KEY, "true");
+    } catch {
+      // best effort
+    }
+    setOnboardingStatus("done");
+  }, []);
 
   useEffect(() => {
     if (authState !== "active") {
@@ -276,69 +312,207 @@ export function MobileShell() {
     );
   }
 
+  if (onboardingStatus === "needed") {
+    return (
+      <View style={styles.rootShell}>
+        <StatusBar style="light" />
+        <MobileOnboardingScreen onDone={() => void completeOnboarding()} />
+      </View>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.root} edges={["top", "right", "bottom", "left"]}>
+    <View style={styles.rootShell}>
       <StatusBar style="light" />
 
-      {selectedChat ? (
-        <MobileChatScreen
-          chat={selectedChat}
-          ownerUserId={ownerUserId}
-          onBack={() => setSelectedChat(null)}
-          onInitialPendingPromptConsumed={clearSelectedChatInitialPendingPrompt}
-          onSessionSelected={markSelectedChatSession}
-        />
-      ) : (
-        <>
-          <MobileTopBar
-            title={routeTitle(route)}
-            subtitle={subtitle}
-            leading={{ kind: "menu", onPress: () => setDrawerOpen(true) }}
-            trailing={route === "home" ? (
-              <MobileTopBarIconButton
-                name="search"
-                accessibilityLabel="Open all work"
-                onPress={() => navigate("work")}
-              />
-            ) : undefined}
+      <ShellWithDrawer
+        drawerOpen={drawerOpen}
+        setDrawerOpen={setDrawerOpen}
+        drawer={
+          <MobileDrawer
+            activeRoute={selectedChat ? null : route}
+            onNavigate={navigate}
+            onOpenChat={openChat}
+            onNewChat={() => navigate("home")}
+            onClose={() => setDrawerOpen(false)}
+            account={account}
           />
-
+        }
+      >
+        {selectedChat ? (
+          <MobileChatScreen
+            chat={selectedChat}
+            ownerUserId={ownerUserId}
+            onBack={() => setSelectedChat(null)}
+            onInitialPendingPromptConsumed={clearSelectedChatInitialPendingPrompt}
+            onSessionSelected={markSelectedChatSession}
+          />
+        ) : route === "home" ? (
+          <MobileHomeScreen
+            ownerUserId={ownerUserId}
+            onOpenChat={openChat}
+            onOpenDrawer={() => setDrawerOpen(true)}
+            onConfigureRepos={() => navigate("settings")}
+          />
+        ) : (
           <View style={styles.body}>
-            {route === "home" ? (
-              <MobileHomeScreen ownerUserId={ownerUserId} onOpenChat={openChat} />
-            ) : route === "work" ? (
-              <MobileAllWorkScreen onOpenChat={openChat} />
+            {route === "work" ? (
+              <MobileWorkspacesScreen
+                onOpenChat={openChat}
+                onOpenDrawer={() => setDrawerOpen(true)}
+                onNewChat={() => navigate("home")}
+              />
             ) : route === "automations" ? (
-              <MobileAutomationsScreen />
+              <>
+                <MobileTopBar
+                  title={routeTitle(route)}
+                  subtitle={subtitle}
+                  leading={{ kind: "menu", onPress: () => setDrawerOpen(true) }}
+                />
+                <MobileAutomationsScreen />
+              </>
             ) : (
-              <MobileSettingsScreen account={account} onSignOut={() => void handleSignOut()} />
+              <>
+                <MobileTopBar
+                  title={routeTitle(route)}
+                  subtitle={subtitle}
+                  leading={{ kind: "menu", onPress: () => setDrawerOpen(true) }}
+                />
+                <MobileSettingsScreen account={account} onSignOut={() => void handleSignOut()} />
+              </>
             )}
           </View>
+        )}
+      </ShellWithDrawer>
 
-          {route !== "home" && (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="New chat"
-              onPress={() => navigate("home")}
-              style={({ pressed }) => [styles.fab, pressed && styles.pressed]}
-            >
-              <MobileIcon name="plus" size={22} color={colors.background} />
-            </Pressable>
-          )}
-        </>
-      )}
+    </View>
+  );
+}
 
-      {drawerOpen && (
-        <MobileDrawer
-          activeRoute={route}
-          onNavigate={navigate}
-          onOpenChat={openChat}
-          onClose={() => setDrawerOpen(false)}
-          onSignOut={() => void handleSignOut()}
-          account={account}
-        />
-      )}
-    </SafeAreaView>
+function ShellWithDrawer({
+  drawerOpen,
+  setDrawerOpen,
+  drawer,
+  children,
+}: {
+  drawerOpen: boolean;
+  setDrawerOpen: (open: boolean) => void;
+  drawer: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const translate = useRef(new Animated.Value(0)).current;
+  const [scrimReady, setScrimReady] = useState(false);
+  const draggingRef = useRef(false);
+  const scrimOpacity = useMemo(
+    () => translate.interpolate({
+      inputRange: [0, DRAWER_WIDTH],
+      outputRange: [0, 0.4],
+      extrapolate: "clamp",
+    }),
+    [translate],
+  );
+
+  function animateTo(open: boolean, velocity = 0) {
+    Animated.timing(translate, {
+      toValue: open ? DRAWER_WIDTH : 0,
+      duration: Math.max(140, 260 - Math.abs(velocity) * 90),
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start(() => {
+      setDrawerOpen(open);
+    });
+  }
+
+  useEffect(() => {
+    if (drawerOpen) {
+      Keyboard.dismiss();
+    }
+    if (draggingRef.current) return;
+    Animated.timing(translate, {
+      toValue: drawerOpen ? DRAWER_WIDTH : 0,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+    if (!drawerOpen) {
+      setScrimReady(false);
+      return;
+    }
+    const id = setTimeout(() => setScrimReady(true), 360);
+    return () => clearTimeout(id);
+  }, [drawerOpen, translate]);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_e, g) => {
+          if (Math.abs(g.dy) > Math.abs(g.dx) * 1.2) return false;
+          if (Math.abs(g.dx) < 8) return false;
+          if (drawerOpen) return true;
+          return g.x0 <= 28 && g.dx > 0;
+        },
+        onPanResponderGrant: () => {
+          draggingRef.current = true;
+          Keyboard.dismiss();
+          (translate as Animated.Value).stopAnimation((v: number) => {
+            (translate as Animated.Value).setValue(v);
+          });
+        },
+        onPanResponderMove: (_e, g) => {
+          const start = drawerOpen ? DRAWER_WIDTH : 0;
+          const next = Math.max(0, Math.min(DRAWER_WIDTH, start + g.dx));
+          translate.setValue(next);
+        },
+        onPanResponderRelease: (_e, g) => {
+          draggingRef.current = false;
+          const start = drawerOpen ? DRAWER_WIDTH : 0;
+          const current = Math.max(0, Math.min(DRAWER_WIDTH, start + g.dx));
+          let shouldOpen: boolean;
+          if (g.vx > 0.4) shouldOpen = true;
+          else if (g.vx < -0.4) shouldOpen = false;
+          else shouldOpen = current > DRAWER_WIDTH / 2;
+          animateTo(shouldOpen, g.vx);
+          if (shouldOpen === drawerOpen) {
+            // state already correct, just bounce-animate (done in animateTo)
+          }
+        },
+        onPanResponderTerminate: () => {
+          draggingRef.current = false;
+          animateTo(drawerOpen);
+        },
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [drawerOpen],
+  );
+
+  return (
+    <View style={styles.shellContainer} {...panResponder.panHandlers}>
+      <View
+        style={[styles.staticDrawer, { width: DRAWER_WIDTH }]}
+        pointerEvents={drawerOpen ? "auto" : "none"}
+      >
+        {drawer}
+      </View>
+      <Animated.View
+        style={[styles.slidingContent, { transform: [{ translateX: translate }] }]}
+      >
+        <SafeAreaView style={styles.slidingSafeArea} edges={["top", "right", "bottom", "left"]}>
+          {children}
+        </SafeAreaView>
+        <Animated.View
+          style={[styles.contentScrim, { opacity: scrimOpacity }]}
+          pointerEvents={drawerOpen && scrimReady ? "auto" : "none"}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close navigation"
+            onPress={() => setDrawerOpen(false)}
+            style={StyleSheet.absoluteFill}
+          />
+        </Animated.View>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -370,7 +544,7 @@ function routeSubtitle(route: RouteId): string | undefined {
     case "home":
       return "New chat";
     case "work":
-      return "Cloud work";
+      return "Workspaces";
     case "automations":
       return "Scheduled runs";
     case "settings":
@@ -644,19 +818,45 @@ const styles = StyleSheet.create({
   body: {
     flex: 1,
   },
-  fab: {
-    position: "absolute",
-    right: 18,
-    bottom: 26,
-    width: 52,
-    height: 52,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 26,
-    backgroundColor: colors.fg,
-    ...shadow.floating,
+  rootShell: {
+    flex: 1,
+    backgroundColor: colors.sidebar,
   },
-  pressed: {
-    opacity: 0.72,
+  shellContainer: {
+    flex: 1,
+    overflow: "hidden",
+    backgroundColor: colors.sidebar,
+  },
+  staticDrawer: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 0,
+  },
+  slidingContent: {
+    flex: 1,
+    zIndex: 1,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 22,
+    borderBottomLeftRadius: 22,
+    overflow: "hidden",
+  },
+  slidingSafeArea: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  contentScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#000000",
+    zIndex: 5,
+  },
+  drawerGestureEdge: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 24,
+    zIndex: 10,
   },
 });

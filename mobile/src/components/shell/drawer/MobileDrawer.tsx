@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect } from "react";
+import { Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { useMobileWorkInventory } from "../../../hooks/work/derived/use-mobile-work-inventory";
 import {
@@ -18,40 +19,40 @@ export interface MobileDrawerAccountSummary {
 }
 
 interface MobileDrawerProps {
-  activeRoute: RouteId;
+  activeRoute: RouteId | null;
   account: MobileDrawerAccountSummary;
   onNavigate: (route: RouteId) => void;
   onOpenChat: (chat: MobileCloudChat) => void;
+  onNewChat: () => void;
   onClose: () => void;
-  onSignOut: () => void;
 }
+
 
 export function MobileDrawer({
   activeRoute,
-  account,
+  account: _account,
   onNavigate,
   onOpenChat,
-  onClose,
-  onSignOut,
+  onNewChat,
+  onClose: _onClose,
 }: MobileDrawerProps) {
   const inventory = useMobileWorkInventory();
+
+  useEffect(() => {
+    Keyboard.dismiss();
+  }, []);
 
   function navigate(route: RouteId) {
     onNavigate(route);
   }
 
   return (
-    <View style={styles.drawerLayer}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Close navigation"
-        onPress={onClose}
-        style={styles.scrim}
-      />
-      <View style={styles.drawer}>
-        <View style={styles.brand}>
-          <MobileProliferateMark size={20} />
-          <Text style={styles.wordmark}>Proliferate</Text>
+    <View style={styles.drawer}>
+        <View style={styles.profileHeader}>
+          <View style={styles.profileBrand}>
+            <MobileProliferateMark size={19} />
+            <Text style={styles.wordmark}>Proliferate</Text>
+          </View>
         </View>
 
         <View style={styles.primaryNav}>
@@ -68,70 +69,55 @@ export function MobileDrawer({
 
         <View style={styles.recentSection}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionLabel}>Recent work</Text>
-            <Text style={styles.sectionCount}>{inventory.recentItems.length}</Text>
+            <Text style={styles.sectionLabel}>Recents</Text>
           </View>
-          <View style={styles.recentList}>
+          <ScrollView
+            style={styles.recentList}
+            contentContainerStyle={styles.recentListContent}
+            showsVerticalScrollIndicator={false}
+          >
             {inventory.isLoading ? (
               <Text style={styles.recentEmpty}>Loading...</Text>
             ) : inventory.recentItems.length === 0 ? (
-              <Text style={styles.recentEmpty}>No recent work yet.</Text>
+              <Text style={styles.recentEmpty}>No recent work yet</Text>
             ) : (
-              inventory.recentItems.map((item) => (
+              <>
+                {inventory.recentItems.map((item) => (
+                  <Pressable
+                    key={item.view.id}
+                    accessibilityRole="button"
+                    onPress={() => onOpenChat(item.chat)}
+                    style={({ pressed }) => [styles.recentRow, pressed && styles.drawerRowPressed]}
+                  >
+                    <Text style={styles.recentTitle} numberOfLines={1}>{item.view.title}</Text>
+                  </Pressable>
+                ))}
                 <Pressable
-                  key={item.view.id}
                   accessibilityRole="button"
-                  onPress={() => onOpenChat(item.chat)}
+                  accessibilityLabel="All workspaces"
+                  onPress={() => navigate(allWorkRoute.id)}
                   style={({ pressed }) => [styles.recentRow, pressed && styles.drawerRowPressed]}
                 >
-                  <MobileIcon
-                    name={item.view.source === "slack" ? "slack" : item.view.source === "automation" ? "calendar-clock" : "sessions"}
-                    size={16}
-                    color={colors.mutedForeground}
-                  />
-                  <View style={styles.recentText}>
-                    <Text style={styles.recentTitle} numberOfLines={1}>{item.view.title}</Text>
-                    <Text style={styles.recentMeta} numberOfLines={1}>
-                      {item.view.sourceLabel} - {item.view.lastActivityLabel}
-                    </Text>
-                  </View>
+                  <Text style={styles.allWorkspacesTitle} numberOfLines={1}>All workspaces</Text>
                 </Pressable>
-              ))
+              </>
             )}
-          </View>
+          </ScrollView>
         </View>
 
         <View style={styles.drawerBottom}>
-          <DrawerRouteRow
-            active={activeRoute === allWorkRoute.id}
-            icon={allWorkRoute.icon}
-            label={`${allWorkRoute.label}${inventory.items.length ? ` (${inventory.items.length})` : ""}`}
-            onPress={() => navigate(allWorkRoute.id)}
-          />
-
-          <View style={styles.account}>
-            <View style={styles.accountAvatar}>
-              <Text style={styles.accountAvatarText}>{account.initials}</Text>
-            </View>
-            <View style={styles.accountText}>
-              <Text style={styles.accountName} numberOfLines={1}>
-                {account.name}
-              </Text>
-              <Text style={styles.accountHandle} numberOfLines={1}>
-                {account.handle}
-              </Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Sign out"
-              onPress={onSignOut}
-              style={({ pressed }) => [styles.accountAction, pressed && styles.pressed]}
-            >
-              <MobileIcon name="log-out" size={17} color={colors.mutedForeground} />
-            </Pressable>
-          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="New chat"
+            onPress={() => {
+              onNewChat();
+            }}
+            style={({ pressed }) => [styles.newChat, pressed && styles.newChatPressed]}
+          >
+            <MobileIcon name="plus" size={17} color={colors.background} />
+            <Text style={styles.newChatText}>New chat</Text>
+          </Pressable>
         </View>
-      </View>
     </View>
   );
 }
@@ -177,48 +163,45 @@ function DrawerRouteRow({
 }
 
 const styles = StyleSheet.create({
-  drawerLayer: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 20,
-    flexDirection: "row",
-  },
-  scrim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.overlayStrong,
-  },
   drawer: {
-    width: 296,
-    height: "100%",
-    paddingTop: 64,
-    paddingHorizontal: spacing[3],
-    paddingBottom: spacing[4],
+    flex: 1,
+    paddingTop: Platform.OS === "web" ? 60 : 80,
+    paddingHorizontal: spacing[2],
+    paddingBottom: Platform.OS === "web" ? 20 : spacing[4],
     backgroundColor: colors.sidebar,
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: colors.sidebarBorder,
+    borderRightWidth: 1,
+    borderRightColor: colors.borderHeavy,
+    borderTopRightRadius: 22,
+    borderBottomRightRadius: 22,
   },
-  brand: {
+  profileHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing[2],
-    paddingHorizontal: spacing[2],
+    paddingHorizontal: spacing[4],
     marginBottom: spacing[4],
+  },
+  profileBrand: {
+    minWidth: 0,
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[3],
   },
   wordmark: {
     color: colors.fg,
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "600",
-    letterSpacing: -0.3,
   },
   primaryNav: {
     gap: 2,
   },
   drawerRow: {
-    minHeight: 44,
+    minHeight: 39,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing[3],
-    borderRadius: radius.md,
-    paddingHorizontal: spacing[3],
+    borderRadius: 20,
+    paddingHorizontal: spacing[4],
   },
   drawerRowActive: {
     backgroundColor: colors.sidebarAccent,
@@ -231,7 +214,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     color: colors.sidebarForeground,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "500",
   },
   drawerRowTextActive: {
@@ -240,108 +223,75 @@ const styles = StyleSheet.create({
   },
   recentSection: {
     flex: 1,
-    marginTop: spacing[5],
+    marginTop: spacing[3],
     minHeight: 0,
   },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: spacing[2],
+    paddingHorizontal: spacing[4],
     paddingBottom: spacing[2],
   },
   sectionLabel: {
     color: colors.sidebarMutedForeground,
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-  },
-  sectionCount: {
-    color: colors.faint,
-    fontSize: 11,
-    fontWeight: "600",
+    fontSize: 13,
+    fontWeight: "500",
   },
   recentList: {
-    gap: 2,
+    flex: 1,
+  },
+  recentListContent: {
+    gap: 1,
   },
   recentEmpty: {
     color: colors.faint,
-    fontSize: 12,
-    lineHeight: 17,
-    paddingHorizontal: spacing[2],
+    fontSize: 13.5,
+    lineHeight: 18,
+    paddingHorizontal: spacing[4],
     paddingVertical: spacing[2],
   },
   recentRow: {
-    minHeight: 42,
+    minHeight: 34,
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing[3],
-    borderRadius: radius.md,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-  },
-  recentText: {
-    flex: 1,
-    minWidth: 0,
-    gap: 1,
+    borderRadius: 17,
+    paddingHorizontal: spacing[4],
   },
   recentTitle: {
-    color: colors.fg,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  recentMeta: {
-    color: colors.faint,
-    fontSize: 11,
-  },
-  drawerBottom: {
-    gap: spacing[3],
-    paddingTop: spacing[3],
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.sidebarBorder,
-  },
-  account: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[3],
-    paddingHorizontal: spacing[1],
-  },
-  accountAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.infoSubtle,
-  },
-  accountAvatarText: {
-    color: colors.info,
-    fontSize: 11.5,
-    fontWeight: "700",
-  },
-  accountText: {
     flex: 1,
     minWidth: 0,
-  },
-  accountName: {
     color: colors.fg,
-    fontSize: 13.5,
-    fontWeight: "600",
+    fontSize: 14,
+    fontWeight: "500",
   },
-  accountHandle: {
-    color: colors.faint,
-    fontSize: 11.5,
-    marginTop: 1,
+  allWorkspacesTitle: {
+    flex: 1,
+    minWidth: 0,
+    color: colors.sidebarMutedForeground,
+    fontSize: 14,
+    fontWeight: "500",
   },
-  accountAction: {
-    width: 36,
-    height: 36,
+  drawerBottom: {
+    paddingTop: spacing[2],
+  },
+  newChat: {
+    minHeight: 44,
+    alignSelf: "flex-end",
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: radius.md,
+    gap: spacing[2],
+    borderRadius: radius.full,
+    backgroundColor: colors.fg,
+    paddingHorizontal: spacing[4],
   },
-  pressed: {
-    opacity: 0.72,
+  newChatPressed: {
+    opacity: 0.82,
+  },
+  newChatText: {
+    color: colors.background,
+    fontSize: 14.5,
+    fontWeight: "600",
   },
 });

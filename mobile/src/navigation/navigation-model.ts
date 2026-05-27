@@ -25,8 +25,12 @@ export interface MobileCloudChat {
 export interface MobilePendingPrompt {
   id: string;
   text: string;
+  agentKind?: string | null;
   modelId: string | null;
   modeId: string | null;
+  sessionConfigUpdates?: { configId: string; value: string }[];
+  selectedRepo?: string | null;
+  selectedRuntimeTargetId?: string | null;
   createdAt: number;
   dispatchedSessionId?: string | null;
   failedAt?: number | null;
@@ -36,10 +40,11 @@ export interface MobilePendingPrompt {
 export const drawerRoutes: DrawerRoute[] = [
   { id: "home", label: "Home", icon: "home" },
   { id: "automations", label: "Automations", icon: "calendar-clock" },
+  { id: "work", label: "Workspaces", icon: "workspaces" },
   { id: "settings", label: "Settings", icon: "settings" },
 ];
 
-export const allWorkRoute: DrawerRoute = { id: "work", label: "All work", icon: "workspaces" };
+export const allWorkRoute: DrawerRoute = { id: "work", label: "Workspaces", icon: "workspaces" };
 
 export function routeTitle(route: RouteId): string {
   if (route === allWorkRoute.id) {

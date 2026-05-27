@@ -9,6 +9,7 @@ import {
   type CloudWorkspaceDetail,
   ProliferateClientError,
   type ProliferateCloudClient,
+  type AgentAuthAgentKind,
 } from "@proliferate/cloud-sdk";
 import {
   cloudCommandReadiness,
@@ -31,6 +32,11 @@ export type StartSessionPayload = {
     kind: "system";
     entrypoint: "cloud";
   };
+};
+
+export type UpdateSessionConfigPayload = {
+  configId: string;
+  value: string;
 };
 
 type EnqueueCloudCommand<TPayload> = (
@@ -84,12 +90,24 @@ export async function dispatchPendingMobilePrompt(args: {
   pendingPrompt: MobilePendingPrompt;
   modelId: string | null;
   enqueueStartSession: EnqueueCloudCommand<StartSessionPayload>;
+  enqueueConfig: EnqueueCloudCommand<UpdateSessionConfigPayload>;
   enqueuePrompt: EnqueueCloudCommand<SendPromptPayload>;
   setLatestCommandId: (commandId: string) => void;
   onStatus: (status: string) => void;
   shouldContinue: () => boolean;
 }): Promise<string> {
   const session = await startSessionForPrompt(args);
+  assertStillCurrent(args.shouldContinue);
+  await applyPendingSessionConfigUpdates({
+    client: args.client,
+    workspace: args.workspace,
+    session,
+    pendingPrompt: args.pendingPrompt,
+    enqueueConfig: args.enqueueConfig,
+    setLatestCommandId: args.setLatestCommandId,
+    onStatus: args.onStatus,
+    shouldContinue: args.shouldContinue,
+  });
   assertStillCurrent(args.shouldContinue);
   args.onStatus("Sending queued prompt.");
   const command = await args.enqueuePrompt({
@@ -126,17 +144,19 @@ async function startSessionForPrompt(args: {
   if (!targetId || !anyharnessWorkspaceId) {
     throw new Error("Workspace is ready but missing runtime command routing.");
   }
+  const agentKind = args.pendingPrompt.agentKind ?? resolveAgentKind(args.workspace);
+  const modelId = args.pendingPrompt.modelId ?? args.modelId;
+  const modeId = args.pendingPrompt.modeId;
   await ensureMobileWorkspaceReadyForCloudCommands({
     client: args.client,
     workspace: args.workspace,
+    agentKind,
+    modelId,
     idempotencyKey: `${args.pendingPrompt.id}:target-config`,
     setLatestCommandId: args.setLatestCommandId,
     onStatus: args.onStatus,
     shouldContinue: args.shouldContinue,
   });
-  const agentKind = resolveAgentKind(args.workspace);
-  const modelId = agentKind === "codex" ? args.modelId : null;
-  const modeId = args.pendingPrompt.modeId;
   const existingSessionIds = await loadExistingSessionIds({
     client: args.client,
     workspaceId: args.workspace.id,
@@ -164,9 +184,57 @@ async function startSessionForPrompt(args: {
   });
 }
 
+async function applyPendingSessionConfigUpdates(args: {
+  client: ProliferateCloudClient;
+  workspace: CloudWorkspaceDetail;
+  session: CloudSessionProjection;
+  pendingPrompt: MobilePendingPrompt;
+  enqueueConfig: EnqueueCloudCommand<UpdateSessionConfigPayload>;
+  setLatestCommandId: (commandId: string) => void;
+  onStatus: (status: string) => void;
+  shouldContinue: () => boolean;
+}): Promise<void> {
+  const updates = filterSessionConfigUpdatesForSession(
+    args.pendingPrompt.sessionConfigUpdates ?? [],
+    args.session,
+  );
+  if (updates.length === 0) {
+    return;
+  }
+  args.onStatus("Applying session configuration.");
+  for (const update of updates) {
+    assertStillCurrent(args.shouldContinue);
+    const command = await args.enqueueConfig({
+      idempotencyKey: `${args.pendingPrompt.id}:config:${update.configId}`,
+      targetId: args.session.targetId,
+      workspaceId: args.session.workspaceId,
+      cloudWorkspaceId: args.workspace.id,
+      sessionId: args.session.sessionId,
+      kind: "update_session_config",
+      source: "mobile",
+      payload: update,
+    });
+    args.setLatestCommandId(command.commandId);
+    assertCommandEnqueued(command);
+    const completed = await waitForCommandTerminal(
+      command.commandId,
+      args.client,
+      args.shouldContinue,
+      args.onStatus,
+    );
+    assertCommandAccepted(completed);
+    const applyState = configApplyState(completed);
+    if (applyState && applyState !== "applied") {
+      throw new Error("Session configuration was queued but not applied.");
+    }
+  }
+}
+
 export async function ensureMobileWorkspaceReadyForCloudCommands(args: {
   client: ProliferateCloudClient;
   workspace: CloudWorkspaceDetail;
+  agentKind?: string | null;
+  modelId?: string | null;
   idempotencyKey: string;
   setLatestCommandId: (commandId: string) => void;
   onStatus: (status: string) => void;
@@ -179,6 +247,8 @@ export async function ensureMobileWorkspaceReadyForCloudCommands(args: {
   if (args.workspace.sandboxType === "managed_personal") {
     await ensurePersonalManagedAgentAuthReady({
       client: args.client,
+      agentKind: args.agentKind ?? resolveAgentKind(args.workspace),
+      modelId: args.modelId,
       onStatus: args.onStatus,
     });
   }
@@ -188,10 +258,15 @@ export async function ensureMobileWorkspaceReadyForCloudCommands(args: {
 
 async function ensurePersonalManagedAgentAuthReady(args: {
   client: ProliferateCloudClient;
+  agentKind: string;
+  modelId?: string | null;
   onStatus: (status: string) => void;
 }): Promise<void> {
   args.onStatus("Checking cloud agent credits.");
-  const result = await ensureFreeManagedCredits({}, args.client);
+  const result = await ensureFreeManagedCredits({
+    agentKind: normalizeAgentAuthAgentKind(args.agentKind),
+    modelId: args.modelId,
+  }, args.client);
   if (!result.launchEnabled) {
     throw new Error(
       result.lastErrorMessage
@@ -235,7 +310,14 @@ async function ensureManagedWorkspaceTargetConfigReady(args: {
   const command = response.command as CloudCommandResponse;
   args.setLatestCommandId(command.commandId);
   args.onStatus("Applying managed target configuration.");
-  await waitForCommandAccepted(command, args.client, args.shouldContinue);
+  assertCommandAccepted(
+    await waitForCommandTerminal(
+      command.commandId,
+      args.client,
+      args.shouldContinue,
+      args.onStatus,
+    ),
+  );
 }
 
 function shouldMaterializeManagedTargetConfig(workspace: CloudWorkspaceDetail): boolean {
@@ -329,6 +411,38 @@ async function waitForCommandAccepted(
     await sleep(delayMs);
     delayMs = nextPollDelay(delayMs);
   }
+}
+
+async function waitForCommandTerminal(
+  commandId: string,
+  client: ProliferateCloudClient,
+  shouldContinue: () => boolean,
+  onStatus?: (status: string) => void,
+): Promise<CloudCommandResponse> {
+  const deadline = Date.now() + 240_000;
+  let latest = await getCommandStatus(commandId, client);
+  let delayMs = 500;
+  let lastStatusMessage: string | null = null;
+  assertStillCurrent(shouldContinue);
+  while (!isTerminalStatus(latest.status)) {
+    assertStillCurrent(shouldContinue);
+    if (Date.now() >= deadline) {
+      throw new RetryablePendingPromptDispatchError(
+        "Still waiting for the cloud command to finish. Retrying queued prompt handoff.",
+      );
+    }
+    const nextStatusMessage = commandPendingMessage(latest.status);
+    if (nextStatusMessage && nextStatusMessage !== lastStatusMessage) {
+      onStatus?.(nextStatusMessage);
+      lastStatusMessage = nextStatusMessage;
+    }
+    await sleep(delayMs);
+    delayMs = nextPollDelay(delayMs);
+    assertStillCurrent(shouldContinue);
+    latest = await getCommandStatus(commandId, client);
+  }
+  assertStillCurrent(shouldContinue);
+  return latest;
 }
 
 async function refreshCommandStatus(
@@ -466,6 +580,34 @@ function assertCommandEnqueued(command: CloudCommandResponse): void {
   }
 }
 
+function assertCommandAccepted(command: CloudCommandResponse): void {
+  if (command.status !== "accepted" && command.status !== "accepted_but_queued") {
+    throw new Error(command.errorMessage || `Cloud command ${command.status}.`);
+  }
+}
+
+function isTerminalStatus(status: CloudCommandResponse["status"]): boolean {
+  return status === "accepted"
+    || status === "accepted_but_queued"
+    || status === "rejected"
+    || status === "expired"
+    || status === "superseded"
+    || status === "failed_delivery";
+}
+
+function commandPendingMessage(status: CloudCommandResponse["status"]): string | null {
+  switch (status) {
+    case "queued":
+      return "Command queued; waiting for the cloud runtime.";
+    case "leased":
+      return "Cloud runtime is picking up the command.";
+    case "delivered":
+      return "Command delivered; waiting for runtime acknowledgement.";
+    default:
+      return null;
+  }
+}
+
 function retryableReadinessError(error: unknown): RetryablePendingPromptDispatchError | null {
   if (
     error instanceof Error
@@ -491,15 +633,26 @@ function isRetryablePendingPromptFailureMessage(message: string): boolean {
   return RETRYABLE_FAILURE_PATTERNS.some((pattern) => normalized.includes(pattern));
 }
 
+function normalizeAgentAuthAgentKind(agentKind: string): AgentAuthAgentKind | null {
+  return agentKind === "claude"
+    || agentKind === "codex"
+    || agentKind === "opencode"
+    || agentKind === "gemini"
+    ? agentKind
+    : null;
+}
+
 function parseStartedSessionId(command: CloudCommandResponse): string | null {
+  const result = commandResultObject(command);
+  const body = commandResultBodyObject(command);
   const candidates = [
     command.sessionId,
-    command.result?.sessionId,
-    command.result?.session_id,
-    nestedString(command.result?.body, "sessionId"),
-    nestedString(command.result?.body, "session_id"),
-    nestedString(command.result?.body, "id"),
-    nestedString(nestedObject(command.result?.body, "session"), "id"),
+    result?.sessionId,
+    result?.session_id,
+    nestedString(body, "sessionId"),
+    nestedString(body, "session_id"),
+    nestedString(body, "id"),
+    nestedString(nestedObject(body, "session"), "id"),
   ];
   for (const candidate of candidates) {
     if (typeof candidate === "string" && candidate.trim()) {
@@ -509,22 +662,89 @@ function parseStartedSessionId(command: CloudCommandResponse): string | null {
   return null;
 }
 
+function configApplyState(command: CloudCommandResponse): string | null {
+  const result = commandResultObject(command);
+  const body = commandResultBodyObject(command);
+  return nestedString(body, "applyState")
+    ?? nestedString(result, "applyState");
+}
+
+function filterSessionConfigUpdatesForSession(
+  updates: UpdateSessionConfigPayload[],
+  session: CloudSessionProjection,
+): UpdateSessionConfigPayload[] {
+  const supportedConfigIds = collectSupportedSessionConfigIds(session);
+  if (supportedConfigIds.size === 0) {
+    return updates;
+  }
+  return updates.filter((update) => supportedConfigIds.has(update.configId));
+}
+
+function collectSupportedSessionConfigIds(session: CloudSessionProjection): Set<string> {
+  const supported = new Set<string>();
+  const liveConfig = objectFromUnknown((session as unknown as Record<string, unknown>).liveConfig);
+  const rawOptions = Array.isArray(liveConfig?.rawConfigOptions)
+    ? liveConfig.rawConfigOptions
+    : [];
+  for (const option of rawOptions) {
+    const id = nestedString(option, "id");
+    if (id) {
+      supported.add(id);
+    }
+  }
+  const controls = objectFromUnknown(liveConfig?.normalizedControls);
+  if (controls) {
+    for (const control of Object.values(controls)) {
+      const rawConfigId = nestedString(control, "rawConfigId");
+      if (rawConfigId) {
+        supported.add(rawConfigId);
+      }
+    }
+  }
+  return supported;
+}
+
+function commandResultObject(command: CloudCommandResponse): Record<string, unknown> | null {
+  return objectFromUnknown(command.result);
+}
+
+function commandResultBodyObject(command: CloudCommandResponse): Record<string, unknown> | null {
+  const result = commandResultObject(command);
+  return objectFromUnknown(result?.body);
+}
+
 function nestedObject(value: unknown, key: string): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  const object = objectFromUnknown(value);
+  if (!object) {
     return null;
   }
-  const nested = (value as Record<string, unknown>)[key];
+  const nested = object[key];
   return nested && typeof nested === "object" && !Array.isArray(nested)
     ? nested as Record<string, unknown>
     : null;
 }
 
 function nestedString(value: unknown, key: string): string | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  const object = objectFromUnknown(value);
+  if (!object) return null;
+  const nested = object[key];
+  return typeof nested === "string" ? nested : null;
+}
+
+function objectFromUnknown(value: unknown): Record<string, unknown> | null {
+  if (!value) return null;
+  if (typeof value === "string") {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      return objectFromUnknown(parsed);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
-  const nested = (value as Record<string, unknown>)[key];
-  return typeof nested === "string" ? nested : null;
+  return value as Record<string, unknown>;
 }
 
 function sleep(ms: number): Promise<void> {

@@ -120,8 +120,13 @@ function parsePendingPrompt(value: unknown): MobilePendingPrompt | null {
   return {
     id: parsed.id,
     text: parsed.text,
+    agentKind: typeof parsed.agentKind === "string" ? parsed.agentKind : null,
     modelId: typeof parsed.modelId === "string" ? parsed.modelId : null,
     modeId: typeof parsed.modeId === "string" ? parsed.modeId : null,
+    sessionConfigUpdates: parseSessionConfigUpdates(parsed.sessionConfigUpdates),
+    selectedRepo: typeof parsed.selectedRepo === "string" ? parsed.selectedRepo : null,
+    selectedRuntimeTargetId:
+      typeof parsed.selectedRuntimeTargetId === "string" ? parsed.selectedRuntimeTargetId : null,
     createdAt: typeof parsed.createdAt === "number" ? parsed.createdAt : Date.now(),
     dispatchedSessionId:
       typeof parsed.dispatchedSessionId === "string" ? parsed.dispatchedSessionId : null,
@@ -129,6 +134,21 @@ function parsePendingPrompt(value: unknown): MobilePendingPrompt | null {
     failureMessage:
       typeof parsed.failureMessage === "string" ? parsed.failureMessage : null,
   };
+}
+
+function parseSessionConfigUpdates(value: unknown): { configId: string; value: string }[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return [];
+    }
+    const record = item as Record<string, unknown>;
+    const configId = typeof record.configId === "string" ? record.configId.trim() : "";
+    const updateValue = typeof record.value === "string" ? record.value.trim() : "";
+    return configId && updateValue ? [{ configId, value: updateValue }] : [];
+  });
 }
 
 function isPromptFresh(savedAt: unknown): boolean {
