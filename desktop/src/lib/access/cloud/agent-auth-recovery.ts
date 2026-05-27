@@ -1,10 +1,12 @@
-import type { CloudAgentKind } from "@/lib/access/cloud/client";
-import { isCloudAgentKind, ProliferateClientError } from "@/lib/access/cloud/client";
-import { listSyncableAgentAuthCredentials } from "@/lib/access/tauri/credentials";
+import { ProliferateClientError } from "@/lib/access/cloud/client";
+import {
+  listSyncableAgentAuthCredentials,
+  type AgentAuthProvider,
+} from "@/lib/access/tauri/credentials";
 
 export async function autoSyncDetectedAgentAuthCredentialsIfNeeded(
   error: unknown,
-  syncCredential: (provider: CloudAgentKind) => Promise<unknown>,
+  syncCredential: (provider: AgentAuthProvider) => Promise<unknown>,
 ): Promise<boolean> {
   if (
     !(error instanceof ProliferateClientError)
@@ -15,9 +17,7 @@ export async function autoSyncDetectedAgentAuthCredentialsIfNeeded(
 
   const localSources = await listSyncableAgentAuthCredentials().catch(() => []);
   const syncableProviders = Array.from(new Set(localSources
-    .filter((source): source is typeof source & { provider: CloudAgentKind } => (
-      source.detected && isCloudAgentKind(source.provider)
-    ))
+    .filter((source) => source.detected)
     .map((source) => source.provider)));
 
   if (syncableProviders.length === 0) {
