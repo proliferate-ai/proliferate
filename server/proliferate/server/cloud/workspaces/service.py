@@ -812,6 +812,7 @@ async def launch_workspace_on_target(
         template_version=CLOUD_TARGET_LAUNCH_TEMPLATE_VERSION,
         origin="manual_mobile" if body.source == "mobile" else "manual_web",
     )
+    workspace_id = workspace.id
     await db_engine.commit_session(db)
 
     try:
@@ -819,7 +820,7 @@ async def launch_workspace_on_target(
             db,
             user=user,
             target_id=target.id,
-            cloud_workspace_id=workspace.id,
+            cloud_workspace_id=workspace_id,
             kind=CloudCommandKind.ensure_repo_checkout.value,
             payload=EnsureRepoCheckoutPayload(
                 provider=resolved.git_provider,
@@ -828,16 +829,16 @@ async def launch_workspace_on_target(
                 path=repo_root_path,
                 base_branch=resolved.git_base_branch,
             ).to_json(),
-            idempotency_key=f"target-launch:{workspace.id}:checkout",
+            idempotency_key=f"target-launch:{workspace_id}:checkout",
             source=body.source,
         )
-        await _wait_for_target_launch_command(checkout, workspace_id=workspace.id)
+        await _wait_for_target_launch_command(checkout, workspace_id=workspace_id)
 
         root_command = await _enqueue_target_launch_command(
             db,
             user=user,
             target_id=target.id,
-            cloud_workspace_id=workspace.id,
+            cloud_workspace_id=workspace_id,
             kind=CloudCommandKind.materialize_workspace.value,
             payload=MaterializeWorkspacePayload(
                 mode="existing_path",
@@ -846,18 +847,18 @@ async def launch_workspace_on_target(
                 origin={"kind": "system", "entrypoint": "cloud"},
                 creator_context={"kind": "human", "label": "Mobile"},
             ).to_json(),
-            idempotency_key=f"target-launch:{workspace.id}:materialize-root",
+            idempotency_key=f"target-launch:{workspace_id}:materialize-root",
             source=body.source,
         )
         root_result = parse_materialize_workspace_result(
-            await _wait_for_target_launch_command(root_command, workspace_id=workspace.id),
+            await _wait_for_target_launch_command(root_command, workspace_id=workspace_id),
         )
 
         worktree_command = await _enqueue_target_launch_command(
             db,
             user=user,
             target_id=target.id,
-            cloud_workspace_id=workspace.id,
+            cloud_workspace_id=workspace_id,
             kind=CloudCommandKind.materialize_workspace.value,
             payload=MaterializeWorkspacePayload(
                 mode="worktree",
@@ -868,11 +869,11 @@ async def launch_workspace_on_target(
                 origin={"kind": "system", "entrypoint": "cloud"},
                 creator_context={"kind": "human", "label": "Mobile"},
             ).to_json(),
-            idempotency_key=f"target-launch:{workspace.id}:materialize-worktree",
+            idempotency_key=f"target-launch:{workspace_id}:materialize-worktree",
             source=body.source,
         )
         materialized = parse_materialize_workspace_result(
-            await _wait_for_target_launch_command(worktree_command, workspace_id=workspace.id),
+            await _wait_for_target_launch_command(worktree_command, workspace_id=workspace_id),
         )
 
         start_payload = StartSessionPayload(
@@ -887,14 +888,14 @@ async def launch_workspace_on_target(
             db,
             user=user,
             target_id=target.id,
-            cloud_workspace_id=workspace.id,
+            cloud_workspace_id=workspace_id,
             kind=CloudCommandKind.start_session.value,
             payload=start_payload,
-            idempotency_key=f"target-launch:{workspace.id}:start-session",
+            idempotency_key=f"target-launch:{workspace_id}:start-session",
             source=body.source,
         )
         started = parse_start_session_result(
-            await _wait_for_target_launch_command(start_command, workspace_id=workspace.id),
+            await _wait_for_target_launch_command(start_command, workspace_id=workspace_id),
         )
 
         config_command_ids: list[str] = []
@@ -903,35 +904,35 @@ async def launch_workspace_on_target(
                 db,
                 user=user,
                 target_id=target.id,
-                cloud_workspace_id=workspace.id,
+                cloud_workspace_id=workspace_id,
                 session_id=started.session_id,
                 kind=CloudCommandKind.update_session_config.value,
                 payload={"configId": update.config_id, "value": update.value},
                 idempotency_key=(
-                    f"target-launch:{workspace.id}:config:{update.config_id}:{update.value}"
+                    f"target-launch:{workspace_id}:config:{update.config_id}:{update.value}"
                 ),
                 source=body.source,
             )
             config_command_ids.append(str(config_command.id))
-            await _wait_for_target_launch_command(config_command, workspace_id=workspace.id)
+            await _wait_for_target_launch_command(config_command, workspace_id=workspace_id)
 
-        prompt_id = body.prompt_id or f"target-launch:{workspace.id}:prompt:{uuid4().hex}"
+        prompt_id = body.prompt_id or f"target-launch:{workspace_id}:prompt:{uuid4().hex}"
         send_command = await _enqueue_target_launch_command(
             db,
             user=user,
             target_id=target.id,
-            cloud_workspace_id=workspace.id,
+            cloud_workspace_id=workspace_id,
             session_id=started.session_id,
             kind=CloudCommandKind.send_prompt.value,
             payload=SendPromptPayload(text=prompt_text, prompt_id=prompt_id).to_json(),
-            idempotency_key=f"target-launch:{workspace.id}:send-prompt:{prompt_id}",
+            idempotency_key=f"target-launch:{workspace_id}:send-prompt:{prompt_id}",
             source=body.source,
         )
-        await _wait_for_target_launch_command(send_command, workspace_id=workspace.id)
+        await _wait_for_target_launch_command(send_command, workspace_id=workspace_id)
     except (RuntimeError, TimeoutError, ValueError) as exc:
         message = format_exception_message(exc) or str(exc)
         await mark_workspace_error_by_id(
-            workspace.id,
+            workspace_id,
             message,
             status_detail="Desktop dispatch failed",
         )
@@ -942,7 +943,7 @@ async def launch_workspace_on_target(
         ) from exc
 
     db.expire_all()
-    refreshed = await get_cloud_workspace_by_id(db, workspace.id)
+    refreshed = await get_cloud_workspace_by_id(db, workspace_id)
     if refreshed is None:
         raise CloudApiError(
             "target_launch_workspace_missing",

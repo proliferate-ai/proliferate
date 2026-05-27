@@ -12,6 +12,7 @@ from proliferate.constants.billing import (
     WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED,
 )
 from proliferate.server.billing.models import SandboxStartAuthorization
+from proliferate.server.automations.worker.cloud_executor_commands import AutomationCommandResult
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workspaces import service as workspace_service
 
@@ -310,6 +311,177 @@ async def test_create_cloud_workspace_returns_pending_after_queueing_provision(
     assert scheduled == [workspace.id]
     assert create_kwargs["origin"] == "manual_mobile"
     assert create_kwargs["origin_json"] == '{"kind":"human","entrypoint":"mobile"}'
+
+
+@pytest.mark.asyncio
+async def test_launch_workspace_on_target_keeps_workspace_id_after_expire_all(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid4())
+    expected_target_id = uuid4()
+    expected_workspace_id = uuid4()
+    refreshed_workspace = SimpleNamespace(id=expected_workspace_id)
+    command_calls: list[dict[str, object]] = []
+
+    class ExpiringWorkspace:
+        expired = False
+
+        @property
+        def id(self):
+            if self.expired:
+                raise AssertionError("workspace.id was read after db.expire_all()")
+            return expected_workspace_id
+
+    workspace = ExpiringWorkspace()
+
+    class FakeDb:
+        def expire_all(self) -> None:
+            workspace.expired = True
+
+    async def _get_visible_target_by_id(_db, *, target_id: object, user_id: object):
+        assert target_id == expected_target_id
+        assert user_id == user.id
+        return SimpleNamespace(
+            id=expected_target_id,
+            owner_scope="personal",
+            owner_user_id=user.id,
+            kind=workspace_service.CloudTargetKind.desktop_dispatch.value,
+            status=workspace_service.CloudTargetStatus.online.value,
+            default_workspace_root="/tmp/workspaces",
+        )
+
+    async def _resolve_new_direct_target_workspace_create(*_args, **_kwargs):
+        return workspace_service.ResolvedCloudWorkspaceCreate(
+            git_provider="github",
+            git_owner="acme",
+            git_repo_name="rocket",
+            git_branch="feature/dispatch",
+            git_base_branch="main",
+            display_name="Dispatch",
+            active_sandbox_count=0,
+            selected_agent_kinds=("claude",),
+            cloud_repo_limit=None,
+        )
+
+    async def _ensure_personal_billing_subject(_db, _user_id):
+        return SimpleNamespace(id=uuid4())
+
+    async def _create_direct_target_cloud_workspace(_db, **_kwargs):
+        return workspace
+
+    async def _commit_session(_db) -> None:
+        return None
+
+    async def _enqueue_target_launch_command(_db, **kwargs):
+        command = SimpleNamespace(id=uuid4(), kind=kwargs["kind"], payload=kwargs["payload"])
+        command_calls.append({**kwargs, "command": command})
+        assert kwargs["cloud_workspace_id"] == expected_workspace_id
+        return command
+
+    async def _wait_for_target_launch_command(command, *, workspace_id: object):
+        assert workspace_id == expected_workspace_id
+        if command.kind == workspace_service.CloudCommandKind.materialize_workspace.value:
+            if command.payload["mode"] == "existing_path":
+                return AutomationCommandResult(
+                    command=command,
+                    result={
+                        "anyharnessWorkspaceId": "repo-root-workspace",
+                        "repoRootId": "repo-root",
+                        "path": command.payload["path"],
+                        "kind": "existing_path",
+                    },
+                    body={},
+                )
+            return AutomationCommandResult(
+                command=command,
+                result={
+                    "anyharnessWorkspaceId": "worktree-workspace",
+                    "repoRootId": "repo-root",
+                    "path": command.payload["targetPath"],
+                    "kind": "worktree",
+                },
+                body={},
+            )
+        if command.kind == workspace_service.CloudCommandKind.start_session.value:
+            return AutomationCommandResult(command=command, result={}, body={"id": "session-1"})
+        return AutomationCommandResult(command=command, result={}, body={})
+
+    async def _get_cloud_workspace_by_id(_db, requested_workspace_id):
+        assert requested_workspace_id == expected_workspace_id
+        return refreshed_workspace
+
+    async def _build_workspace_detail_for_request(_db, workspace):
+        assert workspace is refreshed_workspace
+        return workspace_service.WorkspaceDetail.model_construct(id=str(expected_workspace_id))
+
+    monkeypatch.setattr(
+        workspace_service.targets_store,
+        "get_visible_target_by_id",
+        _get_visible_target_by_id,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "_resolve_new_direct_target_workspace_create",
+        _resolve_new_direct_target_workspace_create,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "ensure_personal_billing_subject",
+        _ensure_personal_billing_subject,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "create_direct_target_cloud_workspace",
+        _create_direct_target_cloud_workspace,
+    )
+    monkeypatch.setattr(workspace_service.db_engine, "commit_session", _commit_session)
+    monkeypatch.setattr(
+        workspace_service,
+        "_enqueue_target_launch_command",
+        _enqueue_target_launch_command,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "_wait_for_target_launch_command",
+        _wait_for_target_launch_command,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "get_cloud_workspace_by_id",
+        _get_cloud_workspace_by_id,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "_build_workspace_detail_for_request",
+        _build_workspace_detail_for_request,
+    )
+
+    result = await workspace_service.launch_workspace_on_target(
+        FakeDb(),
+        user,
+        workspace_service.LaunchWorkspaceOnTargetRequest.model_validate(
+            {
+                "targetId": str(expected_target_id),
+                "gitProvider": "github",
+                "gitOwner": "acme",
+                "gitRepoName": "rocket",
+                "branchName": "feature/dispatch",
+                "prompt": "hello",
+                "agentKind": "claude",
+                "source": "mobile",
+            }
+        ),
+    )
+
+    assert result.session_id == "session-1"
+    assert result.workspace.id == str(expected_workspace_id)
+    assert len(command_calls) == 5
+    assert {call["kind"] for call in command_calls} == {
+        workspace_service.CloudCommandKind.ensure_repo_checkout.value,
+        workspace_service.CloudCommandKind.materialize_workspace.value,
+        workspace_service.CloudCommandKind.start_session.value,
+        workspace_service.CloudCommandKind.send_prompt.value,
+    }
 
 
 @pytest.mark.asyncio
