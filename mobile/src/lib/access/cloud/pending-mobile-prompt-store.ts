@@ -130,6 +130,7 @@ function parsePendingPrompt(value: unknown): MobilePendingPrompt | null {
     createdAt: typeof parsed.createdAt === "number" ? parsed.createdAt : Date.now(),
     dispatchedSessionId:
       typeof parsed.dispatchedSessionId === "string" ? parsed.dispatchedSessionId : null,
+    sendCommandId: typeof parsed.sendCommandId === "string" ? parsed.sendCommandId : null,
     failedAt: typeof parsed.failedAt === "number" ? parsed.failedAt : null,
     failureMessage:
       typeof parsed.failureMessage === "string" ? parsed.failureMessage : null,

@@ -80,4 +80,50 @@ describe("CloudChatComposer", () => {
 
     expect(onSelect).toHaveBeenCalledWith("gemini");
   });
+
+  it("shows every agent model group directly in the model menu", () => {
+    const onSelect = vi.fn();
+
+    render(
+      <CloudChatComposer
+        composer={{
+          value: "",
+          placeholder: "Send a prompt",
+          canSubmit: false,
+          onChange: vi.fn(),
+          onSubmit: vi.fn(),
+          controls: [
+            {
+              id: "model",
+              key: "model",
+              label: "Model",
+              icon: "claude",
+              placement: "trailing",
+              groups: [
+                {
+                  id: "claude",
+                  label: "Claude",
+                  options: [{ id: "claude:sonnet", label: "Sonnet 4.6", selected: true }],
+                },
+                {
+                  id: "codex",
+                  label: "Codex",
+                  options: [{ id: "codex:gpt-5.4", label: "GPT-5.4" }],
+                },
+              ],
+              onSelect,
+            },
+          ],
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Model and configuration: Sonnet 4.6" }));
+
+    expect(screen.getByText("Claude")).toBeTruthy();
+    expect(screen.getByText("Codex")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "GPT-5.4" }));
+    expect(onSelect).toHaveBeenCalledWith("codex:gpt-5.4");
+  });
 });

@@ -352,13 +352,11 @@ function CloudChatModelConfigControl({
   const modelControl = controls.find((control) => isModelControl(control)) ?? controls[0] ?? null;
   const configControls = controls.filter((control) => control !== modelControl);
   const selectedModel = modelControl ? selectedComposerOption(modelControl) : null;
-  const activeModelGroup = modelControl ? activeComposerModelGroup(modelControl) : null;
-  const filteredModelControl = modelControl && activeModelGroup
-    ? filterModelControlOptions({ ...modelControl, groups: [activeModelGroup] }, search)
+  const filteredModelControl = modelControl
+    ? filterModelControlOptions(modelControl, search)
     : null;
   const activeConfigSubmenuControl = configControls.find((control) => control.id === activeSubmenuId) ?? null;
-  const showHarnessSubmenu = Boolean(modelControl && modelControl.groups.length > 1);
-  const showSubmenuRows = configControls.length > 0 || showHarnessSubmenu;
+  const showSubmenuRows = configControls.length > 0;
   const pendingState = controls.find((control) => control.pendingState)?.pendingState ?? null;
   const disabled = composerDisabled || controls.every(isControlDisabled);
   const triggerLabel = selectedModel?.label ?? modelControl?.detail ?? modelControl?.label ?? "Configure";
@@ -418,13 +416,6 @@ function CloudChatModelConfigControl({
               {showSubmenuRows ? (
                 <div className="shrink-0">
                   <ComposerMenuSeparator />
-                  {showHarnessSubmenu && modelControl ? (
-                    <ComposerConfigSubmenuButton
-                      active={activeSubmenuId === modelControl.id}
-                      control={modelControl}
-                      onOpen={() => setActiveSubmenuId(modelControl.id)}
-                    />
-                  ) : null}
                   {configControls.map((control) => (
                     <ComposerConfigSubmenuButton
                       key={control.id}
@@ -437,18 +428,7 @@ function CloudChatModelConfigControl({
               ) : null}
             </div>
           </ComposerPopoverSurface>
-          {activeSubmenuId === modelControl?.id && modelControl ? (
-            <ComposerPopoverSurface className="absolute bottom-0 left-[calc(100%+0.25rem)] z-[81] w-56 max-w-[calc(100vw-1rem)] p-1">
-              <ComposerHarnessMenuRows
-                control={modelControl}
-                onClose={() => {
-                  setOpen(false);
-                  setSearch("");
-                  setActiveSubmenuId(null);
-                }}
-              />
-            </ComposerPopoverSurface>
-          ) : activeConfigSubmenuControl ? (
+          {activeConfigSubmenuControl ? (
             <ComposerPopoverSurface className="absolute bottom-0 left-[calc(100%+0.25rem)] z-[81] w-56 max-w-[calc(100vw-1rem)] p-1">
               <ComposerControlMenuRows
                 control={activeConfigSubmenuControl}
@@ -588,36 +568,6 @@ function ComposerMenuSeparator() {
     <div className="w-full px-2 py-0.5">
       <div className="h-px w-full bg-border/60" />
     </div>
-  );
-}
-
-function ComposerHarnessMenuRows({
-  control,
-  onClose,
-}: {
-  control: CloudChatComposerControlView;
-  onClose: () => void;
-}) {
-  return (
-    <>
-      {control.groups.map((group) => {
-        const selected = group.options.find((option) => option.selected) ?? group.options[0] ?? null;
-        return (
-          <PopoverMenuItem
-            key={group.id}
-            label={group.label ?? group.id}
-            trailing={selected?.selected ? <Check className="size-3.5 shrink-0" /> : null}
-            disabled={!selected}
-            onClick={() => {
-              if (selected) {
-                control.onSelect?.(selected.id);
-              }
-              onClose();
-            }}
-          />
-        );
-      })}
-    </>
   );
 }
 

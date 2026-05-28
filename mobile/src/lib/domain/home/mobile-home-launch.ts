@@ -89,6 +89,7 @@ export function buildMobilePendingPrompt(input: {
   text: string;
   selection: CloudLaunchComposerSelection;
   catalog?: CloudAgentCatalogResponse | null;
+  launchableAgentKinds?: readonly string[] | null;
   repo: MobileRepoOption;
   runtime: MobileRuntimeOption;
 }): MobilePendingPrompt {
@@ -100,6 +101,7 @@ export function buildMobilePendingPrompt(input: {
     modeId: input.selection.modeId,
     sessionConfigUpdates: buildLaunchSessionConfigUpdates({
       catalog: input.catalog,
+      launchableAgentKinds: input.launchableAgentKinds,
       selection: input.selection,
     }),
     selectedRepo: input.repo.id,

@@ -1,5 +1,4 @@
 import {
-  ensureFreeManagedCredits,
   getCommandStatus,
   getWorkspaceSnapshot,
   materializeTargetConfig,
@@ -16,6 +15,7 @@ import {
 } from "@proliferate/product-model/workspaces/cloud-work-inventory";
 
 import type { MobilePendingPrompt } from "../../../navigation/navigation-model";
+import { ensurePersonalAgentAuthLaunchReady } from "./agent-auth-launch-readiness";
 
 export type SendPromptPayload = {
   text: string;
@@ -42,6 +42,11 @@ export type UpdateSessionConfigPayload = {
 type EnqueueCloudCommand<TPayload> = (
   command: CloudCommandEnvelope<TPayload>,
 ) => Promise<CloudCommandResponse>;
+
+export type PendingMobilePromptDispatchResult = {
+  sessionId: string;
+  sendCommandId: string;
+};
 
 const RETRYABLE_READINESS_ERROR_CODES = new Set([
   "cloud_command_target_config_required",
@@ -93,11 +98,18 @@ export async function dispatchPendingMobilePrompt(args: {
   enqueueConfig: EnqueueCloudCommand<UpdateSessionConfigPayload>;
   enqueuePrompt: EnqueueCloudCommand<SendPromptPayload>;
   setLatestCommandId: (commandId: string) => void;
+  onSessionStarted?: (sessionId: string) => void;
+  onPromptEnqueued?: (commandId: string) => void;
   onStatus: (status: string) => void;
   shouldContinue: () => boolean;
-}): Promise<string> {
-  const session = await startSessionForPrompt(args);
+}): Promise<PendingMobilePromptDispatchResult> {
+  const session = args.pendingPrompt.dispatchedSessionId
+    ? await resumeSessionForPrompt(args)
+    : await startSessionForPrompt(args);
   assertStillCurrent(args.shouldContinue);
+  if (!args.pendingPrompt.dispatchedSessionId) {
+    args.onSessionStarted?.(session.sessionId);
+  }
   await applyPendingSessionConfigUpdates({
     client: args.client,
     workspace: args.workspace,
@@ -125,8 +137,61 @@ export async function dispatchPendingMobilePrompt(args: {
   });
   args.setLatestCommandId(command.commandId);
   assertCommandEnqueued(command);
+  args.onPromptEnqueued?.(command.commandId);
   await waitForCommandAccepted(command, args.client, args.shouldContinue);
-  return session.sessionId;
+  return {
+    sessionId: session.sessionId,
+    sendCommandId: command.commandId,
+  };
+}
+
+async function resumeSessionForPrompt(args: {
+  client: ProliferateCloudClient;
+  workspace: CloudWorkspaceDetail;
+  pendingPrompt: MobilePendingPrompt;
+  modelId: string | null;
+  setLatestCommandId: (commandId: string) => void;
+  onStatus: (status: string) => void;
+  shouldContinue: () => boolean;
+}): Promise<CloudSessionProjection> {
+  const dispatchedSessionId = args.pendingPrompt.dispatchedSessionId;
+  if (!dispatchedSessionId) {
+    throw new Error("Queued prompt is missing a dispatched session.");
+  }
+  const agentKind = args.pendingPrompt.agentKind ?? resolveAgentKind(args.workspace);
+  const modelId = args.pendingPrompt.modelId ?? args.modelId;
+  const workspace = await ensureMobileWorkspaceReadyForCloudCommands({
+    client: args.client,
+    workspace: args.workspace,
+    agentKind,
+    modelId,
+    idempotencyKey: `${args.pendingPrompt.id}:target-config`,
+    setLatestCommandId: args.setLatestCommandId,
+    onStatus: args.onStatus,
+    shouldContinue: args.shouldContinue,
+  });
+  const targetId = workspace.targetId;
+  const anyharnessWorkspaceId = workspace.anyharnessWorkspaceId;
+  if (!targetId || !anyharnessWorkspaceId) {
+    throw new Error("Workspace is ready but missing runtime command routing.");
+  }
+  args.onStatus("Resuming queued prompt.");
+  const snapshot = await getWorkspaceSnapshot(workspace.id, args.client);
+  assertStillCurrent(args.shouldContinue);
+  const session = snapshot.sessions.find((candidate) =>
+    candidate.sessionId === dispatchedSessionId
+    && (!candidate.targetId || candidate.targetId === targetId)
+  );
+  if (!session) {
+    throw new RetryablePendingPromptDispatchError(
+      "Still waiting for the cloud session to resume. Retrying queued prompt handoff.",
+    );
+  }
+  return {
+    ...session,
+    workspaceId: session.workspaceId || anyharnessWorkspaceId,
+    targetId: session.targetId || targetId,
+  };
 }
 
 async function startSessionForPrompt(args: {
@@ -139,15 +204,10 @@ async function startSessionForPrompt(args: {
   onStatus: (status: string) => void;
   shouldContinue: () => boolean;
 }): Promise<CloudSessionProjection> {
-  const targetId = args.workspace.targetId;
-  const anyharnessWorkspaceId = args.workspace.anyharnessWorkspaceId;
-  if (!targetId || !anyharnessWorkspaceId) {
-    throw new Error("Workspace is ready but missing runtime command routing.");
-  }
   const agentKind = args.pendingPrompt.agentKind ?? resolveAgentKind(args.workspace);
   const modelId = args.pendingPrompt.modelId ?? args.modelId;
   const modeId = args.pendingPrompt.modeId;
-  await ensureMobileWorkspaceReadyForCloudCommands({
+  const workspace = await ensureMobileWorkspaceReadyForCloudCommands({
     client: args.client,
     workspace: args.workspace,
     agentKind,
@@ -157,13 +217,19 @@ async function startSessionForPrompt(args: {
     onStatus: args.onStatus,
     shouldContinue: args.shouldContinue,
   });
+  const targetId = workspace.targetId;
+  const anyharnessWorkspaceId = workspace.anyharnessWorkspaceId;
+  if (!targetId || !anyharnessWorkspaceId) {
+    throw new Error("Workspace is ready but missing runtime command routing.");
+  }
   const existingSessionIds = await loadExistingSessionIds({
     client: args.client,
-    workspaceId: args.workspace.id,
+    workspaceId: workspace.id,
     targetId,
   });
   const command = await enqueueStartSessionWithRetryableReadiness({
     args,
+    workspace,
     targetId,
     anyharnessWorkspaceId,
     agentKind,
@@ -176,10 +242,11 @@ async function startSessionForPrompt(args: {
   return waitForStartedSession({
     client: args.client,
     command,
-    workspaceId: args.workspace.id,
+    workspaceId: workspace.id,
     targetId,
     fallbackWorkspaceId: anyharnessWorkspaceId,
     existingSessionIds,
+    expectedAgentKind: agentKind,
     shouldContinue: args.shouldContinue,
   });
 }
@@ -239,11 +306,8 @@ export async function ensureMobileWorkspaceReadyForCloudCommands(args: {
   setLatestCommandId: (commandId: string) => void;
   onStatus: (status: string) => void;
   shouldContinue: () => boolean;
-}): Promise<void> {
-  const readiness = cloudCommandReadiness(args.workspace);
-  if (!readiness.commandable) {
-    throw new Error(readiness.message ?? "This workspace cannot accept cloud commands right now.");
-  }
+}): Promise<CloudWorkspaceDetail> {
+  let workspace = args.workspace;
   if (args.workspace.sandboxType === "managed_personal") {
     await ensurePersonalManagedAgentAuthReady({
       client: args.client,
@@ -251,9 +315,24 @@ export async function ensureMobileWorkspaceReadyForCloudCommands(args: {
       modelId: args.modelId,
       onStatus: args.onStatus,
     });
+    assertStillCurrent(args.shouldContinue);
+    workspace = await waitForManagedAgentAuthCurrent({
+      client: args.client,
+      workspaceId: workspace.id,
+      onStatus: args.onStatus,
+      shouldContinue: args.shouldContinue,
+    });
+  }
+  const readiness = cloudCommandReadiness(workspace);
+  if (!readiness.commandable) {
+    throw new Error(readiness.message ?? "This workspace cannot accept cloud commands right now.");
   }
   assertStillCurrent(args.shouldContinue);
-  await ensureManagedWorkspaceTargetConfigReady(args);
+  await ensureManagedWorkspaceTargetConfigReady({
+    ...args,
+    workspace,
+  });
+  return workspace;
 }
 
 async function ensurePersonalManagedAgentAuthReady(args: {
@@ -262,18 +341,44 @@ async function ensurePersonalManagedAgentAuthReady(args: {
   modelId?: string | null;
   onStatus: (status: string) => void;
 }): Promise<void> {
-  args.onStatus("Checking cloud agent credits.");
-  const result = await ensureFreeManagedCredits({
+  await ensurePersonalAgentAuthLaunchReady({
+    client: args.client,
     agentKind: normalizeAgentAuthAgentKind(args.agentKind),
     modelId: args.modelId,
-  }, args.client);
-  if (!result.launchEnabled) {
-    throw new Error(
-      result.lastErrorMessage
-      ?? (result.status === "gateway_disabled"
-        ? "Cloud agent launch is disabled for this account."
-        : "Cloud agent credits are not ready yet. Please retry in a moment."),
-    );
+    onStatus: args.onStatus,
+  });
+}
+
+async function waitForManagedAgentAuthCurrent(args: {
+  client: ProliferateCloudClient;
+  workspaceId: string;
+  onStatus: (status: string) => void;
+  shouldContinue: () => boolean;
+}): Promise<CloudWorkspaceDetail> {
+  const deadline = Date.now() + 120_000;
+  let delayMs = 500;
+  let latest = (await getWorkspaceSnapshot(args.workspaceId, args.client)).workspace;
+  while (true) {
+    assertStillCurrent(args.shouldContinue);
+    const runtimeAuth = latest.runtime?.runtimeAuth;
+    if (runtimeAuth?.targetCurrent === true) {
+      return latest;
+    }
+    if (runtimeAuth?.status === "apply_failed" || runtimeAuth?.status === "missing_credentials") {
+      throw new Error(
+        runtimeAuth.lastError
+          ?? "Cloud agent credentials are not ready for this workspace.",
+      );
+    }
+    args.onStatus("Applying cloud agent credentials.");
+    if (Date.now() >= deadline) {
+      throw new RetryablePendingPromptDispatchError(
+        "Still waiting for cloud agent credentials to apply. Retrying queued prompt handoff.",
+      );
+    }
+    await sleep(delayMs);
+    delayMs = nextPollDelay(delayMs);
+    latest = (await getWorkspaceSnapshot(args.workspaceId, args.client)).workspace;
   }
 }
 
@@ -326,7 +431,7 @@ function shouldMaterializeManagedTargetConfig(workspace: CloudWorkspaceDetail): 
   }
   const runtimeAuth = workspace.runtime?.runtimeAuth;
   if (!runtimeAuth) {
-    return false;
+    return true;
   }
   return runtimeAuth.targetCurrent !== true || runtimeAuth.configCurrent !== true;
 }
@@ -345,6 +450,7 @@ async function waitForStartedSession(args: {
   targetId: string;
   fallbackWorkspaceId: string;
   existingSessionIds: Set<string>;
+  expectedAgentKind: string | null;
   shouldContinue: () => boolean;
 }): Promise<CloudSessionProjection> {
   const deadline = Date.now() + 240_000;
@@ -367,6 +473,8 @@ async function waitForStartedSession(args: {
       targetId: args.targetId,
       expectedSessionId,
       existingSessionIds: args.existingSessionIds,
+      expectedAgentKind: args.expectedAgentKind,
+      startedAfter: latestCommand.createdAt,
       shouldContinue: args.shouldContinue,
     });
     if (session) {
@@ -495,6 +603,8 @@ async function findStartedSession(args: {
   targetId: string;
   expectedSessionId: string | null;
   existingSessionIds: Set<string>;
+  expectedAgentKind: string | null;
+  startedAfter: string | null | undefined;
   shouldContinue: () => boolean;
 }): Promise<CloudSessionProjection | null> {
   assertStillCurrent(args.shouldContinue);
@@ -510,10 +620,36 @@ async function findStartedSession(args: {
     }
     return sessionsForTarget
       .filter((candidate) => !args.existingSessionIds.has(candidate.sessionId))
+      .filter((candidate) => sessionMatchesExpectedAgent(candidate, args.expectedAgentKind))
+      .filter((candidate) => sessionStartedAfter(candidate, args.startedAfter))
       .sort(compareSessionFreshness)[0] ?? null;
   } catch {
     return null;
   }
+}
+
+function sessionMatchesExpectedAgent(
+  session: CloudSessionProjection,
+  expectedAgentKind: string | null,
+): boolean {
+  return !expectedAgentKind
+    || !session.sourceAgentKind
+    || session.sourceAgentKind === expectedAgentKind;
+}
+
+function sessionStartedAfter(
+  session: CloudSessionProjection,
+  startedAfter: string | null | undefined,
+): boolean {
+  if (!startedAfter) {
+    return true;
+  }
+  const baseline = Date.parse(startedAfter);
+  if (!Number.isFinite(baseline)) {
+    return true;
+  }
+  const sessionTime = Date.parse(session.startedAt ?? session.lastEventAt ?? "");
+  return Number.isFinite(sessionTime) && sessionTime >= baseline;
 }
 
 function compareSessionFreshness(
@@ -533,10 +669,10 @@ function assertStillCurrent(shouldContinue: () => boolean): void {
 
 async function enqueueStartSessionWithRetryableReadiness(input: {
   args: {
-    workspace: CloudWorkspaceDetail;
     pendingPrompt: MobilePendingPrompt;
     enqueueStartSession: EnqueueCloudCommand<StartSessionPayload>;
   };
+  workspace: CloudWorkspaceDetail;
   targetId: string;
   anyharnessWorkspaceId: string;
   agentKind: string;
@@ -547,7 +683,7 @@ async function enqueueStartSessionWithRetryableReadiness(input: {
     return await input.args.enqueueStartSession({
       idempotencyKey: `${input.args.pendingPrompt.id}:start-session`,
       targetId: input.targetId,
-      cloudWorkspaceId: input.args.workspace.id,
+      cloudWorkspaceId: input.workspace.id,
       kind: "start_session",
       source: "mobile",
       payload: {
@@ -675,7 +811,7 @@ function filterSessionConfigUpdatesForSession(
 ): UpdateSessionConfigPayload[] {
   const supportedConfigIds = collectSupportedSessionConfigIds(session);
   if (supportedConfigIds.size === 0) {
-    return updates;
+    return [];
   }
   return updates.filter((update) => supportedConfigIds.has(update.configId));
 }

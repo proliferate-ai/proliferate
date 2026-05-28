@@ -660,7 +660,9 @@ function sessionMatchesExpectedAgent(
   session: CloudSessionProjection,
   expectedAgentKind: string | null,
 ): boolean {
-  return !expectedAgentKind || session.sourceAgentKind === expectedAgentKind;
+  return !expectedAgentKind
+    || !session.sourceAgentKind
+    || session.sourceAgentKind === expectedAgentKind;
 }
 
 function sessionStartedAfter(

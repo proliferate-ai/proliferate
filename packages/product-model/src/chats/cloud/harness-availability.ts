@@ -28,6 +28,27 @@ export interface CloudHarnessAvailability {
   message: string | null;
 }
 
+export interface CloudAgentAuthCredentialLike {
+  agentKind?: string | null;
+  credentialKind?: string | null;
+  status?: string | null;
+}
+
+export function readySyncedCloudAgentKinds(
+  credentials: readonly CloudAgentAuthCredentialLike[] | null | undefined,
+): string[] {
+  if (!credentials) {
+    return [];
+  }
+  return normalizeCloudAgentKindList(
+    credentials
+      .filter((credential) =>
+        credential.status === "ready" && credential.credentialKind === "synced_path"
+      )
+      .map((credential) => credential.agentKind ?? ""),
+  );
+}
+
 export function resolveCloudHarnessAvailability(input: {
   catalogAgentKinds?: readonly string[] | null;
   allowedAgentKinds?: readonly string[] | null;

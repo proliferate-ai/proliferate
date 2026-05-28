@@ -89,6 +89,7 @@ async def create_cloud_workspace_endpoint(
             branch_name=body.branch_name,
             display_name=body.display_name,
             required_agent_kind=body.required_agent_kind,
+            source=body.source or "desktop",
             owner_selection=OwnerSelection(
                 owner_scope=body.owner_scope,
                 organization_id=body.organization_id,

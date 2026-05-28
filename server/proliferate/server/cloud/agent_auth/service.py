@@ -3046,9 +3046,7 @@ async def _reconcile_bifrost_managed_budget_subject(
         entitlement_period_key = budget.entitlement_period_key
         budget_duration = budget.budget_duration or AGENT_GATEWAY_BUDGET_DURATION_V1
 
-    managed_provider_plans: list[
-        tuple[str, tuple[GatewayModelDeploymentRequest, ...]]
-    ] = []
+    managed_provider_plans: list[tuple[str, tuple[GatewayModelDeploymentRequest, ...]]] = []
     seen_provider_kinds: set[str] = set()
     for agent_kind in _managed_credit_agent_kinds():
         provider_kind = _managed_credit_provider_kind_for_agent(agent_kind)
@@ -3090,9 +3088,7 @@ async def _reconcile_bifrost_managed_budget_subject(
                 )
                 for provider_kind, deployments in managed_provider_plans
             ]
-            router_object_id = (
-                materializations[0].router_object_id if materializations else None
-            )
+            router_object_id = materializations[0].router_object_id if materializations else None
             used = await store.sum_llm_usage_cost_for_budget_subject(
                 db,
                 budget_subject_id=budget.id,
@@ -3103,9 +3099,7 @@ async def _reconcile_bifrost_managed_budget_subject(
                 if Decimal(included_budget_usd) <= 0 or used >= Decimal(included_budget_usd)
                 else "ready"
             )
-            fingerprint = _managed_budget_provider_keys_fingerprint(
-                materializations
-            )
+            fingerprint = _managed_budget_provider_keys_fingerprint(materializations)
             error_code = None
             error_message = None
         except (BifrostIntegrationError, AgentAuthError) as exc:

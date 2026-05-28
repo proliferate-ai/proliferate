@@ -1045,7 +1045,7 @@ async def lease_worker_command(
             status_code=401,
         )
     await require_current_managed_worker_slot(db, auth=auth, target=target)
-    expired_commands = await command_service.expire_stale_web_commands_for_target(
+    expired_commands = await command_service.expire_stale_client_commands_for_target(
         db,
         target_id=auth.target_id,
     )

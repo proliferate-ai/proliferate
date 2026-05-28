@@ -43,6 +43,7 @@ export function MobileHomeScreen({
   const launchActions = useMobileHomeLaunchActions({
     ownerUserId,
     catalog: launchModel.agentCatalog.data,
+    launchableAgentKinds: launchModel.launchableAgentKinds,
     selectedRepo: launchModel.selectedRepo,
     selectedRuntime: launchModel.selectedRuntime,
     selection: launchModel.resolvedLaunchSelection,
@@ -53,9 +54,11 @@ export function MobileHomeScreen({
     launchModel.launchComposerControls.find((control) => control.key === "model")
     ?? launchModel.launchComposerControls[launchModel.launchComposerControls.length - 1]
     ?? null;
+  const canStartCloudHarness = launchModel.launchableAgentKinds.length > 0;
   const canSubmit = Boolean(draft.trim())
     && Boolean(launchModel.selectedRepo)
     && Boolean(launchModel.selectedRuntime)
+    && canStartCloudHarness
     && !launchActions.submitting
     && (launchModel.selectedRuntime?.kind !== "target" || launchModel.selectedRuntime.online);
   const runtimeBlocker = launchModel.selectedRuntime?.kind === "target" && !launchModel.selectedRuntime.online
@@ -138,9 +141,9 @@ export function MobileHomeScreen({
 
       <View style={styles.spacer} />
 
-      {launchActions.status || launchActions.error ? (
+      {launchActions.status || launchActions.error || (!canStartCloudHarness && launchModel.harnessAvailability.message) ? (
         <Text style={[styles.launchNote, launchActions.error && styles.launchError]}>
-          {launchActions.error ?? launchActions.status}
+          {launchActions.error ?? launchActions.status ?? launchModel.harnessAvailability.message}
         </Text>
       ) : null}
 

@@ -23,6 +23,7 @@ import {
   useEnqueueCloudCommand,
   useSessionLive,
   useWorkspaceLive,
+  useAgentAuthCredentials,
 } from "@proliferate/cloud-sdk-react";
 import {
   CloudChatSurface,
@@ -51,6 +52,7 @@ import {
   type PendingConfigChange,
 } from "@proliferate/product-model/chats/cloud/composer-controls";
 import {
+  readySyncedCloudAgentKinds,
   resolveCloudHarnessAvailability,
 } from "@proliferate/product-model/chats/cloud/harness-availability";
 import {
@@ -139,6 +141,7 @@ export function ChatScreen() {
   const workspaceQuery = useCloudWorkspaceSnapshot(workspaceId ?? null, Boolean(workspaceId));
   const agentCatalog = useCloudAgentCatalog();
   const cloudCapabilities = useCloudCapabilities();
+  const agentAuthCredentials = useAgentAuthCredentials();
   const workspaceLive = useWorkspaceLive(workspaceId ?? null, { enabled: Boolean(workspaceId) });
   const snapshot = useMemo(
     () => mergeWorkspaceSnapshot(workspaceQuery.data, workspaceLive.snapshot),
@@ -250,16 +253,28 @@ export function ChatScreen() {
   const isUnclaimed = workspace?.visibility === "shared_unclaimed";
   const workspaceReadyAgentKindsKey = workspace?.readyAgentKinds?.join("\0") ?? "";
   const workspaceAllowedAgentKindsKey = workspace?.allowedAgentKinds?.join("\0") ?? "";
+  const workspaceUsesManagedRuntime =
+    !workspace || workspace.sandboxType === "managed_personal" || workspace.sandboxType === "managed_shared";
   const agentGateway = cloudCapabilities.data?.agentGateway;
+  const readySyncedAgentKinds = useMemo(
+    () => readySyncedCloudAgentKinds(agentAuthCredentials.data),
+    [agentAuthCredentials.data],
+  );
+  const readySyncedAgentKindsKey = readySyncedAgentKinds.join("\0");
   const agentGatewayManagedCreditKindsKey = agentGateway?.managedCreditAgentKinds?.join("\0") ?? "";
   const catalogAgentKindsKey = agentCatalog.data?.agents.map((agent) => agent.kind).join("\0") ?? "";
   const workspaceHarnessAvailability = useMemo(() => resolveCloudHarnessAvailability({
     catalogAgentKinds: agentCatalog.data?.agents.map((agent) => agent.kind),
     allowedAgentKinds: workspace?.allowedAgentKinds,
-    readyAgentKinds: workspace?.readyAgentKinds,
-    agentGateway,
+    readyAgentKinds: workspace?.readyAgentKinds
+      ?? (workspaceUsesManagedRuntime
+        ? readySyncedAgentKinds
+        : agentCatalog.data?.agents.map((agent) => agent.kind)),
+    agentGateway: workspaceUsesManagedRuntime ? agentGateway : null,
+    assumeFallbackAgentKindsLaunchable: !workspaceUsesManagedRuntime,
   }), [
     agentCatalog.data,
+    readySyncedAgentKindsKey,
     agentGateway?.enabled,
     agentGateway?.managedCreditsOrganizationEnabled,
     agentGateway?.managedCreditsPersonalEnabled,
@@ -268,6 +283,7 @@ export function ChatScreen() {
     catalogAgentKindsKey,
     workspaceAllowedAgentKindsKey,
     workspaceReadyAgentKindsKey,
+    workspaceUsesManagedRuntime,
   ]);
   const workspaceLaunchableAgentKinds = workspaceHarnessAvailability.launchableAgentKinds;
   const canStartNewSession = workspaceLaunchableAgentKinds.length > 0;
@@ -1791,6 +1807,7 @@ function friendlyCommandErrorCodeMessage(code: string | null | undefined): strin
     case "runtime_config_not_ready":
       return "Workspace accepted. Preparing cloud runtime access for this target.";
     case "web_command_queue_timeout":
+    case "client_command_queue_timeout":
       return "Cloud runtime did not pick up the command in time. Check that the runtime is online, then retry.";
     case "sandbox_wake_blocked":
       return "Cloud runtime needs billing or quota attention before it can wake.";

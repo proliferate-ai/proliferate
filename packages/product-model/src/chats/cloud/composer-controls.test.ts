@@ -7,7 +7,10 @@ import {
   resolveCloudLaunchSelection,
   type CloudLaunchComposerSelection,
 } from "./composer-controls";
-import { resolveCloudHarnessAvailability } from "./harness-availability";
+import {
+  readySyncedCloudAgentKinds,
+  resolveCloudHarnessAvailability,
+} from "./harness-availability";
 
 type Catalog = NonNullable<Parameters<typeof buildCloudLaunchComposerControls>[0]["catalog"]>;
 type ChatControlsInput = Parameters<typeof buildCloudChatComposerControls>[0];
@@ -433,6 +436,30 @@ describe("buildCloudLaunchComposerControls", () => {
 });
 
 describe("resolveCloudHarnessAvailability", () => {
+  it("normalizes ready synced credentials into launchable harness kinds", () => {
+    const readyAgentKinds = readySyncedCloudAgentKinds([
+      { agentKind: "codex", credentialKind: "synced_path", status: "ready" },
+      { agentKind: "claude", credentialKind: "synced_path", status: "ready" },
+      { agentKind: "gemini", credentialKind: "managed_gateway", status: "ready" },
+      { agentKind: "opencode", credentialKind: "synced_path", status: "syncing" },
+      { agentKind: "unknown", credentialKind: "synced_path", status: "ready" },
+    ]);
+
+    expect(readyAgentKinds).toEqual(["claude", "codex"]);
+    expect(resolveCloudHarnessAvailability({
+      allowedAgentKinds: ["claude", "codex"],
+      readyAgentKinds,
+      agentGateway: {
+        enabled: false,
+        managedCreditsPersonalEnabled: false,
+        managedCreditsOrganizationEnabled: false,
+      },
+    })).toMatchObject({
+      launchableAgentKinds: ["claude", "codex"],
+      message: null,
+    });
+  });
+
   it("combines workspace-ready auth with managed-credit harnesses", () => {
     expect(resolveCloudHarnessAvailability({
       allowedAgentKinds: ["claude", "codex", "gemini", "opencode"],

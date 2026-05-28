@@ -1,6 +1,6 @@
 import { Outlet } from "react-router-dom";
 import { PanelLeftOpen } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { AppShell } from "@proliferate/ui/layout/AppShell";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
@@ -8,7 +8,29 @@ import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { WebSidebarController } from "../navigation/WebSidebarController";
 
 export function WebAppShell() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => (
+    typeof window === "undefined" || !window.matchMedia
+      ? true
+      : window.matchMedia("(min-width: 768px)").matches
+  ));
+
+  useEffect(() => {
+    if (!window.matchMedia) {
+      return;
+    }
+    const query = window.matchMedia("(min-width: 768px)");
+    const handleChange = () => {
+      if (!query.matches) {
+        setSidebarOpen(false);
+      }
+    };
+    if (query.addEventListener) {
+      query.addEventListener("change", handleChange);
+      return () => query.removeEventListener("change", handleChange);
+    }
+    query.addListener(handleChange);
+    return () => query.removeListener(handleChange);
+  }, []);
 
   return (
     <AppShell
@@ -17,7 +39,7 @@ export function WebAppShell() {
       className="relative"
     >
       {!sidebarOpen ? (
-        <div className="absolute left-3 top-3 z-30">
+        <div className="absolute bottom-3 left-3 z-30 md:bottom-auto md:top-3">
           <IconButton
             tone="default"
             size="sm"

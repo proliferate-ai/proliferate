@@ -115,6 +115,7 @@ class CreateCloudWorkspaceRequest(BaseModel):
     )
     organization_id: UUID | None = Field(default=None, alias="organizationId")
     required_agent_kind: str | None = Field(default=None, alias="requiredAgentKind")
+    source: Literal["desktop", "web", "mobile"] | None = None
 
 
 class UpdateCloudWorkspaceBranchRequest(BaseModel):

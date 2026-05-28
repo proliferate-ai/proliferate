@@ -488,12 +488,6 @@ function ShellWithDrawer({
 
   return (
     <View style={styles.shellContainer} {...panResponder.panHandlers}>
-      <View
-        style={[styles.staticDrawer, { width: DRAWER_WIDTH }]}
-        pointerEvents={drawerOpen ? "auto" : "none"}
-      >
-        {drawer}
-      </View>
       <Animated.View
         style={[styles.slidingContent, { transform: [{ translateX: translate }] }]}
       >
@@ -512,6 +506,16 @@ function ShellWithDrawer({
           />
         </Animated.View>
       </Animated.View>
+      <View
+        style={[
+          styles.staticDrawer,
+          drawerOpen && styles.staticDrawerOpen,
+          { width: DRAWER_WIDTH },
+        ]}
+        pointerEvents={drawerOpen ? "auto" : "none"}
+      >
+        {drawer}
+      </View>
     </View>
   );
 }
@@ -833,6 +837,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     zIndex: 0,
+  },
+  staticDrawerOpen: {
+    zIndex: 10,
   },
   slidingContent: {
     flex: 1,

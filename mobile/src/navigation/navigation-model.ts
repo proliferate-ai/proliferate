@@ -33,6 +33,7 @@ export interface MobilePendingPrompt {
   selectedRuntimeTargetId?: string | null;
   createdAt: number;
   dispatchedSessionId?: string | null;
+  sendCommandId?: string | null;
   failedAt?: number | null;
   failureMessage?: string | null;
 }

@@ -4,7 +4,7 @@ import type {
   CloudAgentCatalogResponse,
 } from "@proliferate/cloud-sdk";
 import {
-  useAgentAuthMutations,
+  useCloudClient,
   useCreateCloudWorkspace,
   useLaunchCloudWorkspaceOnTarget,
 } from "@proliferate/cloud-sdk-react";
@@ -18,11 +18,13 @@ import {
   type MobileRuntimeOption,
 } from "../../../lib/domain/home/mobile-home-launch";
 import { savePendingMobilePrompt } from "../../../lib/access/cloud/pending-mobile-prompt-store";
+import { ensurePersonalAgentAuthLaunchReady } from "../../../lib/access/cloud/agent-auth-launch-readiness";
 import type { MobileCloudChat } from "../../../navigation/navigation-model";
 
 export function useMobileHomeLaunchActions(input: {
   ownerUserId: string | null;
   catalog?: CloudAgentCatalogResponse | null;
+  launchableAgentKinds?: readonly string[] | null;
   selectedRepo: MobileRepoOption | null;
   selectedRuntime: MobileRuntimeOption | null;
   selection: CloudLaunchComposerSelection;
@@ -32,9 +34,9 @@ export function useMobileHomeLaunchActions(input: {
   const submitInFlightRef = useRef(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const client = useCloudClient();
   const createWorkspace = useCreateCloudWorkspace();
   const launchOnTarget = useLaunchCloudWorkspaceOnTarget();
-  const agentAuthMutations = useAgentAuthMutations();
 
   async function submit(text: string): Promise<void> {
     const prompt = text.trim();
@@ -56,6 +58,7 @@ export function useMobileHomeLaunchActions(input: {
       text: prompt,
       selection: input.selection,
       catalog: input.catalog,
+      launchableAgentKinds: input.launchableAgentKinds,
       repo: input.selectedRepo,
       runtime: input.selectedRuntime,
     });
@@ -96,20 +99,13 @@ export function useMobileHomeLaunchActions(input: {
       }
 
       setStatus("Creating cloud workspace.");
-      const freeCredits = await agentAuthMutations.ensureFreeCredits({
+      await ensurePersonalAgentAuthLaunchReady({
+        client,
         agentKind: normalizeAgentAuthAgentKind(input.selection.agentKind),
         modelId: input.selection.modelId,
+        onStatus: setStatus,
       });
-      if (
-        freeCredits.status !== "not_entitled"
-        && freeCredits.status !== "gateway_disabled"
-        && !freeCredits.launchEnabled
-      ) {
-        throw new Error(
-          freeCredits.lastErrorMessage
-            ?? "Cloud agent credits are not ready yet. Please retry in a moment.",
-        );
-      }
+      setStatus("Creating cloud workspace.");
       const workspace = await createWorkspace.mutateAsync({
         gitProvider: "github",
         gitOwner: input.selectedRepo.gitOwner,
@@ -118,6 +114,7 @@ export function useMobileHomeLaunchActions(input: {
         displayName: buildWorkspaceDisplayName(prompt),
         ownerScope: "personal",
         requiredAgentKind: input.selection.agentKind,
+        source: "mobile",
       });
       await savePendingMobilePrompt(workspace.id, input.ownerUserId, pendingPrompt)
         .catch(() => undefined);
@@ -151,12 +148,11 @@ export function useMobileHomeLaunchActions(input: {
     submitting:
       createWorkspace.isPending ||
       launchOnTarget.isPending ||
-      agentAuthMutations.isEnsuringFreeCredits ||
       submitInFlightRef.current,
   };
 }
 
-function normalizeAgentAuthAgentKind(agentKind: string): AgentAuthAgentKind {
+function normalizeAgentAuthAgentKind(agentKind: string): AgentAuthAgentKind | null {
   switch (agentKind) {
     case "claude":
     case "codex":
@@ -164,6 +160,6 @@ function normalizeAgentAuthAgentKind(agentKind: string): AgentAuthAgentKind {
     case "gemini":
       return agentKind;
     default:
-      return "codex";
+      return null;
   }
 }

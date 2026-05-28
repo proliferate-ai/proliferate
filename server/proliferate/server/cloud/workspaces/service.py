@@ -27,6 +27,7 @@ from proliferate.constants.cloud import (
     SUPPORTED_GIT_PROVIDER,
     CloudCommandKind,
     CloudCommandSource,
+    CloudCommandStatus,
     CloudTargetKind,
     CloudTargetStatus,
     CloudWorkspaceCleanupState,
@@ -126,8 +127,12 @@ from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kind
 from proliferate.server.cloud.claims.access import load_workspace_exposure_and_claim
 from proliferate.server.cloud.claims.domain.policy import is_org_admin_role
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
-from proliferate.server.cloud.commands.service import enqueue_command
+from proliferate.server.cloud.commands.service import (
+    enqueue_command,
+    mark_pending_prompt_interaction_failed_for_command,
+)
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.live.service import publish_command_status_after_commit
 from proliferate.server.cloud.repo_config.service import (
     bootstrap_repo_config,
     load_repo_config_value,
@@ -185,6 +190,11 @@ MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS = 160
 CLOUD_HUMAN_ORIGIN_JSON = '{"kind":"human","entrypoint":"cloud"}'
 CLOUD_DESKTOP_REMOTE_ACCESS_ORIGIN_JSON = '{"kind":"human","entrypoint":"desktop"}'
 CLOUD_SYSTEM_ORIGIN_JSON = '{"kind":"system","entrypoint":"cloud"}'
+CREATE_WORKSPACE_ORIGIN_BY_SOURCE = {
+    "desktop": ("manual_desktop", '{"kind":"human","entrypoint":"desktop"}'),
+    "web": ("manual_web", '{"kind":"human","entrypoint":"web"}'),
+    "mobile": ("manual_mobile", '{"kind":"human","entrypoint":"mobile"}'),
+}
 CLOUD_REMOTE_ACCESS_TEMPLATE_VERSION = "desktop-remote-access-v1"
 CLOUD_TARGET_LAUNCH_TEMPLATE_VERSION = "desktop-target-launch-v1"
 TARGET_LAUNCH_COMMAND_WAIT_TIMEOUT = timedelta(seconds=240)
@@ -807,6 +817,7 @@ async def launch_workspace_on_target(
         template_version=CLOUD_TARGET_LAUNCH_TEMPLATE_VERSION,
         origin="manual_mobile" if body.source == "mobile" else "manual_web",
     )
+    workspace_id = workspace.id
     await db_engine.commit_session(db)
 
     try:
@@ -814,7 +825,7 @@ async def launch_workspace_on_target(
             db,
             user=user,
             target_id=target.id,
-            cloud_workspace_id=workspace.id,
+            cloud_workspace_id=workspace_id,
             kind=CloudCommandKind.ensure_repo_checkout.value,
             payload=EnsureRepoCheckoutPayload(
                 provider=resolved.git_provider,
@@ -823,16 +834,16 @@ async def launch_workspace_on_target(
                 path=repo_root_path,
                 base_branch=resolved.git_base_branch,
             ).to_json(),
-            idempotency_key=f"target-launch:{workspace.id}:checkout",
+            idempotency_key=f"target-launch:{workspace_id}:checkout",
             source=body.source,
         )
-        await _wait_for_target_launch_command(checkout, workspace_id=workspace.id)
+        await _wait_for_target_launch_command(checkout, workspace_id=workspace_id)
 
         root_command = await _enqueue_target_launch_command(
             db,
             user=user,
             target_id=target.id,
-            cloud_workspace_id=workspace.id,
+            cloud_workspace_id=None,
             kind=CloudCommandKind.materialize_workspace.value,
             payload=MaterializeWorkspacePayload(
                 mode="existing_path",
@@ -841,18 +852,18 @@ async def launch_workspace_on_target(
                 origin={"kind": "system", "entrypoint": "cloud"},
                 creator_context={"kind": "human", "label": "Mobile"},
             ).to_json(),
-            idempotency_key=f"target-launch:{workspace.id}:materialize-root",
+            idempotency_key=f"target-launch:{workspace_id}:materialize-root",
             source=body.source,
         )
         root_result = parse_materialize_workspace_result(
-            await _wait_for_target_launch_command(root_command, workspace_id=workspace.id),
+            await _wait_for_target_launch_command(root_command, workspace_id=workspace_id),
         )
 
         worktree_command = await _enqueue_target_launch_command(
             db,
             user=user,
             target_id=target.id,
-            cloud_workspace_id=workspace.id,
+            cloud_workspace_id=workspace_id,
             kind=CloudCommandKind.materialize_workspace.value,
             payload=MaterializeWorkspacePayload(
                 mode="worktree",
@@ -863,11 +874,11 @@ async def launch_workspace_on_target(
                 origin={"kind": "system", "entrypoint": "cloud"},
                 creator_context={"kind": "human", "label": "Mobile"},
             ).to_json(),
-            idempotency_key=f"target-launch:{workspace.id}:materialize-worktree",
+            idempotency_key=f"target-launch:{workspace_id}:materialize-worktree",
             source=body.source,
         )
         materialized = parse_materialize_workspace_result(
-            await _wait_for_target_launch_command(worktree_command, workspace_id=workspace.id),
+            await _wait_for_target_launch_command(worktree_command, workspace_id=workspace_id),
         )
 
         start_payload = StartSessionPayload(
@@ -882,14 +893,14 @@ async def launch_workspace_on_target(
             db,
             user=user,
             target_id=target.id,
-            cloud_workspace_id=workspace.id,
+            cloud_workspace_id=workspace_id,
             kind=CloudCommandKind.start_session.value,
             payload=start_payload,
-            idempotency_key=f"target-launch:{workspace.id}:start-session",
+            idempotency_key=f"target-launch:{workspace_id}:start-session",
             source=body.source,
         )
         started = parse_start_session_result(
-            await _wait_for_target_launch_command(start_command, workspace_id=workspace.id),
+            await _wait_for_target_launch_command(start_command, workspace_id=workspace_id),
         )
 
         config_command_ids: list[str] = []
@@ -898,35 +909,46 @@ async def launch_workspace_on_target(
                 db,
                 user=user,
                 target_id=target.id,
-                cloud_workspace_id=workspace.id,
+                cloud_workspace_id=workspace_id,
                 session_id=started.session_id,
                 kind=CloudCommandKind.update_session_config.value,
                 payload={"configId": update.config_id, "value": update.value},
                 idempotency_key=(
-                    f"target-launch:{workspace.id}:config:{update.config_id}:{update.value}"
+                    f"target-launch:{workspace_id}:config:{update.config_id}:{update.value}"
                 ),
                 source=body.source,
             )
             config_command_ids.append(str(config_command.id))
-            await _wait_for_target_launch_command(config_command, workspace_id=workspace.id)
+            await _wait_for_target_launch_command(
+                config_command,
+                workspace_id=workspace_id,
+            )
 
-        prompt_id = body.prompt_id or f"target-launch:{workspace.id}:prompt:{uuid4().hex}"
+        prompt_id = body.prompt_id or f"target-launch:{workspace_id}:prompt:{uuid4().hex}"
         send_command = await _enqueue_target_launch_command(
             db,
             user=user,
             target_id=target.id,
-            cloud_workspace_id=workspace.id,
+            cloud_workspace_id=workspace_id,
             session_id=started.session_id,
             kind=CloudCommandKind.send_prompt.value,
             payload=SendPromptPayload(text=prompt_text, prompt_id=prompt_id).to_json(),
-            idempotency_key=f"target-launch:{workspace.id}:send-prompt:{prompt_id}",
+            idempotency_key=f"target-launch:{workspace_id}:send-prompt:{prompt_id}",
             source=body.source,
         )
-        await _wait_for_target_launch_command(send_command, workspace_id=workspace.id)
+        await _wait_for_target_launch_command(send_command, workspace_id=workspace_id)
+    except CloudApiError as exc:
+        message = format_exception_message(exc) or exc.message
+        await mark_workspace_error_by_id(
+            workspace_id,
+            message,
+            status_detail="Desktop dispatch failed",
+        )
+        raise
     except (RuntimeError, TimeoutError, ValueError) as exc:
         message = format_exception_message(exc) or str(exc)
         await mark_workspace_error_by_id(
-            workspace.id,
+            workspace_id,
             message,
             status_detail="Desktop dispatch failed",
         )
@@ -937,7 +959,7 @@ async def launch_workspace_on_target(
         ) from exc
 
     db.expire_all()
-    refreshed = await get_cloud_workspace_by_id(db, workspace.id)
+    refreshed = await get_cloud_workspace_by_id(db, workspace_id)
     if refreshed is None:
         raise CloudApiError(
             "target_launch_workspace_missing",
@@ -1089,7 +1111,7 @@ async def _enqueue_target_launch_command(
     *,
     user: User,
     target_id: UUID,
-    cloud_workspace_id: UUID,
+    cloud_workspace_id: UUID | None,
     kind: str,
     payload: dict[str, object],
     idempotency_key: str,
@@ -1121,10 +1143,33 @@ async def _wait_for_target_launch_command(
     workspace_id: UUID,
 ) -> AutomationCommandResult:
     del workspace_id
-    return await wait_for_command_result(
-        command,
-        timeout=TARGET_LAUNCH_COMMAND_WAIT_TIMEOUT,
-    )
+    try:
+        return await wait_for_command_result(
+            command,
+            timeout=TARGET_LAUNCH_COMMAND_WAIT_TIMEOUT,
+        )
+    except (RuntimeError, TimeoutError):
+        await _mark_target_launch_command_failed_interaction_if_needed(command.id)
+        raise
+
+
+async def _mark_target_launch_command_failed_interaction_if_needed(
+    command_id: UUID,
+) -> None:
+    async with db_engine.async_session_factory() as fresh_db:
+        latest = await command_store.get_command_by_id(fresh_db, command_id)
+        if latest is None:
+            return
+        if latest.status not in {
+            CloudCommandStatus.rejected.value,
+            CloudCommandStatus.failed_delivery.value,
+            CloudCommandStatus.expired.value,
+            CloudCommandStatus.superseded.value,
+        }:
+            return
+        await mark_pending_prompt_interaction_failed_for_command(fresh_db, latest)
+        await publish_command_status_after_commit(fresh_db, latest)
+        await db_engine.commit_session(fresh_db)
 
 
 async def enable_cloud_workspace_remote_access(
@@ -1715,6 +1760,7 @@ async def create_cloud_workspace(
     branch_name: str,
     display_name: str | None,
     required_agent_kind: str | None = None,
+    source: str = "desktop",
     owner_selection: OwnerSelection | None = None,
 ) -> WorkspaceDetail:
     if owner_selection is not None and owner_selection.owner_scope == "organization":
@@ -1741,6 +1787,10 @@ async def create_cloud_workspace(
     )
 
     try:
+        origin, origin_json = CREATE_WORKSPACE_ORIGIN_BY_SOURCE.get(
+            source,
+            CREATE_WORKSPACE_ORIGIN_BY_SOURCE["desktop"],
+        )
         workspace = await create_cloud_workspace_for_user(
             user_id=user.id,
             display_name=resolved.display_name,
@@ -1749,7 +1799,8 @@ async def create_cloud_workspace(
             git_repo_name=resolved.git_repo_name,
             git_branch=resolved.git_branch,
             git_base_branch=resolved.git_base_branch,
-            origin_json=CLOUD_HUMAN_ORIGIN_JSON,
+            origin=origin,
+            origin_json=origin_json,
             template_version=get_configured_sandbox_provider().template_version,
             cloud_repo_limit=resolved.cloud_repo_limit,
         )

@@ -13,6 +13,7 @@ import {
   useCloudClient,
   useCloudRepoConfigs,
   useCreateCloudWorkspace,
+  useAgentAuthCredentials,
 } from "@proliferate/cloud-sdk-react";
 import {
   buildCloudLaunchComposerControls,
@@ -23,6 +24,7 @@ import {
   type CloudLaunchComposerSelection,
 } from "@proliferate/product-model/chats/cloud/composer-controls";
 import {
+  readySyncedCloudAgentKinds,
   resolveCloudHarnessAvailability,
 } from "@proliferate/product-model/chats/cloud/harness-availability";
 import {
@@ -83,6 +85,7 @@ export function HomeScreen() {
   const repoConfigs = useCloudRepoConfigs();
   const agentCatalog = useCloudAgentCatalog();
   const cloudCapabilities = useCloudCapabilities();
+  const agentAuthCredentials = useAgentAuthCredentials();
   const createWorkspace = useCreateCloudWorkspace();
   const repoOptions = useMemo(
     () => buildRepoOptions(repoConfigs.data?.configs ?? [], webEnv.defaultCloudRepo),
@@ -93,13 +96,20 @@ export function HomeScreen() {
     [repoId, repoOptions],
   );
   const agentGateway = cloudCapabilities.data?.agentGateway;
+  const readySyncedAgentKinds = useMemo(
+    () => readySyncedCloudAgentKinds(agentAuthCredentials.data),
+    [agentAuthCredentials.data],
+  );
+  const readySyncedAgentKindsKey = readySyncedAgentKinds.join("\0");
   const agentGatewayManagedCreditKindsKey = agentGateway?.managedCreditAgentKinds?.join("\0") ?? "";
   const catalogAgentKindsKey = agentCatalog.data?.agents.map((agent) => agent.kind).join("\0") ?? "";
   const harnessAvailability = useMemo(() => resolveCloudHarnessAvailability({
     catalogAgentKinds: agentCatalog.data?.agents.map((agent) => agent.kind),
+    readyAgentKinds: readySyncedAgentKinds,
     agentGateway,
   }), [
     agentCatalog.data,
+    readySyncedAgentKindsKey,
     agentGateway?.enabled,
     agentGateway?.managedCreditsOrganizationEnabled,
     agentGateway?.managedCreditsPersonalEnabled,
@@ -221,6 +231,7 @@ export function HomeScreen() {
         displayName: buildWorkspaceDisplayName(text),
         ownerScope: "personal",
         requiredAgentKind: resolvedLaunchSelection.agentKind,
+        source: "web",
       };
       const workspace = await createCloudWorkspaceWithTransientRecovery({
         client,

@@ -675,6 +675,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/workspaces/target-launch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Launch Workspace On Target Endpoint */
+        post: operations["launch_workspace_on_target_endpoint_v1_cloud_workspaces_target_launch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workspaces/remote-access": {
         parameters: {
             query?: never;
@@ -5568,6 +5585,8 @@ export interface components {
             organizationId?: string | null;
             /** Requiredagentkind */
             requiredAgentKind?: string | null;
+            /** Source */
+            source?: ("desktop" | "web" | "mobile") | null;
         };
         /** CreateGatewayCredentialRequest */
         CreateGatewayCredentialRequest: {
@@ -5813,6 +5832,50 @@ export interface components {
             lastEventAt?: string | null;
             /** Preview */
             preview?: string | null;
+        };
+        /** LaunchWorkspaceOnTargetRequest */
+        LaunchWorkspaceOnTargetRequest: {
+            /**
+             * Targetid
+             * Format: uuid
+             */
+            targetId: string;
+            /**
+             * Gitprovider
+             * @constant
+             */
+            gitProvider: "github";
+            /** Gitowner */
+            gitOwner: string;
+            /** Gitreponame */
+            gitRepoName: string;
+            /** Basebranch */
+            baseBranch?: string | null;
+            /** Branchname */
+            branchName: string;
+            /** Displayname */
+            displayName?: string | null;
+            /** Prompt */
+            prompt: string;
+            /** Promptid */
+            promptId?: string | null;
+            /**
+             * Agentkind
+             * @default claude
+             */
+            agentKind: string;
+            /** Modelid */
+            modelId?: string | null;
+            /** Modeid */
+            modeId?: string | null;
+            /** Sessionconfigupdates */
+            sessionConfigUpdates?: components["schemas"]["WorkspaceTargetLaunchSessionConfigUpdate"][];
+            /**
+             * Source
+             * @default mobile
+             * @enum {string}
+             */
+            source: "mobile" | "web" | "api";
         };
         /** LocalAutomationAttachSessionRequest */
         LocalAutomationAttachSessionRequest: {
@@ -8891,6 +8954,37 @@ export interface components {
             claimSourceKind?: string | null;
             billing?: components["schemas"]["WorkspaceBillingSummary"] | null;
         };
+        /** WorkspaceTargetLaunchCommandIds */
+        WorkspaceTargetLaunchCommandIds: {
+            /** Ensurerepocheckout */
+            ensureRepoCheckout: string;
+            /** Materializeroot */
+            materializeRoot: string;
+            /** Materializeworktree */
+            materializeWorktree: string;
+            /** Startsession */
+            startSession: string;
+            /** Sendprompt */
+            sendPrompt: string;
+            /** Updatesessionconfig */
+            updateSessionConfig?: string[];
+        };
+        /** WorkspaceTargetLaunchResponse */
+        WorkspaceTargetLaunchResponse: {
+            workspace: components["schemas"]["WorkspaceDetail"];
+            /** Sessionid */
+            sessionId: string;
+            /** Sendcommandid */
+            sendCommandId: string;
+            commandIds: components["schemas"]["WorkspaceTargetLaunchCommandIds"];
+        };
+        /** WorkspaceTargetLaunchSessionConfigUpdate */
+        WorkspaceTargetLaunchSessionConfigUpdate: {
+            /** Configid */
+            configId: string;
+            /** Value */
+            value: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -10400,6 +10494,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    launch_workspace_on_target_endpoint_v1_cloud_workspaces_target_launch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaunchWorkspaceOnTargetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceTargetLaunchResponse"];
                 };
             };
             /** @description Validation Error */
