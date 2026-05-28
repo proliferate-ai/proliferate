@@ -237,6 +237,68 @@ describe("buildModelSelectorGroups", () => {
     ]);
   });
 
+  it("keeps catalog-visible Claude models when active live controls omit them", () => {
+    const groups = buildModelSelectorGroups(
+      [
+        launchAgent("claude", [
+          model("us.anthropic.claude-opus-4-7", "Opus 4.7", false, {
+            aliases: ["claude-opus-4-7"],
+            defaultOptIn: true,
+          }),
+          model("us.anthropic.claude-sonnet-4-6", "Sonnet 4.6", true, {
+            aliases: ["sonnet", "claude-sonnet-4-6"],
+            defaultOptIn: true,
+          }),
+          model("haiku", "Haiku 4.5", false, {
+            aliases: ["claude-haiku-4-5"],
+            defaultOptIn: true,
+          }),
+        ]),
+      ],
+      { kind: "claude", modelId: "sonnet" },
+      { kind: "claude", modelId: "sonnet" },
+      {
+        kind: "claude",
+        values: [
+          {
+            value: "sonnet",
+            label: "Sonnet",
+            description: "Sonnet 4.6 - Best for everyday tasks",
+          },
+          {
+            value: "haiku",
+            label: "Haiku",
+            description: "Haiku 4.5 - Fastest for quick answers",
+          },
+        ],
+      },
+    );
+
+    expect(groups[0]?.models).toEqual([
+      {
+        kind: "claude",
+        modelId: "sonnet",
+        displayName: "Sonnet 4.6",
+        actionKind: "select",
+        isSelected: true,
+      },
+      {
+        kind: "claude",
+        modelId: "haiku",
+        displayName: "Haiku 4.5",
+        actionKind: "update_current_chat",
+        isSelected: false,
+      },
+      {
+        kind: "claude",
+        modelId: "us.anthropic.claude-opus-4-7",
+        displayName: "Opus 4.7",
+        actionKind: "update_current_chat",
+        isSelected: false,
+      },
+    ]);
+  });
+
   it("applies visibility preferences to active model controls", () => {
     const groups = buildModelSelectorGroups(
       [

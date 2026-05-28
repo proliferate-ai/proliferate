@@ -9,8 +9,9 @@ export function findCompatibleExistingSession({
   agentKind: string;
   modelId: string;
 }): Session | null {
-  return sessions.find((session) =>
-    session.agentKind === agentKind
-    && (!session.modelId || session.modelId === modelId)
-  ) ?? null;
+  return sessions.find((session) => {
+    const requestedOrCurrentModelId = session.requestedModelId ?? session.modelId ?? null;
+    return session.agentKind === agentKind
+      && (!requestedOrCurrentModelId || requestedOrCurrentModelId === modelId);
+  }) ?? null;
 }

@@ -35,6 +35,7 @@ export interface SessionDirectoryEntry {
   workspaceId: string | null;
   agentKind: string;
   modelId: string | null;
+  requestedModelId: string | null;
   modeId: string | null;
   title: string | null;
   actionCapabilities: SessionActionCapabilities;
@@ -56,6 +57,7 @@ export interface DirectoryEntryInput {
   workspaceId?: string | null;
   agentKind: string;
   modelId?: string | null;
+  requestedModelId?: string | null;
   modeId?: string | null;
   title?: string | null;
   actionCapabilities?: SessionActionCapabilities | null;
@@ -105,6 +107,7 @@ export function normalizeDirectoryEntryInput(
     workspaceId: input.workspaceId ?? existing?.workspaceId ?? null,
     agentKind: input.agentKind,
     modelId: input.modelId ?? existing?.modelId ?? null,
+    requestedModelId: input.requestedModelId ?? existing?.requestedModelId ?? null,
     modeId: input.modeId ?? existing?.modeId ?? null,
     title: input.title ?? existing?.title ?? null,
     actionCapabilities:
@@ -163,6 +166,7 @@ export function directoryEntryEqual(
     && a.workspaceId === b.workspaceId
     && a.agentKind === b.agentKind
     && a.modelId === b.modelId
+    && a.requestedModelId === b.requestedModelId
     && a.modeId === b.modeId
     && a.title === b.title
     && a.actionCapabilities === b.actionCapabilities

@@ -337,6 +337,7 @@ export function useSessionSelectionWorkflowActions({
         ...createEmptySessionRecord(sessionId, agentKind, {
           workspaceId,
           modelId: sessionMeta?.modelId ?? null,
+          requestedModelId: sessionMeta?.requestedModelId ?? sessionMeta?.modelId ?? null,
           modeId: sessionMeta?.modeId ?? null,
           title: sessionMeta?.title ?? null,
           liveConfig: sessionMeta?.liveConfig ?? null,
@@ -374,6 +375,11 @@ export function useSessionSelectionWorkflowActions({
         workspaceId,
         agentKind,
         modelId: sessionMeta?.modelId ?? existingSlot.modelId ?? null,
+        requestedModelId:
+          sessionMeta?.requestedModelId
+          ?? sessionMeta?.modelId
+          ?? existingSlot.requestedModelId
+          ?? null,
         modeId: sessionMeta?.modeId ?? existingSlot.modeId ?? null,
         title: sessionMeta?.title ?? existingSlot.title ?? null,
         liveConfig: sessionMeta?.liveConfig ?? existingSlot.liveConfig ?? null,

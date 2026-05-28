@@ -224,9 +224,9 @@ function resolveSessionModel(
   liveConfig: SessionLiveConfigSnapshot,
 ): SessionConfigModel | null {
   const candidates = [
-    liveConfig.normalizedControls.model?.currentValue,
-    session.modelId,
     session.requestedModelId,
+    session.modelId,
+    liveConfig.normalizedControls.model?.currentValue,
   ];
 
   for (const candidate of candidates) {

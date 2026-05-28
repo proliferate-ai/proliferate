@@ -107,6 +107,7 @@ export function useSessionSummaryActions() {
         agentKind: patch.agentKind,
         workspaceId: patch.workspaceId,
         modelId: shouldApplyConfigFields ? patch.modelId : existing.modelId,
+        requestedModelId: patch.requestedModelId,
         modeId: shouldApplyConfigFields ? patch.modeId : existing.modeId,
         title: patch.title,
         actionCapabilities: patch.actionCapabilities,

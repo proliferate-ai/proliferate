@@ -39,6 +39,34 @@ describe("findCompatibleExistingSession", () => {
     })).toBe(matched);
   });
 
+  it("matches against requested model ids when current model ids lag behind", () => {
+    const matched = session({
+      id: "match",
+      modelId: "sonnet",
+      requestedModelId: "opus",
+    });
+
+    expect(findCompatibleExistingSession({
+      sessions: [matched],
+      agentKind: "codex",
+      modelId: "opus",
+    })).toBe(matched);
+  });
+
+  it("does not match a stale current model when requested model differs", () => {
+    expect(findCompatibleExistingSession({
+      sessions: [
+        session({
+          id: "wrong-requested-model",
+          modelId: "opus",
+          requestedModelId: "sonnet",
+        }),
+      ],
+      agentKind: "codex",
+      modelId: "opus",
+    })).toBeNull();
+  });
+
   it("returns null when no session matches", () => {
     expect(findCompatibleExistingSession({
       sessions: [session({ id: "wrong-model", modelId: "gpt-5.4" })],

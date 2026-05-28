@@ -295,6 +295,7 @@ export function useActiveSessionLaunchState(): {
       activeSessionId,
       agentKind: entry?.agentKind ?? null,
       modelId: entry?.modelId ?? null,
+      requestedModelId: entry?.requestedModelId ?? null,
       directoryPendingConfigChanges: normalizeEmptyPendingConfigChanges(
         entry?.pendingConfigChanges,
       ),
@@ -325,9 +326,9 @@ export function useActiveSessionLaunchState(): {
     if (!slice.agentKind) {
       return null;
     }
-    const modelId = pendingModelId ?? slice.modelId ?? null;
+    const modelId = pendingModelId ?? slice.requestedModelId ?? slice.modelId ?? null;
     return modelId ? { kind: slice.agentKind, modelId } : null;
-  }, [pendingModelId, slice.agentKind, slice.modelId]);
+  }, [pendingModelId, slice.agentKind, slice.modelId, slice.requestedModelId]);
 
   return {
     ...slice,

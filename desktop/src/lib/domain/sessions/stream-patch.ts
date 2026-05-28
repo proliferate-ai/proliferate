@@ -11,6 +11,7 @@ import type {
 export interface SessionStreamPatchInput {
   slot: {
     modelId: string | null;
+    requestedModelId: string | null;
     modeId: string | null;
     title: string | null;
     status: SessionStatus | null;
@@ -25,6 +26,7 @@ export interface SessionStreamPatch {
   liveConfig?: SessionLiveConfigSnapshot | null;
   executionSummary?: SessionExecutionSummary | null;
   modelId?: string | null;
+  requestedModelId?: string | null;
   modeId?: string | null;
   title?: string | null;
   status?: SessionStatus | null;
@@ -49,6 +51,18 @@ export function buildSessionStreamPatch({
 
   if (event.type === "current_mode_update") {
     patch.modeId = event.currentModeId;
+  }
+
+  if (event.type === "session_state_update") {
+    if (event.modelId !== undefined) {
+      patch.modelId = event.modelId ?? null;
+    }
+    if (event.requestedModelId !== undefined) {
+      patch.requestedModelId = event.requestedModelId ?? null;
+    }
+    if (event.modeId !== undefined) {
+      patch.modeId = event.modeId ?? null;
+    }
   }
 
   if (event.type === "config_option_update") {
@@ -163,6 +177,10 @@ export function buildSessionStreamBatchPatch({
         eventPatch.modelId !== undefined
           ? eventPatch.modelId
           : foldedSlot.modelId,
+      requestedModelId:
+        eventPatch.requestedModelId !== undefined
+          ? eventPatch.requestedModelId
+          : foldedSlot.requestedModelId,
       modeId:
         eventPatch.modeId !== undefined
           ? eventPatch.modeId

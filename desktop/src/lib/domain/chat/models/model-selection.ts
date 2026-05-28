@@ -228,41 +228,24 @@ function resolveSelectorModels(
   sourceAgent: DesktopAgentLaunchAgent,
 ): Array<{ id: string; displayName: string }> {
   if (activeModelControl?.kind === agent.kind && activeModelControl.values.length > 0) {
-    return activeModelControl.values.flatMap((value) => {
-      const isSelected = modelSelectionMatchesModel(
+    return mergeCatalogAndActiveControlSelectorModels(
+      resolveCatalogSelectorModels(agent),
+      resolveActiveControlSelectorModels(
+        agent,
+        activeModelControl,
         selected,
         sourceAgent,
-        agent.kind,
-        value.value,
-      );
-      const knownModel = findLaunchModelByIdOrAlias(sourceAgent, value.value);
-      const visibleModel = findLaunchModelByIdOrAlias(agent, value.value);
-      const isFilteredByVisibility =
-        Boolean(knownModel) && !visibleModel;
-      const isUnknownDynamicModel =
-        !knownModel && dynamicLaunchAgentAcceptsModel(sourceAgent);
-      const isHiddenByProductPolicy = shouldHideSelectorModel(agent.kind, value);
-      if (
-        (isFilteredByVisibility || isUnknownDynamicModel || isHiddenByProductPolicy)
-        && !isSelected
-      ) {
-        return [];
-      }
-
-      const displayName = resolveModelDisplayName({
-        agentKind: agent.kind,
-        modelId: value.value,
-        sourceLabels: [value.label],
-        preferKnownAlias: !isHiddenByProductPolicy,
-      }) ?? value.label;
-
-      return [{
-        id: value.value,
-        displayName,
-      }];
-    });
+      ),
+      sourceAgent,
+    );
   }
 
+  return resolveCatalogSelectorModels(agent);
+}
+
+function resolveCatalogSelectorModels(
+  agent: DesktopAgentLaunchAgent,
+): Array<{ id: string; displayName: string }> {
   return agent.models.map((model) => ({
     id: model.id,
     displayName: resolveModelDisplayName({
@@ -272,6 +255,92 @@ function resolveSelectorModels(
       preferKnownAlias: shouldPreferStaticModelAlias(model.displayName),
     }) ?? model.displayName,
   }));
+}
+
+function resolveActiveControlSelectorModels(
+  agent: DesktopAgentLaunchAgent,
+  activeModelControl: ActiveModelSelectorControl,
+  selected: ModelSelectorSelection | null,
+  sourceAgent: DesktopAgentLaunchAgent,
+): Array<{ id: string; displayName: string }> {
+  return activeModelControl.values.flatMap((value) => {
+    const isSelected = modelSelectionMatchesModel(
+      selected,
+      sourceAgent,
+      agent.kind,
+      value.value,
+    );
+    const knownModel = findLaunchModelByIdOrAlias(sourceAgent, value.value);
+    const visibleModel = findLaunchModelByIdOrAlias(agent, value.value);
+    const isFilteredByVisibility =
+      Boolean(knownModel) && !visibleModel;
+    const isUnknownDynamicModel =
+      !knownModel && dynamicLaunchAgentAcceptsModel(sourceAgent);
+    const isHiddenByProductPolicy = shouldHideSelectorModel(agent.kind, value);
+    if (
+      (isFilteredByVisibility || isUnknownDynamicModel || isHiddenByProductPolicy)
+      && !isSelected
+    ) {
+      return [];
+    }
+
+    const displayName = resolveModelDisplayName({
+      agentKind: agent.kind,
+      modelId: value.value,
+      sourceLabels: [value.label],
+      preferKnownAlias: !isHiddenByProductPolicy,
+    }) ?? value.label;
+
+    return [{
+      id: value.value,
+      displayName,
+    }];
+  });
+}
+
+function mergeCatalogAndActiveControlSelectorModels(
+  catalogModels: Array<{ id: string; displayName: string }>,
+  activeControlModels: Array<{ id: string; displayName: string }>,
+  sourceAgent: DesktopAgentLaunchAgent,
+): Array<{ id: string; displayName: string }> {
+  const emittedDedupeKeys = new Set<string>();
+  const merged: Array<{ id: string; displayName: string }> = [];
+  for (const model of activeControlModels) {
+    merged.push(model);
+    for (const key of selectorModelDedupeKeys(sourceAgent, model)) {
+      emittedDedupeKeys.add(key);
+    }
+  }
+
+  for (const catalogModel of catalogModels) {
+    const keys = selectorModelDedupeKeys(sourceAgent, catalogModel);
+    if (keys.some((key) => emittedDedupeKeys.has(key))) {
+      continue;
+    }
+    merged.push(catalogModel);
+    for (const key of keys) {
+      emittedDedupeKeys.add(key);
+    }
+  }
+
+  return merged;
+}
+
+function selectorModelDedupeKeys(
+  agent: DesktopAgentLaunchAgent,
+  model: { id: string; displayName: string },
+): string[] {
+  const keys = [
+    `model:${findLaunchModelByIdOrAlias(agent, model.id)?.id ?? model.id}`,
+  ];
+  const displayName = model.displayName
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+  if (displayName) {
+    keys.push(`display:${displayName}`);
+  }
+  return keys;
 }
 
 function resolveModelSelectionActionKindForModel(

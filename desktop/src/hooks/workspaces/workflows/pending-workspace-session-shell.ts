@@ -34,6 +34,7 @@ export function ensurePendingWorkspaceSessionShell(input: {
       workspaceId: pendingWorkspaceUiKey,
       materializedSessionId: null,
       modelId: initialSession.modelId,
+      requestedModelId: initialSession.modelId,
       modeId: initialSession.modeId ?? null,
       title: initialSession.displayTitle ?? initialSession.modelId,
       optimisticPrompt: null,

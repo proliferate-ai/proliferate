@@ -52,6 +52,7 @@ export function usePendingWorkspaceSessionMaterialization() {
         sessionId: session.sessionId,
         agentKind: session.agentKind,
         modelId: session.modelId,
+        requestedModelId: session.requestedModelId,
       });
     }
 
@@ -62,7 +63,7 @@ export function usePendingWorkspaceSessionMaterialization() {
         clientSessionId: session.sessionId,
         workspaceId,
         agentKind: session.agentKind,
-        modelId: session.modelId ?? session.agentKind,
+        modelId: session.requestedModelId ?? session.modelId ?? session.agentKind,
         modeId: session.modeId ?? undefined,
         reuseInFlightEmptySession: false,
         preserveProjectedSessionOnCreateFailure: true,

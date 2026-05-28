@@ -34,6 +34,7 @@ export function createEmptySessionRecord(
     workspaceId?: string | null;
     materializedSessionId?: string | null;
     modelId?: string | null;
+    requestedModelId?: string | null;
     modeId?: string | null;
     title?: string | null;
     actionCapabilities?: SessionActionCapabilities | null;
@@ -66,6 +67,7 @@ export function createEmptySessionRecord(
     workspaceId: config?.workspaceId ?? null,
     agentKind,
     modelId: config?.modelId ?? null,
+    requestedModelId: config?.requestedModelId ?? config?.modelId ?? null,
     modeId: resolvedModeId,
     title,
     actionCapabilities: config?.actionCapabilities ?? DEFAULT_SESSION_ACTION_CAPABILITIES,
@@ -104,6 +106,7 @@ export function createSessionRecordFromSummary(
     workspaceId,
     materializedSessionId: session.id,
     modelId: session.modelId ?? null,
+    requestedModelId: session.requestedModelId ?? session.modelId ?? null,
     modeId,
     title,
     actionCapabilities: session.actionCapabilities,
@@ -150,6 +153,7 @@ export function patchSessionRecord(
     if ("workspaceId" in patch) directoryPatch.workspaceId = patch.workspaceId ?? null;
     if ("agentKind" in patch && patch.agentKind) directoryPatch.agentKind = patch.agentKind;
     if ("modelId" in patch) directoryPatch.modelId = patch.modelId ?? null;
+    if ("requestedModelId" in patch) directoryPatch.requestedModelId = patch.requestedModelId ?? null;
     if ("modeId" in patch) directoryPatch.modeId = patch.modeId ?? null;
     if ("title" in patch) directoryPatch.title = patch.title ?? null;
     if ("actionCapabilities" in patch && patch.actionCapabilities) {

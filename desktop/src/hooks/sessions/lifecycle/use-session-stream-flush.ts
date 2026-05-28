@@ -433,6 +433,9 @@ export function createSessionStreamFlushController(
         modelId: streamPatch.modelId !== undefined
           ? streamPatch.modelId
           : slotState.modelId,
+        requestedModelId: streamPatch.requestedModelId !== undefined
+          ? streamPatch.requestedModelId
+          : slotState.requestedModelId,
         modeId: streamPatch.modeId !== undefined
           ? streamPatch.modeId
           : slotState.modeId,

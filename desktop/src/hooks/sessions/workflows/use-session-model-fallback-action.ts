@@ -43,6 +43,9 @@ export function useSessionModelFallbackAction() {
         liveConfig,
         fallbackModelId,
       }),
+      requestedModelId:
+        response.session.requestedModelId
+        ?? fallbackModelId,
       modeId:
         liveConfig?.normalizedControls.mode?.currentValue
         ?? response.session.modeId

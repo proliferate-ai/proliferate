@@ -214,4 +214,77 @@ describe("applySessionLaunchDefaults", () => {
     expect(result.session.liveConfig?.normalizedControls.collaborationMode?.currentValue)
       .toBe("plan");
   });
+
+  it("resolves model defaults from the requested model before a lagging current model", async () => {
+    const firstLiveConfig = liveConfig({
+      model: "sonnet",
+      reasoning: control("reasoning", "reasoning-raw", "off", ["off", "extended"]),
+    });
+    const finalLiveConfig = liveConfig({
+      model: "sonnet",
+      reasoning: control("reasoning", "reasoning-raw", "extended", ["off", "extended"]),
+    });
+    const setConfigOption = vi.fn().mockResolvedValueOnce({
+      applyState: "applied",
+      session: session(finalLiveConfig, {
+        modelId: "sonnet",
+        requestedModelId: "opus",
+      }),
+      liveConfig: finalLiveConfig,
+    });
+    const client = {
+      sessions: {
+        setConfigOption,
+        getLiveConfig: vi.fn(),
+      },
+    } as unknown as AnyHarnessClient;
+    const registries: ModelRegistry[] = [{
+      kind: "claude",
+      displayName: "Claude",
+      defaultModelId: "sonnet",
+      models: [
+        {
+          id: "sonnet",
+          displayName: "Sonnet",
+          isDefault: true,
+          status: "active",
+          sessionDefaultControls: [],
+        },
+        {
+          id: "opus",
+          displayName: "Opus",
+          isDefault: false,
+          status: "active",
+          sessionDefaultControls: [{
+            key: "reasoning",
+            label: "Reasoning",
+            values: [
+              { value: "off", label: "Off", isDefault: true },
+              { value: "extended", label: "Extended", isDefault: false },
+            ],
+          }],
+        },
+      ],
+    }];
+
+    await applySessionLaunchDefaults({
+      client,
+      session: session(firstLiveConfig, {
+        modelId: "sonnet",
+        requestedModelId: "opus",
+      }),
+      agentKind: "claude",
+      modelRegistries: registries,
+      defaultLiveSessionControlValuesByAgentKind: {
+        claude: {
+          reasoning: "extended",
+        },
+      },
+    });
+
+    expect(setConfigOption).toHaveBeenCalledWith("session-1", {
+      configId: "reasoning-raw",
+      value: "extended",
+    });
+  });
 });
