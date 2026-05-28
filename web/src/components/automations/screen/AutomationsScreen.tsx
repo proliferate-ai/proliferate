@@ -14,6 +14,7 @@ import {
   useAutomationRuns,
   useAutomations,
   useCloudAgentCatalog,
+  useCloudCapabilities,
   useCloudRepoConfigs,
   useOrganizations,
 } from "@proliferate/cloud-sdk-react";
@@ -39,6 +40,7 @@ import {
 import {
   buildCloudLaunchComposerControls,
   buildLaunchRunConfigControlValues,
+  DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS,
   DEFAULT_DIRECT_PROMPT_AGENT_KIND,
   DEFAULT_DIRECT_PROMPT_MODEL_ID,
   resolveCloudLaunchSelection,
@@ -90,6 +92,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
   });
   const repoConfigs = useCloudRepoConfigs();
   const agentCatalog = useCloudAgentCatalog();
+  const cloudCapabilities = useCloudCapabilities();
   const actions = useAutomationActions();
   const runConfigActions = useAgentRunConfigActions();
   const [createOpen, setCreateOpen] = useState(false);
@@ -178,16 +181,25 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     () => buildRepoOptions(repoConfigs.data?.configs ?? EMPTY_REPO_CONFIGS),
     [repoConfigs.data?.configs],
   );
+  const launchableAgentKinds = useMemo(() => {
+    const managedCreditKinds = cloudCapabilities.data?.agentGateway.managedCreditAgentKinds
+      ?? DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS;
+    return managedCreditKinds.length > 0
+      ? managedCreditKinds
+      : [DEFAULT_DIRECT_PROMPT_AGENT_KIND];
+  }, [cloudCapabilities.data?.agentGateway.managedCreditAgentKinds]);
   const resolvedLaunchSelection = useMemo(
     () => resolveCloudLaunchSelection({
       catalog: agentCatalog.data,
+      launchableAgentKinds,
       selection: launchSelection,
     }),
-    [agentCatalog.data, launchSelection],
+    [agentCatalog.data, launchSelection, launchableAgentKinds],
   );
   const agentControls = useMemo(
     () => buildCloudLaunchComposerControls({
       catalog: agentCatalog.data,
+      launchableAgentKinds,
       selection: resolvedLaunchSelection,
       onAgentModelSelect: (agentKind, modelId) => {
         setLaunchSelection((current) => ({
@@ -212,7 +224,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
         });
       },
     }),
-    [agentCatalog.data, resolvedLaunchSelection],
+    [agentCatalog.data, launchableAgentKinds, resolvedLaunchSelection],
   );
   const timezoneOptions = useMemo(
     () => automationTimezoneOptions(createValues.timezone),
@@ -297,6 +309,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
       modelId: resolvedLaunchSelection.modelId,
       controlValues: buildLaunchRunConfigControlValues({
         catalog: agentCatalog.data,
+        launchableAgentKinds,
         selection: resolvedLaunchSelection,
       }),
       usableInPersonalSandboxes: true,

@@ -1100,7 +1100,7 @@ async def test_bifrost_worker_materialization_uses_direct_virtual_key_env(
     claude = selections["claude"]["gateway"]
     assert claude["baseUrls"]["anthropic"] == "https://bifrost.test/anthropic"
     assert claude["runtimeGrantToken"] == "sk-bf-runtime-1"
-    assert claude["protectedEnv"]["ANTHROPIC_AUTH_TOKEN"] == ""
+    assert claude["protectedEnv"]["ANTHROPIC_AUTH_TOKEN"] == "sk-bf-runtime-1"
     assert claude["protectedEnv"]["ANTHROPIC_CUSTOM_HEADERS"] == "x-bf-vk: sk-bf-runtime-1"
     gemini = selections["gemini"]["gateway"]
     assert gemini["protocolFacade"] == "genai"

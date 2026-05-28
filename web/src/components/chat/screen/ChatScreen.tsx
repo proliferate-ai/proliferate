@@ -14,6 +14,7 @@ import {
 import {
   useClaimCloudWorkspace,
   useCloudAgentCatalog,
+  useCloudCapabilities,
   useCloudClient,
   useCloudSessionEvents,
   useCloudTranscriptSnapshot,
@@ -40,6 +41,7 @@ import {
 import {
   buildCloudChatComposerControls,
   buildLaunchSessionConfigUpdates,
+  DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS,
   DEFAULT_DIRECT_PROMPT_AGENT_KIND,
   DEFAULT_DIRECT_PROMPT_MODEL_ID,
   getLiveConfigControlValue,
@@ -59,7 +61,9 @@ import {
 import { routes } from "../../../config/routes";
 import {
   dispatchPendingHomePrompt,
+  enqueuePromptCommandWithRetry,
   prepareManagedWorkspaceForCloudCommands,
+  resumePendingHomePromptInSession,
   type SendPromptPayload,
   type StartSessionPayload,
   type UpdateSessionConfigPayload,
@@ -70,6 +74,22 @@ import {
   savePendingHomePrompt,
   type PendingHomePrompt,
 } from "../../../lib/access/cloud/pending-home-prompt-store";
+import {
+  clearWebCloudSessionDraft,
+  createWebCloudSessionDraft,
+  loadWebCloudPendingConfigChanges,
+  loadWebCloudPromptIntents,
+  loadWebCloudSessionDraftFromSearch,
+  saveWebCloudPendingConfigChanges,
+  saveWebCloudPromptIntents,
+  saveWebCloudSessionDraft,
+  webCloudSessionDraftIdFromOptionId,
+  webCloudSessionDraftIdFromSearch,
+  webCloudSessionDraftOptionId,
+  webCloudSessionDraftSearch,
+  type WebCloudPromptIntent,
+  type WebCloudSessionDraft,
+} from "../../../stores/cloud/web-cloud-chat-state-store";
 
 type PendingHomePromptDispatchRun = {
   key: string;
@@ -77,17 +97,7 @@ type PendingHomePromptDispatchRun = {
   started: boolean;
 };
 
-type OptimisticPromptStatus = "sending" | "queued" | "failed";
-
-type OptimisticPrompt = {
-  id: string;
-  workspaceId: string;
-  sessionId: string | null;
-  text: string;
-  baseTranscriptSeq: number;
-  status: OptimisticPromptStatus;
-  commandId?: string | null;
-};
+type OptimisticPrompt = WebCloudPromptIntent;
 
 const EMPTY_SESSION_EVENTS: CloudSessionEvent[] = [];
 const EMPTY_TRANSCRIPT_ITEMS: CloudTranscriptItem[] = [];
@@ -107,19 +117,26 @@ export function ChatScreen() {
   });
   const [latestCommandId, setLatestCommandId] = useState<string | null>(null);
   const [directPromptDispatching, setDirectPromptDispatching] = useState(false);
-  const [optimisticPrompts, setOptimisticPrompts] = useState<OptimisticPrompt[]>([]);
+  const [optimisticPrompts, setOptimisticPrompts] = useState<OptimisticPrompt[]>(() =>
+    workspaceId ? loadWebCloudPromptIntents(workspaceId) : []
+  );
   const [pendingConfigChanges, setPendingConfigChanges] = useState<
     Record<string, PendingConfigChange>
-  >({});
+  >(() => workspaceId ? loadWebCloudPendingConfigChanges(workspaceId) : {});
+  const [pendingSessionDraft, setPendingSessionDraft] = useState<WebCloudSessionDraft | null>(() =>
+    workspaceId ? loadWebCloudSessionDraftFromSearch(workspaceId, location.search) : null
+  );
   const [pendingHomePrompt, setPendingHomePrompt] = useState<PendingHomePrompt | null>(() =>
     workspaceId ? loadPendingHomePrompt(workspaceId) : null
   );
   const [pendingHomePromptStatus, setPendingHomePromptStatus] = useState<string | null>(null);
   const pendingHomePromptDispatchRunRef = useRef<PendingHomePromptDispatchRun | null>(null);
+  const pendingHomePromptResumeAttemptsRef = useRef<Set<string>>(new Set());
   const pendingConfigMutationIdRef = useRef(0);
   const mountedRef = useRef(true);
   const workspaceQuery = useCloudWorkspaceSnapshot(workspaceId ?? null, Boolean(workspaceId));
   const agentCatalog = useCloudAgentCatalog();
+  const cloudCapabilities = useCloudCapabilities();
   const workspaceLive = useWorkspaceLive(workspaceId ?? null, { enabled: Boolean(workspaceId) });
   const snapshot = useMemo(
     () => mergeWorkspaceSnapshot(workspaceQuery.data, workspaceLive.snapshot),
@@ -131,7 +148,9 @@ export function ChatScreen() {
     () => [...(snapshot?.sessions ?? [])].sort(compareSessions),
     [snapshot?.sessions],
   );
-  const suppressSessionRedirect = shouldSuppressWorkspaceSessionRedirect(location.state);
+  const routeSessionDraftId = workspaceId ? webCloudSessionDraftIdFromSearch(location.search) : null;
+  const suppressSessionRedirect = Boolean(routeSessionDraftId && pendingSessionDraft)
+    || shouldSuppressWorkspaceSessionRedirect(location.state);
   const session = chatId
     ? sessions.find((candidate) => candidate.sessionId === chatId) ?? null
     : null;
@@ -168,6 +187,11 @@ export function ChatScreen() {
     [pendingInteractions],
   );
   const pendingPromptCommandIdsKey = pendingPromptCommandIds.join("\0");
+  const optimisticPromptCommandIds = useMemo(
+    () => optimisticPromptCommandIdsFromPrompts(optimisticPrompts),
+    [optimisticPrompts],
+  );
+  const optimisticPromptCommandIdsKey = optimisticPromptCommandIds.join("\0");
   const pendingConfigCommandIds = useMemo(
     () => pendingConfigCommandIdsFromChanges(pendingConfigChanges),
     [pendingConfigChanges],
@@ -224,13 +248,29 @@ export function ChatScreen() {
   const isUnclaimed = workspace?.visibility === "shared_unclaimed";
   const workspaceReadyAgentKindsKey = workspace?.readyAgentKinds?.join("\0") ?? "";
   const workspaceAllowedAgentKindsKey = workspace?.allowedAgentKinds?.join("\0") ?? "";
+  const workspaceLaunchableAgentKinds = useMemo(() => {
+    const readyAgentKinds = workspace?.readyAgentKinds?.filter(Boolean) ?? [];
+    const managedCreditKinds = cloudCapabilities.data?.agentGateway.managedCreditAgentKinds
+      ?? DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS;
+    const allowedAgentKinds = workspace?.allowedAgentKinds?.filter(Boolean) ?? [];
+    const launchableKinds = new Set([...readyAgentKinds, ...managedCreditKinds]);
+    const filteredKinds = allowedAgentKinds.length > 0
+      ? [...launchableKinds].filter((kind) => allowedAgentKinds.includes(kind))
+      : [...launchableKinds];
+    return filteredKinds.length > 0 ? filteredKinds : null;
+  }, [
+    cloudCapabilities.data?.agentGateway.managedCreditAgentKinds,
+    workspaceAllowedAgentKindsKey,
+    workspaceReadyAgentKindsKey,
+  ]);
   const liveConfig = readSessionLiveConfig(session);
   const resolvedLaunchSelection = useMemo(
     () => resolveCloudLaunchSelection({
       catalog: agentCatalog.data,
+      launchableAgentKinds: workspaceLaunchableAgentKinds,
       selection: launchSelection,
     }),
-    [agentCatalog.data, launchSelection],
+    [agentCatalog.data, launchSelection, workspaceLaunchableAgentKinds],
   );
   const sessionModelId = session && liveConfig ? getLiveConfigControlValue(liveConfig, "model") : null;
   const composerControls = buildCloudChatComposerControls({
@@ -238,6 +278,7 @@ export function ChatScreen() {
     liveConfig,
     pendingConfigChanges,
     launchCatalog: agentCatalog.data,
+    launchableAgentKinds: workspaceLaunchableAgentKinds,
     launchSelection: resolvedLaunchSelection,
     launchModelId: resolvedLaunchSelection.modelId ?? DEFAULT_DIRECT_PROMPT_MODEL_ID,
     onLaunchAgentModelSelect: (agentKind, modelId) => {
@@ -269,18 +310,12 @@ export function ChatScreen() {
       void submitSessionConfig(rawConfigId, value);
     },
     onSessionAgentModelSelect: ({ agentKind, modelId }) => {
-      setLaunchSelection({
+      openNewSessionDraft({
         agentKind,
         modelId,
         modeId: null,
         controlValues: {},
       });
-      setPendingConfigChanges({});
-      if (workspaceId) {
-        navigate(routes.workspace(workspaceId), {
-          state: { startNewSession: true },
-        });
-      }
     },
   });
 
@@ -297,9 +332,77 @@ export function ChatScreen() {
   useEffect(() => {
     setPendingHomePrompt(workspaceId ? loadPendingHomePrompt(workspaceId) : null);
     setPendingHomePromptStatus(null);
-    setOptimisticPrompts([]);
-    setPendingConfigChanges({});
+    setOptimisticPrompts(workspaceId ? loadWebCloudPromptIntents(workspaceId) : []);
+    setPendingConfigChanges(workspaceId ? loadWebCloudPendingConfigChanges(workspaceId) : {});
+    pendingHomePromptResumeAttemptsRef.current.clear();
   }, [workspaceId]);
+
+  useEffect(() => {
+    setPendingSessionDraft(
+      workspaceId ? loadWebCloudSessionDraftFromSearch(workspaceId, location.search) : null,
+    );
+  }, [location.search, workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId || optimisticPrompts.some((prompt) => prompt.workspaceId !== workspaceId)) {
+      return;
+    }
+    saveWebCloudPromptIntents(workspaceId, optimisticPrompts);
+  }, [optimisticPrompts, workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId) {
+      return;
+    }
+    saveWebCloudPendingConfigChanges(workspaceId, pendingConfigChanges);
+  }, [pendingConfigChanges, workspaceId]);
+
+  useEffect(() => {
+    if (!pendingSessionDraft) {
+      return;
+    }
+    setLaunchSelection(pendingSessionDraft.selection);
+  }, [pendingSessionDraft?.id]);
+
+  useEffect(() => {
+    if (!workspaceId || !routeSessionDraftId || pendingSessionDraft) {
+      return;
+    }
+    clearWebCloudSessionDraft(workspaceId, routeSessionDraftId);
+    navigate(routes.workspace(workspaceId), { replace: true });
+  }, [navigate, pendingSessionDraft, routeSessionDraftId, workspaceId]);
+
+  useEffect(() => {
+    if (!pendingSessionDraft) {
+      return;
+    }
+    const resolvedSelection = resolveCloudLaunchSelection({
+      catalog: agentCatalog.data,
+      launchableAgentKinds: workspaceLaunchableAgentKinds,
+      selection: launchSelection,
+    });
+    const sessionConfigUpdates = buildLaunchSessionConfigUpdates({
+      catalog: agentCatalog.data,
+      launchableAgentKinds: workspaceLaunchableAgentKinds,
+      selection: resolvedSelection,
+    });
+    if (sessionDraftMatchesSelection(pendingSessionDraft, resolvedSelection, sessionConfigUpdates)) {
+      return;
+    }
+    const nextDraft = {
+      ...pendingSessionDraft,
+      selection: resolvedSelection,
+      sessionConfigUpdates,
+    };
+    saveWebCloudSessionDraft(nextDraft);
+    setPendingSessionDraft(nextDraft);
+  }, [
+    agentCatalog.data,
+    launchSelection,
+    pendingSessionDraft?.id,
+    pendingSessionDraft?.workspaceId,
+    workspaceLaunchableAgentKinds,
+  ]);
 
   useEffect(() => {
     if (!workspaceId || !workspace || workspaceStatus === "ready" || workspaceStatus === "error") {
@@ -418,10 +521,13 @@ export function ChatScreen() {
                   baseTranscriptSeq: 0,
                   status: "queued",
                   commandId: result.sendCommandId,
+                  createdAt: Date.now(),
                 },
               ]
           );
           clearPendingHomePrompt(workspace.id);
+          clearWebCloudSessionDraft(workspace.id, pendingSessionDraft?.id ?? routeSessionDraftId);
+          setPendingSessionDraft(null);
           setPendingHomePrompt(null);
           setPendingHomePromptStatus(null);
           void workspaceQuery.refetch();
@@ -467,12 +573,140 @@ export function ChatScreen() {
     enqueueConfig.mutateAsync,
     navigate,
     pendingHomePrompt,
+    routeSessionDraftId,
     workspace?.anyharnessWorkspaceId,
     workspace?.id,
     workspace?.targetId,
     workspaceStatus,
     workspaceAllowedAgentKindsKey,
     workspaceReadyAgentKindsKey,
+    workspaceQuery.refetch,
+  ]);
+
+  useEffect(() => {
+    if (
+      !workspace
+      || chatId
+      || !pendingHomePrompt
+      || pendingHomePrompt.status !== "failed"
+      || directPromptDispatching
+    ) {
+      return;
+    }
+    const recoverableSession = findRecoverableSessionForPendingPrompt(sessions, pendingHomePrompt);
+    if (!recoverableSession) {
+      return;
+    }
+    const runKey = `${workspace.id}:${pendingHomePrompt.id}:resume:${recoverableSession.sessionId}`;
+    if (pendingHomePromptResumeAttemptsRef.current.has(runKey)) {
+      return;
+    }
+    const currentRun = pendingHomePromptDispatchRunRef.current;
+    if (currentRun?.key === runKey && currentRun.active) {
+      return;
+    }
+
+    pendingHomePromptResumeAttemptsRef.current.add(runKey);
+    const run: PendingHomePromptDispatchRun = { key: runKey, active: true, started: true };
+    pendingHomePromptDispatchRunRef.current = run;
+    const isCurrentRun = () =>
+      mountedRef.current && pendingHomePromptDispatchRunRef.current === run && run.active;
+    const setCurrentStatus = (status: string) => {
+      if (isCurrentRun()) {
+        setPendingHomePromptStatus(status);
+      }
+    };
+
+    setPendingHomePromptStatus("Session started; sending queued prompt.");
+    void resumePendingHomePromptInSession({
+      client,
+      workspace,
+      session: recoverableSession,
+      pendingPrompt: pendingHomePrompt,
+      enqueueConfig: enqueueConfig.mutateAsync,
+      enqueuePrompt: enqueuePrompt.mutateAsync,
+      setLatestCommandId: (commandId) => {
+        if (isCurrentRun()) {
+          setLatestCommandId(commandId);
+        }
+      },
+      onStatus: setCurrentStatus,
+      shouldContinue: isCurrentRun,
+    })
+      .then((result) => {
+        if (!isCurrentRun()) {
+          return;
+        }
+        setOptimisticPrompts((current) => {
+          const updated = current.map((prompt) =>
+            prompt.id === pendingHomePrompt.id
+              ? {
+                ...prompt,
+                sessionId: result.sessionId,
+                status: "queued" as const,
+                commandId: result.sendCommandId,
+                errorMessage: null,
+              }
+              : prompt
+          );
+          return updated.some((prompt) => prompt.id === pendingHomePrompt.id)
+            ? updated
+            : [
+              ...updated,
+              {
+                id: pendingHomePrompt.id,
+                workspaceId: workspace.id,
+                sessionId: result.sessionId,
+                text: pendingHomePrompt.text,
+                baseTranscriptSeq: 0,
+                status: "queued",
+                commandId: result.sendCommandId,
+                createdAt: Date.now(),
+              },
+            ];
+        });
+        clearPendingHomePrompt(workspace.id);
+        setPendingHomePrompt(null);
+        setPendingHomePromptStatus(null);
+        setDraft((current) => textMatches(current, pendingHomePrompt.text) ? "" : current);
+        void workspaceQuery.refetch();
+        navigate(routes.chat(workspace.id, result.sessionId), { replace: true });
+      })
+      .catch((error: unknown) => {
+        if (!isCurrentRun()) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : "Queued prompt could not be sent.";
+        const prompt: PendingHomePrompt = {
+          ...pendingHomePrompt,
+          status: "failed",
+          errorMessage: message,
+        };
+        savePendingHomePrompt(workspace.id, prompt);
+        setPendingHomePrompt(prompt);
+        setPendingHomePromptStatus(message);
+        setDraft((current) => current.trim() ? current : pendingHomePrompt.text);
+      })
+      .finally(() => {
+        if (pendingHomePromptDispatchRunRef.current === run) {
+          pendingHomePromptDispatchRunRef.current = null;
+        }
+      });
+    return () => {
+      if (!run.started) {
+        run.active = false;
+      }
+    };
+  }, [
+    chatId,
+    client,
+    directPromptDispatching,
+    enqueueConfig.mutateAsync,
+    enqueuePrompt.mutateAsync,
+    navigate,
+    pendingHomePrompt,
+    sessions,
+    workspace,
     workspaceQuery.refetch,
   ]);
 
@@ -544,7 +778,10 @@ export function ChatScreen() {
     if (!hasMatchingOptimisticPrompt && !isPersistedPendingPromptCommand) {
       return;
     }
-    const message = command.errorMessage || promptCommandFailureMessage(command.status);
+    const message = commandStatusFailureMessage(
+      command,
+      promptCommandFailureMessage(command.status),
+    ) ?? promptCommandFailureMessage(command.status);
     const isPreparing = isWorkspacePreparationStatus(message);
     if (hasMatchingOptimisticPrompt) {
       setOptimisticPrompts((current) =>
@@ -564,6 +801,7 @@ export function ChatScreen() {
     }
   }, [
     commandStatus.data?.commandId,
+    commandStatus.data?.errorCode,
     commandStatus.data?.errorMessage,
     commandStatus.data?.status,
     pendingPromptCommandId,
@@ -616,6 +854,75 @@ export function ChatScreen() {
   ]);
 
   useEffect(() => {
+    if (optimisticPromptCommandIds.length === 0) {
+      return;
+    }
+    let active = true;
+    let timeoutId: number | undefined;
+
+    const pollOptimisticPromptCommands = async () => {
+      let sawTerminalCommand = false;
+      let failureMessage: string | null = null;
+      for (const commandId of optimisticPromptCommandIds) {
+        try {
+          const command = await getCommandStatus(commandId, client);
+          if (isTerminalCommandStatus(command.status)) {
+            sawTerminalCommand = true;
+          }
+          if (isRejectedCommandStatus(command.status)) {
+            const message = commandStatusFailureMessage(
+              command,
+              promptCommandFailureMessage(command.status),
+            );
+            failureMessage = failureMessage ?? message;
+            setOptimisticPrompts((current) =>
+              current.map((prompt) =>
+                prompt.commandId === command.commandId
+                  ? { ...prompt, status: "failed", errorMessage: message }
+                  : prompt
+              )
+            );
+          } else if (command.status === "accepted" || command.status === "accepted_but_queued") {
+            setOptimisticPrompts((current) =>
+              current.map((prompt) =>
+                prompt.commandId === command.commandId && prompt.status === "sending"
+                  ? { ...prompt, status: "queued" }
+                  : prompt
+              )
+            );
+          }
+        } catch {
+          // Keep polling other commands; a transient read should not strand prompt echoes.
+        }
+      }
+      if (!active) {
+        return;
+      }
+      if (failureMessage) {
+        setPendingHomePromptStatus(failureMessage);
+      }
+      if (sawTerminalCommand) {
+        void transcriptQuery.refetch();
+        void sessionEventsQuery.refetch();
+      }
+      timeoutId = window.setTimeout(pollOptimisticPromptCommands, 3000);
+    };
+
+    timeoutId = window.setTimeout(pollOptimisticPromptCommands, 0);
+    return () => {
+      active = false;
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [
+    client,
+    optimisticPromptCommandIdsKey,
+    sessionEventsQuery.refetch,
+    transcriptQuery.refetch,
+  ]);
+
+  useEffect(() => {
     const command = commandStatus.data;
     if (!command || command.commandId !== pendingPromptCommandId) {
       return;
@@ -653,7 +960,10 @@ export function ChatScreen() {
               removePendingConfigCommand(current, command.commandId)
             );
             setPendingHomePromptStatus(
-              command.errorMessage || sessionConfigCommandFailureMessage(command.status),
+              commandStatusFailureMessage(
+                command,
+                sessionConfigCommandFailureMessage(command.status),
+              ) ?? sessionConfigCommandFailureMessage(command.status),
             );
           }
         } catch {
@@ -692,7 +1002,10 @@ export function ChatScreen() {
     )) {
       return;
     }
-    const message = command.errorMessage || promptCommandFailureMessage(command.status);
+    const message = commandStatusFailureMessage(
+      command,
+      promptCommandFailureMessage(command.status),
+    ) ?? promptCommandFailureMessage(command.status);
     const isPreparing = isWorkspacePreparationStatus(message);
     setOptimisticPrompts((current) =>
       current.map((prompt) =>
@@ -704,6 +1017,7 @@ export function ChatScreen() {
     setPendingHomePromptStatus(message);
   }, [
     commandStatus.data?.commandId,
+    commandStatus.data?.errorCode,
     commandStatus.data?.errorMessage,
     commandStatus.data?.status,
     optimisticPrompts,
@@ -739,6 +1053,7 @@ export function ChatScreen() {
         text,
         baseTranscriptSeq: 0,
         status: "sending",
+        createdAt: Date.now(),
       };
       setOptimisticPrompts((current) => [
         ...removeRetryReplacedFailedPrompts(current, optimisticPrompt),
@@ -747,16 +1062,24 @@ export function ChatScreen() {
       setDraft("");
       setDirectPromptDispatching(true);
       setPendingHomePromptStatus("Starting a session for this prompt.");
+      const promptSelection = resolveCloudLaunchSelection({
+        catalog: agentCatalog.data,
+        launchableAgentKinds: workspaceLaunchableAgentKinds,
+        selection: pendingSessionDraft?.selection ?? resolvedLaunchSelection,
+      });
+      const promptConfigUpdates = pendingSessionDraft?.sessionConfigUpdates
+        ?? buildLaunchSessionConfigUpdates({
+          catalog: agentCatalog.data,
+          launchableAgentKinds: workspaceLaunchableAgentKinds,
+          selection: promptSelection,
+        });
       const pendingPrompt: PendingHomePrompt = {
         id: promptId,
         text,
-        agentKind: resolvedLaunchSelection.agentKind,
-        modelId: resolvedLaunchSelection.modelId,
-        modeId: resolvedLaunchSelection.modeId,
-        sessionConfigUpdates: buildLaunchSessionConfigUpdates({
-          catalog: agentCatalog.data,
-          selection: resolvedLaunchSelection,
-        }),
+        agentKind: promptSelection.agentKind,
+        modelId: promptSelection.modelId,
+        modeId: promptSelection.modeId,
+        sessionConfigUpdates: promptConfigUpdates,
         createdAt: Date.now(),
       };
       savePendingHomePrompt(workspace.id, pendingPrompt);
@@ -786,6 +1109,8 @@ export function ChatScreen() {
           )
         );
         clearPendingHomePrompt(workspace.id);
+        clearWebCloudSessionDraft(workspace.id, pendingSessionDraft?.id ?? routeSessionDraftId);
+        setPendingSessionDraft(null);
         setPendingHomePrompt(null);
         setPendingHomePromptStatus(null);
         await workspaceQuery.refetch();
@@ -821,6 +1146,7 @@ export function ChatScreen() {
       text,
       baseTranscriptSeq: latestCloudTranscriptSeq(transcriptItems, transcriptView.rows),
       status: "sending",
+      createdAt: Date.now(),
     };
     setOptimisticPrompts((current) => [
       ...removeRetryReplacedFailedPrompts(current, optimisticPrompt),
@@ -839,22 +1165,29 @@ export function ChatScreen() {
         onStatus: setPendingHomePromptStatus,
         shouldContinue: () => mountedRef.current,
       });
-      const command = await enqueuePrompt.mutateAsync({
-        idempotencyKey: optimisticPrompt.id,
-        targetId: session.targetId,
-        workspaceId: session.workspaceId,
-        cloudWorkspaceId: commandWorkspace.id,
-        sessionId: session.sessionId,
-        kind: "send_prompt",
-        source: "web",
-        payload: { text, promptId: optimisticPrompt.id },
+      const command = await enqueuePromptCommandWithRetry({
+        envelope: {
+          idempotencyKey: optimisticPrompt.id,
+          targetId: session.targetId,
+          workspaceId: session.workspaceId,
+          cloudWorkspaceId: commandWorkspace.id,
+          sessionId: session.sessionId,
+          kind: "send_prompt",
+          source: "web",
+          payload: { text, promptId: optimisticPrompt.id },
+        },
+        enqueuePrompt: enqueuePrompt.mutateAsync,
+        shouldContinue: () => mountedRef.current,
       });
       if (!mountedRef.current) {
         return;
       }
       setLatestCommandId(command.commandId);
       if (isRejectedCommandStatus(command.status)) {
-        throw new Error(command.errorMessage || promptCommandFailureMessage(command.status));
+        throw new Error(
+          commandStatusFailureMessage(command, promptCommandFailureMessage(command.status))
+            ?? promptCommandFailureMessage(command.status),
+        );
       }
       setOptimisticPrompts((current) =>
         current.map((prompt) =>
@@ -987,6 +1320,35 @@ export function ChatScreen() {
     }
   }
 
+  function openNewSessionDraft(selection: CloudLaunchComposerSelection = resolvedLaunchSelection) {
+    if (!workspace) {
+      return;
+    }
+    if (pendingSessionDraft) {
+      clearWebCloudSessionDraft(workspace.id, pendingSessionDraft.id);
+    }
+    const resolvedSelection = resolveCloudLaunchSelection({
+      catalog: agentCatalog.data,
+      launchableAgentKinds: workspaceLaunchableAgentKinds,
+      selection,
+    });
+    const draft = createWebCloudSessionDraft({
+      workspaceId: workspace.id,
+      selection: resolvedSelection,
+      sessionConfigUpdates: buildLaunchSessionConfigUpdates({
+        catalog: agentCatalog.data,
+        launchableAgentKinds: workspaceLaunchableAgentKinds,
+        selection: resolvedSelection,
+      }),
+    });
+    saveWebCloudSessionDraft(draft);
+    setPendingSessionDraft(draft);
+    setLaunchSelection(resolvedSelection);
+    setPendingConfigChanges({});
+    setPendingHomePromptStatus(null);
+    navigate(`${routes.workspace(workspace.id)}${webCloudSessionDraftSearch(draft.id)}`);
+  }
+
   if (!workspaceId) {
     return <MissingState title="Workspace not found" />;
   }
@@ -1075,7 +1437,7 @@ export function ChatScreen() {
     ? `Start the first session in ${workspaceTitle}`
     : sessionEventsQuery.isLoading && transcriptView.source === "empty"
       ? "Loading transcript"
-      : "Waiting for the first projected transcript event.";
+      : "No transcript yet";
 
   return (
     <CloudChatSurface
@@ -1129,19 +1491,35 @@ export function ChatScreen() {
         : null}
       sessionSwitcher={{
         workspaceLabel: workspaceTitle,
-        activeSessionId: session?.sessionId ?? null,
+        activeSessionId: session?.sessionId
+          ?? (pendingSessionDraft ? webCloudSessionDraftOptionId(pendingSessionDraft.id) : null),
         activeSessionLabel,
-        sessions: sessions.map((candidate) => ({
-          id: candidate.sessionId,
-          label: sessionOptionLabel(candidate),
-          detail: relativeSessionTime(candidate.lastEventAt ?? candidate.startedAt ?? null),
-          statusLabel: sessionStatusLabel(candidate.status),
-        })),
+        sessions: [
+          ...(pendingSessionDraft
+            ? [{
+              id: webCloudSessionDraftOptionId(pendingSessionDraft.id),
+              label: "New session",
+              detail: pendingSessionDraft.selection.agentKind,
+              statusLabel: "Draft",
+            }]
+            : []),
+          ...sessions.map((candidate) => ({
+            id: candidate.sessionId,
+            label: sessionOptionLabel(candidate),
+            detail: relativeSessionTime(candidate.lastEventAt ?? candidate.startedAt ?? null),
+            statusLabel: sessionStatusLabel(candidate.status),
+          })),
+        ],
         newSessionLabel: "New session",
-        onSelectSession: (sessionId: string) => navigate(routes.chat(workspace.id, sessionId)),
-        onNewSession: () => navigate(routes.workspace(workspace.id), {
-          state: { startNewSession: true },
-        }),
+        onSelectSession: (sessionId: string) => {
+          const draftId = webCloudSessionDraftIdFromOptionId(sessionId);
+          if (draftId) {
+            navigate(`${routes.workspace(workspace.id)}${webCloudSessionDraftSearch(draftId)}`);
+            return;
+          }
+          navigate(routes.chat(workspace.id, sessionId));
+        },
+        onNewSession: () => openNewSessionDraft(),
       }}
       topNotice={isUnclaimed
         ? {
@@ -1203,6 +1581,51 @@ function sessionRecencyMs(
   session: Pick<CloudSessionProjection, "lastEventAt" | "startedAt">,
 ): number {
   return Date.parse(session.lastEventAt ?? session.startedAt ?? "") || 0;
+}
+
+function findRecoverableSessionForPendingPrompt(
+  sessions: readonly CloudSessionProjection[],
+  prompt: PendingHomePrompt,
+): CloudSessionProjection | null {
+  if (Date.now() - prompt.createdAt > 30 * 60 * 1000) {
+    return null;
+  }
+  const earliestStartMs = prompt.createdAt - 30_000;
+  return sessions
+    .filter((session) =>
+      sessionStartedMs(session) >= earliestStartMs
+      && (
+        !prompt.agentKind
+        || !session.sourceAgentKind
+        || session.sourceAgentKind === prompt.agentKind
+      )
+    )
+    .sort(compareSessions)[0] ?? null;
+}
+
+function sessionStartedMs(
+  session: Pick<CloudSessionProjection, "lastEventAt" | "startedAt">,
+): number {
+  return Date.parse(session.startedAt ?? "") || Date.parse(session.lastEventAt ?? "") || 0;
+}
+
+function sessionDraftMatchesSelection(
+  draft: WebCloudSessionDraft,
+  selection: CloudLaunchComposerSelection,
+  sessionConfigUpdates: WebCloudSessionDraft["sessionConfigUpdates"],
+): boolean {
+  return launchSelectionsEqual(draft.selection, selection)
+    && JSON.stringify(draft.sessionConfigUpdates) === JSON.stringify(sessionConfigUpdates);
+}
+
+function launchSelectionsEqual(
+  left: CloudLaunchComposerSelection,
+  right: CloudLaunchComposerSelection,
+): boolean {
+  return left.agentKind === right.agentKind
+    && left.modelId === right.modelId
+    && left.modeId === right.modeId
+    && JSON.stringify(left.controlValues) === JSON.stringify(right.controlValues);
 }
 
 function sessionOptionLabel(session: Pick<CloudSessionProjection, "sessionId" | "title">): string {
@@ -1279,9 +1702,9 @@ function commandStatusMessageForNotice(
   if (!command) {
     return null;
   }
-  const errorMessage = friendlyCommandStatusMessage(command.errorMessage);
-  if (errorMessage) {
-    return errorMessage;
+  const failureMessage = commandStatusFailureMessage(command, null);
+  if (failureMessage) {
+    return failureMessage;
   }
   switch (command.status) {
     case "queued":
@@ -1302,12 +1725,72 @@ function commandStatusMessageForNotice(
   }
 }
 
+function commandStatusFailureMessage(
+  command: Pick<CloudCommandResponse, "errorCode" | "errorMessage" | "status">,
+  fallback: string | null,
+): string | null {
+  const codeMessage = friendlyCommandErrorCodeMessage(command.errorCode);
+  if (codeMessage) {
+    return codeMessage;
+  }
+  const errorMessage = friendlyCommandStatusMessage(command.errorMessage);
+  if (errorMessage) {
+    return errorMessage;
+  }
+  return fallback;
+}
+
+function friendlyCommandErrorCodeMessage(code: string | null | undefined): string | null {
+  switch (code) {
+    case "cloud_command_exposure_not_active":
+    case "cloud_exposure_not_active":
+      return "Workspace access is no longer active. Refresh the workspace, then retry.";
+    case "cloud_command_exposure_not_commandable":
+    case "cloud_exposure_not_commandable":
+      return "This workspace is read-only from Cloud right now.";
+    case "cloud_command_workspace_not_found":
+      return "Workspace no longer exists.";
+    case "cloud_command_workspace_target_mismatch":
+    case "cloud_command_agent_auth_target_mismatch":
+      return "Workspace is attached to a different runtime target. Refresh the workspace, then retry.";
+    case "cloud_command_cloud_workspace_required":
+    case "cloud_workspace_required":
+      return "Workspace accepted. Preparing the selected runtime so this session can start.";
+    case "runtime_config_not_ready":
+      return "Workspace accepted. Preparing cloud runtime access for this target.";
+    case "web_command_queue_timeout":
+      return "Cloud runtime did not pick up the command in time. Check that the runtime is online, then retry.";
+    case "sandbox_wake_blocked":
+      return "Cloud runtime needs billing or quota attention before it can wake.";
+    case "sandbox_wake_failed":
+      return "Cloud runtime wake failed. Retry after the runtime is healthy.";
+    case "sandbox_wake_timeout":
+      return "Cloud runtime did not wake in time. Retry shortly.";
+    case "quota_exceeded":
+    case "cloud_repo_limit_reached":
+      return "Cloud limit reached. Disable another cloud repo or upgrade before creating this workspace.";
+    case "missing_supported_credentials":
+    case "agent_auth_credentials_missing":
+      return "Add credentials for the selected agent before starting this session.";
+    default:
+      return null;
+  }
+}
+
 function workspaceFailureStatusMessage(
   workspace: { lastError?: string | null; statusDetail?: string | null },
 ): string | null {
   return friendlyCommandStatusMessage(workspace.lastError)
-    ?? friendlyCommandStatusMessage(workspace.statusDetail)
+    ?? friendlyWorkspaceStatusDetailMessage(workspace.statusDetail)
     ?? null;
+}
+
+function friendlyWorkspaceStatusDetailMessage(message: string | null | undefined): string | null {
+  const trimmed = message?.trim();
+  if (!trimmed || /^ready$/i.test(trimmed) || /^synced from target\.?$/i.test(trimmed)) {
+    return null;
+  }
+  return friendlyCommandStatusMessage(trimmed);
 }
 
 function isManagedCloudWorkerBaseUrlMessage(message: string): boolean {
@@ -1510,11 +1993,11 @@ function buildOptimisticPromptRows(input: {
         body: prompt.status === "sending" ? "Sending message..." : "Waiting for response...",
         streaming: true,
       });
-    } else if (prompt.status === "failed" && input.status) {
+    } else if (prompt.status === "failed" && (input.status || prompt.errorMessage)) {
       rows.push({
         id: `${prompt.id}:assistant-error`,
         kind: "error",
-        body: input.status,
+        body: input.status ?? prompt.errorMessage ?? "Prompt could not be sent.",
       });
     }
   }
@@ -1594,6 +2077,17 @@ function pendingPromptCommandIdsFromInteractions(
     .map((candidate) => candidate.commandId);
 }
 
+function optimisticPromptCommandIdsFromPrompts(
+  prompts: readonly OptimisticPrompt[],
+): string[] {
+  return [...new Set(
+    prompts
+      .filter((prompt) => prompt.status !== "failed")
+      .map((prompt) => prompt.commandId?.trim() ?? "")
+      .filter((commandId) => commandId.length > 0),
+  )];
+}
+
 function pendingConfigCommandIdsFromChanges(
   pendingConfigChanges: Record<string, PendingConfigChange>,
 ): string[] {
@@ -1657,7 +2151,7 @@ function removeRetryReplacedFailedPrompts(
   );
 }
 
-function optimisticPromptStatusLabel(status: OptimisticPromptStatus): string {
+function optimisticPromptStatusLabel(status: OptimisticPrompt["status"]): string {
   switch (status) {
     case "failed":
       return "Failed";

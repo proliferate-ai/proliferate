@@ -4,6 +4,7 @@ import {
   buildCloudLaunchComposerControls,
   buildLaunchRunConfigControlValues,
   buildLaunchSessionConfigUpdates,
+  resolveCloudLaunchSelection,
   type CloudLaunchComposerSelection,
 } from "./composer-controls";
 
@@ -324,6 +325,38 @@ describe("buildCloudLaunchComposerControls", () => {
       placement: "trailing",
     });
   });
+
+  it("filters launch agent options to launchable agent kinds", () => {
+    const controls = buildCloudLaunchComposerControls({
+      catalog: multiAgentCatalog(),
+      launchableAgentKinds: ["claude"],
+      selection: {
+        agentKind: "codex",
+        modelId: "gpt-5-codex",
+        modeId: null,
+        controlValues: {},
+      },
+      onAgentModelSelect: () => {},
+      onControlSelect: () => {},
+    });
+
+    const modelControl = controls.find((control) => control.key === "model");
+
+    expect(modelControl?.groups.map((group) => group.id)).toEqual(["claude"]);
+    expect(resolveCloudLaunchSelection({
+      catalog: multiAgentCatalog(),
+      launchableAgentKinds: ["claude"],
+      selection: {
+        agentKind: "codex",
+        modelId: "gpt-5-codex",
+        modeId: null,
+        controlValues: {},
+      },
+    })).toMatchObject({
+      agentKind: "claude",
+      modelId: "us.anthropic.claude-opus-4-6",
+    });
+  });
 });
 
 describe("buildCloudChatComposerControls", () => {
@@ -391,6 +424,24 @@ describe("buildCloudChatComposerControls", () => {
     expect(sessionSwitches).toEqual([
       { agentKind: "codex", modelId: "gpt-5-codex" },
     ]);
+  });
+
+  it("filters cross-harness session model options to launchable agent kinds", () => {
+    const controls = buildCloudChatComposerControls({
+      session: claudeSession("us.anthropic.claude-opus-4-6"),
+      liveConfig: liveConfigWithModel("us.anthropic.claude-opus-4-6"),
+      pendingConfigChanges: {},
+      launchCatalog: multiAgentCatalog(),
+      launchableAgentKinds: ["claude"],
+      launchModelId: "us.anthropic.claude-opus-4-6",
+      onLaunchModelSelect: () => {},
+      onSessionConfigSelect: () => {},
+      onSessionAgentModelSelect: () => {},
+    });
+
+    const modelControl = controls.find((control) => control.key === "model");
+
+    expect(modelControl?.groups.map((group) => group.id)).toEqual(["claude"]);
   });
 });
 

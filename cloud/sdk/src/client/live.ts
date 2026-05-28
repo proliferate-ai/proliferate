@@ -49,7 +49,7 @@ export function subscribeWorkspace(
   workspaceId: string,
   options: SubscribeCloudLiveOptions<
     CloudWorkspaceLiveEvent,
-    CloudWorkspaceProjectionPatch
+    CloudWorkspaceProjectionPatch | CloudCommandStatusPatch
   >,
   client: ProliferateCloudClient = getProliferateClient(),
 ): CloudSseSubscription<CloudWorkspaceLiveEvent> {

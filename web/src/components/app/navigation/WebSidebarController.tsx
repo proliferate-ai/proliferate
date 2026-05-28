@@ -444,7 +444,6 @@ function RecentSourceIndicator({ item }: { item: RecentWorkItemView }) {
 
 function sourceIcon(source: RecentWorkSourceKind): ReactNode {
   switch (source) {
-    case "web":
     case "mobile":
       return <Smartphone className="size-3.5" />;
     case "slack":
@@ -454,6 +453,7 @@ function sourceIcon(source: RecentWorkSourceKind): ReactNode {
       return <CalendarClock className="size-3.5" />;
     case "desktop_exposed":
     case "cloud_sandbox":
+    case "web":
     case "api":
     case "unknown":
       return <Cloud className="size-3.5" />;
@@ -462,9 +462,12 @@ function sourceIcon(source: RecentWorkSourceKind): ReactNode {
 
 function sourceIndicatorLabel(item: RecentWorkItemView): string {
   switch (item.sourceKind) {
-    case "web":
     case "mobile":
       return "Mobile dispatch";
+    case "web":
+      return item.ownership === "unclaimed"
+        ? "Cloud workspace, unclaimed"
+        : "Cloud workspace";
     case "slack":
       return "Slack";
     case "personal_automation":

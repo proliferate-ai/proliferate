@@ -455,22 +455,12 @@ class TestCloudEventStreamsApi:
                 mapping(session)["sessionId"] for session in workspace_snapshot["sessions"]
             ] == ["session-live"]
 
-            workspace_patch_task: asyncio.Task[str] = asyncio.create_task(
-                next_stream_frame(workspace_stream)
-            )
+            workspace_patch_task = _next_workspace_stream_frame(workspace_stream)
             live_uploaded = await client.post(
                 "/v1/cloud/worker/events/batches",
                 headers=worker_headers,
                 json={
-                    "events": [
-                        {
-                            "workspaceId": "workspace-live",
-                            "sessionId": "session-live",
-                            "seq": 2,
-                            "timestamp": "2026-05-13T00:00:01Z",
-                            "event": {"type": "turn_started"},
-                        }
-                    ]
+                    "events": [_live_turn_started_event(seq=2, timestamp="2026-05-13T00:00:01Z")]
                 },
             )
             assert live_uploaded.status_code == 200
@@ -482,9 +472,50 @@ class TestCloudEventStreamsApi:
             workspace_patch = mapping(patch_envelope["patch"])
             assert workspace_patch["eventType"] == "turn_started"
             assert mapping(workspace_patch["envelope"])["sessionId"] == "session-live"
-            assert mapping(mapping(workspace_patch["envelope"])["event"])["type"] == (
-                "turn_started"
+            workspace_patch_event = mapping(mapping(workspace_patch["envelope"])["event"])
+            assert workspace_patch_event["type"] == "turn_started"
+
+            command_status_task = _next_workspace_stream_frame(workspace_stream)
+            command = await client.post(
+                "/v1/cloud/commands",
+                headers=auth.headers,
+                json={
+                    "idempotencyKey": "workspace-stream-command",
+                    "targetId": target_id,
+                    "workspaceId": "workspace-live",
+                    "cloudWorkspaceId": cloud_workspace_id,
+                    "sessionId": "session-live",
+                    "kind": "send_prompt",
+                    "payload": {"text": "hi"},
+                    "source": "web",
+                },
             )
+            assert command.status_code == 200
+            command_status_frame = await asyncio.wait_for(command_status_task, timeout=2)
+            assert sse_event(command_status_frame) == "command_status"
+            command_status = sse_data(command_status_frame)
+            assert command_status["kind"] == "command_status"
+            assert mapping(command_status["command"])["status"] == "queued"
+
+            workspace_patch_after_command_task = _next_workspace_stream_frame(workspace_stream)
+            live_uploaded_after_command = await client.post(
+                "/v1/cloud/worker/events/batches",
+                headers=worker_headers,
+                json={
+                    "events": [_live_turn_started_event(seq=3, timestamp="2026-05-13T00:00:02Z")]
+                },
+            )
+            assert live_uploaded_after_command.status_code == 200
+
+            workspace_patch_after_command_frame = await asyncio.wait_for(
+                workspace_patch_after_command_task,
+                timeout=2,
+            )
+            assert sse_event(workspace_patch_after_command_frame) == "patch"
+            patch_after_command_envelope = sse_data(workspace_patch_after_command_frame)
+            patch_after_command = mapping(patch_after_command_envelope["patch"])
+            assert patch_after_command["eventType"] == "turn_started"
+            assert mapping(patch_after_command["envelope"])["seq"] == 3
         finally:
             await workspace_stream.aclose()
 
@@ -551,3 +582,19 @@ class _ClosingPubSubBus:
 async def _closed_message_iterator() -> AsyncIterator[PubSubMessage]:
     return
     yield PubSubMessage(event="patch", event_id="1", data={})
+
+
+def _next_workspace_stream_frame(
+    workspace_stream: AsyncGenerator[str, None],
+) -> asyncio.Task[str]:
+    return asyncio.create_task(next_stream_frame(workspace_stream))
+
+
+def _live_turn_started_event(seq: int, timestamp: str) -> dict[str, object]:
+    return {
+        "workspaceId": "workspace-live",
+        "sessionId": "session-live",
+        "seq": seq,
+        "timestamp": timestamp,
+        "event": {"type": "turn_started"},
+    }

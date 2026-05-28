@@ -139,6 +139,11 @@ async def publish_command_status(command: commands_store.CloudCommandSnapshot) -
         target_channel(target_id=command.target_id),
         PubSubMessage(event="command_status", event_id=event_id, data=data),
     )
+    if command.cloud_workspace_id is not None:
+        await _live_bus.publish(
+            workspace_channel(workspace_id=command.cloud_workspace_id),
+            PubSubMessage(event="command_status", event_id=event_id, data=data),
+        )
     if command.session_id is not None:
         await _live_bus.publish(
             session_channel(target_id=command.target_id, session_id=command.session_id),
@@ -245,6 +250,13 @@ async def stream_workspace_events(
                     event="heartbeat",
                     event_id=str(cursor),
                     data=CloudStreamHeartbeatResponse().model_dump(by_alias=True),
+                )
+                continue
+            if message.event != "patch":
+                yield _sse_event(
+                    event=message.event,
+                    event_id=message.event_id,
+                    data=message.data,
                 )
                 continue
             message_seq = _int_or_zero(message.event_id)
