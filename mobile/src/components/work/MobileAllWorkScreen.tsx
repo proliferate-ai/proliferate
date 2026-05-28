@@ -18,13 +18,13 @@ import type {
 import { useClaimCloudWorkspace } from "@proliferate/cloud-sdk-react";
 
 import { useMobileWorkInventory, type MobileWorkItem } from "../../hooks/work/derived/use-mobile-work-inventory";
-import { mobileIconForRuntimeLocation, mobileIconForWorkSourceKind } from "../../lib/domain/work/mobile-work-presentation";
 import type { MobileCloudChat } from "../../navigation/navigation-model";
 import { MobileIcon, type MobileIconName } from "../primitives/MobileIcon";
 import {
   MobileEmptyState,
   MobileScreen,
 } from "../primitives/MobileLayout";
+import { MobileWorkspaceCard } from "./MobileWorkspaceCard";
 import { colors, radius, spacing } from "../../styles/tokens";
 
 interface MobileWorkspacesScreenProps {
@@ -33,20 +33,27 @@ interface MobileWorkspacesScreenProps {
   onNewChat: () => void;
 }
 
-type SourceFilter = RecentWorkSourceKind | "all";
+type AgentFilter = "all" | "claude" | "codex" | "opencode" | "gemini";
+type WorkTypeFilter = "all" | "cloud" | "slack" | "personal_automation" | "team_automation" | "dispatch";
 type RuntimeFilter = RecentWorkRuntimeLocation | "all";
 type StatusFilter = CloudWorkStatusFilter | "all";
-type FilterPanel = "source" | "runtime" | "ownership" | "status" | "repo" | "sort";
+type FilterPanel = "type" | "runtime" | "ownership" | "status" | "repo" | "sort";
 
-const SOURCE_OPTIONS: readonly { id: SourceFilter; label: string; icon: MobileIconName }[] = [
-  { id: "all", label: "All sources", icon: "workspaces" },
-  { id: "cloud_sandbox", label: "Cloud", icon: "cloud" },
-  { id: "desktop_exposed", label: "Desktop", icon: "monitor" },
-  { id: "mobile", label: "Mobile", icon: "smartphone" },
+const AGENT_OPTIONS: readonly { id: AgentFilter; label: string; icon: MobileIconName }[] = [
+  { id: "all", label: "All", icon: "sparkles" },
+  { id: "claude", label: "Claude", icon: "claude" },
+  { id: "codex", label: "Codex", icon: "openai" },
+  { id: "opencode", label: "OpenCode", icon: "sparkles" },
+  { id: "gemini", label: "Gemini", icon: "gemini" },
+];
+
+const WORK_TYPE_OPTIONS: readonly { id: WorkTypeFilter; label: string; icon: MobileIconName }[] = [
+  { id: "all", label: "All", icon: "workspaces" },
+  { id: "cloud", label: "Cloud", icon: "cloud" },
   { id: "slack", label: "Slack", icon: "slack" },
   { id: "personal_automation", label: "Automation", icon: "calendar-clock" },
   { id: "team_automation", label: "Team automation", icon: "calendar-clock" },
-  { id: "api", label: "API", icon: "cloud" },
+  { id: "dispatch", label: "Dispatch", icon: "monitor" },
 ];
 
 const RUNTIME_OPTIONS: readonly { id: RuntimeFilter; label: string; icon: MobileIconName }[] = [
@@ -88,7 +95,8 @@ export function MobileWorkspacesScreen({
   onOpenDrawer,
   onNewChat,
 }: MobileWorkspacesScreenProps) {
-  const [source, setSource] = useState<SourceFilter>("all");
+  const [agent, setAgent] = useState<AgentFilter>("all");
+  const [workType, setWorkType] = useState<WorkTypeFilter>("all");
   const [runtime, setRuntime] = useState<RuntimeFilter>("all");
   const [ownership, setOwnership] = useState<CloudWorkOwnerFilter>("all");
   const [status, setStatus] = useState<StatusFilter>("all");
@@ -100,22 +108,33 @@ export function MobileWorkspacesScreen({
   const claimWorkspace = useClaimCloudWorkspace();
   const filters = useMemo(() => ({
     ownership,
-    semanticSources: source === "all" ? undefined : new Set<RecentWorkSourceKind>([source]),
+    semanticSources: semanticSourcesForWorkType(workType),
     runtimeLocations: runtime === "all" ? undefined : new Set<RecentWorkRuntimeLocation>([runtime]),
     statuses: status === "all" ? undefined : new Set<CloudWorkStatusFilter>([status]),
     repoLabels: repo === "all" ? undefined : new Set<string>([repo]),
     sort,
     needsAttention: attentionOnly,
-  }), [attentionOnly, ownership, repo, runtime, sort, source, status]);
+  }), [attentionOnly, ownership, repo, runtime, sort, status, workType]);
   const allInventory = useMobileWorkInventory();
   const inventory = useMobileWorkInventory(filters);
+  const visibleInventory = useMemo(() => {
+    const groups = inventory.groups.flatMap((group) => {
+      const items = group.items.filter((item) => workspaceMatchesAgent(item, agent));
+      return items.length > 0 ? [{ ...group, items }] : [];
+    });
+    return {
+      groups,
+      items: groups.flatMap((group) => group.items),
+    };
+  }, [agent, inventory.groups]);
   const repoOptions = useMemo(() => {
     return [...new Set(allInventory.items.map((item) => item.view.repoLabel))]
       .filter(Boolean)
       .sort((left, right) => left.localeCompare(right));
   }, [allInventory.items]);
   const activeFilterCount = [
-    source !== "all",
+    agent !== "all",
+    workType !== "all",
     runtime !== "all",
     ownership !== "all",
     status !== "all",
@@ -123,11 +142,6 @@ export function MobileWorkspacesScreen({
     sort !== "recent",
     attentionOnly,
   ].filter(Boolean).length;
-  const attentionCount = allInventory.items.filter((item) =>
-    item.view.status === "blocked" || item.view.unclaimed
-  ).length;
-  const readyCount = allInventory.items.filter((item) => item.view.status === "ready").length;
-
   async function claimListWorkspace(item: MobileWorkItem) {
     if (!item.view.unclaimed || claimingWorkspaceId) {
       return;
@@ -180,7 +194,8 @@ export function MobileWorkspacesScreen({
         contentContainerStyle={styles.pills}
       >
         <SummaryPill label={`All ${allInventory.items.length}`} selected={activeFilterCount === 0} onPress={() => {
-          setSource("all");
+          setAgent("all");
+          setWorkType("all");
           setRuntime("all");
           setOwnership("all");
           setStatus("all");
@@ -188,23 +203,31 @@ export function MobileWorkspacesScreen({
           setSort("recent");
           setAttentionOnly(false);
         }} />
-        <SummaryPill
-          label={`Needs input ${attentionCount}`}
-          selected={attentionOnly}
-          onPress={() => {
-            setAttentionOnly(!attentionOnly);
-            setStatus("all");
-            setOwnership("all");
-          }}
-        />
-        <SummaryPill
-          label={`Ready ${readyCount}`}
-          selected={status === "ready" && !attentionOnly}
-          onPress={() => {
-            setAttentionOnly(false);
-            setStatus(status === "ready" ? "all" : "ready");
-          }}
-        />
+        {AGENT_OPTIONS.filter((option) => option.id !== "all").map((option) => (
+          <SummaryPill
+            key={option.id}
+            label={option.label}
+            icon={option.icon}
+            selected={agent === option.id}
+            onPress={() => setAgent(agent === option.id ? "all" : option.id)}
+          />
+        ))}
+      </ScrollView>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={[styles.pills, styles.typePills]}
+      >
+        {WORK_TYPE_OPTIONS.map((option) => (
+          <SummaryPill
+            key={option.id}
+            label={option.label}
+            icon={option.icon}
+            selected={workType === option.id}
+            onPress={() => setWorkType(option.id)}
+          />
+        ))}
         <SummaryPill
           label={activeFilterCount ? `Filters ${activeFilterCount}` : "Filter"}
           icon="filter"
@@ -226,21 +249,21 @@ export function MobileWorkspacesScreen({
         <MobileEmptyState title="Loading workspaces" body="Fetching visible cloud workspaces." />
       ) : inventory.error && inventory.items.length === 0 ? (
         <MobileEmptyState title="Could not load workspaces" body="Pull to refresh or sign in again." />
-      ) : inventory.items.length === 0 ? (
+      ) : visibleInventory.items.length === 0 ? (
         <MobileEmptyState
           title="No matching workspaces"
           body="Adjust filters or start a new chat."
         />
       ) : (
         <View style={styles.groups}>
-          {inventory.groups.map((group) => (
+          {visibleInventory.groups.map((group) => (
             <View key={group.view.id} style={styles.group}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>{group.view.label}</Text>
               </View>
               <View style={styles.cards}>
                 {group.items.map((item) => (
-                  <WorkspaceCard
+                  <MobileWorkspaceCard
                     key={item.view.id}
                     item={item}
                     claiming={claimingWorkspaceId === item.workspace.id}
@@ -258,14 +281,14 @@ export function MobileWorkspacesScreen({
 
       <FilterSheet
         visible={filterOpen}
-        source={source}
+        workType={workType}
         runtime={runtime}
         ownership={ownership}
         status={status}
         repo={repo}
         sort={sort}
         repoOptions={repoOptions}
-        onSource={setSource}
+        onWorkType={setWorkType}
         onRuntime={setRuntime}
         onOwnership={(value) => {
           setAttentionOnly(false);
@@ -278,7 +301,8 @@ export function MobileWorkspacesScreen({
         onRepo={setRepo}
         onSort={setSort}
         onClear={() => {
-          setSource("all");
+          setAgent("all");
+          setWorkType("all");
           setRuntime("all");
           setOwnership("all");
           setStatus("all");
@@ -322,111 +346,16 @@ function SummaryPill({
   );
 }
 
-function WorkspaceCard({
-  item,
-  claiming,
-  onPress,
-  onClaim,
-}: {
-  item: MobileWorkItem;
-  claiming: boolean;
-  onPress: () => void;
-  onClaim: () => void;
-}) {
-  const detailText = workspaceDetailText(item);
-  const blocked = item.view.status === "blocked" || item.view.status === "error";
-  const active = item.view.status === "active" || item.view.status === "running";
-  const unclaimed = item.view.unclaimed;
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-    >
-      <View style={styles.cardTop}>
-        <View style={styles.iconTile}>
-          <MobileIcon
-            name={mobileIconForWorkSourceKind(item.view.sourceKind)}
-            size={21}
-            color={item.view.sourceKind === "slack" ? colors.success : colors.fg}
-          />
-          <View
-            style={[
-              styles.stateDot,
-              active && styles.stateDotActive,
-              blocked && styles.stateDotBlocked,
-              unclaimed && styles.stateDotUnclaimed,
-            ]}
-          />
-        </View>
-        <View style={styles.cardTitleBlock}>
-          <View style={styles.cardTitleRow}>
-            <Text style={styles.cardTitle} numberOfLines={1}>{item.view.title}</Text>
-            <Text style={styles.cardTime}>{item.view.lastActivityLabel}</Text>
-          </View>
-          <View style={styles.cardMetaRow}>
-            <MobileIcon
-              name={mobileIconForRuntimeLocation(item.view.runtimeLocation)}
-              size={13}
-              color={colors.faint}
-            />
-            <Text style={styles.cardMeta} numberOfLines={1}>
-              {item.view.repoLabel} · {item.view.branchLabel}
-            </Text>
-          </View>
-        </View>
-      </View>
-      {detailText ? (
-        <View style={styles.promptBlock}>
-          <Text style={styles.promptText} numberOfLines={2}>
-            {detailText}
-          </Text>
-        </View>
-      ) : null}
-      {unclaimed ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Claim workspace"
-          accessibilityState={{ disabled: claiming }}
-          disabled={claiming}
-          onPress={onClaim}
-          style={({ pressed }) => [
-            styles.claimButton,
-            claiming && styles.claimButtonDisabled,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={styles.claimButtonText}>{claiming ? "Claiming" : "Claim workspace"}</Text>
-        </Pressable>
-      ) : null}
-    </Pressable>
-  );
-}
-
-function workspaceDetailText(item: MobileWorkItem): string | null {
-  if (item.view.unclaimed) {
-    return "Unclaimed workspace";
-  }
-  if (item.view.status === "blocked" || item.view.status === "error") {
-    return item.view.statusLabel;
-  }
-  if (item.view.commandability !== "commandable") {
-    return item.view.commandabilityLabel;
-  }
-  return null;
-}
-
 function FilterSheet({
   visible,
-  source,
+  workType,
   runtime,
   ownership,
   status,
   repo,
   sort,
   repoOptions,
-  onSource,
+  onWorkType,
   onRuntime,
   onOwnership,
   onStatus,
@@ -436,14 +365,14 @@ function FilterSheet({
   onClose,
 }: {
   visible: boolean;
-  source: SourceFilter;
+  workType: WorkTypeFilter;
   runtime: RuntimeFilter;
   ownership: CloudWorkOwnerFilter;
   status: StatusFilter;
   repo: string;
   sort: CloudWorkSort;
   repoOptions: readonly string[];
-  onSource: (value: SourceFilter) => void;
+  onWorkType: (value: WorkTypeFilter) => void;
   onRuntime: (value: RuntimeFilter) => void;
   onOwnership: (value: CloudWorkOwnerFilter) => void;
   onStatus: (value: StatusFilter) => void;
@@ -503,9 +432,9 @@ function FilterSheet({
               <>
                 <FilterSummaryRow
                   icon="workspaces"
-                  title="Source"
-                  value={optionLabel(SOURCE_OPTIONS, source)}
-                  onPress={() => setPanel("source")}
+                  title="Type"
+                  value={optionLabel(WORK_TYPE_OPTIONS, workType)}
+                  onPress={() => setPanel("type")}
                 />
                 <FilterSummaryRow
                   icon="cloud"
@@ -539,13 +468,13 @@ function FilterSheet({
                 />
               </>
             ) : null}
-            {panel === "source" ? SOURCE_OPTIONS.map((option) => (
+            {panel === "type" ? WORK_TYPE_OPTIONS.map((option) => (
                 <FilterChoice
                   key={option.id}
                   label={option.label}
                   icon={option.icon}
-                  selected={source === option.id}
-                  onPress={() => onSource(option.id)}
+                  selected={workType === option.id}
+                  onPress={() => onWorkType(option.id)}
                 />
               )) : null}
             {panel === "runtime" ? RUNTIME_OPTIONS.map((option) => (
@@ -637,8 +566,8 @@ function FilterSummaryRow({
 
 function filterPanelTitle(panel: FilterPanel): string {
   switch (panel) {
-    case "source":
-      return "Source";
+    case "type":
+      return "Type";
     case "runtime":
       return "Runtime";
     case "ownership":
@@ -650,6 +579,30 @@ function filterPanelTitle(panel: FilterPanel): string {
     case "sort":
       return "Sort";
   }
+}
+
+function semanticSourcesForWorkType(type: WorkTypeFilter): ReadonlySet<RecentWorkSourceKind> | undefined {
+  switch (type) {
+    case "cloud":
+      return new Set<RecentWorkSourceKind>(["cloud_sandbox", "web", "mobile", "api"]);
+    case "slack":
+      return new Set<RecentWorkSourceKind>(["slack"]);
+    case "personal_automation":
+      return new Set<RecentWorkSourceKind>(["personal_automation"]);
+    case "team_automation":
+      return new Set<RecentWorkSourceKind>(["team_automation"]);
+    case "dispatch":
+      return new Set<RecentWorkSourceKind>(["desktop_exposed"]);
+    case "all":
+      return undefined;
+  }
+}
+
+function workspaceMatchesAgent(item: MobileWorkItem, agent: AgentFilter): boolean {
+  if (agent === "all") {
+    return true;
+  }
+  return item.view.sourceAgentKind?.toLowerCase() === agent;
 }
 
 function optionLabel<T extends string>(
@@ -722,6 +675,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[4],
     paddingBottom: spacing[4],
   },
+  typePills: {
+    paddingTop: 0,
+  },
   summaryPill: {
     minHeight: 38,
     flexDirection: "row",
@@ -783,113 +739,6 @@ const styles = StyleSheet.create({
   },
   cards: {
     gap: spacing[2],
-  },
-  card: {
-    borderRadius: 22,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[3],
-    gap: spacing[3],
-  },
-  cardPressed: {
-    opacity: 0.82,
-    backgroundColor: colors.accent,
-  },
-  cardTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[3],
-  },
-  iconTile: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radius.full,
-    backgroundColor: colors.background,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  stateDot: {
-    position: "absolute",
-    right: 4,
-    bottom: 4,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: colors.borderHeavy,
-  },
-  stateDotActive: {
-    backgroundColor: colors.info,
-  },
-  stateDotBlocked: {
-    backgroundColor: colors.destructive,
-  },
-  stateDotUnclaimed: {
-    backgroundColor: colors.success,
-  },
-  cardTitleBlock: {
-    flex: 1,
-    minWidth: 0,
-    gap: 5,
-  },
-  cardTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[2],
-  },
-  cardTitle: {
-    flex: 1,
-    minWidth: 0,
-    color: colors.fg,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  cardTime: {
-    color: colors.faint,
-    fontSize: 12,
-    fontWeight: "500",
-  },
-  cardMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  cardMeta: {
-    flex: 1,
-    minWidth: 0,
-    color: colors.faint,
-    fontSize: 13.5,
-    lineHeight: 18,
-  },
-  promptBlock: {
-    borderRadius: 18,
-    backgroundColor: colors.background,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-  },
-  promptText: {
-    color: colors.mutedForeground,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  claimButton: {
-    minHeight: 38,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radius.full,
-    backgroundColor: colors.fg,
-    paddingHorizontal: spacing[4],
-  },
-  claimButtonDisabled: {
-    opacity: 0.62,
-  },
-  claimButtonText: {
-    color: colors.background,
-    fontSize: 13,
-    fontWeight: "600",
   },
   sheetLayer: {
     flex: 1,

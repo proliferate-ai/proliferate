@@ -4,6 +4,7 @@ import { APP_ROUTES, LEGACY_APP_ROUTES } from "@/config/app-routes";
 import { AutomationDetailPage } from "@/pages/AutomationDetailPage";
 import { AutomationsPage } from "@/pages/AutomationsPage";
 import { CloudWorkspacesPage } from "@/pages/CloudWorkspacesPage";
+import { DesktopWorkspaceDeepLinkPage } from "@/pages/DesktopWorkspaceDeepLinkPage";
 import { MainPage } from "@/pages/MainPage";
 import { PluginsPage } from "@/pages/PluginsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
@@ -64,6 +65,7 @@ export function AuthenticatedAppHost({
           <Route path="automations" element={<AutomationsPage />} />
           <Route path="automations/:automationId" element={<AutomationDetailPage />} />
           <Route path="workspaces" element={<CloudWorkspacesPage />} />
+          <Route path="workspaces/:workspaceId" element={<DesktopWorkspaceDeepLinkPage />} />
           <Route path="*" element={<Navigate to={APP_ROUTES.home} replace />} />
         </Routes>
       )}

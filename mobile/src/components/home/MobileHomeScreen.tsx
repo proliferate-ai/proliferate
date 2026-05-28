@@ -11,6 +11,7 @@ import type { CloudChatComposerControlView } from "@proliferate/product-model/ch
 
 import { useMobileHomeLaunchModel } from "../../hooks/home/derived/use-mobile-home-launch-model";
 import { useMobileHomeLaunchActions } from "../../hooks/home/workflows/use-mobile-home-launch-actions";
+import { useMobileWorkInventory } from "../../hooks/work/derived/use-mobile-work-inventory";
 import type { MobileCloudChat } from "../../navigation/navigation-model";
 import { MobileIcon, type MobileIconName } from "../primitives/MobileIcon";
 import { MobileTextInput } from "../primitives/MobileTextInput";
@@ -20,6 +21,7 @@ import { MobilePopoverDivider } from "../primitives/popover/MobilePopoverDivider
 import { MobilePopoverGroup } from "../primitives/popover/MobilePopoverGroup";
 import { MobilePopoverOption } from "../primitives/popover/MobilePopoverOption";
 import { MobilePopoverRow } from "../primitives/popover/MobilePopoverRow";
+import { MobileWorkspaceCard } from "../work/MobileWorkspaceCard";
 import { colors, radius, spacing } from "../../styles/tokens";
 
 interface MobileHomeScreenProps {
@@ -29,7 +31,7 @@ interface MobileHomeScreenProps {
   onConfigureRepos: () => void;
 }
 
-type HomeSheet = "repo" | "runtime" | "config" | null;
+type HomeSheet = "repo" | "branch" | "runtime" | "config" | null;
 
 export function MobileHomeScreen({
   ownerUserId,
@@ -40,11 +42,14 @@ export function MobileHomeScreen({
   const [draft, setDraft] = useState("");
   const [sheet, setSheet] = useState<HomeSheet>(null);
   const launchModel = useMobileHomeLaunchModel();
+  const recentInventory = useMobileWorkInventory();
+  const recentItems = recentInventory.recentItems.slice(0, 2);
   const launchActions = useMobileHomeLaunchActions({
     ownerUserId,
     catalog: launchModel.agentCatalog.data,
     launchableAgentKinds: launchModel.launchableAgentKinds,
     selectedRepo: launchModel.selectedRepo,
+    selectedBaseBranch: launchModel.selectedBaseBranch,
     selectedRuntime: launchModel.selectedRuntime,
     selection: launchModel.resolvedLaunchSelection,
     onOpenChat,
@@ -139,6 +144,24 @@ export function MobileHomeScreen({
         </View>
       ) : null}
 
+      {recentItems.length > 0 ? (
+        <View style={styles.recentSection}>
+          <View style={styles.recentHeader}>
+            <Text style={styles.recentTitle}>Recent</Text>
+          </View>
+          <View style={styles.recentCards}>
+            {recentItems.map((item) => (
+              <MobileWorkspaceCard
+                key={item.view.id}
+                item={item}
+                compact
+                onPress={() => onOpenChat(item.chat)}
+              />
+            ))}
+          </View>
+        </View>
+      ) : null}
+
       <View style={styles.spacer} />
 
       {launchActions.status || launchActions.error || (!canStartCloudHarness && launchModel.harnessAvailability.message) ? (
@@ -149,21 +172,42 @@ export function MobileHomeScreen({
 
       <View style={styles.composer}>
         <View style={styles.composerCluster}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Choose repository"
-            onPress={() => setSheet("repo")}
-            style={({ pressed }) => [styles.repoPill, pressed && styles.pressed]}
-          >
-            <MobileIcon name="git-branch" size={15} color={colors.fg} />
-            <Text style={styles.repoPillText} numberOfLines={1}>
-              {launchModel.selectedRepo?.label ?? "Choose a GitHub repo"}
-            </Text>
-            <MobileIcon name="chevron-right" size={14} color={colors.faint} />
-          </Pressable>
+          <View style={styles.selectorRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Choose repository"
+              onPress={() => setSheet("repo")}
+              style={({ pressed }) => [styles.repoPill, styles.repoPillWide, pressed && styles.pressed]}
+            >
+              <MobileIcon name="git-branch" size={15} color={colors.fg} />
+              <Text style={styles.repoPillText} numberOfLines={1}>
+                {launchModel.selectedRepo?.label ?? "Choose a GitHub repo"}
+              </Text>
+              <MobileIcon name="chevron-right" size={14} color={colors.faint} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Choose branch"
+              disabled={!launchModel.selectedRepo || launchModel.repoBranches.isLoading}
+              onPress={() => setSheet("branch")}
+              style={({ pressed }) => [
+                styles.repoPill,
+                styles.branchPill,
+                (!launchModel.selectedRepo || launchModel.repoBranches.isLoading) && styles.disabledPill,
+                pressed && styles.pressed,
+              ]}
+            >
+              <MobileIcon name="git-branch" size={15} color={colors.fg} />
+              <Text style={styles.repoPillText} numberOfLines={1}>
+                {launchModel.selectedBaseBranch ?? (launchModel.repoBranches.isLoading ? "Loading" : "Branch")}
+              </Text>
+              <MobileIcon name="chevron-right" size={14} color={colors.faint} />
+            </Pressable>
+          </View>
 
           <View style={styles.composerCard}>
             <MobileTextInput
+              autoFocus
               multiline
               value={draft}
               onChangeText={setDraft}
@@ -234,6 +278,35 @@ export function MobileHomeScreen({
       </MobilePopover>
 
       <MobilePopover
+        visible={sheet === "branch"}
+        onClose={closeSheet}
+        anchor="bottom-left"
+        insetSide={20}
+        insetBottom={140}
+        width={260}
+      >
+        <MobilePopoverGroup>
+          {launchModel.repoBranches.isLoading ? (
+            <MobilePopoverRow id="loading" icon="git-branch" title="Loading branches..." disabled />
+          ) : launchModel.branchOptions.length === 0 ? (
+            <MobilePopoverRow id="empty" icon="git-branch" title="No branches found" disabled />
+          ) : (
+            launchModel.branchOptions.map((branch) => (
+              <MobilePopoverOption
+                key={branch}
+                title={branch}
+                selected={branch === launchModel.selectedBaseBranch}
+                onSelect={() => {
+                  launchModel.setBaseBranch(branch);
+                  closeSheet();
+                }}
+              />
+            ))
+          )}
+        </MobilePopoverGroup>
+      </MobilePopover>
+
+      <MobilePopover
         visible={sheet === "runtime"}
         onClose={closeSheet}
         anchor="top-center"
@@ -285,6 +358,7 @@ export function MobileHomeScreen({
                     disabled={option.disabled}
                     onSelect={() => {
                       control.onSelect?.(option.id);
+                      closeSheet();
                     }}
                   />
                 )),
@@ -460,6 +534,24 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     fontWeight: "600",
   },
+  recentSection: {
+    gap: spacing[2],
+    paddingHorizontal: spacing[4],
+    marginTop: spacing[6],
+  },
+  recentHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  recentTitle: {
+    color: colors.faint,
+    fontSize: 12.5,
+    fontWeight: "600",
+  },
+  recentCards: {
+    gap: spacing[2],
+  },
   spacer: {
     flex: 1,
   },
@@ -472,9 +564,14 @@ const styles = StyleSheet.create({
   composerCluster: {
     gap: spacing[3],
   },
+  selectorRow: {
+    maxWidth: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+  },
   repoPill: {
     alignSelf: "flex-start",
-    maxWidth: "100%",
     minHeight: 36,
     flexDirection: "row",
     alignItems: "center",
@@ -484,6 +581,16 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.card,
     paddingHorizontal: spacing[3],
+  },
+  repoPillWide: {
+    flex: 1,
+    minWidth: 0,
+  },
+  branchPill: {
+    maxWidth: 140,
+  },
+  disabledPill: {
+    opacity: 0.55,
   },
   repoPillText: {
     minWidth: 0,

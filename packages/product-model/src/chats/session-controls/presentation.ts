@@ -16,6 +16,7 @@ export type SessionControlTone =
   | "info";
 
 export type SessionControlIconKey =
+  | "branch"
   | "build"
   | "chat"
   | "claude"

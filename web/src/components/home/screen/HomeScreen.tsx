@@ -2,6 +2,7 @@ import { Bot, Cloud, GitBranch, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  type CloudTargetSummary,
   listCloudWorkspaces,
   type CloudWorkspaceDetail,
   type CreateCloudWorkspaceRequest,
@@ -11,8 +12,12 @@ import {
   useCloudAgentCatalog,
   useCloudCapabilities,
   useCloudClient,
+  useCloudRepoBranches,
   useCloudRepoConfigs,
   useCreateCloudWorkspace,
+  useCloudTargets,
+  useLaunchCloudWorkspaceOnTarget,
+  useTargetLive,
   useAgentAuthCredentials,
 } from "@proliferate/cloud-sdk-react";
 import {
@@ -38,6 +43,7 @@ import type {
   NoticeView,
   PickerView,
 } from "@proliferate/product-ui/new-chat/NewChatSurface";
+import type { CloudChatComposerControlView } from "@proliferate/product-ui/chat/CloudChatComposer";
 import { NewChatSurface } from "@proliferate/product-ui/new-chat/NewChatSurface";
 import type { CloudChatTranscriptRowView } from "@proliferate/product-ui/chat/CloudChatTranscript";
 
@@ -47,6 +53,7 @@ import { ensurePersonalAgentAuthLaunchReady } from "../../../lib/access/cloud/ag
 import { isRecoverableCloudDispatchError } from "../../../lib/access/cloud/pending-home-prompt-dispatch";
 import { savePendingHomePrompt } from "../../../lib/access/cloud/pending-home-prompt-store";
 import { AddCloudEnvironmentDialogController } from "../../environments/screen/AddCloudEnvironmentDialogController";
+import { saveWebCloudPromptIntents } from "../../../stores/cloud/web-cloud-chat-state-store";
 
 const HOME_PLACEHOLDER = "Describe a quick remote task...";
 
@@ -65,6 +72,24 @@ interface HomePendingPrompt {
   detail?: string | null;
 }
 
+type RuntimeOption =
+  | {
+    id: "cloud";
+    kind: "cloud";
+    label: string;
+    description: string;
+    online: true;
+    targetId: null;
+  }
+  | {
+    id: string;
+    kind: "target";
+    label: string;
+    description: string;
+    online: boolean;
+    targetId: string;
+  };
+
 export function HomeScreen() {
   const navigate = useNavigate();
   const client = useCloudClient();
@@ -73,6 +98,8 @@ export function HomeScreen() {
   const [repoId, setRepoId] = useState(() =>
     readLastRepoId() ?? normalizeGitRepoId(webEnv.defaultCloudRepo) ?? ""
   );
+  const [baseBranchByRepoId, setBaseBranchByRepoId] = useState<Record<string, string>>({});
+  const [runtimeId, setRuntimeId] = useState("cloud");
   const [addRepoOpen, setAddRepoOpen] = useState(false);
   const [launchSelection, setLaunchSelection] = useState<CloudLaunchComposerSelection>({
     agentKind: DEFAULT_DIRECT_PROMPT_AGENT_KIND,
@@ -87,6 +114,10 @@ export function HomeScreen() {
   const cloudCapabilities = useCloudCapabilities();
   const agentAuthCredentials = useAgentAuthCredentials();
   const createWorkspace = useCreateCloudWorkspace();
+  const launchOnTarget = useLaunchCloudWorkspaceOnTarget();
+  const targets = useCloudTargets();
+  const liveTargetId = runtimeId === "cloud" ? null : runtimeId;
+  const targetLive = useTargetLive(liveTargetId, { enabled: Boolean(liveTargetId) });
   const repoOptions = useMemo(
     () => buildRepoOptions(repoConfigs.data?.configs ?? [], webEnv.defaultCloudRepo),
     [repoConfigs.data?.configs],
@@ -95,6 +126,46 @@ export function HomeScreen() {
     () => repoOptions.find((repo) => repo.id === repoId) ?? repoOptions[0] ?? null,
     [repoId, repoOptions],
   );
+  const liveTargets = useMemo(() => {
+    const liveTarget = targetLive.snapshot?.target;
+    if (!liveTarget) {
+      return targets.data;
+    }
+    const baseTargets = targets.data ?? [];
+    if (!baseTargets.some((target) => target.id === liveTarget.id)) {
+      return [...baseTargets, liveTarget];
+    }
+    return baseTargets.map((target) =>
+      target.id === liveTarget.id ? { ...target, ...liveTarget } : target
+    );
+  }, [targetLive.snapshot?.target, targets.data]);
+  const runtimeOptions = useMemo(
+    () => buildRuntimeOptions(liveTargets),
+    [liveTargets],
+  );
+  const selectedRuntime = useMemo(
+    () => runtimeOptions.find((runtime) => runtime.id === runtimeId) ?? runtimeOptions[0] ?? null,
+    [runtimeId, runtimeOptions],
+  );
+  const repoBranches = useCloudRepoBranches(
+    selectedRepo?.gitOwner,
+    selectedRepo?.gitRepoName,
+    Boolean(selectedRepo),
+  );
+  const selectedBaseBranchOverride = selectedRepo ? baseBranchByRepoId[selectedRepo.id] ?? null : null;
+  const branchOptions = useMemo(
+    () => buildBranchOptions({
+      branches: repoBranches.data?.branches,
+      defaultBranch: repoBranches.data?.defaultBranch,
+      selectedBranch: selectedBaseBranchOverride,
+    }),
+    [repoBranches.data?.branches, repoBranches.data?.defaultBranch, selectedBaseBranchOverride],
+  );
+  const selectedBaseBranch =
+    selectedBaseBranchOverride
+    ?? repoBranches.data?.defaultBranch
+    ?? branchOptions[0]
+    ?? null;
   const agentGateway = cloudCapabilities.data?.agentGateway;
   const readySyncedAgentKinds = useMemo(
     () => readySyncedCloudAgentKinds(agentAuthCredentials.data),
@@ -105,8 +176,11 @@ export function HomeScreen() {
   const catalogAgentKindsKey = agentCatalog.data?.agents.map((agent) => agent.kind).join("\0") ?? "";
   const harnessAvailability = useMemo(() => resolveCloudHarnessAvailability({
     catalogAgentKinds: agentCatalog.data?.agents.map((agent) => agent.kind),
-    readyAgentKinds: readySyncedAgentKinds,
-    agentGateway,
+    readyAgentKinds: selectedRuntime?.kind === "target"
+      ? agentCatalog.data?.agents.map((agent) => agent.kind)
+      : readySyncedAgentKinds,
+    agentGateway: selectedRuntime?.kind === "target" ? null : agentGateway,
+    assumeFallbackAgentKindsLaunchable: selectedRuntime?.kind === "target",
   }), [
     agentCatalog.data,
     readySyncedAgentKindsKey,
@@ -116,9 +190,11 @@ export function HomeScreen() {
     agentGateway?.opencodeGatewayEnabled,
     agentGatewayManagedCreditKindsKey,
     catalogAgentKindsKey,
+    selectedRuntime?.kind,
   ]);
   const launchableAgentKinds = harnessAvailability.launchableAgentKinds;
   const canStartCloudHarness = launchableAgentKinds.length > 0;
+  const selectedRuntimeReady = selectedRuntime?.kind !== "target" || selectedRuntime.online;
   const resolvedLaunchSelection = useMemo(
     () => resolveCloudLaunchSelection({
       catalog: agentCatalog.data,
@@ -157,12 +233,54 @@ export function HomeScreen() {
     }),
     [agentCatalog.data, launchableAgentKinds, resolvedLaunchSelection],
   );
+  const composerControls = useMemo(
+    () => [
+      buildBranchControl({
+        branchOptions,
+        loading: repoBranches.isLoading,
+        selectedBranch: selectedBaseBranch,
+        disabled: !selectedRepo,
+        onSelect: (branch) => {
+          if (!selectedRepo) {
+            return;
+          }
+          setBaseBranchByRepoId((current) => ({
+            ...current,
+            [selectedRepo.id]: branch,
+          }));
+        },
+      }),
+      buildRuntimeControl({
+        runtimeOptions,
+        loading: targets.isLoading,
+        selectedRuntime,
+        onSelect: setRuntimeId,
+      }),
+      ...launchComposerControls,
+    ],
+    [
+      branchOptions,
+      launchComposerControls,
+      repoBranches.isLoading,
+      runtimeOptions,
+      selectedBaseBranch,
+      selectedRepo,
+      selectedRuntime,
+      targets.isLoading,
+    ],
+  );
 
   useEffect(() => {
     if (!repoId && !selectedRepo && repoOptions[0]) {
       setRepoId(repoOptions[0].id);
     }
   }, [repoId, repoOptions, selectedRepo]);
+
+  useEffect(() => {
+    if (!runtimeOptions.some((runtime) => runtime.id === runtimeId)) {
+      setRuntimeId("cloud");
+    }
+  }, [runtimeId, runtimeOptions]);
 
   function handlePickerSelect(picker: NewChatPickerId, itemId: string) {
     if (picker === "target") {
@@ -187,6 +305,14 @@ export function HomeScreen() {
   async function handleSubmit() {
     const text = draft.trim();
     if (!text || !selectedRepo || submitInFlightRef.current) return;
+    if (!selectedRuntime) {
+      setSubmitError("Select a runtime before sending.");
+      return;
+    }
+    if (selectedRuntime.kind === "target" && !selectedRuntime.online) {
+      setSubmitError(`${selectedRuntime.label} is offline.`);
+      return;
+    }
     if (!canStartCloudHarness) {
       setSubmitError(
         harnessAvailability.message ?? "No cloud agent is ready to start this workspace.",
@@ -205,19 +331,52 @@ export function HomeScreen() {
     setDraft("");
     try {
       await waitForNextPaint();
+      const sessionConfigUpdates = buildLaunchSessionConfigUpdates({
+        catalog: agentCatalog.data,
+        launchableAgentKinds,
+        selection: resolvedLaunchSelection,
+      });
       const workspacePendingPrompt = {
         id: pendingPrompt.id,
         text,
         agentKind: resolvedLaunchSelection.agentKind,
         modelId: resolvedLaunchSelection.modelId,
         modeId: resolvedLaunchSelection.modeId,
-        sessionConfigUpdates: buildLaunchSessionConfigUpdates({
-          catalog: agentCatalog.data,
-          launchableAgentKinds,
-          selection: resolvedLaunchSelection,
-        }),
+        sessionConfigUpdates,
         createdAt: Date.now(),
       };
+      if (selectedRuntime.kind === "target") {
+        const result = await launchOnTarget.mutateAsync({
+          targetId: selectedRuntime.targetId,
+          gitProvider: "github",
+          gitOwner: selectedRepo.gitOwner,
+          gitRepoName: selectedRepo.gitRepoName,
+          baseBranch: selectedBaseBranch,
+          branchName: buildBranchName(text),
+          displayName: buildWorkspaceDisplayName(text),
+          prompt: text,
+          promptId: pendingPrompt.id,
+          agentKind: resolvedLaunchSelection.agentKind,
+          modelId: resolvedLaunchSelection.modelId,
+          modeId: resolvedLaunchSelection.modeId,
+          sessionConfigUpdates,
+          source: "web",
+        });
+        saveWebCloudPromptIntents(result.workspace.id, [
+          {
+            id: pendingPrompt.id,
+            workspaceId: result.workspace.id,
+            sessionId: result.sessionId,
+            text,
+            baseTranscriptSeq: 0,
+            status: "queued",
+            commandId: result.sendCommandId,
+            createdAt: Date.now(),
+          },
+        ]);
+        navigate(routes.chat(result.workspace.id, result.sessionId));
+        return;
+      }
       await ensurePersonalAgentAuthLaunchReady({
         client,
         agentKind: normalizeAgentAuthAgentKind(resolvedLaunchSelection.agentKind),
@@ -227,6 +386,7 @@ export function HomeScreen() {
         gitProvider: "github",
         gitOwner: selectedRepo.gitOwner,
         gitRepoName: selectedRepo.gitRepoName,
+        baseBranch: selectedBaseBranch,
         branchName: buildBranchName(text),
         displayName: buildWorkspaceDisplayName(text),
         ownerScope: "personal",
@@ -254,6 +414,7 @@ export function HomeScreen() {
   }
 
   const submitting = createWorkspace.isPending
+    || launchOnTarget.isPending
     || submitInFlightRef.current;
   const transcriptRows = useMemo(
     () => buildPendingPromptRows(pendingPrompt),
@@ -280,6 +441,13 @@ export function HomeScreen() {
       text: harnessAvailability.message,
     }
     : null;
+  const runtimeNotice: NoticeView | null = selectedRuntime?.kind === "target" && !selectedRuntime.online
+    ? {
+      id: "runtime-offline",
+      tone: "warning",
+      text: `${selectedRuntime.label} is offline.`,
+    }
+    : null;
   if (errorNotice && pendingPrompt?.status === "failed") {
     errorNotice.action = {
       label: "Retry",
@@ -292,6 +460,7 @@ export function HomeScreen() {
   }
   const notices: NoticeView[] = [];
   if (repoNotice) notices.push(repoNotice);
+  if (runtimeNotice) notices.push(runtimeNotice);
   if (harnessNotice) notices.push(harnessNotice);
   if (errorNotice) notices.push(errorNotice);
 
@@ -301,17 +470,26 @@ export function HomeScreen() {
         heading="What should we run?"
         draft={draft}
         placeholder={HOME_PLACEHOLDER}
-        canSubmit={Boolean(draft.trim()) && Boolean(selectedRepo) && canStartCloudHarness && !submitting}
+        canSubmit={
+          Boolean(draft.trim())
+          && Boolean(selectedRepo)
+          && Boolean(selectedRuntime)
+          && selectedRuntimeReady
+          && canStartCloudHarness
+          && !submitting
+        }
         submitting={submitting}
         target={buildTargetPicker(repoId, repoOptions, repoConfigs.isLoading)}
         model={buildModelPicker(resolvedLaunchSelection.modelId ?? DEFAULT_DIRECT_PROMPT_MODEL_ID)}
         mode={buildModePicker()}
-        extraComposerControls={launchComposerControls}
+        extraComposerControls={composerControls}
         notices={notices}
         transcriptRows={transcriptRows}
         commandMessage={
           pendingPrompt?.status === "creating"
-            ? "Creating a cloud workspace. The prompt will send as soon as the workspace is ready."
+            ? selectedRuntime?.kind === "target"
+              ? "Dispatching to Desktop. The prompt will send as soon as the session is ready."
+              : "Creating a cloud workspace. The prompt will send as soon as the workspace is ready."
             : null
         }
         actions={[
@@ -347,17 +525,14 @@ function buildPendingPromptRows(
       id: `${pendingPrompt.id}:user`,
       kind: "user",
       body: pendingPrompt.text,
-      status: isCreating ? "Creating workspace" : "Failed",
-      streaming: isCreating,
+      status: isCreating ? "Loading" : "Failed",
     },
     isCreating
       ? {
         id: `${pendingPrompt.id}:assistant`,
         kind: "assistant",
-        title: "Cloud setup",
-        body: "Preparing the workspace and queuing this prompt.",
-        status: "Waiting",
-        streaming: true,
+        title: "Workspace setup",
+        body: "Loading...",
       }
       : {
         id: `${pendingPrompt.id}:error`,
@@ -468,6 +643,51 @@ function buildTargetPicker(
   };
 }
 
+function buildRuntimeControl(input: {
+  runtimeOptions: readonly RuntimeOption[];
+  loading: boolean;
+  selectedRuntime: RuntimeOption | null;
+  onSelect: (runtimeId: string) => void;
+}): CloudChatComposerControlView {
+  const options = input.loading && input.runtimeOptions.length <= 1
+    ? [
+      {
+        id: "__loading__",
+        label: "Loading runtimes...",
+        disabled: true,
+        selected: true,
+      },
+    ]
+    : input.runtimeOptions.map((runtime) => ({
+      id: runtime.id,
+      label: runtime.label,
+      description: runtime.description,
+      selected: runtime.id === input.selectedRuntime?.id,
+      disabled: runtime.kind === "target" && !runtime.online,
+    }));
+
+  return {
+    id: "new-chat-runtime",
+    key: "runtime",
+    label: "Runtime",
+    icon: "build",
+    placement: "leading",
+    disabled: input.loading && input.runtimeOptions.length <= 1,
+    groups: [
+      {
+        id: "runtimes",
+        label: "Run destination",
+        options,
+      },
+    ],
+    onSelect: (optionId) => {
+      if (!optionId.startsWith("__")) {
+        input.onSelect(optionId);
+      }
+    },
+  };
+}
+
 function buildModelPicker(selectedId: string): PickerView {
   const models = [
     { id: "gpt-5.4", label: "GPT-5.4", description: "Balanced cloud work" },
@@ -511,6 +731,33 @@ function buildModePicker(): PickerView {
   };
 }
 
+function buildRuntimeOptions(
+  targets: readonly CloudTargetSummary[] | undefined,
+): RuntimeOption[] {
+  return [
+    {
+      id: "cloud",
+      kind: "cloud",
+      label: "Cloud sandbox",
+      description: "Run in managed cloud compute",
+      online: true,
+      targetId: null,
+    },
+    ...((targets ?? [])
+      .filter((target) => target.kind === "desktop_dispatch")
+      .map((target): RuntimeOption => ({
+        id: target.id,
+        kind: "target",
+        label: targetLabel(target),
+        description: target.status === "online"
+          ? "Dispatch to this connected Desktop"
+          : target.statusDetail?.statusDetail ?? "Desktop target is offline",
+        online: target.status === "online",
+        targetId: target.id,
+      }))),
+  ];
+}
+
 function buildRepoOptions(
   configs: readonly {
     gitOwner: string;
@@ -551,6 +798,81 @@ function buildRepoOptions(
     }
   }
   return Array.from(options.values());
+}
+
+function targetLabel(target: CloudTargetSummary): string {
+  const displayName = target.displayName?.trim();
+  return displayName || "Desktop Mac";
+}
+
+function buildBranchOptions(input: {
+  branches?: readonly string[] | null;
+  defaultBranch?: string | null;
+  selectedBranch?: string | null;
+}): string[] {
+  const options: string[] = [];
+  addUniqueBranch(options, input.defaultBranch);
+  addUniqueBranch(options, input.selectedBranch);
+  for (const branch of input.branches ?? []) {
+    addUniqueBranch(options, branch);
+  }
+  return options;
+}
+
+function buildBranchControl(input: {
+  branchOptions: readonly string[];
+  loading: boolean;
+  selectedBranch: string | null;
+  disabled: boolean;
+  onSelect: (branch: string) => void;
+}): CloudChatComposerControlView {
+  const options = input.loading && input.branchOptions.length === 0
+    ? [{
+      id: "__loading__",
+      label: "Loading branches...",
+      disabled: true,
+      selected: true,
+    }]
+    : input.branchOptions.length === 0
+      ? [{
+        id: "__empty__",
+        label: "No branches found",
+        disabled: true,
+        selected: true,
+      }]
+      : input.branchOptions.map((branch) => ({
+        id: branch,
+        label: branch,
+        selected: branch === input.selectedBranch,
+      }));
+
+  return {
+    id: "new-chat-base-branch",
+    key: "branch",
+    label: "Base branch",
+    icon: "branch",
+    placement: "leading",
+    disabled: input.disabled || (input.loading && input.branchOptions.length === 0),
+    groups: [
+      {
+        id: "branches",
+        label: "GitHub branches",
+        options,
+      },
+    ],
+    onSelect: (optionId) => {
+      if (!optionId.startsWith("__")) {
+        input.onSelect(optionId);
+      }
+    },
+  };
+}
+
+function addUniqueBranch(options: string[], branch: string | null | undefined): void {
+  const trimmed = branch?.trim();
+  if (trimmed && !options.includes(trimmed)) {
+    options.push(trimmed);
+  }
 }
 
 function buildBranchName(prompt: string): string {

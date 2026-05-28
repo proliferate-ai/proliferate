@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import type { CloudOwnerSelection } from "@proliferate/cloud-sdk";
@@ -38,6 +38,13 @@ export function BillingSettingsSection() {
   const comparisonActions = useCloudBillingActions(comparisonOwner);
   const [comparisonActionError, setComparisonActionError] = useState<string | null>(null);
   const checkoutReturnState = checkoutReturnStateFromParams(searchParams);
+
+  useEffect(() => {
+    if (checkoutReturnState !== "success") {
+      return;
+    }
+    void comparisonBilling.refetch();
+  }, [checkoutReturnState, comparisonBilling.refetch]);
 
   async function openComparisonBillingAction() {
     setComparisonActionError(null);
@@ -95,6 +102,7 @@ export function BillingSettingsSection() {
           title="Account credits"
           description="Included cloud usage and onboarding credits for work you launch from this account."
           iconKind="personal"
+          checkoutReturnState={checkoutReturnState}
           accountCreditsOnly
         />
 
@@ -131,6 +139,7 @@ export function BillingSettingsSection() {
             description="Applies to shared cloud workspaces, team automations, Slack sessions, and shared sandbox usage."
             iconKind="organization"
             owner={{ ownerScope: "organization", organizationId: team.id }}
+            checkoutReturnState={checkoutReturnState}
           />
         ) : team ? (
           <SettingsCard>
@@ -161,12 +170,14 @@ function BillingOwnerController({
   description,
   iconKind,
   owner,
+  checkoutReturnState,
   accountCreditsOnly = false,
 }: {
   title: string;
   description: string;
   iconKind: "personal" | "organization";
   owner?: CloudOwnerSelection;
+  checkoutReturnState?: "success" | "cancel" | null;
   accountCreditsOnly?: boolean;
 }) {
   const billing = useCloudBilling(owner);
@@ -174,6 +185,23 @@ function BillingOwnerController({
   const billingPlan = billing.data;
   const [actionError, setActionError] = useState<string | null>(null);
   const invoiceUrl = billingPlan?.hostedInvoiceUrl ?? null;
+
+  useEffect(() => {
+    if (checkoutReturnState !== "success") {
+      return;
+    }
+    void billing.refetch();
+    const timers = [1500, 4500, 9000].map((delayMs) =>
+      window.setTimeout(() => {
+        void billing.refetch();
+      }, delayMs)
+    );
+    return () => {
+      for (const timer of timers) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [billing.refetch, checkoutReturnState]);
 
   async function openBillingAction(action: "checkout" | "portal" | "refill") {
     setActionError(null);

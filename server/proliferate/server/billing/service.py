@@ -112,6 +112,7 @@ from proliferate.errors import ProliferateError
 from proliferate.integrations import resend
 from proliferate.integrations.billing import stripe as stripe_billing
 from proliferate.server.billing.domain.accounting import (
+    ordered_accounting_grants,
     stripe_status_is_terminal,
     terminal_meter_event_error,
     usage_export_identifier,
@@ -152,6 +153,8 @@ from proliferate.server.billing.models import (
     BillingUrlResponse,
     CloudPlanInfo,
     CurrentTeamCheckoutResponse,
+    GrantAllocation,
+    GrantAllocationInfo,
     OverageSettingsResponse,
     PlanInfo,
     SandboxStartAuthorization,
@@ -270,6 +273,54 @@ def _grant_applies_to_paid_state(grant: BillingGrant, *, is_paid_cloud: bool) ->
     )
 
 
+def _grant_allocations_for_snapshot(
+    *,
+    eligible_grants: list[BillingGrant],
+    active_grants: list[BillingGrant],
+    is_paid_cloud: bool,
+    unaccounted_billable_seconds: float,
+    now: datetime,
+) -> tuple[GrantAllocation, ...]:
+    adjusted_remaining_by_id = {
+        grant.id: max(float(grant.remaining_seconds), 0.0) for grant in eligible_grants
+    }
+    uncovered_seconds = max(float(unaccounted_billable_seconds), 0.0)
+    for grant in ordered_accounting_grants(
+        active_grants,
+        pro_billing_enabled=settings.pro_billing_enabled,
+        is_paid_cloud=is_paid_cloud,
+        at=now,
+    ):
+        if uncovered_seconds <= 0:
+            break
+        available_seconds = adjusted_remaining_by_id.get(grant.id, 0.0)
+        consumed_seconds = min(available_seconds, uncovered_seconds)
+        if consumed_seconds <= 0:
+            continue
+        adjusted_remaining_by_id[grant.id] = max(available_seconds - consumed_seconds, 0.0)
+        uncovered_seconds -= consumed_seconds
+
+    allocations: list[GrantAllocation] = []
+    for grant in eligible_grants:
+        total_seconds = max(float(grant.hours_granted) * 3600.0, 0.0)
+        raw_remaining_seconds = max(float(grant.remaining_seconds), 0.0)
+        remaining_seconds = max(
+            adjusted_remaining_by_id.get(grant.id, raw_remaining_seconds),
+            0.0,
+        )
+        billable_remaining_seconds = min(remaining_seconds, total_seconds)
+        allocations.append(
+            GrantAllocation(
+                grant_type=grant.grant_type,
+                total_seconds=total_seconds,
+                consumed_seconds=max(total_seconds - billable_remaining_seconds, 0.0),
+                remaining_seconds=remaining_seconds,
+                active=_grant_is_active(grant, now),
+            )
+        )
+    return tuple(allocations)
+
+
 def _segment_seconds(segment: UsageSegment, now: datetime) -> float:
     return duration_seconds(
         started_at=segment.started_at,
@@ -355,6 +406,13 @@ def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
 
     has_unlimited_cloud_hours = unlimited_state.has_unlimited_cloud_hours
     remaining_seconds_value = None if has_unlimited_cloud_hours else max(remaining_seconds, 0.0)
+    grant_allocations = _grant_allocations_for_snapshot(
+        eligible_grants=eligible_grants,
+        active_grants=active_grants,
+        is_paid_cloud=is_paid_cloud,
+        unaccounted_billable_seconds=state.unaccounted_billable_seconds,
+        now=now,
+    )
 
     active_sandbox_count = sum(
         1 for sandbox in state.sandboxes if sandbox.status in ACTIVE_SANDBOX_STATUSES
@@ -499,6 +557,7 @@ def _build_billing_snapshot(state: BillingSnapshotState) -> BillingSnapshot:
         repo_environment_limit=repo_environment_limit,
         byo_runtime_allowed=byo_runtime_allowed,
         legacy_cloud_subscription=legacy_cloud_subscription,
+        grant_allocations=grant_allocations,
     )
 
 
@@ -706,6 +765,20 @@ def _cloud_plan_from_snapshot(snapshot: BillingSnapshot) -> CloudPlanInfo:
         repo_environment_limit=snapshot.repo_environment_limit,
         byo_runtime_allowed=snapshot.byo_runtime_allowed,
         legacy_cloud_subscription=snapshot.legacy_cloud_subscription,
+        grant_allocations=[
+            _grant_allocation_info(allocation)
+            for allocation in snapshot.grant_allocations
+        ],
+    )
+
+
+def _grant_allocation_info(allocation: GrantAllocation) -> GrantAllocationInfo:
+    return GrantAllocationInfo(
+        grant_type=allocation.grant_type,
+        total_seconds=round(allocation.total_seconds, 4),
+        consumed_seconds=round(allocation.consumed_seconds, 4),
+        remaining_seconds=round(allocation.remaining_seconds, 4),
+        active=allocation.active,
     )
 
 

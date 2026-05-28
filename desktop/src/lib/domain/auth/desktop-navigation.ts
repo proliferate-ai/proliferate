@@ -52,5 +52,20 @@ export function desktopNavigationTarget(url: string): string | null {
     return parsed.search ? `/plugins${parsed.search}` : "/plugins";
   }
 
+  if (parsed.hostname === "workspaces") {
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    if (segments.length === 1) {
+      return `/workspaces/${encodeURIComponent(decodeRoutePart(segments[0]))}${parsed.search}`;
+    }
+  }
+
   return null;
+}
+
+function decodeRoutePart(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }

@@ -98,6 +98,7 @@ export interface CloudWorkspaceLastSessionSummary {
   targetId: string;
   workspaceId?: string | null;
   sessionId: string;
+  sourceAgentKind?: string | null;
   title?: string | null;
   status: string;
   lastEventAt?: string | null;

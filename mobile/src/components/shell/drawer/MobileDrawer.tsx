@@ -169,8 +169,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[2],
     paddingBottom: Platform.OS === "web" ? 20 : spacing[4],
     backgroundColor: colors.sidebar,
-    borderRightWidth: 1,
-    borderRightColor: colors.borderHeavy,
     borderTopRightRadius: 22,
     borderBottomRightRadius: 22,
   },

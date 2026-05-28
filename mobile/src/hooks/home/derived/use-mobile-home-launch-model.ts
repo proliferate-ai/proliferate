@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   useCloudAgentCatalog,
   useCloudCapabilities,
+  useCloudRepoBranches,
   useCloudRepoConfigs,
   useCloudTargets,
   useAgentAuthCredentials,
@@ -21,11 +22,13 @@ import {
 
 import {
   buildMobileRepoOptions,
+  buildMobileBranchOptions,
   buildMobileRuntimeOptions,
 } from "../../../lib/domain/home/mobile-home-launch";
 
 export function useMobileHomeLaunchModel() {
   const [repoId, setRepoId] = useState("");
+  const [baseBranchByRepoId, setBaseBranchByRepoId] = useState<Record<string, string>>({});
   const [runtimeId, setRuntimeId] = useState("cloud");
   const [launchSelection, setLaunchSelection] = useState<CloudLaunchComposerSelection>({
     agentKind: DEFAULT_DIRECT_PROMPT_AGENT_KIND,
@@ -62,6 +65,25 @@ export function useMobileHomeLaunchModel() {
     [liveTargets],
   );
   const selectedRepo = repoOptions.find((repo) => repo.id === repoId) ?? repoOptions[0] ?? null;
+  const repoBranches = useCloudRepoBranches(
+    selectedRepo?.gitOwner,
+    selectedRepo?.gitRepoName,
+    Boolean(selectedRepo),
+  );
+  const selectedBaseBranchOverride = selectedRepo ? baseBranchByRepoId[selectedRepo.id] ?? null : null;
+  const branchOptions = useMemo(
+    () => buildMobileBranchOptions({
+      branches: repoBranches.data?.branches,
+      defaultBranch: repoBranches.data?.defaultBranch,
+      selectedBranch: selectedBaseBranchOverride,
+    }),
+    [repoBranches.data?.branches, repoBranches.data?.defaultBranch, selectedBaseBranchOverride],
+  );
+  const selectedBaseBranch =
+    selectedBaseBranchOverride
+    ?? repoBranches.data?.defaultBranch
+    ?? branchOptions[0]
+    ?? null;
   const selectedRuntime =
     runtimeOptions.find((runtime) => runtime.id === runtimeId) ?? runtimeOptions[0] ?? null;
   const agentGateway = cloudCapabilities.data?.agentGateway;
@@ -149,6 +171,8 @@ export function useMobileHomeLaunchModel() {
     harnessAvailability,
     launchableAgentKinds,
     launchComposerControls,
+    branchOptions,
+    repoBranches,
     repoConfigs,
     repoId,
     repoOptions,
@@ -156,7 +180,17 @@ export function useMobileHomeLaunchModel() {
     runtimeId,
     runtimeOptions,
     selectedRepo,
+    selectedBaseBranch,
     selectedRuntime,
+    setBaseBranch: (branch: string) => {
+      if (!selectedRepo) {
+        return;
+      }
+      setBaseBranchByRepoId((current) => ({
+        ...current,
+        [selectedRepo.id]: branch,
+      }));
+    },
     setRepoId,
     setRuntimeId,
     targetLive,
