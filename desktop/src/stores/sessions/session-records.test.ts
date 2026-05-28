@@ -198,6 +198,28 @@ describe("session records facade invariants", () => {
     expect(record.status).toBe("idle");
   });
 
+  it("preserves requested model ids from runtime summaries", () => {
+    const record = createSessionRecordFromSummary(
+      {
+        id: "session-1",
+        agentKind: "claude",
+        modelId: "sonnet",
+        requestedModelId: "us.anthropic.claude-opus-4-7",
+        modeId: "default",
+        title: "Claude session",
+        status: "idle",
+        liveConfig: null,
+        executionSummary: null,
+        mcpBindingSummaries: null,
+        lastPromptAt: null,
+      } as Session,
+      "workspace-1",
+    );
+
+    expect(record.modelId).toBe("sonnet");
+    expect(record.requestedModelId).toBe("us.anthropic.claude-opus-4-7");
+  });
+
   it("preserves existing relationship metadata across summary patches", () => {
     const relationship = {
       kind: "review_child" as const,

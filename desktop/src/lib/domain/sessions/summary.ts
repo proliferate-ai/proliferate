@@ -14,6 +14,7 @@ export interface SessionSlotSummaryPatch {
   agentKind: string;
   workspaceId: string;
   modelId: string | null;
+  requestedModelId: string | null;
   modeId: string | null;
   title: string | null;
   actionCapabilities: SessionActionCapabilities;
@@ -40,6 +41,7 @@ export function buildSessionSlotPatchFromSummary(
     agentKind: session.agentKind,
     workspaceId,
     modelId: session.modelId ?? null,
+    requestedModelId: session.requestedModelId ?? session.modelId ?? null,
     modeId,
     title,
     actionCapabilities: session.actionCapabilities,

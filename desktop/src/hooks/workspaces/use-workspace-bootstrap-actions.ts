@@ -740,6 +740,11 @@ export function useWorkspaceBootstrapActions() {
           workspaceId,
           agentKind: sessionMeta.agentKind ?? currentSlot.agentKind,
           modelId: sessionMeta.modelId ?? currentSlot.modelId ?? null,
+          requestedModelId:
+            sessionMeta.requestedModelId
+            ?? sessionMeta.modelId
+            ?? currentSlot.requestedModelId
+            ?? null,
           modeId: sessionMeta.modeId ?? currentSlot.modeId ?? null,
           title: sessionMeta.title ?? currentSlot.title ?? null,
           liveConfig: sessionMeta.liveConfig ?? currentSlot.liveConfig ?? null,

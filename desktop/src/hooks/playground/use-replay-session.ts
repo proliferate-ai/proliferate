@@ -150,6 +150,7 @@ export function useReplaySession(recordingId: string | null): PlaygroundReplaySt
           ...createEmptySessionRecord(session.id, session.agentKind, {
             workspaceId: session.workspaceId,
             modelId: session.modelId ?? null,
+            requestedModelId: session.requestedModelId ?? session.modelId ?? null,
             modeId: session.modeId ?? null,
             title: session.title ?? null,
             liveConfig: session.liveConfig ?? null,

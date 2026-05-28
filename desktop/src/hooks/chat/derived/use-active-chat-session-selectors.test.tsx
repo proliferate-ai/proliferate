@@ -5,6 +5,7 @@ import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   useActivePendingPrompts,
+  useActiveSessionLaunchState,
   useActiveSessionConfigState,
   useActiveTranscriptPaneState,
 } from "@/hooks/chat/derived/use-active-chat-session-selectors";
@@ -128,5 +129,28 @@ describe("useActiveSessionConfigState", () => {
     rerender();
 
     expect(result.current.pendingConfigChanges).toBe(firstPendingConfigChanges);
+  });
+});
+
+describe("useActiveSessionLaunchState", () => {
+  it("uses the requested model for the active launch identity when current model lags", () => {
+    useSessionSelectionStore.setState({
+      activeSessionId: "session-1",
+      activeSessionVersion: 1,
+    });
+    useSessionDirectoryStore.getState().upsertEntry({
+      sessionId: "session-1",
+      agentKind: "claude",
+      modelId: "sonnet",
+      requestedModelId: "us.anthropic.claude-opus-4-7",
+      workspaceId: "workspace-1",
+    });
+
+    const { result } = renderHook(() => useActiveSessionLaunchState());
+
+    expect(result.current.currentLaunchIdentity).toEqual({
+      kind: "claude",
+      modelId: "us.anthropic.claude-opus-4-7",
+    });
   });
 });

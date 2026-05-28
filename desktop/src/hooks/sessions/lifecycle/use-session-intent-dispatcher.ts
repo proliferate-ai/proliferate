@@ -271,6 +271,10 @@ export function useSessionIntentDispatcher(): void {
         const effectiveLiveConfig = shouldReplaceLiveConfig
           ? responseLiveConfig
           : latestSlot.liveConfig;
+        const isModelConfigIntent =
+          intent.configId === "model"
+          || responseLiveConfig?.normalizedControls.model?.rawConfigId === intent.configId
+          || latestSlot.liveConfig?.normalizedControls.model?.rawConfigId === intent.configId;
         const nextPatch = {
           agentKind: response.session.agentKind,
           executionSummary: response.session.executionSummary ?? latestSlot.executionSummary ?? null,
@@ -281,6 +285,11 @@ export function useSessionIntentDispatcher(): void {
           title: response.session.title ?? latestSlot.title ?? null,
           lastPromptAt: response.session.lastPromptAt ?? latestSlot.lastPromptAt ?? null,
           workspaceId,
+          requestedModelId:
+            response.session.requestedModelId
+            ?? (isModelConfigIntent ? intent.value : null)
+            ?? latestSlot.requestedModelId
+            ?? null,
         } as const;
         if (effectiveLiveConfig) {
           patchSessionRecord(intent.clientSessionId, {
