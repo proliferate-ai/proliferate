@@ -41,7 +41,6 @@ import {
 import {
   buildCloudChatComposerControls,
   buildLaunchSessionConfigUpdates,
-  DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS,
   DEFAULT_DIRECT_PROMPT_AGENT_KIND,
   DEFAULT_DIRECT_PROMPT_MODEL_ID,
   getLiveConfigControlValue,
@@ -51,6 +50,9 @@ import {
   type CloudLaunchComposerSelection,
   type PendingConfigChange,
 } from "@proliferate/product-model/chats/cloud/composer-controls";
+import {
+  resolveCloudHarnessAvailability,
+} from "@proliferate/product-model/chats/cloud/harness-availability";
 import {
   cloudCommandReadiness,
   recentWorkCloudAccessState,
@@ -248,21 +250,27 @@ export function ChatScreen() {
   const isUnclaimed = workspace?.visibility === "shared_unclaimed";
   const workspaceReadyAgentKindsKey = workspace?.readyAgentKinds?.join("\0") ?? "";
   const workspaceAllowedAgentKindsKey = workspace?.allowedAgentKinds?.join("\0") ?? "";
-  const workspaceLaunchableAgentKinds = useMemo(() => {
-    const readyAgentKinds = workspace?.readyAgentKinds?.filter(Boolean) ?? [];
-    const managedCreditKinds = cloudCapabilities.data?.agentGateway.managedCreditAgentKinds
-      ?? DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS;
-    const allowedAgentKinds = workspace?.allowedAgentKinds?.filter(Boolean) ?? [];
-    const launchableKinds = new Set([...readyAgentKinds, ...managedCreditKinds]);
-    const filteredKinds = allowedAgentKinds.length > 0
-      ? [...launchableKinds].filter((kind) => allowedAgentKinds.includes(kind))
-      : [...launchableKinds];
-    return filteredKinds.length > 0 ? filteredKinds : null;
-  }, [
-    cloudCapabilities.data?.agentGateway.managedCreditAgentKinds,
+  const agentGateway = cloudCapabilities.data?.agentGateway;
+  const agentGatewayManagedCreditKindsKey = agentGateway?.managedCreditAgentKinds?.join("\0") ?? "";
+  const catalogAgentKindsKey = agentCatalog.data?.agents.map((agent) => agent.kind).join("\0") ?? "";
+  const workspaceHarnessAvailability = useMemo(() => resolveCloudHarnessAvailability({
+    catalogAgentKinds: agentCatalog.data?.agents.map((agent) => agent.kind),
+    allowedAgentKinds: workspace?.allowedAgentKinds,
+    readyAgentKinds: workspace?.readyAgentKinds,
+    agentGateway,
+  }), [
+    agentCatalog.data,
+    agentGateway?.enabled,
+    agentGateway?.managedCreditsOrganizationEnabled,
+    agentGateway?.managedCreditsPersonalEnabled,
+    agentGateway?.opencodeGatewayEnabled,
+    agentGatewayManagedCreditKindsKey,
+    catalogAgentKindsKey,
     workspaceAllowedAgentKindsKey,
     workspaceReadyAgentKindsKey,
   ]);
+  const workspaceLaunchableAgentKinds = workspaceHarnessAvailability.launchableAgentKinds;
+  const canStartNewSession = workspaceLaunchableAgentKinds.length > 0;
   const liveConfig = readSessionLiveConfig(session);
   const resolvedLaunchSelection = useMemo(
     () => resolveCloudLaunchSelection({
@@ -376,6 +384,9 @@ export function ChatScreen() {
     if (!pendingSessionDraft) {
       return;
     }
+    if (!canStartNewSession) {
+      return;
+    }
     const resolvedSelection = resolveCloudLaunchSelection({
       catalog: agentCatalog.data,
       launchableAgentKinds: workspaceLaunchableAgentKinds,
@@ -401,6 +412,7 @@ export function ChatScreen() {
     launchSelection,
     pendingSessionDraft?.id,
     pendingSessionDraft?.workspaceId,
+    canStartNewSession,
     workspaceLaunchableAgentKinds,
   ]);
 
@@ -1038,6 +1050,13 @@ export function ChatScreen() {
       return;
     }
     if (!session) {
+      if (!canStartNewSession) {
+        setPendingHomePromptStatus(
+          workspaceHarnessAvailability.message
+            ?? "No cloud agent is ready to start a new session in this workspace.",
+        );
+        return;
+      }
       if (workspaceStatus !== "ready") {
         setPendingHomePromptStatus("Workspace is provisioning; the prompt will send when ready.");
         return;
@@ -1324,6 +1343,13 @@ export function ChatScreen() {
     if (!workspace) {
       return;
     }
+    if (!canStartNewSession) {
+      setPendingHomePromptStatus(
+        workspaceHarnessAvailability.message
+          ?? "No cloud agent is ready to start a new session in this workspace.",
+      );
+      return;
+    }
     if (pendingSessionDraft) {
       clearWebCloudSessionDraft(workspace.id, pendingSessionDraft.id);
     }
@@ -1372,7 +1398,8 @@ export function ChatScreen() {
     draft.trim()
       && !promptSubmitting
       && !isUnclaimed
-      && workspaceCommandReady,
+      && workspaceCommandReady
+      && (session || canStartNewSession),
   );
   const branchName = workspace.repo.branch ?? workspace.repo.baseBranch ?? "main";
   const repoLabel = `${workspace.repo.owner}/${workspace.repo.name}`;
@@ -1387,6 +1414,9 @@ export function ChatScreen() {
   const commandMessage =
     visiblePendingHomePromptStatus ??
     commandStatusMessage ??
+    (!session && workspaceCommandReady && !canStartNewSession
+      ? workspaceHarnessAvailability.message
+      : null) ??
     (!workspaceCommandReady
       ? friendlyCommandStatusMessage(commandReadiness.message)
         ?? commandReadiness.message
@@ -1540,7 +1570,7 @@ export function ChatScreen() {
         onSubmit: () => void submitPrompt(),
         controls: composerControls,
         footerControls: composerFooterControls,
-        disabled: !workspaceCommandReady || isUnclaimed,
+        disabled: !workspaceCommandReady || isUnclaimed || (!session && !canStartNewSession),
         canSubmit,
         isSubmitting: promptSubmitting,
         placeholder: isUnclaimed
@@ -1548,7 +1578,9 @@ export function ChatScreen() {
           : session
             ? "Describe a task"
             : workspaceCommandReady
-              ? "Describe a task"
+              ? canStartNewSession
+                ? "Describe a task"
+                : "No cloud agents ready"
               : workspaceCommandability === "stale"
                 ? "Desktop or remote runtime is offline"
                 : "Waiting for workspace",

@@ -17,7 +17,7 @@ const CLAUDE_GATEWAY_PROTECTED_ENV: &[&str] = &[
     "ANTHROPIC_CUSTOM_HEADERS",
     "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
 ];
-const CODEX_GATEWAY_PROTECTED_ENV: &[&str] = &["CODEX_API_KEY", "CODEX_HOME"];
+const CODEX_GATEWAY_PROTECTED_ENV: &[&str] = &["CODEX_API_KEY", "OPENAI_API_KEY", "CODEX_HOME"];
 const OPENCODE_GATEWAY_PROTECTED_ENV: &[&str] = &["OPENAI_API_KEY", "OPENAI_BASE_URL"];
 const GEMINI_GATEWAY_PROTECTED_ENV: &[&str] = &["GEMINI_API_KEY", "GOOGLE_GEMINI_BASE_URL"];
 const CLAUDE_SYNCED_PROTECTED_ENV: &[&str] = &[];
@@ -459,6 +459,48 @@ mod tests {
         assert_eq!(
             request["selections"][0]["expiresAt"],
             "2026-05-18T00:00:00Z"
+        );
+    }
+
+    #[test]
+    fn allows_codex_gateway_env_aliases() {
+        let plan: AgentAuthMaterializationPlan = serde_json::from_value(json!({
+            "applied": true,
+            "targetId": "target-1",
+            "sandboxProfileId": "profile-1",
+            "revision": 7,
+            "selections": [{
+                "agentKind": "codex",
+                "materializationMode": "gateway_env",
+                "credentialId": "credential-1",
+                "credentialRevision": 3,
+                "credentialShareId": null,
+                "gateway": {
+                    "protocolFacade": "openai",
+                    "baseUrls": { "openai": "https://gateway.example/openai/v1" },
+                    "runtimeGrantToken": "grant-token",
+                    "expiresAt": "2026-05-18T00:00:00Z",
+                    "protectedEnv": {
+                        "CODEX_API_KEY": "sk-codex",
+                        "OPENAI_API_KEY": "sk-codex",
+                        "CODEX_HOME": "/home/user/.proliferate/anyharness/agent-auth/codex"
+                    },
+                    "supportEnv": {},
+                    "protectedConfig": {},
+                    "supportConfig": {}
+                }
+            }]
+        }))
+        .expect("plan");
+
+        let (request, outcome) =
+            build_anyharness_agent_auth_request(None, "profile-1", "target-1", None, 7, &plan)
+                .expect("request");
+
+        assert!(outcome.applied);
+        assert_eq!(
+            request["selections"][0]["protectedEnv"]["OPENAI_API_KEY"],
+            "sk-codex"
         );
     }
 

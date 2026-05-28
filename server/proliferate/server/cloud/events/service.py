@@ -671,6 +671,8 @@ def _session_projection_patch(
         return SessionProjectionPatch(status="running", phase="turn_running")
     if event_type_value == "turn_ended":
         return SessionProjectionPatch(status="idle", phase="idle")
+    if event_type_value == "error":
+        return SessionProjectionPatch(status="idle", phase="idle")
     if event_type_value == "session_info_update":
         return SessionProjectionPatch(title=_str_or_none(event.get("title")))
     if event_type_value == "config_option_update":

@@ -30,6 +30,7 @@ async def test_cloud_capabilities_response_shape(
     monkeypatch.setattr(settings, "agent_gateway_managed_budget_free_usd", "12.50")
     monkeypatch.setattr(settings, "agent_gateway_managed_budget_pro_usd", "0")
     monkeypatch.setattr(settings, "agent_gateway_managed_budget_unlimited_usd", "0")
+    monkeypatch.setattr(settings, "agent_gateway_managed_anthropic_api_key", "sk-ant-test")
     auth = await create_user_and_login(
         client,
         db_session,

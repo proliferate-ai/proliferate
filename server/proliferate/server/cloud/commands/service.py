@@ -1359,6 +1359,13 @@ async def _mark_pending_prompt_interaction_failed_for_command(
     )
 
 
+async def mark_pending_prompt_interaction_failed_for_command(
+    db: AsyncSession,
+    command: commands_store.CloudCommandSnapshot,
+) -> None:
+    await _mark_pending_prompt_interaction_failed_for_command(db, command)
+
+
 async def _validate_managed_runtime_config_current_for_command(
     db: AsyncSession,
     *,

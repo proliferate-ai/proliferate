@@ -166,7 +166,7 @@ async function startSessionForPrompt(args: {
     client: args.client,
     workspaceId: workspace.id,
     targetId,
-  }).catch(() => new Set<string>());
+  });
   const command = await args.enqueueStartSession({
     idempotencyKey: `${args.pendingPrompt.id}:start-session`,
     targetId,
@@ -192,6 +192,7 @@ async function startSessionForPrompt(args: {
     targetId,
     fallbackWorkspaceId: anyharnessWorkspaceId,
     existingSessionIds,
+    expectedAgentKind: agentKind,
     shouldContinue: args.shouldContinue,
   });
 }
@@ -215,7 +216,12 @@ export async function prepareManagedWorkspaceForCloudCommands(args: {
       onStatus: args.onStatus,
     });
     assertStillCurrent(args.shouldContinue);
-    workspace = (await getWorkspaceSnapshot(workspace.id, args.client)).workspace;
+    workspace = await waitForManagedAgentAuthCurrent({
+      client: args.client,
+      workspaceId: workspace.id,
+      onStatus: args.onStatus,
+      shouldContinue: args.shouldContinue,
+    });
   }
   assertWorkspaceCanAcceptCloudCommands(workspace);
   await ensureManagedWorkspaceTargetConfigReady({
@@ -227,6 +233,37 @@ export async function prepareManagedWorkspaceForCloudCommands(args: {
     shouldContinue: args.shouldContinue,
   });
   return workspace;
+}
+
+async function waitForManagedAgentAuthCurrent(args: {
+  client: ProliferateCloudClient;
+  workspaceId: string;
+  onStatus: (status: string) => void;
+  shouldContinue: () => boolean;
+}): Promise<CloudWorkspaceDetail> {
+  const deadline = Date.now() + 120_000;
+  let delayMs = 500;
+  let latest = (await getWorkspaceSnapshot(args.workspaceId, args.client)).workspace;
+  while (true) {
+    assertStillCurrent(args.shouldContinue);
+    const runtimeAuth = latest.runtime?.runtimeAuth;
+    if (runtimeAuth?.targetCurrent === true) {
+      return latest;
+    }
+    if (runtimeAuth?.status === "apply_failed" || runtimeAuth?.status === "missing_credentials") {
+      throw new Error(
+        runtimeAuth.lastError
+          ?? "Cloud agent credentials are not ready for this workspace.",
+      );
+    }
+    args.onStatus("Applying cloud agent credentials.");
+    if (Date.now() >= deadline) {
+      throw new Error("Timed out waiting for cloud agent credentials to apply.");
+    }
+    await sleep(delayMs);
+    delayMs = nextPollDelay(delayMs);
+    latest = (await getWorkspaceSnapshot(args.workspaceId, args.client)).workspace;
+  }
 }
 
 async function ensurePersonalManagedAgentAuthReady(args: {
@@ -437,7 +474,13 @@ async function waitForCommandTerminal(
 ): Promise<CloudCommandResponse> {
   const deadline = Date.now() + 240_000;
   assertStillCurrent(shouldContinue);
-  let latest = await getCommandStatus(commandId, client);
+  let latest = await getCommandStatusWithRecoverableRetry({
+    commandId,
+    client,
+    shouldContinue,
+    deadline,
+  });
+  let delayMs = 500;
   let lastStatusMessage: string | null = null;
   while (!isTerminalStatus(latest.status)) {
     assertStillCurrent(shouldContinue);
@@ -449,12 +492,44 @@ async function waitForCommandTerminal(
       onStatus?.(nextStatusMessage);
       lastStatusMessage = nextStatusMessage;
     }
-    await sleep(500);
+    await sleep(delayMs);
+    delayMs = nextPollDelay(delayMs);
     assertStillCurrent(shouldContinue);
-    latest = await getCommandStatus(commandId, client);
+    latest = await getCommandStatusWithRecoverableRetry({
+      commandId,
+      client,
+      shouldContinue,
+      deadline,
+    });
   }
   assertStillCurrent(shouldContinue);
   return latest;
+}
+
+async function getCommandStatusWithRecoverableRetry(args: {
+  commandId: string;
+  client: ProliferateCloudClient;
+  shouldContinue: () => boolean;
+  deadline: number;
+}): Promise<CloudCommandResponse> {
+  let delayMs = 500;
+  let lastError: unknown = null;
+  while (Date.now() < args.deadline) {
+    assertStillCurrent(args.shouldContinue);
+    try {
+      return await getCommandStatus(args.commandId, args.client);
+    } catch (error) {
+      lastError = error;
+      if (!isRecoverableCloudDispatchError(error)) {
+        throw error;
+      }
+      await sleep(delayMs);
+      delayMs = nextPollDelay(delayMs);
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Timed out waiting for the cloud command to finish.");
 }
 
 async function waitForStartedSession(args: {
@@ -464,6 +539,7 @@ async function waitForStartedSession(args: {
   targetId: string;
   fallbackWorkspaceId: string;
   existingSessionIds: Set<string>;
+  expectedAgentKind: string | null;
   shouldContinue: () => boolean;
 }): Promise<CloudSessionProjection> {
   const deadline = Date.now() + 240_000;
@@ -486,6 +562,8 @@ async function waitForStartedSession(args: {
       targetId: args.targetId,
       expectedSessionId,
       existingSessionIds: args.existingSessionIds,
+      expectedAgentKind: args.expectedAgentKind,
+      startedAfter: latestCommand.createdAt,
       shouldContinue: args.shouldContinue,
     });
     if (session) {
@@ -553,6 +631,8 @@ async function findStartedSession(args: {
   targetId: string;
   expectedSessionId: string | null;
   existingSessionIds: Set<string>;
+  expectedAgentKind: string | null;
+  startedAfter: string | null | undefined;
   shouldContinue: () => boolean;
 }): Promise<CloudSessionProjection | null> {
   assertStillCurrent(args.shouldContinue);
@@ -568,10 +648,34 @@ async function findStartedSession(args: {
     }
     return sessionsForTarget
       .filter((candidate) => !args.existingSessionIds.has(candidate.sessionId))
+      .filter((candidate) => sessionMatchesExpectedAgent(candidate, args.expectedAgentKind))
+      .filter((candidate) => sessionStartedAfter(candidate, args.startedAfter))
       .sort(compareSessionFreshness)[0] ?? null;
   } catch {
     return null;
   }
+}
+
+function sessionMatchesExpectedAgent(
+  session: CloudSessionProjection,
+  expectedAgentKind: string | null,
+): boolean {
+  return !expectedAgentKind || session.sourceAgentKind === expectedAgentKind;
+}
+
+function sessionStartedAfter(
+  session: CloudSessionProjection,
+  startedAfter: string | null | undefined,
+): boolean {
+  if (!startedAfter) {
+    return true;
+  }
+  const baseline = Date.parse(startedAfter);
+  if (!Number.isFinite(baseline)) {
+    return true;
+  }
+  const sessionTime = Date.parse(session.startedAt ?? session.lastEventAt ?? "");
+  return Number.isFinite(sessionTime) && sessionTime >= baseline;
 }
 
 function compareSessionFreshness(

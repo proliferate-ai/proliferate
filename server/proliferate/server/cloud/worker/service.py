@@ -1131,6 +1131,8 @@ async def record_command_delivery(
         session_id=command.session_id,
         cloud_workspace_id=command.cloud_workspace_id,
     )
+    if _command_result_should_fail_pending_prompt(command):
+        await command_service.mark_pending_prompt_interaction_failed_for_command(db, command)
     await publish_command_status_after_commit(db, command)
     return WorkerCommandStatusResponse(
         command_id=str(command.id),
@@ -1274,12 +1276,24 @@ async def record_command_result(
         body=body,
         status=command.status,
     )
+    if _command_result_should_fail_pending_prompt(command):
+        await command_service.mark_pending_prompt_interaction_failed_for_command(db, command)
     await publish_command_status_after_commit(db, command)
     return WorkerCommandStatusResponse(
         command_id=str(command.id),
         status=command.status,
         updated=True,
     )
+
+
+def _command_result_should_fail_pending_prompt(
+    command: commands_store.CloudCommandSnapshot,
+) -> bool:
+    return command.kind == CloudCommandKind.send_prompt.value and command.status in {
+        CloudCommandStatus.rejected.value,
+        CloudCommandStatus.failed_delivery.value,
+        CloudCommandStatus.superseded.value,
+    }
 
 
 async def list_worker_exposures(

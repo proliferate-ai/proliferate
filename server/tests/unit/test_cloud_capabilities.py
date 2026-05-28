@@ -20,6 +20,11 @@ def test_cloud_capabilities_gate_gateway_byok(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(service.settings, "agent_gateway_managed_budget_free_usd", "12.50")
     monkeypatch.setattr(service.settings, "agent_gateway_managed_budget_pro_usd", "0")
     monkeypatch.setattr(service.settings, "agent_gateway_managed_budget_unlimited_usd", "0")
+    monkeypatch.setattr(
+        service.settings,
+        "agent_gateway_managed_anthropic_api_key",
+        "sk-ant-managed-test",
+    )
 
     capabilities = service.cloud_capabilities()
 

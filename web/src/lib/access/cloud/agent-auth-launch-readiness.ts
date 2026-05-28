@@ -1,4 +1,5 @@
 import {
+  enableSandboxProfileCloud,
   ensureFreeManagedCredits,
   ensurePersonalSandboxProfile,
   getSandboxAgentAuthSelections,
@@ -26,6 +27,7 @@ export async function ensurePersonalAgentAuthLaunchReady(args: {
 }): Promise<PersonalAgentAuthLaunchReadiness> {
   if (args.agentKind && await hasReadyPersonalSelectionWithRetry(args.client, args.agentKind)) {
     args.onStatus?.("Using selected cloud agent credential.");
+    await ensurePersonalCloudTargetReady(args.client);
     return { source: "selected_credential" };
   }
 
@@ -39,7 +41,17 @@ export async function ensurePersonalAgentAuthLaunchReady(args: {
           : "Cloud agent credits are not ready yet. Please retry in a moment."),
     );
   }
+  await ensurePersonalCloudTargetReady(args.client);
   return { source: "free_credits", result };
+}
+
+async function ensurePersonalCloudTargetReady(
+  client: ProliferateCloudClient,
+): Promise<void> {
+  await withRecoverableRetry(async () => {
+    const profile = await ensurePersonalSandboxProfile(client);
+    await enableSandboxProfileCloud(profile.id, client);
+  });
 }
 
 async function hasReadyPersonalSelectionWithRetry(

@@ -107,6 +107,29 @@ def _managed_credit_agent_kinds() -> list[str]:
         if item.strip()
     ]
     agent_kinds = [
-        item for item in configured if item in {"claude", "codex", "opencode", "gemini"}
+        item
+        for item in configured
+        if item in {"claude", "codex", "opencode", "gemini"}
+        and _managed_credit_agent_kind_has_provider(item)
     ]
-    return agent_kinds or ["claude"]
+    if agent_kinds:
+        return agent_kinds
+    if not configured and _managed_credit_agent_kind_has_provider("claude"):
+        return ["claude"]
+    return []
+
+
+def _managed_credit_agent_kind_has_provider(agent_kind: str) -> bool:
+    if agent_kind == "claude":
+        return bool(
+            (
+                settings.agent_gateway_managed_bedrock_region.strip()
+                and settings.agent_gateway_managed_bedrock_role_arn.strip()
+            )
+            or settings.agent_gateway_managed_anthropic_api_key.strip()
+        )
+    if agent_kind in {"codex", "opencode"}:
+        return bool(settings.agent_gateway_managed_openai_api_key.strip())
+    if agent_kind == "gemini":
+        return bool(settings.agent_gateway_managed_gemini_api_key.strip())
+    return False

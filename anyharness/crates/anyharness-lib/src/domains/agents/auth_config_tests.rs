@@ -98,7 +98,7 @@ fn codex_launch_overlay_sets_managed_codex_home() {
                 protected_config: BTreeMap::from([(
                     "codex".to_string(),
                     json!({
-                        "model_provider_id": "proliferate",
+                        "model_provider": "proliferate",
                         "model_providers": {
                             "proliferate": {
                                 "name": "Proliferate Gateway",
@@ -126,6 +126,7 @@ fn codex_launch_overlay_sets_managed_codex_home() {
             .map(String::as_str),
         Some("runtime-token")
     );
+    assert_eq!(overlay.protected_env.get("OPENAI_API_KEY"), None);
     assert_eq!(
         overlay.protected_env.get("CODEX_HOME").map(String::as_str),
         Some(
@@ -140,6 +141,21 @@ fn codex_launch_overlay_sets_managed_codex_home() {
         .join("codex")
         .join("config.toml")
         .exists());
+    let codex_home = root.join("agent-auth").join("codex");
+    let config_toml =
+        std::fs::read_to_string(codex_home.join("config.toml")).expect("codex config");
+    assert!(config_toml.contains("openai_base_url = \"https://gateway.example/openai/v1\""));
+    assert!(config_toml.contains("env_key = \"CODEX_API_KEY\""));
+    assert!(config_toml.contains("model_provider = \"proliferate\""));
+    assert!(!config_toml.contains("model_provider_id"));
+    assert!(config_toml.contains("[model_providers.proliferate]"));
+    assert!(config_toml.contains("env_key = \"CODEX_API_KEY\""));
+
+    let auth_json: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(codex_home.join("auth.json")).expect("codex auth"))
+            .expect("parse codex auth");
+    assert_eq!(auth_json["auth_mode"], "apikey");
+    assert_eq!(auth_json["OPENAI_API_KEY"], "runtime-token");
 }
 
 #[test]

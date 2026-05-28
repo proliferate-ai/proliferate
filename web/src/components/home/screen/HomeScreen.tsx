@@ -17,12 +17,14 @@ import {
 import {
   buildCloudLaunchComposerControls,
   buildLaunchSessionConfigUpdates,
-  DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS,
   DEFAULT_DIRECT_PROMPT_AGENT_KIND,
   DEFAULT_DIRECT_PROMPT_MODEL_ID,
   resolveCloudLaunchSelection,
   type CloudLaunchComposerSelection,
 } from "@proliferate/product-model/chats/cloud/composer-controls";
+import {
+  resolveCloudHarnessAvailability,
+} from "@proliferate/product-model/chats/cloud/harness-availability";
 import {
   formatGitRepoId,
   normalizeGitRepoId,
@@ -90,13 +92,23 @@ export function HomeScreen() {
     () => repoOptions.find((repo) => repo.id === repoId) ?? repoOptions[0] ?? null,
     [repoId, repoOptions],
   );
-  const launchableAgentKinds = useMemo(() => {
-    const managedCreditKinds = cloudCapabilities.data?.agentGateway.managedCreditAgentKinds
-      ?? DEFAULT_CLOUD_LAUNCHABLE_AGENT_KINDS;
-    return managedCreditKinds.length > 0
-      ? managedCreditKinds
-      : [DEFAULT_DIRECT_PROMPT_AGENT_KIND];
-  }, [cloudCapabilities.data?.agentGateway.managedCreditAgentKinds]);
+  const agentGateway = cloudCapabilities.data?.agentGateway;
+  const agentGatewayManagedCreditKindsKey = agentGateway?.managedCreditAgentKinds?.join("\0") ?? "";
+  const catalogAgentKindsKey = agentCatalog.data?.agents.map((agent) => agent.kind).join("\0") ?? "";
+  const harnessAvailability = useMemo(() => resolveCloudHarnessAvailability({
+    catalogAgentKinds: agentCatalog.data?.agents.map((agent) => agent.kind),
+    agentGateway,
+  }), [
+    agentCatalog.data,
+    agentGateway?.enabled,
+    agentGateway?.managedCreditsOrganizationEnabled,
+    agentGateway?.managedCreditsPersonalEnabled,
+    agentGateway?.opencodeGatewayEnabled,
+    agentGatewayManagedCreditKindsKey,
+    catalogAgentKindsKey,
+  ]);
+  const launchableAgentKinds = harnessAvailability.launchableAgentKinds;
+  const canStartCloudHarness = launchableAgentKinds.length > 0;
   const resolvedLaunchSelection = useMemo(
     () => resolveCloudLaunchSelection({
       catalog: agentCatalog.data,
@@ -165,6 +177,12 @@ export function HomeScreen() {
   async function handleSubmit() {
     const text = draft.trim();
     if (!text || !selectedRepo || submitInFlightRef.current) return;
+    if (!canStartCloudHarness) {
+      setSubmitError(
+        harnessAvailability.message ?? "No cloud agent is ready to start this workspace.",
+      );
+      return;
+    }
 
     submitInFlightRef.current = true;
     setSubmitError(null);
@@ -194,7 +212,6 @@ export function HomeScreen() {
         client,
         agentKind: normalizeAgentAuthAgentKind(resolvedLaunchSelection.agentKind),
         modelId: resolvedLaunchSelection.modelId,
-        allowUnavailableFreeCredits: true,
       });
       const workspaceRequest: CreateCloudWorkspaceRequest = {
         gitProvider: "github",
@@ -245,6 +262,13 @@ export function HomeScreen() {
       text: submitError,
     }
     : null;
+  const harnessNotice: NoticeView | null = !canStartCloudHarness && harnessAvailability.message
+    ? {
+      id: "harness-required",
+      tone: "warning",
+      text: harnessAvailability.message,
+    }
+    : null;
   if (errorNotice && pendingPrompt?.status === "failed") {
     errorNotice.action = {
       label: "Retry",
@@ -257,6 +281,7 @@ export function HomeScreen() {
   }
   const notices: NoticeView[] = [];
   if (repoNotice) notices.push(repoNotice);
+  if (harnessNotice) notices.push(harnessNotice);
   if (errorNotice) notices.push(errorNotice);
 
   return (
@@ -265,7 +290,7 @@ export function HomeScreen() {
         heading="What should we run?"
         draft={draft}
         placeholder={HOME_PLACEHOLDER}
-        canSubmit={Boolean(draft.trim()) && Boolean(selectedRepo) && !submitting}
+        canSubmit={Boolean(draft.trim()) && Boolean(selectedRepo) && canStartCloudHarness && !submitting}
         submitting={submitting}
         target={buildTargetPicker(repoId, repoOptions, repoConfigs.isLoading)}
         model={buildModelPicker(resolvedLaunchSelection.modelId ?? DEFAULT_DIRECT_PROMPT_MODEL_ID)}

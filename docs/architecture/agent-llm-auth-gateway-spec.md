@@ -1711,7 +1711,7 @@ Claude:
 
 Codex:
   CODEX_API_KEY
-  model_provider_id
+  model_provider
   model_providers.proliferate.*
   Codex provider config files/env fragments
 
@@ -1764,7 +1764,7 @@ Use the OpenAI Responses-compatible facade.
 Expected config shape:
 
 ```text
-model_provider_id = "proliferate"
+model_provider = "proliferate"
 
 [model_providers.proliferate]
 name = "Proliferate Gateway"
