@@ -766,8 +766,7 @@ def _cloud_plan_from_snapshot(snapshot: BillingSnapshot) -> CloudPlanInfo:
         byo_runtime_allowed=snapshot.byo_runtime_allowed,
         legacy_cloud_subscription=snapshot.legacy_cloud_subscription,
         grant_allocations=[
-            _grant_allocation_info(allocation)
-            for allocation in snapshot.grant_allocations
+            _grant_allocation_info(allocation) for allocation in snapshot.grant_allocations
         ],
     )
 
