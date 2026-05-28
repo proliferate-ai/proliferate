@@ -213,7 +213,7 @@ describe("useWorkspaceNavigationWorkflow", () => {
     act(() => result.current.selectWorkspaceFromSurface("logical-unclaimed", "sidebar"));
 
     expect(shellMocks.openExternal).toHaveBeenCalledWith(
-      "https://app.proliferate.ai/cloud/workspaces/cloud-unclaimed-1",
+      "https://web.proliferate.com/cloud/workspaces/cloud-unclaimed-1",
     );
     expect(selectionMocks.selectWorkspace).not.toHaveBeenCalled();
     expect(routerMocks.navigate).not.toHaveBeenCalled();
