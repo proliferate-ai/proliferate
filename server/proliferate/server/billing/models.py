@@ -49,6 +49,7 @@ class BillingSnapshot:
     repo_environment_limit: int | None = None
     byo_runtime_allowed: bool = False
     legacy_cloud_subscription: bool = False
+    grant_allocations: tuple[GrantAllocation, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -104,6 +105,14 @@ class BillingBaseModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class GrantAllocationInfo(BillingBaseModel):
+    grant_type: str = Field(alias="grantType")
+    total_seconds: float = Field(alias="totalSeconds")
+    consumed_seconds: float = Field(alias="consumedSeconds")
+    remaining_seconds: float = Field(alias="remainingSeconds")
+    active: bool
+
+
 class PlanInfo(BillingBaseModel):
     plan: str
     usage_minutes: int = Field(alias="usageMinutes")
@@ -152,6 +161,10 @@ class CloudPlanInfo(BillingBaseModel):
     repo_environment_limit: int | None = Field(default=None, alias="repoEnvironmentLimit")
     byo_runtime_allowed: bool = Field(alias="byoRuntimeAllowed")
     legacy_cloud_subscription: bool = Field(alias="legacyCloudSubscription")
+    grant_allocations: list[GrantAllocationInfo] = Field(
+        default_factory=list,
+        alias="grantAllocations",
+    )
 
 
 class BillingOverview(BillingBaseModel):

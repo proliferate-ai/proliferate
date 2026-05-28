@@ -36,6 +36,7 @@ export interface CloudWorkItemView {
   id: string;
   title: string;
   subtitle: string;
+  sourceAgentKind: string | null;
   source: CloudWorkSource;
   sourceLabel: string;
   sourceKind: RecentWorkSourceKind;
@@ -171,6 +172,7 @@ export interface BuildCloudWorkInventoryOptions {
 }
 
 export interface BuildRecentWorkItemsOptions {
+  activeWorkspaceId?: string | null;
   activeWorkspaceSessions?: readonly CloudSessionProjection[];
   nowMs?: number;
   limit?: number;
@@ -260,6 +262,7 @@ export function buildRecentWorkItems(
   options: BuildRecentWorkItemsOptions = {},
 ): RecentWorkItemView[] {
   const nowMs = options.nowMs ?? Date.now();
+  const activeWorkspaceId = options.activeWorkspaceId ?? null;
   const workspaceRows = dedupeCloudWorkspaces(workspaces);
   const workspaceById = new Map(workspaceRows.map((workspace) => [workspace.id, workspace]));
   const rows = new Map<string, RecentWorkItemView>();
@@ -291,7 +294,7 @@ export function buildRecentWorkItems(
   }
 
   for (const workspace of workspaceRows) {
-    if (workspacesWithSessionRows.has(workspace.id)) {
+    if (workspacesWithSessionRows.has(workspace.id) && workspace.id !== activeWorkspaceId) {
       continue;
     }
     rows.set(recentWorkspaceRowId(workspace.id), recentWorkItemForWorkspace(workspace, { nowMs }));
@@ -324,6 +327,7 @@ export function cloudWorkItemForWorkspace(
   const branchLabel = workspace.repo.branch ?? workspace.repo.baseBranch ?? "main";
   const title = workspace.displayName ?? workspace.lastSessionSummary?.title ?? workspace.repo.name;
   const sessionTitle = workspace.lastSessionSummary?.title ?? null;
+  const sourceAgentKind = cloudWorkSourceAgentKind(workspace);
   const source = cloudWorkSourceForWorkspace(workspace);
   const sourceKind = recentWorkSourceForWorkspace(workspace);
   const runtimeLocation = recentWorkRuntimeLocationForWorkspace(workspace);
@@ -338,6 +342,7 @@ export function cloudWorkItemForWorkspace(
     id: workspace.id,
     title,
     subtitle: [repoLabel, branchLabel].filter(Boolean).join(" - "),
+    sourceAgentKind,
     source,
     sourceLabel: SOURCE_LABELS[source],
     sourceKind,
@@ -367,6 +372,7 @@ export function cloudWorkItemForWorkspace(
       sessionTitle,
       repoLabel,
       branchLabel,
+      sourceAgentKind,
       SOURCE_LABELS[source],
       cloudWorkOwnerLabel(workspace),
       STATUS_LABELS[status],
@@ -376,6 +382,13 @@ export function cloudWorkItemForWorkspace(
       sessionId: defaultSessionId,
     },
   };
+}
+
+export function cloudWorkSourceAgentKind(
+  workspace: Pick<CloudWorkspaceSummary, "lastSessionSummary">,
+): string | null {
+  const sourceAgentKind = workspace.lastSessionSummary?.sourceAgentKind?.trim();
+  return sourceAgentKind || null;
 }
 
 export function cloudWorkSourceForWorkspace(

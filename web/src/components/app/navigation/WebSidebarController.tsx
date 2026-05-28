@@ -123,10 +123,11 @@ export function WebSidebarController({
   );
   const recentItems = useMemo(
     () => buildRecentWorkItems(cloudWorkspaces, {
+      activeWorkspaceId: routeState.sessionId ? null : routeState.workspaceId,
       activeWorkspaceSessions,
       nowMs: Date.now(),
     }),
-    [activeWorkspaceSessions, cloudWorkspaces],
+    [activeWorkspaceSessions, cloudWorkspaces, routeState.sessionId, routeState.workspaceId],
   );
   const visibleRecentItems = useMemo(
     () => recentItems.filter((item) =>

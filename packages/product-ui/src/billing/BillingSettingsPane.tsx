@@ -51,6 +51,15 @@ export interface BillingPlanView {
   overagePricePerHourCents?: number | null;
   repoEnvironmentLimit?: number | null;
   legacyCloudSubscription: boolean;
+  grantAllocations?: BillingGrantAllocationView[] | null;
+}
+
+export interface BillingGrantAllocationView {
+  grantType: string;
+  totalSeconds: number;
+  consumedSeconds: number;
+  remainingSeconds: number;
+  active: boolean;
 }
 
 export interface BillingActionView {
@@ -210,6 +219,8 @@ export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
           ) : null}
         </div>
 
+        <CreditGrantBreakdown plan={plan} />
+
         {overage ? (
           <div className="flex flex-col gap-3 border-t border-border-light pt-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0 space-y-1">
@@ -368,8 +379,8 @@ function CheckoutReturnNotice({ state }: { state: "success" | "cancel" }) {
           <div className="min-w-0">
             <div className="text-sm font-medium">Stripe checkout completed</div>
             <p className="mt-1 text-sm leading-5 text-muted-foreground">
-              Billing is refreshing from Stripe. If the relevant billing card has not updated yet,
-              wait a moment for the webhook to finish and refresh this page.
+              Billing is refreshing from Stripe. The relevant card will update automatically
+              as soon as the webhook lands.
             </p>
           </div>
         </div>
@@ -565,7 +576,11 @@ function runtimeUsage(plan: BillingPlanView): {
   const included = plan.proBillingEnabled && plan.isPaidCloud
     ? plan.includedManagedCloudHours
     : plan.freeSandboxHours;
-  const used = plan.usedSandboxHours ?? 0;
+  const grantUsage = grantUsageSummary(plan.grantAllocations);
+  const used = grantUsage?.consumedHours
+    ?? managedUsedHours(plan)
+    ?? plan.usedSandboxHours
+    ?? 0;
   const total = included ?? (remaining === null || remaining === undefined ? null : used + remaining);
   const percent = total && total > 0
     ? Math.min(100, Math.max(0, (used / total) * 100))
@@ -578,6 +593,124 @@ function runtimeUsage(plan: BillingPlanView): {
     percent,
     progressLabel: total ? `${Math.round(percent ?? 0)}% used this period` : "Usage is not capped for this plan",
   };
+}
+
+function CreditGrantBreakdown({ plan }: { plan: BillingPlanView }) {
+  const grants = visibleGrantAllocations(plan.grantAllocations);
+  if (grants.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-3 border-t border-border-light pt-4">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="text-sm font-medium text-foreground">Credit usage</div>
+          <p className="text-xs leading-5 text-muted-foreground">
+            Consumed hours across free trial, included, refill, and Team period grants.
+          </p>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {formatHours(grants.reduce((total, grant) => total + secondsToHours(grant.consumedSeconds), 0))} used
+        </div>
+      </div>
+      <div className="space-y-2">
+        {grants.map((grant) => {
+          const totalHours = secondsToHours(grant.totalSeconds);
+          const consumedHours = secondsToHours(grant.consumedSeconds);
+          const remainingHours = secondsToHours(grant.remainingSeconds);
+          const percent = totalHours > 0
+            ? Math.min(100, Math.max(0, (consumedHours / totalHours) * 100))
+            : 0;
+          return (
+            <div key={`${grant.grantType}:${grant.totalSeconds}:${grant.active}`} className="space-y-1.5">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+                  {grantTypeLabel(grant.grantType)}
+                </span>
+                <span className="shrink-0 text-muted-foreground">
+                  {formatHours(consumedHours)} / {formatHours(totalHours)}
+                </span>
+                {!grant.active ? <Badge tone="neutral">Inactive</Badge> : null}
+              </div>
+              <div className="h-1 overflow-hidden rounded-full bg-foreground/10">
+                <div className="h-full rounded-full bg-foreground/70" style={{ width: `${percent}%` }} />
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {grant.active ? `${formatHours(remainingHours)} remaining` : "No longer active"}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function grantUsageSummary(
+  grants: readonly BillingGrantAllocationView[] | null | undefined,
+): { consumedHours: number } | null {
+  const visible = visibleGrantAllocations(grants);
+  if (visible.length === 0) {
+    return null;
+  }
+  return {
+    consumedHours: visible.reduce(
+      (total, grant) => total + secondsToHours(grant.consumedSeconds),
+      0,
+    ),
+  };
+}
+
+function visibleGrantAllocations(
+  grants: readonly BillingGrantAllocationView[] | null | undefined,
+): BillingGrantAllocationView[] {
+  return (grants ?? [])
+    .filter((grant) =>
+      grant.active
+      || grant.consumedSeconds > 0
+      || grant.remainingSeconds > 0
+    )
+    .sort((left, right) => Number(right.active) - Number(left.active)
+      || right.consumedSeconds - left.consumedSeconds);
+}
+
+function managedUsedHours(plan: BillingPlanView): number | null {
+  if (!plan.proBillingEnabled || !plan.isPaidCloud) {
+    return null;
+  }
+  if (
+    plan.includedManagedCloudHours === null
+    || plan.includedManagedCloudHours === undefined
+    || plan.remainingManagedCloudHours === null
+    || plan.remainingManagedCloudHours === undefined
+  ) {
+    return null;
+  }
+  return Math.max(plan.includedManagedCloudHours - plan.remainingManagedCloudHours, 0);
+}
+
+function secondsToHours(seconds: number | null | undefined): number {
+  return Math.max(seconds ?? 0, 0) / 3600;
+}
+
+function grantTypeLabel(grantType: string): string {
+  switch (grantType) {
+    case "free_trial_v2":
+      return "Free trial credits";
+    case "free_included":
+      return "Included free credits";
+    case "cloud_monthly":
+      return "Monthly cloud credits";
+    case "pro_period":
+      return "Team period credits";
+    case "pro_seat_proration":
+      return "Seat adjustment credits";
+    case "refill_10h":
+      return "Refill credits";
+    default:
+      return grantType.replace(/_/g, " ");
+  }
 }
 
 function overageSummary(plan: BillingPlanView): {

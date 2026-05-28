@@ -56,6 +56,20 @@ export function buildMobileRepoOptions(
     }));
 }
 
+export function buildMobileBranchOptions(input: {
+  branches?: readonly string[] | null;
+  defaultBranch?: string | null;
+  selectedBranch?: string | null;
+}): string[] {
+  const options: string[] = [];
+  addUniqueBranch(options, input.defaultBranch);
+  addUniqueBranch(options, input.selectedBranch);
+  for (const branch of input.branches ?? []) {
+    addUniqueBranch(options, branch);
+  }
+  return options;
+}
+
 export function buildMobileRuntimeOptions(
   targets: readonly CloudTargetSummary[] | undefined,
 ): MobileRuntimeOption[] {
@@ -153,5 +167,12 @@ function targetIcon(target: CloudTargetSummary): MobileIconName {
       return "external";
     default:
       return "cloud";
+  }
+}
+
+function addUniqueBranch(options: string[], branch: string | null | undefined): void {
+  const trimmed = branch?.trim();
+  if (trimmed && !options.includes(trimmed)) {
+    options.push(trimmed);
   }
 }

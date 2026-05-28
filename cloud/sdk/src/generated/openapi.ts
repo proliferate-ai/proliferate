@@ -4841,6 +4841,8 @@ export interface components {
             byoRuntimeAllowed: boolean;
             /** Legacycloudsubscription */
             legacyCloudSubscription: boolean;
+            /** Grantallocations */
+            grantAllocations?: components["schemas"]["GrantAllocationInfo"][];
         };
         /** CloudRepoConfigResponse */
         CloudRepoConfigResponse: {
@@ -5798,6 +5800,19 @@ export interface components {
             /** Title */
             title: string;
         };
+        /** GrantAllocationInfo */
+        GrantAllocationInfo: {
+            /** Granttype */
+            grantType: string;
+            /** Totalseconds */
+            totalSeconds: number;
+            /** Consumedseconds */
+            consumedSeconds: number;
+            /** Remainingseconds */
+            remainingSeconds: number;
+            /** Active */
+            active: boolean;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -5824,6 +5839,8 @@ export interface components {
             workspaceId?: string | null;
             /** Sessionid */
             sessionId: string;
+            /** Sourceagentkind */
+            sourceAgentKind?: string | null;
             /** Title */
             title?: string | null;
             /** Status */

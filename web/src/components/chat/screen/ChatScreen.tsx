@@ -478,7 +478,7 @@ export function ChatScreen() {
       setPendingHomePromptStatus(
         workspaceFailureMessage
           ?? pendingHomePrompt.errorMessage
-          ?? "Queued prompt could not be sent.",
+          ?? "Prompt could not be sent.",
       );
       setDraft((current) => current.trim() ? current : pendingHomePrompt.text);
       return;
@@ -510,7 +510,7 @@ export function ChatScreen() {
       }
     };
 
-    setPendingHomePromptStatus("Starting a session for the queued prompt.");
+    setPendingHomePromptStatus("Starting a session for this prompt.");
     const timeoutId = window.setTimeout(() => {
       if (!isCurrentRun()) {
         return;
@@ -565,7 +565,7 @@ export function ChatScreen() {
           if (!isCurrentRun()) {
             return;
           }
-          const message = error instanceof Error ? error.message : "Queued prompt could not be sent.";
+          const message = error instanceof Error ? error.message : "Prompt could not be sent.";
           const prompt: PendingHomePrompt = isWorkspacePreparationStatus(message)
             ? {
               ...pendingHomePrompt,
@@ -645,7 +645,7 @@ export function ChatScreen() {
       }
     };
 
-    setPendingHomePromptStatus("Session started; sending queued prompt.");
+    setPendingHomePromptStatus("Session started; sending prompt.");
     void resumePendingHomePromptInSession({
       client,
       workspace,
@@ -704,7 +704,7 @@ export function ChatScreen() {
         if (!isCurrentRun()) {
           return;
         }
-        const message = error instanceof Error ? error.message : "Queued prompt could not be sent.";
+        const message = error instanceof Error ? error.message : "Prompt could not be sent.";
         const prompt: PendingHomePrompt = {
           ...pendingHomePrompt,
           status: "failed",
@@ -1417,9 +1417,12 @@ export function ChatScreen() {
       && workspaceCommandReady
       && (session || canStartNewSession),
   );
-  const branchName = workspace.repo.branch ?? workspace.repo.baseBranch ?? "main";
   const repoLabel = `${workspace.repo.owner}/${workspace.repo.name}`;
-  const workspaceTitle = branchName || repoLabel;
+  const defaultBranchName = workspace.repo.baseBranch ?? "main";
+  const branchName = workspace.repo.branch ?? defaultBranchName;
+  const workspaceDisplayName = workspace.displayName?.trim() ?? "";
+  const workspaceTitle = workspaceDisplayName || branchName || repoLabel;
+  const showBranchChip = !workspaceDisplayName || branchName !== defaultBranchName;
   const activeSessionLabel = session
     ? sessionOptionLabel(session)
     : "New session";
@@ -1494,11 +1497,13 @@ export function ChatScreen() {
         commandabilityLabel,
       ]}
       chips={[
-        {
-          id: "branch",
-          label: branchName,
-          icon: "branch",
-        },
+        ...(showBranchChip
+          ? [{
+            id: "branch",
+            label: branchName,
+            icon: "branch" as const,
+          }]
+          : []),
         {
           id: "repo",
           label: repoLabel,
@@ -1756,7 +1761,7 @@ function commandStatusMessageForNotice(
   }
   switch (command.status) {
     case "queued":
-      return "Command queued; waiting for the cloud runtime.";
+      return "Loading...";
     case "leased":
       return "Cloud runtime is picking up the command.";
     case "delivered":
@@ -2032,15 +2037,13 @@ function buildOptimisticPromptRows(input: {
         kind: "user",
         body: prompt.text,
         status: optimisticPromptStatusLabel(prompt.status),
-        streaming: prompt.status !== "failed",
       });
     }
-    if (prompt.status !== "failed" && !agentStarted) {
+    if (prompt.status === "sending" && !agentStarted) {
       rows.push({
         id: `${prompt.id}:assistant-waiting`,
         kind: "assistant",
-        body: prompt.status === "sending" ? "Sending message..." : "Waiting for response...",
-        streaming: true,
+        body: "Loading...",
       });
     } else if (prompt.status === "failed" && (input.status || prompt.errorMessage)) {
       rows.push({
@@ -2078,27 +2081,23 @@ function buildPendingHomePromptRows(input: {
     && (input.pendingPrompt.status === "failed" || isFailureStatusText(input.status));
   const failureMessage = friendlyCommandStatusMessage(input.pendingPrompt.errorMessage)
     ?? input.status;
-  return [
+  const loading = preparationStatus;
+  const rows: CloudChatTranscriptRowView[] = [
     {
       id: `${input.pendingPrompt.id}:user`,
       kind: "user",
       body: input.pendingPrompt.text,
-      status: preparationStatus ? "Preparing" : failed ? "Failed" : "Queued",
-      streaming: !failed,
-    },
-    {
-      id: `${input.pendingPrompt.id}:assistant-waiting`,
-      kind: failed ? "error" : "assistant",
-      body: failed
-        ? failureMessage ?? "Queued prompt could not be sent."
-        : input.status ?? (
-          preparationStatus
-            ? "Preparing the selected runtime so this session can start."
-            : "Waiting for the workspace to be ready..."
-        ),
-      streaming: !failed,
+      status: loading ? "Loading" : failed ? "Failed" : null,
     },
   ];
+  if (loading || failed) {
+    rows.push({
+      id: `${input.pendingPrompt.id}:assistant-waiting`,
+      kind: failed ? "error" : "assistant",
+      body: failed ? failureMessage ?? "Prompt could not be sent." : "Loading...",
+    });
+  }
+  return rows;
 }
 
 function latestPendingPromptCommandId(
@@ -2200,15 +2199,15 @@ function removeRetryReplacedFailedPrompts(
   );
 }
 
-function optimisticPromptStatusLabel(status: OptimisticPrompt["status"]): string {
+function optimisticPromptStatusLabel(status: OptimisticPrompt["status"]): string | null {
   switch (status) {
     case "failed":
       return "Failed";
     case "queued":
-      return "Queued";
+      return null;
     case "sending":
     default:
-      return "Sending";
+      return "Loading";
   }
 }
 

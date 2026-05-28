@@ -26,6 +26,7 @@ export function useMobileHomeLaunchActions(input: {
   catalog?: CloudAgentCatalogResponse | null;
   launchableAgentKinds?: readonly string[] | null;
   selectedRepo: MobileRepoOption | null;
+  selectedBaseBranch: string | null;
   selectedRuntime: MobileRuntimeOption | null;
   selection: CloudLaunchComposerSelection;
   onOpenChat: (chat: MobileCloudChat) => void;
@@ -71,6 +72,7 @@ export function useMobileHomeLaunchActions(input: {
           gitProvider: "github",
           gitOwner: input.selectedRepo.gitOwner,
           gitRepoName: input.selectedRepo.gitRepoName,
+          baseBranch: input.selectedBaseBranch,
           branchName: buildBranchName(prompt),
           displayName: buildWorkspaceDisplayName(prompt),
           prompt,
@@ -110,6 +112,7 @@ export function useMobileHomeLaunchActions(input: {
         gitProvider: "github",
         gitOwner: input.selectedRepo.gitOwner,
         gitRepoName: input.selectedRepo.gitRepoName,
+        baseBranch: input.selectedBaseBranch,
         branchName: buildBranchName(prompt),
         displayName: buildWorkspaceDisplayName(prompt),
         ownerScope: "personal",

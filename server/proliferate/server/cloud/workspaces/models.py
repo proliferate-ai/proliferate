@@ -75,6 +75,7 @@ class WorkspaceSessionSummaryRecord(Protocol):
     target_id: UUID
     workspace_id: str | None
     session_id: str
+    source_agent_kind: str | None
     title: str | None
     status: str
     last_event_at: str | None
@@ -282,6 +283,7 @@ class LastSessionSummary(BaseModel):
     target_id: str = Field(serialization_alias="targetId")
     workspace_id: str | None = Field(default=None, serialization_alias="workspaceId")
     session_id: str = Field(serialization_alias="sessionId")
+    source_agent_kind: str | None = Field(default=None, serialization_alias="sourceAgentKind")
     title: str | None = None
     status: str
     last_event_at: str | None = Field(default=None, serialization_alias="lastEventAt")
@@ -730,6 +732,7 @@ def last_session_summary_payload(
         target_id=str(session.target_id),
         workspace_id=session.workspace_id,
         session_id=session.session_id,
+        source_agent_kind=getattr(session, "source_agent_kind", None),
         title=session.title,
         status=session.status,
         last_event_at=session.last_event_at,

@@ -27,6 +27,15 @@ describe("desktopNavigationTarget", () => {
     ).toBe("/plugins?source=mcp_oauth_callback&status=completed");
   });
 
+  it("routes workspace deep links to the desktop workspace opener", () => {
+    expect(desktopNavigationTarget("proliferate://workspaces/cloud-workspace-1")).toBe(
+      "/workspaces/cloud-workspace-1",
+    );
+    expect(desktopNavigationTarget("proliferate-local://workspaces/cloud%20workspace")).toBe(
+      "/workspaces/cloud%20workspace",
+    );
+  });
+
   it("routes legacy settings cloud deep links to billing", () => {
     expect(desktopNavigationTarget("proliferate://settings/cloud?checkout=done")).toBe(
       "/settings?checkout=done&section=billing",
@@ -54,5 +63,6 @@ describe("desktopNavigationTarget", () => {
   it("rejects unsupported desktop navigation links", () => {
     expect(desktopNavigationTarget("https://plugins?source=mcp_oauth_callback")).toBeNull();
     expect(desktopNavigationTarget("proliferate://plugins/extra")).toBeNull();
+    expect(desktopNavigationTarget("proliferate://workspaces/cloud-1/extra")).toBeNull();
   });
 });

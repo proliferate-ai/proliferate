@@ -137,6 +137,23 @@ describe("cloud work inventory", () => {
     expect(groups[0]?.items.map((item) => item.id)).toEqual(["session-activity", "workspace-activity"]);
   });
 
+  it("carries the last session agent kind into workspace rows", () => {
+    const item = cloudWorkItemForWorkspace(workspace({
+      lastSessionSummary: {
+        targetId: "target",
+        workspaceId: "runtime",
+        sessionId: "session",
+        sourceAgentKind: "codex",
+        title: "Codex session",
+        status: "idle",
+        lastEventAt: "2026-05-23T11:57:00Z",
+      },
+    }), { nowMs: NOW });
+
+    expect(item.sourceAgentKind).toBe("codex");
+    expect(item.searchText).toContain("codex");
+  });
+
   it("dedupes duplicate rows while building the inventory", () => {
     const groups = buildCloudWorkInventory([
       workspace({ id: "same", displayName: "Sparse" }),
@@ -360,6 +377,48 @@ describe("cloud work inventory", () => {
       runtimeLocation: "cloud_sandbox",
       commandability: "commandable",
       state: "idle",
+    });
+  });
+
+  it("keeps the active workspace row even when that workspace has recent sessions", () => {
+    const rows = buildRecentWorkItems([
+      workspace({
+        id: "desktop",
+        displayName: "Bramble",
+        sandboxType: "local",
+        origin: { kind: "human", entrypoint: "desktop" },
+        lastSessionSummary: {
+          targetId: "target",
+          workspaceId: "runtime",
+          sessionId: "session",
+          title: "Fix cloud UI",
+          status: "running",
+          lastEventAt: "2026-05-23T11:58:00Z",
+        },
+      }),
+      workspace({
+        id: "empty",
+        displayName: "Empty cloud workspace",
+        sandboxType: "managed_personal",
+        origin: { kind: "human", entrypoint: "web" },
+        targetId: "cloud-target",
+        lastActivityAt: "2026-05-23T11:00:00Z",
+      }),
+    ], {
+      activeWorkspaceId: "desktop",
+      nowMs: NOW,
+    });
+
+    expect(rows.map((row) => row.id)).toEqual([
+      "session:desktop:session",
+      "workspace:desktop",
+      "workspace:empty",
+    ]);
+    expect(rows[1]).toMatchObject({
+      rowKind: "workspace",
+      workspaceId: "desktop",
+      sessionId: null,
+      title: "Bramble",
     });
   });
 

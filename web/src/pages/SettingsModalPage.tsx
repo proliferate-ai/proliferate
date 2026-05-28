@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { X } from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, type Location } from "react-router-dom";
 
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 
@@ -8,22 +8,25 @@ import { SettingsScreen } from "../components/settings/screen/SettingsScreen";
 import { routes } from "../config/routes";
 
 type SettingsRouteState = {
-  backgroundLocation?: unknown;
+  backgroundLocation?: Pick<Location, "pathname" | "search" | "hash">;
 };
 
 export function SettingsModalPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const dialogRef = useRef<HTMLDivElement | null>(null);
-  const hasBackground = Boolean((location.state as SettingsRouteState | null)?.backgroundLocation);
+  const backgroundLocation = (location.state as SettingsRouteState | null)?.backgroundLocation;
+  const backgroundPath = backgroundLocation
+    ? `${backgroundLocation.pathname}${backgroundLocation.search}${backgroundLocation.hash}`
+    : null;
 
   const closeSettings = useCallback(() => {
-    if (hasBackground) {
-      navigate(-1);
+    if (backgroundPath) {
+      navigate(backgroundPath, { replace: true });
       return;
     }
     navigate(routes.home, { replace: true });
-  }, [hasBackground, navigate]);
+  }, [backgroundPath, navigate]);
 
   useEffect(() => {
     dialogRef.current?.focus();
@@ -41,8 +44,13 @@ export function SettingsModalPage() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/48 p-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/48 p-3 backdrop-blur-[2px] sm:p-5"
       data-telemetry-block
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          closeSettings();
+        }
+      }}
     >
       <div
         ref={dialogRef}
@@ -50,13 +58,13 @@ export function SettingsModalPage() {
         aria-modal="true"
         aria-label="Settings"
         tabIndex={-1}
-        className="relative h-[min(820px,calc(100vh-2rem))] w-[min(1120px,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-background shadow-2xl outline-none"
+        className="relative h-[min(880px,calc(100vh-1.5rem))] w-[min(1180px,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-border bg-background shadow-2xl outline-none"
       >
         <IconButton
           title="Close settings"
           aria-label="Close settings"
           onClick={closeSettings}
-          className="absolute right-3 top-3 z-10 bg-background/80"
+          className="absolute right-3 top-3 z-10 border border-border bg-background/90 shadow-sm"
         >
           <X size={16} />
         </IconButton>

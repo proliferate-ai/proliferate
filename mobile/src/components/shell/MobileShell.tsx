@@ -411,6 +411,22 @@ function ShellWithDrawer({
     }),
     [translate],
   );
+  const contentRadius = useMemo(
+    () => translate.interpolate({
+      inputRange: [0, 36],
+      outputRange: [0, 30],
+      extrapolate: "clamp",
+    }),
+    [translate],
+  );
+  const edgeOpacity = useMemo(
+    () => translate.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, 1],
+      extrapolate: "clamp",
+    }),
+    [translate],
+  );
 
   function animateTo(open: boolean, velocity = 0) {
     Animated.timing(translate, {
@@ -488,12 +504,39 @@ function ShellWithDrawer({
 
   return (
     <View style={styles.shellContainer} {...panResponder.panHandlers}>
+      <View
+        style={[
+          styles.staticDrawer,
+          { width: DRAWER_WIDTH },
+        ]}
+        pointerEvents={drawerOpen ? "auto" : "none"}
+      >
+        {drawer}
+      </View>
       <Animated.View
-        style={[styles.slidingContent, { transform: [{ translateX: translate }] }]}
+        style={[
+          styles.slidingContent,
+          {
+            borderTopLeftRadius: contentRadius,
+            borderBottomLeftRadius: contentRadius,
+            transform: [{ translateX: translate }],
+          },
+        ]}
       >
         <SafeAreaView style={styles.slidingSafeArea} edges={["top", "right", "bottom", "left"]}>
           {children}
         </SafeAreaView>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.contentEdge,
+            {
+              borderTopLeftRadius: contentRadius,
+              borderBottomLeftRadius: contentRadius,
+              opacity: edgeOpacity,
+            },
+          ]}
+        />
         <Animated.View
           style={[styles.contentScrim, { opacity: scrimOpacity }]}
           pointerEvents={drawerOpen && scrimReady ? "auto" : "none"}
@@ -506,16 +549,6 @@ function ShellWithDrawer({
           />
         </Animated.View>
       </Animated.View>
-      <View
-        style={[
-          styles.staticDrawer,
-          drawerOpen && styles.staticDrawerOpen,
-          { width: DRAWER_WIDTH },
-        ]}
-        pointerEvents={drawerOpen ? "auto" : "none"}
-      >
-        {drawer}
-      </View>
     </View>
   );
 }
@@ -838,20 +871,28 @@ const styles = StyleSheet.create({
     left: 0,
     zIndex: 0,
   },
-  staticDrawerOpen: {
-    zIndex: 10,
-  },
   slidingContent: {
     flex: 1,
+    position: "relative",
     zIndex: 1,
     backgroundColor: colors.background,
-    borderTopLeftRadius: 22,
-    borderBottomLeftRadius: 22,
     overflow: "hidden",
   },
   slidingSafeArea: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  contentEdge: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 32,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderLeftWidth: 1,
+    borderColor: colors.borderHeavy,
+    zIndex: 4,
   },
   contentScrim: {
     ...StyleSheet.absoluteFillObject,

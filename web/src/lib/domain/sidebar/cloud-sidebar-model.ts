@@ -20,8 +20,7 @@ export function parseCloudSidebarRoute(pathname: string): CloudSidebarRouteState
     sessionId: match?.[2] ? decodeRoutePart(match[2]) : null,
     workspacesActive:
       normalizedPath === "/workspaces" ||
-      normalizedPath.startsWith("/workspaces/") ||
-      normalizedPath.startsWith("/cloud/workspaces/"),
+      normalizedPath === "/cloud/workspaces",
   };
 }
 
