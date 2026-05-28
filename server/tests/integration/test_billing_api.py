@@ -253,6 +253,15 @@ class TestBillingApi:
             "repoEnvironmentLimit": settings.cloud_free_repo_limit,
             "byoRuntimeAllowed": False,
             "legacyCloudSubscription": False,
+            "grantAllocations": [
+                {
+                    "grantType": "free_included",
+                    "totalSeconds": 20.0 * 3600,
+                    "consumedSeconds": 0.0,
+                    "remainingSeconds": 20.0 * 3600,
+                    "active": True,
+                }
+            ],
         }
 
     @pytest.mark.asyncio
