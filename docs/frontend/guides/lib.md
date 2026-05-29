@@ -1,279 +1,119 @@
 # Frontend Lib
 
-`lib/**` is for non-component logic. Keep React behavior in hooks and raw
-external access in `lib/access/**`.
+`lib/**` is non-component logic. Hooks own React behavior. Access layers own
+external systems.
 
 ## `lib/domain/**`
 
-Pure product logic.
+Pure product logic for one app.
 
-Use this for rules that understand Proliferate concepts but do not need React,
-stores, query clients, platform APIs, or external clients.
+Use app-local `lib/domain/**` when the rule is platform/app-specific. Move the
+rule to `apps/packages/product-domain/**` when Desktop, Web, or Mobile need the
+same decision or view model.
 
-Examples:
+Owns:
 
-- chat surface mode transitions
-- session status labels
-- workspace display names
-- prompt outbox reconciliation
-- validation rules for product models
+- product validation and normalization
+- status labels, tones, icons, and display metadata
+- workspace/session/chat projection models
+- pure reducers
+- pure side-effect planners
 
-Rules:
+Must not import:
 
-- No React, JSX, hooks, stores, query clients, telemetry, or raw access.
-- Keep functions deterministic when possible.
-- Organize large domains by subdomain and product purpose, not by generic file
-  types like `utils` or `helpers`.
-- Pure side-effect planners belong here when the decision is product logic.
-  They inspect state/events and return an explicit plan; they do not execute
-  the effects.
+- React, JSX, hooks, stores, providers, query clients
+- DOM, React Native components, Tauri, or platform APIs
+- SDK clients, raw access helpers, or app code from another boundary
 
-Target shape:
+Shape:
 
 ```text
-lib/domain/
-  chat/
-    composer/
-    launch/
-    models/
-    outbox/
-    session-controls/
-    subagents/
-    surface/
-    tools/
-    transcript/
-  workspaces/
-    changes/
-    cloud/
-    creation/
-    display/
-    mobility/
-    selection/
-    shell/
-    sidebar/
-    tabs/
-    viewer/
+lib/domain/<domain>/<subdomain>/<rule>.ts
 ```
 
-File naming:
-
-- `<specific-rule>.ts` for pure decisions and computations
-- `<thing>-model.ts` for model construction
-- `<thing>-reducer.ts` for pure reducers
-- `<thing>-effect-plan.ts` for pure side-effect planning
-- `<thing>-presentation.ts` or `presentation.ts` for state-to-display metadata
-- `<thing>.test.ts` next to meaningful pure logic when coverage is useful
-
-Avoid names like `utils.ts`, `helpers.ts`, or `types.ts` unless the file is
-truly tiny and local to one subdomain. Prefer names that state the product rule.
+Name files for the product rule: `<specific-rule>.ts`,
+`<thing>-model.ts`, `<thing>-reducer.ts`, `<thing>-effect-plan.ts`, or
+`<thing>-presentation.ts`. Avoid `utils.ts`, `helpers.ts`, and broad
+`types.ts` files unless the scope is tiny and local.
 
 ### Side-Effect Planners
 
-Use this pattern when product logic needs to decide what effects should happen
-but should not execute those effects directly.
+A planner decides what effects should happen and returns an explicit plan. It
+does not execute effects. The executor belongs in a workflow hook, lifecycle
+hook, or `lib/workflows/**`.
 
-Domain planner:
-
-```ts
-export function planSessionStreamEffects(input): SessionStreamEffectPlan {
-  return {
-    refreshSummary: true,
-    playTurnEndSound: false,
-    mountLinkedSessionIds: [],
-  };
-}
-```
-
-Workflow or lifecycle hook executor:
-
-```ts
-const plan = planSessionStreamEffects(snapshot);
-if (plan.refreshSummary) {
-  await deps.refreshSummary();
-}
-if (plan.playTurnEndSound) {
-  deps.playTurnEndSound();
-}
-```
-
-The planner belongs in `lib/domain/**` because it is pure product decision
-logic. The executor belongs in a workflow hook, lifecycle hook, or
-`lib/workflows/**` because it performs side effects.
+Use planners when product decisions are pure but the resulting effects are not,
+such as stream refresh decisions, toast decisions, or reconciliation commands.
 
 ## `lib/workflows/**`
 
 Plain non-React product sequences.
 
-Use this when logic coordinates multiple dependencies but should not be tied to
-React. The hook gathers dependencies and passes them in; the workflow runs the
-sequence.
+Use this when a user or lifecycle action coordinates multiple dependencies and
+the sequence should be readable/testable outside React. The owning hook gathers
+dependencies and calls the workflow.
 
-Examples:
+Owns:
 
-- create workspace then create initial session
-- prepare prompt payload then dispatch
-- reconcile materialized workspace metadata
+- ordered product sequences
+- branching across fetched/local data
+- retries, rollback, and multi-step error recovery
+- app-local orchestration that should not call hooks directly
 
-Rules:
+Must not import:
 
-- No React hooks.
-- Dependencies are passed in as arguments.
-- Keep side effects explicit in the dependency interface.
-- Workflow hooks should remain thin controllers around these functions.
-- Do not import access hooks, stores, query clients, or React providers.
-- Do not construct raw clients or call raw endpoint paths unless the workflow is
-  explicitly designed as an access-layer helper. Product workflows should
-  receive access callbacks from the hook that calls them.
+- React hooks, providers, stores, or query clients
+- hidden singletons for app state
+- raw endpoint paths or client construction for product workflows
 
-Target shape:
+Shape:
 
 ```text
-lib/workflows/
-  sessions/
-    create-session-workflow.ts
-    prompt-session-workflow.ts
-  workspaces/
-    materialize-workspace-workflow.ts
+lib/workflows/<domain>/<workflow>.ts
 ```
 
-Workflow functions should accept a small dependency object instead of importing
-singletons. That keeps the sequence testable and makes side effects visible.
-Use an `(input, deps)` shape by default. The dependency object should expose
-side effects as named callbacks, not hidden imports.
+Use an `(input, deps)` shape. Per-call values belong in `input`. Live
+capabilities belong in `deps`: access calls, store setters, cache invalidation,
+navigation, toasts, telemetry, runtime resolution, clocks, and id generation.
 
-### Workflow Dependency Interfaces
+Do not pass pure helpers, constants, or formatting functions as deps. Import
+pure domain helpers and static config directly.
 
-Dependencies are for live side effects and runtime collaborators: access
-calls, store setters, cache invalidation, navigation, toasts, telemetry,
-runtime connection resolution, clocks, and id generation when testability
-requires it.
+Keep a sequence in the workflow hook when it is a short single action. Move it
+to `lib/workflows/**` when ordering, branching, rollback, retry, or testability
+is the reason for the extraction.
 
-Do not pass pure helpers, constants, or simple formatting functions as
-dependencies. Import pure domain helpers and static config directly.
+## `lib/access/**`
 
-Prefer small capability interfaces and compose narrow workflow deps:
+Raw app-local access helpers.
 
-```ts
-interface TerminalRuntimeDeps {
-  getWorkspaceRuntimeBlockReason(workspaceId: string): string | null;
-  resolveWorkspaceConnection(workspaceId: string): Promise<TerminalConnection>;
-}
+Use this for client setup, platform bridges, native wrappers, auth/storage
+integration, and thin app-specific adapters around SDK clients. Query/mutation
+hooks that expose this access to React live in `hooks/access/**`.
 
-interface TerminalCacheDeps {
-  invalidateWorkspaceTerminals(workspaceId: string): Promise<void>;
-}
+Must not own product workflow branching, UI state, stores, or reusable shared
+package logic.
 
-interface TerminalRecordAccessDeps {
-  createTerminal(
-    connection: TerminalConnection,
-    input: CreateTerminalRequest,
-  ): Promise<TerminalRecord>;
-  closeTerminal(connection: TerminalConnection, terminalId: string): Promise<void>;
-  isMissingTerminalError(error: unknown): boolean;
-}
-
-type CreateTerminalDeps =
-  TerminalRuntimeDeps
-  & Pick<TerminalRecordAccessDeps, "createTerminal">
-  & TerminalCacheDeps;
-```
-
-Each workflow should receive only the capabilities it uses. Avoid one giant
-`TerminalEverythingDeps` or `PromptOutboxEverythingDeps` object. If a workflow
-needs a very large dependency type, split the workflow into smaller substeps or
-keep the owning hook as the readable orchestrator.
-
-Use one workflow file per cohesive family at first:
-
-```text
-lib/workflows/terminals/
-  terminal-record-workflows.ts
-  terminal-stream-workflows.ts
-```
-
-Split into per-action files only when a family file becomes too large or mixes
-unrelated ownership:
-
-```text
-lib/workflows/terminals/
-  create-terminal-workflow.ts
-  close-terminal-workflow.ts
-```
-
-Example shape:
-
-```ts
-export async function createWorkspaceWorkflow(input, deps) {
-  const workspace = await deps.createWorkspace(input.workspace);
-  const session = await deps.createSession({ workspaceId: workspace.id });
-  deps.activateWorkspace({ workspaceId: workspace.id, sessionId: session.id });
-  return { workspace, session };
-}
-```
-
-Another example:
-
-```ts
-export async function closeTerminalWorkflow(input, deps) {
-  const blockedReason = deps.getBlockReason(input.workspaceId);
-  if (blockedReason) {
-    deps.showToast(blockedReason);
-    return "blocked";
-  }
-
-  try {
-    await deps.closeTerminal(input.terminalId, input.workspaceId);
-    deps.clearTerminalState(input.terminalId, input.workspaceId);
-    return "closed";
-  } finally {
-    await deps.invalidateTerminals(input.workspaceId);
-  }
-}
-```
-
-The corresponding hook wires the dependencies:
-
-```ts
-export function useCreateWorkspaceActions() {
-  const createWorkspace = useCreateWorkspaceMutation();
-  const createSession = useCreateSessionMutation();
-  const activateWorkspace = useSelectionStore((state) => state.activateWorkspace);
-
-  return {
-    create: (input) => createWorkspaceWorkflow(input, {
-      createWorkspace: createWorkspace.mutateAsync,
-      createSession: createSession.mutateAsync,
-      activateWorkspace,
-    }),
-  };
-}
-```
+See [access.md](access.md) for the concrete system map.
 
 ## `lib/infra/**`
 
-Generic technical machinery that does not care about product domains.
+Generic technical machinery with no product-domain vocabulary.
 
-Examples:
+Owns:
 
 - persistence helpers
-- scheduling and batching
-- ids and stable key helpers
+- scheduling, batching, and timers
+- ids and stable keys
 - measurement plumbing
 - safe JSON parsing
 - logging utilities
 
-If a function knows about chats, sessions, workspaces, agents, billing, or
-repositories, it is not infra.
+If a function knows about chats, sessions, workspaces, agents, billing,
+repositories, or prompts, it is not infra.
 
-Target shape:
+Shape:
 
 ```text
-lib/infra/
-  persistence/
-  scheduling/
-  measurement/
-  ids/
-  logging/
+lib/infra/<technical-concern>/<helper>.ts
 ```
-
-Organize infra by technical mechanism, not by product domain.

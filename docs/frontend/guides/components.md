@@ -1,190 +1,132 @@
 # Frontend Components
 
-Components render UI. They should be easy to scan: props in, hook calls for
-state/actions, tiny local UI callbacks, JSX out.
+Components render UI. Hooks own React behavior, `lib/**` owns reusable logic,
+and access layers own external systems.
 
 ## Ownership
 
-- Components render. They do not fetch, orchestrate workflows, or own reusable
-  product logic.
-- Components may call hooks. Hooks should provide the data, callbacks, and
-  state needed for rendering.
-- Components may import small pure domain/presentation helpers directly when
-  the helper only builds local render metadata, such as a row label, tone, or
-  icon choice. If the composition reads multiple stores/queries or combines
-  several product concerns, put it behind a derived hook instead.
-- Components may own local presentational state that only their subtree needs.
-- If a component has real computation in `useMemo`, move the computation into a
-  derived hook or `lib/domain` helper.
-- If a component defines several callbacks that coordinate stores, query
-  invalidation, navigation, or API calls, move that orchestration into a
-  workflow hook.
-- Use error boundaries around major sections so one crash does not kill the
-  entire app.
-
-Allowed component logic:
-
-- choosing which child component to render from hook-provided state
-- tiny local UI callbacks such as `setOpen(false)` or forwarding an event to a
-  prop callback
-- local-only measurement, hover, drag, focus, and menu state
-- simple formatting that is truly local and not a repeated product rule
-- small calls to pure presentation/domain helpers for local render metadata
+- Components may render, call hooks, forward callbacks, and own local
+  presentation state for their subtree.
+- Components must not fetch, invalidate queries, construct clients, call raw
+  Tauri/Cloud/AnyHarness helpers, coordinate multi-step workflows, or own
+  reusable product rules.
+- Product conditions reused across components belong in `lib/domain/**` or
+  `apps/packages/product-domain/**`.
+- A component callback that coordinates stores, queries, navigation, or remote
+  mutations belongs in a workflow hook.
 
 Red flags:
 
-- raw cloud, AnyHarness, or Tauri calls
-- `queryClient.invalidateQueries`
-- multiple store setters in one event handler
-- duplicated product conditions across components
+- raw Cloud, AnyHarness, MCP, or Tauri calls
+- `queryClient.invalidateQueries` or direct query-key construction
+- multiple store setters in one component callback
+- repeated status-to-label/tone/icon maps
 - non-trivial `useMemo` or `useEffect`
-- inline status-to-label/tone/icon maps
-- callbacks that read like workflows
-- imperative UI engine setup, subscriptions, or cleanup, such as xterm,
-  Monaco, canvas, media players, or map engines
-- async mutations, file parsing, sorting/filtering product models, or
-  multi-step state transitions
+- async mutations, file parsing, product sorting/filtering, or multi-step state
+  transitions
 
 ## Folder Shape
 
-Organize product components by domain, surface, then role by default:
-
-```text
-components/
-  ui/
-    Button.tsx
-    ConfirmationDialog.tsx
-    ModalShell.tsx
-  workspace/
-    shell/
-      topbar/
-      sidebar/
-    chat/
-      input/
-      transcript/
-    git/
-  settings/
-    panes/
-```
-
-Default path:
+Organize app product components by domain, surface, then role:
 
 ```text
 components/<domain>/<surface>/<role>/<Component>.tsx
 ```
 
-Use fewer levels only when the domain is genuinely small. Domain folders answer
-"what product area owns this?" Surface folders answer "where does this render?"
-Role folders answer "what part of the surface is this?"
+Use fewer levels only when the domain is small. Domain answers "what product
+area owns this?" Surface answers "where does this render?" Role answers "what
+part of the surface is this?"
 
-Examples:
+Rules:
 
-```text
-components/workspace/chat/input/ChatInput.tsx
-components/workspace/chat/transcript/MessageList.tsx
-components/workspace/shell/topbar/TopBar.tsx
-components/settings/panes/cloud/CloudPane.tsx
-```
-
-Avoid new root buckets like `modals`, `panels`, `sidebar`, or `topbar`.
-Domain-aware dialogs, panels, sidebars, and toolbars stay inside their owning
-product area (under the hoo  using the components from the `ui` folder for shared UI structure for modals, buttons, etc.)
-
-Folder hygiene:
-
-- A top-level `components/<domain>/` folder should represent a real product
-  area, not a UI shape or transport boundary.
-- Single-file folders are usually not worth it. Keep the file in its parent
-  unless the folder is clearly about to hold a cohesive surface/role.
-- Pick one shape per parent. A folder should not mix many direct component
-  files with some nested role folders unless the direct files are the surface
-  entrypoints.
-- Avoid `shared/` and `common/` inside surfaces. Reuse moves up to
-  `components/ui/**` for generic primitives or to a domain root when it remains
-  product-aware.
+- Top-level `components/<domain>/` folders are product areas, not UI shapes or
+  transport boundaries.
+- Avoid root buckets like `modals`, `panels`, `sidebar`, `topbar`, `shared`, or
+  `common`.
+- Single-file folders are usually noise unless the folder is the start of a
+  cohesive surface or role.
+- Pick one shape per parent. Do not mix many direct component files with nested
+  role folders unless the direct files are surface entrypoints.
 - When a flat component folder grows past roughly ten files, introduce
-  surface/role folders before adding more unrelated components.
-
-## UI Primitives
-
-- Put Desktop-only foundational primitives and shells in
-  `desktop/src/components/ui/**`.
-- Put cross-client DOM primitives in `packages/ui/**` only when they are useful
-  to both Desktop and Web and do not import `@/`, Tauri APIs, stores, product
-  hooks, access helpers, or Desktop overlay/runtime mechanics.
-- Put cross-client Desktop/Web product components in `packages/product-ui/**`
-  only when they accept data and callbacks as props and do not construct SDK
-  clients, call app access helpers, or own query/mutation wiring.
-- Web product surfaces should be controllers over `packages/product-ui/**`.
-  `web/src/components/**` may map cloud data, fixture data, route params, auth
-  state, and callbacks into shared view models, but it should not define
-  product visual rows, cards, banners, sidebars, settings panes, or chat
-  surfaces locally.
-- Desktop product surfaces should use the same `packages/product-ui/**`
-  components whenever Web needs the surface too. Desktop keeps the controller:
-  stores, hooks, AnyHarness/Tauri/cloud access, navigation, native menus, and
-  workflow callbacks stay in `desktop/src/**`.
-- Do not promote product-aware components into `components/ui/**`.
-- Do not render raw `<button>`, `<input>`, `<label>`, `<select>`, or
-  `<textarea>` outside approved primitives in `components/ui/**`.
-- Reusable icons belong in `components/ui/icons.tsx`, not inline inside
-  feature components.
-- `packages/ui/**` exports concrete subpaths such as
-  `@proliferate/ui/primitives/Button`; do not add barrel imports.
-- `packages/product-ui/**` follows the same concrete subpath rule for shared
-  product components, such as `@proliferate/product-ui/auth/AuthLayout`.
-- Preserve UI behavior and layout unless an explicit redesign is requested.
-- Product copy should come from `copy/**` or a domain/presentation helper when
-  it is reused or conditional.
-
-## Component Patterns
-
-- Functions flow down; events flow up through callbacks.
-- Push state down. Lift state only when siblings need to share it.
-- Split components at data boundaries: if a child needs guarded data, make the
-  guard the parent and the data consumer the child.
-- Use `React.memo` only when props are reference-stable and the component
-  demonstrably re-renders due to parent state churn.
+  surface/role folders before adding unrelated components.
 - Component files use `PascalCase.tsx`.
-- Do not put `.ts` files under `components/**`. Static metadata, copy,
-  config, and pure presentation helpers belong in `config/**`, `copy/**`, or
+- Do not put `.ts` files under `components/**`. Static metadata, copy, config,
+  and pure presentation helpers belong in `config/**`, `copy/**`, or
   `lib/domain/**`.
-- Component names should describe the product surface or UI primitive they own.
-- Avoid generic names like `Panel`, `Modal`, `Content`, or `Row` unless the
-  folder path already makes the ownership unambiguous.
 
-## Imperative UI Engines
+## Shared UI
 
-Components may render the host element for imperative UI engines, such as
-xterm, Monaco, canvas, media players, or map engines. The setup and lifecycle
-for those engines belongs in hooks:
+`apps/packages/ui/**` is the only DOM primitive layer.
 
-```text
-components/workspace/terminals/TerminalViewport.tsx
-hooks/terminals/lifecycle/use-xterm-viewport.ts
-hooks/terminals/lifecycle/use-terminal-stream-replay.ts
-```
+Hard invariant: do not define DOM primitive components anywhere else.
 
-The component should provide refs, props, and render shell. The lifecycle hook
-should own dynamic imports, engine construction, subscriptions, observers,
-stream handles, event wiring, focus retries, and cleanup. Pure presentation
-rules, such as labels or replay-entry decisions, still belong in `lib/domain/**`
-when they can be expressed without DOM or engine instances.
+A primitive component is any generic reusable control, shell, or low-level UI
+building block: `Button`, `IconButton`, `Input`, `Textarea`, `Label`, `Select`,
+`Checkbox`, `Switch`, `Tabs`, `Menu`, `Popover`, `Tooltip`, `Dialog`, `Modal`,
+`Badge`, `Pill`, `Separator`, `ScrollArea`, layout shell, or a differently
+named component that wraps/restyles the same raw DOM control.
 
-File size guidance:
+New primitive definitions are forbidden in:
 
-- Prefer splitting product component files before roughly 300 lines.
-- Component files around 500 lines need a strong reason to stay whole.
-- Size alone is not the only signal. Split earlier when a component mixes
-  rendering with workflows, product-model construction, repeated presentation
-  maps, or non-trivial effects.
+- `apps/desktop/src/**`
+- `apps/web/src/**`
+- `apps/packages/product-ui/**`
+- `apps/packages/product-surfaces/**`
 
-## Settings
+Primitive definitions outside `apps/packages/ui/**` violate this standard. Do
+not add them, copy them, or create local variants beside them. Put the
+primitive in `apps/packages/ui/**`, add the needed variant/prop there, and
+update callsites to import it.
 
-- Settings routes use flat section ids.
-- Visual sidebar groups, such as Configuration, are headings only and must not
-  introduce nested route state.
-- Settings panes live under `components/settings/panes/**`; each pane owns one
-  product area.
-- Repo settings compose local and cloud repo sections inside the repo pane
-  instead of growing one mixed pane.
+### `apps/packages/ui`
+
+- Owns base DOM controls and layout primitives: buttons, icon buttons, inputs,
+  textareas, labels, selects, checkboxes, switches, tabs, menus, popovers,
+  dialogs, tooltips, badges, separators, scroll areas, and layout shells.
+- Must not import app code, SDK clients, stores, product hooks, access helpers,
+  Tauri APIs, React Native, routes, or product concepts.
+- Must expose variants/props for repeated visual treatments. Do not create a
+  one-off restyled button/input/dialog at the callsite.
+- Is the only place in DOM frontend code that should define the base visual
+  contract for raw controls.
+
+### Desktop, Web, `product-ui`, and `product-surfaces`
+
+- Must use primitives from `apps/packages/ui/**` for base controls.
+- Must not define or redefine primitive components, even with different names.
+- Must not render raw `<button>`, `<input>`, `<label>`, `<select>`, or
+  `<textarea>` outside `apps/packages/ui/**`.
+- May pass layout/sizing classes when the primitive API allows it, but must not
+  rebuild color, border, radius, typography, focus, disabled, or hover behavior
+  at the callsite.
+- If a needed primitive variant does not exist, add it to
+  `apps/packages/ui/**` and then consume it everywhere.
+
+### `apps/packages/product-ui`
+
+- Owns shared Desktop/Web product presentation under
+  `apps/packages/product-ui/src/<domain>/<surface>/**`.
+- Receives data and callbacks as props.
+- Composes `apps/packages/ui/**` primitives and
+  `apps/packages/product-domain/**` view models.
+- Must not import SDK clients, SDK React hooks, access helpers, app stores,
+  routes, Tauri, AnyHarness runtime wiring, or React Native.
+
+### `apps/packages/product-surfaces`
+
+- Owns shared connected Desktop/Web Cloud surfaces under
+  `apps/packages/product-surfaces/src/<domain>/<surface>/**`.
+- May use shared Cloud SDK React hooks and render `product-ui`.
+- Must still use `apps/packages/ui/**` for base controls.
+- Must not import Desktop/Web app internals, Tauri, local AnyHarness runtime
+  wiring, app stores, app routes, or React Native.
+
+### Mobile
+
+- Renders native components under `apps/mobile/src/components/**`.
+- May share `apps/packages/product-domain/**` view models and
+  `apps/packages/design/src/react-native.ts` tokens.
+- Must not import DOM packages: `ui`, `product-ui`, or `product-surfaces`.
+
+Use concrete package subpaths such as `@proliferate/ui/primitives/Button` or
+`@proliferate/product-ui/settings/account/AccountPane`; do not add barrels.

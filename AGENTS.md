@@ -64,7 +64,7 @@ at the start of the task, not halfway through implementation.
 
 ## Area Read Order
 
-### Frontend (`desktop/src/**`)
+### Frontend (`apps/desktop/src/**`, `apps/web/src/**`, `apps/mobile/src/**`, `apps/packages/**`)
 
 1. `docs/frontend/README.md`
 2. The focused frontend doc for the layer being changed:
@@ -75,6 +75,9 @@ at the start of the task, not halfway through implementation.
    - `docs/frontend/guides/config.md`
    - `docs/frontend/guides/copy.md`
    - `docs/frontend/guides/access.md`
+   - `docs/frontend/packages/README.md` for shared frontend packages, package
+     dependency direction, shared product rules, product UI, or connected
+     product surfaces
 3. Specialized docs when relevant:
    - `docs/frontend/guides/styling.md` for styling, primitives, tokens, or
      theme usage
