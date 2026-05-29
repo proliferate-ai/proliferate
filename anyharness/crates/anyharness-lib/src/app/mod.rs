@@ -9,6 +9,7 @@ use crate::domains::agents::auth_config::{AgentAuthConfigService, AgentAuthConfi
 use crate::domains::agents::model_registry::service::DynamicModelRegistryService;
 use crate::domains::agents::model_registry::store::DynamicModelRegistryStore;
 use crate::domains::agents::reconcile::execution::AgentReconcileService;
+use crate::domains::agents::runtime::AgentRuntime;
 use crate::domains::agents::seed::AgentSeedStore;
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
 use crate::domains::cowork::delegation::service::CoworkDelegationService;
@@ -71,7 +72,9 @@ use crate::workspaces::retention_policy::WorktreeRetentionPolicyStore;
 use crate::workspaces::retire_preflight::RetirePreflightChecker;
 use crate::workspaces::runtime::WorkspaceRuntime;
 use crate::workspaces::service::WorkspaceService;
+use crate::workspaces::setup_runtime::WorkspaceSetupRuntime;
 use crate::workspaces::store::WorkspaceStore;
+use crate::workspaces::worktree_runtime::WorkspaceWorktreeRuntime;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppStateInitError {
@@ -94,12 +97,15 @@ pub struct AppState {
     pub bearer_token: Option<String>,
     pub auth_manager: AuthManager,
     pub agent_seed_store: AgentSeedStore,
+    pub agent_runtime: Arc<AgentRuntime>,
     pub agent_auth_config_service: Arc<AgentAuthConfigService>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
     pub dynamic_model_registry_service: Arc<DynamicModelRegistryService>,
     pub runtime_config_service: Arc<RuntimeConfigService>,
     pub repo_root_service: Arc<RepoRootService>,
     pub workspace_runtime: Arc<WorkspaceRuntime>,
+    pub workspace_setup_runtime: Arc<WorkspaceSetupRuntime>,
+    pub workspace_worktree_runtime: Arc<WorkspaceWorktreeRuntime>,
     pub files_runtime: Arc<WorkspaceFilesRuntime>,
     pub process_service: Arc<ProcessService>,
     pub workspace_file_search_cache: Arc<WorkspaceFileSearchCache>,
@@ -153,6 +159,11 @@ impl AppState {
             runtime_home.clone(),
         ));
         let agent_reconcile_service = Arc::new(AgentReconcileService::new());
+        let agent_runtime = Arc::new(AgentRuntime::new(
+            runtime_home.clone(),
+            agent_reconcile_service.clone(),
+            agent_seed_store.clone(),
+        ));
         let agent_auth_config_service = Arc::new(AgentAuthConfigService::new(
             AgentAuthConfigStore::new(db.clone()),
             session_data_cipher.clone(),
@@ -207,6 +218,12 @@ impl AppState {
             SessionStore::new(db.clone()),
             WorkspaceAccessStore::new(db.clone()),
             terminal_service.clone(),
+        ));
+        let workspace_setup_runtime = Arc::new(WorkspaceSetupRuntime::new(
+            workspace_runtime.clone(),
+            terminal_service.clone(),
+            workspace_access_gate.clone(),
+            workspace_operation_gate.clone(),
         ));
         let session_link_service = SessionLinkService::new(
             SessionLinkStore::new(db.clone()),
@@ -317,6 +334,11 @@ impl AppState {
             checkout_deletion_gate.clone(),
             runtime_home.clone(),
         ));
+        let workspace_worktree_runtime = Arc::new(WorkspaceWorktreeRuntime::new(
+            workspace_runtime.clone(),
+            workspace_setup_runtime.clone(),
+            workspace_retention_service.clone(),
+        ));
         let cowork_runtime = Arc::new(CoworkRuntime::new(
             (*cowork_service).clone(),
             cowork_delegation_service,
@@ -411,12 +433,15 @@ impl AppState {
             bearer_token,
             auth_manager,
             agent_seed_store,
+            agent_runtime,
             agent_auth_config_service,
             agent_reconcile_service,
             dynamic_model_registry_service,
             runtime_config_service,
             repo_root_service,
             workspace_runtime,
+            workspace_setup_runtime,
+            workspace_worktree_runtime,
             files_runtime,
             process_service,
             workspace_file_search_cache,

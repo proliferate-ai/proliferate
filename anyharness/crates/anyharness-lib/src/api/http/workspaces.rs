@@ -39,6 +39,10 @@ use crate::workspaces::operation_gate::WorkspaceOperationKind;
 use crate::workspaces::purge::WorkspacePurgeServiceOutcome;
 use crate::workspaces::retire_preflight::RetirePreflightMode;
 use crate::workspaces::runtime::WorkspaceResolution;
+use crate::workspaces::setup_runtime::{StartWorkspaceSetupInput, WorkspaceSetupError};
+use crate::workspaces::worktree_runtime::{
+    CreateWorktreeWorkflowError, CreateWorktreeWorkflowInput,
+};
 
 #[utoipa::path(
     post,
@@ -127,17 +131,15 @@ pub async fn create_worktree(
     let latency = LatencyRequestContext::from_headers(&headers);
     let latency_fields = latency_trace_fields(latency.as_ref());
     let started = Instant::now();
-    let workspace_runtime = state.workspace_runtime.clone();
     let repo_root_id = req.repo_root_id;
     let target_path = req.target_path;
     let new_branch_name = req.new_branch_name;
     let base_branch = req.base_branch.clone();
-    let setup_script = req.setup_script.clone();
+    let setup_script = req.setup_script;
     let origin = request_origin_or_api_default(req.origin, "create_worktree");
     let creator_context = req
         .creator_context
         .map(WorkspaceCreatorContext::from_contract);
-    let repo_root_id_for_task = repo_root_id.clone();
     let has_setup_script = setup_script
         .as_deref()
         .map(str::trim)
@@ -158,60 +160,26 @@ pub async fn create_worktree(
         .assert_can_mutate_for_repo_root(&repo_root_id)
         .map_err(map_access_error)?;
 
-    let result = run_blocking("worktree", {
-        let base_branch = base_branch.clone();
-        move || {
-            workspace_runtime.create_worktree_with_surface(
-                &repo_root_id_for_task,
-                &target_path,
-                &new_branch_name,
-                base_branch.as_deref(),
-                None,
-                "standard",
-                origin,
-                creator_context,
-            )
-        }
-    })
-    .await?
-    .map_err(|e| ApiError::bad_request(e.to_string(), "WORKTREE_CREATE_FAILED"))?;
-
-    if let Some(script) = setup_script
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        let _lease = state
-            .workspace_operation_gate
-            .acquire_shared(&result.workspace.id, WorkspaceOperationKind::SetupCommand)
-            .await;
-        let workspace_runtime_for_env = state.workspace_runtime.clone();
-        let env_vars = tokio::task::spawn_blocking({
-            let record = result.workspace.clone();
-            let base_branch = base_branch.clone();
-            move || workspace_runtime_for_env.build_workspace_env(&record, base_branch.as_deref())
+    let result = state
+        .workspace_worktree_runtime
+        .create_worktree(CreateWorktreeWorkflowInput {
+            repo_root_id: repo_root_id.clone(),
+            target_path,
+            new_branch_name,
+            base_branch: base_branch.clone(),
+            setup_script,
+            surface: "standard".to_string(),
+            origin,
+            creator_context,
         })
         .await
-        .map_err(|e| ApiError::internal(format!("env build task failed: {e}")))?
-        .map_err(|e| ApiError::internal(e.to_string()))?;
-
-        state
-            .terminal_service
-            .start_setup_command(
-                &result.workspace.id,
-                &result.workspace.path,
-                script.to_string(),
-                env_vars,
-                None,
-            )
-            .await
-            .map_err(|e| ApiError::internal(e.to_string()))?;
-    }
+        .map_err(map_create_worktree_error)?;
 
     tracing::info!(
-        workspace_id = %result.workspace.id,
+        workspace_id = %result.worktree.workspace.id,
         repo_root_id = %repo_root_id,
         has_setup_script,
+        setup_started = result.setup_started,
         elapsed_ms = started.elapsed().as_millis(),
         flow_id = latency_fields.flow_id,
         flow_kind = latency_fields.flow_kind,
@@ -220,13 +188,8 @@ pub async fn create_worktree(
         "[workspace-latency] workspace.http.worktree.completed"
     );
 
-    state
-        .workspace_retention_service
-        .clone()
-        .spawn_post_create_pass(result.workspace.id.clone());
-
     Ok(Json(CreateWorktreeWorkspaceResponse {
-        workspace: workspace_to_contract(&state, result.workspace).await?,
+        workspace: workspace_to_contract(&state, result.worktree.workspace).await?,
         setup_script: None,
     }))
 }
@@ -914,9 +877,9 @@ pub async fn get_setup_status(
     Path(workspace_id): Path<String>,
 ) -> Result<Json<GetSetupStatusResponse>, ApiError> {
     let run = state
-        .terminal_service
+        .workspace_setup_runtime
         .latest_setup_run(&workspace_id)
-        .map_err(|e| ApiError::internal(e.to_string()))?
+        .map_err(map_workspace_setup_error)?
         .ok_or_else(|| {
             ApiError::not_found(
                 "No setup execution found for this workspace".to_string(),
@@ -942,20 +905,12 @@ pub async fn rerun_setup(
     State(state): State<AppState>,
     Path(workspace_id): Path<String>,
 ) -> Result<Json<GetSetupStatusResponse>, ApiError> {
-    assert_workspace_mutable(&state, &workspace_id)?;
-    let previous = state
-        .terminal_service
-        .latest_setup_run(&workspace_id)
-        .map_err(|e| ApiError::internal(e.to_string()))?
-        .ok_or_else(|| {
-            ApiError::not_found(
-                "No previous setup execution found for this workspace".to_string(),
-                "SETUP_NOT_FOUND",
-            )
-        })?;
-
-    let snapshot = start_setup_for_workspace(&state, workspace_id, previous.command, None).await?;
-    Ok(Json(snapshot))
+    let run = state
+        .workspace_setup_runtime
+        .rerun_setup(workspace_id)
+        .await
+        .map_err(map_workspace_setup_error)?;
+    Ok(Json(setup_command_run_to_contract(run)))
 }
 
 #[utoipa::path(
@@ -975,58 +930,48 @@ pub async fn start_setup(
     Path(workspace_id): Path<String>,
     Json(req): Json<StartWorkspaceSetupRequest>,
 ) -> Result<Json<GetSetupStatusResponse>, ApiError> {
-    assert_workspace_mutable(&state, &workspace_id)?;
-    let command = req.command.trim().to_string();
-    if command.is_empty() {
-        return Err(ApiError::bad_request(
-            "Setup command must not be empty.",
-            "INVALID_SETUP_COMMAND",
-        ));
-    }
-
-    let snapshot = start_setup_for_workspace(&state, workspace_id, command, req.base_ref).await?;
-    Ok(Json(snapshot))
-}
-
-async fn start_setup_for_workspace(
-    state: &AppState,
-    workspace_id: String,
-    command: String,
-    base_ref: Option<String>,
-) -> Result<GetSetupStatusResponse, ApiError> {
-    let _lease = state
-        .workspace_operation_gate
-        .acquire_shared(&workspace_id, WorkspaceOperationKind::SetupCommand)
-        .await;
-    assert_workspace_mutable(state, &workspace_id)?;
-    let workspace_runtime = state.workspace_runtime.clone();
-    let ws_id = workspace_id.clone();
-    let record = run_blocking("workspace lookup", move || {
-        workspace_runtime.get_workspace(&ws_id)
-    })
-    .await?
-    .map_err(|e| ApiError::internal(e.to_string()))?
-    .ok_or_else(|| ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND"))?;
-
-    let env_vars = {
-        let workspace_runtime = state.workspace_runtime.clone();
-        let rec = record.clone();
-        let base_ref = base_ref.clone();
-        tokio::task::spawn_blocking(move || {
-            workspace_runtime.build_workspace_env(&rec, base_ref.as_deref())
+    let run = state
+        .workspace_setup_runtime
+        .start_setup(StartWorkspaceSetupInput {
+            workspace_id,
+            command: req.command,
+            base_ref: req.base_ref,
         })
         .await
-        .map_err(|e| ApiError::internal(format!("env build failed: {e}")))?
-        .map_err(|e| ApiError::internal(e.to_string()))?
-    };
+        .map_err(map_workspace_setup_error)?;
+    Ok(Json(setup_command_run_to_contract(run)))
+}
 
-    let run = state
-        .terminal_service
-        .start_setup_command(&workspace_id, &record.path, command, env_vars, None)
-        .await
-        .map_err(|e| ApiError::internal(e.to_string()))?;
+fn map_create_worktree_error(error: CreateWorktreeWorkflowError) -> ApiError {
+    match error {
+        CreateWorktreeWorkflowError::CreateTaskFailed(error) => {
+            ApiError::internal(format!("worktree task failed: {error}"))
+        }
+        CreateWorktreeWorkflowError::Create(error) => {
+            ApiError::bad_request(error.to_string(), "WORKTREE_CREATE_FAILED")
+        }
+        CreateWorktreeWorkflowError::Setup(error) => map_workspace_setup_error(error),
+    }
+}
 
-    Ok(setup_command_run_to_contract(run))
+fn map_workspace_setup_error(error: WorkspaceSetupError) -> ApiError {
+    match error {
+        WorkspaceSetupError::InvalidCommand => {
+            ApiError::bad_request("Setup command must not be empty.", "INVALID_SETUP_COMMAND")
+        }
+        WorkspaceSetupError::WorkspaceNotFound(_) => {
+            ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
+        }
+        WorkspaceSetupError::SetupNotFound => ApiError::not_found(
+            "No previous setup execution found for this workspace".to_string(),
+            "SETUP_NOT_FOUND",
+        ),
+        WorkspaceSetupError::Access(error) => map_access_error(error),
+        WorkspaceSetupError::TaskFailed(error) => {
+            ApiError::internal(format!("workspace setup task failed: {error}"))
+        }
+        WorkspaceSetupError::Unexpected(error) => ApiError::internal(error.to_string()),
+    }
 }
 
 async fn resolve_workspace_response_to_contract(

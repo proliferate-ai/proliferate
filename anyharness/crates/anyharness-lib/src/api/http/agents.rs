@@ -11,18 +11,17 @@ use axum::{
 };
 
 use crate::app::AppState;
-use crate::domains::agents::installer::{
-    self, InstallError, InstallOptions, InstalledArtifactResult,
-};
+use crate::domains::agents::installer::{InstallError, InstalledArtifactResult};
 use crate::domains::agents::model::*;
-use crate::domains::agents::readiness::resolver::resolve_agent;
 use crate::domains::agents::reconcile::execution::{
     AgentReconcileJobSnapshot, AgentReconcileJobStatus,
 };
 use crate::domains::agents::reconcile::{
     AgentReconcileOutcome, AgentReconcileResult as InternalAgentReconcileResult,
 };
-use crate::domains::agents::registry::built_in_registry;
+use crate::domains::agents::runtime::{
+    AgentInstallRequest as DomainInstallAgentRequest, AgentRuntimeError,
+};
 
 type ProblemResponse = (StatusCode, Json<ProblemDetails>);
 
@@ -57,6 +56,25 @@ fn agent_not_found(kind: &str) -> ProblemResponse {
     )
 }
 
+fn agent_runtime_error_to_problem(error: AgentRuntimeError) -> ProblemResponse {
+    match error {
+        AgentRuntimeError::NotFound(kind) => agent_not_found(&kind),
+        AgentRuntimeError::LoginNotSupported(kind) => problem(
+            400,
+            "Login not supported",
+            Some(format!("Agent {kind} does not support native login")),
+            Some("LOGIN_NOT_SUPPORTED"),
+        ),
+        AgentRuntimeError::InstallTaskFailed(error) => problem(
+            500,
+            "Install failed",
+            Some(format!("Agent install task failed: {error}")),
+            Some("INSTALL_FAILED"),
+        ),
+        AgentRuntimeError::Install(error) => install_error_to_problem(error),
+    }
+}
+
 #[utoipa::path(
     get,
     path = "/v1/agents",
@@ -66,16 +84,11 @@ fn agent_not_found(kind: &str) -> ProblemResponse {
     tag = "agents"
 )]
 pub async fn list_agents(State(state): State<AppState>) -> Json<Vec<AgentSummary>> {
-    let registry = built_in_registry();
-    let reconcile_snapshot = state.agent_reconcile_service.snapshot().await;
-    let summaries: Vec<AgentSummary> = registry
+    let snapshot = state.agent_runtime.list_agents().await;
+    let summaries: Vec<AgentSummary> = snapshot
+        .agents
         .iter()
-        .map(|desc| {
-            to_summary(
-                &resolve_agent(desc, &state.runtime_home),
-                Some(&reconcile_snapshot),
-            )
-        })
+        .map(|agent| to_summary(agent, Some(&snapshot.reconcile_snapshot)))
         .collect();
     Json(summaries)
 }
@@ -94,16 +107,15 @@ pub async fn get_agent(
     State(state): State<AppState>,
     Path(kind): Path<String>,
 ) -> Result<Json<AgentSummary>, ProblemResponse> {
-    let registry = built_in_registry();
-    let desc = registry.iter().find(|d| d.kind.as_str() == kind);
-    let reconcile_snapshot = state.agent_reconcile_service.snapshot().await;
-    match desc {
-        Some(desc) => Ok(Json(to_summary(
-            &resolve_agent(desc, &state.runtime_home),
-            Some(&reconcile_snapshot),
-        ))),
-        None => Err(agent_not_found(&kind)),
-    }
+    let snapshot = state
+        .agent_runtime
+        .get_agent(&kind)
+        .await
+        .map_err(agent_runtime_error_to_problem)?;
+    Ok(Json(to_summary(
+        &snapshot.agent,
+        Some(&snapshot.reconcile_snapshot),
+    )))
 }
 
 #[utoipa::path(
@@ -124,82 +136,23 @@ pub async fn install_agent(
     Path(kind): Path<String>,
     Json(req): Json<InstallAgentRequest>,
 ) -> Result<Json<InstallAgentResponse>, ProblemResponse> {
-    let registry = built_in_registry();
-    let desc = registry.iter().find(|d| d.kind.as_str() == kind);
-    let desc = match desc {
-        Some(d) => d,
-        None => return Err(agent_not_found(&kind)),
-    };
-
-    let options = InstallOptions {
-        reinstall: req.reinstall,
-        native_version: req.native_version,
-        agent_process_version: req.agent_process_version,
-    };
-
-    tracing::info!(
-        agent = %kind,
-        reinstall = options.reinstall,
-        native_version = ?options.native_version,
-        agent_process_version = ?options.agent_process_version,
-        runtime_home = %state.runtime_home.display(),
-        "installing agent"
-    );
-
-    let install_runtime_home = state.runtime_home.clone();
-    let install_desc = desc.clone();
-    let install_options = options.clone();
-    let installed_artifacts = tokio::task::spawn_blocking(move || {
-        installer::install_agent(&install_desc, &install_runtime_home, &install_options)
-    })
-    .await
-    .map_err(|error| {
-        tracing::error!(
-            agent = %kind,
-            reinstall = options.reinstall,
-            native_version = ?options.native_version,
-            agent_process_version = ?options.agent_process_version,
-            runtime_home = %state.runtime_home.display(),
-            error = %error,
-            "agent install task failed"
-        );
-        problem(
-            500,
-            "Install failed",
-            Some(format!("Agent install task failed: {error}")),
-            Some("INSTALL_FAILED"),
+    let outcome = state
+        .agent_runtime
+        .install_agent(
+            &kind,
+            DomainInstallAgentRequest {
+                reinstall: req.reinstall,
+                native_version: req.native_version,
+                agent_process_version: req.agent_process_version,
+            },
         )
-    })?
-    .map_err(|error| {
-        tracing::error!(
-            agent = %kind,
-            reinstall = options.reinstall,
-            native_version = ?options.native_version,
-            agent_process_version = ?options.agent_process_version,
-            runtime_home = %state.runtime_home.display(),
-            error = %error,
-            "agent install failed"
-        );
-        install_error_to_problem(error)
-    })?;
-    state
-        .agent_seed_store
-        .refresh_from_state(&state.runtime_home);
-    let resolved = resolve_agent(desc, &state.runtime_home);
-    let summary = to_summary(&resolved, None);
-    let already_installed = installed_artifacts.is_empty();
-
-    tracing::info!(
-        agent = %kind,
-        already_installed,
-        installed_artifact_count = installed_artifacts.len(),
-        "agent install completed"
-    );
-
+        .await
+        .map_err(agent_runtime_error_to_problem)?;
     Ok(Json(InstallAgentResponse {
-        agent: summary,
-        already_installed,
-        installed_artifacts: installed_artifacts
+        agent: to_summary(&outcome.agent, None),
+        already_installed: outcome.already_installed,
+        installed_artifacts: outcome
+            .installed_artifacts
             .iter()
             .map(to_installed_artifact_status)
             .collect(),
@@ -223,51 +176,22 @@ pub async fn start_agent_login(
     Path(kind): Path<String>,
     Json(_req): Json<StartAgentLoginRequest>,
 ) -> Result<Json<StartAgentLoginResponse>, ProblemResponse> {
-    let registry = built_in_registry();
-    let desc = registry.iter().find(|d| d.kind.as_str() == kind);
-    let desc = match desc {
-        Some(d) => d,
-        None => return Err(agent_not_found(&kind)),
-    };
-
-    match &desc.auth.login {
-        Some(login) => Ok(Json(StartAgentLoginResponse {
-            kind: desc.kind.as_str().into(),
-            label: login.label.clone(),
-            mode: "terminal_command".into(),
-            command: managed_login_command(desc, &state.runtime_home).unwrap_or_else(|| {
-                LoginCommand {
-                    program: login.command.program.clone(),
-                    args: login.command.args.clone(),
-                }
-            }),
-            reuses_user_state: login.reuses_user_state,
-            message: login.message.clone(),
-        })),
-        None => Err(problem(
-            400,
-            "Login not supported",
-            Some(format!("Agent {kind} does not support native login")),
-            Some("LOGIN_NOT_SUPPORTED"),
-        )),
-    }
-}
-
-fn managed_login_command(
-    desc: &AgentDescriptor,
-    runtime_home: &std::path::Path,
-) -> Option<LoginCommand> {
-    let login = desc.auth.login.as_ref()?;
-    let resolved = resolve_agent(desc, runtime_home);
-    let native = resolved.native.as_ref()?;
-    if native.source.as_deref() == Some("path") {
-        return None;
-    }
-    let path = native.path.as_ref()?;
-    Some(LoginCommand {
-        program: path.display().to_string(),
-        args: login.command.args.clone(),
-    })
+    let login = state
+        .agent_runtime
+        .start_login(&kind)
+        .await
+        .map_err(agent_runtime_error_to_problem)?;
+    Ok(Json(StartAgentLoginResponse {
+        kind: login.kind,
+        label: login.label,
+        mode: "terminal_command".into(),
+        command: LoginCommand {
+            program: login.command.program,
+            args: login.command.args,
+        },
+        reuses_user_state: login.reuses_user_state,
+        message: login.message,
+    }))
 }
 
 #[utoipa::path(
@@ -279,7 +203,7 @@ fn managed_login_command(
     tag = "agents"
 )]
 pub async fn get_reconcile_status(State(state): State<AppState>) -> Json<ReconcileAgentsResponse> {
-    let snapshot = state.agent_reconcile_service.snapshot().await;
+    let snapshot = state.agent_runtime.reconcile_status().await;
     Json(reconcile_snapshot_to_contract(&snapshot))
 }
 
@@ -296,15 +220,7 @@ pub async fn reconcile_agents(
     State(state): State<AppState>,
     Json(req): Json<ReconcileAgentsRequest>,
 ) -> (StatusCode, Json<ReconcileAgentsResponse>) {
-    let snapshot = state
-        .agent_reconcile_service
-        .start_or_get(
-            built_in_registry(),
-            state.runtime_home.clone(),
-            req.reinstall,
-            Some(state.agent_seed_store.clone()),
-        )
-        .await;
+    let snapshot = state.agent_runtime.start_reconcile(req.reinstall).await;
     (
         StatusCode::ACCEPTED,
         Json(reconcile_snapshot_to_contract(&snapshot)),
