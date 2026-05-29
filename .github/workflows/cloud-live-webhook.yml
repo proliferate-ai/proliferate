@@ -11,6 +11,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   DATABASE_URL: postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate
   LOCAL_PGHOST: 127.0.0.1
   LOCAL_PGPORT: 5432

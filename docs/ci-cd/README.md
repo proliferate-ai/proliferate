@@ -74,9 +74,12 @@ vercel.json                  # web app deploy config (Vercel project proliferate
   `installers.json`, not the Tauri updater `latest.json` feed.
 - Only packaged desktop builds should auto-check for updates. Development builds
   should remain updater-free.
-- `ci.yml` is the repo-wide merge gate. It must include the checks needed before
-  staging can deploy, including server lint/tests.
-- `server-ci.yml` remains the tag-gated self-hosted server image/release-asset
+- `ci.yml` is the repo-wide merge gate for repo shape, Rust, SDK, frontend,
+  mobile, shared-package, and workflow-config checks.
+- `server-ci.yml` is the canonical server validation lane. Staging waits for a
+  matching `Server CI` run when one exists for the same SHA, so server changes do
+  not deploy before server lint/tests finish.
+- `server-ci.yml` also remains the tag-gated self-hosted server image/release-asset
   workflow. Hosted ECS rollout belongs to the deploy spine, not this workflow.
 - Staging deploys are driven by `deploy-staging.yml` after `CI` succeeds on
   `main`. Production deploys are driven by protected manual promotion through
@@ -88,6 +91,9 @@ vercel.json                  # web app deploy config (Vercel project proliferate
   explicit product change is requested.
 - PRs must use the repository release metadata standard before they are marked
   ready for review. Draft PRs are exempt until ready.
+- GitHub workflows opt into the Node 24 JavaScript action runtime with
+  `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`. Keep that env var on new workflows
+  so the June 2026 GitHub Actions runtime migration stays explicit and tested.
 
 ## 3. PR Metadata and Release Notes
 
@@ -193,13 +199,13 @@ Flow:
    - the Rust workspace with `cargo check` and `cargo test`
    - `@anyharness/sdk` generation and build
    - the desktop frontend build
-   - server catalog validation, Ruff, format, and deterministic pytest suites
-     against Postgres
    - mobile typecheck
    - web typecheck/build
    - shared frontend package typecheck/build/tests
 3. `.github/workflows/server-ci.yml` validates the server slice separately with:
+   - server catalog validation
    - Ruff
+   - format checks
    - deterministic pytest suites against Postgres
    - versioned GHCR image publishing only on `server-v*` tags
 4. Direct, non-provider E2B webhook handler coverage stays in
@@ -444,10 +450,12 @@ Hosted flow:
    - runs `alembic upgrade head` as a one-off Fargate task
    - rolls the ECS service
    - smokes `${API_URL}${API_HEALTH_PATH:-/api/health}`
-5. `Promote Production` is a manual protected workflow. It requires, by default,
-   a successful staging deploy for the exact SHA being promoted, then repeats
-   the same changed-surface deploy graph against production environment vars and
-   secrets.
+5. `Promote Production` is a manual workflow. Its plan/dry-run path is not
+   environment-protected, so production plans can be iterated quickly.
+6. Non-dry-run production deploy jobs use the protected `production`
+   environment. They require, by default, a successful staging deploy for the
+   exact SHA being promoted, then repeat the same changed-surface deploy graph
+   against production environment vars and secrets.
 
 Self-hosted/tag flow:
 

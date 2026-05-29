@@ -15,6 +15,9 @@ permissions:
   contents: read
   pull-requests: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   validate-pr-metadata:
     name: Validate PR title and labels

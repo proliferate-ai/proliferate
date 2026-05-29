@@ -31,10 +31,12 @@ concurrency:
   group: promote-production
   cancel-in-progress: false
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   plan:
     runs-on: ubuntu-latest
-    environment: production
     outputs:
       base_sha: ${{ steps.detect.outputs.base_sha }}
       head_sha: ${{ steps.detect.outputs.head_sha }}

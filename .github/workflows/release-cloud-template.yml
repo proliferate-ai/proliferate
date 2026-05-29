@@ -7,6 +7,7 @@ permissions:
   contents: read
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   CARGO_TERM_COLOR: always
   E2B_PUBLIC_TEMPLATE_FAMILY: ${{ vars.E2B_PUBLIC_TEMPLATE_FAMILY }}
   E2B_TEAM_ID: ${{ vars.E2B_TEAM_ID }}
