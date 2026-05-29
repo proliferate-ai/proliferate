@@ -235,7 +235,7 @@
   "scripts": {
     "build": "pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json",
     "typecheck": "pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json --noEmit",
-    "test": "pnpm --filter @proliferate/product-domain build && vitest run"
+    "test": "pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && vitest run"
   },
   "dependencies": {
     "@proliferate/product-domain": "workspace:*",
