@@ -1,8 +1,0 @@
-{
-  "name": "anyharness-e2b-scripts",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "e2b": "^2.0.0"
-  }
-}
