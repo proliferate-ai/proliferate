@@ -28,12 +28,29 @@
       "ios": {
         "image": "latest"
       }
+    },
+    "staging": {
+      "autoIncrement": true,
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "staging",
+        "EXPO_PUBLIC_PROLIFERATE_API_BASE_URL": "https://staging-app.proliferate.com/api",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      },
+      "ios": {
+        "image": "latest"
+      }
     }
   },
   "submit": {
     "production": {
       "ios": {
         "ascAppId": "6770219581"
+      }
+    },
+    "staging": {
+      "ios": {
+        "ascAppId": "6774573981"
       }
     }
   }
