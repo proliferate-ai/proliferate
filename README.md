@@ -53,6 +53,40 @@ sandboxes, automations, or team workflows.
 - Move work between local and cloud targets when the job needs a different
   runtime.
 
+## Supported Agents
+
+Run agents with their native CLIs, auth, tools, models, permissions, and
+transcript behavior.
+
+<table>
+  <tr>
+    <td align="center" width="120">
+      <img src="./apps/desktop/public/provider-icons/claude.svg" width="40" height="40" alt="Claude" /><br />
+      <strong>Claude Code</strong>
+    </td>
+    <td align="center" width="120">
+      <img src="./apps/desktop/public/provider-icons/codex.svg" width="40" height="40" alt="Codex" /><br />
+      <strong>Codex</strong>
+    </td>
+    <td align="center" width="120">
+      <img src="./apps/desktop/public/provider-icons/gemini.svg" width="40" height="40" alt="Gemini" /><br />
+      <strong>Gemini CLI</strong>
+    </td>
+    <td align="center" width="120">
+      <img src="./apps/desktop/public/provider-icons/opencode.png" width="40" height="40" alt="OpenCode" /><br />
+      <strong>OpenCode</strong>
+    </td>
+    <td align="center" width="120">
+      <img src="./apps/desktop/public/provider-icons/cursor.svg" width="40" height="40" alt="Cursor" /><br />
+      <strong>Cursor</strong>
+    </td>
+    <td align="center" width="120">
+      <img src="./apps/desktop/public/provider-icons/amp.svg" width="40" height="40" alt="Amp" /><br />
+      <strong>Amp</strong>
+    </td>
+  </tr>
+</table>
+
 ## Features
 
 | Feature | What it unlocks |
@@ -75,7 +109,7 @@ Download Proliferate from [proliferate.com](https://proliferate.com) or the
 [latest GitHub release](https://github.com/proliferate-ai/proliferate/releases/latest).
 
 <details>
-<summary>Run from source, develop locally, or self-host</summary>
+<summary>Run from source</summary>
 
 ### Run Locally From Source
 
@@ -116,7 +150,10 @@ make dev PROFILE=main
 See [dev profiles](./docs/reference/dev-profiles.md) for profile state, ports,
 generated Tauri config, and app labels.
 
-### Full Self-Hosting For Proliferate Cloud
+</details>
+
+<details>
+<summary>Full self-hosting for Proliferate Cloud</summary>
 
 Full self-hosted Proliferate Cloud deployments are available for teams. Reach
 out through [proliferate.com](https://proliferate.com) for access and deployment
@@ -124,48 +161,14 @@ support.
 
 </details>
 
-## Development Commands
-
-```bash
-make dev-local        # Desktop app with bundled local runtime
-make dev PROFILE=main # Runtime + server + desktop + local Postgres
-make dev-list         # List prepared and running dev profiles
-make sdk-build        # Generate and build the TypeScript SDK
-make desktop-build    # Type-check and build the desktop frontend
-make test             # Rust workspace tests
-make test-server      # Server tests
-make all              # Rust checks, boundary checks, and SDK build
-```
-
-## Architecture
-
-```text
-apps/desktop/        Tauri app and React desktop UI
-apps/web/            Cloud web client
-apps/mobile/         Mobile client
-anyharness/crates/   Rust runtime, sessions, workspaces, tools, git, SSE
-anyharness/sdk/      TypeScript client
-anyharness/sdk-react/ React hooks
-server/              FastAPI cloud control plane
-```
-
 ## Community
 
-Join the open source community on
-[GitHub Discussions](https://github.com/proliferate-ai/proliferate/discussions).
-File bugs and feature requests in
-[GitHub Issues](https://github.com/proliferate-ai/proliferate/issues), or reach
-us at [pablo@proliferate.com](mailto:pablo@proliferate.com).
+Join our open source community on [Discord](https://proliferate.com/discord)!
 
 ## Contributing
 
-Looking to contribute? Please check out the
-[Contribution Guide](./docs/README.md) first, then read the relevant area doc
-before changing code in that area.
-
-PR titles and labels must follow [CI/CD docs](./docs/ci-cd/README.md): use
-exactly one `release:*` label and at least one `area:*` label before marking a
-PR ready for review.
+Looking to contribute? Please check out the [Contribution Guide](./CONTRIBUTING.md)
+for more details.
 
 ## License
 
