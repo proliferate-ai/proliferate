@@ -108,6 +108,7 @@ jobs:
             > task-definition.raw.json
 
           jq -n \
+            --arg api_url "$API_URL" \
             --arg api_base "$API_BASE_URL" \
             --arg frontend "$WEB_URL" \
             --arg environment "$DEPLOY_ENVIRONMENT" \
@@ -115,6 +116,7 @@ jobs:
             --arg git "$GIT_SHA" \
             --arg release "proliferate-server@${GIT_SHA:0:12}" \
             '[
+              {"name":"API_URL","value":$api_url},
               {"name":"API_BASE_URL","value":$api_base},
               {"name":"FRONTEND_BASE_URL","value":$frontend},
               {"name":"API_PATH_PREFIX","value":"/api"},

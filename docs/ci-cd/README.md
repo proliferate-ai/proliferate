@@ -436,8 +436,8 @@ Hosted flow:
 3. If `server` changed, `_deploy-server.yml`:
    - builds and pushes an ECR image tagged by short SHA
    - renders a new ECS task definition from the live service task definition
-   - updates non-secret runtime environment such as `API_BASE_URL`, release SHA,
-     and E2B template ref
+   - updates non-secret runtime environment such as `API_URL`, `API_BASE_URL`,
+     release SHA, and E2B template ref
    - runs `alembic upgrade head` as a one-off Fargate task
    - rolls the ECS service
    - smokes `${API_URL}${API_HEALTH_PATH:-/api/health}`
