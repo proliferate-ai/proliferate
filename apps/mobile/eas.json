@@ -20,7 +20,6 @@
       }
     },
     "production": {
-      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_PROLIFERATE_API_BASE_URL": "https://app.proliferate.com/api",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
@@ -30,8 +29,17 @@
       }
     },
     "staging": {
-      "autoIncrement": true,
       "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "staging",
+        "EXPO_PUBLIC_PROLIFERATE_API_BASE_URL": "https://staging-app.proliferate.com/api",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      },
+      "ios": {
+        "image": "latest"
+      }
+    },
+    "staging-testflight": {
       "env": {
         "APP_VARIANT": "staging",
         "EXPO_PUBLIC_PROLIFERATE_API_BASE_URL": "https://staging-app.proliferate.com/api",
