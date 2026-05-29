@@ -17,14 +17,13 @@ import { routes } from "../../../config/routes";
 import { WebSidebarController } from "../navigation/WebSidebarController";
 
 const SIDEBAR_DOCKED_QUERY = "(min-width: 1024px)";
+const SIDEBAR_TRANSITION_MS = 220;
 
 export function WebAppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(() => (
-    typeof window === "undefined" || !window.matchMedia
-      ? true
-      : window.matchMedia(SIDEBAR_DOCKED_QUERY).matches
+    sidebarOpenFromViewport()
   ));
   const [sidebarRendered, setSidebarRendered] = useState(sidebarOpen);
   const [sidebarVisible, setSidebarVisible] = useState(sidebarOpen);
@@ -50,13 +49,25 @@ export function WebAppShell() {
   useEffect(() => {
     if (!sidebarOpen) {
       setSidebarVisible(false);
-      setSidebarRendered(false);
+      const timeout = window.setTimeout(
+        () => setSidebarRendered(false),
+        SIDEBAR_TRANSITION_MS,
+      );
+      return () => window.clearTimeout(timeout);
+    }
+
+    if (sidebarRendered) {
+      setSidebarVisible(true);
       return;
     }
 
+    setSidebarVisible(false);
     setSidebarRendered(true);
-    const frame = window.requestAnimationFrame(() => setSidebarVisible(true));
-    return () => window.cancelAnimationFrame(frame);
+    const visibleTimeout = window.setTimeout(
+      () => setSidebarVisible(true),
+      35,
+    );
+    return () => window.clearTimeout(visibleTimeout);
   }, [sidebarOpen]);
 
   return (
@@ -66,14 +77,15 @@ export function WebAppShell() {
           <button
             type="button"
             aria-label="Close sidebar"
-            className={`fixed inset-0 z-40 bg-background/55 backdrop-blur-[1px] transition-opacity duration-200 ease-out lg:hidden ${
+            className={`fixed inset-0 z-40 bg-background/55 backdrop-blur-[1px] transition-opacity duration-200 ease-out motion-reduce:transition-none lg:hidden ${
               sidebarVisible ? "opacity-100" : "opacity-0"
             }`}
             onClick={() => setSidebarOpen(false)}
           />
           <div
-            className={`fixed inset-y-0 left-0 z-50 transform-gpu transition-transform duration-200 ease-out lg:static lg:inset-auto lg:z-auto lg:h-full lg:transform-none lg:transition-none ${
-              sidebarVisible ? "translate-x-0" : "-translate-x-full"
+            data-sidebar-panel="expanded"
+            className={`web-sidebar-panel-slide-in fixed inset-y-0 left-0 z-50 transform-gpu shadow-2xl transition-[transform,opacity] duration-200 ease-out will-change-transform motion-reduce:transition-none lg:static lg:inset-auto lg:z-auto lg:h-full lg:shadow-none ${
+              sidebarVisible ? "translate-x-0 opacity-100" : "-translate-x-full opacity-0"
             }`}
           >
             <WebSidebarController onToggleSidebar={() => setSidebarOpen(false)} />
@@ -110,6 +122,12 @@ export function WebAppShell() {
       <Outlet />
     </AppShell>
   );
+}
+
+function sidebarOpenFromViewport() {
+  return typeof window === "undefined" || !window.matchMedia
+    ? true
+    : window.matchMedia(SIDEBAR_DOCKED_QUERY).matches;
 }
 
 interface CollapsedSidebarRailProps {
