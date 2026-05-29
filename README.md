@@ -17,7 +17,7 @@
   </picture>
 </p>
 
-<p><strong>The Local and Cloud Agent IDE (YC S25 🔸)</strong></p>
+<p><strong>The Local and Cloud Agent IDE</strong></p>
 
 <p>
   <a href="https://github.com/proliferate-ai/proliferate/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/proliferate-ai/proliferate?style=flat&amp;logo=github&amp;label=stars" /></a>
