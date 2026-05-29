@@ -101,18 +101,18 @@ permissions, and transcript behavior stay intact.
 
 | Feature | What it unlocks |
 | --- | --- |
-| [Workspaces](https://proliferate.com/docs/concepts/workspaces) | Isolate repository work in a local checkout, new worktree, or cloud workspace. |
-| [Agents](https://proliferate.com/docs/concepts/agents-and-harnesses) | Run Codex, Claude Code, Gemini CLI, OpenCode, Cursor, Amp, and more with native harness behavior intact. |
-| [Subagents](https://proliferate.com/docs/concepts/subagents) | Spawn focused helper agents for investigation, implementation, and review. |
-| [Code and plan review](https://proliferate.com/docs/concepts/review) | Use reviewer agents to check plans, diffs, risks, tests, and branch readiness. |
-| [Automations](https://proliferate.com/docs/concepts/automations) | Schedule repeated fixes, checks, reviews, reports, and handoffs. |
-| [Plugins](https://proliferate.com/docs/concepts/plugins) | Bundle skills, MCPs, and Proliferate capabilities into one session-scoped unit. |
-| [Computer Use](https://proliferate.com/docs/concepts/computer-use) | Let approved agents click, type, and navigate desktop apps when APIs are not enough. |
-| [Browser Use](https://proliferate.com/docs/concepts/browser-use) | Give agents scoped browser automation for forms, dashboards, OAuth flows, and web testing. |
-| [Artifacts](https://proliferate.com/docs/concepts/artifacts) | Render agent outputs like Markdown, HTML, SVG, and React components inline. |
-| [Cloud](https://proliferate.com/docs/concepts/cloud) | Run long-lived work away from your laptop in managed or self-hosted environments. |
-| [Mobile](https://proliferate.com/docs/concepts/mobile) | Coming soon: dispatch sessions, approve actions, and follow cloud work from your phone. |
-| [Organizations](https://proliferate.com/docs/concepts/organizations) | Share seats, billing, repository settings, cloud limits, and team defaults. |
+| [Automations](https://proliferate.com/docs/concepts/automations) | Run any agent on a schedule whenever, wherever. |
+| [Native harnesses](https://proliferate.com/docs/concepts/agents-and-harnesses) | Claude Code, Codex, Gemini CLI, OpenCode, Cursor, Amp, and more. |
+| [Workspaces](https://proliferate.com/docs/concepts/workspaces) | Isolated local worktrees and cloud sandboxes for every task. |
+| [Workspace mobility](https://proliferate.com/docs/concepts/cloud) | Move workspaces between local and cloud when the job changes. |
+| [Subagents](https://proliferate.com/docs/concepts/subagents) | Split investigation, implementation, and review across helper agents. |
+| [Code and plan review](https://proliferate.com/docs/concepts/review) | Have reviewer agents check plans, diffs, risks, and branch readiness. |
+| [Plugins](https://proliferate.com/docs/concepts/plugins) | Add MCPs, skills, Computer Use, Browser Use, and custom tools per session. |
+| [Artifacts](https://proliferate.com/docs/concepts/artifacts) | Render agent outputs like docs, UI, demos, and components inline. |
+| [Multiplayer cloud chats](https://proliferate.com/docs/concepts/cloud) | Share cloud sessions your team can inspect, claim, and continue. |
+| [Team Slackbot](https://proliferate.com/docs/concepts/organizations) | Turn Slack requests into shared agent work for the whole team. |
+| [Mobile](https://proliferate.com/docs/concepts/mobile) | Coming soon: dispatch work, approve actions, and follow runs from your phone. |
+| [Organizations](https://proliferate.com/docs/concepts/organizations) | Team seats, shared settings, cloud limits, and governance controls. |
 
 ## Getting Started
 
