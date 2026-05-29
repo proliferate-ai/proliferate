@@ -1298,12 +1298,6 @@ export function MobileChatScreen({
     ? `${workspace.repo.owner}/${workspace.repo.name}`
     : chat.repoLabel;
   const runtimeContext = summarizeRuntimeContext(workspace, workspaceStatus);
-  const sessionSwitchContext = summarizeSessionSwitchContext(
-    sessions,
-    session,
-    newSessionMode,
-    sessionChoiceRequired,
-  );
   const branchLabel = workspace?.repo.branch ?? workspace?.repo.baseBranch ?? chat.branchLabel;
   const commandMessage =
     pendingPromptStatus ??
@@ -1334,7 +1328,7 @@ export function MobileChatScreen({
       : workspaceCommandReady
         ? "Start a session with a message"
         : "Waiting for workspace";
-  const composerControlSummary = summarizeComposerControls(composerControls);
+  const composerControlSummary = summarizeComposerControls(composerControls, runtimeContext.label);
 
   function openToolDetailRow(row: CloudChatTranscriptRowView) {
     if (row.sourceRequestId) {
@@ -1364,66 +1358,44 @@ export function MobileChatScreen({
           subtitle={subtitle}
           leading={{ kind: "back", onPress: onBack }}
           trailing={
-            <View style={styles.headerStatus}>
+            <View style={styles.headerActions}>
               <MobileStatusDot status={mobileStatus(session?.status ?? workspaceStatus)} />
-              <MobileTopBarIconButton
-                name="more"
-                accessibilityLabel="Workspace actions"
-                onPress={() => openWorkspaceActionSheet()}
-              />
+              {sessions.length > 0 ? (
+                <View style={styles.sessionActionGroup}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Switch sessions. ${formatSessionCount(sessions.length)}.`}
+                    disabled={isUnclaimed}
+                    onPress={() => openWorkspaceActionSheet("sessions")}
+                    style={({ pressed }) => [
+                      styles.sessionCountButton,
+                      isUnclaimed && styles.sessionCountButtonDisabled,
+                      pressed && !isUnclaimed && styles.headerButtonPressed,
+                    ]}
+                  >
+                    <MobileIcon name="sessions" size={14} color={colors.faint} />
+                    <Text style={styles.sessionCountText}>{sessions.length}</Text>
+                  </Pressable>
+                  <View style={styles.sessionActionDivider} />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Workspace actions"
+                    onPress={() => openWorkspaceActionSheet()}
+                    style={({ pressed }) => [styles.sessionDotsButton, pressed && styles.headerButtonPressed]}
+                  >
+                    <MobileIcon name="more" size={18} color={colors.fg} />
+                  </Pressable>
+                </View>
+              ) : (
+                <MobileTopBarIconButton
+                  name="more"
+                  accessibilityLabel="Workspace actions"
+                  onPress={() => openWorkspaceActionSheet()}
+                />
+              )}
             </View>
           }
         />
-        <View style={styles.contextBar}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Open workspace actions. Running on ${runtimeContext.label}. ${runtimeContext.detail}.`}
-            onPress={() => openWorkspaceActionSheet()}
-            style={({ pressed }) => [
-              styles.contextChip,
-              styles.machineChip,
-              pressed && styles.contextChipPressed,
-            ]}
-          >
-            <View style={styles.contextIconSlot}>
-              <MobileIcon name={runtimeContext.icon} size={15} color={colors.fg} />
-            </View>
-            <View style={styles.contextText}>
-              <Text style={styles.contextLabel} numberOfLines={1}>
-                {runtimeContext.label}
-              </Text>
-              <View style={styles.contextDetailRow}>
-                <MobileStatusDot status={runtimeContext.status} size={6} />
-                <Text style={styles.contextDetail} numberOfLines={1}>
-                  {runtimeContext.detail}
-                </Text>
-              </View>
-            </View>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Switch session. ${sessionSwitchContext.label}. ${sessionSwitchContext.detail}.`}
-            disabled={isUnclaimed}
-            onPress={() => openWorkspaceActionSheet("sessions")}
-            style={({ pressed }) => [
-              styles.contextChip,
-              styles.sessionsChip,
-              isUnclaimed && styles.contextChipDisabled,
-              pressed && !isUnclaimed && styles.contextChipPressed,
-            ]}
-          >
-            <MobileIcon name="sessions" size={15} color={colors.fg} />
-            <View style={styles.contextText}>
-              <Text style={styles.contextLabel} numberOfLines={1}>
-                {sessionSwitchContext.label}
-              </Text>
-              <Text style={styles.contextDetail} numberOfLines={1}>
-                {sessionSwitchContext.detail}
-              </Text>
-            </View>
-            <MobileIcon name="chevron-down" size={11} color={colors.faint} />
-          </Pressable>
-        </View>
       </View>
 
       {isUnclaimed ? (
@@ -1499,17 +1471,12 @@ export function MobileChatScreen({
               accessibilityLabel="Open chat settings"
               onPress={() => openWorkspaceActionSheet()}
               style={({ pressed }) => [
-                styles.configPill,
-                composerControlSummary.pending && styles.configPillPending,
-                pressed && styles.configPillPressed,
+                styles.configLink,
+                composerControlSummary.pending && styles.configLinkPending,
+                pressed && styles.configLinkPressed,
               ]}
             >
-              <MobileIcon
-                name={composerControlSummary.icon}
-                size={11}
-                color={colors.faint}
-              />
-              <Text style={styles.configPillText} numberOfLines={1}>
+              <Text style={styles.configLinkText} numberOfLines={1}>
                 {composerControlSummary.label}
               </Text>
               <MobileIcon name="chevron-down" size={10} color={colors.faint} />
@@ -1536,6 +1503,9 @@ export function MobileChatScreen({
         visible={actionSheetOpen}
         initialExpandedId={actionSheetInitialExpandedId}
         branchLabel={branchLabel}
+        runtimeLabel={runtimeContext.label}
+        runtimeDetail={runtimeContext.detail}
+        runtimeIcon={runtimeContext.icon}
         unclaimed={isUnclaimed}
         claimPending={claimWorkspace.isPending}
         promptSubmitting={promptSubmitting}
@@ -2398,38 +2368,6 @@ function joinUniqueLabels(labels: Array<string | null | undefined>): string {
   return parts.join(" · ");
 }
 
-function summarizeSessionSwitchContext(
-  sessions: readonly CloudSessionProjection[],
-  session: CloudSessionProjection | null,
-  newSessionMode: boolean,
-  sessionChoiceRequired: boolean,
-): { label: string; detail: string } {
-  const countLabel = formatSessionCount(sessions.length);
-  if (newSessionMode) {
-    return {
-      label: "New session",
-      detail: sessions.length ? `${countLabel} existing` : "No existing sessions",
-    };
-  }
-  if (sessionChoiceRequired) {
-    return {
-      label: countLabel,
-      detail: "Choose one",
-    };
-  }
-  if (!session) {
-    return {
-      label: countLabel,
-      detail: sessions.length ? "Choose one" : "Start one",
-    };
-  }
-  const index = sessions.findIndex((candidate) => candidate.sessionId === session.sessionId);
-  return {
-    label: countLabel,
-    detail: sessionDisplayTitle(session, Math.max(index, 0)),
-  };
-}
-
 function formatSessionCount(count: number): string {
   return count === 1 ? "1 session" : `${count} sessions`;
 }
@@ -2510,6 +2448,7 @@ async function copyBranchToClipboard(branchLabel: string): Promise<void> {
 
 function summarizeComposerControls(
   controls: readonly CloudChatComposerControlView[],
+  runtimeLabel: string,
 ): { label: string; icon: MobileIconName; pending: boolean } {
   const modelControl = controls.find((control) => control.key === "model") ?? null;
   const modeControl =
@@ -2527,11 +2466,11 @@ function summarizeComposerControls(
     ? composerControlValueLabel(modeControl)
     : null;
   const label = secondaryLabel && secondaryLabel !== primaryLabel
-    ? `${primaryLabel} · ${secondaryLabel}`
-    : primaryLabel;
+    ? joinUniqueLabels([primaryLabel, secondaryLabel, runtimeLabel])
+    : joinUniqueLabels([primaryLabel, runtimeLabel]);
 
   return {
-    label,
+    label: label || "Chat settings",
     icon: composerControlIcon(primaryControl),
     pending: controls.some((control) => Boolean(control.pendingState)),
   };
@@ -2605,77 +2544,52 @@ const styles = StyleSheet.create({
   headerWrapper: {
     backgroundColor: colors.background,
   },
-  headerStatus: {
+  headerActions: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing[2],
     paddingRight: spacing[1],
   },
-  contextBar: {
+  sessionActionGroup: {
+    height: 32,
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing[2],
-    paddingHorizontal: spacing[3],
-    paddingTop: spacing[2],
-    paddingBottom: spacing[2],
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderLight,
-  },
-  contextChip: {
-    minHeight: 44,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[2],
-    borderRadius: radius.full,
+    overflow: "hidden",
+    borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.accent,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
   },
-  contextChipPressed: {
-    opacity: 0.72,
+  sessionCountButton: {
+    height: 32,
+    minWidth: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    paddingHorizontal: spacing[2],
   },
-  contextChipDisabled: {
+  sessionCountButtonDisabled: {
     opacity: 0.48,
   },
-  machineChip: {
-    flex: 1,
-    minWidth: 0,
+  sessionCountText: {
+    color: colors.fg,
+    fontSize: 12,
+    fontWeight: "700",
   },
-  sessionsChip: {
-    maxWidth: "46%",
-    flexShrink: 0,
+  sessionActionDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 18,
+    backgroundColor: colors.border,
   },
-  contextIconSlot: {
-    width: 18,
+  sessionDotsButton: {
+    width: 32,
+    height: 32,
     alignItems: "center",
     justifyContent: "center",
   },
-  contextText: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  contextLabel: {
-    color: colors.fg,
-    fontSize: 12.5,
-    lineHeight: 16,
-    fontWeight: "700",
-  },
-  contextDetailRow: {
-    minWidth: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  contextDetail: {
-    flexShrink: 1,
-    minWidth: 0,
-    color: colors.faint,
-    fontSize: 11.5,
-    lineHeight: 15,
-    fontWeight: "600",
+  headerButtonPressed: {
+    opacity: 0.68,
   },
   list: {
     flex: 1,
@@ -3056,31 +2970,32 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: spacing[2],
   },
-  configPill: {
+  configLink: {
     flexShrink: 1,
     minWidth: 0,
-    maxWidth: "76%",
-    height: 40,
+    maxWidth: "82%",
+    minHeight: 32,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
     gap: 5,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing[2],
+    borderRadius: radius.md,
+    paddingHorizontal: 2,
     paddingVertical: 0,
   },
-  configPillPending: {
+  configLinkPending: {
     backgroundColor: colors.accent,
+    paddingHorizontal: spacing[2],
   },
-  configPillPressed: {
+  configLinkPressed: {
     opacity: 0.82,
   },
-  configPillText: {
+  configLinkText: {
+    flexShrink: 1,
     minWidth: 0,
     color: colors.faint,
-    fontSize: 11.5,
-    lineHeight: 16,
-    fontWeight: "500",
+    fontSize: 13.5,
+    lineHeight: 18,
+    fontWeight: "600",
     includeFontPadding: false,
   },
   send: {

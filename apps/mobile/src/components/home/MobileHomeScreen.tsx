@@ -1,22 +1,32 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import type { CloudChatComposerControlView } from "@proliferate/product-domain/chats/cloud/composer-controls";
+import {
+  cloudComposerControlGroupLabel,
+  cloudComposerControlTitle,
+  formatCloudComposerControlValueLabel,
+  normalizeCloudComposerModelLabel,
+  summarizeCloudComposerBadgeControls,
+  type CloudChatComposerControlOptionView,
+  type CloudChatComposerControlView,
+} from "@proliferate/product-domain/chats/cloud/composer-controls";
 
 import { useMobileHomeLaunchModel } from "../../hooks/home/derived/use-mobile-home-launch-model";
 import { useMobileHomeLaunchActions } from "../../hooks/home/workflows/use-mobile-home-launch-actions";
 import { useMobileWorkInventory } from "../../hooks/work/derived/use-mobile-work-inventory";
+import type { MobileRuntimeOption } from "../../lib/domain/home/mobile-home-launch";
 import type { MobileCloudChat } from "../../navigation/navigation-model";
 import { MobileIcon, type MobileIconName } from "../primitives/MobileIcon";
 import { MobileTextInput } from "../primitives/MobileTextInput";
 import { MobilePopover } from "../primitives/popover/MobilePopover";
-import { MobilePopoverDisclosure } from "../primitives/popover/MobilePopoverDisclosure";
 import { MobilePopoverDivider } from "../primitives/popover/MobilePopoverDivider";
 import { MobilePopoverGroup } from "../primitives/popover/MobilePopoverGroup";
 import { MobilePopoverOption } from "../primitives/popover/MobilePopoverOption";
@@ -32,7 +42,7 @@ interface MobileHomeScreenProps {
   onConfigureRepos: () => void;
 }
 
-type HomeSheet = "repo" | "branch" | "runtime" | "config" | null;
+type HomeSheet = "repo" | "branch" | "config" | null;
 
 export function MobileHomeScreen({
   ownerUserId,
@@ -56,10 +66,10 @@ export function MobileHomeScreen({
     onOpenChat,
     onSubmitted: () => setDraft(""),
   });
-  const primaryModelControl =
-    launchModel.launchComposerControls.find((control) => control.key === "model")
-    ?? launchModel.launchComposerControls[launchModel.launchComposerControls.length - 1]
-    ?? null;
+  const launchConfigSummary = summarizeLaunchConfig(
+    launchModel.launchComposerControls,
+    launchModel.selectedRuntime?.label ?? "Runtime",
+  );
   const canStartCloudHarness = launchModel.launchableAgentKinds.length > 0;
   const canSubmit = Boolean(draft.trim())
     && Boolean(launchModel.selectedRepo)
@@ -90,17 +100,7 @@ export function MobileHomeScreen({
         >
           <MobileIcon name="menu" size={20} color={colors.fg} />
         </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Change model"
-          onPress={() => setSheet("config")}
-          style={({ pressed }) => [styles.modelSelector, pressed && styles.pressed]}
-        >
-          <Text style={styles.modelSelectorText} numberOfLines={1}>
-            {controlValueLabel(primaryModelControl) ?? "Model"}
-          </Text>
-          <MobileIcon name="chevron-down" size={14} color={colors.faint} />
-        </Pressable>
+        <Text style={styles.headerTitle}>New chat</Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Open chat settings"
@@ -110,40 +110,6 @@ export function MobileHomeScreen({
           <MobileIcon name="controls" size={19} color={colors.fg} />
         </Pressable>
       </View>
-
-      <Text style={styles.newChatLabel}>New chat</Text>
-
-      <View style={styles.runtimeRow}>
-        <View style={styles.runtimeRowLine} />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Choose runtime"
-          onPress={() => setSheet("runtime")}
-          style={({ pressed }) => [styles.runtimeSelector, pressed && styles.pressed]}
-        >
-          <MobileIcon
-            name={launchModel.selectedRuntime?.icon ?? "cloud"}
-            size={15}
-            color={colors.fg}
-          />
-          <Text style={styles.runtimeSelectorText} numberOfLines={1}>
-            {launchModel.selectedRuntime?.label ?? "Choose runtime"}
-          </Text>
-          <View
-            style={[
-              styles.runtimeDot,
-              launchModel.selectedRuntime?.kind === "target" && !launchModel.selectedRuntime.online && styles.runtimeDotOffline,
-            ]}
-          />
-        </Pressable>
-        <View style={styles.runtimeRowLine} />
-      </View>
-      {runtimeBlocker ? (
-        <View style={styles.runtimeBlocker}>
-          <MobileIcon name="lock" size={13} color={colors.destructive} />
-          <Text style={styles.runtimeBlockerText}>{runtimeBlocker}</Text>
-        </View>
-      ) : null}
 
       {recentItems.length > 0 ? (
         <View style={styles.recentSection}>
@@ -168,6 +134,11 @@ export function MobileHomeScreen({
       {launchActions.status || launchActions.error || (!canStartCloudHarness && launchModel.harnessAvailability.message) ? (
         <Text style={[styles.launchNote, launchActions.error && styles.launchError]}>
           {launchActions.error ?? launchActions.status ?? launchModel.harnessAvailability.message}
+        </Text>
+      ) : null}
+      {runtimeBlocker ? (
+        <Text style={[styles.launchNote, styles.launchError]}>
+          {runtimeBlocker}
         </Text>
       ) : null}
 
@@ -216,6 +187,21 @@ export function MobileHomeScreen({
               style={styles.composerInput}
             />
             <View style={styles.composerFooter}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open chat settings"
+                onPress={() => setSheet("config")}
+                style={({ pressed }) => [
+                  styles.configLink,
+                  launchConfigSummary.pending && styles.configLinkPending,
+                  pressed && styles.configLinkPressed,
+                ]}
+              >
+                <Text style={styles.configLinkText} numberOfLines={1}>
+                  {launchConfigSummary.label}
+                </Text>
+                <MobileIcon name="chevron-down" size={10} color={colors.faint} />
+              </Pressable>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Send"
@@ -288,67 +274,14 @@ export function MobileHomeScreen({
         onSelect={launchModel.setBaseBranch}
       />
 
-      <MobilePopover
-        visible={sheet === "runtime"}
-        onClose={closeSheet}
-        anchor="top-center"
-        insetTop={138}
-      >
-        <MobilePopoverGroup>
-          {launchModel.runtimeOptions.map((runtime) => {
-            const offlineTarget = runtime.kind === "target" && !runtime.online;
-            return (
-              <MobilePopoverOption
-                key={runtime.id}
-                title={runtime.label}
-                subtitle={offlineTarget ? `${runtime.description ?? ""} · Offline`.trim() : runtime.description ?? undefined}
-                selected={runtime.id === launchModel.selectedRuntime?.id}
-                disabled={offlineTarget}
-                onSelect={() => {
-                  launchModel.setRuntimeId(runtime.id);
-                  closeSheet();
-                }}
-              />
-            );
-          })}
-        </MobilePopoverGroup>
-      </MobilePopover>
-
-      <MobilePopover
+      <HomeConfigSheet
         visible={sheet === "config"}
         onClose={closeSheet}
-        anchor="top-right"
-        insetTop={58}
-      >
-        <MobilePopoverGroup>
-          {launchModel.launchComposerControls.map((control) => (
-            <MobilePopoverDisclosure
-              key={control.id}
-              id={`control:${control.id}`}
-              icon={controlIcon(control)}
-              title={topLevelControlTitle(control)}
-              value={controlValueLabel(control) ?? "Choose"}
-              disabled={control.disabled}
-            >
-              {control.groups.flatMap((group) =>
-                group.options.map((option) => (
-                  <MobilePopoverOption
-                    key={`${group.id}:${option.id}`}
-                    title={normalizeModelLabel(option.label)}
-                    subtitle={option.description ?? undefined}
-                    selected={Boolean(option.selected)}
-                    disabled={option.disabled}
-                    onSelect={() => {
-                      control.onSelect?.(option.id);
-                      closeSheet();
-                    }}
-                  />
-                )),
-              )}
-            </MobilePopoverDisclosure>
-          ))}
-        </MobilePopoverGroup>
-      </MobilePopover>
+        controls={launchModel.launchComposerControls}
+        runtimeOptions={launchModel.runtimeOptions}
+        selectedRuntimeId={launchModel.selectedRuntime?.id ?? null}
+        onRuntimeSelect={launchModel.setRuntimeId}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -375,48 +308,256 @@ function controlIcon(control: CloudChatComposerControlView | null): MobileIconNa
   }
 }
 
-function topLevelControlTitle(control: CloudChatComposerControlView): string {
-  if (control.key === "model") {
-    return "Model";
+function HomeConfigSheet({
+  visible,
+  controls,
+  runtimeOptions,
+  selectedRuntimeId,
+  onRuntimeSelect,
+  onClose,
+}: {
+  visible: boolean;
+  controls: readonly CloudChatComposerControlView[];
+  runtimeOptions: readonly MobileRuntimeOption[];
+  selectedRuntimeId: string | null;
+  onRuntimeSelect: (runtimeId: string) => void;
+  onClose: () => void;
+}) {
+  const [detailControlId, setDetailControlId] = useState<string | null>(null);
+  const detailControl = controls.find((control) => control.id === detailControlId) ?? null;
+
+  function close() {
+    setDetailControlId(null);
+    onClose();
   }
-  if (control.key === "mode") {
-    return "Mode";
-  }
-  return control.label;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
+      <View style={styles.sheetLayer}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close chat settings"
+          style={styles.sheetScrim}
+          onPress={close}
+        />
+        <View style={styles.sheet}>
+          <View style={styles.sheetGrabber} />
+          {detailControl ? (
+            <View style={styles.detail}>
+              <View style={styles.detailHeader}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to settings"
+                  onPress={() => setDetailControlId(null)}
+                  style={({ pressed }) => [styles.detailBack, pressed && styles.pressed]}
+                >
+                  <MobileIcon name="chevron-left" size={18} color={colors.fg} />
+                </Pressable>
+                <Text style={styles.detailTitle}>{cloudComposerControlTitle(detailControl)}</Text>
+              </View>
+              <ScrollView
+                style={styles.sheetScroll}
+                contentContainerStyle={styles.detailContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                {detailControl.groups.map((group) => {
+                  const label = cloudComposerControlGroupLabel(detailControl, group);
+                  return (
+                    <View key={group.id} style={styles.optionGroup}>
+                      {label ? <Text style={styles.optionGroupTitle}>{label}</Text> : null}
+                      {group.options.map((option) => (
+                        <HomeOptionRow
+                          key={option.id}
+                          option={option}
+                          onPress={() => {
+                            detailControl.onSelect?.(option.id);
+                            setDetailControlId(null);
+                          }}
+                        />
+                      ))}
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : (
+            <ScrollView
+              style={styles.sheetScroll}
+              contentContainerStyle={styles.sheetContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <HomeSheetSection title="Configuration">
+                {controls.map((control) => (
+                  <HomeSheetRow
+                    key={control.id}
+                    icon={controlIcon(control)}
+                    title={cloudComposerControlTitle(control)}
+                    value={formatCloudComposerControlValueLabel(control) ?? "Choose"}
+                    disabled={control.disabled}
+                    onPress={() => setDetailControlId(control.id)}
+                  />
+                ))}
+              </HomeSheetSection>
+              <HomeSheetSection title="Runtime">
+                {runtimeOptions.map((runtime) => {
+                  const offline = runtime.kind === "target" && !runtime.online;
+                  return (
+                    <HomeSheetRow
+                      key={runtime.id}
+                      icon={runtime.icon}
+                      title={runtime.label}
+                      subtitle={offline ? `${runtime.description} · Offline` : runtime.description}
+                      selected={runtime.id === selectedRuntimeId}
+                      disabled={offline}
+                      chevron={false}
+                      onPress={() => {
+                        onRuntimeSelect(runtime.id);
+                      }}
+                    />
+                  );
+                })}
+              </HomeSheetSection>
+            </ScrollView>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
 }
 
-function controlValueLabel(control: CloudChatComposerControlView | null): string | null {
-  if (!control) {
-    return null;
-  }
-  const selected = selectedOptionLabel(control);
-  const detail = control.detail;
-  const value = detail && detail !== control.label && detail.toLowerCase() !== "mode"
-    ? normalizeModelLabel(detail)
-    : selected;
-  if (!value) {
-    return null;
-  }
-  return control.pendingState ? `Updating ${value}` : value;
+function HomeSheetSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <View style={styles.sheetSection}>
+      <Text style={styles.sheetSectionTitle}>{title}</Text>
+      {children}
+    </View>
+  );
 }
 
-function selectedOptionLabel(control: CloudChatComposerControlView): string | null {
-  for (const group of control.groups) {
-    const selected = group.options.find((option) => option.selected);
-    if (selected) {
-      return normalizeModelLabel(selected.label);
-    }
-  }
-  return null;
+function HomeSheetRow({
+  icon,
+  title,
+  subtitle,
+  value,
+  selected,
+  disabled,
+  chevron = true,
+  onPress,
+}: {
+  icon: MobileIconName;
+  title: string;
+  subtitle?: string | null;
+  value?: string | null;
+  selected?: boolean;
+  disabled?: boolean;
+  chevron?: boolean;
+  onPress?: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected, disabled }}
+      disabled={disabled || !onPress}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.sheetRow,
+        selected && styles.sheetRowSelected,
+        disabled && styles.disabledPill,
+        pressed && !disabled ? styles.pressed : null,
+      ]}
+    >
+      <View style={styles.sheetRowIcon}>
+        <MobileIcon name={icon} size={16} color={disabled ? colors.faint : colors.fg} />
+      </View>
+      <View style={styles.sheetRowText}>
+        <Text style={[styles.sheetRowTitle, disabled && styles.sheetRowTitleDisabled]} numberOfLines={1}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text style={styles.sheetRowSubtitle} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      {value ? (
+        <Text style={styles.sheetRowValue} numberOfLines={1}>
+          {value}
+        </Text>
+      ) : null}
+      {selected ? <MobileIcon name="check" size={15} color={colors.fg} /> : null}
+      {chevron ? <MobileIcon name="chevron-right" size={14} color={colors.faint} /> : null}
+    </Pressable>
+  );
 }
 
-function normalizeModelLabel(label: string): string {
-  return label
-    .replace(/^Claude\s*·\s*/i, "")
-    .replace(/^Claude\s+(?=Sonnet|Haiku|Opus)/i, "")
-    .replace(/^OpenAI\s*·\s*/i, "")
-    .replace(/^Gemini\s*·\s*/i, "")
-    .replace(/^Codex\s*·\s*/i, "");
+function HomeOptionRow({
+  option,
+  onPress,
+}: {
+  option: CloudChatComposerControlOptionView;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: Boolean(option.selected), disabled: option.disabled }}
+      disabled={option.disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.optionRow,
+        option.selected && styles.sheetRowSelected,
+        option.disabled && styles.disabledPill,
+        pressed && !option.disabled ? styles.pressed : null,
+      ]}
+    >
+      <View style={styles.optionCheck}>
+        {option.selected ? <MobileIcon name="check" size={15} color={colors.fg} /> : null}
+      </View>
+      <View style={styles.sheetRowText}>
+        <Text style={[styles.optionTitle, option.disabled && styles.sheetRowTitleDisabled]} numberOfLines={1}>
+          {normalizeCloudComposerModelLabel(option.label)}
+        </Text>
+        {option.description ? (
+          <Text style={styles.sheetRowSubtitle} numberOfLines={2}>
+            {option.description}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
+function summarizeLaunchConfig(
+  controls: readonly CloudChatComposerControlView[],
+  runtimeLabel: string,
+): { label: string; pending: boolean } {
+  const badge = summarizeCloudComposerBadgeControls(controls);
+  return {
+    label: joinUniqueLabels([badge.label, runtimeLabel]) || "Chat settings",
+    pending: badge.pending,
+  };
+}
+
+function joinUniqueLabels(labels: Array<string | null | undefined>): string {
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const label of labels) {
+    const trimmed = label?.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    parts.push(trimmed);
+  }
+  return parts.join(" · ");
 }
 
 const styles = StyleSheet.create({
@@ -438,83 +579,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: radius.full,
   },
-  modelSelector: {
-    maxWidth: "56%",
-    minHeight: 38,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing[2],
-  },
-  modelSelectorText: {
-    minWidth: 0,
+  headerTitle: {
     color: colors.fg,
     fontSize: 15.5,
-    fontWeight: "600",
-  },
-  newChatLabel: {
-    alignSelf: "center",
-    color: colors.faint,
-    fontSize: 12,
-    fontWeight: "500",
-    marginTop: spacing[6],
-    marginBottom: spacing[2],
-  },
-  runtimeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[3],
-    paddingHorizontal: spacing[5],
-  },
-  runtimeRowLine: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
-  },
-  runtimeSelector: {
-    minHeight: 34,
-    maxWidth: "72%",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    borderRadius: radius.full,
-    backgroundColor: colors.accent,
-    paddingHorizontal: spacing[3],
-  },
-  runtimeSelectorText: {
-    minWidth: 0,
-    color: colors.fg,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  runtimeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: colors.success,
-  },
-  runtimeDotOffline: {
-    backgroundColor: colors.destructive,
-  },
-  runtimeBlocker: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[2],
-    alignSelf: "center",
-    maxWidth: 340,
-    marginTop: spacing[2],
-    borderRadius: radius.lg,
-    backgroundColor: colors.destructiveSubtle,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-  },
-  runtimeBlockerText: {
-    flex: 1,
-    color: colors.destructive,
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   recentSection: {
     gap: spacing[2],
@@ -608,9 +676,38 @@ const styles = StyleSheet.create({
     lineHeight: 23,
   },
   composerFooter: {
+    minHeight: 40,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
+    gap: spacing[2],
+  },
+  configLink: {
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: "82%",
+    minHeight: 32,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: radius.md,
+    paddingHorizontal: 2,
+  },
+  configLinkPending: {
+    backgroundColor: colors.accent,
+    paddingHorizontal: spacing[2],
+  },
+  configLinkPressed: {
+    opacity: 0.82,
+  },
+  configLinkText: {
+    flexShrink: 1,
+    minWidth: 0,
+    color: colors.faint,
+    fontSize: 13.5,
+    lineHeight: 18,
+    fontWeight: "600",
+    includeFontPadding: false,
   },
   send: {
     width: 40,
@@ -639,5 +736,154 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
+  },
+  sheetLayer: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  sheetScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  sheet: {
+    maxHeight: "78%",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderHeavy,
+    backgroundColor: colors.popover,
+    paddingTop: spacing[2],
+    paddingBottom: spacing[4],
+  },
+  sheetGrabber: {
+    alignSelf: "center",
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.borderHeavy,
+    marginBottom: spacing[2],
+  },
+  sheetScroll: {
+    minHeight: 0,
+  },
+  sheetContent: {
+    paddingBottom: spacing[2],
+  },
+  sheetSection: {
+    paddingHorizontal: spacing[3],
+    paddingTop: spacing[2],
+    paddingBottom: spacing[3],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  sheetSectionTitle: {
+    color: colors.faint,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    paddingHorizontal: spacing[2],
+    paddingBottom: spacing[2],
+  },
+  sheetRow: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[3],
+    borderRadius: radius.md,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[2],
+  },
+  sheetRowSelected: {
+    backgroundColor: colors.accent,
+  },
+  sheetRowIcon: {
+    width: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sheetRowText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  sheetRowTitle: {
+    color: colors.fg,
+    fontSize: 13.5,
+    fontWeight: "600",
+  },
+  sheetRowTitleDisabled: {
+    color: colors.faint,
+  },
+  sheetRowSubtitle: {
+    color: colors.faint,
+    fontSize: 11.5,
+    lineHeight: 15,
+  },
+  sheetRowValue: {
+    maxWidth: "42%",
+    color: colors.mutedForeground,
+    fontSize: 12.5,
+    fontWeight: "500",
+  },
+  detail: {
+    minHeight: 260,
+  },
+  detailHeader: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    paddingHorizontal: spacing[3],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  detailBack: {
+    width: 34,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.md,
+  },
+  detailTitle: {
+    color: colors.fg,
+    fontSize: 15.5,
+    fontWeight: "700",
+  },
+  detailContent: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[3],
+    gap: spacing[3],
+  },
+  optionGroup: {
+    gap: spacing[1],
+  },
+  optionGroupTitle: {
+    color: colors.faint,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    paddingHorizontal: spacing[2],
+    paddingBottom: spacing[1],
+  },
+  optionRow: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    borderRadius: radius.md,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[2],
+  },
+  optionCheck: {
+    width: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  optionTitle: {
+    color: colors.fg,
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
