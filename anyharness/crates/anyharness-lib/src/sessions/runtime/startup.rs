@@ -6,8 +6,8 @@ use std::time::Instant;
 use crate::domains::agents::model::{AgentKind, ResolvedAgent};
 use crate::domains::agents::readiness::resolver::resolve_agent_with_env;
 use crate::domains::agents::registry::built_in_registry;
-use crate::live::sessions::actor::state::SessionStartupStrategy;
 use crate::live::sessions::handle::LiveSessionHandle;
+use crate::live::sessions::SessionStartupStrategy;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::sessions::extensions::SessionTurnFinishedContext;
 use crate::sessions::links::model::SessionLinkRelation;
@@ -249,7 +249,7 @@ impl SessionRuntime {
         let session_store = self.session_service.store().clone();
 
         // Repair any turns that were left open (turn_started without
-        // turn_ended) before starting the actor. AcpManager reads last_seq
+        // turn_ended) before starting the actor. LiveSessionManager reads last_seq
         // inside its start/inject critical section after this repair.
         match session_store.repair_unclosed_turns(&record.id) {
             Ok(0) => {}

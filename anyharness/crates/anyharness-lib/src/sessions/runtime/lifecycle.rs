@@ -3,7 +3,6 @@ use std::future::Future;
 use std::pin::Pin;
 use std::time::Instant;
 
-use crate::live::sessions::actor::command::SessionCommand;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::sessions::extensions::SessionClosingContext;
 use crate::sessions::links::model::SessionLinkRelation;
@@ -23,7 +22,7 @@ impl SessionRuntime {
         let record = self.get_session_or_not_found(session_id)?;
 
         if let Some(handle) = self.acp_manager.get_handle(session_id).await {
-            let _ = handle.command_tx.send(SessionCommand::Cancel).await;
+            let _ = handle.cancel().await;
         }
 
         Ok(self
@@ -55,12 +54,7 @@ impl SessionRuntime {
         session_id: &str,
     ) -> Result<(), SessionLifecycleError> {
         if let Some(handle) = self.acp_manager.get_handle(session_id).await {
-            let (tx, rx) = tokio::sync::oneshot::channel();
-            let _ = handle
-                .command_tx
-                .send(SessionCommand::Close { respond_to: tx })
-                .await;
-            let _ = rx.await;
+            let _ = handle.close().await;
         }
         self.acp_manager.remove_session(session_id).await;
 
@@ -186,12 +180,7 @@ impl SessionRuntime {
         let record = self.get_session_or_not_found(session_id)?;
 
         if let Some(handle) = self.acp_manager.get_handle(session_id).await {
-            let (tx, rx) = tokio::sync::oneshot::channel();
-            let _ = handle
-                .command_tx
-                .send(SessionCommand::Dismiss { respond_to: tx })
-                .await;
-            let _ = rx.await;
+            let _ = handle.dismiss().await;
         }
         self.acp_manager.remove_session(session_id).await;
 

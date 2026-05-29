@@ -3,8 +3,8 @@ use std::sync::Arc;
 use anyharness_contract::v1::{SessionEndReason, SessionExecutionPhase};
 use tokio::sync::Mutex;
 
-use crate::acp::event_sink::SessionEventSink;
 use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
+use crate::live::sessions::event_sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::sessions::store::SessionStore;
 

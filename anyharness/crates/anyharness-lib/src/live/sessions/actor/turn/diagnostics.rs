@@ -36,7 +36,8 @@ impl PromptDiagnostics {
         &mut self,
         notif: &acp::SessionNotification,
     ) {
-        let kind = crate::acp::runtime_client::session_update_kind(&notif.update);
+        let kind =
+            crate::live::sessions::connection::runtime_client::session_update_kind(&notif.update);
         let now = Instant::now();
         self.last_raw_kind = Some(kind);
         self.last_raw_at = Some(now);

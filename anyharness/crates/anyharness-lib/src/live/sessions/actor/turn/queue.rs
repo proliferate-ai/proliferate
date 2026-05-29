@@ -6,10 +6,10 @@ use anyharness_contract::v1::{
 };
 use tokio::sync::Mutex;
 
-use crate::acp::event_sink::SessionEventSink;
 use crate::live::sessions::actor::command::{
     PromptAcceptError, PromptAcceptance, QueueMutationError,
 };
+use crate::live::sessions::event_sink::SessionEventSink;
 use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::model::{PromptAttachmentRecord, PromptAttachmentState};
 use crate::sessions::prompt::PromptPayload;

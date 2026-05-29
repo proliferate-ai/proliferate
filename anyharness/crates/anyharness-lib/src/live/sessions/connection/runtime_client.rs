@@ -5,18 +5,22 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use tokio::sync::{mpsc, Mutex};
 
-use super::event_sink::SessionEventSink;
-use super::mcp_elicitation::{
+use crate::acp::permission_context::permission_context_from_meta;
+use crate::acp::permission_payload::{
+    bound_raw_json, permission_option_mappings, permission_options,
+};
+use crate::domains::plans::model::PlanRecord;
+use crate::domains::plans::service::PlanService;
+use crate::live::sessions::event_sink::SessionEventSink;
+use crate::live::sessions::handle::LiveSessionHandle;
+use crate::live::sessions::interactions::broker::{
+    InteractionBroker, PermissionOutcome, UserInputOutcome,
+};
+use crate::live::sessions::interactions::mcp_elicitation::{
     claude_ext_response_from_outcome, codex_ext_response_from_outcome,
     normalize_claude_mcp_elicitation, normalize_codex_mcp_elicitation,
     ClaudeMcpElicitationExtParams, CodexMcpElicitationExtParams,
 };
-use super::permission_broker::{InteractionBroker, PermissionOutcome, UserInputOutcome};
-use super::permission_context::permission_context_from_meta;
-use super::permission_payload::{bound_raw_json, permission_option_mappings, permission_options};
-use crate::domains::plans::model::PlanRecord;
-use crate::domains::plans::service::PlanService;
-use crate::live::sessions::handle::LiveSessionHandle;
 use anyharness_contract::v1::{
     InteractionKind, InteractionPayload, InteractionRequestedEvent, InteractionSource,
     PendingInteractionPayloadSummary, PendingInteractionSource, PendingInteractionSummary,

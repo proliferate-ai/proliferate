@@ -24,13 +24,13 @@ use super::turn::diagnostics::PromptDiagnostics;
 use super::turn::finish::should_emit_empty_turn_error;
 use super::turn::handle::first_prompt_system_prompt_append_for_codex_prompt;
 use super::turn::start::prepend_system_prompt_append_to_acp_blocks;
-use crate::acp::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
-use crate::acp::event_sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
-use crate::acp::permission_broker::{InteractionBroker, PermissionOutcome};
 use crate::domains::agents::model::AgentKind;
 use crate::domains::plans::{service::PlanService, store::PlanStore};
+use crate::live::sessions::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
 use crate::live::sessions::connection::types::NativeSessionStartupDisposition;
+use crate::live::sessions::event_sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
 use crate::live::sessions::handle::{LiveSessionExecutionSnapshot, LiveSessionHandle};
+use crate::live::sessions::interactions::broker::{InteractionBroker, PermissionOutcome};
 use crate::persistence::Db;
 use crate::sessions::live_config::{
     normalized_key_rank, snapshot_to_record, NormalizedControlKind,

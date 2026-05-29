@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
-use crate::acp::event_sink::{
-    AcpChunkPayload, AcpToolPayload, CompletedAssistantMessage, SessionEventSink,
-};
 use crate::domains::plans::model::NewPlan;
 use crate::domains::plans::service::{PlanCreateError, PlanService};
 use crate::domains::reviews::service::ReviewService;
 use crate::live::sessions::actor::notifications::types::ProposedPlanChunkMeta;
+use crate::live::sessions::event_sink::{
+    AcpChunkPayload, AcpToolPayload, CompletedAssistantMessage, SessionEventSink,
+};
 
 pub(in crate::live::sessions::actor) async fn maybe_ingest_codex_completed_plan(
     event_sink: &Arc<Mutex<SessionEventSink>>,

@@ -2,7 +2,7 @@ use anyharness_contract::v1::ProposedPlanDecisionState;
 
 use crate::domains::plans::model::PlanRecord;
 use crate::domains::plans::service::PlanDecisionError;
-use crate::live::sessions::actor::command::SessionCommand;
+use crate::live::sessions::LiveSessionCommandError;
 
 use super::SessionRuntime;
 
@@ -23,26 +23,18 @@ impl SessionRuntime {
             .map_err(|error| PlanDecisionError::Store(anyhow::anyhow!(error.to_string())))?;
 
         if let Some(handle) = self.acp_manager.get_handle(&plan.session_id).await {
-            let (tx, rx) = tokio::sync::oneshot::channel();
-            handle
-                .command_tx
-                .send(SessionCommand::ApplyPlanDecision {
-                    plan_id: plan_id.to_string(),
-                    expected_version,
-                    decision,
-                    respond_to: tx,
-                })
+            return handle
+                .apply_plan_decision(plan_id.to_string(), expected_version, decision)
                 .await
-                .map_err(|_| {
-                    PlanDecisionError::Store(anyhow::anyhow!(
-                        "session actor is not available for plan decision"
-                    ))
-                })?;
-            return rx.await.map_err(|_| {
-                PlanDecisionError::Store(anyhow::anyhow!(
-                    "session actor dropped plan decision response"
-                ))
-            })?;
+                .map_err(|error| match error {
+                    LiveSessionCommandError::ActorUnavailable => PlanDecisionError::Store(
+                        anyhow::anyhow!("session actor is not available for plan decision"),
+                    ),
+                    LiveSessionCommandError::ResponseDropped => PlanDecisionError::Store(
+                        anyhow::anyhow!("session actor dropped plan decision response"),
+                    ),
+                    LiveSessionCommandError::Rejected(error) => error,
+                });
         }
 
         let (plan, _) =

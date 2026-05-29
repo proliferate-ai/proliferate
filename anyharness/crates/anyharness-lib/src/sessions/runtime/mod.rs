@@ -13,11 +13,10 @@ use super::mcp_bindings::model::SessionMcpServer;
 use super::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use super::model::SessionRecord;
 use super::service::SessionService;
-use crate::acp::manager::AcpManager;
-use crate::acp::permission_broker::PermissionDecision;
 use crate::domains::agents::auth_config::{AgentAuthConfigService, AgentAuthSelectionRequired};
 use crate::domains::plans::service::PlanService;
 use crate::domains::runtime_config::service::RuntimeConfigService;
+use crate::live::sessions::LiveSessionManager;
 use crate::sessions::extensions::SessionExtension;
 use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::runtime::WorkspaceRuntime;
@@ -40,7 +39,7 @@ pub struct SessionRuntime {
     session_service: Arc<SessionService>,
     session_link_service: SessionLinkService,
     workspace_runtime: Arc<WorkspaceRuntime>,
-    acp_manager: AcpManager,
+    acp_manager: LiveSessionManager,
     runtime_home: PathBuf,
     session_data_cipher: Option<SessionDataCipher>,
     session_extensions: Vec<Arc<dyn SessionExtension>>,
@@ -154,9 +153,15 @@ pub enum SessionLifecycleError {
     Internal(anyhow::Error),
 }
 
+#[derive(Debug, Clone)]
+pub enum InteractionPermissionDecision {
+    Allow,
+    Deny,
+}
+
 #[derive(Clone)]
 pub enum InteractionResolutionRequest {
-    Decision(PermissionDecision),
+    Decision(InteractionPermissionDecision),
     OptionId(String),
     Submitted {
         answers: Vec<UserInputSubmittedAnswer>,
@@ -239,7 +244,7 @@ impl SessionRuntime {
         session_service: Arc<SessionService>,
         session_link_service: SessionLinkService,
         workspace_runtime: Arc<WorkspaceRuntime>,
-        acp_manager: AcpManager,
+        acp_manager: LiveSessionManager,
         runtime_home: PathBuf,
         session_data_cipher: Option<SessionDataCipher>,
         session_extensions: Vec<Arc<dyn SessionExtension>>,

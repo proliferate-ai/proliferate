@@ -1,11 +1,4 @@
-pub mod background_work;
-pub mod event_sink;
-pub mod manager;
-pub mod mcp_elicitation;
-pub mod permission_broker;
-mod permission_context;
+pub(crate) mod permission_context;
 pub(crate) mod permission_payload;
 pub mod persistence_sanitizer;
 pub mod provider_errors;
-pub mod replay_actor;
-pub mod runtime_client;

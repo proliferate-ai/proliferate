@@ -7,7 +7,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use super::{BackgroundWorkOptions, BackgroundWorkUpdate};
-use crate::acp::event_sink::AcpToolPayload;
+use crate::live::sessions::event_sink::AcpToolPayload;
 use crate::sessions::model::{
     SessionBackgroundWorkRecord, SessionBackgroundWorkState, SessionBackgroundWorkTrackerKind,
 };
@@ -303,8 +303,8 @@ mod tests {
         detect_async_agent_registration, extract_terminal_result_text, watch_async_agent,
         BACKGROUND_WORK_FALLBACK_RESULT,
     };
-    use crate::acp::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
-    use crate::acp::event_sink::AcpToolPayload;
+    use crate::live::sessions::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
+    use crate::live::sessions::event_sink::AcpToolPayload;
     use crate::persistence::Db;
     use crate::sessions::model::{
         SessionBackgroundWorkRecord, SessionBackgroundWorkState, SessionBackgroundWorkTrackerKind,

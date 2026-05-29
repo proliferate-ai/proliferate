@@ -1,8 +1,8 @@
 use anyharness_contract::v1::SessionExecutionPhase;
 
 use crate::domains::agents::model::AgentKind;
-use crate::live::sessions::actor::command::{ForkSessionCommandError, SessionCommand};
-use crate::live::sessions::actor::state::SessionStartupStrategy;
+use crate::live::sessions::SessionStartupStrategy;
+use crate::live::sessions::{ForkSessionCommandError, LiveSessionCommandError};
 use crate::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
 };
@@ -80,47 +80,21 @@ impl SessionRuntime {
         let execution = handle.execution_snapshot().await;
         if execution.phase != SessionExecutionPhase::Idle
             || !execution.pending_interactions.is_empty()
-            || handle.busy.load(std::sync::atomic::Ordering::Acquire)
+            || handle.is_busy()
         {
             return Err(ForkSessionError::Busy);
         }
 
         let child_actor_forks = parent.agent_kind == AgentKind::Claude.as_str();
         let forked = if child_actor_forks {
-            let (tx, rx) = tokio::sync::oneshot::channel();
-            handle
-                .command_tx
-                .send(SessionCommand::VerifyForkReady { respond_to: tx })
-                .await
-                .map_err(|_| {
-                    ForkSessionError::Internal(anyhow::anyhow!("session actor channel closed"))
-                })?;
-            rx.await
-                .map_err(|_| {
-                    ForkSessionError::Internal(anyhow::anyhow!(
-                        "session actor dropped fork readiness response"
-                    ))
-                })?
-                .map_err(map_fork_command_error)?;
+            handle.verify_fork_ready().await.map_err(|error| {
+                map_live_fork_command_error(error, "session actor dropped fork readiness response")
+            })?;
             None
         } else {
-            let (tx, rx) = tokio::sync::oneshot::channel();
-            handle
-                .command_tx
-                .send(SessionCommand::Fork { respond_to: tx })
-                .await
-                .map_err(|_| {
-                    ForkSessionError::Internal(anyhow::anyhow!("session actor channel closed"))
-                })?;
-            Some(
-                rx.await
-                    .map_err(|_| {
-                        ForkSessionError::Internal(anyhow::anyhow!(
-                            "session actor dropped fork response"
-                        ))
-                    })?
-                    .map_err(map_fork_command_error)?,
-            )
+            Some(handle.fork().await.map_err(|error| {
+                map_live_fork_command_error(error, "session actor dropped fork response")
+            })?)
         };
 
         let now = chrono::Utc::now().to_rfc3339();
@@ -188,15 +162,9 @@ impl SessionRuntime {
         };
         if let Err(error) = insert_result {
             if let Some(forked) = forked.as_ref().filter(|forked| forked.supports_close) {
-                let (close_tx, close_rx) = tokio::sync::oneshot::channel();
                 let _ = handle
-                    .command_tx
-                    .send(SessionCommand::CloseNativeSession {
-                        native_session_id: forked.native_session_id.clone(),
-                        respond_to: close_tx,
-                    })
+                    .close_native_session(forked.native_session_id.clone())
                     .await;
-                let _ = close_rx.await;
             }
             return Err(ForkSessionError::Internal(error));
         }
@@ -309,5 +277,20 @@ fn map_fork_command_error(error: ForkSessionCommandError) -> ForkSessionError {
         ForkSessionCommandError::Failed(detail) => {
             ForkSessionError::Internal(anyhow::anyhow!(detail))
         }
+    }
+}
+
+fn map_live_fork_command_error(
+    error: LiveSessionCommandError<ForkSessionCommandError>,
+    response_dropped_detail: &str,
+) -> ForkSessionError {
+    match error {
+        LiveSessionCommandError::ActorUnavailable => {
+            ForkSessionError::Internal(anyhow::anyhow!("session actor channel closed"))
+        }
+        LiveSessionCommandError::ResponseDropped => {
+            ForkSessionError::Internal(anyhow::anyhow!(response_dropped_detail.to_string()))
+        }
+        LiveSessionCommandError::Rejected(error) => map_fork_command_error(error),
     }
 }

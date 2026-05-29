@@ -4,7 +4,6 @@ use agent_client_protocol as acp;
 use anyharness_contract::v1::SessionEventEnvelope;
 use tokio::sync::broadcast;
 
-use crate::acp::permission_broker::InteractionBroker;
 use crate::domains::agents::model::ResolvedAgent;
 use crate::domains::plans::service::PlanService;
 use crate::domains::reviews::service::ReviewService;
@@ -12,6 +11,7 @@ use crate::live::sessions::actor::config::selection::find_select_option_by_purpo
 use crate::live::sessions::actor::config::types::ConfigPurpose;
 use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
 use crate::live::sessions::connection::types::NativeSessionStartupState;
+use crate::live::sessions::interactions::broker::InteractionBroker;
 use crate::observability::latency::LatencyRequestContext;
 use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::mcp_bindings::model::SessionMcpServer;

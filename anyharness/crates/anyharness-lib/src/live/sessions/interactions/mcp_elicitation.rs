@@ -4,10 +4,7 @@ use accept::accept_form;
 #[cfg(test)]
 use anyharness_contract::v1::McpElicitationSubmittedValue;
 use anyharness_contract::v1::{McpElicitationInteractionPayload, McpElicitationSubmittedField};
-pub use ext_response::{
-    claude_ext_response_from_outcome, codex_ext_response_from_outcome,
-    ClaudeMcpElicitationExtResponse, CodexMcpElicitationExtResponse,
-};
+pub use ext_response::{claude_ext_response_from_outcome, codex_ext_response_from_outcome};
 use normalize::{normalize_form, normalize_url};
 use serde::Deserialize;
 use serde_json::Value;

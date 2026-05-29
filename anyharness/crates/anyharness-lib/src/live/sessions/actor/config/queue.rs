@@ -3,7 +3,6 @@ use std::sync::Arc;
 use agent_client_protocol as acp;
 use tokio::sync::Mutex;
 
-use crate::acp::event_sink::SessionEventSink;
 use crate::live::sessions::actor::command::SetConfigOptionCommandError;
 use crate::live::sessions::actor::config::apply::apply_specific_config_option;
 use crate::live::sessions::actor::config::selection::{
@@ -12,6 +11,7 @@ use crate::live::sessions::actor::config::selection::{
 };
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
 use crate::live::sessions::actor::state::SessionStartupState;
+use crate::live::sessions::event_sink::SessionEventSink;
 use crate::sessions::model::PendingConfigChangeRecord;
 use crate::sessions::store::SessionStore;
 pub(in crate::live::sessions::actor) fn queue_pending_config_change(

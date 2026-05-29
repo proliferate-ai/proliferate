@@ -1,5 +1,5 @@
 use super::*;
-use crate::acp::mcp_elicitation::{
+use crate::live::sessions::interactions::mcp_elicitation::{
     normalize_codex_mcp_elicitation, CodexMcpElicitationExtParams, CodexMcpElicitationExtRequest,
 };
 use anyharness_contract::v1::{UserInputQuestionOption, UserInputSubmittedAnswer};

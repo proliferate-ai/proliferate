@@ -3,14 +3,13 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock as StdRwLock};
 use std::time::Instant;
 
-use tokio::sync::{broadcast, oneshot, watch, RwLock};
+use tokio::sync::{broadcast, watch, RwLock};
 
-use super::permission_broker::InteractionBroker;
-use super::replay_actor::{spawn_replay_actor, ReplayActorConfig};
+use super::interactions::broker::InteractionBroker;
+use super::replay::{spawn_replay_actor, ReplayActorConfig};
 use crate::domains::agents::model::ResolvedAgent;
 use crate::domains::plans::service::PlanService;
 use crate::domains::reviews::service::ReviewService;
-use crate::live::sessions::actor::command::SessionCommand;
 use crate::live::sessions::actor::spawn::{
     spawn_session_actor_pending, ActorReadyResult, PendingSessionActor,
 };
@@ -30,7 +29,7 @@ use anyharness_contract::v1::SessionEventEnvelope;
 
 type StartupReadinessState = Option<Result<String, String>>;
 
-pub struct AcpManager {
+pub struct LiveSessionManager {
     live_sessions: Arc<RwLock<HashMap<String, Arc<LiveSessionHandle>>>>,
     pending_startups: Arc<RwLock<HashMap<String, watch::Receiver<StartupReadinessState>>>>,
     interaction_broker: Arc<InteractionBroker>,
@@ -38,7 +37,7 @@ pub struct AcpManager {
     review_service: Arc<StdRwLock<Option<Arc<ReviewService>>>>,
 }
 
-impl AcpManager {
+impl LiveSessionManager {
     pub fn new(plan_service: Arc<PlanService>) -> Self {
         let interaction_broker = Arc::new(InteractionBroker::new());
         Self {
@@ -231,23 +230,9 @@ impl AcpManager {
                 }
             };
 
-            let (tx, rx) = oneshot::channel();
-            let send_result = handle
-                .command_tx
-                .send(SessionCommand::InjectRuntimeEvent {
-                    event: event.clone(),
-                    respond_to: tx,
-                })
-                .await
-                .map_err(|_| RuntimeEventInjectionError::ActorUnavailable);
-            let result = match send_result {
-                Ok(()) => rx
-                    .await
-                    .map_err(|_| RuntimeEventInjectionError::ActorUnavailable),
-                Err(error) => Err(error),
-            };
+            let result = handle.inject_runtime_event(event.clone()).await;
             match result {
-                Ok(result) => return result,
+                Ok(result) => return Ok(result),
                 Err(RuntimeEventInjectionError::ActorUnavailable) => {
                     let mut sessions = self.live_sessions.write().await;
                     match sessions.get(session_id) {
@@ -340,7 +325,7 @@ fn append_offline_runtime_event(
         .map_err(|error| RuntimeEventInjectionError::PersistenceFailed(error.to_string()))
 }
 
-impl Clone for AcpManager {
+impl Clone for LiveSessionManager {
     fn clone(&self) -> Self {
         Self {
             live_sessions: self.live_sessions.clone(),
@@ -429,7 +414,7 @@ mod tests {
     use tokio::sync::{broadcast, mpsc, watch};
     use tokio::time::{sleep, Duration};
 
-    use super::{AcpManager, PromptAttachmentStorage};
+    use super::{LiveSessionManager, PromptAttachmentStorage};
     use crate::domains::agents::model::{
         AgentKind, ArtifactRole, CredentialState, ResolvedAgent, ResolvedAgentStatus,
         ResolvedArtifact,
@@ -547,7 +532,7 @@ mod tests {
     #[tokio::test]
     async fn reused_live_handle_reports_the_live_native_session_id() {
         let plan_db = Db::open_in_memory().expect("open plan db");
-        let manager = AcpManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+        let manager = LiveSessionManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
         let (command_tx, _command_rx) = mpsc::channel(4);
         let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
         let handle = Arc::new(LiveSessionHandle::new_for_test(
@@ -591,7 +576,7 @@ mod tests {
     #[tokio::test]
     async fn reused_pending_live_handle_waits_for_shared_startup_readiness() {
         let plan_db = Db::open_in_memory().expect("open plan db");
-        let manager = AcpManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+        let manager = LiveSessionManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
         let (command_tx, _command_rx) = mpsc::channel(4);
         let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
         let handle = Arc::new(LiveSessionHandle::new_for_test(
@@ -656,7 +641,7 @@ mod tests {
     #[tokio::test]
     async fn offline_runtime_event_injection_appends_with_next_sequence() {
         let plan_db = Db::open_in_memory().expect("open plan db");
-        let manager = AcpManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+        let manager = LiveSessionManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
         let store = seeded_session_store();
         store
             .append_event(&SessionEventRecord {
@@ -700,7 +685,7 @@ mod tests {
     #[tokio::test]
     async fn offline_runtime_activity_event_touches_session_updated_at() {
         let plan_db = Db::open_in_memory().expect("open plan db");
-        let manager = AcpManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+        let manager = LiveSessionManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
         let store = seeded_session_store();
 
         let envelope = manager
@@ -721,7 +706,7 @@ mod tests {
     #[tokio::test]
     async fn offline_runtime_event_injection_serializes_concurrent_appends() {
         let plan_db = Db::open_in_memory().expect("open plan db");
-        let manager = AcpManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+        let manager = LiveSessionManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
         let store = seeded_session_store();
 
         let first = manager.emit_runtime_event(
@@ -759,7 +744,7 @@ mod tests {
     #[tokio::test]
     async fn runtime_event_injection_falls_back_when_live_handle_is_stale() {
         let plan_db = Db::open_in_memory().expect("open plan db");
-        let manager = AcpManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+        let manager = LiveSessionManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
         let store = seeded_session_store();
         let (command_tx, command_rx) = mpsc::channel(1);
         drop(command_rx);
@@ -804,7 +789,7 @@ mod tests {
     #[tokio::test]
     async fn live_runtime_event_injection_routes_through_actor_command() {
         let plan_db = Db::open_in_memory().expect("open plan db");
-        let manager = AcpManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+        let manager = LiveSessionManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
         let store = seeded_session_store();
         let (command_tx, mut command_rx) = mpsc::channel(4);
         let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);

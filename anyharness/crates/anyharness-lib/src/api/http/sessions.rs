@@ -19,7 +19,6 @@ use super::access::{
     assert_session_auth_scope, assert_session_mutable, assert_workspace_auth_scope,
 };
 use super::error::ApiError;
-use crate::acp::permission_broker::PermissionDecision;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
@@ -29,9 +28,9 @@ use crate::sessions::mcp_bindings::summaries::validate_binding_summaries;
 use crate::sessions::runtime::contract::session_link_to_summary;
 use crate::sessions::runtime::{
     CreateAndStartSessionError, EnsureLiveSessionError, ForkSessionError,
-    InteractionResolutionRequest, PendingPromptMutationError, ResolveInteractionError,
-    SendPromptError, SendPromptOutcome, SessionLifecycleError, SessionMcpRefresh,
-    SetSessionConfigOptionError,
+    InteractionPermissionDecision, InteractionResolutionRequest, PendingPromptMutationError,
+    ResolveInteractionError, SendPromptError, SendPromptOutcome, SessionLifecycleError,
+    SessionMcpRefresh, SetSessionConfigOptionError,
 };
 use crate::sessions::service::{GetLiveConfigSnapshotError, UpdateSessionTitleError};
 use crate::workspaces::operation_gate::{WorkspaceOperationKind, WorkspaceOperationLease};
@@ -1188,10 +1187,10 @@ fn resolve_interaction_input(request: ResolveInteractionRequest) -> InteractionR
         }
         ResolveInteractionRequest::Decision {
             decision: InteractionDecision::Allow,
-        } => InteractionResolutionRequest::Decision(PermissionDecision::Allow),
+        } => InteractionResolutionRequest::Decision(InteractionPermissionDecision::Allow),
         ResolveInteractionRequest::Decision {
             decision: InteractionDecision::Deny,
-        } => InteractionResolutionRequest::Decision(PermissionDecision::Deny),
+        } => InteractionResolutionRequest::Decision(InteractionPermissionDecision::Deny),
         ResolveInteractionRequest::Submitted { answers } => {
             InteractionResolutionRequest::Submitted { answers }
         }

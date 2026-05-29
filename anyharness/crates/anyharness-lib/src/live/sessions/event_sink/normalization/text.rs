@@ -1,7 +1,7 @@
 use super::super::state::{AcpToolPayload, ParsedMeta};
 use anyharness_contract::v1::ContentPart;
 
-pub(in crate::acp::event_sink) fn extract_text(content: &serde_json::Value) -> String {
+pub(in crate::live::sessions::event_sink) fn extract_text(content: &serde_json::Value) -> String {
     match content {
         serde_json::Value::String(text) => text.clone(),
         serde_json::Value::Object(map) => {
@@ -22,7 +22,7 @@ fn is_subagent_tool(tool_kind: Option<&str>, native_tool_name: Option<&str>) -> 
     native_tool_name == Some("Agent") || tool_kind == Some("think")
 }
 
-pub(in crate::acp::event_sink) fn normalize_text_parts(
+pub(in crate::live::sessions::event_sink) fn normalize_text_parts(
     payload: &AcpToolPayload,
     tool_kind: Option<&str>,
     native_tool_name: Option<&str>,
@@ -91,7 +91,7 @@ fn extract_subagent_result_text(
     None
 }
 
-pub(in crate::acp::event_sink) fn extract_preview(
+pub(in crate::live::sessions::event_sink) fn extract_preview(
     value: Option<&serde_json::Value>,
 ) -> Option<String> {
     let value = value?;
@@ -141,7 +141,7 @@ pub(in crate::acp::event_sink) fn extract_preview(
     }
 }
 
-pub(in crate::acp::event_sink) fn extract_preview_value(
+pub(in crate::live::sessions::event_sink) fn extract_preview_value(
     value: &serde_json::Value,
 ) -> Option<String> {
     match value {
@@ -218,7 +218,7 @@ fn extract_result_text_without_input_fallback(
     extract_preview(raw_output)
 }
 
-pub(in crate::acp::event_sink) fn count_lines(text: &str) -> i64 {
+pub(in crate::live::sessions::event_sink) fn count_lines(text: &str) -> i64 {
     if text.is_empty() {
         0
     } else {

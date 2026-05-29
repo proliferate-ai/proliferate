@@ -6,19 +6,19 @@ use anyharness_contract::v1::{
 };
 use tokio::sync::Mutex;
 
-use crate::acp::event_sink::SessionEventSink;
-use crate::acp::mcp_elicitation::McpElicitationOutcome;
-use crate::acp::permission_broker::{
-    InteractionBroker, InteractionBrokerOutcome, InteractionCancelOutcome, PermissionOutcome,
-    ResolveInteractionError, UserInputOutcome,
-};
 use crate::domains::plans::model::PlanRecord;
 use crate::domains::plans::service::{PlanDecisionError, PlanService};
 use crate::live::sessions::actor::command::{
     InteractionResolution, ResolveInteractionCommandError,
 };
 use crate::live::sessions::actor::interactions::plan_links::link_plan_to_pending_permission;
+use crate::live::sessions::event_sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
+use crate::live::sessions::interactions::broker::{
+    InteractionBroker, InteractionBrokerOutcome, InteractionCancelOutcome, PermissionOutcome,
+    ResolveInteractionError, UserInputOutcome,
+};
+use crate::live::sessions::interactions::mcp_elicitation::McpElicitationOutcome;
 pub(in crate::live::sessions::actor) async fn handle_resolve_interaction(
     handle: &Arc<LiveSessionHandle>,
     event_sink: &Arc<Mutex<SessionEventSink>>,
@@ -367,14 +367,14 @@ mod tests {
     use tokio::time::timeout;
 
     use super::*;
-    use crate::acp::event_sink::SessionEventSink;
-    use crate::acp::permission_broker::{InteractionBroker, PermissionOutcome};
     use crate::domains::plans::model::PlanRecord;
     use crate::domains::plans::model::{NewPlan, PlanCreateOutcome};
     use crate::domains::plans::service::{PlanEventContext, PlanService};
     use crate::domains::plans::store::PlanStore;
     use crate::live::sessions::actor::command::SessionCommand;
+    use crate::live::sessions::event_sink::SessionEventSink;
     use crate::live::sessions::handle::LiveSessionHandle;
+    use crate::live::sessions::interactions::broker::{InteractionBroker, PermissionOutcome};
     use crate::persistence::Db;
     use crate::sessions::store::SessionStore;
 
@@ -467,7 +467,7 @@ mod tests {
         Arc<Mutex<SessionEventSink>>,
         Arc<InteractionBroker>,
         Arc<LiveSessionHandle>,
-        crate::acp::permission_broker::PendingPermissionWait,
+        crate::live::sessions::interactions::broker::PendingPermissionWait,
     ) {
         let (db, service, plan) = seed_plan_service_with_link(option_mappings);
         let session_store = SessionStore::new(db);

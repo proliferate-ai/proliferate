@@ -9,7 +9,9 @@ use anyharness_contract::v1::{
 use tokio::sync::{oneshot, Mutex};
 use validation::{map_mcp_validation_error, pick_option, validate_user_input_answers};
 
-use super::mcp_elicitation::{McpElicitationOutcome, StoredMcpElicitation};
+use crate::live::sessions::interactions::mcp_elicitation::{
+    McpElicitationOutcome, StoredMcpElicitation,
+};
 
 #[cfg(test)]
 mod tests;

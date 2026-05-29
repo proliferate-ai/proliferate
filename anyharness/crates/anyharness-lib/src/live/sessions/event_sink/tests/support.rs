@@ -1,7 +1,7 @@
 use serde_json::json;
 use tokio::sync::broadcast;
 
-use crate::acp::event_sink::AcpChunkPayload;
+use crate::live::sessions::event_sink::AcpChunkPayload;
 use crate::persistence::Db;
 use crate::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::sessions::store::SessionStore;

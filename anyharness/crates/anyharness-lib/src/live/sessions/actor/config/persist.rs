@@ -6,10 +6,10 @@ use anyharness_contract::v1::{
 };
 use tokio::sync::Mutex;
 
-use crate::acp::event_sink::SessionEventSink;
 use crate::domains::agents::model::AgentKind;
 use crate::live::sessions::actor::config::types::{ConfigPurpose, PersistedSessionConfigState};
 use crate::live::sessions::actor::state::SessionStartupState;
+use crate::live::sessions::event_sink::SessionEventSink;
 use crate::sessions::live_config::{
     build_live_config_snapshot, normalized_key_rank, snapshot_from_record, snapshot_to_record,
     NormalizedControlKind,

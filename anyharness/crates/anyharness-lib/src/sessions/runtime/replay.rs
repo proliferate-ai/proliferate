@@ -1,6 +1,6 @@
 use anyharness_contract::v1::ReplayRecordingSummary;
 
-use crate::live::sessions::actor::command::SessionCommand;
+use crate::live::sessions::LiveSessionCommandError;
 use crate::origin::OriginContext;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::replay::{
@@ -125,14 +125,12 @@ impl SessionRuntime {
             .get_handle(session_id)
             .await
             .ok_or_else(|| ReplayError::SessionNotLive(session_id.to_string()))?;
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        handle
-            .command_tx
-            .send(SessionCommand::ReplayAdvance { respond_to: tx })
-            .await
-            .map_err(|_| ReplayError::SessionNotLive(session_id.to_string()))?;
-        rx.await
-            .map_err(|_| ReplayError::SessionNotLive(session_id.to_string()))?
-            .map_err(ReplayError::Internal)
+        handle.replay_advance().await.map_err(|error| match error {
+            LiveSessionCommandError::ActorUnavailable
+            | LiveSessionCommandError::ResponseDropped => {
+                ReplayError::SessionNotLive(session_id.to_string())
+            }
+            LiveSessionCommandError::Rejected(error) => ReplayError::Internal(error),
+        })
     }
 }
