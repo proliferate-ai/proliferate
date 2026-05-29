@@ -1,0 +1,113 @@
+name: Deploy Web
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      git_sha:
+        required: true
+        type: string
+      enabled:
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ inputs.enabled }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      WEB_URL: ${{ vars.WEB_URL }}
+      VERCEL_ENVIRONMENT: ${{ vars.VERCEL_ENVIRONMENT || 'production' }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE }}
+      VERCEL_GIT_COMMIT_SHA: ${{ inputs.git_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_sha }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Validate Vercel config
+        run: |
+          set -euo pipefail
+          : "${WEB_URL:?Set WEB_URL on the GitHub environment.}"
+          : "${VERCEL_TOKEN:?Set VERCEL_TOKEN on the GitHub environment.}"
+          : "${VERCEL_ORG_ID:?Set VERCEL_ORG_ID on the GitHub environment.}"
+          : "${VERCEL_PROJECT_ID:?Set VERCEL_PROJECT_ID on the GitHub environment.}"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Pull Vercel project settings
+        run: >
+          pnpm dlx vercel@latest pull
+          --yes
+          --environment="$VERCEL_ENVIRONMENT"
+          --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy to Vercel
+        id: deploy
+        run: |
+          set -euo pipefail
+          args=(--yes --token="$VERCEL_TOKEN")
+          if [[ -n "${VERCEL_SCOPE:-}" ]]; then
+            args+=(--scope "$VERCEL_SCOPE")
+          fi
+          if [[ "$VERCEL_ENVIRONMENT" == "production" ]]; then
+            args+=(--prod)
+          fi
+          deployment_output="$(pnpm dlx vercel@latest deploy "${args[@]}")"
+          deployment_url="$(printf '%s\n' "$deployment_output" | awk '/^https:\/\// { url=$0 } END { print url }')"
+          if [[ -z "$deployment_url" ]]; then
+            printf '%s\n' "$deployment_output"
+            echo "Could not find Vercel deployment URL in CLI output." >&2
+            exit 1
+          fi
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Alias web domain
+        run: |
+          set -euo pipefail
+          args=(--token="$VERCEL_TOKEN")
+          if [[ -n "${VERCEL_SCOPE:-}" ]]; then
+            args+=(--scope "$VERCEL_SCOPE")
+          fi
+          alias_domain="${WEB_URL#https://}"
+          alias_domain="${alias_domain#http://}"
+          alias_domain="${alias_domain%%/*}"
+          pnpm dlx vercel@latest alias set "${{ steps.deploy.outputs.deployment_url }}" "$alias_domain" "${args[@]}"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Smoke web
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location "$WEB_URL" >/tmp/web.html
+          test -s /tmp/web.html
+
+      - name: Summarize web deploy
+        run: |
+          {
+            echo "### Web"
+            echo "- Environment: ${{ inputs.environment }}"
+            echo "- Deployment: ${{ steps.deploy.outputs.deployment_url }}"
+            echo "- URL: $WEB_URL"
+          } >> "$GITHUB_STEP_SUMMARY"

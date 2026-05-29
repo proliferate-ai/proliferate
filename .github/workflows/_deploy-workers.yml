@@ -1,0 +1,52 @@
+name: Deploy Workers
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      git_sha:
+        required: true
+        type: string
+      enabled:
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    if: ${{ inputs.enabled }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      WORKERS_DEPLOY_ENABLED: ${{ vars.WORKERS_DEPLOY_ENABLED || 'false' }}
+      WORKERS_DEPLOY_NOTE: ${{ vars.WORKERS_DEPLOY_NOTE || 'No hosted background worker ECS service is enabled for this environment yet.' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_sha }}
+
+      - name: Check worker deploy switch
+        run: |
+          set -euo pipefail
+          if [[ "$WORKERS_DEPLOY_ENABLED" != "true" ]]; then
+            echo "$WORKERS_DEPLOY_NOTE"
+            exit 0
+          fi
+          echo "WORKERS_DEPLOY_ENABLED=true, but no canonical worker command/service has been configured in this workflow yet." >&2
+          echo "Define the ECS worker service and worker command before enabling this lane." >&2
+          exit 1
+
+      - name: Summarize worker deploy
+        if: always()
+        run: |
+          {
+            echo "### Workers"
+            echo "- Environment: ${{ inputs.environment }}"
+            echo "- Enabled: \`$WORKERS_DEPLOY_ENABLED\`"
+            echo "- Note: $WORKERS_DEPLOY_NOTE"
+          } >> "$GITHUB_STEP_SUMMARY"

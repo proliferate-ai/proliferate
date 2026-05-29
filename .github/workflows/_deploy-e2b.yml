@@ -1,0 +1,133 @@
+name: Deploy E2B Template
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      git_sha:
+        required: true
+        type: string
+      enabled:
+        default: true
+        type: boolean
+      rolling_tag:
+        required: true
+        type: string
+      mode:
+        default: build_and_promote
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ inputs.enabled }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      E2B_PUBLIC_TEMPLATE_FAMILY: ${{ vars.E2B_PUBLIC_TEMPLATE_FAMILY }}
+      E2B_TEAM_ID: ${{ vars.E2B_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_sha }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install E2B CLI
+        run: npm install -g @e2b/cli
+
+      - name: Validate E2B config
+        run: |
+          set -euo pipefail
+          case "${{ inputs.mode }}" in
+            build_and_promote|promote_only) ;;
+            *) echo "Unsupported E2B deploy mode: ${{ inputs.mode }}" >&2; exit 1 ;;
+          esac
+          : "${E2B_PUBLIC_TEMPLATE_FAMILY:?Set E2B_PUBLIC_TEMPLATE_FAMILY on the GitHub environment.}"
+          : "${E2B_TEAM_ID:?Set E2B_TEAM_ID on the GitHub environment.}"
+          : "${E2B_API_KEY:?Set E2B_API_KEY on the GitHub environment.}"
+          if [[ "${{ inputs.mode }}" == "build_and_promote" ]]; then
+            : "${E2B_ACCESS_TOKEN:?Set E2B_ACCESS_TOKEN on the GitHub environment while build-template uses the E2B CLI.}"
+          fi
+        env:
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+          E2B_ACCESS_TOKEN: ${{ secrets.E2B_ACCESS_TOKEN }}
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install MUSL target
+        if: ${{ inputs.mode == 'build_and_promote' }}
+        run: rustup target add x86_64-unknown-linux-musl
+
+      - name: Setup Zig
+        if: ${{ inputs.mode == 'build_and_promote' }}
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.13.0
+
+      - name: Install cargo-zigbuild
+        if: ${{ inputs.mode == 'build_and_promote' }}
+        run: cargo install cargo-zigbuild --locked
+
+      - name: Resolve immutable template tag
+        id: tag
+        run: |
+          set -euo pipefail
+          short_sha="${GIT_SHA:0:12}"
+          echo "sha_tag=sha-${short_sha}" >> "$GITHUB_OUTPUT"
+        env:
+          GIT_SHA: ${{ inputs.git_sha }}
+
+      - name: Build and publish immutable template
+        if: ${{ inputs.mode == 'build_and_promote' }}
+        run: >
+          node scripts/build-template.mjs
+          --name "$E2B_PUBLIC_TEMPLATE_FAMILY"
+          --tag "${{ steps.tag.outputs.sha_tag }}"
+          --publish
+          --rebuild-runtime
+        env:
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+          E2B_ACCESS_TOKEN: ${{ secrets.E2B_ACCESS_TOKEN }}
+          E2B_TEAM_ID: ${{ vars.E2B_TEAM_ID }}
+
+      - name: Smoke test immutable public ref
+        run: >
+          node scripts/smoke-cloud-template.mjs
+          --template "$E2B_PUBLIC_TEMPLATE_FAMILY:${{ steps.tag.outputs.sha_tag }}"
+        env:
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+
+      - name: Promote immutable build
+        run: >
+          node scripts/promote-cloud-template.mjs
+          --name "$E2B_PUBLIC_TEMPLATE_FAMILY"
+          --source-tag "${{ steps.tag.outputs.sha_tag }}"
+          --tag "${{ inputs.rolling_tag }}"
+        env:
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+
+      - name: Summarize E2B deploy
+        run: |
+          {
+            echo "### E2B template"
+            echo "- Environment: ${{ inputs.environment }}"
+            echo "- Immutable tag: \`${{ steps.tag.outputs.sha_tag }}\`"
+            echo "- Rolling tag: \`${{ inputs.rolling_tag }}\`"
+            echo "- Family: \`$E2B_PUBLIC_TEMPLATE_FAMILY\`"
+          } >> "$GITHUB_STEP_SUMMARY"

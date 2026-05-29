@@ -38,6 +38,29 @@ jobs:
       - name: Check AnyHarness layer boundaries
         run: python3 scripts/check_anyharness_boundaries.py
 
+  ci-cd-config:
+    name: CI/CD config checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check CI/CD scripts parse
+        run: |
+          node --check scripts/ci-cd/detect-deploy-surfaces.mjs
+          node --check scripts/ci-cd/resolve-deploy-base.mjs
+
+      - name: Check workflow YAML parses
+        run: ruby -e 'require "yaml"; ARGV.each { |file| YAML.load_file(file); puts file }' .github/workflows/*.yml
+
+      - name: Smoke deploy surface detector
+        run: node scripts/ci-cd/detect-deploy-surfaces.mjs --base HEAD --head HEAD
+
   cargo-check:
     name: Cargo check & test
     runs-on: ubuntu-latest
@@ -123,6 +146,105 @@ jobs:
       - name: Build desktop frontend
         working-directory: apps/desktop
         run: pnpm run build
+
+  server-lint:
+    name: Server lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate catalogs
+        run: node scripts/validate-agent-catalog.mjs
+        working-directory: .
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      - name: Build artifact runtime
+        run: pnpm -C server/artifact-runtime build
+        working-directory: .
+
+      - name: Install dependencies
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Ruff check
+        run: ruff check proliferate/ tests/
+
+      - name: Ruff format check
+        run: ruff format --check proliferate/ tests/
+
+  server-test:
+    name: Server tests
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate
+      JWT_SECRET: test-jwt-secret
+      CLOUD_SECRET_KEY: test-cloud-secret
+    defaults:
+      run:
+        working-directory: server
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: proliferate
+          POSTGRES_PASSWORD: localdev
+          POSTGRES_DB: proliferate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U proliferate -d proliferate"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      - name: Build artifact runtime
+        run: pnpm -C server/artifact-runtime build
+        working-directory: .
+
+      - name: Install dependencies
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Run tests
+        run: pytest tests/ -xvs
 
   mobile-typecheck:
     name: Mobile typecheck

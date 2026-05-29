@@ -8,6 +8,14 @@ publishing, or the desktop in-app update flow.
 ```text
 .github/workflows/
   ci.yml                     # shared Rust, SDK, and desktop frontend validation
+  deploy-staging.yml         # main -> staging deploy spine after CI succeeds
+  promote-production.yml     # protected manual production promote from a tested SHA
+  _deploy-e2b.yml            # reusable E2B template build/promote/smoke lane
+  _deploy-server.yml         # reusable ECR/ECS/Alembic/server-health lane
+  _deploy-workers.yml        # reusable hosted worker lane, gated until workers are enabled
+  _deploy-web.yml            # reusable Vercel deploy/alias/smoke lane
+  _deploy-mobile.yml         # reusable EAS/TestFlight lane, gated until app identity is ready
+  _deploy-desktop.yml        # reusable desktop release dispatch lane, gated until beta/stable channel split
   cloud-tests.yml            # real-provider cloud lifecycle + cloud-backed runtime suites
   cloud-live-webhook.yml     # manual/nightly live E2B webhook delivery smoke
   release-cloud-template.yml # public E2B cloud template build + publish + staging promote
@@ -31,6 +39,9 @@ server/
   infra/main.tf              # ECR, ECS, RDS, and server runtime infra
   deploy/                    # self-hosted production compose + update scripts
 scripts/
+  ci-cd/
+    detect-deploy-surfaces.mjs
+    resolve-deploy-base.mjs
   build-agent-seed.mjs
   generate-desktop-installer-manifest.mjs
   generate-updater-manifest.mjs
@@ -63,10 +74,13 @@ vercel.json                  # web app deploy config (Vercel project proliferate
   `installers.json`, not the Tauri updater `latest.json` feed.
 - Only packaged desktop builds should auto-check for updates. Development builds
   should remain updater-free.
-- `server-ci.yml` validates the server on normal pushes and pull requests.
-  Publishing remains tag-gated; this repo does not yet contain the final ECS
-  rollout workflow. Do not document a fully automated API deploy path unless it
-  actually exists.
+- `ci.yml` is the repo-wide merge gate. It must include the checks needed before
+  staging can deploy, including server lint/tests.
+- `server-ci.yml` remains the tag-gated self-hosted server image/release-asset
+  workflow. Hosted ECS rollout belongs to the deploy spine, not this workflow.
+- Staging deploys are driven by `deploy-staging.yml` after `CI` succeeds on
+  `main`. Production deploys are driven by protected manual promotion through
+  `promote-production.yml`.
 - Self-hosted production should center on `server/deploy/**` and GHCR-published
   server images. Do not create a parallel self-hosted deploy path that drifts
   from those files.
@@ -174,9 +188,15 @@ Flow:
 2. It validates:
    - repo shape checks, including max source file length, frontend layer
      boundaries, server layer boundaries, and AnyHarness layer boundaries
+   - CI/CD helper script parsing, workflow YAML parsing, and deploy surface
+     detector smoke coverage
    - the Rust workspace with `cargo check` and `cargo test`
    - `@anyharness/sdk` generation and build
    - the desktop frontend build
+   - server catalog validation, Ruff, format, and pytest against Postgres
+   - mobile typecheck
+   - web typecheck/build
+   - shared frontend package typecheck/build/tests
 3. `.github/workflows/server-ci.yml` validates the server slice separately with:
    - Ruff
    - pytest against Postgres
@@ -401,10 +421,31 @@ Notes:
 
 Source of truth:
 
+- `.github/workflows/deploy-staging.yml`
+- `.github/workflows/promote-production.yml`
+- `.github/workflows/_deploy-server.yml`
 - `.github/workflows/server-ci.yml`
 - `server/infra/main.tf`
 
-Flow today:
+Hosted flow:
+
+1. A successful `CI` run on `main` triggers `Deploy Staging`.
+2. `Deploy Staging` resolves the last successful staging SHA, diffs it against
+   the new SHA, and classifies touched deploy surfaces.
+3. If `server` changed, `_deploy-server.yml`:
+   - builds and pushes an ECR image tagged by short SHA
+   - renders a new ECS task definition from the live service task definition
+   - updates non-secret runtime environment such as API URLs, release SHA, and
+     E2B template ref
+   - runs `alembic upgrade head` as a one-off Fargate task
+   - rolls the ECS service
+   - smokes `${API_URL}${API_HEALTH_PATH:-/api/health}`
+4. `Promote Production` is a manual protected workflow. It requires, by default,
+   a successful staging deploy for the exact SHA being promoted, then repeats
+   the same changed-surface deploy graph against production environment vars and
+   secrets.
+
+Self-hosted/tag flow:
 
 1. Changes under `server/**` trigger `Server CI` on `main` and pull requests.
 2. The workflow runs lint and tests.
@@ -423,20 +464,115 @@ Flow today:
 
 Current boundary:
 
-- This repo currently automates versioned GHCR image publication on
-  `server-v*` tags.
+- This repo automates hosted ECR/ECS rollout through the deploy spine and
+  versioned GHCR image publication through `server-v*` tags.
 - This repo now also publishes the versioned AWS self-hosted stack template and
   Linux runtime tarball on `server-v*` tags so a CloudFormation launch can
   bootstrap the same `server/deploy/**` surface.
-- This repo does not currently contain the final ECS deployment rollout step.
-- If you add that rollout later, update this doc, `server/infra/**`, and the
-  GitHub workflow together.
+
+### Hosted Deploy Spine
+
+Source of truth:
+
+- `.github/workflows/deploy-staging.yml`
+- `.github/workflows/promote-production.yml`
+- `.github/workflows/_deploy-*.yml`
+- `scripts/ci-cd/detect-deploy-surfaces.mjs`
+- `scripts/ci-cd/resolve-deploy-base.mjs`
+
+Trigger model:
+
+1. Pull requests run checks only.
+2. `main` runs `CI`.
+3. Successful `CI` on `main` triggers `Deploy Staging`.
+4. Production is promoted manually through `Promote Production` and should be
+   protected by the GitHub `production` environment.
+5. Tags are release artifacts or channel pointers, not the primary hosted deploy
+   trigger.
+
+Deploy graph:
+
+1. Resolve base/head:
+   - staging diffs against the last successful `deploy-staging.yml` run
+   - production diffs against the last successful `promote-production.yml` run
+2. Detect changed surfaces:
+   - `server`
+   - `workers`
+   - `e2b`
+   - `web`
+   - `mobile`
+   - `desktop`
+   - `runtime`
+3. Deploy changed surfaces:
+   - E2B builds immutable `sha-*` tags for staging, then moves the rolling
+     `staging` tag after smoke
+   - production E2B promotes the already-built `sha-*` tag to `production`
+   - server deploys ECR/ECS, runs Alembic, and smokes health
+   - web deploys through Vercel, aliases the environment URL, and smokes it
+   - mobile uses EAS build/submit when `MOBILE_DEPLOY_ENABLED=true`
+   - desktop dispatches the desktop release workflow when
+     `DESKTOP_DEPLOY_ENABLED=true`
+   - workers are intentionally gated until the hosted worker ECS command/service
+     is canonical
+4. Upload a deploy summary artifact.
+
+Required GitHub environment vars/secrets:
+
+```text
+# common
+AWS_REGION
+AWS_DEPLOY_ROLE_ARN
+WEB_URL
+API_URL
+
+# server
+ECR_SERVER_REPOSITORY
+ECS_CLUSTER
+ECS_SERVER_SERVICE
+ECS_SERVER_CONTAINER_NAME
+API_HEALTH_PATH
+E2B_TEMPLATE_REF
+
+# E2B
+E2B_PUBLIC_TEMPLATE_FAMILY
+E2B_TEAM_ID
+E2B_API_KEY
+E2B_ACCESS_TOKEN
+
+# Vercel
+VERCEL_TOKEN
+VERCEL_ORG_ID
+VERCEL_PROJECT_ID
+VERCEL_ENVIRONMENT
+VERCEL_SCOPE
+
+# mobile, when enabled
+MOBILE_DEPLOY_ENABLED
+EXPO_TOKEN
+EAS_BUILD_PROFILE
+EAS_SUBMIT_PROFILE
+EAS_SUBMIT_ENABLED
+
+# desktop, when enabled
+DESKTOP_DEPLOY_ENABLED
+DESKTOP_RELEASE_WORKFLOW
+DESKTOP_RELEASE_REF
+```
+
+For staging, the canonical values are expected to point at staging resources
+such as `proliferate-staging`, `staging.proliferate.com`,
+`staging-app.proliferate.com`, and
+`TEAM_SLUG/proliferate-runtime-cloud:staging`. Production must point at the
+production equivalents.
 
 ## 5. Source of Truth
 
 | Concern | Canonical files |
 | --- | --- |
 | Shared CI for Rust, SDK, and desktop frontend | `.github/workflows/ci.yml` |
+| Hosted staging deploy | `.github/workflows/deploy-staging.yml`, `.github/workflows/_deploy-*.yml` |
+| Hosted production promote | `.github/workflows/promote-production.yml`, `.github/workflows/_deploy-*.yml` |
+| Deploy surface detection | `scripts/ci-cd/detect-deploy-surfaces.mjs`, `scripts/ci-cd/resolve-deploy-base.mjs` |
 | PR title and release/area label validation | `.github/workflows/pr-metadata.yml` |
 | Generated GitHub release-note grouping | `.github/release.yml` |
 | PR metadata checklist | `.github/pull_request_template.md` |
