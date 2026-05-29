@@ -268,11 +268,14 @@ export const MainSidebar = memo(function MainSidebar() {
 
   return (
     <DebugProfiler id="workspace-sidebar">
-      <ProductSidebarFrame footer={(
-        <DebugProfiler id="workspace-sidebar-footer">
-          <SidebarFooter />
-        </DebugProfiler>
-      )}>
+      <ProductSidebarFrame
+        className="pt-3"
+        footer={(
+          <DebugProfiler id="workspace-sidebar-footer">
+            <SidebarFooter />
+          </DebugProfiler>
+        )}
+      >
       {supportOpen && (
         <SupportDialog
           onClose={() => setSupportOpen(false)}
