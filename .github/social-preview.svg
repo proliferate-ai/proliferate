@@ -1,0 +1,19 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
+  <rect width="1200" height="630" fill="#07080A"/>
+  <rect x="100" y="88" width="1000" height="454" rx="30" fill="#0A0B0D"/>
+  <rect x="100.5" y="88.5" width="999" height="453" rx="29.5" stroke="#22242A"/>
+  <g transform="translate(255.36 258.5) scale(0.62)">
+    <rect x="75" y="75" width="50" height="50" fill="#F3F1EF"/>
+    <rect x="87.67" y="5" width="24.67" height="24.67" fill="#F3F1EF"/>
+    <rect x="129" y="46.33" width="24.67" height="24.67" fill="#F3F1EF"/>
+    <rect x="170.33" y="87.67" width="24.67" height="24.67" fill="#F3F1EF"/>
+    <rect x="129" y="129" width="24.67" height="24.67" fill="#F3F1EF"/>
+    <rect x="87.67" y="170.33" width="24.67" height="24.67" fill="#F3F1EF"/>
+    <rect x="46.33" y="129" width="24.67" height="24.67" fill="#F3F1EF"/>
+    <rect x="5" y="87.67" width="24.67" height="24.67" fill="#F3F1EF"/>
+    <rect x="46.33" y="46.33" width="24.67" height="24.67" fill="#F3F1EF"/>
+  </g>
+  <text x="429.36" y="288.5" fill="#F8F6F1" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="70" font-weight="760" letter-spacing="0">Proliferate</text>
+  <text x="434.36" y="350.5" fill="#D8D3CB" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="32" font-weight="540" letter-spacing="0">The Local and Cloud Agent IDE</text>
+  <text x="434.36" y="404.5" fill="#A9A39A" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="26" font-weight="450" letter-spacing="0">Run any agent harness locally or in the cloud.</text>
+</svg>

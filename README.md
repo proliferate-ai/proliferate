@@ -1,16 +1,135 @@
-# Proliferate
+<div align="center">
 
-**Run coding agents locally or in the cloud.**
+<table>
+  <tr>
+    <td align="center">
+      <br /><br /><br />
+      <strong>Coming soon</strong>
+      <br /><br /><br />
+    </td>
+  </tr>
+</table>
 
-Proliferate is a macOS app for running Codex, Claude Code, Gemini CLI, and other
-coding agents in isolated workspaces.
+<p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/readme/proliferate-wordmark-dark.svg" />
+    <img src="./docs/assets/readme/proliferate-wordmark-light.svg" width="320" alt="Proliferate" />
+  </picture>
+</p>
 
-## Install
+<p><strong>The Local and Cloud Agent IDE</strong></p>
 
-Download Proliferate from [proliferate.com](https://proliferate.com) or from the
-[latest GitHub release](https://github.com/proliferate-ai/proliferate/releases/latest).
+<p>
+  <a href="https://github.com/proliferate-ai/proliferate/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/proliferate-ai/proliferate?style=flat&amp;logo=github&amp;label=stars" /></a>
+  <a href="https://github.com/proliferate-ai/proliferate/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/proliferate-ai/proliferate?style=flat&amp;sort=semver&amp;label=release" /></a>
+  <a href="./LICENSE"><img alt="License" src="https://img.shields.io/github/license/proliferate-ai/proliferate?style=flat&amp;label=license" /></a>
+  <a href="https://proliferate.com/docs"><img alt="Docs" src="https://img.shields.io/badge/docs-view-0969DA?style=flat" /></a>
+  <a href="https://proliferate.com"><img alt="Website" src="https://img.shields.io/badge/website-visit-0969DA?style=flat" /></a>
+  <a href="https://proliferate.com/discord"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2?style=flat&amp;logo=discord&amp;logoColor=white" /></a>
+</p>
 
-## Run Locally
+<p>
+  Your personal software factory for running any agent harness locally, in the
+  cloud, and across the surfaces where work happens.
+</p>
+
+<p>
+  <a href="https://proliferate.com"><strong>Download for macOS</strong></a>
+  ·
+  <a href="https://proliferate.com/docs">Documentation</a>
+  ·
+  <a href="https://proliferate.com/changelog">Changelog</a>
+  ·
+  <a href="#community">Community</a>
+</p>
+
+</div>
+
+## Your Personal Software Factory
+
+Proliferate is the open source workspace for using any coding agent and getting
+real work done: local when you want desktop control, cloud when work needs to
+keep going, and shared when a workflow is ready for the rest of your team.
+
+- Use the agents you already trust: Codex, Claude Code, Gemini CLI, OpenCode,
+  Cursor, Amp, and whatever comes next.
+- Start work on your machine, keep it running in cloud when it needs time, and
+  pick it back up from desktop or web.
+- Spin up focused agent runs, compare plans and diffs, and review the useful
+  work without juggling terminals.
+- Turn repeated fixes, checks, reviews, and handoffs into automations your team
+  can run from Proliferate or Slack.
+- Keep control as adoption grows with open source, self-hosting, sandbox
+  isolation, shared auth, and enterprise security boundaries.
+
+## Bring Your Agent
+
+Proliferate runs each agent through its native harness, so auth, tools, models,
+permissions, and transcript behavior stay intact.
+
+<table>
+  <tr>
+    <td align="center" width="120">
+      <img src="./apps/desktop/public/provider-icons/claude.svg" width="40" height="40" alt="Claude" /><br />
+      <strong>Claude Code</strong>
+    </td>
+    <td align="center" width="120">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="./apps/desktop/public/provider-icons/codex-dark.svg" />
+        <img src="./apps/desktop/public/provider-icons/codex.svg" width="40" height="40" alt="Codex" />
+      </picture><br />
+      <strong>Codex</strong>
+    </td>
+    <td align="center" width="120">
+      <img src="./apps/desktop/public/provider-icons/gemini.svg" width="40" height="40" alt="Gemini" /><br />
+      <strong>Gemini CLI</strong>
+    </td>
+    <td align="center" width="120">
+      <img src="./apps/desktop/public/provider-icons/opencode.png" width="40" height="40" alt="OpenCode" /><br />
+      <strong>OpenCode</strong>
+    </td>
+    <td align="center" width="120">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/readme/cursor-dark.svg" />
+        <img src="./apps/desktop/public/provider-icons/cursor.svg" width="40" height="40" alt="Cursor" />
+      </picture><br />
+      <strong>Cursor</strong>
+    </td>
+    <td align="center" width="120">
+      <img src="./apps/desktop/public/provider-icons/amp.svg" width="40" height="40" alt="Amp" /><br />
+      <strong>Amp</strong>
+    </td>
+  </tr>
+</table>
+
+## Features
+
+| Feature | What it unlocks |
+| --- | --- |
+| [Automations](https://proliferate.com/docs/concepts/automations) | Run any agent on a schedule whenever, wherever. |
+| [Native harnesses](https://proliferate.com/docs/concepts/agents-and-harnesses) | Claude Code, Codex, Gemini CLI, OpenCode, Cursor, Amp, and more. |
+| [Workspaces](https://proliferate.com/docs/concepts/workspaces) | Isolated local worktrees and cloud sandboxes for every task. |
+| [Workspace mobility](https://proliferate.com/docs/concepts/cloud) | Move workspaces between local and cloud when the job changes. |
+| [Subagents](https://proliferate.com/docs/concepts/subagents) | Split investigation, implementation, and review across helper agents. |
+| [Code and plan review](https://proliferate.com/docs/concepts/review) | Have reviewer agents check plans, diffs, risks, and branch readiness. |
+| [Plugins](https://proliferate.com/docs/concepts/plugins) | Add MCPs, skills, Computer Use, Browser Use, and custom tools per session. |
+| [Artifacts](https://proliferate.com/docs/concepts/artifacts) | Render agent outputs like docs, UI, demos, and components inline. |
+| [Multiplayer cloud chats](https://proliferate.com/docs/concepts/cloud) | Share cloud sessions your team can inspect, claim, and continue. |
+| [Team Slackbot](https://proliferate.com/docs/concepts/organizations) | Turn Slack requests into shared agent work for the whole team. |
+| [Mobile](https://proliferate.com/docs/concepts/mobile) | Coming soon: dispatch work, approve actions, and follow runs from your phone. |
+| [Organizations](https://proliferate.com/docs/concepts/organizations) | Team seats, shared settings, cloud limits, and governance controls. |
+
+## Getting Started
+
+### Quick Start
+
+Download Proliferate from [proliferate.com](https://proliferate.com) or follow
+the [installation guide](https://proliferate.com/docs/installation).
+
+<details>
+<summary>Run from source</summary>
+
+### Run Locally From Source
 
 Requirements:
 
@@ -18,69 +137,56 @@ Requirements:
 - Node.js 22+
 - pnpm
 
+Run the desktop app with the bundled local AnyHarness runtime:
+
 ```bash
 make install
 make dev-local
 ```
 
-## Use Cases
+### Local Full-Stack Development
 
-- Run multiple isolated agent sessions on one repo
-- Compare patches across Codex, Claude Code, Gemini CLI, and custom agents
-- Triage CI, tests, PR feedback, approvals, tool calls, and diffs
-- Move long-running jobs to cloud workspaces
-- Build workflows on top of the AnyHarness HTTP and SSE APIs
+Requirements:
 
-## Run the Full Stack
-Cloud workspaces use the Python control plane.
+- Rust stable
+- Node.js 22+
+- pnpm
+- Python 3.12+
+- `uv`
+- Docker, for the local control plane database
 
-Local requirements: Python 3.12+, `uv`, and Docker for full stack.
+Use named dev profiles for full-stack development, especially when multiple
+worktrees run at the same time.
 
 ```bash
 make server-install
-make dev-init PROFILE=main  # Prepare profile state without launching
-make dev-list               # show known profiles and live port status
-make dev PROFILE=main       # runtime + server + desktop + local Postgres
-make dev PROFILE=main STRIPE=1  # also start Stripe webhook forwarding
+make dev-init PROFILE=main
+make dev-list
+make dev PROFILE=main
 ```
 
-Use `make dev PROFILE=<name>` for multi-worktree development. See
-[`docs/reference/dev-profiles.md`](docs/reference/dev-profiles.md) for ports,
-profile state, overrides, and app labels.
+See [dev profiles](./docs/reference/dev-profiles.md) for profile state, ports,
+generated Tauri config, and app labels.
 
-For local cloud sandbox development, set `server/.env.local`:
+</details>
 
-```env
-E2B_API_KEY=...
-E2B_TEMPLATE_NAME=...
-```
+<details>
+<summary>Full self-hosting for Proliferate Cloud</summary>
 
-## Development
+Full self-hosted Proliferate Cloud deployments are available for teams. Reach
+out through [proliferate.com](https://proliferate.com) for access and deployment
+support.
 
-```bash
-make dev-local        # Desktop app with bundled local runtime
-make dev PROFILE=main # Runtime + server + desktop + local Postgres
-make dev-list         # List prepared and running dev profiles
-make sdk-build        # Generate and build the TypeScript SDK
-make desktop-build    # Type-check and build the desktop frontend
-make test             # Rust workspace tests
-make test-server      # Server tests
-make all              # Rust checks, boundary checks, and SDK build
-```
+</details>
 
-## Architecture
+## Community
 
-```text
-desktop/              Tauri app and React UI
-anyharness/crates/    Rust runtime, sessions, workspaces, tools, git, SSE
-anyharness/sdk/       TypeScript client
-anyharness/sdk-react/ React hooks
-server/               FastAPI cloud control plane
-```
+Join our open source community on [Discord](https://proliferate.com/discord)!
 
 ## Contributing
 
-Issues and pull requests are welcome.
+Looking to contribute? Please check out the [Contribution Guide](./CONTRIBUTING.md)
+for more details.
 
 ## License
 
