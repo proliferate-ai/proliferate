@@ -24,8 +24,8 @@
 </p>
 
 <p>
-  Move agent work between local desktop, cloud sandboxes, web, and Slack.
-  Bring any agent, have them work together, and make agent work team-wide.
+  Your personal software factory for running any agent harness locally, in the
+  cloud, and across the surfaces where work happens.
 </p>
 
 <p>
@@ -40,19 +40,22 @@
 
 </div>
 
-## Team-Wide Agent Work, Finally
+## Your Personal Software Factory
 
-Proliferate gives teams one workspace for every agent run: local when you want
-desktop control, cloud when work needs to keep going, and shared surfaces when
-teammates need to claim, review, or continue the work.
+Proliferate is the open source workspace for using any coding agent and getting
+real work done: local when you want desktop control, cloud when work needs to
+keep going, and shared when a workflow is ready for the rest of your team.
 
-- Move work local <-> cloud and desktop <-> web without losing the thread.
-- Bring any agent and keep its native tools, auth, models, permissions, and
-  transcript behavior.
-- Run agents together through subagents, review agents, automations, and Slack.
-- Isolate every task in a worktree, SSH target, or managed cloud sandbox.
-- Build on enterprise-ready foundations for self-hosting, sandbox isolation,
-  shared auth, and security review.
+- Bring Codex, Claude Code, Gemini CLI, OpenCode, Cursor, Amp, and future
+  harnesses without locking your workflow to one model or provider.
+- Keep agent work organized across local worktrees, cloud sandboxes, desktop,
+  and web so context travels with the work.
+- Parallelize cleanly with subagents, review agents, automations, and Slack
+  handoffs.
+- Share the workflows that stick through team workspaces, claims, shared
+  sandbox profiles, and governed cloud runs.
+- Stay open and self-hostable so companies can run agents under their own
+  infrastructure, security posture, and model choices.
 
 ## Bring Your Agent
 
@@ -98,15 +101,15 @@ permissions, and transcript behavior stay intact.
 
 | Feature | What it unlocks |
 | --- | --- |
-| [Team-wide agent work](./docs/current/specs/05-claiming.md) | Shared sessions, claims, Slack starts, and automations your whole team can use. |
-| [Workspace mobility](./docs/current/specs/10-migration.md) | Move runnable work between local, cloud, desktop, and web surfaces. |
+| [Personal software factory](./docs/anyharness/guides/api.md) | Build, run, inspect, and improve agentic work from one open workspace. |
 | [Native agent harnesses](./docs/anyharness/guides/harnesses.md) | Use Codex, Claude Code, Gemini, OpenCode, Cursor, Amp, and more with native behavior intact. |
-| [Cloud sandboxes](./docs/current/specs/00-sandbox-foundation.md) | Run long-lived work in managed or self-hosted cloud environments. |
-| [Automations](./docs/current/specs/06-automations.md) | Schedule agents to run whenever, wherever, with team-wide defaults. |
+| [Local and cloud workspaces](./docs/current/specs/00-sandbox-foundation.md) | Keep routine tasks fast and close, then send long-running work to managed or self-hosted cloud. |
+| [Workspace continuity](./docs/current/specs/10-migration.md) | Carry agent context across desktop, web, local runtimes, and cloud sandboxes. |
 | [Subagents and reviews](./docs/anyharness/product-mcps/reviews.md) | Split work across agents and launch code or plan review loops. |
+| [Automations](./docs/current/specs/06-automations.md) | Schedule useful agent work and promote repeatable workflows into team defaults. |
+| [Team workflows](./docs/current/specs/05-claiming.md) | Share work through Slack starts, shared sessions, claims, and multiplayer cloud chats. |
 | [Plugins, MCPs, and skills](./docs/current/specs/01-mcp-skills-plugins.md) | Package tools, prompts, and capabilities once and project them into local or cloud runtimes. |
-| [Enterprise controls](./docs/security/README.md) | Self-hosting, sandbox policy, shared auth, deployment boundaries, and security docs for teams. |
-| [AnyHarness API](./docs/anyharness/guides/api.md) | Build directly on runtime APIs for sessions, tools, transcripts, and workspaces. |
+| [Enterprise controls](./docs/security/README.md) | Self-hosting, sandbox policy, shared auth, deployment boundaries, and security docs for companies. |
 
 ## Getting Started
 
