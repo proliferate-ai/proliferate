@@ -2,7 +2,7 @@
   <rect width="1200" height="630" fill="#07080A"/>
   <rect x="100" y="88" width="1000" height="454" rx="30" fill="#0A0B0D"/>
   <rect x="100.5" y="88.5" width="999" height="453" rx="29.5" stroke="#22242A"/>
-  <g transform="translate(160 226) scale(0.72)">
+  <g transform="translate(170 236) scale(0.62)">
     <rect x="75" y="75" width="50" height="50" fill="#F3F1EF"/>
     <rect x="87.67" y="5" width="24.67" height="24.67" fill="#F3F1EF"/>
     <rect x="129" y="46.33" width="24.67" height="24.67" fill="#F3F1EF"/>

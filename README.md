@@ -15,7 +15,7 @@
 <p>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/readme/proliferate-wordmark-dark.svg" />
-    <img src="./docs/assets/readme/proliferate-wordmark-light.svg" width="340" alt="Proliferate" />
+    <img src="./docs/assets/readme/proliferate-wordmark-light.svg" width="320" alt="Proliferate" />
   </picture>
 </p>
 
