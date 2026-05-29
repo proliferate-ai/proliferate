@@ -23,7 +23,7 @@ export function ProductPageShell({
     <PageContentFrame
       maxWidthClassName={maxWidthClassName}
       stickyTitle={typeof title === "string" ? title : undefined}
-      header={<PageHeader title={title} description={description} actions={actions} className="px-0 py-0 border-b-0" />}
+      header={<PageHeader title={title} description={description} actions={actions} className="border-b-0 px-0 py-0 sm:px-0 sm:py-0" />}
     >
       {children}
     </PageContentFrame>
