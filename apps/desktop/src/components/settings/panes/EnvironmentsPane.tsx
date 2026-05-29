@@ -1,22 +1,12 @@
-import { useMemo, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { CloudEnvironmentList } from "@proliferate/product-ui/environments/CloudEnvironmentList";
-import {
-  buildCloudEnvironmentListItems,
-} from "@proliferate/product-domain/environments/cloud-environments";
-import {
-  formatGitRepoId,
-  parseGitRepoId,
-} from "@proliferate/product-domain/repos/repo-id";
 import { ChevronRight } from "@proliferate/ui/icons";
+import { CloudEnvironmentsSettingsSurface } from "@proliferate/product-surfaces/settings/CloudEnvironmentsSettingsSurface";
+
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import type { SettingsFocus } from "@/lib/domain/settings/navigation";
-import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { LocalRepoSection } from "./repo/LocalRepoSection";
 import { CloudRepoSection } from "./repo/CloudRepoSection";
-import { AddCloudEnvironmentDialogController } from "./environments/AddCloudEnvironmentDialogController";
-import { CloudOnlyEnvironmentDetail } from "./environments/CloudOnlyEnvironmentDetail";
 
 interface EnvironmentsPaneProps {
   repositories: SettingsRepositoryEntry[];
@@ -43,112 +33,38 @@ export function EnvironmentsPane({
   onSelectCloudEnvironment,
   onBackToList,
 }: EnvironmentsPaneProps) {
-  const [addCloudEnvironmentOpen, setAddCloudEnvironmentOpen] = useState(false);
-  const cloudRepoConfigs = useCloudRepoConfigs(cloudActive);
   const selectedCloudRepo = focus.cloudRepoOwner && focus.cloudRepoName
     ? {
       gitOwner: focus.cloudRepoOwner,
       gitRepoName: focus.cloudRepoName,
     }
     : null;
-  const cloudConfigByRepoId = useMemo(() => {
-    const byId = new Map<string, { configured: boolean }>();
-    for (const config of cloudRepoConfigs.data?.configs ?? []) {
-      byId.set(formatGitRepoId({
-        gitOwner: config.gitOwner,
-        gitRepoName: config.gitRepoName,
-      }), config);
-    }
-    return byId;
-  }, [cloudRepoConfigs.data?.configs]);
-  const cloudEnvironmentItems = useMemo(() => buildCloudEnvironmentListItems({
-    configs: cloudRepoConfigs.data?.configs ?? [],
-    localCheckouts: repositories
-      .filter((repository) => repository.gitOwner && repository.gitRepoName)
-      .map((repository) => ({
-        gitOwner: repository.gitOwner!,
-        gitRepoName: repository.gitRepoName!,
-        sourceRoot: repository.sourceRoot,
-        name: repository.name,
-        secondaryLabel: repository.secondaryLabel,
-      })),
-  }), [cloudRepoConfigs.data?.configs, repositories]);
-
-  if (!selectedRepository && selectedCloudRepo && cloudActive) {
-    return (
-      <CloudOnlyEnvironmentDetail
-        gitOwner={selectedCloudRepo.gitOwner}
-        gitRepoName={selectedCloudRepo.gitRepoName}
-        cloudActive={cloudActive}
-        onBack={onBackToList}
-        onSaved={() => { void cloudRepoConfigs.refetch(); }}
-      />
-    );
-  }
 
   if (!selectedRepository) {
-    const cloudUnavailableReason = cloudUnavailableDescription({
-      cloudEnabled,
-      cloudActive,
-      cloudSignInChecking,
-      cloudSignInAvailable,
-    });
-
     return (
-      <>
-        <CloudEnvironmentList
-          title="Environments"
-          description="Configure local checkouts and personal Cloud environments."
-          localCheckouts={repositories.map((repository) => {
-            const repoId = repository.gitOwner && repository.gitRepoName
-              ? formatGitRepoId({
-                gitOwner: repository.gitOwner,
-                gitRepoName: repository.gitRepoName,
-              })
-              : null;
-            const cloudConfig = repoId ? cloudConfigByRepoId.get(repoId) : null;
-            return {
-              id: repository.sourceRoot,
-              name: repository.name,
-              description: repository.secondaryLabel ?? repository.sourceRoot,
-              cloudStatusLabel: cloudConfig
-                ? cloudConfig.configured
-                  ? "Cloud enabled"
-                  : "Cloud disabled"
-                : null,
-            };
-          })}
-          cloudEnvironments={cloudEnvironmentItems.map((environment) => ({
-            id: environment.id,
-            fullName: environment.fullName,
-            description: environment.description,
-            configured: environment.configured,
-            localState: environment.localState,
-          }))}
-          loadingCloudEnvironments={cloudRepoConfigs.isLoading}
-          cloudUnavailableReason={cloudUnavailableReason}
-          onSelectLocalCheckout={onSelectRepository}
-          onSelectCloudEnvironment={(repoId) => {
-            const parsed = parseGitRepoId(repoId);
-            if (parsed) {
-              onSelectCloudEnvironment(parsed.gitOwner, parsed.gitRepoName);
-            }
-          }}
-          onAddCloudEnvironment={cloudActive ? () => setAddCloudEnvironmentOpen(true) : undefined}
-          onRetryCloudEnvironments={cloudRepoConfigs.isError ? () => { void cloudRepoConfigs.refetch(); } : undefined}
-        />
-        <AddCloudEnvironmentDialogController
-          open={addCloudEnvironmentOpen}
-          onClose={() => setAddCloudEnvironmentOpen(false)}
-          onEnvironmentAdded={(repoId) => {
-            const parsed = parseGitRepoId(repoId);
-            if (parsed) {
-              onSelectCloudEnvironment(parsed.gitOwner, parsed.gitRepoName);
-              void cloudRepoConfigs.refetch();
-            }
-          }}
-        />
-      </>
+      <CloudEnvironmentsSettingsSurface
+        mode="hybrid"
+        enabled={cloudActive}
+        cloudUnavailableReason={cloudUnavailableDescription({
+          cloudEnabled,
+          cloudActive,
+          cloudSignInChecking,
+          cloudSignInAvailable,
+        })}
+        localCheckouts={repositories.map((repository) => ({
+          id: repository.sourceRoot,
+          name: repository.name,
+          description: repository.secondaryLabel ?? repository.sourceRoot,
+          gitOwner: repository.gitOwner,
+          gitRepoName: repository.gitRepoName,
+        }))}
+        selectedCloudRepo={selectedCloudRepo}
+        onSelectLocalCheckout={onSelectRepository}
+        onSelectCloudEnvironment={(repo) => {
+          onSelectCloudEnvironment(repo.gitOwner, repo.gitRepoName);
+        }}
+        onBackToList={onBackToList}
+      />
     );
   }
 

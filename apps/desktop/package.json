@@ -4,11 +4,11 @@
   "version": "0.1.40",
   "type": "module",
   "scripts": {
-    "dev": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && vite",
-    "build": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && tsc && vite build",
+    "dev": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && pnpm --filter @proliferate/product-surfaces build && vite",
+    "build": "pnpm --filter @anyharness/sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && pnpm --filter @proliferate/product-surfaces build && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "pretest": "pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build",
+    "pretest": "pnpm --filter @proliferate/design build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && pnpm --filter @proliferate/product-surfaces build",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -29,6 +29,7 @@
     "@proliferate/cloud-sdk-react": "workspace:*",
     "@proliferate/design": "workspace:*",
     "@proliferate/product-domain": "workspace:*",
+    "@proliferate/product-surfaces": "workspace:*",
     "@proliferate/product-ui": "workspace:*",
     "@proliferate/ui": "workspace:*",
     "@sentry/react": "^10.45.0",

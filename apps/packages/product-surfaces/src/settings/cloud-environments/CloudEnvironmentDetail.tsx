@@ -1,21 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { CloudEnvironmentEditor } from "@proliferate/product-ui/environments/CloudEnvironmentEditor";
-import type { CloudEnvironmentEnvVarRowView } from "@proliferate/product-ui/environments/CloudEnvironmentEditor";
+import type { CloudRepoConfigResponse } from "@proliferate/cloud-sdk";
+import {
+  useCloudRepoBranches,
+  useCloudRepoConfig,
+  useSaveCloudRepoConfig,
+} from "@proliferate/cloud-sdk-react";
 import { buildCoreCloudEnvironmentSaveRequest } from "@proliferate/product-domain/environments/cloud-environments";
 import { formatGitRepoId } from "@proliferate/product-domain/repos/repo-id";
-import { useCloudRepoBranches } from "@/hooks/access/cloud/use-cloud-repo-branches";
-import { useCloudRepoConfig } from "@/hooks/access/cloud/use-cloud-repo-config";
-import { useSavePersonalCloudRepoConfig } from "@/hooks/access/cloud/use-save-personal-cloud-repo-config";
-import type { CloudRepoConfig } from "@/lib/domain/cloud/repo-configs";
-
-interface CloudOnlyEnvironmentDetailProps {
-  gitOwner: string;
-  gitRepoName: string;
-  cloudActive: boolean;
-  onBack: () => void;
-  onSaved: () => void;
-}
+import { CloudEnvironmentEditor } from "@proliferate/product-ui/environments/CloudEnvironmentEditor";
+import type { CloudEnvironmentEnvVarRowView } from "@proliferate/product-ui/environments/CloudEnvironmentEditor";
+import { Button } from "@proliferate/ui/primitives/Button";
 
 interface CloudEnvironmentDraftState {
   configured: boolean;
@@ -25,17 +19,23 @@ interface CloudEnvironmentDraftState {
   envVarRows: CloudEnvironmentEnvVarRowView[];
 }
 
-export function CloudOnlyEnvironmentDetail({
+export function CloudEnvironmentDetail({
   gitOwner,
   gitRepoName,
-  cloudActive,
+  enabled,
   onBack,
   onSaved,
-}: CloudOnlyEnvironmentDetailProps) {
+}: {
+  gitOwner: string;
+  gitRepoName: string;
+  enabled: boolean;
+  onBack: () => void;
+  onSaved: () => void;
+}) {
   const repoId = formatGitRepoId({ gitOwner, gitRepoName });
-  const config = useCloudRepoConfig(gitOwner, gitRepoName, cloudActive);
-  const branches = useCloudRepoBranches(gitOwner, gitRepoName, cloudActive);
-  const saveConfig = useSavePersonalCloudRepoConfig();
+  const config = useCloudRepoConfig(gitOwner, gitRepoName, enabled);
+  const branches = useCloudRepoBranches(gitOwner, gitRepoName, enabled);
+  const saveConfig = useSaveCloudRepoConfig();
   const draft = useCloudEnvironmentCoreDraft(config.data, repoId);
   const savedConfigured = config.data?.configured ?? false;
   const statusLabel = !draft.configured && savedConfigured
@@ -67,7 +67,7 @@ export function CloudOnlyEnvironmentDetail({
   return (
     <CloudEnvironmentEditor
       title={repoId}
-      description="Personal Cloud environment. This repo does not need to be cloned locally."
+      description="Personal Cloud environment. This does not create or require a local checkout."
       statusLabel={statusLabel}
       statusTone={savedConfigured ? (draft.dirty ? "warning" : "success") : "warning"}
       defaultBranch={draft.defaultBranch}
@@ -79,7 +79,7 @@ export function CloudOnlyEnvironmentDetail({
       runCommand={draft.runCommand}
       envVarRows={draft.envVarRows}
       saving={saveConfig.isPending}
-      saveDisabled={!cloudActive || config.isLoading || saveConfig.isPending || !draft.canSave}
+      saveDisabled={!enabled || config.isLoading || saveConfig.isPending || !draft.canSave}
       revertDisabled={saveConfig.isPending || !draft.dirty}
       disableDisabled={!draft.configured}
       error={saveConfig.error?.message ?? null}
@@ -89,8 +89,8 @@ export function CloudOnlyEnvironmentDetail({
         <Button
           type="button"
           variant="ghost"
-          onClick={onBack}
           className="h-auto px-0 py-0 text-sm hover:bg-transparent"
+          onClick={onBack}
         >
           Environments / {repoId}
         </Button>
@@ -101,7 +101,9 @@ export function CloudOnlyEnvironmentDetail({
       onAddEnvVar={draft.addEnvVar}
       onUpdateEnvVar={draft.updateEnvVar}
       onRemoveEnvVar={draft.removeEnvVar}
-      onSave={() => { void handleSave(); }}
+      onSave={() => {
+        void handleSave();
+      }}
       onRevert={draft.revert}
       onDisable={savedConfigured ? draft.disable : undefined}
     />
@@ -109,7 +111,7 @@ export function CloudOnlyEnvironmentDetail({
 }
 
 function useCloudEnvironmentCoreDraft(
-  config: CloudRepoConfig | null | undefined,
+  config: CloudRepoConfigResponse | null | undefined,
   sourceKey: string,
 ) {
   const initial = useMemo(() => buildInitialDraftState(config), [config]);
@@ -204,7 +206,7 @@ function useCloudEnvironmentCoreDraft(
       }));
     },
     disable: () => patch({ configured: false }),
-    reset: (nextConfig: CloudRepoConfig) => {
+    reset: (nextConfig: CloudRepoConfigResponse) => {
       const next = buildInitialDraftState(nextConfig);
       setState({
         sourceKey,
@@ -217,7 +219,7 @@ function useCloudEnvironmentCoreDraft(
 }
 
 function buildInitialDraftState(
-  config: CloudRepoConfig | null | undefined,
+  config: CloudRepoConfigResponse | null | undefined,
 ): {
   baseline: CloudEnvironmentDraftState;
   revertDraft: CloudEnvironmentDraftState;
@@ -243,7 +245,7 @@ function buildInitialDraftState(
 }
 
 function buildSavedDraft(
-  config: CloudRepoConfig | null | undefined,
+  config: CloudRepoConfigResponse | null | undefined,
 ): CloudEnvironmentDraftState {
   return {
     configured: config?.configured ?? false,
@@ -281,5 +283,5 @@ function rowsToEnvVars(rows: readonly CloudEnvironmentEnvVarRowView[]): Record<s
 }
 
 function createRowId(): string {
-  return crypto.randomUUID();
+  return globalThis.crypto?.randomUUID?.() ?? `row-${Math.random().toString(36).slice(2)}`;
 }
