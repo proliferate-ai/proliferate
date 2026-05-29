@@ -68,7 +68,7 @@ export function MobileHomeScreen({
     && !launchActions.submitting
     && (launchModel.selectedRuntime?.kind !== "target" || launchModel.selectedRuntime.online);
   const runtimeBlocker = launchModel.selectedRuntime?.kind === "target" && !launchModel.selectedRuntime.online
-    ? `${launchModel.selectedRuntime.label} is offline. Open Desktop or choose Cloud sandbox to start this chat.`
+    ? `${launchModel.selectedRuntime.label} is offline. Open Desktop or choose Sandbox to start this chat.`
     : null;
 
   function closeSheet() {

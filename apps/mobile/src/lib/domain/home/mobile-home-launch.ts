@@ -77,7 +77,7 @@ export function buildMobileRuntimeOptions(
     {
       id: "cloud",
       kind: "cloud",
-      label: "Cloud sandbox",
+      label: "Sandbox",
       description: "Run in managed cloud compute",
       icon: "cloud",
       online: true,
@@ -148,7 +148,7 @@ function targetLabel(target: CloudTargetSummary): string {
   }
   switch (target.kind) {
     case "desktop_dispatch":
-      return "Desktop Mac";
+      return "Mac";
     case "ssh":
       return "SSH target";
     case "self_hosted_cloud":

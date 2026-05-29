@@ -407,7 +407,7 @@ function groupLabelForSource(kind: WorkspaceInventorySourceKind): string {
     case "desktop_exposed":
       return "Desktop";
     case "cloud_sandbox":
-      return "Cloud sandbox";
+      return "Sandbox";
     case "web":
       return "Web";
     case "mobile":

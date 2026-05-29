@@ -57,7 +57,13 @@ pub fn ensure_repo_checkout(
             "target_git_not_ready: target Git identity is not configured",
         ));
     }
-    let checkout_path = prepare_checkout_path(allowed_root, &payload.path)?;
+    let requested_checkout_path = expand_home(&payload.path);
+    ensure_no_symlink_path(&requested_checkout_path)?;
+    let checkout_path = if requested_checkout_path.exists() {
+        canonicalize_existing_checkout_path(&requested_checkout_path)?
+    } else {
+        prepare_new_checkout_path(allowed_root, &payload.path)?
+    };
     if !checkout_path.exists() {
         let parent = checkout_path.parent().ok_or_else(|| {
             materialization_error(format!(
@@ -113,7 +119,7 @@ pub fn ensure_repo_checkout(
     })
 }
 
-fn prepare_checkout_path(
+fn prepare_new_checkout_path(
     allowed_root: Option<&Path>,
     checkout_path: &str,
 ) -> Result<PathBuf, WorkerError> {
@@ -136,21 +142,12 @@ fn prepare_checkout_path(
         })?;
     let checkout_path = expand_home(checkout_path);
     ensure_no_symlink_path(&checkout_path)?;
-    let comparable = if checkout_path.exists() {
-        checkout_path
-            .canonicalize()
-            .map_err(|source| WorkerError::CreateParent {
-                path: checkout_path.clone(),
-                source,
-            })?
-    } else {
-        nearest_existing_ancestor(&checkout_path)?
-            .canonicalize()
-            .map_err(|source| WorkerError::CreateParent {
-                path: checkout_path.clone(),
-                source,
-            })?
-    };
+    let comparable = nearest_existing_ancestor(&checkout_path)?
+        .canonicalize()
+        .map_err(|source| WorkerError::CreateParent {
+            path: checkout_path.clone(),
+            source,
+        })?;
     if !comparable.starts_with(&allowed_root) {
         return Err(materialization_error(format!(
             "repo_clone_failed: checkout path {} is outside materialization root {}",
@@ -159,6 +156,15 @@ fn prepare_checkout_path(
         )));
     }
     Ok(checkout_path)
+}
+
+fn canonicalize_existing_checkout_path(checkout_path: &Path) -> Result<PathBuf, WorkerError> {
+    checkout_path
+        .canonicalize()
+        .map_err(|source| WorkerError::CreateParent {
+            path: checkout_path.to_path_buf(),
+            source,
+        })
 }
 
 fn nearest_existing_ancestor(path: &Path) -> Result<&Path, WorkerError> {
@@ -405,6 +411,83 @@ mod tests {
 
         assert_eq!(outcome.current_head.as_deref(), Some(new_head.trim()));
         assert_eq!(git_capture(&checkout, &["rev-parse", "HEAD"]), new_head);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn existing_checkout_outside_root_is_reused_when_origin_matches() {
+        if Command::new("git").arg("--version").output().is_err() {
+            return;
+        }
+        let root = temp_root("existing-checkout-outside-root");
+        let allowed_root = root.join("workspaces");
+        fs::create_dir_all(&allowed_root).expect("create allowed root");
+        write_target_git_files(&allowed_root);
+
+        let remote = root
+            .join("remotes")
+            .join("proliferate-ai")
+            .join("proliferate.git");
+        fs::create_dir_all(remote.parent().expect("remote parent")).expect("create remote parent");
+        run_plain(None, &["git", "init", "--bare", remote.to_str().unwrap()]);
+
+        let source = root.join("source");
+        run_plain(None, &["git", "init", source.to_str().unwrap()]);
+        run_plain(Some(&source), &["git", "config", "user.name", "Test User"]);
+        run_plain(
+            Some(&source),
+            &["git", "config", "user.email", "test@example.com"],
+        );
+        fs::write(source.join("README.md"), "one\n").expect("write source file");
+        run_plain(Some(&source), &["git", "add", "README.md"]);
+        run_plain(Some(&source), &["git", "commit", "-m", "one"]);
+        run_plain(Some(&source), &["git", "branch", "-M", "main"]);
+        run_plain(
+            Some(&source),
+            &["git", "remote", "add", "origin", remote.to_str().unwrap()],
+        );
+        run_plain(Some(&source), &["git", "push", "origin", "main"]);
+        run_plain(
+            Some(&remote),
+            &["git", "symbolic-ref", "HEAD", "refs/heads/main"],
+        );
+
+        let outside_checkout = root.join("outside").join("repo");
+        run_plain(
+            None,
+            &[
+                "git",
+                "clone",
+                remote.to_str().unwrap(),
+                outside_checkout.to_str().unwrap(),
+            ],
+        );
+
+        let outcome = ensure_repo_checkout(
+            Some(&allowed_root),
+            &EnsureRepoCheckoutPayload {
+                provider: "github".to_string(),
+                owner: "proliferate-ai".to_string(),
+                name: "proliferate".to_string(),
+                path: outside_checkout.to_string_lossy().to_string(),
+                base_branch: Some("main".to_string()),
+            },
+        )
+        .expect("ensure existing checkout outside root");
+
+        assert_eq!(
+            outcome.path,
+            outside_checkout
+                .canonicalize()
+                .expect("canonical checkout")
+                .to_string_lossy()
+                .to_string()
+        );
+        assert_eq!(
+            git_capture(&outside_checkout, &["remote", "get-url", "origin"]),
+            remote.to_string_lossy().to_string()
+        );
+        assert!(!allowed_root.join("repo").exists());
         let _ = fs::remove_dir_all(root);
     }
 

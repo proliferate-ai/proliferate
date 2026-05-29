@@ -56,7 +56,7 @@ type RuntimeFilter = RecentWorkRuntimeLocation | "all";
 const SOURCE_FILTERS: readonly { id: SourceFilter; label: string }[] = [
   { id: "all", label: "All sources" },
   { id: "desktop_exposed", label: "Desktop" },
-  { id: "cloud_sandbox", label: "Cloud sandbox" },
+  { id: "cloud_sandbox", label: "Sandbox" },
   { id: "web", label: "Web" },
   { id: "mobile", label: "Mobile" },
   { id: "personal_automation", label: "Personal automation" },
@@ -68,7 +68,7 @@ const SOURCE_FILTERS: readonly { id: SourceFilter; label: string }[] = [
 const RUNTIME_FILTERS: readonly { id: RuntimeFilter; label: string }[] = [
   { id: "all", label: "All runtimes" },
   { id: "local_desktop", label: "Local Desktop" },
-  { id: "cloud_sandbox", label: "Cloud runtime" },
+  { id: "cloud_sandbox", label: "Sandbox" },
   { id: "ssh_remote", label: "SSH remote" },
   { id: "offline", label: "Offline" },
   { id: "unknown", label: "Unknown" },

@@ -1903,7 +1903,7 @@ function workspaceRuntimeLabel(runtime: ReturnType<typeof recentWorkRuntimeLocat
     case "local_desktop":
       return "Local Desktop runtime";
     case "cloud_sandbox":
-      return "Cloud runtime";
+      return "Sandbox";
     case "ssh_remote":
       return "SSH runtime";
     case "offline":

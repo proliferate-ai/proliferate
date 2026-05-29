@@ -2266,7 +2266,7 @@ function fallbackRuntimeLabel(
 ): string {
   switch (workspace.executionTarget?.kind) {
     case "managed_cloud":
-      return "Cloud runtime";
+      return "Sandbox";
     case "local_desktop":
       return "Desktop dispatch";
     case "ssh":

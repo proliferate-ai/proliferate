@@ -98,7 +98,7 @@ export const ComposerControlButton = forwardRef<HTMLButtonElement, ComposerContr
           <span className="sr-only">{iconOnlyLabel}</span>
         ) : (
           <span className="flex min-w-0 items-center gap-1">
-            <span className={`min-w-0 truncate text-left ${labelClassName}`}>{label}</span>
+            <span className={`min-w-0 truncate text-left text-[color:var(--color-composer-control-active-foreground)] ${labelClassName}`}>{label}</span>
             {detail && (
               <span className={`truncate text-left text-[color:var(--color-composer-control-muted-foreground)] ${detailClassName}`}>
                 {detail}

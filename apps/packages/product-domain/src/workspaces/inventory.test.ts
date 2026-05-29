@@ -136,7 +136,7 @@ function inventoryItem(
     locationKind: "cloud",
     locationLabel: "Cloud",
     runtimeLocation: "cloud_sandbox",
-    runtimeLocationLabel: "Cloud runtime",
+    runtimeLocationLabel: "Sandbox",
     cloudAccessState: "enabled",
     cloudAccessLabel: "Cloud access enabled",
     commandability: "commandable",

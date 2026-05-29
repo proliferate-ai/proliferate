@@ -49,8 +49,8 @@ const WORK_TYPE_OPTIONS: readonly { id: WorkTypeFilter; label: string; icon: Mob
 
 const RUNTIME_OPTIONS: readonly { id: RuntimeFilter; label: string; icon: MobileIconName }[] = [
   { id: "all", label: "All runtimes", icon: "workspaces" },
-  { id: "cloud_sandbox", label: "Cloud runtime", icon: "cloud" },
-  { id: "local_desktop", label: "Desktop Mac", icon: "monitor" },
+  { id: "cloud_sandbox", label: "Sandbox", icon: "cloud" },
+  { id: "local_desktop", label: "Mac", icon: "monitor" },
   { id: "ssh_remote", label: "SSH", icon: "external" },
   { id: "offline", label: "Offline", icon: "lock" },
 ];

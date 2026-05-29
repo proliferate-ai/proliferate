@@ -203,14 +203,14 @@ function ProjectSearchField({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="p-2 pb-1.5">
-      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-surface-control px-2.5">
+    <div className="p-1.5 pb-1">
+      <div className="flex items-center gap-1.5 rounded-lg border border-border/70 bg-surface-control px-2">
         <Search className="size-3.5 shrink-0 text-muted-foreground" />
         <Input
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder="Search projects"
-          className="h-8 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
+          className="h-7 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
         />
       </div>
     </div>
@@ -237,13 +237,13 @@ function BranchSearchField({
 }) {
   return (
     <div className="px-1 pb-1">
-      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-surface-control px-2.5">
+      <div className="flex items-center gap-1.5 rounded-lg border border-border/70 bg-surface-control px-2">
         <Search className="size-3.5 shrink-0 text-muted-foreground" />
         <Input
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder="Search branches"
-          className="h-8 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
+          className="h-7 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
         />
       </div>
     </div>
@@ -308,7 +308,7 @@ export function HomeTargetPicker({
         selectedRepository,
         destination,
       })}
-      className="max-w-[13rem]"
+      className="max-w-[10.5rem]"
     />
   );
 
@@ -321,11 +321,11 @@ export function HomeTargetPicker({
             label={projectLabel({ destination, selectedRepository })}
             disclosure
             aria-label={projectAriaLabel({ destination, selectedRepository })}
-            className="max-w-[14rem]"
+            className="max-w-[11rem]"
           />
         )}
         side="top"
-        className="w-[23rem] rounded-xl border border-border bg-popover p-1 shadow-floating"
+        className="w-80 max-w-[calc(100vw-1rem)] rounded-xl border border-border bg-popover p-1 shadow-floating"
       >
         {(close) => (
           <div className="flex max-h-[20rem] min-h-0 flex-col">
@@ -343,7 +343,7 @@ export function HomeTargetPicker({
                     key={repository.sourceRoot}
                     label={repository.name}
                     trailing={isSelected ? <Check className="size-4" /> : null}
-                    className="rounded-lg px-3 py-1.5 text-sm"
+                    className="rounded-lg px-2 py-1 text-sm"
                     onClick={() => {
                       onSelectRepository(repository.sourceRoot);
                       clearSearch();
@@ -363,7 +363,7 @@ export function HomeTargetPicker({
                 icon={<FolderPlus className="size-3.5" />}
                 label="Add new project"
                 trailing={<ChevronRight className="size-3.5" />}
-                className="rounded-lg px-2.5 py-1.5 text-sm"
+                className="rounded-lg px-2 py-1 text-sm"
                 onClick={() => {
                   onAddRepository();
                   clearSearch();
@@ -374,7 +374,7 @@ export function HomeTargetPicker({
                 icon={<X className="size-3.5" />}
                 label="Don't work in a project"
                 trailing={destination === "cowork" ? <Check className="size-3.5" /> : null}
-                className="rounded-lg px-2.5 py-1.5 text-sm"
+                className="rounded-lg px-2 py-1 text-sm"
                 onClick={() => {
                   onSelectCowork();
                   clearSearch();
@@ -467,11 +467,11 @@ export function HomeTargetPicker({
               label={selectedBranchName ?? "Base branch"}
               disclosure
               aria-label={`Branch: ${selectedBranchName ?? "base branch"}`}
-              className="max-w-[15rem]"
+              className="max-w-[10.5rem]"
             />
           )}
           side="top"
-          className="w-[22rem] rounded-xl border border-border bg-popover p-1 shadow-floating"
+          className="w-64 max-w-[calc(100vw-1rem)] rounded-xl border border-border bg-popover p-1 shadow-floating"
         >
           {(close) => (
             <PickerPopoverContent>

@@ -213,7 +213,7 @@ export function useWorkspaceRemoteAccessActions() {
       throw new Error("AnyHarness must be healthy before remote access can start.");
     }
     const enrollment = await createTargetEnrollment({
-      displayName: "This Mac",
+      displayName: "Mac",
       kind: "desktop_dispatch",
       ownerScope: "personal",
       organizationId: null,

@@ -1014,7 +1014,7 @@ export function recentWorkSourceLabel(source: RecentWorkSourceKind): string {
     case "desktop_exposed":
       return "Desktop";
     case "cloud_sandbox":
-      return "Cloud sandbox";
+      return "Sandbox";
     case "web":
       return "Web";
     case "mobile":
@@ -1037,7 +1037,7 @@ export function recentWorkRuntimeLabel(runtimeLocation: RecentWorkRuntimeLocatio
     case "local_desktop":
       return "Local Desktop";
     case "cloud_sandbox":
-      return "Cloud runtime";
+      return "Sandbox";
     case "ssh_remote":
       return "SSH remote";
     case "offline":

@@ -740,7 +740,7 @@ function buildRuntimeOptions(
     {
       id: "cloud",
       kind: "cloud",
-      label: "Cloud sandbox",
+      label: "Sandbox",
       description: "Run in managed cloud compute",
       online: true,
       targetId: null,
@@ -804,7 +804,7 @@ function buildRepoOptions(
 
 function targetLabel(target: CloudTargetSummary): string {
   const displayName = target.displayName?.trim();
-  return displayName || "Desktop Mac";
+  return displayName || "Mac";
 }
 
 function buildBranchOptions(input: {
