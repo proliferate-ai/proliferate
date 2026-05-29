@@ -15,9 +15,9 @@ CHECK_ROOTS = [
     "anyharness/sdk-react/src",
     "cloud/sdk/src",
     "cloud/sdk-react/src",
-    "desktop/src",
-    "desktop/src-tauri/src",
-    "desktop/src-tauri/build.rs",
+    "apps/desktop/src",
+    "apps/desktop/src-tauri/src",
+    "apps/desktop/src-tauri/build.rs",
     "server/proliferate",
     "server/tests",
 ]
@@ -51,7 +51,7 @@ def count_lines(path: Path) -> int:
 
 def max_lines_for(relative_path: str) -> int:
     if (
-        relative_path.startswith("desktop/src/components/")
+        relative_path.startswith("apps/desktop/src/components/")
         and relative_path.endswith(".tsx")
     ):
         return COMPONENT_MAX_LINES

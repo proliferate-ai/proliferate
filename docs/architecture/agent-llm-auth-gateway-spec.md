@@ -2338,11 +2338,11 @@ cloud/sdk-react
   reusable query/mutation hooks and the single query-key/cache owner for Cloud
   resources
 
-desktop/src/hooks/access/cloud/agent-auth/**
+apps/desktop/src/hooks/access/cloud/agent-auth/**
   desktop-specific adapters only when desktop adds Tauri/local detection,
   telemetry, or cache invalidation behavior not owned by cloud-sdk-react
 
-desktop/src/lib/domain/**
+apps/desktop/src/lib/domain/**
   compatibility filtering, disabled reasons, status copy, where-used summaries
 
 components

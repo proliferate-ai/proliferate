@@ -236,7 +236,7 @@ Frontend/SDK deviations:
 
 ```text
 Desktop access wrappers
-  desktop/src/hooks/access/cloud/agent-auth/** currently mostly initialize the
+  apps/desktop/src/hooks/access/cloud/agent-auth/** currently mostly initialize the
   Cloud client and re-export cloud-sdk-react hooks. Treat them as compatibility
   shims unless they gain Desktop-specific behavior.
 
@@ -626,7 +626,7 @@ SDK surface:
 ```text
 cloud/sdk/src/client/agent-auth.ts
 cloud/sdk-react/src/hooks/agent-auth.ts
-desktop/src/hooks/access/cloud/agent-auth/use-agent-auth.ts   // transitional shim
+apps/desktop/src/hooks/access/cloud/agent-auth/use-agent-auth.ts   // transitional shim
 ```
 
 Desktop product surfaces in the final stack:

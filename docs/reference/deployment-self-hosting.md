@@ -322,7 +322,7 @@ production surface for internal reference.
 | Server | ECS Fargate (256 CPU / 512 MB) | `server/infra/main.tf` |
 | Database | RDS PostgreSQL (`db.t4g.micro`) | `server/infra/main.tf` |
 | Container registry | ECR | `server/infra/main.tf` |
-| Desktop updater | S3 + CloudFront (`downloads.proliferate.com`) | `desktop/infra/main.tf` |
+| Desktop updater | S3 + CloudFront (`downloads.proliferate.com`) | `apps/desktop/infra/main.tf` |
 
 ### CI pipelines
 

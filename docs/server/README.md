@@ -80,7 +80,7 @@ server/proliferate/
   auth/
     dependencies.py
     authorization.py
-    desktop/
+    apps/desktop/
     jwt.py
     oauth.py
     pkce.py

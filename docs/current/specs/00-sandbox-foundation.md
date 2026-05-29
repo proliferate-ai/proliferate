@@ -1278,13 +1278,13 @@ anyharness/sdk/src/index.ts
 Desktop (minimal in this PR — spec 03 owns the broad redesign):
 
 ```text
-desktop/src/hooks/access/cloud/sandbox-profiles/                          (new)
+apps/desktop/src/hooks/access/cloud/sandbox-profiles/                          (new)
   query-keys.ts, use-sandbox-profile.ts, use-sandbox-profile-mutations.ts
 
-desktop/src/hooks/access/cloud/target-runtime-access/                     (new)
+apps/desktop/src/hooks/access/cloud/target-runtime-access/                     (new)
   query-keys.ts, use-target-runtime-access.ts   -- diagnostics only
 
-desktop/src/lib/access/cloud/sandbox-profiles.ts                          (new)
+apps/desktop/src/lib/access/cloud/sandbox-profiles.ts                          (new)
 ```
 
 Tests follow files listed in §8.

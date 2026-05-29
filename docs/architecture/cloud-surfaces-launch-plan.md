@@ -33,11 +33,11 @@ The urgent launch bar is:
 These facts matter for the launch plan:
 
 - The workspace has `cloud/sdk` and `cloud/sdk-react` packages.
-- The workspace does not currently have a separate committed `mobile/` package.
+- The workspace does not currently have a separate committed `apps/mobile/` package.
 - The desktop app is a Tauri app and has iOS icon assets, but a committed Tauri
   iOS project was not found during the planning pass.
 - Desktop already has an Automations surface and editor under
-  `desktop/src/components/automations/**`.
+  `apps/desktop/src/components/automations/**`.
 - Server automations already expose `targetId` / target kind fields in the API
   models, but the Desktop automation UI still primarily thinks in
   local-vs-cloud execution target terms.
@@ -238,7 +238,7 @@ Before promising TestFlight, verify the native mobile path.
 
 Check:
 
-- Is there a committed or local `desktop/src-tauri/gen/apple` project?
+- Is there a committed or local `apps/desktop/src-tauri/gen/apple` project?
 - Does `pnpm tauri ios init` succeed from `desktop` without restructuring?
 - Does the local machine have valid Apple signing identities/profiles?
 - Can the app reach the correct Cloud API base URL in an iOS build?
@@ -252,9 +252,9 @@ If the answer is no, the fallback launch artifact is:
 
 Relevant files/directories:
 
-- `desktop/package.json`
-- `desktop/src-tauri/`
-- `desktop/src/config/app-routes.ts`
+- `apps/desktop/package.json`
+- `apps/desktop/src-tauri/`
+- `apps/desktop/src/config/app-routes.ts`
 - `cloud/sdk/**`
 - `cloud/sdk-react/**`
 
@@ -285,13 +285,13 @@ Likely files:
 - `server/proliferate/server/automations/api.py`
 - `cloud/sdk/src/client/automations.ts`
 - `cloud/sdk/src/generated/openapi.ts`
-- `desktop/src/lib/domain/automations/run/ui-records.ts`
-- `desktop/src/lib/domain/automations/target/records.ts`
-- `desktop/src/lib/domain/automations/target/selection.ts`
-- `desktop/src/hooks/automations/derived/use-automation-target-selection.ts`
-- `desktop/src/components/automations/controls/AutomationTargetPicker.tsx`
-- `desktop/src/components/automations/editor/AutomationEditorModal.tsx`
-- `desktop/src/components/automations/list/AutomationDetailContent.tsx`
+- `apps/desktop/src/lib/domain/automations/run/ui-records.ts`
+- `apps/desktop/src/lib/domain/automations/target/records.ts`
+- `apps/desktop/src/lib/domain/automations/target/selection.ts`
+- `apps/desktop/src/hooks/automations/derived/use-automation-target-selection.ts`
+- `apps/desktop/src/components/automations/controls/AutomationTargetPicker.tsx`
+- `apps/desktop/src/components/automations/editor/AutomationEditorModal.tsx`
+- `apps/desktop/src/components/automations/list/AutomationDetailContent.tsx`
 
 Acceptance:
 
@@ -319,9 +319,9 @@ Desktop should support:
 
 Likely files:
 
-- `desktop/src/components/automations/**`
-- `desktop/src/hooks/automations/**`
-- `desktop/src/lib/domain/automations/**`
+- `apps/desktop/src/components/automations/**`
+- `apps/desktop/src/hooks/automations/**`
+- `apps/desktop/src/lib/domain/automations/**`
 - `cloud/sdk/src/client/automations.ts`
 - `server/proliferate/server/automations/**`
 
@@ -401,14 +401,14 @@ Implementation options:
 
 Likely files:
 
-- `desktop/src/App.tsx`
-- `desktop/src/pages/MainPage.tsx`
-- `desktop/src/config/app-routes.ts`
-- `desktop/src/components/automations/**`
-- `desktop/src/components/cloud/**` where present
+- `apps/desktop/src/App.tsx`
+- `apps/desktop/src/pages/MainPage.tsx`
+- `apps/desktop/src/config/app-routes.ts`
+- `apps/desktop/src/components/automations/**`
+- `apps/desktop/src/components/cloud/**` where present
 - `cloud/sdk-react/**`
 - `cloud/sdk/**`
-- `desktop/src-tauri/**` only if native iOS is enabled.
+- `apps/desktop/src-tauri/**` only if native iOS is enabled.
 
 Acceptance:
 

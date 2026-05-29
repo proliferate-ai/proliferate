@@ -204,7 +204,7 @@ when the spec is responsible for the enforcement point.
   `organization_admin_roles()`.
 - **Repo paths are repo-relative.** Alembic migrations live under
   `server/alembic/versions/`. Server tests live under `server/tests/`.
-  Product app paths should be written as `web/`, `mobile/`, `cloud/sdk/`,
+  Product app paths should be written as `apps/web/`, `apps/mobile/`, `cloud/sdk/`,
   etc., not machine-local absolute paths.
 
 ## Implementation Posture
@@ -258,11 +258,11 @@ spec. Implementers should treat these as the open coordination work.
 
 1. **`useIsAdmin(org_id)` shape is defined in spec 03 §5.5 but consumed by
    specs 05, 06, 07, 09 with no shared import contract.** The hook lives
-   at `desktop/src/hooks/access/cloud/organizations/use-is-admin.ts`
+   at `apps/desktop/src/hooks/access/cloud/organizations/use-is-admin.ts`
    (doesn't exist yet). Downstream specs must import from there;
    anyone who inlines the role check violates spec 03 acceptance #14.
 
-2. **`desktop/src/lib/domain/vocabulary.ts` is a hard transitive
+2. **`apps/desktop/src/lib/domain/vocabulary.ts` is a hard transitive
    dependency for specs 04-10.** It doesn't exist yet. If any feature
    spec ships before spec 03's Chunk E, vocabulary imports fail.
    Recommendation: ship the vocabulary file as its own small PR ahead

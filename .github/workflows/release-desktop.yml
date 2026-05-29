@@ -88,9 +88,9 @@ jobs:
         shell: bash
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#desktop-v}"
-          PKG_VERSION=$(node -p "require('./desktop/package.json').version")
-          TAURI_VERSION=$(node -p "JSON.parse(require('fs').readFileSync('./desktop/src-tauri/tauri.conf.json','utf8')).version")
-          CARGO_VERSION=$(grep '^version' desktop/src-tauri/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          PKG_VERSION=$(node -p "require('./apps/desktop/package.json').version")
+          TAURI_VERSION=$(node -p "JSON.parse(require('fs').readFileSync('./apps/desktop/src-tauri/tauri.conf.json','utf8')).version")
+          CARGO_VERSION=$(grep '^version' apps/desktop/src-tauri/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
           if [[ "$TAG_VERSION" != "$PKG_VERSION" ]] || [[ "$TAG_VERSION" != "$TAURI_VERSION" ]] || [[ "$TAG_VERSION" != "$CARGO_VERSION" ]]; then
             echo "::error::Version mismatch: tag=$TAG_VERSION pkg=$PKG_VERSION tauri=$TAURI_VERSION cargo=$CARGO_VERSION"
             exit 1
@@ -106,7 +106,7 @@ jobs:
         if: steps.filter.outputs.skip != 'true'
         shell: bash
         run: |
-          package_version=$(node -p "require('./desktop/package.json').version")
+          package_version=$(node -p "require('./apps/desktop/package.json').version")
           if [[ "${GITHUB_REF_NAME:-}" == desktop-v* ]]; then
             release_version="${GITHUB_REF_NAME#desktop-v}"
           else
@@ -133,12 +133,12 @@ jobs:
         shell: bash
         run: |
           cargo build --release -p anyharness --target "${{ matrix.target }}"
-          mkdir -p desktop/src-tauri/binaries
+          mkdir -p apps/desktop/src-tauri/binaries
           if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
-            cp "target/${{ matrix.target }}/release/anyharness.exe" "desktop/src-tauri/binaries/anyharness-${{ matrix.target }}.exe"
+            cp "target/${{ matrix.target }}/release/anyharness.exe" "apps/desktop/src-tauri/binaries/anyharness-${{ matrix.target }}.exe"
           else
-            cp "target/${{ matrix.target }}/release/anyharness" "desktop/src-tauri/binaries/anyharness-${{ matrix.target }}"
-            chmod +x "desktop/src-tauri/binaries/anyharness-${{ matrix.target }}"
+            cp "target/${{ matrix.target }}/release/anyharness" "apps/desktop/src-tauri/binaries/anyharness-${{ matrix.target }}"
+            chmod +x "apps/desktop/src-tauri/binaries/anyharness-${{ matrix.target }}"
           fi
 
       - name: Install seed packaging tools
@@ -155,18 +155,18 @@ jobs:
             --target "${{ matrix.target }}" \
             --anyharness-bin "$PWD/target/${{ matrix.target }}/release/anyharness" \
             --runtime-home "$TMP_SEED_RUNTIME" \
-            --output-dir "$PWD/desktop/src-tauri/agent-seeds"
+            --output-dir "$PWD/apps/desktop/src-tauri/agent-seeds"
 
-          test -s "desktop/src-tauri/agent-seeds/agent-seed-${{ matrix.target }}.tar.zst"
-          test -s "desktop/src-tauri/agent-seeds/agent-seed-${{ matrix.target }}.sha256"
-          seed_count=$(find desktop/src-tauri/agent-seeds -maxdepth 1 -type f -name 'agent-seed-*.tar.zst' | wc -l | tr -d ' ')
+          test -s "apps/desktop/src-tauri/agent-seeds/agent-seed-${{ matrix.target }}.tar.zst"
+          test -s "apps/desktop/src-tauri/agent-seeds/agent-seed-${{ matrix.target }}.sha256"
+          seed_count=$(find apps/desktop/src-tauri/agent-seeds -maxdepth 1 -type f -name 'agent-seed-*.tar.zst' | wc -l | tr -d ' ')
           [[ "$seed_count" == "1" ]] || { echo "::error::Expected one target seed archive, found $seed_count"; exit 1; }
           NODE_BIN="$TMP_SEED_RUNTIME/node/${{ matrix.target }}/bin/node"
           codesign --verify --verbose "$NODE_BIN"
           spctl --assess --verbose=4 --type open --context context:primary-signature "$NODE_BIN"
 
           TMP_SEED_EXTRACT="$(mktemp -d)"
-          zstd -dc "desktop/src-tauri/agent-seeds/agent-seed-${{ matrix.target }}.tar.zst" | tar -xf - -C "$TMP_SEED_EXTRACT"
+          zstd -dc "apps/desktop/src-tauri/agent-seeds/agent-seed-${{ matrix.target }}.tar.zst" | tar -xf - -C "$TMP_SEED_EXTRACT"
           EXTRACTED_NODE_BIN="$TMP_SEED_EXTRACT/node/${{ matrix.target }}/bin/node"
           codesign --verify --verbose "$EXTRACTED_NODE_BIN"
           spctl --assess --verbose=4 --type open --context context:primary-signature "$EXTRACTED_NODE_BIN"
@@ -176,12 +176,12 @@ jobs:
         shell: bash
         run: |
           cargo build --release -p proliferate-debug --target "${{ matrix.target }}"
-          mkdir -p desktop/src-tauri/binaries
+          mkdir -p apps/desktop/src-tauri/binaries
           if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
-            cp "target/${{ matrix.target }}/release/proliferate-debug.exe" "desktop/src-tauri/binaries/proliferate-debug-${{ matrix.target }}.exe"
+            cp "target/${{ matrix.target }}/release/proliferate-debug.exe" "apps/desktop/src-tauri/binaries/proliferate-debug-${{ matrix.target }}.exe"
           else
-            cp "target/${{ matrix.target }}/release/proliferate-debug" "desktop/src-tauri/binaries/proliferate-debug-${{ matrix.target }}"
-            chmod +x "desktop/src-tauri/binaries/proliferate-debug-${{ matrix.target }}"
+            cp "target/${{ matrix.target }}/release/proliferate-debug" "apps/desktop/src-tauri/binaries/proliferate-debug-${{ matrix.target }}"
+            chmod +x "apps/desktop/src-tauri/binaries/proliferate-debug-${{ matrix.target }}"
           fi
 
       - name: Build Proliferate worker for target
@@ -189,12 +189,12 @@ jobs:
         shell: bash
         run: |
           cargo build --release -p proliferate-worker --target "${{ matrix.target }}"
-          mkdir -p desktop/src-tauri/binaries
+          mkdir -p apps/desktop/src-tauri/binaries
           if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
-            cp "target/${{ matrix.target }}/release/proliferate-worker.exe" "desktop/src-tauri/binaries/proliferate-worker-${{ matrix.target }}.exe"
+            cp "target/${{ matrix.target }}/release/proliferate-worker.exe" "apps/desktop/src-tauri/binaries/proliferate-worker-${{ matrix.target }}.exe"
           else
-            cp "target/${{ matrix.target }}/release/proliferate-worker" "desktop/src-tauri/binaries/proliferate-worker-${{ matrix.target }}"
-            chmod +x "desktop/src-tauri/binaries/proliferate-worker-${{ matrix.target }}"
+            cp "target/${{ matrix.target }}/release/proliferate-worker" "apps/desktop/src-tauri/binaries/proliferate-worker-${{ matrix.target }}"
+            chmod +x "apps/desktop/src-tauri/binaries/proliferate-worker-${{ matrix.target }}"
           fi
 
       - name: Generate and build SDK
@@ -212,7 +212,7 @@ jobs:
 
       - name: Build frontend
         if: steps.filter.outputs.skip != 'true'
-        working-directory: desktop
+        working-directory: apps/desktop
         shell: bash
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -260,7 +260,7 @@ jobs:
 
       - name: Build Tauri app
         if: steps.filter.outputs.skip != 'true'
-        working-directory: desktop
+        working-directory: apps/desktop
         shell: bash
         env:
           _SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -296,7 +296,7 @@ jobs:
 
       - name: Upload native Sentry debug files
         if: steps.filter.outputs.skip != 'true'
-        working-directory: desktop
+        working-directory: apps/desktop
         shell: bash
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -316,7 +316,7 @@ jobs:
             pnpm exec sentry-cli debug-files upload \
               --org "$SENTRY_ORG" \
               --project "$project" \
-              "../target/${{ matrix.target }}/release"
+              "../../target/${{ matrix.target }}/release"
           }
 
           upload_debug_files "${SENTRY_DESKTOP_NATIVE_PROJECT:-$SENTRY_PROJECT}" "desktop native"
@@ -324,10 +324,10 @@ jobs:
 
       - name: Verify updater artifacts
         if: steps.filter.outputs.skip != 'true'
-        working-directory: desktop
+        working-directory: apps/desktop
         shell: bash
         run: |
-          base="../target/${{ matrix.target }}/release/bundle"
+          base="../../target/${{ matrix.target }}/release/bundle"
           find "$base" -type f | sort
 
           if [[ "${{ matrix.runner_os }}" == "macos" ]]; then
@@ -341,10 +341,10 @@ jobs:
 
       - name: Normalize updater artifact names (macOS)
         if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
-        working-directory: desktop
+        working-directory: apps/desktop
         shell: bash
         run: |
-          base="../target/${{ matrix.target }}/release/bundle/macos"
+          base="../../target/${{ matrix.target }}/release/bundle/macos"
           version="${PROLIFERATE_RELEASE_VERSION}"
 
           if [[ "${{ matrix.target }}" == "aarch64-apple-darwin" ]]; then
@@ -370,10 +370,10 @@ jobs:
 
       - name: Normalize installer artifact names (macOS)
         if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
-        working-directory: desktop
+        working-directory: apps/desktop
         shell: bash
         run: |
-          base="../target/${{ matrix.target }}/release/bundle/dmg"
+          base="../../target/${{ matrix.target }}/release/bundle/dmg"
           version="${PROLIFERATE_RELEASE_VERSION}"
 
           if [[ "${{ matrix.target }}" == "aarch64-apple-darwin" ]]; then
@@ -394,11 +394,11 @@ jobs:
 
       - name: Verify normalized updater artifact names (macOS)
         if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
-        working-directory: desktop
+        working-directory: apps/desktop
         shell: bash
         run: |
-          base="../target/${{ matrix.target }}/release/bundle/macos"
-          dmg_base="../target/${{ matrix.target }}/release/bundle/dmg"
+          base="../../target/${{ matrix.target }}/release/bundle/macos"
+          dmg_base="../../target/${{ matrix.target }}/release/bundle/dmg"
           if [[ "${{ matrix.target }}" == "aarch64-apple-darwin" ]]; then
             suffix="aarch64"
           else
@@ -411,16 +411,16 @@ jobs:
 
       - name: Stage release artifacts (macOS)
         if: steps.filter.outputs.skip != 'true' && matrix.runner_os == 'macos'
-        working-directory: desktop
+        working-directory: apps/desktop
         shell: bash
         run: |
-          stage="../target/${{ matrix.target }}/release/release-artifacts"
+          stage="../../target/${{ matrix.target }}/release/release-artifacts"
           rm -rf "$stage"
           mkdir -p "$stage"
 
-          cp ../target/${{ matrix.target }}/release/bundle/dmg/*.dmg "$stage/"
-          cp ../target/${{ matrix.target }}/release/bundle/macos/*_*.app.tar.gz "$stage/"
-          cp ../target/${{ matrix.target }}/release/bundle/macos/*_*.app.tar.gz.sig "$stage/"
+          cp ../../target/${{ matrix.target }}/release/bundle/dmg/*.dmg "$stage/"
+          cp ../../target/${{ matrix.target }}/release/bundle/macos/*_*.app.tar.gz "$stage/"
+          cp ../../target/${{ matrix.target }}/release/bundle/macos/*_*.app.tar.gz.sig "$stage/"
 
           find "$stage" -maxdepth 1 -type f | sort
 

@@ -8,10 +8,10 @@ account/org/billing summaries.
 
 Scope:
 
-- `mobile/src/**`
+- `apps/mobile/src/**`
 - shared mobile-safe dependencies in `@proliferate/cloud-sdk`,
   `@proliferate/cloud-sdk-react`, `@proliferate/design/react-native`, and
-  `@proliferate/product-model`
+  `@proliferate/product-domain`
 - server/cloud APIs only when a required mobile workflow has no complete API
   contract yet
 
@@ -45,7 +45,7 @@ different product model or a simplified chat state machine.
 
 ## Non-Goals
 
-- Do not directly import DOM components from `packages/product-ui/**` into
+- Do not directly import DOM components from `apps/packages/product-ui/**` into
   React Native.
 - Do not force Desktop's full-width chat layout onto small screens.
 - Do not block the mobile work on moving every Desktop/Web component to shared
@@ -53,13 +53,13 @@ different product model or a simplified chat state machine.
 - Do not make Mobile a fixture/demo client. Fixture data is acceptable only in
   explicitly marked development surfaces and must not back product flows.
 - Do not add duplicate backend semantics in Mobile when a shared cloud command,
-  projection, or product-model helper can own the rule.
+  projection, or product-domain helper can own the rule.
 
 ## Current State From Investigation
 
 Mobile already has a real Expo app scaffold:
 
-- `mobile/src/App.tsx` wires safe area, auth, telemetry, cloud query, and shell
+- `apps/mobile/src/App.tsx` wires safe area, auth, telemetry, cloud query, and shell
   providers.
 - `MobileAuthProvider` stores access/refresh tokens in SecureStore and supports
   Apple, Google, and GitHub OAuth through mobile PKCE flows.
@@ -87,7 +87,7 @@ This branch converts the highest-impact gaps into real flows:
 - `MobileChatScreen` now loads workspace snapshots/live state, opens
   workspaces with or without existing sessions, dispatches pending first
   prompts through `start_session` then `send_prompt`, renders event-first /
-  projection-fallback transcript rows from shared product-model helpers, shows
+  projection-fallback transcript rows from shared product-domain helpers, shows
   optimistic prompt and assistant waiting rows, exposes config controls, gates
   unclaimed workspaces, and shares branch identity.
 - `MobileWorkspacesScreen` and `MobileSessionsScreen` use the primary `my`
@@ -97,7 +97,7 @@ This branch converts the highest-impact gaps into real flows:
 - `MobileSettingsScreen` now shows real viewer, GitHub readiness, personal
   billing, configured repo count, and organization memberships.
 - Web now imports the same cloud transcript/composer pure helpers from
-  `@proliferate/product-model`, keeping the Web UI behavior intact while
+  `@proliferate/product-domain`, keeping the Web UI behavior intact while
   making Mobile use the same product semantics.
 
 Remaining gaps after this branch are mostly deeper UX and QA work: workspace
@@ -309,19 +309,19 @@ Use mobile-native UI while sharing contracts and pure rules.
 | --- | --- |
 | Raw Proliferate Cloud requests | `@proliferate/cloud-sdk` |
 | React Query hooks for cloud resources | `@proliferate/cloud-sdk-react`, with mobile additions only when generic hooks are missing |
-| Mobile auth/client setup | `mobile/src/lib/access/cloud/**` and `mobile/src/providers/**` |
-| Mobile navigation and shell state | `mobile/src/components/shell/**`, `mobile/src/navigation/**`, later `mobile/src/stores/**` only for shared local UI state |
-| Mobile product UI | `mobile/src/components/<domain>/**` |
-| Shared product rules/view models | `packages/product-model/src/**` |
-| React Native design tokens | `@proliferate/design/react-native` via `mobile/src/styles/tokens.ts` |
+| Mobile auth/client setup | `apps/mobile/src/lib/access/cloud/**` and `apps/mobile/src/providers/**` |
+| Mobile navigation and shell state | `apps/mobile/src/components/shell/**`, `apps/mobile/src/navigation/**`, later `apps/mobile/src/stores/**` only for shared local UI state |
+| Mobile product UI | `apps/mobile/src/components/<domain>/**` |
+| Shared product rules/view models | `apps/packages/product-domain/src/**` |
+| React Native design tokens | `@proliferate/design/react-native` via `apps/mobile/src/styles/tokens.ts` |
 
 When Desktop/Web have a DOM component and Mobile needs the same behavior, prefer
 one of these clean extractions:
 
-1. Move pure data shaping into `packages/product-model`.
-2. Keep DOM rendering in `packages/product-ui` for Desktop/Web.
-3. Build a React Native renderer in `mobile/src/components/**` over the same
-   product-model output.
+1. Move pure data shaping into `apps/packages/product-domain`.
+2. Keep DOM rendering in `apps/packages/product-ui` for Desktop/Web.
+3. Build a React Native renderer in `apps/mobile/src/components/**` over the same
+   product-domain output.
 
 Do not create a third interpretation of command states, transcript item kinds,
 workspace visibility, or session config in Mobile.
@@ -492,7 +492,7 @@ Desktop settings tree.
 
 - [ ] Inventory all mobile screens and fixture-backed surfaces.
 - [ ] Inventory reusable Web cloud helpers that are browser-specific today.
-- [ ] Identify which Web helpers can move to `packages/product-model` or a
+- [ ] Identify which Web helpers can move to `apps/packages/product-domain` or a
   cloud SDK helper without importing DOM/browser APIs.
 - [ ] Confirm whether mobile needs new cloud SDK React hooks for repo configs,
   workspace live, session events, automations mutations, or orgs.
@@ -500,13 +500,13 @@ Desktop settings tree.
 ### Phase 1 - Shared Product Rules For Cloud Chat
 
 - [x] Move Web-only pure helpers for cloud transcript rows into
-  `packages/product-model`.
+  `apps/packages/product-domain`.
 - [x] Move Web-only pure helpers for cloud composer controls into
-  `packages/product-model`.
+  `apps/packages/product-domain`.
 - [x] Keep browser persistence, navigation, and window timers out of shared
   product logic.
-- [x] Add product-model tests for transcript event/projection fallback.
-- [ ] Add product-model tests for optimistic prompt reconciliation and config
+- [x] Add product-domain tests for transcript event/projection fallback.
+- [ ] Add product-domain tests for optimistic prompt reconciliation and config
   reconciliation.
 
 ### Phase 2 - Mobile New Chat And Workspace Handoff
@@ -571,11 +571,11 @@ coverage exists or is explicitly deferred.
 | --- | --- | --- |
 | Fresh auth | sign in, link GitHub, reopen still signed in | provider/auth unit coverage plus device smoke |
 | New chat | workspace created, session started, first prompt answered | product workflow tests plus real cloud smoke |
-| Existing session send | optimistic row, waiting row, accepted transcript | product-model reconciliation tests plus device smoke |
+| Existing session send | optimistic row, waiting row, accepted transcript | product-domain reconciliation tests plus device smoke |
 | Managed target materialization | disabled send until routing ready, then send works | command-blocker tests plus real materialization smoke |
 | Claim | claim enables composer and prompt send | mutation handling tests plus shared workspace smoke |
 | Live/reload | no duplicate/missing rows after reconnect/reload | transcript event/projection tests plus lifecycle smoke |
-| Config | optimistic config, accepted reconcile, rejected rollback | product-model config tests plus real command smoke |
+| Config | optimistic config, accepted reconcile, rejected rollback | product-domain config tests plus real command smoke |
 | Navigation | drawer/list/deep link open correct workspace/session | navigation model tests plus device smoke |
 | Automations | real list and create/edit where supported | cloud hook tests plus API smoke |
 | Settings | real account/team/billing/profile state | query handling tests plus account smoke |
@@ -586,7 +586,7 @@ Run these before calling an implementation slice done:
 
 ```bash
 pnpm --filter @proliferate/mobile typecheck
-pnpm --filter @proliferate/product-model test
+pnpm --filter @proliferate/product-domain test
 ```
 
 For app runtime smoke:

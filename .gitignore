@@ -8,7 +8,7 @@ reference/
 dist/
 out/
 target/
-desktop/index.js
+apps/desktop/index.js
 *.db
 *.db-wal
 *.db-shm
@@ -41,8 +41,8 @@ references/
 server/openapi.json
 
 # Tauri build outputs and sidecar binaries
-desktop/src-tauri/binaries/
-desktop/src-tauri/gen/
+apps/desktop/src-tauri/binaries/
+apps/desktop/src-tauri/gen/
 
 # CI / release artifacts
 anyharness-sdk.tgz
@@ -54,7 +54,7 @@ anyharness-sdk.tgz
 logs/
 recordings/
 anyharness/recordings/
-desktop/src/lib/domain/chat/__fixtures__/recorded/
+apps/desktop/src/lib/domain/chat/__fixtures__/recorded/
 
 # Terraform
 .terraform/

@@ -66,13 +66,13 @@ Representative code paths reviewed:
 - `server/proliferate/server/billing/stripe_webhooks.py`
 - `server/proliferate/db/store/cloud_agent_auth/store.py`
 - `server/proliferate/server/cloud/sandbox_profiles/api.py`
-- `desktop/src/hooks/organizations/facade/use-active-organization.ts`
-- `desktop/src/stores/organizations/organization-store.ts`
-- `desktop/src/components/settings/panes/OrganizationPane.tsx`
-- `desktop/src/components/settings/panes/BillingPane.tsx`
-- `desktop/src/components/settings/panes/SlackBotPane.tsx`
-- `web/src/components/settings/screen/SettingsScreen.tsx`
-- `web/src/components/settings/screen/BillingSettingsSection.tsx`
+- `apps/desktop/src/hooks/organizations/facade/use-active-organization.ts`
+- `apps/desktop/src/stores/organizations/organization-store.ts`
+- `apps/desktop/src/components/settings/panes/OrganizationPane.tsx`
+- `apps/desktop/src/components/settings/panes/BillingPane.tsx`
+- `apps/desktop/src/components/settings/panes/SlackBotPane.tsx`
+- `apps/web/src/components/settings/screen/SettingsScreen.tsx`
+- `apps/web/src/components/settings/screen/BillingSettingsSection.tsx`
 - `cloud/sdk/src/client/organizations.ts`
 - `cloud/sdk-react/src/hooks/organizations.ts`
 
@@ -1034,19 +1034,19 @@ should add shared pure view/model pieces rather than duplicating the flow.
 
 Recommended additions:
 
-- `packages/product-model/src/organizations/`
+- `apps/packages/product-domain/src/organizations/`
   - current team projection
   - no-team/pending-checkout/active/suspended view-state derivation
   - invite conflict and membership role presentation helpers
   - billing label projection for account credits vs Team billing
-- `packages/product-ui/src/organizations/`
+- `apps/packages/product-ui/src/organizations/`
   - `OrganizationSettingsView`
   - `CreateTeamDialog`
   - `PendingTeamCheckoutPanel`
   - `TeamMembersTable`
   - `TeamInvitesPanel`
   - `InviteAcceptancePanel`
-- `packages/product-ui/src/billing/`
+- `apps/packages/product-ui/src/billing/`
   - `AccountCreditsPanel`
   - `TeamBillingPanel`
 

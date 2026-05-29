@@ -188,7 +188,7 @@ no user-context auth path
 ```
 
 **Desktop remote-target access**
-(`desktop/src/lib/access/anyharness/runtime-target.ts`):
+(`apps/desktop/src/lib/access/anyharness/runtime-target.ts`):
 
 ```text
 runtime location 'local'   localhost
@@ -785,18 +785,18 @@ anyharness/sdk/generated/openapi.json                          regen
 Desktop:
 
 ```text
-desktop/src/hooks/access/cloud/claims/                         (new)
+apps/desktop/src/hooks/access/cloud/claims/                         (new)
   use-workspace-claim.ts
   use-claim-mutations.ts
   use-direct-attach-token.ts
   use-revoke-token.ts             per-token revoke for security
 
-desktop/src/lib/access/anyharness/runtime-target.ts
+apps/desktop/src/lib/access/anyharness/runtime-target.ts
   - new runtime location 'shared_cloud' that uses
     cloud_target_runtime_access.anyharness_base_url +
     Bearer <direct-attach JWT>
 
-desktop/src/components/workspaces/*
+apps/desktop/src/components/workspaces/*
   - "Claim" button in workspace headers when
     visibility='shared_unclaimed' AND user is org member
   - No "Release" button.
@@ -808,7 +808,7 @@ desktop/src/components/workspaces/*
     "Claimed by Alice on Mar 12. To take over, archive and
     recreate."
 
-desktop/src/lib/storage/direct-attach-tokens.ts                (new)
+apps/desktop/src/lib/storage/direct-attach-tokens.ts                (new)
   - store JWT in OS keychain
   - refresh on expiry
   - revoke on user logout
@@ -971,20 +971,20 @@ jti cache).
 Desktop:
 
 ```bash
-cd desktop && pnpm test -- --run && pnpm typecheck
+cd apps/desktop && pnpm test -- --run && pnpm typecheck
 ```
 
 Targeted Desktop tests:
 
 ```text
-desktop/src/hooks/access/cloud/claims/use-workspace-claim.test.ts
+apps/desktop/src/hooks/access/cloud/claims/use-workspace-claim.test.ts
   - claim mutation hits POST /claim
   - no release mutation exists
-desktop/src/hooks/access/cloud/claims/use-direct-attach-token.test.ts
-desktop/src/lib/access/anyharness/runtime-target.test.ts
+apps/desktop/src/hooks/access/cloud/claims/use-direct-attach-token.test.ts
+apps/desktop/src/lib/access/anyharness/runtime-target.test.ts
   - shared_cloud target uses cloud_target_runtime_access + JWT
-desktop/src/lib/storage/direct-attach-tokens.test.ts
-desktop/src/components/workspaces/AdminAuditView.test.tsx
+apps/desktop/src/lib/storage/direct-attach-tokens.test.ts
+apps/desktop/src/components/workspaces/AdminAuditView.test.tsx
   - admin sees claimed-by-other workspace
   - prompt input disabled
   - banner shows claimed_by + claimed_at

@@ -206,10 +206,10 @@ server/proliferate/server/cloud/plugins/catalog/
   first_party/<plugin>/*.md
     reviewed adapted skill instruction files
 
-desktop/src/lib/access/cloud/mcp_catalog.ts
+apps/desktop/src/lib/access/cloud/mcp_catalog.ts
   raw Desktop access to Cloud MCP catalog
 
-desktop/src/lib/workflows/mcp/connector-persistence.ts
+apps/desktop/src/lib/workflows/mcp/connector-persistence.ts
   maps Cloud catalog entries and plugin packages to Desktop records
 ```
 
@@ -558,31 +558,31 @@ Desktop owns local presentation, local install/connect actions, and local
 bundle resolution for local sessions.
 
 ```text
-desktop/src/pages/PluginsPage.tsx
+apps/desktop/src/pages/PluginsPage.tsx
   route-level page
 
-desktop/src/components/plugins/catalog/
+apps/desktop/src/components/plugins/catalog/
   plugin package list and package cards
 
-desktop/src/components/plugins/detail/
+apps/desktop/src/components/plugins/detail/
   configure/tools/about modal content
 
-desktop/src/components/plugins/status/
+apps/desktop/src/components/plugins/status/
   icons, status chips, overflow actions
 
-desktop/src/components/plugins/fields/
+apps/desktop/src/components/plugins/fields/
   plugin/account setup fields
 
-desktop/src/hooks/mcp/**
+apps/desktop/src/hooks/mcp/**
   connector catalog/load/install/toggle/delete/reconnect workflows
 
-desktop/src/lib/domain/plugins/
+apps/desktop/src/lib/domain/plugins/
   pure plugin package projection and session bundle construction
 
-desktop/src/lib/workflows/sessions/session-mcp-launch.ts
+apps/desktop/src/lib/workflows/sessions/session-mcp-launch.ts
   resolves MCP servers and plugin bundle for launch
 
-desktop/src/lib/workflows/sessions/session-runtime.ts
+apps/desktop/src/lib/workflows/sessions/session-runtime.ts
   passes resolved plugin bundle to session create/resume
 ```
 
@@ -648,16 +648,16 @@ The chat transcript should make plugin and skills MCP activity readable without
 showing raw JSON unless there is no product-specific renderer.
 
 ```text
-desktop/src/lib/domain/chat/tools/tool-call-display.ts
+apps/desktop/src/lib/domain/chat/tools/tool-call-display.ts
   labels MCP calls such as list skills, activate skill, and load skill resource
 
-desktop/src/lib/domain/chat/tools/skills-tool-result.ts
+apps/desktop/src/lib/domain/chat/tools/skills-tool-result.ts
   parses proliferate_skills JSON results into display models
 
-desktop/src/components/workspace/chat/tool-calls/SkillsToolResultRow.tsx
+apps/desktop/src/components/workspace/chat/tool-calls/SkillsToolResultRow.tsx
   renders skills results with metadata and markdown instructions/resources
 
-desktop/src/components/workspace/chat/transcript/TranscriptToolCallItemBlock.tsx
+apps/desktop/src/components/workspace/chat/transcript/TranscriptToolCallItemBlock.tsx
   routes proliferate_skills results before falling back to GenericToolResultRow
 ```
 
@@ -686,10 +686,10 @@ Plugins are not injected into coding sessions unless the user preference is
 enabled.
 
 ```text
-desktop/src/lib/domain/preferences/user/model.ts
+apps/desktop/src/lib/domain/preferences/user/model.ts
   pluginsInCodingSessionsEnabled
 
-desktop/src/components/settings/panes/GeneralPane.tsx
+apps/desktop/src/components/settings/panes/GeneralPane.tsx
   "Use plugins in coding sessions"
   "Plugins setup"
 ```
@@ -753,10 +753,10 @@ server/proliferate/server/cloud/mcp_materialization/http_launch.py
 server/proliferate/server/cloud/mcp_materialization/stdio_launch.py
   renders local stdio candidates
 
-desktop/src/lib/access/cloud/mcp_materialization.ts
+apps/desktop/src/lib/access/cloud/mcp_materialization.ts
   raw Desktop access to materialization endpoint
 
-desktop/src/lib/workflows/sessions/session-mcp-launch.ts
+apps/desktop/src/lib/workflows/sessions/session-mcp-launch.ts
   calls Cloud materialization
   finalizes local stdio candidates
   returns mcpServers, mcpBindingSummaries, warnings, and pluginBundle
@@ -765,13 +765,13 @@ desktop/src/lib/workflows/sessions/session-mcp-launch.ts
 Current bundle builder:
 
 ```text
-desktop/src/lib/domain/plugins/session-plugin-bundle.ts
+apps/desktop/src/lib/domain/plugins/session-plugin-bundle.ts
 ```
 
 Current projection helper:
 
 ```text
-desktop/src/lib/domain/plugins/plugin-package-view-model.ts
+apps/desktop/src/lib/domain/plugins/plugin-package-view-model.ts
 ```
 
 The current local connector bridge must not create default or synthetic skills.
@@ -827,12 +827,12 @@ server/proliferate/server/cloud/plugins/
 Desktop should keep local-only resolution in:
 
 ```text
-desktop/src/lib/domain/plugins/
+apps/desktop/src/lib/domain/plugins/
   package-manifest.ts       # target shape for local manifests
   session-plugin-bundle.ts  # local package/component -> SessionPluginBundle
   skill-source.ts           # local skill source metadata/ref helper
 
-desktop/src/lib/workflows/sessions/session-mcp-launch.ts
+apps/desktop/src/lib/workflows/sessions/session-mcp-launch.ts
   session-facing orchestration only
 ```
 
@@ -1113,10 +1113,10 @@ server/proliferate/server/cloud/plugins/catalog/first_party.py
 server/proliferate/server/cloud/mcp_materialization/service.py
   configured connector -> concrete session MCP payloads plus package records
 
-desktop/src/lib/workflows/sessions/session-mcp-launch.ts
+apps/desktop/src/lib/workflows/sessions/session-mcp-launch.ts
   launch-time MCP resolution orchestration
 
-desktop/src/lib/domain/plugins/session-plugin-bundle.ts
+apps/desktop/src/lib/domain/plugins/session-plugin-bundle.ts
   wraps applied MCP results into current plugin bundle entries
 ```
 

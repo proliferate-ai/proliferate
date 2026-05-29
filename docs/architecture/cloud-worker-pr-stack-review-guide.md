@@ -287,7 +287,7 @@ Desktop should configure the shared client, not fork endpoint logic.
 - `cloud/sdk/src/streams/sse.ts`
 - `cloud/sdk-react/src/context/CloudClientProvider.tsx`
 - `cloud/sdk-react/src/lib/query-keys.ts`
-- `desktop/src/lib/access/cloud/client.ts`
+- `apps/desktop/src/lib/access/cloud/client.ts`
 - `Makefile`
 - `pnpm-workspace.yaml`
 
@@ -374,7 +374,7 @@ User creates enrollment
 - `anyharness/crates/proliferate-worker/**`
 - `anyharness/crates/proliferate-supervisor/**`
 - `install/proliferate-target-install.sh`
-- `desktop/src/components/settings/panes/ComputePane.tsx`
+- `apps/desktop/src/components/settings/panes/ComputePane.tsx`
 
 ### Key Endpoints And Tables
 
@@ -1076,7 +1076,7 @@ Owns shared typed Cloud access:
 It must not own Desktop auth storage, Tauri access, product-specific UI state,
 or worker runtime behavior.
 
-### `desktop/src/**`
+### `apps/desktop/src/**`
 
 Owns Desktop-specific Cloud wiring and UX:
 

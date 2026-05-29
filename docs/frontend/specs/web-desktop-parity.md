@@ -10,10 +10,10 @@ inventory and extraction plan, use
 
 Scope:
 
-- `web/src/**`
-- `packages/product-ui/src/**` shared product presentation used by Web
-- `packages/product-model/src/**` shared pure chat/workspace view logic used by Web
-- Desktop components under `desktop/src/**` only when extracting presentation into shared packages
+- `apps/web/src/**`
+- `apps/packages/product-ui/src/**` shared product presentation used by Web
+- `apps/packages/product-domain/src/**` shared pure chat/workspace view logic used by Web
+- Desktop components under `apps/desktop/src/**` only when extracting presentation into shared packages
 
 Read this before implementing Web chat, Web workspace navigation, Web new chat, Web automations, or Web settings parity work.
 
@@ -23,13 +23,13 @@ Web should feel like the Desktop chat/workspace product running against the clou
 
 The UI target is not "similar Web screens." The target is Desktop-grade chat and workspace UX reused or cleanly extracted into shared packages, with Web supplying cloud-specific adapters and Desktop continuing to supply local AnyHarness/runtime adapters.
 
-Desktop is the source of truth for chat/workspace presentation. Desktop behavior should remain unchanged unless a presentational component is deliberately extracted into `packages/product-ui` and re-consumed without changing Desktop semantics.
+Desktop is the source of truth for chat/workspace presentation. Desktop behavior should remain unchanged unless a presentational component is deliberately extracted into `apps/packages/product-ui` and re-consumed without changing Desktop semantics.
 
 ## Operating Rules
 
 - Do not create parallel Web-only product visuals when Desktop presentation can be cleanly extracted.
-- Keep shared UI data-driven. `packages/product-ui` components accept view models and callbacks; they do not call Desktop stores, Tauri, Web cloud clients, or raw endpoints.
-- Keep pure derivation in `packages/product-model` when the same rules apply to Desktop and Web.
+- Keep shared UI data-driven. `apps/packages/product-ui` components accept view models and callbacks; they do not call Desktop stores, Tauri, Web cloud clients, or raw endpoints.
+- Keep pure derivation in `apps/packages/product-domain` when the same rules apply to Desktop and Web.
 - Keep Web cloud command/session wiring in Web access/hooks/controllers.
 - Keep Desktop local AnyHarness/runtime wiring in Desktop.
 - Prefer vertical slices that are usable end to end over large incomplete moves.
@@ -41,13 +41,13 @@ Desktop is the source of truth for chat/workspace presentation. Desktop behavior
 ```text
 Desktop
   local stores/hooks/access
-    -> shared product-model view logic where possible
+    -> shared product-domain view logic where possible
     -> shared product-ui presentation where possible
     -> Desktop-only native/local adapters where required
 
 Web
   cloud sdk/react-query/controllers
-    -> shared product-model view logic where possible
+    -> shared product-domain view logic where possible
     -> shared product-ui presentation where possible
     -> Web/cloud command adapters where required
 ```
@@ -174,7 +174,7 @@ Web
 Use this section to mark incremental progress during implementation.
 
 - [x] Define Web/Desktop parity goal and checklist.
-- [x] Shared Web composer component extracted into `packages/product-ui`.
+- [x] Shared Web composer component extracted into `apps/packages/product-ui`.
 - [x] Web chat surface consumes shared composer.
 - [x] Web first-prompt optimistic row behavior implemented.
 - [x] Web existing-session optimistic row behavior implemented.

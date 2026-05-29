@@ -300,8 +300,8 @@ NOT in archive: MCP bindings, agent auth, runtime config caches,
 explicitly dropped on import; sessions rebind MCP after handoff
 via spec 01 runtime config.
 
-**Desktop UI** (`desktop/src/hooks/workspaces/mobility/` (15 files)
-+ `desktop/src/lib/domain/workspaces/mobility/` (11 files)):
+**Desktop UI** (`apps/desktop/src/hooks/workspaces/mobility/` (15 files)
++ `apps/desktop/src/lib/domain/workspaces/mobility/` (11 files)):
 
 ```text
 WorkspaceMobilityOverlay.tsx     blocking overlay during move
@@ -711,7 +711,7 @@ Spec 08 §6 deferred this verb pending spec 10. Spec 10 turns it
 on:
 
 ```text
-desktop/src/components/workspace/shell/sidebar/
+apps/desktop/src/components/workspace/shell/sidebar/
   use-workspace-sidebar-native-context-menu.ts
     add "Move to another target..." item
     visible when:
@@ -727,7 +727,7 @@ The verb opens a migration editor modal (§5.8).
 ### 5.8 Migration editor UI
 
 ```text
-desktop/src/components/mobility/MigrationEditorModal.tsx       (new)
+apps/desktop/src/components/mobility/MigrationEditorModal.tsx       (new)
 
 sections:
   Source                  workspace name, target, sandbox_type
@@ -953,24 +953,24 @@ cloud/sdk/src/types/generated.ts                        regen
 Desktop:
 
 ```text
-desktop/src/components/mobility/MigrationEditorModal.tsx       (new)
-desktop/src/components/mobility/WorkspaceMobilityOverlay.tsx
+apps/desktop/src/components/mobility/MigrationEditorModal.tsx       (new)
+apps/desktop/src/components/mobility/WorkspaceMobilityOverlay.tsx
   + handle repair_required state with explicit buttons
-desktop/src/components/mobility/PerItemCleanupStatus.tsx       (new)
+apps/desktop/src/components/mobility/PerItemCleanupStatus.tsx       (new)
 
-desktop/src/hooks/workspaces/mobility/
+apps/desktop/src/hooks/workspaces/mobility/
   use-start-handoff.ts                            extend with direction
   use-execute-cleanup-items.ts                    (new) drives per-item
   use-mobility-repair.ts                          (new)
   use-shared-source-direct-attach.ts              (new) integrates spec 05
 
-desktop/src/lib/domain/workspaces/mobility/
+apps/desktop/src/lib/domain/workspaces/mobility/
   mobility-state-machine.ts                       add cutover_committed +
                                                   repair_required transitions
   cleanup-item-runner.ts                          (new) per-item execution
   destination-target-picker.ts                    (new) policy + filters
 
-desktop/src/components/workspace/shell/sidebar/
+apps/desktop/src/components/workspace/shell/sidebar/
   use-workspace-sidebar-native-context-menu.ts    + "Move to another target..."
 ```
 
@@ -1138,22 +1138,22 @@ server/tests/cloud/mobility/test_existing_local_cloud_flow_no_regression.py
 Desktop:
 
 ```bash
-cd desktop && pnpm test -- --run && pnpm typecheck
+cd apps/desktop && pnpm test -- --run && pnpm typecheck
 ```
 
 Targeted Desktop tests:
 
 ```text
-desktop/src/components/mobility/MigrationEditorModal.test.tsx
+apps/desktop/src/components/mobility/MigrationEditorModal.test.tsx
   - preflight blockers disable Start move
   - direction selector filters by source owner
   - destination exposure intent radio respects direction
-desktop/src/lib/domain/workspaces/mobility/cleanup-item-runner.test.ts
+apps/desktop/src/lib/domain/workspaces/mobility/cleanup-item-runner.test.ts
   - per-item execution + status reporting
-desktop/src/hooks/workspaces/mobility/use-execute-cleanup-items.test.ts
-desktop/src/hooks/workspaces/mobility/use-mobility-repair.test.ts
-desktop/src/hooks/workspaces/mobility/use-shared-source-direct-attach.test.ts
-desktop/src/components/workspace/shell/sidebar/use-workspace-sidebar-native-context-menu.test.ts
+apps/desktop/src/hooks/workspaces/mobility/use-execute-cleanup-items.test.ts
+apps/desktop/src/hooks/workspaces/mobility/use-mobility-repair.test.ts
+apps/desktop/src/hooks/workspaces/mobility/use-shared-source-direct-attach.test.ts
+apps/desktop/src/components/workspace/shell/sidebar/use-workspace-sidebar-native-context-menu.test.ts
   - "Move to another target..." visibility gates
 ```
 

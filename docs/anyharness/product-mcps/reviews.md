@@ -548,21 +548,21 @@ anyharness/crates/anyharness-lib/src/persistence/sql/0036_review_assignments_ret
 Frontend:
 
 ```text
-desktop/src/components/workspace/reviews/**
-desktop/src/components/workspace/chat/transcript/ProposedPlanCard.tsx
-desktop/src/components/workspace/chat/plans/**
-desktop/src/components/workspace/chat/input/delegated-work/**
-desktop/src/components/workspace/shell/tabs/**
-desktop/src/hooks/reviews/**
-desktop/src/hooks/plans/**
-desktop/src/hooks/chat/use-delegated-work-composer.ts
-desktop/src/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy.ts
-desktop/src/lib/domain/reviews/**
-desktop/src/lib/domain/plans/**
-desktop/src/lib/domain/delegated-work/**
-desktop/src/lib/access/anyharness/reviews.ts
-desktop/src/lib/access/anyharness/plans.ts
-desktop/src/stores/reviews/**
+apps/desktop/src/components/workspace/reviews/**
+apps/desktop/src/components/workspace/chat/transcript/ProposedPlanCard.tsx
+apps/desktop/src/components/workspace/chat/plans/**
+apps/desktop/src/components/workspace/chat/input/delegated-work/**
+apps/desktop/src/components/workspace/shell/tabs/**
+apps/desktop/src/hooks/reviews/**
+apps/desktop/src/hooks/plans/**
+apps/desktop/src/hooks/chat/use-delegated-work-composer.ts
+apps/desktop/src/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy.ts
+apps/desktop/src/lib/domain/reviews/**
+apps/desktop/src/lib/domain/plans/**
+apps/desktop/src/lib/domain/delegated-work/**
+apps/desktop/src/lib/access/anyharness/reviews.ts
+apps/desktop/src/lib/access/anyharness/plans.ts
+apps/desktop/src/stores/reviews/**
 ```
 
 ## Acceptance

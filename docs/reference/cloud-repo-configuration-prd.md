@@ -36,11 +36,11 @@ preferences.
 
 Relevant code:
 
-- `desktop/src/components/settings/panes/RepositoryPane.tsx`
-- `desktop/src/components/workspace/repo-setup/RepoSetupModal.tsx`
-- `desktop/src/components/workspace/repo-setup/SetupCommandEditor.tsx`
-- `desktop/src/hooks/settings/use-repository-settings.ts`
-- `desktop/src/stores/preferences/repo-preferences-store.ts`
+- `apps/desktop/src/components/settings/panes/RepositoryPane.tsx`
+- `apps/desktop/src/components/workspace/repo-setup/RepoSetupModal.tsx`
+- `apps/desktop/src/components/workspace/repo-setup/SetupCommandEditor.tsx`
+- `apps/desktop/src/hooks/settings/use-repository-settings.ts`
+- `apps/desktop/src/stores/preferences/repo-preferences-store.ts`
 - `anyharness/crates/anyharness-lib/src/workspaces/detector.rs`
 - `anyharness/crates/anyharness-lib/src/workspaces/service.rs`
 
@@ -59,9 +59,9 @@ Current cloud sync is global per user and agent provider, not repo-scoped.
 
 Relevant code:
 
-- `desktop/src/components/settings/panes/CloudPane.tsx`
-- `desktop/src/platform/tauri/credentials.ts`
-- `desktop/src/lib/integrations/cloud/credentials.ts`
+- `apps/desktop/src/components/settings/panes/CloudPane.tsx`
+- `apps/desktop/src/platform/tauri/credentials.ts`
+- `apps/desktop/src/lib/integrations/cloud/credentials.ts`
 - `server/proliferate/server/cloud/credentials/service.py`
 - `server/proliferate/server/cloud/runtime/credentials.py`
 - `server/proliferate/db/models/cloud.py`
@@ -83,9 +83,9 @@ branch. Provisioning performs baseline sandbox and runtime setup only.
 
 Relevant code:
 
-- `desktop/src/components/workspace/cloud/NewCloudWorkspaceModal.tsx`
-- `desktop/src/hooks/cloud/use-new-cloud-workspace-modal-state.ts`
-- `desktop/src/hooks/cloud/use-cloud-workspace-actions.ts`
+- `apps/desktop/src/components/workspace/cloud/NewCloudWorkspaceModal.tsx`
+- `apps/desktop/src/hooks/cloud/use-new-cloud-workspace-modal-state.ts`
+- `apps/desktop/src/hooks/cloud/use-cloud-workspace-actions.ts`
 - `server/proliferate/server/cloud/workspaces/service.py`
 - `server/proliferate/server/cloud/runtime/provision.py`
 - `server/proliferate/server/cloud/runtime/bootstrap.py`
@@ -118,10 +118,10 @@ cloud repo configuration or re-apply controls.
 
 Relevant code:
 
-- `desktop/src/components/workspace/shell/right-panel/RightPanel.tsx`
-- `desktop/src/components/workspace/chat/surface/CloudRuntimeAttachedPanel.tsx`
-- `desktop/src/components/settings/SettingsScreen.tsx`
-- `desktop/src/components/settings/SettingsSidebar.tsx`
+- `apps/desktop/src/components/workspace/shell/right-panel/RightPanel.tsx`
+- `apps/desktop/src/components/workspace/chat/surface/CloudRuntimeAttachedPanel.tsx`
+- `apps/desktop/src/components/settings/SettingsScreen.tsx`
+- `apps/desktop/src/components/settings/SettingsSidebar.tsx`
 
 Current gap:
 
@@ -410,7 +410,7 @@ Recommended Tauri additions:
 Recommended repo inventory source:
 
 - reuse the local repo inventory already derived in
-  `desktop/src/hooks/settings/use-settings-repositories.ts`
+  `apps/desktop/src/hooks/settings/use-settings-repositories.ts`
 - treat that as the v1 list for cloud repo configuration screens
 - avoid adding a separate remote repo browser in the first pass
 

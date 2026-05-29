@@ -115,7 +115,7 @@ at the start of the task, not halfway through implementation.
 
 ### CI/CD, Release, And Deployment
 
-Applies to `.github/workflows/**`, `desktop/infra/**`, `server/infra/**`,
+Applies to `.github/workflows/**`, `apps/desktop/infra/**`, `server/infra/**`,
 updater publishing, and the desktop updater flow.
 
 1. `docs/ci-cd/README.md`

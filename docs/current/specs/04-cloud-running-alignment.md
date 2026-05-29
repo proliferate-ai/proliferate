@@ -1107,13 +1107,13 @@ cloud/sdk              (add exposures/projection clients, new fields
 Desktop:
 
 ```text
-desktop/src/hooks/access/cloud/workspaces/                    extend
+apps/desktop/src/hooks/access/cloud/workspaces/                    extend
   - returns exposure_state and sandbox_type from server payload
-desktop/src/hooks/access/cloud/exposures/                     (new)
+apps/desktop/src/hooks/access/cloud/exposures/                     (new)
   use-workspace-exposure.ts, use-exposure-mutations.ts
-desktop/src/hooks/access/cloud/projections/                   (new)
+apps/desktop/src/hooks/access/cloud/projections/                   (new)
   use-session-projection.ts
-desktop/src/components/cloud/                                 add passive
+apps/desktop/src/components/cloud/                                 add passive
   workspace sidebar row uses exposure_state + sandbox_type from
   vocabulary.ts (spec 03)
 ```

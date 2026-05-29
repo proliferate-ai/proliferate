@@ -92,7 +92,7 @@ anyharness/sdk/
   generated code only
     Regenerate if contract endpoints change. Do not hand-edit generated output.
 
-desktop/src/lib/access/
+apps/desktop/src/lib/access/
   anyharness/agents.ts or existing AnyHarness access module
     Raw calls to AnyHarness launch options and model registry refresh/read.
 
@@ -100,7 +100,7 @@ desktop/src/lib/access/
     Raw calls to Cloud synced registry projections if a first-class Cloud API is
     added.
 
-desktop/src/lib/domain/chat/models/
+apps/desktop/src/lib/domain/chat/models/
   model-display.ts
   model-selection.ts
   model-visibility.ts
@@ -108,17 +108,17 @@ desktop/src/lib/domain/chat/models/
     Pure model descriptor merge, display fallback, visibility, and picker list
     logic. No network calls.
 
-desktop/src/lib/domain/settings/
+apps/desktop/src/lib/domain/settings/
   agent-defaults.ts
   model-registries.ts
     Pure settings/default-model view-model logic.
 
-desktop/src/hooks/
+apps/desktop/src/hooks/
   chat/derived/use-chat-launch-catalog.ts
   settings/workflows/use-model-registry-settings.ts
     Query/mutation wiring and UI orchestration.
 
-desktop/src/components/settings/
+apps/desktop/src/components/settings/
   panes/AgentDefaultsPane.tsx
   panes/ModelRegistryPane.tsx
     Render settings and per-model visibility controls only.
@@ -984,14 +984,14 @@ selected default model intents
 Frontend code should preserve the normal boundary:
 
 ```text
-desktop/src/lib/access/
+apps/desktop/src/lib/access/
   anyharness/agents.ts or existing AnyHarness agent access file
     Raw AnyHarness launch-option and refresh/read calls.
 
   cloud/model-registries.ts
     Raw Cloud synced registry/projection calls if a Cloud endpoint exists.
 
-desktop/src/lib/domain/chat/models/
+apps/desktop/src/lib/domain/chat/models/
   model-display.ts
     Display fallback only: prefer displayName, then catalog enriched name, then
     generated name from id.
@@ -1009,7 +1009,7 @@ desktop/src/lib/domain/chat/models/
     Merge catalog models, AnyHarness live registry models, synced Cloud
     registry models, and current selection into one effective list.
 
-desktop/src/lib/domain/settings/
+apps/desktop/src/lib/domain/settings/
   agent-defaults.ts
     Saved default ModelIntent logic and per-harness defaults.
 
@@ -1019,7 +1019,7 @@ desktop/src/lib/domain/settings/
     Merge logic must preserve catalog aliases so old/default preference ids can
     continue resolving after runtime launch options are merged.
 
-desktop/src/hooks/
+apps/desktop/src/hooks/
   chat/derived/use-chat-launch-catalog.ts
     Reads effective launch options and feeds chat picker state.
 
@@ -1031,7 +1031,7 @@ desktop/src/hooks/
     runtime launch-option merge as the chat picker before resolving the default
     model to launch.
 
-desktop/src/components/
+apps/desktop/src/components/
   workspace/chat/input/ModelSelector.tsx
     Render effective picker list only.
 

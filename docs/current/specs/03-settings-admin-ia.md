@@ -110,13 +110,13 @@ Verified against the current repository worktree on 2026-05-20.
 
 ### 4.1 What exists
 
-**Entry point**: `desktop/src/pages/SettingsPage.tsx` renders
+**Entry point**: `apps/desktop/src/pages/SettingsPage.tsx` renders
 `<SettingsScreen />`. `SettingsScreen` composes
 `SettingsSidebar` (300px fixed) + a scrollable content area.
 
 **Routing**: URL search param `?section=<id>`. Active section is
 managed by `useSettingsNavigation()`. Sections are defined in
-`desktop/src/config/settings.ts`:
+`apps/desktop/src/config/settings.ts`:
 
 ```typescript
 SETTINGS_CONTENT_SECTIONS = [
@@ -126,7 +126,7 @@ SETTINGS_CONTENT_SECTIONS = [
 ]
 ```
 
-**Sidebar config**: `desktop/src/components/settings/settings-navigation.ts`
+**Sidebar config**: `apps/desktop/src/components/settings/settings-navigation.ts`
 exports `SETTINGS_NAV_GROUPS` (icon, label, id per item). **Current
 groups (5)**:
 
@@ -138,7 +138,7 @@ Workflows              agents, agent-defaults, review
 Help                   support (action), checkForUpdates (action)
 ```
 
-**Panes** (in `desktop/src/components/settings/panes/`):
+**Panes** (in `apps/desktop/src/components/settings/panes/`):
 
 ```text
 AccountPane.tsx              AgentDefaultsPane.tsx
@@ -168,14 +168,14 @@ subfolders:
 **Existing shared primitives**:
 
 ```text
-desktop/src/components/settings/shared/
+apps/desktop/src/components/settings/shared/
   SettingsCard.tsx          re-export of @proliferate/product-ui/settings/SettingsCard
   SettingsCardRow.tsx       re-export
   SettingsPageHeader.tsx    title + description + action slot
   RunCommandHelp.tsx
 ```
 
-General UI primitives in `desktop/src/components/ui/`: `Button`,
+General UI primitives in `apps/desktop/src/components/ui/`: `Button`,
 `Input`, `Switch`, `Select`, `Label`, `Textarea`, `Badge`, `Checkbox`,
 `ModalShell`, `ConfirmationDialog`. Layout helpers: `AutoHideScrollArea`,
 `SidebarNavRow`, `EnvironmentLayout` (EnvironmentPanel, ...Row, ...Section).
@@ -185,9 +185,9 @@ computes `canManage = role === "owner" || role === "admin"`.
 `CloudAgentAuthCredentialForm.tsx` filters via
 `isAdminOrganization()`. **No `useIsAdmin()` hook exists.**
 
-**Plugins page**: `desktop/src/pages/PluginsPage.tsx` is a top-level
+**Plugins page**: `apps/desktop/src/pages/PluginsPage.tsx` is a top-level
 page, not under Settings. Renders `<PluginsScreen />` from
-`desktop/src/components/plugins/catalog/PluginsScreen.tsx`.
+`apps/desktop/src/components/plugins/catalog/PluginsScreen.tsx`.
 
 ### 4.2 What is missing vs. the target IA
 
@@ -266,7 +266,7 @@ Help
   check-for-updates        action (existing)
 ```
 
-Section ids (`desktop/src/config/settings.ts`):
+Section ids (`apps/desktop/src/config/settings.ts`):
 
 ```text
 SETTINGS_CONTENT_SECTIONS is the registry of valid section ids. The visible
@@ -469,7 +469,7 @@ SandboxType    local           -> "Local"
 Reusable files:
 
 ```text
-desktop/src/lib/domain/vocabulary.ts      (new)
+apps/desktop/src/lib/domain/vocabulary.ts      (new)
   WorkspaceType, Origin, Exposure, Access, SandboxType TS enums whose
   string values are the snake_case strings above (so the wire payload,
   the TS literal, and the DB CHECK enum are identical bytes)
@@ -484,7 +484,7 @@ Server-side:
 ```text
 Specs that own server migrations emit and accept the same snake_case strings
 on the wire and in DB enums. OpenAPI schema enums use these values literally so
-generated TS types match desktop/src/lib/domain/vocabulary.ts at the character
+generated TS types match apps/desktop/src/lib/domain/vocabulary.ts at the character
 level.
 
 Existing DB CHECK enums that already match this convention are left in place
@@ -500,16 +500,16 @@ in copy/settings/vocabulary-copy.ts keys.
 Existing (kept; no changes):
 
 ```text
-SettingsCard                desktop/src/components/settings/shared/SettingsCard.tsx
-SettingsCardRow             desktop/src/components/settings/shared/SettingsCardRow.tsx
-SettingsPageHeader          desktop/src/components/settings/shared/SettingsPageHeader.tsx
+SettingsCard                apps/desktop/src/components/settings/shared/SettingsCard.tsx
+SettingsCardRow             apps/desktop/src/components/settings/shared/SettingsCardRow.tsx
+SettingsPageHeader          apps/desktop/src/components/settings/shared/SettingsPageHeader.tsx
 ```
 
 New (spec 03 introduces; feature specs consume):
 
 ```text
 CredentialPicker
-  desktop/src/components/settings/shared/CredentialPicker.tsx
+  apps/desktop/src/components/settings/shared/CredentialPicker.tsx
   Props:
     agentKind          'claude' | 'codex' | 'opencode' | 'gemini'
     ownerContext       'personal' | { kind: 'organization', orgId }
@@ -528,7 +528,7 @@ CredentialPicker
     ComputeTargetAgentAuthCard (spec 02)
 
 AgentRunConfigSelector
-  desktop/src/components/settings/shared/AgentRunConfigSelector.tsx
+  apps/desktop/src/components/settings/shared/AgentRunConfigSelector.tsx
   Props:
     agentKind?           preselect
     sandboxType?         filters configs by usable_in_*_sandboxes
@@ -544,7 +544,7 @@ AgentRunConfigSelector
     Slack bot config (spec 07)
 
 RuntimeReadinessPanel
-  desktop/src/components/settings/shared/RuntimeReadinessPanel.tsx
+  apps/desktop/src/components/settings/shared/RuntimeReadinessPanel.tsx
   Props:
     sandboxProfileId
     targetId?            optional; omit for "summary across all targets"
@@ -560,7 +560,7 @@ RuntimeReadinessPanel
     PluginsPage detail panes (status badge only)
 
 PublicCapabilityList
-  desktop/src/components/settings/shared/PublicCapabilityList.tsx
+  apps/desktop/src/components/settings/shared/PublicCapabilityList.tsx
   Props:
     organizationId
     kind                 'mcp' | 'skill' | 'plugin'
@@ -573,7 +573,7 @@ PublicCapabilityList
     PluginsPage admin tab (full controls; spec 01)
 
 WhereUsedDrawer
-  desktop/src/components/settings/shared/WhereUsedDrawer.tsx
+  apps/desktop/src/components/settings/shared/WhereUsedDrawer.tsx
   Props:
     subject              { kind: 'mcp' | 'skill' | 'plugin' | 'credential',
                            id }
@@ -600,7 +600,7 @@ revoked        muted
 blocked        red outline
 unavailable    muted with strikethrough
 
-desktop/src/components/settings/shared/StatusBadge.tsx   (new wrapper
+apps/desktop/src/components/settings/shared/StatusBadge.tsx   (new wrapper
   over the existing Badge primitive that maps a status enum value to
   variant + label + tooltip)
 ```
@@ -616,7 +616,7 @@ use `ModalShell`; destructive actions use `ConfirmationDialog`.
 New hook:
 
 ```text
-desktop/src/hooks/access/cloud/organizations/use-is-admin.ts
+apps/desktop/src/hooks/access/cloud/organizations/use-is-admin.ts
 
 useIsAdmin(organizationId: string | null | undefined): {
   isLoading: boolean
@@ -636,7 +636,7 @@ if (!isAdmin) return <AdminOnlyPlaceholder />;
 `AdminOnlyPlaceholder`:
 
 ```text
-desktop/src/components/settings/shared/AdminOnlyPlaceholder.tsx
+apps/desktop/src/components/settings/shared/AdminOnlyPlaceholder.tsx
   shows a small Card with "Admin access required" + role,
   links to the Organization pane.
 ```
@@ -708,11 +708,11 @@ Copy stays in `copy/<domain>/<domain>-copy.ts` per the existing rule.
 New copy files added by this spec:
 
 ```text
-desktop/src/copy/settings/vocabulary-copy.ts
-desktop/src/copy/settings/admin-gate-copy.ts
-desktop/src/copy/settings/shared-environments-copy.ts
-desktop/src/copy/settings/agent-authentication-copy.ts
-desktop/src/copy/settings/slack-bot-copy.ts
+apps/desktop/src/copy/settings/vocabulary-copy.ts
+apps/desktop/src/copy/settings/admin-gate-copy.ts
+apps/desktop/src/copy/settings/shared-environments-copy.ts
+apps/desktop/src/copy/settings/agent-authentication-copy.ts
+apps/desktop/src/copy/settings/slack-bot-copy.ts
 ```
 
 Existing `copy/settings/*` files are kept; rename inside copy follows
@@ -721,7 +721,7 @@ the section-id renames.
 ### 5.9 Telemetry
 
 Pane open/close events follow the existing analytics pattern in
-`desktop/src/lib/telemetry/**`. New events:
+`apps/desktop/src/lib/telemetry/**`. New events:
 
 ```text
 settings_pane_opened    { sectionId, organizationId? }
@@ -736,37 +736,37 @@ The vocabulary above is logged verbatim in event payloads.
 Desktop:
 
 ```text
-desktop/src/config/settings.ts
+apps/desktop/src/config/settings.ts
   - update SETTINGS_CONTENT_SECTIONS to the new id list
   - export redirect/focus map for old ids: repo -> environments,
     worktrees -> environments, cloud -> focused replacement pane
 
-desktop/src/lib/domain/settings/navigation.ts
+apps/desktop/src/lib/domain/settings/navigation.ts
   - normalize/build Settings location for new ids
   - remove hardcoded cloud/cloudRepo behavior or map it through the new focus
     model
 
-desktop/src/components/settings/settings-navigation.ts
+apps/desktop/src/components/settings/settings-navigation.ts
   - new groups: Preferences | Organization & Account | Workspace |
     Agents | Slack bot | Help
   - new items: agent-authentication, shared-environments, slack-bot
   - removed items: cloud, worktrees
   - admin tag metadata on shared-environments, slack-bot
 
-desktop/src/components/settings/sidebar/SettingsSidebar.tsx
+apps/desktop/src/components/settings/sidebar/SettingsSidebar.tsx
   - render admin tag pill when item.adminOnly is true
   - disable + tooltip for non-admin user
 
-desktop/src/components/settings/screen/SettingsScreen.tsx
+apps/desktop/src/components/settings/screen/SettingsScreen.tsx
   - route redirects for renamed ids
   - thread focus param to active pane
 
-desktop/src/lib/domain/auth/desktop-navigation.ts
-desktop/src/App.tsx
+apps/desktop/src/lib/domain/auth/desktop-navigation.ts
+apps/desktop/src/App.tsx
   - remove direct section=cloud links; route auth/cloud recovery links through
     the redirect/focus map
 
-desktop/src/components/settings/panes/
+apps/desktop/src/components/settings/panes/
   CloudPane.tsx                       split (see below); content moves out
   AgentAuthenticationPane.tsx         (new) spec 02 wires content here
   SharedEnvironmentsPane.tsx          (new) spec 06/07 wires content here
@@ -781,7 +781,7 @@ desktop/src/components/settings/panes/
                                          now lives behind
                                          AgentAuthenticationPane card)
 
-desktop/src/components/settings/shared/
+apps/desktop/src/components/settings/shared/
   SettingsCard.tsx                    (existing; no change)
   SettingsCardRow.tsx                 (existing; no change)
   SettingsPageHeader.tsx              (existing; no change)
@@ -793,22 +793,22 @@ desktop/src/components/settings/shared/
   PublicCapabilityList.tsx            (new)
   WhereUsedDrawer.tsx                 (new)
 
-desktop/src/hooks/access/cloud/organizations/use-is-admin.ts   (new)
+apps/desktop/src/hooks/access/cloud/organizations/use-is-admin.ts   (new)
 
-desktop/src/lib/domain/vocabulary.ts                            (new)
+apps/desktop/src/lib/domain/vocabulary.ts                            (new)
 
-desktop/src/copy/settings/vocabulary-copy.ts                    (new)
-desktop/src/copy/settings/admin-gate-copy.ts                    (new)
-desktop/src/copy/settings/shared-environments-copy.ts           (new)
-desktop/src/copy/settings/agent-authentication-copy.ts          (new)
-desktop/src/copy/settings/slack-bot-copy.ts                     (new)
+apps/desktop/src/copy/settings/vocabulary-copy.ts                    (new)
+apps/desktop/src/copy/settings/admin-gate-copy.ts                    (new)
+apps/desktop/src/copy/settings/shared-environments-copy.ts           (new)
+apps/desktop/src/copy/settings/agent-authentication-copy.ts          (new)
+apps/desktop/src/copy/settings/slack-bot-copy.ts                     (new)
 
-desktop/src/components/settings/panes/cloud/                    (delete folder
+apps/desktop/src/components/settings/panes/cloud/                    (delete folder
                                                                    after move;
                                                                    contents
                                                                    relocate to
                                                                    /agent-authentication/)
-desktop/src/components/settings/panes/agent-authentication/
+apps/desktop/src/components/settings/panes/agent-authentication/
   CloudAgentAuthLibrary.tsx           (moved from /cloud/)
   CloudAgentAuthCredentialForm.tsx    (moved from /cloud/)
   AgentAuthenticationLayout.tsx       (new) composes library + per-target
@@ -825,7 +825,7 @@ vocabulary are owned by specs 00, 04, 05, 06, 07, and 08.
 Telemetry:
 
 ```text
-desktop/src/lib/domain/telemetry/events.ts
+apps/desktop/src/lib/domain/telemetry/events.ts
   add settings_pane_opened, settings_pane_closed, admin_gate_blocked
   events. Payload uses 5.3 vocabulary verbatim.
 ```
@@ -898,9 +898,9 @@ Chunk F  Feature page handoff
 6. `CredentialPicker`, `AgentRunConfigSelector`,
    `RuntimeReadinessPanel`, `PublicCapabilityList`,
    `WhereUsedDrawer`, `StatusBadge` exist in
-   `desktop/src/components/settings/shared/`. Callers import the concrete file
+   `apps/desktop/src/components/settings/shared/`. Callers import the concrete file
    directly; spec 03 does not add a shared barrel/index module.
-7. `desktop/src/lib/domain/vocabulary.ts` exports the five enums
+7. `apps/desktop/src/lib/domain/vocabulary.ts` exports the five enums
    (`WorkspaceType`, `Origin`, `Exposure`, `Access`, `SandboxType`)
    with the exact string values in §5.3. Every other spec that ships
    UI imports from here.
@@ -928,44 +928,44 @@ Chunk F  Feature page handoff
 ## 9. Verification / Tests
 
 ```bash
-cd desktop && pnpm test -- --run && pnpm typecheck
+cd apps/desktop && pnpm test -- --run && pnpm typecheck
 ```
 
 Targeted tests:
 
 ```text
-desktop/src/components/settings/sidebar/SettingsSidebar.test.tsx
+apps/desktop/src/components/settings/sidebar/SettingsSidebar.test.tsx
   - renders the new groups in order
   - admin-tag pill renders when item.adminOnly + user is admin
   - admin-only items are disabled with tooltip when user is non-admin
 
-desktop/src/components/settings/SettingsScreen.test.tsx
+apps/desktop/src/components/settings/SettingsScreen.test.tsx
   - ?section=repo redirects to ?section=environments
   - ?section=cloud redirects by focus param, defaulting to agent-authentication
   - ?section=worktrees redirects to ?section=environments
 
-desktop/src/components/settings/shared/CredentialPicker.test.tsx
-desktop/src/components/settings/shared/AgentRunConfigSelector.test.tsx
-desktop/src/components/settings/shared/RuntimeReadinessPanel.test.tsx
-desktop/src/components/settings/shared/PublicCapabilityList.test.tsx
-desktop/src/components/settings/shared/WhereUsedDrawer.test.tsx
-desktop/src/components/settings/shared/StatusBadge.test.tsx
+apps/desktop/src/components/settings/shared/CredentialPicker.test.tsx
+apps/desktop/src/components/settings/shared/AgentRunConfigSelector.test.tsx
+apps/desktop/src/components/settings/shared/RuntimeReadinessPanel.test.tsx
+apps/desktop/src/components/settings/shared/PublicCapabilityList.test.tsx
+apps/desktop/src/components/settings/shared/WhereUsedDrawer.test.tsx
+apps/desktop/src/components/settings/shared/StatusBadge.test.tsx
   - each primitive snapshot + behavior tests
   - status mapping for every enum value in §5.3
 
-desktop/src/hooks/access/cloud/organizations/use-is-admin.test.ts
+apps/desktop/src/hooks/access/cloud/organizations/use-is-admin.test.ts
   - returns role from useOrganizationMembers
   - returns isAdmin true for owner/admin
   - returns isAdmin false for member or no membership
 
-desktop/src/lib/domain/vocabulary.test.ts
+apps/desktop/src/lib/domain/vocabulary.test.ts
   - enum string values match §5.3 verbatim
 
-desktop/src/components/settings/panes/AgentAuthenticationPane.test.tsx
+apps/desktop/src/components/settings/panes/AgentAuthenticationPane.test.tsx
   - renders functioning spec-02 body when the pane is enabled
-desktop/src/components/settings/panes/SharedEnvironmentsPane.test.tsx
+apps/desktop/src/components/settings/panes/SharedEnvironmentsPane.test.tsx
   - admin gate visible to non-admins once the functioning pane ships
-desktop/src/components/settings/panes/SlackBotPane.test.tsx
+apps/desktop/src/components/settings/panes/SlackBotPane.test.tsx
   - admin gate visible to non-admins once the functioning pane ships
 ```
 

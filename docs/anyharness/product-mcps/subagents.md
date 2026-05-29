@@ -767,20 +767,20 @@ anyharness/crates/anyharness-contract/src/v1/plugins.rs
 anyharness/crates/anyharness-lib/src/domains/plugins/skills.rs
 anyharness/crates/anyharness-lib/src/domains/plugins/session_extension.rs
 anyharness/crates/anyharness-lib/src/domains/plugins/mcp/**
-desktop/src/lib/domain/plugins/session-plugin-bundle.ts
+apps/desktop/src/lib/domain/plugins/session-plugin-bundle.ts
 ```
 
 Frontend:
 
 ```text
-desktop/src/components/workspace/chat/input/delegated-work/**
-desktop/src/components/workspace/shell/tabs/**
-desktop/src/hooks/chat/subagents/**
-desktop/src/hooks/chat/use-delegated-work-composer.ts
-desktop/src/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy.ts
-desktop/src/lib/domain/delegated-work/**
-desktop/src/lib/domain/chat/subagents/**
-desktop/src/lib/access/anyharness/sessions.ts
+apps/desktop/src/components/workspace/chat/input/delegated-work/**
+apps/desktop/src/components/workspace/shell/tabs/**
+apps/desktop/src/hooks/chat/subagents/**
+apps/desktop/src/hooks/chat/use-delegated-work-composer.ts
+apps/desktop/src/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy.ts
+apps/desktop/src/lib/domain/delegated-work/**
+apps/desktop/src/lib/domain/chat/subagents/**
+apps/desktop/src/lib/access/anyharness/sessions.ts
 ```
 
 ## Acceptance

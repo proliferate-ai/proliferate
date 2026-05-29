@@ -121,7 +121,7 @@ jobs:
           cd ../sdk-react && pnpm run build
 
       - name: Build desktop frontend
-        working-directory: desktop
+        working-directory: apps/desktop
         run: pnpm run build
 
   mobile-typecheck:
@@ -190,8 +190,8 @@ jobs:
       - name: Build shared packages
         run: pnpm shared:build
 
-      - name: Test product model
-        run: pnpm --filter @proliferate/product-model test
+      - name: Test product domain
+        run: pnpm --filter @proliferate/product-domain test
 
       - name: Test product UI
         run: pnpm --filter @proliferate/product-ui test

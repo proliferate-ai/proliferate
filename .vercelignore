@@ -34,7 +34,7 @@ tmp
 .claude
 
 # Not needed by the web build — anchor to repo root only (leading /)
-# so we don't accidentally strip nested e.g. packages/design/scripts.
+# so we don't accidentally strip nested e.g. apps/packages/design/scripts.
 /reference
 /docs
 /scripts

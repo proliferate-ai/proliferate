@@ -145,7 +145,7 @@ Today, the runtime path is session-scoped and Desktop-shaped:
 - `SkillsProductMcpServer` resolves its context from the same in-memory
   registry and serves inline skill instructions/resources.
 - Desktop builds the bundle in
-  `desktop/src/lib/domain/plugins/session-plugin-bundle.ts` and sends it from
+  `apps/desktop/src/lib/domain/plugins/session-plugin-bundle.ts` and sends it from
   session launch workflows.
 - Cloud MCP materialization currently returns `pluginPackages` as a sidecar to
   MCP server materialization.
@@ -803,8 +803,8 @@ cargo test -p proliferate-worker anyharness_client
 Verification:
 
 ```bash
-cd desktop && pnpm test session-mcp-launch
-cd desktop && pnpm test session-runtime
+cd apps/desktop && pnpm test session-mcp-launch
+cd apps/desktop && pnpm test session-runtime
 ```
 
 ### Slice 6: Remove Legacy Runtime Plugin Boundary
@@ -885,7 +885,7 @@ human-user policy checks to runtime config endpoints yet.
 
 ## Open Implementation Choices
 
-These are implementation choices, not product-model blockers:
+These are implementation choices, not product-domain blockers:
 
 - Whether the Cloud command kind remains `materialize_environment` for v1 or a
   new `refresh_runtime_config` command is added immediately.

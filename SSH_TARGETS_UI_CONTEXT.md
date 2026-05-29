@@ -103,7 +103,7 @@ Lines 327-414:
  374 | - `anyharness/crates/proliferate-worker/**`
  375 | - `anyharness/crates/proliferate-supervisor/**`
  376 | - `install/proliferate-target-install.sh`
- 377 | - `desktop/src/components/settings/panes/ComputePane.tsx`
+ 377 | - `apps/desktop/src/components/settings/panes/ComputePane.tsx`
  378 | 
  379 | ### Key Endpoints And Tables
  380 | 
@@ -539,7 +539,7 @@ Lines 1-220:
 
 ## Source Files
 
-### desktop/src/components/settings/panes/ComputePane.tsx
+### apps/desktop/src/components/settings/panes/ComputePane.tsx
 
 _Size: 5,176 bytes_
 
@@ -690,7 +690,7 @@ export function ComputePane({ initialTargetId = null }: ComputePaneProps) {
 
 ````
 
-### desktop/src/components/settings/panes/compute/AddSshTargetDialog.tsx
+### apps/desktop/src/components/settings/panes/compute/AddSshTargetDialog.tsx
 
 _Size: 10,319 bytes_
 
@@ -962,7 +962,7 @@ export function AddSshTargetDialog({
 
 ````
 
-### desktop/src/components/settings/panes/compute/ComputeTargetAgentAuthCard.tsx
+### apps/desktop/src/components/settings/panes/compute/ComputeTargetAgentAuthCard.tsx
 
 _Size: 9,426 bytes_
 
@@ -1214,7 +1214,7 @@ function AgentAuthSelectionRow({
 
 ````
 
-### desktop/src/components/settings/panes/compute/ComputeTargetDetails.tsx
+### apps/desktop/src/components/settings/panes/compute/ComputeTargetDetails.tsx
 
 _Size: 17,443 bytes_
 
@@ -1687,7 +1687,7 @@ function Divider() {
 
 ````
 
-### desktop/src/components/settings/panes/compute/ComputeTargetList.tsx
+### apps/desktop/src/components/settings/panes/compute/ComputeTargetList.tsx
 
 _Size: 7,318 bytes_
 
@@ -1900,7 +1900,7 @@ function targetCountLabel(count: number) {
 
 ````
 
-### desktop/src/components/settings/panes/compute/ComputeTargetReadiness.tsx
+### apps/desktop/src/components/settings/panes/compute/ComputeTargetReadiness.tsx
 
 _Size: 2,528 bytes_
 
@@ -1987,7 +1987,7 @@ function readinessLabel(item: ReturnType<typeof computeTargetReadiness>[number])
 
 ````
 
-### desktop/src/components/settings/panes/compute/ComputeTargetSwatch.tsx
+### apps/desktop/src/components/settings/panes/compute/ComputeTargetSwatch.tsx
 
 _Size: 1,586 bytes_
 
@@ -2061,7 +2061,7 @@ export function ComputeTargetIconGlyph({
 
 ````
 
-### desktop/src/components/settings/panes/compute/EnrollmentCommandBlock.tsx
+### apps/desktop/src/components/settings/panes/compute/EnrollmentCommandBlock.tsx
 
 _Size: 1,255 bytes_
 
@@ -2107,7 +2107,7 @@ export function EnrollmentCommandBlock({ command }: EnrollmentCommandBlockProps)
 
 ````
 
-### desktop/src/config/settings.ts
+### apps/desktop/src/config/settings.ts
 
 _Size: 754 bytes_
 
@@ -2152,7 +2152,7 @@ export const SETTINGS_SHORTCUT_SECTION_ORDER = [
 
 ````
 
-### desktop/src/components/settings/settings-navigation.ts
+### apps/desktop/src/components/settings/settings-navigation.ts
 
 _Size: 2,951 bytes_
 
@@ -2274,7 +2274,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
 
 ````
 
-### desktop/src/components/settings/shared/SettingsPageHeader.tsx
+### apps/desktop/src/components/settings/shared/SettingsPageHeader.tsx
 
 _Size: 90 bytes_
 
@@ -2283,7 +2283,7 @@ export { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPag
 
 ````
 
-### desktop/src/components/settings/shared/SettingsCard.tsx
+### apps/desktop/src/components/settings/shared/SettingsCard.tsx
 
 _Size: 78 bytes_
 
@@ -2292,7 +2292,7 @@ export { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
 
 ````
 
-### desktop/src/components/settings/shared/SettingsCardRow.tsx
+### apps/desktop/src/components/settings/shared/SettingsCardRow.tsx
 
 _Size: 84 bytes_
 
@@ -2301,7 +2301,7 @@ export { SettingsCardRow } from "@proliferate/product-ui/settings/SettingsCardRo
 
 ````
 
-### desktop/src/copy/settings/compute.ts
+### apps/desktop/src/copy/settings/compute.ts
 
 _Size: 1,543 bytes_
 
@@ -2334,7 +2334,7 @@ export const COMPUTE_COPY = {
 
 ````
 
-### desktop/src/hooks/settings/workflows/use-compute-target-enrollment.ts
+### apps/desktop/src/hooks/settings/workflows/use-compute-target-enrollment.ts
 
 _Size: 2,291 bytes_
 
@@ -2416,7 +2416,7 @@ export function useComputeTargetEnrollment() {
 
 ````
 
-### desktop/src/hooks/settings/workflows/use-ssh-direct-target-profile.ts
+### apps/desktop/src/hooks/settings/workflows/use-ssh-direct-target-profile.ts
 
 _Size: 2,595 bytes_
 
@@ -2524,7 +2524,7 @@ export function useComputeTargetAppearancePreferences() {
 
 ````
 
-### desktop/src/hooks/access/cloud/targets/query-keys.ts
+### apps/desktop/src/hooks/access/cloud/targets/query-keys.ts
 
 _Size: 88 bytes_
 
@@ -2536,7 +2536,7 @@ export {
 
 ````
 
-### desktop/src/hooks/access/cloud/targets/use-cloud-targets.ts
+### apps/desktop/src/hooks/access/cloud/targets/use-cloud-targets.ts
 
 _Size: 122 bytes_
 
@@ -2550,7 +2550,7 @@ export {
 
 ````
 
-### desktop/src/hooks/access/cloud/targets/use-cloud-target-mutations.ts
+### apps/desktop/src/hooks/access/cloud/targets/use-cloud-target-mutations.ts
 
 _Size: 1,467 bytes_
 
@@ -2600,7 +2600,7 @@ export function useCloudTargetMutations() {
 
 ````
 
-### desktop/src/lib/domain/compute/target-types.ts
+### apps/desktop/src/lib/domain/compute/target-types.ts
 
 _Size: 2,402 bytes_
 
@@ -2697,7 +2697,7 @@ export interface ComputeRuntimeConfigStatus {
 
 ````
 
-### desktop/src/lib/domain/compute/target-readiness.ts
+### apps/desktop/src/lib/domain/compute/target-readiness.ts
 
 _Size: 7,022 bytes_
 
@@ -2918,7 +2918,7 @@ function sandboxSlotDetail(
 
 ````
 
-### desktop/src/lib/domain/compute/target-presentation.ts
+### apps/desktop/src/lib/domain/compute/target-presentation.ts
 
 _Size: 2,333 bytes_
 
@@ -3016,7 +3016,7 @@ export function groupComputeTargetsByOwnerScope(
 
 ````
 
-### desktop/src/lib/domain/compute/target-appearance.ts
+### apps/desktop/src/lib/domain/compute/target-appearance.ts
 
 _Size: 4,707 bytes_
 
@@ -3182,7 +3182,7 @@ export function resolveComputeTargetAppearance(input: {
 
 ````
 
-### desktop/src/lib/domain/compute/target-workspace-id.ts
+### apps/desktop/src/lib/domain/compute/target-workspace-id.ts
 
 _Size: 722 bytes_
 
@@ -3388,7 +3388,7 @@ export type RevokeWorkersResponse =
 
 ````
 
-### desktop/src/components/home/screen/HomeTargetPicker.tsx
+### apps/desktop/src/components/home/screen/HomeTargetPicker.tsx
 
 _Size: 14,051 bytes_
 
@@ -3809,7 +3809,7 @@ export function HomeTargetPicker({
 
 ````
 
-### desktop/src/components/automations/editor/AutomationEditorModal.tsx
+### apps/desktop/src/components/automations/editor/AutomationEditorModal.tsx
 
 _Size: 15,368 bytes_
 
@@ -4222,7 +4222,7 @@ export function AutomationEditorModal({
 
 ````
 
-### desktop/src/components/automations/editor/AutomationEditorControls.tsx
+### apps/desktop/src/components/automations/editor/AutomationEditorControls.tsx
 
 _Size: 8,267 bytes_
 
@@ -4495,7 +4495,7 @@ export function reasoningIcon() {
 
 ````
 
-### desktop/src/hooks/automations/derived/use-automation-target-selection.ts
+### apps/desktop/src/hooks/automations/derived/use-automation-target-selection.ts
 
 _Size: 3,285 bytes_
 
@@ -4598,7 +4598,7 @@ export function useAutomationTargetSelection({
 
 ````
 
-### desktop/src/lib/domain/automations/target/selection.ts
+### apps/desktop/src/lib/domain/automations/target/selection.ts
 
 _Size: 11,330 bytes_
 
@@ -5004,7 +5004,7 @@ function repoKey(gitOwner: string, gitRepoName: string): string {
 
 ````
 
-### desktop/src/lib/domain/automations/target/presentation.ts
+### apps/desktop/src/lib/domain/automations/target/presentation.ts
 
 _Size: 242 bytes_
 
@@ -5018,7 +5018,7 @@ export const AUTOMATION_EXECUTION_TARGET_OPTIONS = AUTOMATION_EXECUTION_TARGET_V
 
 ````
 
-### desktop/src/lib/domain/automations/target/records.ts
+### apps/desktop/src/lib/domain/automations/target/records.ts
 
 _Size: 313 bytes_
 

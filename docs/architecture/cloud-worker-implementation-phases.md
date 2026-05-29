@@ -550,7 +550,7 @@ Update workspace config:
 
 ```text
 pnpm-workspace.yaml
-desktop/package.json
+apps/desktop/package.json
 ```
 
 Package names:
@@ -571,18 +571,18 @@ phase. Every later Desktop migration adds its SDK module in the same change.
 Existing Desktop cloud access:
 
 ```text
-desktop/src/lib/access/cloud/
-desktop/src/hooks/access/cloud/
+apps/desktop/src/lib/access/cloud/
+apps/desktop/src/hooks/access/cloud/
 ```
 
 Target after migration:
 
 ```text
-desktop/src/lib/access/cloud/
+apps/desktop/src/lib/access/cloud/
   client.ts                 # desktop auth/base-url/session wiring only
   timing.ts                 # desktop-local telemetry/timing if still needed
 
-desktop/src/hooks/access/cloud/
+apps/desktop/src/hooks/access/cloud/
   <resource>/query-keys.ts  # may delegate to cloud-sdk-react key helpers
   use-*.ts                  # desktop-specific auth/error/telemetry wrappers only
 ```
@@ -590,7 +590,7 @@ desktop/src/hooks/access/cloud/
 Move reusable raw endpoint logic from:
 
 ```text
-desktop/src/lib/access/cloud/*.ts
+apps/desktop/src/lib/access/cloud/*.ts
 ```
 
 into:
@@ -605,7 +605,7 @@ Create each resource file only when its Desktop source module is moved.
 Move reusable React Query logic from:
 
 ```text
-desktop/src/hooks/access/cloud/**/*.ts
+apps/desktop/src/hooks/access/cloud/**/*.ts
 ```
 
 into:
@@ -641,7 +641,7 @@ cloud/sdk/src/generated/openapi.ts
 Existing generated Desktop output:
 
 ```text
-desktop/src/lib/access/cloud/generated/openapi.ts
+apps/desktop/src/lib/access/cloud/generated/openapi.ts
 ```
 
 is removed or replaced with a shim only during the migration. End state:
@@ -882,36 +882,36 @@ the same.
 Add:
 
 ```text
-desktop/src/components/settings/panes/ComputePane.tsx
-desktop/src/components/settings/panes/compute/
+apps/desktop/src/components/settings/panes/ComputePane.tsx
+apps/desktop/src/components/settings/panes/compute/
   AddSshTargetDialog.tsx
   ComputeTargetDetails.tsx
   ComputeTargetList.tsx
   ComputeTargetReadiness.tsx
   EnrollmentCommandBlock.tsx
 
-desktop/src/hooks/access/cloud/targets/
+apps/desktop/src/hooks/access/cloud/targets/
   query-keys.ts
   use-cloud-targets.ts
   use-cloud-target-mutations.ts
 
-desktop/src/hooks/settings/workflows/
+apps/desktop/src/hooks/settings/workflows/
   use-compute-target-enrollment.ts
 
-desktop/src/lib/domain/compute/
+apps/desktop/src/lib/domain/compute/
   target-presentation.ts
   target-readiness.ts
 
-desktop/src/copy/settings/
+apps/desktop/src/copy/settings/
   compute.ts
 ```
 
 Update:
 
 ```text
-desktop/src/config/settings.ts
-desktop/src/components/settings/settings-navigation.ts
-desktop/src/components/settings/screen/SettingsScreen.tsx
+apps/desktop/src/config/settings.ts
+apps/desktop/src/components/settings/settings-navigation.ts
+apps/desktop/src/components/settings/screen/SettingsScreen.tsx
 ```
 
 UX:
@@ -1659,10 +1659,10 @@ subscribeTarget()
 Add or migrate access hooks:
 
 ```text
-desktop/src/hooks/access/cloud/workspaces/
-desktop/src/hooks/access/cloud/sessions/
-desktop/src/hooks/access/cloud/live/
-desktop/src/hooks/access/cloud/targets/
+apps/desktop/src/hooks/access/cloud/workspaces/
+apps/desktop/src/hooks/access/cloud/sessions/
+apps/desktop/src/hooks/access/cloud/live/
+apps/desktop/src/hooks/access/cloud/targets/
 ```
 
 Product surfaces can initially be minimal. The key requirement is that Desktop
@@ -1676,12 +1676,12 @@ shared SDK packages instead of copying Desktop access code.
 Expected future paths:
 
 ```text
-web/package.json
-web/src/app/
-web/src/components/sessions/
-web/src/hooks/access/cloud/
-web/src/routes/workspaces.tsx
-web/src/routes/sessions.$sessionId.tsx
+apps/web/package.json
+apps/web/src/app/
+apps/web/src/components/sessions/
+apps/web/src/hooks/access/cloud/
+apps/web/src/routes/workspaces.tsx
+apps/web/src/routes/sessions.$sessionId.tsx
 ```
 
 If the web app is not yet in this repo, create only a minimal internal smoke
@@ -1721,13 +1721,13 @@ server/proliferate/server/cloud/mcp_materialization/
 Desktop:
 
 ```text
-desktop/src/components/settings/panes/EnvironmentsPane.tsx
-desktop/src/components/settings/panes/repo/CloudRepoSection.tsx
-desktop/src/lib/domain/settings/environment-draft.ts
-desktop/src/hooks/access/cloud/use-cloud-credentials.ts
-desktop/src/hooks/access/cloud/use-cloud-repo-config.ts
-desktop/src/hooks/access/cloud/use-resync-cloud-workspace-credentials.ts
-desktop/src/hooks/access/cloud/use-resync-cloud-workspace-files.ts
+apps/desktop/src/components/settings/panes/EnvironmentsPane.tsx
+apps/desktop/src/components/settings/panes/repo/CloudRepoSection.tsx
+apps/desktop/src/lib/domain/settings/environment-draft.ts
+apps/desktop/src/hooks/access/cloud/use-cloud-credentials.ts
+apps/desktop/src/hooks/access/cloud/use-cloud-repo-config.ts
+apps/desktop/src/hooks/access/cloud/use-resync-cloud-workspace-credentials.ts
+apps/desktop/src/hooks/access/cloud/use-resync-cloud-workspace-files.ts
 ```
 
 ### New Target Config Domain
@@ -1818,13 +1818,13 @@ Extend the existing Cloud environment section so target choice is explicit.
 Paths:
 
 ```text
-desktop/src/components/settings/panes/repo/CloudRepoSection.tsx
-desktop/src/components/settings/panes/repo/TargetEnvironmentSection.tsx
-desktop/src/components/settings/panes/compute/ComputeTargetDetails.tsx
+apps/desktop/src/components/settings/panes/repo/CloudRepoSection.tsx
+apps/desktop/src/components/settings/panes/repo/TargetEnvironmentSection.tsx
+apps/desktop/src/components/settings/panes/compute/ComputeTargetDetails.tsx
 
-desktop/src/hooks/settings/workflows/use-target-environment-settings.ts
-desktop/src/hooks/cloud/workflows/use-sync-target-environment.ts
-desktop/src/lib/domain/settings/environment-draft.ts
+apps/desktop/src/hooks/settings/workflows/use-target-environment-settings.ts
+apps/desktop/src/hooks/cloud/workflows/use-sync-target-environment.ts
+apps/desktop/src/lib/domain/settings/environment-draft.ts
 ```
 
 UX:
@@ -2149,18 +2149,18 @@ required files:
 
 workspace config:
   pnpm-workspace.yaml includes cloud/sdk and cloud/sdk-react
-  desktop/package.json depends on @proliferate/cloud-sdk
+  apps/desktop/package.json depends on @proliferate/cloud-sdk
 
 forbidden:
-  desktop product components outside desktop/src/lib/access/cloud and
-  desktop/src/hooks/access/cloud do not call raw cloud client.GET/POST/PUT/PATCH/DELETE
+  desktop product components outside apps/desktop/src/lib/access/cloud and
+  apps/desktop/src/hooks/access/cloud do not call raw cloud client.GET/POST/PUT/PATCH/DELETE
   no duplicate generated Cloud OpenAPI truth remains in desktop after migration
 ```
 
 Suggested raw-client scan:
 
 ```bash
-rg "client\\.(GET|POST|PUT|PATCH|DELETE)\\(" desktop/src/components desktop/src/lib/domain desktop/src/hooks -g "*.ts" -g "*.tsx" -g "!desktop/src/hooks/access/cloud/**"
+rg "client\\.(GET|POST|PUT|PATCH|DELETE)\\(" apps/desktop/src/components apps/desktop/src/lib/domain apps/desktop/src/hooks -g "*.ts" -g "*.tsx" -g "!apps/desktop/src/hooks/access/cloud/**"
 ```
 
 Focused commands:
@@ -2194,9 +2194,9 @@ required installer files:
   install/README.md
 
 required desktop files:
-  desktop/src/components/settings/panes/ComputePane.tsx
-  desktop/src/components/settings/panes/compute/AddSshTargetDialog.tsx
-  desktop/src/hooks/access/cloud/targets/use-cloud-targets.ts
+  apps/desktop/src/components/settings/panes/ComputePane.tsx
+  apps/desktop/src/components/settings/panes/compute/AddSshTargetDialog.tsx
+  apps/desktop/src/hooks/access/cloud/targets/use-cloud-targets.ts
 ```
 
 Smoke path:
@@ -2214,7 +2214,7 @@ Focused commands:
 cargo check -p proliferate-worker
 cargo check -p proliferate-supervisor
 cd server && uv run pytest -q tests/cloud/test_targets.py tests/cloud/test_worker_enrollment.py
-cd desktop && pnpm test -- Compute
+cd apps/desktop && pnpm test -- Compute
 ```
 
 ### Phase 3 Verifier

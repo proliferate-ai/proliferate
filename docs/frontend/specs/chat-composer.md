@@ -1,22 +1,22 @@
 # Chat Composer Standards
 
-Status: authoritative for the chat composer area (`desktop/src/components/workspace/chat/input/**`, the panels above the input, and the Claude plan card in the transcript).
+Status: authoritative for the chat composer area (`apps/desktop/src/components/workspace/chat/input/**`, the panels above the input, and the Claude plan card in the transcript).
 
 Scope:
 
-- `desktop/src/components/workspace/chat/input/**`
-- `desktop/src/components/workspace/chat/transcript/ProposedPlanCard.tsx`
-- `desktop/src/components/workspace/chat/content/PlanReferenceAttachmentCard.tsx`
-- `desktop/src/components/workspace/chat/plans/**`
-- `desktop/src/components/workspace/reviews/**`
-- `desktop/src/hooks/chat/ui/use-composer-dock-slots.tsx`
-- `packages/product-model/src/chats/composer/resolve-dock-slots.ts`
-- `desktop/src/hooks/chat/derived/use-active-todo-tracker.ts`
-- `desktop/src/hooks/reviews/**`
-- `packages/product-model/src/chats/tools/active-todo-tracker.ts`
-- `packages/product-model/src/chats/tools/claude-plan-tool-call.ts`
-- `desktop/src/lib/domain/reviews/**`
-- `desktop/src/stores/reviews/**`
+- `apps/desktop/src/components/workspace/chat/input/**`
+- `apps/desktop/src/components/workspace/chat/transcript/ProposedPlanCard.tsx`
+- `apps/desktop/src/components/workspace/chat/content/PlanReferenceAttachmentCard.tsx`
+- `apps/desktop/src/components/workspace/chat/plans/**`
+- `apps/desktop/src/components/workspace/reviews/**`
+- `apps/desktop/src/hooks/chat/ui/use-composer-dock-slots.tsx`
+- `apps/packages/product-domain/src/chats/composer/resolve-dock-slots.ts`
+- `apps/desktop/src/hooks/chat/derived/use-active-todo-tracker.ts`
+- `apps/desktop/src/hooks/reviews/**`
+- `apps/packages/product-domain/src/chats/tools/active-todo-tracker.ts`
+- `apps/packages/product-domain/src/chats/tools/claude-plan-tool-call.ts`
+- `apps/desktop/src/lib/domain/reviews/**`
+- `apps/desktop/src/stores/reviews/**`
 
 Read this doc before changing the composer, the panels that sit above it (todo tracker, approval card, workspace status, cloud runtime), or where the Claude plan body renders. The structure below was chosen to mirror Codex's reference (`references/codex_todo.html`, `references/codex_plan.html`) and is load-bearing for several visual decisions that are not obvious from the code alone.
 
@@ -60,9 +60,9 @@ Non-negotiable:
 ## 2. Dock Regions
 
 `resolveComposerDockSlots`
-(`packages/product-model/src/chats/composer/resolve-dock-slots.ts`) owns the
+(`apps/packages/product-domain/src/chats/composer/resolve-dock-slots.ts`) owns the
 pure precedence rules for the named regions above the composer.
-`useComposerDockSlots` (`desktop/src/hooks/chat/ui/use-composer-dock-slots.tsx`)
+`useComposerDockSlots` (`apps/desktop/src/hooks/chat/ui/use-composer-dock-slots.tsx`)
 adapts that data resolution to Desktop React nodes. Classify each inhabitant by
 state role first, not by component family. They always render in this order:
 
@@ -243,7 +243,7 @@ All approval action buttons use `size="sm"` with `className="rounded-xl px-2.5 t
 
 - Header: tiny icon + muted status text (`text-muted-foreground`), no bold.
 - Body: `vertical-scroll-fade-mask max-h-40` (160px cap) with `[--edge-fade-distance:2rem]`.
-  The fade-mask utility lives in `packages/design/src/dom.css` so shared chat
+  The fade-mask utility lives in `apps/packages/design/src/dom.css` so shared chat
   components can use it on Desktop and Web.
 - Completed entries: `line-through` + `text-muted-foreground/60` on both the index and the content span.
 - Default: expanded. Collapse chevron in header.
@@ -263,7 +263,7 @@ Do **not** grow the scroll cap past `max-h-40` — the Codex reference is exactl
 
 ## 5. No raw primitives, no inline SVGs
 
-Rules that apply everywhere in `desktop/src/**` but are easy to violate in this area specifically:
+Rules that apply everywhere in `apps/desktop/src/**` but are easy to violate in this area specifically:
 
 - **No raw `<button>`.** Use `Button` from `components/ui/Button.tsx`. If the existing variants don't fit, add a new size/variant to the primitive table — don't hand-roll.
 - **No inline SVG icons.** Status icons (`Circle`, `CheckCircleFilled`, etc.) live in `components/ui/icons.tsx`. If you need a new one, add it there and import it.

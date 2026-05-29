@@ -244,7 +244,7 @@ path.
 Packaged desktop builds can ship a compressed agent seed so first launch does
 not need to download the most common managed agents before the user can start.
 The seed is a `.tar.zst` resource built by `scripts/build-agent-seed.mjs` from
-`desktop/src-tauri/agent-seed.inputs.json` and hydrated by
+`apps/desktop/src-tauri/agent-seed.inputs.json` and hydrated by
 `anyharness/crates/anyharness-lib/src/domains/agents/seed/` at runtime startup.
 The HTTP runtime starts immediately with `agentSeed.status=hydrating`; the heavy
 archive extraction and checksum verification run on a blocking background task

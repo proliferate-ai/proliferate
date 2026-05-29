@@ -337,12 +337,12 @@ env var name today (the gap in §4.2).
 **Desktop UI**:
 
 ```text
-desktop/src/components/settings/panes/agent-authentication/CloudAgentAuthLibrary.tsx
-desktop/src/components/settings/panes/compute/ComputeTargetAgentAuthCard.tsx
-desktop/src/hooks/access/cloud/agent-auth/use-agent-auth.ts
+apps/desktop/src/components/settings/panes/agent-authentication/CloudAgentAuthLibrary.tsx
+apps/desktop/src/components/settings/panes/compute/ComputeTargetAgentAuthCard.tsx
+apps/desktop/src/hooks/access/cloud/agent-auth/use-agent-auth.ts
   (transitional shim re-exporting from @proliferate/cloud-sdk-react)
-desktop/src/lib/domain/agent-auth/agent-auth-presentation.ts
-desktop/src/config/agent-auth.ts
+apps/desktop/src/lib/domain/agent-auth/agent-auth-presentation.ts
+apps/desktop/src/config/agent-auth.ts
   -- AGENT_GATEWAY_BYOK_ENABLED = false   (hardcoded today; gap in §4.2)
 ```
 
@@ -399,7 +399,7 @@ agent_gateway_opencode_enabled                    default False
 
 6. **`AGENT_GATEWAY_BYOK_ENABLED` is hardcoded on Desktop.** Server
    config flags exist (`agent_gateway_byok_enabled` and provider-specific
-   gates), but Desktop reads from a static `desktop/src/config/agent-auth.ts`.
+   gates), but Desktop reads from a static `apps/desktop/src/config/agent-auth.ts`.
    Self-hosted operators who enable BYOK on the server cannot reflect
    that in the Desktop UI without recompiling.
 
@@ -718,11 +718,11 @@ GET /v1/cloud/capabilities
 Desktop:
 
 ```text
-desktop/src/hooks/access/cloud/capabilities/use-capabilities.ts   (new)
-desktop/src/lib/domain/agent-auth/capability-presentation.ts       (new)
+apps/desktop/src/hooks/access/cloud/capabilities/use-capabilities.ts   (new)
+apps/desktop/src/lib/domain/agent-auth/capability-presentation.ts       (new)
   - runtime-derived selectors over capabilities snapshot
 
-desktop/src/config/agent-auth.ts
+apps/desktop/src/config/agent-auth.ts
   - keep only static local constants; remove hardcoded
     AGENT_GATEWAY_BYOK_ENABLED runtime gate
 ```
@@ -759,7 +759,7 @@ server/proliferate/server/cloud/agent_auth/freshness.py    (new module)
 server/proliferate/server/cloud/agent_auth/service.py
   on sync event, call apply_signal('desktop_sync_succeeded' | 'desktop_sync_stale')
 
-desktop/src/lib/access/cloud/agent-auth-sync.ts
+apps/desktop/src/lib/access/cloud/agent-auth-sync.ts
   call apply_signal('desktop_sync_succeeded') on successful sync
   surface needs_resync in CloudAgentAuthLibrary
 ```
@@ -988,22 +988,22 @@ cloud/sdk                 add capabilities client
 Desktop:
 
 ```text
-desktop/src/hooks/access/cloud/capabilities/use-capabilities.ts (new)
-desktop/src/lib/domain/agent-auth/capability-presentation.ts (new)
+apps/desktop/src/hooks/access/cloud/capabilities/use-capabilities.ts (new)
+apps/desktop/src/lib/domain/agent-auth/capability-presentation.ts (new)
   - selectors over capabilities snapshot
 
-desktop/src/config/agent-auth.ts
+apps/desktop/src/config/agent-auth.ts
   - remove hardcoded AGENT_GATEWAY_BYOK_ENABLED
   - remains static local config only
 
-desktop/src/components/settings/panes/agent-authentication/CloudAgentAuthLibrary.tsx
+apps/desktop/src/components/settings/panes/agent-authentication/CloudAgentAuthLibrary.tsx
   - read BYOK from capabilities
   - render unavailable rows for stale selections referencing BYOK
     credentials that are now feature-gated off
   - surface needs_resync from the new freshness signals
   - add 'where used' link per credential
 
-desktop/src/components/settings/panes/compute/ComputeTargetAgentAuthCard.tsx
+apps/desktop/src/components/settings/panes/compute/ComputeTargetAgentAuthCard.tsx
   - reload profile state from server (not component-local) after
     selection changes
   - show force-restart toggle for admin force-rotate
@@ -1011,7 +1011,7 @@ desktop/src/components/settings/panes/compute/ComputeTargetAgentAuthCard.tsx
   - show managed-credit budget status when policy is managed
   - hook into freshness signals to surface needs_resync
 
-desktop/src/hooks/access/cloud/agent-auth/
+apps/desktop/src/hooks/access/cloud/agent-auth/
   - extend with mutations for force-rotate, freshness signal
 ```
 
@@ -1122,7 +1122,7 @@ Follow-ups (separate PRs, scope additions, not migration ceremony)
     With 7-day grants this refreshes at roughly five days old. Old grants
     drain naturally.
 12. `GET /v1/cloud/capabilities` returns server-side gateway flags.
-    Desktop reads from this endpoint; `desktop/src/config/agent-auth.ts`
+    Desktop reads from this endpoint; `apps/desktop/src/config/agent-auth.ts`
     has no hardcoded `AGENT_GATEWAY_BYOK_ENABLED` value.
 13. Stale BYOK selections from earlier test environments render as
     `unavailable in hosted cloud` (or self-hosted equivalent) and can
@@ -1226,18 +1226,18 @@ cd cloud/sdk    && pnpm run generate && pnpm run build
 Desktop:
 
 ```bash
-cd desktop && pnpm test -- --run && pnpm typecheck
+cd apps/desktop && pnpm test -- --run && pnpm typecheck
 ```
 
 Targeted Desktop tests:
 
 ```text
-desktop/src/hooks/access/cloud/capabilities/use-capabilities.test.ts
-desktop/src/components/settings/panes/agent-authentication/CloudAgentAuthLibrary.test.tsx
+apps/desktop/src/hooks/access/cloud/capabilities/use-capabilities.test.ts
+apps/desktop/src/components/settings/panes/agent-authentication/CloudAgentAuthLibrary.test.tsx
   - BYOK rows hidden when capability flag is false
   - stale BYOK selection shows unavailable + can be replaced
   - needs_resync surfaces from server snapshot
-desktop/src/components/settings/panes/compute/ComputeTargetAgentAuthCard.test.tsx
+apps/desktop/src/components/settings/panes/compute/ComputeTargetAgentAuthCard.test.tsx
   - profile state reloads from server on target switch
   - force-restart action invalidates target state cache
 ```

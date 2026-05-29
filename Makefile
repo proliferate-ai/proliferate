@@ -37,7 +37,7 @@ CLOUD_SSH_WORKER_DB ?= proliferate_dev_ssh_worker_smoke
 DESKTOP_RELEASE_WORKFLOW ?= Release Desktop
 DESKTOP_RELEASE_REF ?= $(shell git branch --show-current 2>/dev/null)
 DESKTOP_RELEASE_TARGET_OS ?= macos
-DESKTOP_RELEASE_TAG ?= desktop-v$(shell node -p "require('./desktop/package.json').version" 2>/dev/null)
+DESKTOP_RELEASE_TAG ?= desktop-v$(shell node -p "require('./apps/desktop/package.json').version" 2>/dev/null)
 SERVER_ENV_SOURCE = set -a; \
 	[ ! -f .env ] || . .env; \
 	[ ! -f .env.local ] || . .env.local; \
@@ -296,11 +296,11 @@ dev: sdk-build server-db-ready
 	RUST_LOG=info ANYHARNESS_DEV_CORS=1 $(CARGO) run --bin anyharness -- serve --port "$$ANYHARNESS_PORT" --runtime-home "$$ANYHARNESS_RUNTIME_HOME" & \
 	(cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port "$$PROLIFERATE_API_PORT") & \
 	echo "Starting hosted web app..."; \
-	(cd web && VITE_PROLIFERATE_API_BASE_URL="$$API_BASE_URL" VITE_PROLIFERATE_DEV_TOKEN_LOGIN="$${VITE_PROLIFERATE_DEV_TOKEN_LOGIN:-true}" pnpm dev --host 127.0.0.1 --port "$$PROLIFERATE_HOSTED_WEB_PORT" --strictPort) & \
+	(cd apps/web && VITE_PROLIFERATE_API_BASE_URL="$$API_BASE_URL" VITE_PROLIFERATE_DEV_TOKEN_LOGIN="$${VITE_PROLIFERATE_DEV_TOKEN_LOGIN:-true}" pnpm dev --host 127.0.0.1 --port "$$PROLIFERATE_HOSTED_WEB_PORT" --strictPort) & \
 	echo "Starting automation worker..."; \
 	(cd server && uv run python -m proliferate.server.automations.worker --role all) & \
 	sleep 2; \
-	(cd desktop && pnpm tauri dev --runner "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri-runner.sh" --config "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri.dev.json")
+	(cd apps/desktop && pnpm tauri dev --runner "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri-runner.sh" --config "$$(dirname "$$PROLIFERATE_DEV_HOME")/tauri.dev.json")
 
 dev-init:
 	@if [ -z "$(PROFILE)" ]; then \
@@ -325,7 +325,7 @@ dev-list:
 dev-local: export PROLIFERATE_DEV := 1
 dev-local: sdk-build
 	@echo "Starting desktop app with the bundled AnyHarness sidecar and no control plane..."
-	cd desktop && pnpm tauri dev --config src-tauri/tauri.dev.json
+	cd apps/desktop && pnpm tauri dev --config src-tauri/tauri.dev.json
 
 # --- Individual dev targets ---
 
@@ -333,7 +333,7 @@ dev-desktop: export ANYHARNESS_DEV_URL := http://127.0.0.1:8457
 dev-desktop: export VITE_ANYHARNESS_DEV_URL := http://127.0.0.1:8457
 dev-desktop: export PROLIFERATE_DEV := 1
 dev-desktop:
-	cd desktop && pnpm tauri dev --config src-tauri/tauri.dev.json
+	cd apps/desktop && pnpm tauri dev --config src-tauri/tauri.dev.json
 
 dev-runtime: export ANYHARNESS_DEV_CORS := 1
 dev-runtime: export PROLIFERATE_DEV := 1
@@ -767,7 +767,7 @@ cloud-sdk-react-build: cloud-sdk-build
 
 shared-build:
 	pnpm --filter @proliferate/design build
-	pnpm --filter @proliferate/product-model build
+	pnpm --filter @proliferate/product-domain build
 	pnpm --filter @proliferate/ui build
 	pnpm --filter @proliferate/product-ui build
 
@@ -775,7 +775,7 @@ runtime-build:
 	$(CARGO) build --workspace
 
 desktop-build: cloud-sdk-build cloud-sdk-react-build sdk-build sdk-react-build shared-build
-	cd desktop && pnpm exec tsc && pnpm exec vite build
+	cd apps/desktop && pnpm exec tsc && pnpm exec vite build
 
 test-agent-runtime-cloud-e2b: sdk-generate
 	cd anyharness/tests && pnpm run test:cloud:e2b
@@ -792,9 +792,9 @@ install:
 
 stage-sidecar:
 	$(CARGO) build --release -p anyharness --target $(TARGET)
-	mkdir -p desktop/src-tauri/binaries
-	cp target/$(TARGET)/release/anyharness desktop/src-tauri/binaries/anyharness-$(TARGET)
-	chmod +x desktop/src-tauri/binaries/anyharness-$(TARGET)
+	mkdir -p apps/desktop/src-tauri/binaries
+	cp target/$(TARGET)/release/anyharness apps/desktop/src-tauri/binaries/anyharness-$(TARGET)
+	chmod +x apps/desktop/src-tauri/binaries/anyharness-$(TARGET)
 
 # --- Combined ---
 
@@ -806,4 +806,4 @@ clean:
 	$(CARGO) clean
 	rm -rf anyharness/sdk/dist anyharness/sdk/src/generated anyharness/sdk/generated/openapi.json
 	rm -f server/openapi.json
-	rm -rf desktop/dist
+	rm -rf apps/desktop/dist

@@ -4,7 +4,7 @@ Third-Party Notices
 Material Icon Theme
 -------------------
 
-The desktop file icon assets under `desktop/src/assets/file-icons/material/` are
+The desktop file icon assets under `apps/desktop/src/assets/file-icons/material/` are
 vendored from Material Icon Theme:
 
 - Project: https://github.com/material-extensions/vscode-material-icon-theme

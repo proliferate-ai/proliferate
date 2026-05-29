@@ -17,10 +17,10 @@ payloads to third-party vendors.
 - Desktop runtime routing
   - trigger: desktop startup after runtime API config bootstrap
   - code path:
-    - `desktop/src/main.tsx`
-    - `desktop/src/lib/infra/proliferate-api.ts`
-    - `desktop/src/lib/domain/telemetry/mode.ts`
-    - `desktop/src/lib/integrations/telemetry/client.ts`
+    - `apps/desktop/src/main.tsx`
+    - `apps/desktop/src/lib/infra/proliferate-api.ts`
+    - `apps/desktop/src/lib/domain/telemetry/mode.ts`
+    - `apps/desktop/src/lib/integrations/telemetry/client.ts`
   - sends: no record directly; resolves `telemetryMode` as one of
     `local_dev`, `self_managed`, or `hosted_product`
   - failure behavior: if runtime config cannot be read, desktop falls back to
@@ -29,10 +29,10 @@ payloads to third-party vendors.
   - trigger: anonymous telemetry bootstrap, then every 24 hours while the app
     remains open
   - code path:
-    - `desktop/src/main.tsx`
-    - `desktop/src/lib/integrations/telemetry/anonymous.ts`
+    - `apps/desktop/src/main.tsx`
+    - `apps/desktop/src/lib/integrations/telemetry/anonymous.ts`
     - native state/bootstrap helpers in
-      `desktop/src-tauri/src/commands/anonymous_telemetry.rs`
+      `apps/desktop/src-tauri/src/commands/anonymous_telemetry.rs`
   - sends:
     - `recordType=VERSION`
     - payload:
@@ -45,11 +45,11 @@ payloads to third-party vendors.
   - trigger: first matching product event per install
   - code path:
     - existing `trackProductEvent(...)` call sites fan into
-      `desktop/src/lib/integrations/telemetry/client.ts`
+      `apps/desktop/src/lib/integrations/telemetry/client.ts`
     - anonymous derivation lives in
-      `desktop/src/lib/domain/telemetry/anonymous-events.ts`
+      `apps/desktop/src/lib/domain/telemetry/anonymous-events.ts`
     - delivery/persistence lives in
-      `desktop/src/lib/integrations/telemetry/anonymous.ts`
+      `apps/desktop/src/lib/integrations/telemetry/anonymous.ts`
   - sends:
     - `recordType=ACTIVATION`
     - payload:
@@ -68,8 +68,8 @@ payloads to third-party vendors.
   - trigger: usage counters are incremented from product events and flushed when
     24 hours have elapsed since the last successful usage flush
   - code path:
-    - `desktop/src/lib/domain/telemetry/anonymous-events.ts`
-    - `desktop/src/lib/integrations/telemetry/anonymous.ts`
+    - `apps/desktop/src/lib/domain/telemetry/anonymous-events.ts`
+    - `apps/desktop/src/lib/integrations/telemetry/anonymous.ts`
   - sends:
     - `recordType=USAGE`
     - payload:
@@ -132,13 +132,13 @@ Runtime config, not env:
 
 ## Current Usage
 - Desktop runtime routing and fanout:
-  - `desktop/src/lib/integrations/telemetry/client.ts`
+  - `apps/desktop/src/lib/integrations/telemetry/client.ts`
 - Desktop anonymous record derivation:
-  - `desktop/src/lib/domain/telemetry/anonymous-events.ts`
+  - `apps/desktop/src/lib/domain/telemetry/anonymous-events.ts`
 - Desktop anonymous transport and local persistence:
-  - `desktop/src/lib/integrations/telemetry/anonymous.ts`
-  - `desktop/src/lib/integrations/telemetry/anonymous-storage.ts`
-  - `desktop/src-tauri/src/commands/anonymous_telemetry.rs`
+  - `apps/desktop/src/lib/integrations/telemetry/anonymous.ts`
+  - `apps/desktop/src/lib/integrations/telemetry/anonymous-storage.ts`
+  - `apps/desktop/src-tauri/src/commands/anonymous_telemetry.rs`
 - Server anonymous collector:
   - `server/proliferate/server/anonymous_telemetry/api.py`
   - `server/proliferate/server/anonymous_telemetry/models.py`
@@ -166,9 +166,9 @@ Runtime config, not env:
 - Bundled agent seed telemetry:
   - trigger: desktop observes runtime health reporting seed status
   - code path:
-    - `desktop/src/hooks/telemetry/lifecycle/use-telemetry-agent-seed.ts`
-    - `desktop/src/lib/domain/telemetry/events.ts`
-    - `desktop/src/lib/domain/telemetry/anonymous-events.ts`
+    - `apps/desktop/src/hooks/telemetry/lifecycle/use-telemetry-agent-seed.ts`
+    - `apps/desktop/src/lib/domain/telemetry/events.ts`
+    - `apps/desktop/src/lib/domain/telemetry/anonymous-events.ts`
   - sends product events only with low-cardinality fields:
     - `status`
     - `source`

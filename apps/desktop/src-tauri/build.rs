@@ -1,0 +1,585 @@
+use std::env;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+fn main() {
+    println!("cargo:rerun-if-changed=tauri.conf.json");
+    println!("cargo:rerun-if-env-changed=ANYHARNESS_BIN");
+    println!("cargo:rerun-if-env-changed=PROLIFERATE_WORKER_BIN");
+    println!("cargo:rerun-if-env-changed=PROLIFERATE_DEBUG_BIN");
+    println!("cargo:rerun-if-env-changed=CARGO_PRIMARY_PACKAGE");
+    println!("cargo:rerun-if-env-changed=TAURI_ENV_TARGET_TRIPLE");
+    println!("cargo:rerun-if-env-changed=TARGET");
+    println!("cargo:rerun-if-env-changed=PROFILE");
+    propagate_native_telemetry_env();
+    register_anyharness_rerun_inputs();
+    register_proliferate_worker_rerun_inputs();
+    register_proliferate_debug_rerun_inputs();
+
+    if let Err(err) = stage_dependency_placeholders() {
+        panic!("failed to stage dependency placeholders: {err}");
+    }
+
+    if building_primary_package() {
+        if let Err(err) = stage_anyharness_binary() {
+            panic!("failed to stage AnyHarness sidecar binary: {err}");
+        }
+        if let Err(err) = stage_proliferate_worker_binary() {
+            panic!("failed to stage Proliferate Worker sidecar binary: {err}");
+        }
+        if let Err(err) = stage_proliferate_debug_binary() {
+            panic!("failed to stage Proliferate debug helper binary: {err}");
+        }
+    }
+
+    tauri_build::build()
+}
+
+fn building_primary_package() -> bool {
+    env::var_os("CARGO_PRIMARY_PACKAGE").is_some()
+}
+
+fn stage_proliferate_debug_binary() -> Result<(), String> {
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").map_err(|e| e.to_string())?);
+    let target = env::var("TAURI_ENV_TARGET_TRIPLE")
+        .or_else(|_| env::var("TARGET"))
+        .map_err(|e| e.to_string())?;
+    let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
+
+    let binaries_dir = manifest_dir.join("binaries");
+    fs::create_dir_all(&binaries_dir).map_err(|e| e.to_string())?;
+    let dest_name = if target.contains("windows") {
+        format!("proliferate-debug-{target}.exe")
+    } else {
+        format!("proliferate-debug-{target}")
+    };
+    let dest = binaries_dir.join(dest_name);
+
+    let source = match resolve_proliferate_debug_binary(&manifest_dir, &target, &profile) {
+        Ok(source) => source,
+        Err(error) if profile != "release" => {
+            write_placeholder_sidecar(&dest, &target)?;
+            println!(
+                "cargo:warning=staged placeholder Proliferate debug helper for {target}: {error}"
+            );
+            return Ok(());
+        }
+        Err(error) => return Err(error),
+    };
+    copy_executable(&source, &dest)?;
+
+    println!(
+        "cargo:warning=staged Proliferate debug helper from {}",
+        source.display()
+    );
+    println!("cargo:warning=helper resource path {}", dest.display());
+    Ok(())
+}
+
+fn stage_dependency_placeholders() -> Result<(), String> {
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").map_err(|e| e.to_string())?);
+    let target = env::var("TAURI_ENV_TARGET_TRIPLE")
+        .or_else(|_| env::var("TARGET"))
+        .map_err(|e| e.to_string())?;
+    let binaries_dir = manifest_dir.join("binaries");
+    fs::create_dir_all(&binaries_dir).map_err(|e| e.to_string())?;
+
+    let helper_dest = if target.contains("windows") {
+        binaries_dir.join(format!("proliferate-debug-{target}.exe"))
+    } else {
+        binaries_dir.join(format!("proliferate-debug-{target}"))
+    };
+    let anyharness_dest = if target.contains("windows") {
+        binaries_dir.join(format!("anyharness-{target}.exe"))
+    } else {
+        binaries_dir.join(format!("anyharness-{target}"))
+    };
+    let worker_dest = if target.contains("windows") {
+        binaries_dir.join(format!("proliferate-worker-{target}.exe"))
+    } else {
+        binaries_dir.join(format!("proliferate-worker-{target}"))
+    };
+
+    if !helper_dest.exists() {
+        write_placeholder_sidecar(&helper_dest, &target)?;
+    }
+    if !anyharness_dest.exists() {
+        write_placeholder_sidecar(&anyharness_dest, &target)?;
+    }
+    if !worker_dest.exists() {
+        write_placeholder_sidecar(&worker_dest, &target)?;
+    }
+
+    Ok(())
+}
+
+fn propagate_native_telemetry_env() {
+    const NATIVE_TELEMETRY_ENV_KEYS: &[&str] = &[
+        "PROLIFERATE_DESKTOP_SENTRY_DSN",
+        "PROLIFERATE_DESKTOP_SENTRY_ENVIRONMENT",
+        "PROLIFERATE_DESKTOP_SENTRY_RELEASE",
+        "PROLIFERATE_DESKTOP_SENTRY_TRACES_SAMPLE_RATE",
+        "ANYHARNESS_SENTRY_DSN",
+        "ANYHARNESS_SENTRY_ENVIRONMENT",
+        "ANYHARNESS_SENTRY_RELEASE",
+        "ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE",
+        "VITE_PROLIFERATE_API_BASE_URL",
+        "VITE_PROLIFERATE_TELEMETRY_DISABLED",
+    ];
+
+    for key in NATIVE_TELEMETRY_ENV_KEYS {
+        println!("cargo:rerun-if-env-changed={key}");
+
+        if let Ok(value) = env::var(key) {
+            if !value.trim().is_empty() {
+                let propagated_key = match *key {
+                    "VITE_PROLIFERATE_API_BASE_URL" => "PROLIFERATE_DEFAULT_API_BASE_URL",
+                    "VITE_PROLIFERATE_TELEMETRY_DISABLED" => "PROLIFERATE_BUILD_TELEMETRY_DISABLED",
+                    _ => key,
+                };
+                println!("cargo:rustc-env={propagated_key}={value}");
+            }
+        }
+    }
+}
+
+fn stage_anyharness_binary() -> Result<(), String> {
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").map_err(|e| e.to_string())?);
+    let target = env::var("TAURI_ENV_TARGET_TRIPLE")
+        .or_else(|_| env::var("TARGET"))
+        .map_err(|e| e.to_string())?;
+    let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
+
+    let binaries_dir = manifest_dir.join("binaries");
+    fs::create_dir_all(&binaries_dir).map_err(|e| e.to_string())?;
+    let dest_name = if target.contains("windows") {
+        format!("anyharness-{target}.exe")
+    } else {
+        format!("anyharness-{target}")
+    };
+    let dest = binaries_dir.join(dest_name);
+
+    if !is_supported_sidecar_target(&target) {
+        write_placeholder_sidecar(&dest, &target)?;
+        println!(
+            "cargo:warning=staged placeholder AnyHarness sidecar for unsupported target {target}; set ANYHARNESS_BIN to override"
+        );
+        return Ok(());
+    }
+
+    let source = resolve_anyharness_binary(&manifest_dir, &target, &profile)?;
+    copy_executable(&source, &dest)?;
+
+    println!(
+        "cargo:warning=staged AnyHarness sidecar from {}",
+        source.display()
+    );
+    println!("cargo:warning=sidecar resource path {}", dest.display());
+    Ok(())
+}
+
+fn stage_proliferate_worker_binary() -> Result<(), String> {
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").map_err(|e| e.to_string())?);
+    let target = env::var("TAURI_ENV_TARGET_TRIPLE")
+        .or_else(|_| env::var("TARGET"))
+        .map_err(|e| e.to_string())?;
+    let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
+
+    let binaries_dir = manifest_dir.join("binaries");
+    fs::create_dir_all(&binaries_dir).map_err(|e| e.to_string())?;
+    let dest_name = if target.contains("windows") {
+        format!("proliferate-worker-{target}.exe")
+    } else {
+        format!("proliferate-worker-{target}")
+    };
+    let dest = binaries_dir.join(dest_name);
+
+    if !is_supported_sidecar_target(&target) {
+        write_placeholder_sidecar(&dest, &target)?;
+        println!(
+            "cargo:warning=staged placeholder Proliferate Worker sidecar for unsupported target {target}; set PROLIFERATE_WORKER_BIN to override"
+        );
+        return Ok(());
+    }
+
+    let source = resolve_proliferate_worker_binary(&manifest_dir, &target, &profile)?;
+    copy_executable(&source, &dest)?;
+
+    println!(
+        "cargo:warning=staged Proliferate Worker sidecar from {}",
+        source.display()
+    );
+    println!("cargo:warning=worker resource path {}", dest.display());
+    Ok(())
+}
+
+fn resolve_anyharness_binary(
+    manifest_dir: &Path,
+    target: &str,
+    profile: &str,
+) -> Result<PathBuf, String> {
+    if let Ok(explicit) = env::var("ANYHARNESS_BIN") {
+        let path = PathBuf::from(explicit);
+        if path.is_file() {
+            return Ok(path);
+        }
+    }
+
+    let repo_candidates = proliferate_worker_repo_candidates(manifest_dir);
+    let existing_repos: Vec<&PathBuf> = repo_candidates
+        .iter()
+        .filter(|p| p.join("Cargo.toml").is_file())
+        .collect();
+
+    if let Some(primary_repo) = existing_repos.first() {
+        if let Some(path) = find_existing_binary(primary_repo, target, profile) {
+            return Ok(path);
+        }
+        build_anyharness(primary_repo, target, profile)?;
+        if let Some(path) = find_existing_binary(primary_repo, target, profile) {
+            return Ok(path);
+        }
+    }
+
+    for repo in existing_repos.iter().skip(1) {
+        if let Some(path) = find_existing_binary(repo, target, profile) {
+            return Ok(path);
+        }
+    }
+
+    for repo in existing_repos.iter().skip(1) {
+        build_anyharness(repo, target, profile)?;
+        if let Some(path) = find_existing_binary(repo, target, profile) {
+            return Ok(path);
+        }
+    }
+
+    let path_candidates = [
+        home_dir().map(|h| h.join(".cargo/bin/anyharness")),
+        Some(PathBuf::from("/usr/local/bin/anyharness")),
+        Some(PathBuf::from("/opt/homebrew/bin/anyharness")),
+    ];
+    for candidate in path_candidates.into_iter().flatten() {
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+
+    Err(format!(
+        "could not find or build anyharness for target {target}; tried ANYHARNESS_BIN, sibling repos, and common install locations"
+    ))
+}
+
+fn resolve_proliferate_worker_binary(
+    manifest_dir: &Path,
+    target: &str,
+    profile: &str,
+) -> Result<PathBuf, String> {
+    if let Ok(explicit) = env::var("PROLIFERATE_WORKER_BIN") {
+        let path = PathBuf::from(explicit);
+        if path.is_file() {
+            return Ok(path);
+        }
+    }
+
+    let repo_candidates = anyharness_repo_candidates(manifest_dir);
+    let existing_repos: Vec<&PathBuf> = repo_candidates.iter().filter(|p| p.is_dir()).collect();
+
+    if let Some(primary_repo) = existing_repos.first() {
+        if let Some(path) = find_named_binary(primary_repo, target, profile, "proliferate-worker") {
+            return Ok(path);
+        }
+        build_proliferate_worker(primary_repo, target, profile)?;
+        if let Some(path) = find_named_binary(primary_repo, target, profile, "proliferate-worker") {
+            return Ok(path);
+        }
+    }
+
+    for repo in existing_repos.iter().skip(1) {
+        if let Some(path) = find_named_binary(repo, target, profile, "proliferate-worker") {
+            return Ok(path);
+        }
+    }
+
+    for repo in existing_repos.iter().skip(1) {
+        build_proliferate_worker(repo, target, profile)?;
+        if let Some(path) = find_named_binary(repo, target, profile, "proliferate-worker") {
+            return Ok(path);
+        }
+    }
+
+    let path_candidates = [
+        home_dir().map(|h| h.join(".cargo/bin/proliferate-worker")),
+        Some(PathBuf::from("/usr/local/bin/proliferate-worker")),
+        Some(PathBuf::from("/opt/homebrew/bin/proliferate-worker")),
+    ];
+    for candidate in path_candidates.into_iter().flatten() {
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+
+    Err(format!(
+        "could not find or build proliferate-worker for target {target}; tried PROLIFERATE_WORKER_BIN, sibling repos, and common install locations"
+    ))
+}
+
+fn register_anyharness_rerun_inputs() {
+    let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") else {
+        return;
+    };
+    let manifest_dir = PathBuf::from(manifest_dir);
+
+    for repo in anyharness_repo_candidates(&manifest_dir) {
+        if repo.is_dir() {
+            println!("cargo:rerun-if-changed={}", repo.display());
+        }
+    }
+}
+
+fn register_proliferate_worker_rerun_inputs() {
+    let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") else {
+        return;
+    };
+    let manifest_dir = PathBuf::from(manifest_dir);
+
+    for repo in proliferate_worker_repo_candidates(&manifest_dir) {
+        if repo.join("Cargo.toml").is_file() {
+            println!("cargo:rerun-if-changed={}", repo.display());
+        }
+    }
+}
+
+fn register_proliferate_debug_rerun_inputs() {
+    let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") else {
+        return;
+    };
+    let manifest_dir = PathBuf::from(manifest_dir);
+    let helper_dir = proliferate_debug_repo_candidate(&manifest_dir);
+    if helper_dir.is_dir() {
+        println!("cargo:rerun-if-changed={}", helper_dir.display());
+    }
+}
+
+fn anyharness_repo_candidates(manifest_dir: &Path) -> Vec<PathBuf> {
+    let candidates = vec![
+        manifest_dir.join("../../anyharness"),
+        manifest_dir.join("../../../anyharness"),
+        manifest_dir.join("../../../anyharness-acp-chat-surface"),
+        manifest_dir.join("../../../anyharness-git-slice"),
+        manifest_dir.join("../../../anyharness-files"),
+    ];
+
+    let mut unique = Vec::new();
+    for candidate in candidates {
+        if !unique
+            .iter()
+            .any(|existing: &PathBuf| existing == &candidate)
+        {
+            unique.push(candidate);
+        }
+    }
+    unique
+}
+
+fn proliferate_worker_repo_candidates(manifest_dir: &Path) -> Vec<PathBuf> {
+    let mut candidates = vec![manifest_dir.join("../../..")];
+    candidates.extend(anyharness_repo_candidates(manifest_dir));
+
+    let mut unique = Vec::new();
+    for candidate in candidates {
+        if !unique
+            .iter()
+            .any(|existing: &PathBuf| existing == &candidate)
+        {
+            unique.push(candidate);
+        }
+    }
+    unique
+}
+
+fn proliferate_debug_repo_candidate(manifest_dir: &Path) -> PathBuf {
+    manifest_dir.join("../src-tauri-debug")
+}
+
+fn build_anyharness(repo_root: &Path, target: &str, profile: &str) -> Result<(), String> {
+    let mut cmd = Command::new("cargo");
+    cmd.current_dir(repo_root)
+        .env("CARGO_TARGET_DIR", repo_root.join("target"))
+        .arg("build")
+        .arg("-p")
+        .arg("anyharness")
+        .arg("--target")
+        .arg(target);
+
+    if profile == "release" {
+        cmd.arg("--release");
+    }
+
+    let status = cmd.status().map_err(|e| e.to_string())?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "cargo build -p anyharness failed in {}",
+            repo_root.display()
+        ))
+    }
+}
+
+fn build_proliferate_worker(repo_root: &Path, target: &str, profile: &str) -> Result<(), String> {
+    let mut cmd = Command::new("cargo");
+    cmd.current_dir(repo_root)
+        .env("CARGO_TARGET_DIR", repo_root.join("target"))
+        .arg("build")
+        .arg("-p")
+        .arg("proliferate-worker")
+        .arg("--target")
+        .arg(target);
+
+    if profile == "release" {
+        cmd.arg("--release");
+    }
+
+    let status = cmd.status().map_err(|e| e.to_string())?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "cargo build -p proliferate-worker failed in {}",
+            repo_root.display()
+        ))
+    }
+}
+
+fn resolve_proliferate_debug_binary(
+    manifest_dir: &Path,
+    target: &str,
+    profile: &str,
+) -> Result<PathBuf, String> {
+    if let Ok(explicit) = env::var("PROLIFERATE_DEBUG_BIN") {
+        let path = PathBuf::from(explicit);
+        if path.is_file() {
+            return Ok(path);
+        }
+    }
+
+    let helper_dir = proliferate_debug_repo_candidate(manifest_dir);
+    if let Some(path) = find_proliferate_debug_binary(manifest_dir, &helper_dir, target, profile) {
+        return Ok(path);
+    }
+
+    Err(format!(
+        "could not find prebuilt proliferate-debug for target {target}; build it first or set PROLIFERATE_DEBUG_BIN"
+    ))
+}
+
+fn find_existing_binary(repo_root: &Path, target: &str, profile: &str) -> Option<PathBuf> {
+    find_named_binary(repo_root, target, profile, "anyharness")
+}
+
+fn find_named_binary(
+    repo_root: &Path,
+    target: &str,
+    profile: &str,
+    bin_name: &str,
+) -> Option<PathBuf> {
+    let bin_name = if target.contains("windows") {
+        format!("{bin_name}.exe")
+    } else {
+        bin_name.to_string()
+    };
+
+    [
+        repo_root
+            .join("target")
+            .join(target)
+            .join(profile)
+            .join(&bin_name),
+        repo_root.join("target").join(profile).join(&bin_name),
+    ]
+    .into_iter()
+    .find(|p| p.is_file())
+}
+
+fn find_proliferate_debug_binary(
+    manifest_dir: &Path,
+    repo_root: &Path,
+    target: &str,
+    profile: &str,
+) -> Option<PathBuf> {
+    find_named_binary(repo_root, target, profile, "proliferate-debug").or_else(|| {
+        find_named_binary(
+            &manifest_dir.join("../../.."),
+            target,
+            profile,
+            "proliferate-debug",
+        )
+    })
+}
+
+fn copy_executable(source: &Path, dest: &Path) -> Result<(), String> {
+    if paths_refer_to_same_file(source, dest) {
+        mark_executable(dest)?;
+        return Ok(());
+    }
+
+    fs::copy(source, dest).map_err(|e| e.to_string())?;
+    mark_executable(dest)?;
+
+    Ok(())
+}
+
+fn paths_refer_to_same_file(source: &Path, dest: &Path) -> bool {
+    if source == dest {
+        return true;
+    }
+
+    match (fs::canonicalize(source), fs::canonicalize(dest)) {
+        (Ok(source), Ok(dest)) => source == dest,
+        _ => false,
+    }
+}
+
+fn write_placeholder_sidecar(dest: &Path, target: &str) -> Result<(), String> {
+    if target.contains("windows") {
+        fs::write(dest, b"unsupported target placeholder").map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\\n' 'AnyHarness sidecar is not available for target {target}.' >&2\nexit 1\n"
+    );
+    fs::write(dest, script).map_err(|e| e.to_string())?;
+    mark_executable(dest)?;
+    Ok(())
+}
+
+fn mark_executable(dest: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(dest).map_err(|e| e.to_string())?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(dest, perms).map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
+fn home_dir() -> Option<PathBuf> {
+    env::var("HOME").ok().map(PathBuf::from)
+}
+
+fn is_supported_sidecar_target(target: &str) -> bool {
+    matches!(
+        target,
+        "aarch64-apple-darwin"
+            | "x86_64-apple-darwin"
+            | "x86_64-unknown-linux-musl"
+            | "aarch64-unknown-linux-musl"
+            | "x86_64-pc-windows-msvc"
+            | "aarch64-pc-windows-msvc"
+    )
+}

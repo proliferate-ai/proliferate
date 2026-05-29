@@ -737,7 +737,7 @@ client-facing shape.
 Current Desktop automation target selection:
 
 ```text
-desktop/src/lib/domain/automations/target/selection.ts
+apps/desktop/src/lib/domain/automations/target/selection.ts
   executionTarget: cloud | local
   gitOwner
   gitRepoName
@@ -757,16 +757,16 @@ AutomationTargetSelection
 Likely files:
 
 ```text
-desktop/src/lib/domain/automations/target/selection.ts
-desktop/src/lib/domain/automations/target/records.ts
-desktop/src/hooks/automations/derived/use-automation-target-selection.ts
-desktop/src/components/automations/controls/AutomationTargetPicker.tsx
-desktop/src/components/automations/editor/AutomationEditorModal.tsx
-desktop/src/components/automations/list/AutomationDetailContent.tsx
+apps/desktop/src/lib/domain/automations/target/selection.ts
+apps/desktop/src/lib/domain/automations/target/records.ts
+apps/desktop/src/hooks/automations/derived/use-automation-target-selection.ts
+apps/desktop/src/components/automations/controls/AutomationTargetPicker.tsx
+apps/desktop/src/components/automations/editor/AutomationEditorModal.tsx
+apps/desktop/src/components/automations/list/AutomationDetailContent.tsx
 
-desktop/src/components/home/screen/HomeTargetPicker.tsx
-desktop/src/hooks/home/workflows/use-home-next-launch.ts
-desktop/src/hooks/cloud/workflows/use-create-cloud-workspace.ts
+apps/desktop/src/components/home/screen/HomeTargetPicker.tsx
+apps/desktop/src/hooks/home/workflows/use-home-next-launch.ts
+apps/desktop/src/hooks/cloud/workflows/use-create-cloud-workspace.ts
 ```
 
 Required behavior:

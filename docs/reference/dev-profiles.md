@@ -116,8 +116,8 @@ types at the same time.
 - `PROLIFERATE_API_PORT`
 - `PROLIFERATE_WEB_PORT` for the Tauri desktop renderer
 - `PROLIFERATE_WEB_HMR_PORT`
-- `PROLIFERATE_HOSTED_WEB_PORT` for the separate `web/` app
-- `PROLIFERATE_MOBILE_WEB_PORT` for Expo web smoke testing of `mobile/`
+- `PROLIFERATE_HOSTED_WEB_PORT` for the separate `apps/web/` app
+- `PROLIFERATE_MOBILE_WEB_PORT` for Expo web smoke testing of `apps/mobile/`
 - `PROLIFERATE_GOOGLE_WORKSPACE_MCP_PORT_BASE`
 - `ANYHARNESS_PORT`
 
