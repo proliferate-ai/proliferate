@@ -1,0 +1,4 @@
+# Existing frontend layer-boundary violations. Keep this list shrinking.
+#
+# Format:
+# RULE_ID path count reason
