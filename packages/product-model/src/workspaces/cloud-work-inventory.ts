@@ -51,6 +51,7 @@ export interface CloudWorkItemView {
   ownerLabel: string;
   status: CloudWorkStatusFilter;
   statusLabel: string;
+  activityPreview: string | null;
   branchLabel: string;
   repoLabel: string;
   runtimeLabel: string;
@@ -338,6 +339,7 @@ export function cloudWorkItemForWorkspace(
   const lastActivityMs = cloudWorkLastActivityMs(workspace);
   const createdAtMs = parseTime(workspace.createdAt) || lastActivityMs;
   const defaultSessionId = selectDefaultCloudWorkSession(workspace);
+  const activityPreview = cloudWorkActivityPreview(workspace);
   return {
     id: workspace.id,
     title,
@@ -357,6 +359,7 @@ export function cloudWorkItemForWorkspace(
     ownerLabel: cloudWorkOwnerLabel(workspace),
     status,
     statusLabel: STATUS_LABELS[status],
+    activityPreview,
     branchLabel,
     repoLabel,
     runtimeLabel: cloudWorkRuntimeLabel(workspace),
@@ -376,12 +379,29 @@ export function cloudWorkItemForWorkspace(
       SOURCE_LABELS[source],
       cloudWorkOwnerLabel(workspace),
       STATUS_LABELS[status],
+      activityPreview,
     ].filter(Boolean).join(" "),
     openTarget: {
       workspaceId: workspace.id,
       sessionId: defaultSessionId,
     },
   };
+}
+
+export function cloudWorkActivityPreview(
+  workspace: Pick<
+    CloudWorkspaceSummary,
+    | "actionBlockReason"
+    | "lastError"
+    | "lastSessionSummary"
+    | "statusDetail"
+  >,
+): string | null {
+  return compactPreviewText(workspace.lastSessionSummary?.preview)
+    ?? compactPreviewText(workspace.lastSessionSummary?.title)
+    ?? compactPreviewText(workspace.lastError)
+    ?? compactPreviewText(workspace.actionBlockReason)
+    ?? commandStatusDetailMessage(workspace.statusDetail);
 }
 
 export function cloudWorkSourceAgentKind(
@@ -637,6 +657,11 @@ function commandStatusDetailMessage(statusDetail: string | null | undefined): st
   return trimmed;
 }
 
+function compactPreviewText(value: string | null | undefined): string | null {
+  const text = value?.replace(/\s+/gu, " ").trim() ?? "";
+  return text || null;
+}
+
 type CloudWorkspaceCommandFacts = Pick<
   CloudWorkspaceSummary,
     | "exposure"
@@ -669,6 +694,9 @@ export function cloudWorkStatusForWorkspace(
   if (workspace.lastError || workspace.workspaceStatus === "error" || workspace.runtime?.status === "error") {
     return "error";
   }
+  if (workspaceHasPendingSessionInput(workspace)) {
+    return "blocked";
+  }
   if (workspace.actionBlockKind || workspace.actionBlockReason) {
     return "blocked";
   }
@@ -685,6 +713,18 @@ export function cloudWorkStatusForWorkspace(
     return "active";
   }
   return "ready";
+}
+
+function workspaceHasPendingSessionInput(
+  workspace: Pick<CloudWorkspaceSummary, "lastSessionSummary">,
+): boolean {
+  const summary = workspace.lastSessionSummary;
+  if (!summary) {
+    return false;
+  }
+  const phase = summary.phase?.toLowerCase().replace(/[\s-]+/gu, "_") ?? "";
+  return (summary.pendingInteractionCount ?? 0) > 0
+    || phase === "awaiting_interaction";
 }
 
 export function selectDefaultCloudWorkSession(
@@ -1063,7 +1103,8 @@ function workspaceState(workspace: CloudWorkspaceSummary): RecentWorkState {
     workspace.status === "error" ||
     workspace.actionBlockKind ||
     workspace.actionBlockReason ||
-    workspace.exposureState === "stale"
+    workspace.exposureState === "stale" ||
+    workspaceHasPendingSessionInput(workspace)
   ) {
     return "blocked";
   }
@@ -1081,6 +1122,9 @@ function workspaceState(workspace: CloudWorkspaceSummary): RecentWorkState {
 }
 
 function sessionState(status: string | null | undefined, workspace: CloudWorkspaceSummary): RecentWorkState {
+  if (workspaceHasPendingSessionInput(workspace)) {
+    return "blocked";
+  }
   const normalized = status?.toLowerCase().replace(/[\s-]+/gu, "_") ?? "";
   switch (normalized) {
     case "running":

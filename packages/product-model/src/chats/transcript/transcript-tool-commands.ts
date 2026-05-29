@@ -20,17 +20,16 @@ export function getToolCallShellCommand(
   item: Extract<TranscriptItem, { kind: "tool_call" }>,
 ): string | null {
   const rawInput = asRecord(item.rawInput);
-  if (!rawInput) {
-    return null;
+  if (rawInput) {
+    const command = rawInput.command ?? rawInput.cmd;
+    if (typeof command === "string") {
+      return command.trim().length > 0 ? command : null;
+    }
+    if (Array.isArray(command)) {
+      return normalizeShellCommandArray(command);
+    }
   }
-  const command = rawInput.command ?? rawInput.cmd;
-  if (typeof command === "string") {
-    return command.trim().length > 0 ? command : null;
-  }
-  if (Array.isArray(command)) {
-    return normalizeShellCommandArray(command);
-  }
-  return null;
+  return getToolCallTitleShellCommand(item);
 }
 
 export function getToolCallShellCommandName(
@@ -148,6 +147,74 @@ function normalizeShellCommandArray(command: unknown[]): string | null {
   }
 
   return parts.join(" ");
+}
+
+function getToolCallTitleShellCommand(
+  item: Extract<TranscriptItem, { kind: "tool_call" }>,
+): string | null {
+  if (!isShellToolCall(item)) {
+    return null;
+  }
+  const titles = [
+    item.title,
+    ...item.contentParts.flatMap((part) => {
+      const record = asRecord(part);
+      if (!record || record.type !== "tool_call") {
+        return [];
+      }
+      return readString(record.title);
+    }),
+  ];
+  for (const title of titles) {
+    const command = normalizeShellTitle(title);
+    if (command) {
+      return command;
+    }
+  }
+  return null;
+}
+
+function isShellToolCall(item: Extract<TranscriptItem, { kind: "tool_call" }>): boolean {
+  const values = [
+    item.nativeToolName,
+    item.toolKind,
+    item.semanticKind,
+    ...item.contentParts.flatMap((part) => {
+      const record = asRecord(part);
+      if (!record || record.type !== "tool_call") {
+        return [];
+      }
+      return [
+        readString(record.nativeToolName),
+        readString(record.toolKind),
+      ];
+    }),
+  ];
+  return values.some((value) => {
+    const normalized = value?.trim().toLowerCase();
+    return normalized === "bash"
+      || normalized === "shell"
+      || normalized === "terminal"
+      || normalized === "execute";
+  });
+}
+
+function normalizeShellTitle(value: string | null | undefined): string | null {
+  const title = value?.trim();
+  if (!title) {
+    return null;
+  }
+  const normalized = title.toLowerCase();
+  if (
+    normalized === "terminal"
+    || normalized === "command"
+    || normalized === "bash"
+    || normalized === "shell"
+    || normalized === "tool call"
+  ) {
+    return null;
+  }
+  return title;
 }
 
 function expandShellOperationList(command: string | null): string[] {

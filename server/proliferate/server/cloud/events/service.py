@@ -614,6 +614,7 @@ async def _apply_projection(
     elif include_transcript and current_event_type == "interaction_requested":
         request_id = _str_or_none(event_payload.get("requestId"))
         if request_id:
+            interaction_title = _str_or_none(event_payload.get("title"))
             pending_interaction = await events_store.upsert_pending_interaction(
                 db,
                 target_id=auth.target_id,
@@ -624,9 +625,16 @@ async def _apply_projection(
                 seq=seq,
                 occurred_at=timestamp,
                 kind=_str_or_none(event_payload.get("kind")),
-                title=_str_or_none(event_payload.get("title")),
+                title=interaction_title,
                 description=_str_or_none(event_payload.get("description")),
                 payload_json=payload_json,
+            )
+            transcript_item = await events_store.annotate_transcript_item_title(
+                db,
+                target_id=auth.target_id,
+                session_id=session_id,
+                item_id=_interaction_tool_item_id(envelope, event_payload),
+                title=interaction_title,
             )
     elif include_transcript and current_event_type == "interaction_resolved":
         request_id = _str_or_none(event_payload.get("requestId"))
@@ -640,6 +648,14 @@ async def _apply_projection(
                 occurred_at=timestamp,
                 payload_json=payload_json,
             )
+    if pending_interaction is not None:
+        refreshed_projection = await events_store.get_session_projection(
+            db,
+            target_id=auth.target_id,
+            session_id=session_id,
+        )
+        if refreshed_projection is not None:
+            session_projection = refreshed_projection
     return projection_patch_from_event(
         target_id=auth.target_id,
         session_id=session_id,
@@ -689,6 +705,19 @@ def _session_projection_patch(
 
 def _str_or_none(value: object) -> str | None:
     return value if isinstance(value, str) and value else None
+
+
+def _interaction_tool_item_id(
+    envelope: dict[str, object],
+    event_payload: dict[str, object],
+) -> str | None:
+    item_id = _str_or_none(envelope.get("itemId"))
+    if item_id:
+        return item_id
+    source = event_payload.get("source")
+    if not isinstance(source, dict):
+        return None
+    return _str_or_none(source.get("toolCallId"))
 
 
 def _int_value(value: object) -> int:

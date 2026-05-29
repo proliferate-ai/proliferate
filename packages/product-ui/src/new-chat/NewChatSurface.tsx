@@ -106,6 +106,13 @@ export function NewChatSurface({
       pickerToComposerControl("mode", mode, "settings", "trailing", onPickerSelect),
     ]),
   ];
+  const footerComposerKeys = new Set(["target", "branch", "runtime"]);
+  const mainComposerControls = composerControls.filter((control) =>
+    !footerComposerKeys.has(control.key ?? "")
+  );
+  const footerComposerControls = composerControls.filter((control) =>
+    footerComposerKeys.has(control.key ?? "")
+  );
 
   return (
     <div className="relative flex h-full w-full min-w-0 flex-1 overflow-hidden bg-background text-foreground">
@@ -123,7 +130,8 @@ export function NewChatSurface({
               placeholder,
               canSubmit,
               isSubmitting: submitting,
-              controls: composerControls,
+              controls: mainComposerControls,
+              footerComposerControls,
               disabled: submitting,
               onChange: onDraftChange,
               onSubmit,

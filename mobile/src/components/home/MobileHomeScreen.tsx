@@ -23,6 +23,7 @@ import { MobilePopoverOption } from "../primitives/popover/MobilePopoverOption";
 import { MobilePopoverRow } from "../primitives/popover/MobilePopoverRow";
 import { MobileWorkspaceCard } from "../work/MobileWorkspaceCard";
 import { colors, radius, spacing } from "../../styles/tokens";
+import { MobileBranchPickerSheet } from "./MobileBranchPickerSheet";
 
 interface MobileHomeScreenProps {
   ownerUserId: string | null;
@@ -188,12 +189,12 @@ export function MobileHomeScreen({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Choose branch"
-              disabled={!launchModel.selectedRepo || launchModel.repoBranches.isLoading}
+              disabled={!launchModel.selectedRepo}
               onPress={() => setSheet("branch")}
               style={({ pressed }) => [
                 styles.repoPill,
                 styles.branchPill,
-                (!launchModel.selectedRepo || launchModel.repoBranches.isLoading) && styles.disabledPill,
+                !launchModel.selectedRepo && styles.disabledPill,
                 pressed && styles.pressed,
               ]}
             >
@@ -277,34 +278,15 @@ export function MobileHomeScreen({
         </MobilePopoverGroup>
       </MobilePopover>
 
-      <MobilePopover
+      <MobileBranchPickerSheet
         visible={sheet === "branch"}
         onClose={closeSheet}
-        anchor="bottom-left"
-        insetSide={20}
-        insetBottom={140}
-        width={260}
-      >
-        <MobilePopoverGroup>
-          {launchModel.repoBranches.isLoading ? (
-            <MobilePopoverRow id="loading" icon="git-branch" title="Loading branches..." disabled />
-          ) : launchModel.branchOptions.length === 0 ? (
-            <MobilePopoverRow id="empty" icon="git-branch" title="No branches found" disabled />
-          ) : (
-            launchModel.branchOptions.map((branch) => (
-              <MobilePopoverOption
-                key={branch}
-                title={branch}
-                selected={branch === launchModel.selectedBaseBranch}
-                onSelect={() => {
-                  launchModel.setBaseBranch(branch);
-                  closeSheet();
-                }}
-              />
-            ))
-          )}
-        </MobilePopoverGroup>
-      </MobilePopover>
+        loading={launchModel.repoBranches.isLoading}
+        branches={launchModel.branchOptions}
+        selectedBranch={launchModel.selectedBaseBranch}
+        repoLabel={launchModel.selectedRepo?.label}
+        onSelect={launchModel.setBaseBranch}
+      />
 
       <MobilePopover
         visible={sheet === "runtime"}
@@ -565,14 +547,14 @@ const styles = StyleSheet.create({
     gap: spacing[3],
   },
   selectorRow: {
-    maxWidth: "100%",
+    width: "100%",
     flexDirection: "row",
     alignItems: "center",
     gap: spacing[2],
+    paddingHorizontal: spacing[1],
   },
   repoPill: {
-    alignSelf: "flex-start",
-    minHeight: 36,
+    minHeight: 40,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing[2],
@@ -581,18 +563,23 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.card,
     paddingHorizontal: spacing[3],
+    overflow: "hidden",
   },
   repoPillWide: {
     flex: 1,
+    flexShrink: 1,
     minWidth: 0,
   },
   branchPill: {
-    maxWidth: 140,
+    width: 148,
+    maxWidth: "42%",
+    flexShrink: 0,
   },
   disabledPill: {
     opacity: 0.55,
   },
   repoPillText: {
+    flexShrink: 1,
     minWidth: 0,
     color: colors.fg,
     fontSize: 13,

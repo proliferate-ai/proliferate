@@ -41,7 +41,8 @@ export type MobileIconName =
   | "log-out"
   | "git-branch"
   | "shield"
-  | "folder";
+  | "folder"
+  | "terminal";
 
 interface MobileIconProps {
   name: MobileIconName;
@@ -195,6 +196,14 @@ export function MobileIcon({ name, size = 18, color = colors.fg }: MobileIconPro
         <Svg {...props}>
           <Circle cx="11" cy="11" r="7" />
           <Line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </Svg>
+      );
+    case "terminal":
+      return (
+        <Svg {...props}>
+          <Rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+          <Polyline points="7 9 10 12 7 15" />
+          <Line x1="12" y1="15" x2="16.5" y2="15" />
         </Svg>
       );
     case "more":

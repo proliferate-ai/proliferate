@@ -51,7 +51,7 @@ describe("WorkspacesSurface", () => {
         ]}
         filterOptions={[
           { id: "all", label: "All", count: 1 },
-          { id: "unclaimed", label: "Unclaimed", count: 0 },
+          { id: "status:blocked", label: "Needs input", count: 0 },
         ]}
         selectedFilterId="all"
         groupOptions={[
@@ -72,10 +72,11 @@ describe("WorkspacesSurface", () => {
     fireEvent.click(screen.getByRole("button", { name: "Workspace view options" }));
     const filterMenu = screen.getByRole("group", { name: "Filter" });
     fireEvent.click(
-      within(filterMenu).getByRole("button", { name: "Unclaimed" }),
+      within(filterMenu).getByRole("button", { name: "Needs input" }),
     );
-    expect(onFilterChange).toHaveBeenCalledWith("unclaimed");
+    expect(onFilterChange).toHaveBeenCalledWith("status:blocked");
 
+    fireEvent.click(screen.getByRole("button", { name: "Workspace view options" }));
     const groupMenu = screen.getByRole("group", { name: "Group by" });
     fireEvent.click(within(groupMenu).getByRole("button", { name: "Status" }));
     expect(onGroupChange).toHaveBeenCalledWith("status");

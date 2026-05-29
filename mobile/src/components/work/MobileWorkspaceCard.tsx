@@ -99,11 +99,11 @@ export function MobileWorkspaceCard({
 }
 
 function workspaceDetailText(item: MobileWorkItem): string | null {
+  if (item.view.activityPreview) {
+    return item.view.activityPreview;
+  }
   if (item.view.unclaimed) {
     return "Unclaimed workspace";
-  }
-  if (item.view.status === "blocked" || item.view.status === "error") {
-    return item.view.statusLabel;
   }
   if (item.view.commandability !== "commandable") {
     return item.view.commandabilityLabel;

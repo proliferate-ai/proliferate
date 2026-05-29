@@ -532,7 +532,9 @@ function buildPendingPromptRows(
         id: `${pendingPrompt.id}:assistant`,
         kind: "assistant",
         title: "Workspace setup",
-        body: "Loading...",
+        body: null,
+        detail: "Preparing workspace.",
+        streaming: true,
       }
       : {
         id: `${pendingPrompt.id}:error`,

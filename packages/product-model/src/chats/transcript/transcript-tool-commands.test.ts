@@ -70,6 +70,47 @@ describe("transcript actions", () => {
     expect(getToolCallShellCommandName(cmdCommand)).toBe("rg");
   });
 
+  it("falls back to retained shell titles when raw command input is stripped", () => {
+    const retainedTitleCommand = {
+      ...terminalItem("retained-title", "turn-1", 1),
+      title: "pnpm test -- --runInBand",
+      rawInput: {
+        reason: "raw tool bodies are not retained in cloud event sync",
+        retention: "stripped",
+      },
+      contentParts: [
+        {
+          type: "tool_call",
+          toolCallId: "retained-title",
+          title: "pnpm test -- --runInBand",
+          toolKind: "execute",
+          nativeToolName: "Bash",
+        },
+      ],
+    } satisfies ToolCallItem;
+    const genericTitleCommand = {
+      ...terminalItem("generic-title", "turn-1", 2),
+      title: "Terminal",
+      rawInput: {
+        reason: "raw tool bodies are not retained in cloud event sync",
+        retention: "stripped",
+      },
+      contentParts: [
+        {
+          type: "tool_call",
+          toolCallId: "generic-title",
+          title: "Terminal",
+          toolKind: "execute",
+          nativeToolName: "Bash",
+        },
+      ],
+    } satisfies ToolCallItem;
+
+    expect(getToolCallShellCommand(retainedTitleCommand)).toBe("pnpm test -- --runInBand");
+    expect(getToolCallShellCommandName(retainedTitleCommand)).toBe("pnpm");
+    expect(getToolCallShellCommand(genericTitleCommand)).toBeNull();
+  });
+
   it("expands parsed operation batches into normalized command metadata", () => {
     const item = parsedCommandItem("scan", "turn-1", 1, [{
       type: "unknown",

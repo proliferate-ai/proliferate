@@ -18,7 +18,9 @@ import {
 import type { SessionControlIconKey } from "@proliferate/product-model/chats/session-controls/presentation";
 import { Input } from "@proliferate/ui/primitives/Input";
 import {
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ComponentType,
   type FormEvent,
@@ -72,6 +74,7 @@ export interface CloudChatComposerView {
   canSubmit: boolean;
   isSubmitting?: boolean;
   controls?: readonly CloudChatComposerControlView[];
+  footerComposerControls?: readonly CloudChatComposerControlView[];
   footerControls?: readonly CloudChatComposerFooterControlView[];
   onChange: (value: string) => void;
   onSubmit: () => void;
@@ -143,7 +146,11 @@ export function CloudChatComposer({ composer }: { composer: CloudChatComposerVie
           <CloudChatComposerControlRow composer={composer} />
         </form>
       </ChatComposerSurface>
-      <CloudChatComposerFooter controls={composer.footerControls ?? []} />
+      <CloudChatComposerFooter
+        composerControls={composer.footerComposerControls ?? []}
+        controls={composer.footerControls ?? []}
+        disabled={composer.disabled}
+      />
     </div>
   );
 }
@@ -235,17 +242,28 @@ export function CloudChatComposerControlStrip({
 }
 
 function CloudChatComposerFooter({
+  composerControls,
   controls,
+  disabled = false,
 }: {
+  composerControls: readonly CloudChatComposerControlView[];
   controls: readonly CloudChatComposerFooterControlView[];
+  disabled?: boolean;
 }) {
-  if (controls.length === 0) {
+  if (composerControls.length === 0 && controls.length === 0) {
     return null;
   }
 
   return (
     <div className="rounded-[var(--radius-composer,1.5rem)] px-2 pt-2">
       <div className="flex min-w-0 flex-wrap items-center gap-1">
+        {composerControls.map((control) => (
+          <CloudChatSingleControl
+            key={control.id}
+            control={control}
+            composerDisabled={disabled}
+          />
+        ))}
         {controls.map((control) => {
           const Icon = iconForComposerFooterControl(control.icon);
           return (
@@ -281,6 +299,8 @@ function CloudChatSingleControl({
   composerDisabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const selected = useMemo(() => selectedComposerOption(control), [control]);
   const disabled = composerDisabled || isControlDisabled(control);
   const icon = iconNodeForComposerControl(selected?.icon ?? control.icon, "size-3.5");
@@ -288,6 +308,15 @@ function CloudChatSingleControl({
   const displayDetail = control.detail && control.detail !== displayLabel
     ? control.detail
     : null;
+  const searchable = composerControlOptionCount(control) > 12;
+  const visibleControl = searchable ? filterComposerControlOptions(control, search) : control;
+
+  function closePopover() {
+    setOpen(false);
+    setSearch("");
+  }
+
+  useDismissComposerPopover(open, rootRef, closePopover);
 
   if (disabled) {
     return (
@@ -305,7 +334,7 @@ function CloudChatSingleControl({
   }
 
   return (
-    <div className="relative min-w-0">
+    <div ref={rootRef} className="relative min-w-0">
       <ComposerControlButton
         tone={control.active ? "accent" : "neutral"}
         icon={icon}
@@ -325,14 +354,46 @@ function CloudChatSingleControl({
         aria-label={`${control.label}: ${displayLabel}${displayDetail ? `, ${displayDetail}` : ""}`}
         data-state={open ? "open" : "closed"}
         className="max-w-[12rem]"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          setOpen((value) => {
+            const nextOpen = !value;
+            if (!nextOpen) {
+              setSearch("");
+            }
+            return nextOpen;
+          });
+        }}
       />
       {open ? (
-        <ComposerPopoverSurface className="absolute bottom-full left-0 z-30 mb-1 w-56 max-w-[calc(100vw-1rem)] p-1">
-          <ComposerControlMenuRows
-            control={control}
-            onClose={() => setOpen(false)}
-          />
+        <ComposerPopoverSurface className="absolute bottom-full left-0 z-30 mb-1 w-64 max-w-[calc(100vw-1rem)] p-1">
+          {searchable ? (
+            <div className="px-1 pb-1">
+              <div className="flex h-7 items-center rounded-lg border border-border bg-surface-control px-2.5">
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder={`Search ${control.label.toLowerCase()}`}
+                  className="h-auto min-w-0 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
+                  data-telemetry-mask
+                />
+              </div>
+            </div>
+          ) : null}
+          <div className="max-h-[min(18rem,calc(100vh-8rem))] overflow-y-auto">
+            {composerControlOptionCount(visibleControl) > 0 ? (
+              <ComposerControlMenuRows
+                control={visibleControl}
+                onClose={() => {
+                  setOpen(false);
+                  setSearch("");
+                }}
+              />
+            ) : (
+              <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+                No matches
+              </p>
+            )}
+          </div>
         </ComposerPopoverSurface>
       ) : null}
     </div>
@@ -349,6 +410,7 @@ function CloudChatModelConfigControl({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [activeSubmenuId, setActiveSubmenuId] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const modelControl = controls.find((control) => isModelControl(control)) ?? controls[0] ?? null;
   const configControls = controls.filter((control) => control !== modelControl);
   const selectedModel = modelControl ? selectedComposerOption(modelControl) : null;
@@ -362,8 +424,16 @@ function CloudChatModelConfigControl({
   const triggerLabel = selectedModel?.label ?? modelControl?.detail ?? modelControl?.label ?? "Configure";
   const triggerDetail = summarizeComposerModelConfigControls(configControls);
 
+  function closePopover() {
+    setOpen(false);
+    setSearch("");
+    setActiveSubmenuId(null);
+  }
+
+  useDismissComposerPopover(open, rootRef, closePopover);
+
   return (
-    <div className="relative min-w-0">
+    <div ref={rootRef} className="relative min-w-0">
       <ComposerControlButton
         disabled={disabled}
         icon={iconNodeForComposerControl(selectedModel?.icon ?? modelControl?.icon ?? "claude", "size-4")}
@@ -619,6 +689,78 @@ function filterModelControlOptions(
       return options.length > 0 ? [{ ...group, options }] : [];
     }),
   };
+}
+
+function filterComposerControlOptions(
+  control: CloudChatComposerControlView,
+  search: string,
+): CloudChatComposerControlView {
+  const normalizedSearch = search.trim().toLowerCase();
+  if (!normalizedSearch) {
+    return control;
+  }
+
+  return {
+    ...control,
+    groups: control.groups.flatMap((group) => {
+      const groupMatches = (group.label ?? group.id).toLowerCase().includes(normalizedSearch);
+      const options = groupMatches
+        ? group.options
+        : group.options.filter((option) =>
+          `${option.label} ${option.description ?? ""}`.toLowerCase().includes(normalizedSearch)
+        );
+      return options.length > 0 ? [{ ...group, options }] : [];
+    }),
+  };
+}
+
+function composerControlOptionCount(control: CloudChatComposerControlView): number {
+  return control.groups.reduce((count, group) => count + group.options.length, 0);
+}
+
+function useDismissComposerPopover(
+  open: boolean,
+  rootRef: { readonly current: HTMLElement | null },
+  onClose: () => void,
+) {
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const ownerDocument = rootRef.current?.ownerDocument ?? document;
+
+    function eventTargetIsInsideRoot(target: EventTarget | null): boolean {
+      return target instanceof Node
+        && Boolean(rootRef.current?.contains(target));
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!eventTargetIsInsideRoot(event.target)) {
+        onClose();
+      }
+    }
+
+    function handleFocusIn(event: FocusEvent) {
+      if (!eventTargetIsInsideRoot(event.target)) {
+        onClose();
+      }
+    }
+
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    ownerDocument.addEventListener("pointerdown", handlePointerDown, true);
+    ownerDocument.addEventListener("focusin", handleFocusIn, true);
+    ownerDocument.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      ownerDocument.removeEventListener("pointerdown", handlePointerDown, true);
+      ownerDocument.removeEventListener("focusin", handleFocusIn, true);
+      ownerDocument.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [onClose, open, rootRef]);
 }
 
 function modelConfigSubmenuLabel(control: CloudChatComposerControlView): string {

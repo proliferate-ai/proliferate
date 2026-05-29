@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SessionEventEnvelope } from "@anyharness/sdk";
+import type { ContentPart, SessionEventEnvelope } from "@anyharness/sdk";
 import type {
   CloudPendingInteraction,
   CloudSessionEvent,
@@ -48,6 +48,62 @@ describe("buildCloudTranscriptView", () => {
       expect.objectContaining({
         body: "hello from projection",
         kind: "user",
+        title: null,
+        detail: null,
+        status: null,
+      }),
+    ]);
+  });
+
+  it("shows projected shell commands as command rows with inline detail", () => {
+    const command = "pnpm test -- --runInBand";
+    const fallbackItems: CloudTranscriptItem[] = [
+      {
+        itemId: "tool-1",
+        turnId: "turn-1",
+        kind: "tool_invocation",
+        status: "completed",
+        title: command,
+        text: null,
+        payload: {
+          event: {
+            item: {
+              kind: "tool_invocation",
+              nativeToolName: "Bash",
+              toolKind: "execute",
+              title: command,
+              toolCallId: "tool-1",
+              contentParts: [
+                {
+                  type: "tool_call",
+                  nativeToolName: "Bash",
+                  toolKind: "execute",
+                  title: command,
+                  toolCallId: "tool-1",
+                },
+              ],
+            },
+          },
+        },
+        firstSeq: 4,
+        lastSeq: 8,
+      },
+    ];
+
+    const view = buildCloudTranscriptView({
+      sessionId: "session-1",
+      events: [],
+      fallbackItems,
+    });
+
+    expect(view.rows).toEqual([
+      expect.objectContaining({
+        id: "projection:tool-1",
+        kind: "tool",
+        title: "Command",
+        detail: command,
+        status: null,
+        sourceToolCallId: "tool-1",
       }),
     ]);
   });
@@ -88,6 +144,73 @@ describe("buildCloudTranscriptView", () => {
         lastSeq: 1,
       }),
     ]);
+  });
+
+  it("uses retained permission command titles for event-backed tool rows", () => {
+    const command = "uname -a && free -h";
+    const events: CloudSessionEvent[] = [
+      {
+        targetId: "target-1",
+        sessionId: "session-1",
+        seq: 4,
+        eventType: "item_started",
+        sourceKind: "runtime",
+        envelope: toolStartEnvelope(4, "tool-1"),
+      },
+      {
+        targetId: "target-1",
+        sessionId: "session-1",
+        seq: 5,
+        eventType: "interaction_requested",
+        sourceKind: "runtime",
+        envelope: interactionRequestedEnvelope(5, "tool-1", command),
+      },
+    ];
+
+    const view = buildCloudTranscriptView({
+      sessionId: "session-1",
+      events,
+      fallbackItems: [],
+    });
+
+    expect(view.rows).toEqual([
+      expect.objectContaining({
+        kind: "tool",
+        title: "Command",
+        detail: command,
+        sourceToolCallId: "tool-1",
+      }),
+    ]);
+  });
+
+  it("does not show generic action counts under collapsed work-history summaries", () => {
+    const events: CloudSessionEvent[] = [
+      eventEnvelope(1, "turn_started", turnStartedEnvelope(1)),
+      eventEnvelope(2, "item_completed", userEnvelope(2, "ZCZCX")),
+      eventEnvelope(3, "item_completed", readToolCompletedEnvelope(3, "read-1")),
+      eventEnvelope(4, "item_completed", assistantEnvelope(4, "Still here.")),
+      eventEnvelope(5, "turn_ended", turnEndedEnvelope(5)),
+    ];
+
+    const view = buildCloudTranscriptView({
+      sessionId: "session-1",
+      events,
+      fallbackItems: [],
+    });
+    const historyRow = view.rows.find((row) => row.title === "Work history");
+
+    expect(historyRow).toEqual(expect.objectContaining({
+      kind: "system",
+      detail: "1 tool call",
+    }));
+    expect(historyRow?.children).toEqual([
+      expect.objectContaining({
+        kind: "tool_group",
+        title: "Explored 1 file",
+      }),
+    ]);
+    expect(historyRow?.children?.[0]?.detail).toBeUndefined();
+    expect(JSON.stringify(historyRow)).not.toContain("1 action");
   });
 
   it("uses newer event rows instead of stale projection when later envelopes render", () => {
@@ -204,10 +327,16 @@ describe("buildCloudTranscriptView", () => {
       expect.objectContaining({
         body: "rendered from event",
         kind: "user",
+        title: null,
+        detail: null,
+        status: null,
       }),
       expect.objectContaining({
         body: "projection-only assistant",
         kind: "assistant",
+        title: null,
+        detail: null,
+        status: null,
       }),
     ]);
   });
@@ -337,7 +466,137 @@ describe("buildCloudTranscriptView", () => {
       }),
       expect.objectContaining({
         id: "pending-prompt:prompt-2:assistant-waiting",
-        body: "Waiting for response.",
+        body: null,
+        kind: "assistant",
+        streaming: true,
+      }),
+    ]);
+  });
+
+  it("marks projected tool rows that are waiting on permission approval", () => {
+    const fallbackItems: CloudTranscriptItem[] = [
+      {
+        itemId: "tool-1",
+        turnId: "turn-1",
+        kind: "tool_invocation",
+        status: "in_progress",
+        text: null,
+        payload: {
+          event: {
+            item: {
+              title: "Terminal",
+              toolCallId: "tool-1",
+            },
+          },
+        },
+        firstSeq: 4,
+        lastSeq: 4,
+      },
+    ];
+    const pendingInteractions: CloudPendingInteraction[] = [
+      pendingPermissionInteraction({
+        requestId: "permission-1",
+        requestedSeq: 5,
+        toolCallId: "tool-1",
+        title: "npm test",
+      }),
+    ];
+
+    const view = buildCloudTranscriptView({
+      sessionId: "session-1",
+      events: [],
+      fallbackItems,
+      pendingInteractions,
+    });
+
+    expect(view.rows).toEqual([
+      expect.objectContaining({
+        id: "projection:tool-1",
+        kind: "tool",
+        title: "Tool call",
+        detail: "npm test",
+        status: "Needs approval",
+        sourceRequestId: "permission-1",
+        sourceToolCallId: "tool-1",
+      }),
+    ]);
+  });
+
+  it("adds a standalone permission row when the matching tool row is missing", () => {
+    const pendingInteractions: CloudPendingInteraction[] = [
+      pendingPermissionInteraction({
+        requestId: "permission-1",
+        requestedSeq: 5,
+        toolCallId: "tool-1",
+        title: "npm test",
+      }),
+    ];
+
+    const view = buildCloudTranscriptView({
+      sessionId: "session-1",
+      events: [],
+      fallbackItems: [],
+      pendingInteractions,
+    });
+
+    expect(view.rows).toEqual([
+      expect.objectContaining({
+        id: "pending-permission:permission-1",
+        kind: "tool",
+        title: "Command",
+        detail: "npm test",
+        status: "Needs approval",
+        sourceRequestId: "permission-1",
+        sourceToolCallId: "tool-1",
+      }),
+    ]);
+  });
+
+  it("marks old in-progress tool rows as interrupted once later transcript rows exist", () => {
+    const fallbackItems: CloudTranscriptItem[] = [
+      {
+        itemId: "tool-1",
+        turnId: "turn-1",
+        kind: "tool_invocation",
+        status: "in_progress",
+        text: null,
+        payload: {
+          event: {
+            item: {
+              title: "Terminal",
+              toolCallId: "tool-1",
+            },
+          },
+        },
+        firstSeq: 4,
+        lastSeq: 4,
+      },
+      {
+        itemId: "assistant-1",
+        turnId: "turn-2",
+        kind: "assistant_message",
+        status: "completed",
+        text: "The previous command did not finish.",
+        firstSeq: 8,
+        lastSeq: 8,
+      },
+    ];
+
+    const view = buildCloudTranscriptView({
+      sessionId: "session-1",
+      events: [],
+      fallbackItems,
+      pendingInteractions: [],
+    });
+
+    expect(view.rows).toEqual([
+      expect.objectContaining({
+        id: "projection:tool-1",
+        kind: "tool",
+        status: "Interrupted",
+      }),
+      expect.objectContaining({
+        id: "projection:assistant-1",
         kind: "assistant",
       }),
     ]);
@@ -363,6 +622,164 @@ function userEnvelope(seq: number, text: string): SessionEventEnvelope {
   };
 }
 
+function eventEnvelope(
+  seq: number,
+  eventType: CloudSessionEvent["eventType"],
+  envelope: SessionEventEnvelope,
+): CloudSessionEvent {
+  return {
+    targetId: "target-1",
+    sessionId: "session-1",
+    seq,
+    eventType,
+    sourceKind: "runtime",
+    envelope,
+  };
+}
+
+function turnStartedEnvelope(seq: number): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-05-22T00:00:0${seq}Z`,
+    turnId: "turn-1",
+    event: { type: "turn_started" },
+  };
+}
+
+function turnEndedEnvelope(seq: number): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-05-22T00:00:0${seq}Z`,
+    turnId: "turn-1",
+    event: { type: "turn_ended", stopReason: "end_turn" },
+  };
+}
+
+function assistantEnvelope(seq: number, text: string): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-05-22T00:00:0${seq}Z`,
+    turnId: "turn-1",
+    itemId: `assistant-${seq}`,
+    event: {
+      type: "item_completed",
+      item: {
+        kind: "assistant_message",
+        status: "completed",
+        sourceAgentKind: "claude",
+        contentParts: [{ type: "text", text }],
+      },
+    },
+  };
+}
+
+function readToolCompletedEnvelope(seq: number, itemId: string): SessionEventEnvelope {
+  const contentParts: ContentPart[] = [
+    {
+      type: "tool_call",
+      toolCallId: itemId,
+      title: "Read File",
+      toolKind: "read",
+      nativeToolName: "Read",
+    },
+    {
+      type: "file_read",
+      path: "AGENTS.md",
+      basename: "AGENTS.md",
+      workspacePath: "AGENTS.md",
+      scope: "full",
+    },
+  ];
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-05-22T00:00:0${seq}Z`,
+    turnId: "turn-1",
+    itemId,
+    event: {
+      type: "item_completed",
+      item: {
+        kind: "tool_invocation",
+        status: "completed",
+        sourceAgentKind: "claude",
+        title: "Read File",
+        nativeToolName: "Read",
+        toolKind: "read",
+        toolCallId: itemId,
+        contentParts,
+      },
+    },
+  };
+}
+
+function toolStartEnvelope(seq: number, toolCallId: string): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-05-22T00:00:0${seq}Z`,
+    turnId: "turn-1",
+    itemId: toolCallId,
+    event: {
+      type: "item_started",
+      item: {
+        kind: "tool_invocation",
+        status: "in_progress",
+        sourceAgentKind: "claude",
+        title: "Terminal",
+        nativeToolName: "Bash",
+        toolKind: "execute",
+        toolCallId,
+        contentParts: [
+          {
+            type: "tool_call",
+            nativeToolName: "Bash",
+            title: "Terminal",
+            toolCallId,
+            toolKind: "execute",
+          },
+        ],
+      },
+    },
+  };
+}
+
+function interactionRequestedEnvelope(
+  seq: number,
+  toolCallId: string,
+  command: string,
+): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-05-22T00:00:0${seq}Z`,
+    turnId: "turn-1",
+    itemId: toolCallId,
+    event: {
+      type: "interaction_requested",
+      kind: "permission",
+      requestId: "permission-1",
+      source: {
+        toolCallId,
+        toolKind: "execute",
+      },
+      title: command,
+      payload: {
+        type: "permission",
+        options: [
+          {
+            optionId: "allow",
+            label: "Allow",
+            kind: "allow_once",
+          },
+        ],
+      },
+    },
+  };
+}
+
 function pendingPromptInteraction(input: {
   requestId: string;
   requestedSeq: number;
@@ -378,6 +795,52 @@ function pendingPromptInteraction(input: {
       text: input.text,
       promptId: input.requestId,
       commandId: `command-${input.requestId}`,
+    },
+    requestedSeq: input.requestedSeq,
+    resolvedSeq: null,
+    requestedAt: "2026-05-22T00:00:00Z",
+    resolvedAt: null,
+  };
+}
+
+function pendingPermissionInteraction(input: {
+  requestId: string;
+  requestedSeq: number;
+  toolCallId: string;
+  title: string;
+}): CloudPendingInteraction {
+  return {
+    requestId: input.requestId,
+    kind: "permission",
+    status: "pending",
+    title: input.title,
+    description: null,
+    payload: {
+      itemId: input.toolCallId,
+      event: {
+        kind: "permission",
+        requestId: input.requestId,
+        source: {
+          toolCallId: input.toolCallId,
+          toolKind: "execute",
+        },
+        title: input.title,
+        payload: {
+          type: "permission",
+          options: [
+            {
+              optionId: "allow",
+              label: "Allow",
+              kind: "allow_once",
+            },
+            {
+              optionId: "reject",
+              label: "Reject",
+              kind: "reject_once",
+            },
+          ],
+        },
+      },
     },
     requestedSeq: input.requestedSeq,
     resolvedSeq: null,

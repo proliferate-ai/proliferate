@@ -4949,6 +4949,11 @@ export interface components {
             status: string;
             /** Phase */
             phase?: string | null;
+            /**
+             * Pendinginteractioncount
+             * @default 0
+             */
+            pendingInteractionCount: number;
             /** Liveconfig */
             liveConfig?: {
                 [key: string]: unknown;
@@ -5845,6 +5850,13 @@ export interface components {
             title?: string | null;
             /** Status */
             status: string;
+            /** Phase */
+            phase?: string | null;
+            /**
+             * Pendinginteractioncount
+             * @default 0
+             */
+            pendingInteractionCount: number;
             /** Lasteventat */
             lastEventAt?: string | null;
             /** Preview */

@@ -33,19 +33,10 @@ interface MobileWorkspacesScreenProps {
   onNewChat: () => void;
 }
 
-type AgentFilter = "all" | "claude" | "codex" | "opencode" | "gemini";
 type WorkTypeFilter = "all" | "cloud" | "slack" | "personal_automation" | "team_automation" | "dispatch";
 type RuntimeFilter = RecentWorkRuntimeLocation | "all";
 type StatusFilter = CloudWorkStatusFilter | "all";
 type FilterPanel = "type" | "runtime" | "ownership" | "status" | "repo" | "sort";
-
-const AGENT_OPTIONS: readonly { id: AgentFilter; label: string; icon: MobileIconName }[] = [
-  { id: "all", label: "All", icon: "sparkles" },
-  { id: "claude", label: "Claude", icon: "claude" },
-  { id: "codex", label: "Codex", icon: "openai" },
-  { id: "opencode", label: "OpenCode", icon: "sparkles" },
-  { id: "gemini", label: "Gemini", icon: "gemini" },
-];
 
 const WORK_TYPE_OPTIONS: readonly { id: WorkTypeFilter; label: string; icon: MobileIconName }[] = [
   { id: "all", label: "All", icon: "workspaces" },
@@ -95,7 +86,6 @@ export function MobileWorkspacesScreen({
   onOpenDrawer,
   onNewChat,
 }: MobileWorkspacesScreenProps) {
-  const [agent, setAgent] = useState<AgentFilter>("all");
   const [workType, setWorkType] = useState<WorkTypeFilter>("all");
   const [runtime, setRuntime] = useState<RuntimeFilter>("all");
   const [ownership, setOwnership] = useState<CloudWorkOwnerFilter>("all");
@@ -117,23 +107,12 @@ export function MobileWorkspacesScreen({
   }), [attentionOnly, ownership, repo, runtime, sort, status, workType]);
   const allInventory = useMobileWorkInventory();
   const inventory = useMobileWorkInventory(filters);
-  const visibleInventory = useMemo(() => {
-    const groups = inventory.groups.flatMap((group) => {
-      const items = group.items.filter((item) => workspaceMatchesAgent(item, agent));
-      return items.length > 0 ? [{ ...group, items }] : [];
-    });
-    return {
-      groups,
-      items: groups.flatMap((group) => group.items),
-    };
-  }, [agent, inventory.groups]);
   const repoOptions = useMemo(() => {
     return [...new Set(allInventory.items.map((item) => item.view.repoLabel))]
       .filter(Boolean)
       .sort((left, right) => left.localeCompare(right));
   }, [allInventory.items]);
   const activeFilterCount = [
-    agent !== "all",
     workType !== "all",
     runtime !== "all",
     ownership !== "all",
@@ -194,7 +173,6 @@ export function MobileWorkspacesScreen({
         contentContainerStyle={styles.pills}
       >
         <SummaryPill label={`All ${allInventory.items.length}`} selected={activeFilterCount === 0} onPress={() => {
-          setAgent("all");
           setWorkType("all");
           setRuntime("all");
           setOwnership("all");
@@ -203,13 +181,15 @@ export function MobileWorkspacesScreen({
           setSort("recent");
           setAttentionOnly(false);
         }} />
-        {AGENT_OPTIONS.filter((option) => option.id !== "all").map((option) => (
+        {STATUS_OPTIONS.filter((option) => option.id !== "all").map((option) => (
           <SummaryPill
             key={option.id}
             label={option.label}
-            icon={option.icon}
-            selected={agent === option.id}
-            onPress={() => setAgent(agent === option.id ? "all" : option.id)}
+            selected={status === option.id}
+            onPress={() => {
+              setAttentionOnly(false);
+              setStatus(status === option.id ? "all" : option.id);
+            }}
           />
         ))}
       </ScrollView>
@@ -249,14 +229,14 @@ export function MobileWorkspacesScreen({
         <MobileEmptyState title="Loading workspaces" body="Fetching visible cloud workspaces." />
       ) : inventory.error && inventory.items.length === 0 ? (
         <MobileEmptyState title="Could not load workspaces" body="Pull to refresh or sign in again." />
-      ) : visibleInventory.items.length === 0 ? (
+      ) : inventory.items.length === 0 ? (
         <MobileEmptyState
           title="No matching workspaces"
           body="Adjust filters or start a new chat."
         />
       ) : (
         <View style={styles.groups}>
-          {visibleInventory.groups.map((group) => (
+          {inventory.groups.map((group) => (
             <View key={group.view.id} style={styles.group}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>{group.view.label}</Text>
@@ -301,7 +281,6 @@ export function MobileWorkspacesScreen({
         onRepo={setRepo}
         onSort={setSort}
         onClear={() => {
-          setAgent("all");
           setWorkType("all");
           setRuntime("all");
           setOwnership("all");
@@ -474,7 +453,10 @@ function FilterSheet({
                   label={option.label}
                   icon={option.icon}
                   selected={workType === option.id}
-                  onPress={() => onWorkType(option.id)}
+                  onPress={() => {
+                    onWorkType(option.id);
+                    setPanel(null);
+                  }}
                 />
               )) : null}
             {panel === "runtime" ? RUNTIME_OPTIONS.map((option) => (
@@ -483,7 +465,10 @@ function FilterSheet({
                   label={option.label}
                   icon={option.icon}
                   selected={runtime === option.id}
-                  onPress={() => onRuntime(option.id)}
+                  onPress={() => {
+                    onRuntime(option.id);
+                    setPanel(null);
+                  }}
                 />
               )) : null}
             {panel === "ownership" ? OWNER_OPTIONS.map((option) => (
@@ -491,7 +476,10 @@ function FilterSheet({
                   key={option.id}
                   label={option.label}
                   selected={ownership === option.id}
-                  onPress={() => onOwnership(option.id)}
+                  onPress={() => {
+                    onOwnership(option.id);
+                    setPanel(null);
+                  }}
                 />
               )) : null}
             {panel === "status" ? STATUS_OPTIONS.map((option) => (
@@ -499,7 +487,10 @@ function FilterSheet({
                   key={option.id}
                   label={option.label}
                   selected={status === option.id}
-                  onPress={() => onStatus(option.id)}
+                  onPress={() => {
+                    onStatus(option.id);
+                    setPanel(null);
+                  }}
                 />
               )) : null}
             {panel === "repo" ? (
@@ -507,7 +498,10 @@ function FilterSheet({
                 <FilterChoice
                   label="All repos"
                   selected={repo === "all"}
-                  onPress={() => onRepo("all")}
+                  onPress={() => {
+                    onRepo("all");
+                    setPanel(null);
+                  }}
                 />
                 {repoOptions.map((option) => (
                   <FilterChoice
@@ -515,7 +509,10 @@ function FilterSheet({
                     label={option}
                     icon="folder"
                     selected={repo === option}
-                    onPress={() => onRepo(option)}
+                    onPress={() => {
+                      onRepo(option);
+                      setPanel(null);
+                    }}
                   />
                 ))}
               </>
@@ -525,7 +522,10 @@ function FilterSheet({
                   key={option.id}
                   label={option.label}
                   selected={sort === option.id}
-                  onPress={() => onSort(option.id)}
+                  onPress={() => {
+                    onSort(option.id);
+                    setPanel(null);
+                  }}
                 />
               )) : null}
           </ScrollView>
@@ -596,13 +596,6 @@ function semanticSourcesForWorkType(type: WorkTypeFilter): ReadonlySet<RecentWor
     case "all":
       return undefined;
   }
-}
-
-function workspaceMatchesAgent(item: MobileWorkItem, agent: AgentFilter): boolean {
-  if (agent === "all") {
-    return true;
-  }
-  return item.view.sourceAgentKind?.toLowerCase() === agent;
 }
 
 function optionLabel<T extends string>(

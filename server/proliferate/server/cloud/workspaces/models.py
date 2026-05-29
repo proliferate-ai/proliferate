@@ -78,7 +78,10 @@ class WorkspaceSessionSummaryRecord(Protocol):
     source_agent_kind: str | None
     title: str | None
     status: str
+    phase: str | None
     last_event_at: str | None
+    pending_interaction_count: int
+    preview: str | None
 
 
 class RuntimeEnvironmentRecord(Protocol):
@@ -286,6 +289,11 @@ class LastSessionSummary(BaseModel):
     source_agent_kind: str | None = Field(default=None, serialization_alias="sourceAgentKind")
     title: str | None = None
     status: str
+    phase: str | None = None
+    pending_interaction_count: int = Field(
+        default=0,
+        serialization_alias="pendingInteractionCount",
+    )
     last_event_at: str | None = Field(default=None, serialization_alias="lastEventAt")
     preview: str | None = None
 
@@ -735,8 +743,10 @@ def last_session_summary_payload(
         source_agent_kind=getattr(session, "source_agent_kind", None),
         title=session.title,
         status=session.status,
+        phase=getattr(session, "phase", None),
+        pending_interaction_count=getattr(session, "pending_interaction_count", 0),
         last_event_at=session.last_event_at,
-        preview=session.title,
+        preview=getattr(session, "preview", None),
     )
 
 

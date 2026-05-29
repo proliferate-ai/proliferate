@@ -166,12 +166,19 @@ class TestCloudEventSyncApi:
         assert body["session"]["sessionId"] == "session-1"
         assert body["session"]["sourceAgentKind"] == "codex"
         assert body["session"]["lastEventSeq"] == 7
+        assert body["session"]["pendingInteractionCount"] == 1
         assert body["transcriptItems"][0]["text"] == "hello"
         assert body["transcriptItems"][0]["payload"]["event"]["item"]["rawInput"]["retention"] == (
             "stripped"
         )
         assert body["pendingInteractions"][0]["requestId"] == "interaction-1"
         assert body["pendingInteractions"][0]["title"] == "Approve command"
+
+        workspaces = await client.get("/v1/cloud/workspaces", headers=auth.headers)
+        assert workspaces.status_code == 200
+        workspace_summary = workspaces.json()[0]
+        assert workspace_summary["lastSessionSummary"]["sessionId"] == "session-1"
+        assert workspace_summary["lastSessionSummary"]["pendingInteractionCount"] == 1
 
         snapshot_alias = await client.get(
             f"/v1/cloud/sessions/session-1?targetId={target_id}",

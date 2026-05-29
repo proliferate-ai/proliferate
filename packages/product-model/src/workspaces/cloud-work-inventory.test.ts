@@ -54,6 +54,20 @@ describe("cloud work inventory", () => {
         lastEventAt: "2026-05-23T11:55:00Z",
       },
     }))).toBe("running");
+    expect(cloudWorkStatusForWorkspace(workspace({
+      workspaceStatus: "ready",
+      runtime: runtime("running"),
+      lastSessionSummary: {
+        targetId: "target",
+        workspaceId: "runtime",
+        sessionId: "session",
+        title: "Awaiting approval",
+        status: "idle",
+        phase: "awaiting_interaction",
+        pendingInteractionCount: 1,
+        lastEventAt: "2026-05-23T11:56:00Z",
+      },
+    }))).toBe("blocked");
     expect(cloudWorkStatusForWorkspace(workspace({ workspaceStatus: "ready", runtime: runtime("paused") }))).toBe("ready");
   });
 
@@ -152,6 +166,34 @@ describe("cloud work inventory", () => {
 
     expect(item.sourceAgentKind).toBe("codex");
     expect(item.searchText).toContain("codex");
+  });
+
+  it("uses the latest session preview as the workspace card activity text", () => {
+    const item = cloudWorkItemForWorkspace(workspace({
+      displayName: "Workspace name",
+      lastSessionSummary: {
+        targetId: "target",
+        workspaceId: "runtime",
+        sessionId: "session",
+        title: "Session title",
+        status: "idle",
+        lastEventAt: "2026-05-23T11:57:00Z",
+        preview: "I fixed the mobile workspace list preview.",
+      },
+    }), { nowMs: NOW });
+
+    expect(item.activityPreview).toBe("I fixed the mobile workspace list preview.");
+    expect(item.searchText).toContain("mobile workspace list");
+  });
+
+  it("falls back to specific blocker detail instead of blunt status copy", () => {
+    const item = cloudWorkItemForWorkspace(workspace({
+      lastError: "Runtime failed while starting",
+      workspaceStatus: "error",
+    }), { nowMs: NOW });
+
+    expect(item.statusLabel).toBe("Error");
+    expect(item.activityPreview).toBe("Runtime failed while starting");
   });
 
   it("dedupes duplicate rows while building the inventory", () => {
