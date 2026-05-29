@@ -243,7 +243,7 @@ Flow:
    - publish the GitHub Release as the human-facing release page
 6. If you must trigger manually, use `--ref desktop-v<VERSION>` — **never
    trigger on `main`**, because the updater manifest version is derived from
-   `GITHUB_REF_NAME` and will resolve to `"main"` instead of valid semver.
+   `GITHUB_REF_NAME` and resolves to `"main"` instead of valid semver.
 7. The workflow:
    - validates version consistency on tag pushes
    - builds the AnyHarness sidecar for each desktop target
@@ -572,6 +572,56 @@ production equivalents.
 `https://staging-app.proliferate.com`. `API_BASE_URL` is the server's canonical
 API base URL and keeps the mounted `/api` prefix, such as
 `https://staging-app.proliferate.com/api`.
+
+Current hosted staging inventory:
+
+```text
+GitHub environment: staging
+Web: https://staging.proliferate.com
+API health: https://staging-app.proliferate.com/api/health
+ECS cluster/service: proliferate-staging / proliferate-staging-server
+RDS instance: proliferate-staging
+E2B template: pablo-5391/proliferate-runtime-cloud:staging
+Apple staging app: Proliferate Staging, ai.proliferate.mobile.staging, ASC 6774573981
+```
+
+Current staging environment vars:
+
+```text
+AWS_REGION=us-east-1
+AWS_DEPLOY_ROLE_ARN=arn:aws:iam::157466816238:role/proliferate-staging-github-actions-deploy
+ECS_CLUSTER=proliferate-staging
+ECS_SERVER_SERVICE=proliferate-staging-server
+ECS_SERVER_TASK_FAMILY=proliferate-staging-server
+ECS_SERVER_CONTAINER_NAME=server
+ECR_SERVER_REPOSITORY=proliferate-server
+WEB_URL=https://staging.proliferate.com
+API_URL=https://staging-app.proliferate.com
+API_BASE_URL=https://staging-app.proliferate.com/api
+API_HEALTH_PATH=/api/health
+E2B_TEMPLATE_REF=pablo-5391/proliferate-runtime-cloud:staging
+E2B_PUBLIC_TEMPLATE_FAMILY=pablo-5391/proliferate-runtime-cloud
+E2B_TEAM_ID=18587c49-ea26-407a-8f22-def12957005f
+VERCEL_ENVIRONMENT=staging
+VERCEL_TARGET=staging
+VERCEL_ORG_ID=team_Ic8IL7bOkRza1fHw7ROqLHSI
+VERCEL_PROJECT_ID=prj_IfWCLHwRUgqyCQPUDXmsgxMnECIm
+VERCEL_SCOPE=getonyx
+MOBILE_DEPLOY_ENABLED=false
+EAS_BUILD_PROFILE=staging
+EAS_SUBMIT_PROFILE=staging
+EAS_SUBMIT_ENABLED=true
+WORKERS_DEPLOY_ENABLED=false
+DESKTOP_CHANNEL=beta
+```
+
+The production GitHub environment currently exists as `Production`; the
+workflow input still uses `production`, which GitHub resolves to that existing
+environment. Production should keep `MOBILE_DEPLOY_ENABLED=false`,
+`WORKERS_DEPLOY_ENABLED=false`, and `DESKTOP_DEPLOY_ENABLED=false` until those
+lanes are explicitly ready. Keep `VERCEL_TOKEN` as an environment secret, and
+keep E2B API credentials as repo or environment secrets; do not document secret
+values here.
 
 ## 5. Source of Truth
 
