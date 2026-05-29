@@ -1,10 +1,12 @@
 use rusqlite::{params, OptionalExtension};
 
+pub(super) mod feedback;
+mod iteration;
+mod rows;
+
+use self::rows::{insert_assignment, insert_round, insert_run, map_assignment, map_round, map_run};
 use super::model::{
     ReviewAssignmentRecord, ReviewModeVerificationStatus, ReviewRoundRecord, ReviewRunRecord,
-};
-use super::store_rows::{
-    insert_assignment, insert_round, insert_run, map_assignment, map_round, map_run,
 };
 use crate::persistence::Db;
 use crate::sessions::deletion::SessionDeleteParticipant;

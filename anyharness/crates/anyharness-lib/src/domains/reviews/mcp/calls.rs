@@ -2,7 +2,7 @@ use serde_json::{json, Value};
 
 use super::context::{ReviewMcpContext, ReviewMcpRole};
 use super::tools::{GetReviewStatusArgs, MarkReviewRevisionReadyArgs, SubmitReviewResultArgs};
-use crate::domains::reviews::runtime::ReviewRuntime;
+use crate::domains::reviews::runtime::{MarkReviewRevisionReadyInput, ReviewRuntime};
 use crate::integrations::mcp::json_rpc::deserialize_args;
 
 pub async fn call_tool(
@@ -56,7 +56,7 @@ pub async fn call_tool(
                 .mark_revision_ready_from_parent_tool(
                     &ctx.session_id,
                     &review_id,
-                    anyharness_contract::v1::MarkReviewRevisionReadyRequest {
+                    MarkReviewRevisionReadyInput {
                         revised_plan_id: args.revised_plan_id,
                     },
                 )

@@ -1,6 +1,6 @@
 use rusqlite::params;
 
-use super::model::{
+use super::super::model::{
     ReviewAssignmentRecord, ReviewAssignmentStatus, ReviewFeedbackJobRecord,
     ReviewFeedbackJobState, ReviewKind, ReviewModeVerificationStatus, ReviewParseError,
     ReviewRoundRecord, ReviewRoundStatus, ReviewRunRecord, ReviewRunStatus,

@@ -8,7 +8,7 @@ use crate::sessions::deletion::SessionDeleteWorkflow;
 use crate::sessions::links::store::SessionLinkStore;
 use crate::sessions::model::{SessionEventRecord, SessionMcpBindingPolicy, SessionRecord};
 
-use super::super::store_feedback::PendingPromptExecutionLookup;
+use super::super::store::feedback::PendingPromptExecutionLookup;
 
 fn seed_workspace(db: &Db) {
     db.with_conn(|conn| {

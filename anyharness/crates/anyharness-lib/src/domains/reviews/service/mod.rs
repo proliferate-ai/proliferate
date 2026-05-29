@@ -2,11 +2,13 @@ use anyharness_contract::v1;
 use uuid::Uuid;
 
 use super::model::{
-    ReviewAssignmentStatus, ReviewCodeTargetManifest, ReviewFeedbackJobRecord,
+    ReviewAssignmentStatus, ReviewCodeTargetManifest, ReviewCritique, ReviewFeedbackJobRecord,
     ReviewFeedbackJobState, ReviewKind, ReviewModeVerificationStatus, ReviewRoundRecord,
     ReviewRoundStatus, ReviewRunRecord, ReviewRunStatus,
 };
-use super::service_detail::{
+mod detail;
+
+use self::detail::{
     assignment_is_terminal, build_assignments, build_feedback_prompt, dedupe_personas,
     map_link_error, session_has_review_mcp, validate_review_submission, validate_reviewers,
     validate_rounds,
@@ -433,13 +435,13 @@ impl ReviewService {
         &self,
         run_id: &str,
         assignment_id: &str,
-    ) -> Result<v1::ReviewCritiqueResponse, ReviewError> {
+    ) -> Result<ReviewCritique, ReviewError> {
         let assignment = self
             .store
             .find_assignment_for_run(run_id, assignment_id)
             .map_err(ReviewError::Internal)?
             .ok_or_else(|| ReviewError::AssignmentNotFound(assignment_id.to_string()))?;
-        Ok(v1::ReviewCritiqueResponse {
+        Ok(ReviewCritique {
             assignment_id: assignment.id,
             review_run_id: assignment.review_run_id,
             review_round_id: assignment.review_round_id,

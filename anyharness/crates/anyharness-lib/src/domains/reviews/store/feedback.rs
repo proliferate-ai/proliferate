@@ -1,12 +1,14 @@
+// SessionEvent is the durable session event-log payload, which is the allowed
+// contract exception for domain code.
 use anyharness_contract::v1::{PendingPromptRemovalReason, PromptProvenance, SessionEvent};
 use rusqlite::{params, OptionalExtension};
 
-use super::model::{ReviewFeedbackJobRecord, ReviewRunStatus};
-use super::store::ReviewStore;
-use super::store_rows::{insert_feedback_job, map_feedback_job};
+use super::super::model::{ReviewFeedbackJobRecord, ReviewRunStatus};
+use super::rows::{insert_feedback_job, map_feedback_job};
+use super::ReviewStore;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum PendingPromptExecutionLookup {
+pub(in crate::domains::reviews) enum PendingPromptExecutionLookup {
     Pending,
     Executed {
         turn_id: String,
@@ -326,7 +328,7 @@ impl ReviewStore {
         })
     }
 
-    pub(super) fn find_pending_prompt_execution(
+    pub(in crate::domains::reviews) fn find_pending_prompt_execution(
         &self,
         session_id: &str,
         pending_prompt_seq: i64,

@@ -380,6 +380,20 @@ pub struct ReviewFeedbackJobRecord {
     pub updated_at: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct ReviewCritique {
+    pub assignment_id: String,
+    pub review_run_id: String,
+    pub review_round_id: String,
+    pub persona_id: String,
+    pub persona_label: String,
+    pub pass: Option<bool>,
+    pub summary: Option<String>,
+    pub critique_markdown: Option<String>,
+    pub critique_artifact_path: Option<String>,
+    pub submitted_at: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReviewCodeTargetManifest {

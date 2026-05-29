@@ -5,15 +5,17 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use anyharness_contract::v1::{
-    AgentAuthConfigStatusResponse, AgentAuthExternalScope, AgentAuthSelectionConfig,
-    AgentAuthSelectionStatus, ApplyAgentAuthConfigRequest, ApplyAgentAuthConfigResponse,
+    AgentAuthExternalScope, AgentAuthSelectionConfig, AgentAuthSelectionStatus,
 };
 use chrono::{DateTime, Utc};
-use rusqlite::{params, OptionalExtension};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 
-use crate::persistence::Db;
 use crate::sessions::mcp_bindings::crypto::{decrypt_bytes, encrypt_bytes, SessionDataCipher};
+
+mod store;
+use self::store::AgentAuthConfigRecord;
+pub use self::store::AgentAuthConfigStore;
 
 const LOCAL_SCOPE_KEY: &str = "local:default";
 const AGENT_AUTH_REQUIRED_AGENT_KINDS: &[&str] = &["claude", "codex", "opencode", "gemini"];
@@ -86,114 +88,29 @@ impl From<anyhow::Error> for AgentAuthLaunchOverlayError {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentAuthConfigInput {
+    pub external_auth_scope: Option<AgentAuthExternalScope>,
+    pub revision: i64,
+    pub selections: Vec<AgentAuthSelectionConfig>,
+}
+
 #[derive(Debug, Clone)]
-struct AgentAuthConfigRecord {
-    scope_provider: String,
-    scope_id: String,
-    target_id: Option<String>,
-    revision: i64,
-    config_ciphertext: String,
+pub struct AgentAuthConfigApplyOutcome {
+    pub applied: bool,
+    pub revision: i64,
+    pub selection_count: usize,
+    pub no_selection_kinds: Vec<String>,
+    pub status: String,
 }
 
-#[derive(Clone)]
-pub struct AgentAuthConfigStore {
-    db: Db,
-}
-
-impl AgentAuthConfigStore {
-    pub fn new(db: Db) -> Self {
-        Self { db }
-    }
-
-    fn current_revision(&self, scope_key: &str) -> anyhow::Result<Option<i64>> {
-        self.db.with_conn(|conn| {
-            conn.query_row(
-                "SELECT revision FROM agent_auth_config WHERE scope_key = ?1",
-                [scope_key],
-                |row| row.get(0),
-            )
-            .optional()
-        })
-    }
-
-    fn upsert(
-        &self,
-        scope_key: &str,
-        scope: &AgentAuthExternalScope,
-        revision: i64,
-        config_ciphertext: &str,
-    ) -> anyhow::Result<bool> {
-        self.db.with_tx(|conn| {
-            let changed = conn.execute(
-                "INSERT INTO agent_auth_config (
-                    scope_key, scope_provider, scope_id, target_id, revision,
-                    config_ciphertext, created_at, updated_at
-                 ) VALUES (
-                    ?1, ?2, ?3, ?4, ?5, ?6, datetime('now'), datetime('now')
-                 )
-                 ON CONFLICT(scope_key) DO UPDATE SET
-                    scope_provider = excluded.scope_provider,
-                    scope_id = excluded.scope_id,
-                    target_id = excluded.target_id,
-                    revision = excluded.revision,
-                    config_ciphertext = excluded.config_ciphertext,
-                    updated_at = datetime('now')
-                 WHERE agent_auth_config.revision <= excluded.revision",
-                params![
-                    scope_key,
-                    scope.provider,
-                    scope.id,
-                    scope.target_id.as_deref(),
-                    revision,
-                    config_ciphertext,
-                ],
-            )?;
-            Ok(changed > 0)
-        })
-    }
-
-    fn latest(&self) -> anyhow::Result<Option<AgentAuthConfigRecord>> {
-        self.db.with_conn(|conn| {
-            conn.query_row(
-                "SELECT scope_provider, scope_id, target_id, revision, config_ciphertext
-                 FROM agent_auth_config
-                 ORDER BY updated_at DESC
-                 LIMIT 1",
-                [],
-                |row| {
-                    Ok(AgentAuthConfigRecord {
-                        scope_provider: row.get(0)?,
-                        scope_id: row.get(1)?,
-                        target_id: row.get(2)?,
-                        revision: row.get(3)?,
-                        config_ciphertext: row.get(4)?,
-                    })
-                },
-            )
-            .optional()
-        })
-    }
-
-    fn find_by_scope(&self, scope_key: &str) -> anyhow::Result<Option<AgentAuthConfigRecord>> {
-        self.db.with_conn(|conn| {
-            conn.query_row(
-                "SELECT scope_provider, scope_id, target_id, revision, config_ciphertext
-                 FROM agent_auth_config
-                 WHERE scope_key = ?1",
-                [scope_key],
-                |row| {
-                    Ok(AgentAuthConfigRecord {
-                        scope_provider: row.get(0)?,
-                        scope_id: row.get(1)?,
-                        target_id: row.get(2)?,
-                        revision: row.get(3)?,
-                        config_ciphertext: row.get(4)?,
-                    })
-                },
-            )
-            .optional()
-        })
-    }
+#[derive(Debug, Clone, Serialize)]
+pub struct AgentAuthConfigStatus {
+    pub external_auth_scope: Option<AgentAuthExternalScope>,
+    pub revision: Option<i64>,
+    pub status: String,
+    pub selections: Vec<AgentAuthSelectionStatus>,
 }
 
 #[derive(Clone)]
@@ -220,9 +137,9 @@ impl AgentAuthConfigService {
 
     pub fn apply_config(
         &self,
-        request: ApplyAgentAuthConfigRequest,
-    ) -> anyhow::Result<ApplyAgentAuthConfigResponse> {
-        validate_config_request(&request)?;
+        input: AgentAuthConfigInput,
+    ) -> anyhow::Result<AgentAuthConfigApplyOutcome> {
+        validate_config_input(&input)?;
         let _guard = self
             .apply_lock
             .lock()
@@ -230,53 +147,53 @@ impl AgentAuthConfigService {
         let Some(cipher) = self.cipher.as_ref() else {
             anyhow::bail!("ANYHARNESS_DATA_KEY is required to apply agent auth config");
         };
-        let scope = request
+        let scope = input
             .external_auth_scope
             .clone()
             .unwrap_or_else(default_external_scope);
         let scope_key = scope_key(&scope);
         if let Some(current_revision) = self.store.current_revision(&scope_key)? {
-            if current_revision > request.revision {
-                return Ok(ApplyAgentAuthConfigResponse {
+            if current_revision > input.revision {
+                return Ok(AgentAuthConfigApplyOutcome {
                     applied: false,
                     revision: current_revision,
                     selection_count: 0,
-                    no_selection_kinds: no_selection_kinds(&request.selections),
+                    no_selection_kinds: no_selection_kinds(&input.selections),
                     status: "stale".to_string(),
                 });
             }
         }
-        self.write_managed_config_files(&request)?;
-        let plaintext = serde_json::to_vec(&request)?;
+        self.write_managed_config_files(&input)?;
+        let plaintext = serde_json::to_vec(&input)?;
         let ciphertext = encrypt_bytes(cipher, &plaintext)?;
         let applied = self
             .store
-            .upsert(&scope_key, &scope, request.revision, &ciphertext)?;
+            .upsert(&scope_key, &scope, input.revision, &ciphertext)?;
         if !applied {
             let current_revision = self
                 .store
                 .current_revision(&scope_key)?
-                .unwrap_or(request.revision);
-            return Ok(ApplyAgentAuthConfigResponse {
+                .unwrap_or(input.revision);
+            return Ok(AgentAuthConfigApplyOutcome {
                 applied: false,
                 revision: current_revision,
                 selection_count: 0,
-                no_selection_kinds: no_selection_kinds(&request.selections),
+                no_selection_kinds: no_selection_kinds(&input.selections),
                 status: "stale".to_string(),
             });
         }
-        Ok(ApplyAgentAuthConfigResponse {
+        Ok(AgentAuthConfigApplyOutcome {
             applied: true,
-            revision: request.revision,
-            selection_count: request.selections.len(),
-            no_selection_kinds: no_selection_kinds(&request.selections),
+            revision: input.revision,
+            selection_count: input.selections.len(),
+            no_selection_kinds: no_selection_kinds(&input.selections),
             status: "applied".to_string(),
         })
     }
 
-    pub fn status(&self) -> anyhow::Result<AgentAuthConfigStatusResponse> {
+    pub fn status(&self) -> anyhow::Result<AgentAuthConfigStatus> {
         let Some(record) = self.store.latest()? else {
-            return Ok(AgentAuthConfigStatusResponse {
+            return Ok(AgentAuthConfigStatus {
                 external_auth_scope: None,
                 revision: None,
                 status: "missing".to_string(),
@@ -372,7 +289,7 @@ impl AgentAuthConfigService {
     fn decrypt_record(
         &self,
         record: &AgentAuthConfigRecord,
-    ) -> anyhow::Result<ApplyAgentAuthConfigRequest> {
+    ) -> anyhow::Result<AgentAuthConfigInput> {
         let Some(cipher) = self.cipher.as_ref() else {
             anyhow::bail!("ANYHARNESS_DATA_KEY is required to read agent auth config");
         };
@@ -380,10 +297,7 @@ impl AgentAuthConfigService {
         Ok(serde_json::from_slice(&plaintext)?)
     }
 
-    fn write_managed_config_files(
-        &self,
-        request: &ApplyAgentAuthConfigRequest,
-    ) -> anyhow::Result<()> {
+    fn write_managed_config_files(&self, request: &AgentAuthConfigInput) -> anyhow::Result<()> {
         for selection in &request.selections {
             if selection.agent_kind != "codex" {
                 continue;
@@ -409,7 +323,7 @@ impl AgentAuthConfigService {
     }
 }
 
-fn validate_config_request(request: &ApplyAgentAuthConfigRequest) -> anyhow::Result<()> {
+fn validate_config_input(request: &AgentAuthConfigInput) -> anyhow::Result<()> {
     if request.revision < 0 {
         anyhow::bail!("agent auth config revision must be non-negative");
     }
@@ -495,9 +409,9 @@ fn is_protected_env_key(key: &str) -> bool {
 fn status_response(
     external_scope: Option<AgentAuthExternalScope>,
     revision: i64,
-    config: &ApplyAgentAuthConfigRequest,
-) -> AgentAuthConfigStatusResponse {
-    AgentAuthConfigStatusResponse {
+    config: &AgentAuthConfigInput,
+) -> AgentAuthConfigStatus {
+    AgentAuthConfigStatus {
         external_auth_scope: external_scope,
         revision: Some(revision),
         status: "applied".to_string(),
@@ -693,5 +607,5 @@ fn set_private_file_permissions(_path: &PathBuf) -> anyhow::Result<()> {
 }
 
 #[cfg(test)]
-#[path = "auth_config_tests.rs"]
+#[path = "../auth_config_tests.rs"]
 mod auth_config_tests;

@@ -42,16 +42,17 @@ mod tests {
     use std::sync::Arc;
 
     use anyharness_contract::v1::{
-        ApplyRuntimeConfigRequest, RuntimeArtifactPayload, RuntimeArtifactRef,
-        RuntimeConfigExternalScope, RuntimeConfigManifest, RuntimeConfigRevision,
-        RuntimeConfigRevisionExpectation, RuntimeConfigSource, RuntimeSkill,
-        RuntimeSkillSourceKind,
+        RuntimeArtifactPayload, RuntimeArtifactRef, RuntimeConfigExternalScope,
+        RuntimeConfigManifest, RuntimeConfigRevision, RuntimeConfigRevisionExpectation,
+        RuntimeSkill, RuntimeSkillSourceKind,
     };
     use sha2::{Digest, Sha256};
 
     use super::auth::SkillsMcpAuth;
     use super::SkillsProductMcpServer;
-    use crate::domains::runtime_config::service::{RuntimeConfigService, RuntimeConfigStore};
+    use crate::domains::runtime_config::model::RuntimeConfigApplyInput;
+    use crate::domains::runtime_config::service::RuntimeConfigService;
+    use crate::domains::runtime_config::store::RuntimeConfigStore;
     use crate::integrations::mcp::product_server::{ProductMcpRequestContext, ProductMcpServer};
     use crate::persistence::Db;
 
@@ -111,7 +112,7 @@ mod tests {
         assert!(error.to_string().contains("no runtime config skills"));
     }
 
-    fn apply_request() -> ApplyRuntimeConfigRequest {
+    fn apply_request() -> RuntimeConfigApplyInput {
         let instruction_content = "# Runtime config skill\n";
         let instruction_hash = runtime_artifact_hash(instruction_content);
         let guide_content = "Use issues.";
@@ -132,7 +133,7 @@ mod tests {
             resource_id: Some("triage-guide".to_string()),
             display_name: Some("Triage guide".to_string()),
         };
-        ApplyRuntimeConfigRequest {
+        RuntimeConfigApplyInput {
             revision: RuntimeConfigRevision {
                 id: "rev-1".to_string(),
                 sequence: 1,
@@ -181,7 +182,7 @@ mod tests {
                 },
             ],
             credential_values: Vec::new(),
-            source: RuntimeConfigSource::Worker,
+            source: "worker".to_string(),
         }
     }
 

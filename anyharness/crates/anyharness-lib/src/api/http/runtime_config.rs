@@ -5,6 +5,9 @@ use axum::{extract::State, Json};
 
 use super::error::ApiError;
 use crate::app::AppState;
+use crate::domains::runtime_config::model::{
+    RuntimeConfigApplyInput, RuntimeConfigApplyOutcome, RuntimeConfigStatus,
+};
 use crate::domains::runtime_config::service::RuntimeConfigError;
 
 #[utoipa::path(
@@ -25,14 +28,14 @@ pub async fn apply_runtime_config(
     let manifest = req.manifest.clone();
     state
         .runtime_config_service
-        .apply_config(req)
+        .apply_config(runtime_config_apply_input(req))
         .map(|response| {
             if response.applied {
                 state
                     .auth_manager
                     .apply_runtime_config(&revision, &manifest);
             }
-            Json(response)
+            Json(runtime_config_apply_response(response))
         })
         .map_err(map_runtime_config_error)
 }
@@ -51,8 +54,35 @@ pub async fn get_runtime_config(
     state
         .runtime_config_service
         .status()
-        .map(Json)
+        .map(|status| Json(runtime_config_status_response(status)))
         .map_err(map_runtime_config_error)
+}
+
+fn runtime_config_apply_input(request: ApplyRuntimeConfigRequest) -> RuntimeConfigApplyInput {
+    RuntimeConfigApplyInput {
+        revision: request.revision,
+        manifest: request.manifest,
+        artifact_payloads: request.artifact_payloads,
+        credential_values: request.credential_values,
+        source: format!("{:?}", request.source).to_lowercase(),
+    }
+}
+
+fn runtime_config_apply_response(outcome: RuntimeConfigApplyOutcome) -> ApplyRuntimeConfigResponse {
+    let status = outcome.status().to_string();
+    ApplyRuntimeConfigResponse {
+        applied: outcome.applied,
+        revision: outcome.revision,
+        status,
+    }
+}
+
+fn runtime_config_status_response(status: RuntimeConfigStatus) -> RuntimeConfigStatusResponse {
+    RuntimeConfigStatusResponse {
+        artifacts: status.artifacts,
+        current_revision: status.current_revision,
+        manifest: status.manifest,
+    }
 }
 
 pub fn map_runtime_config_error(error: RuntimeConfigError) -> ApiError {

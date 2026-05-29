@@ -14,7 +14,13 @@ use super::access::{
 use super::error::ApiError;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
+use crate::domains::reviews::model::ReviewCritique;
+use crate::domains::reviews::runtime::{
+    MarkReviewRevisionReadyInput, RetryReviewAssignmentInput, StartCodeReviewRuntimeInput,
+    StartPlanReviewRuntimeInput,
+};
 use crate::domains::reviews::service::ReviewError;
+use crate::domains::reviews::service::ReviewPersonaInput;
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[utoipa::path(
@@ -46,7 +52,7 @@ pub async fn start_plan_review(
     assert_workspace_mutable(&state, &workspace_id)?;
     let run = state
         .review_runtime
-        .start_plan_review(&workspace_id, &plan_id, req)
+        .start_plan_review(&workspace_id, &plan_id, start_plan_review_input(req))
         .await
         .map_err(map_review_error)?;
     Ok(Json(ReviewRunResponse { run }))
@@ -77,7 +83,7 @@ pub async fn start_code_review(
     assert_workspace_mutable(&state, &workspace_id)?;
     let run = state
         .review_runtime
-        .start_code_review(&workspace_id, req)
+        .start_code_review(&workspace_id, start_code_review_input(req))
         .await
         .map_err(map_review_error)?;
     Ok(Json(ReviewRunResponse { run }))
@@ -127,7 +133,7 @@ pub async fn get_review_assignment_critique(
         .review_service
         .get_assignment_critique(&review_run_id, &assignment_id)
         .map_err(map_review_error)?;
-    Ok(Json(critique))
+    Ok(Json(review_critique_response(critique)))
 }
 
 #[utoipa::path(
@@ -152,7 +158,11 @@ pub async fn retry_review_assignment(
 ) -> Result<Json<ReviewRunResponse>, ApiError> {
     let run = state
         .review_runtime
-        .retry_assignment(&review_run_id, &assignment_id, req)
+        .retry_assignment(
+            &review_run_id,
+            &assignment_id,
+            retry_review_assignment_input(req),
+        )
         .await
         .map_err(map_review_error)?;
     Ok(Json(ReviewRunResponse { run }))
@@ -220,10 +230,75 @@ pub async fn mark_review_revision_ready(
 ) -> Result<Json<ReviewRunResponse>, ApiError> {
     let run = state
         .review_runtime
-        .mark_revision_ready(&review_run_id, req)
+        .mark_revision_ready(&review_run_id, mark_review_revision_ready_input(req))
         .await
         .map_err(map_review_error)?;
     Ok(Json(ReviewRunResponse { run }))
+}
+
+fn start_plan_review_input(request: StartPlanReviewRequest) -> StartPlanReviewRuntimeInput {
+    StartPlanReviewRuntimeInput {
+        parent_session_id: request.parent_session_id,
+        max_rounds: request.max_rounds,
+        auto_iterate: request.auto_iterate,
+        reviewers: reviewers_from_contract(request.reviewers),
+    }
+}
+
+fn start_code_review_input(request: StartCodeReviewRequest) -> StartCodeReviewRuntimeInput {
+    StartCodeReviewRuntimeInput {
+        parent_session_id: request.parent_session_id,
+        max_rounds: request.max_rounds,
+        auto_iterate: request.auto_iterate,
+        reviewers: reviewers_from_contract(request.reviewers),
+    }
+}
+
+fn reviewers_from_contract(
+    reviewers: Vec<anyharness_contract::v1::ReviewPersonaRequest>,
+) -> Vec<ReviewPersonaInput> {
+    reviewers
+        .into_iter()
+        .map(|reviewer| ReviewPersonaInput {
+            persona_id: reviewer.persona_id,
+            label: reviewer.label,
+            prompt: reviewer.prompt,
+            agent_kind: reviewer.agent_kind,
+            model_id: reviewer.model_id,
+            mode_id: reviewer.mode_id,
+        })
+        .collect()
+}
+
+fn retry_review_assignment_input(
+    request: RetryReviewAssignmentRequest,
+) -> RetryReviewAssignmentInput {
+    RetryReviewAssignmentInput {
+        model_id: request.model_id,
+    }
+}
+
+fn mark_review_revision_ready_input(
+    request: MarkReviewRevisionReadyRequest,
+) -> MarkReviewRevisionReadyInput {
+    MarkReviewRevisionReadyInput {
+        revised_plan_id: request.revised_plan_id,
+    }
+}
+
+fn review_critique_response(critique: ReviewCritique) -> ReviewCritiqueResponse {
+    ReviewCritiqueResponse {
+        assignment_id: critique.assignment_id,
+        review_run_id: critique.review_run_id,
+        review_round_id: critique.review_round_id,
+        persona_id: critique.persona_id,
+        persona_label: critique.persona_label,
+        pass: critique.pass,
+        summary: critique.summary,
+        critique_markdown: critique.critique_markdown,
+        critique_artifact_path: critique.critique_artifact_path,
+        submitted_at: critique.submitted_at,
+    }
 }
 
 fn map_review_error(error: ReviewError) -> ApiError {

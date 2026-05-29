@@ -8,7 +8,7 @@ use anyhow::Context;
 use crate::adapters::git::executor::run_git_ok;
 use crate::domains::agents::portability::{
     collect_agent_artifacts, delete_session_agent_artifacts, install_session_agent_artifacts,
-    validate_session_agent_artifacts,
+    validate_session_agent_artifacts, AgentArtifactFileData,
 };
 use crate::domains::mobility::model::{
     DestroyedWorkspaceSourceSummary, ImportedWorkspaceArchiveSummary, MobilityBlocker,
@@ -902,15 +902,23 @@ fn validate_archive_size(archive: &WorkspaceMobilityArchiveData) -> Result<(), M
         )));
     }
 
-    for file in archive.files.iter().chain(
-        archive
-            .sessions
-            .iter()
-            .flat_map(|bundle| bundle.agent_artifacts.iter()),
-    ) {
+    for file in &archive.files {
         if file.content.len() > MAX_MOBILITY_FILE_BYTES {
             return Err(MobilityError::SizeLimitExceeded(format!(
                 "file {} exceeded the {} byte limit",
+                file.relative_path, MAX_MOBILITY_FILE_BYTES
+            )));
+        }
+    }
+
+    for file in archive
+        .sessions
+        .iter()
+        .flat_map(|bundle| bundle.agent_artifacts.iter())
+    {
+        if file.content.len() > MAX_MOBILITY_FILE_BYTES {
+            return Err(MobilityError::SizeLimitExceeded(format!(
+                "agent artifact {} exceeded the {} byte limit",
                 file.relative_path, MAX_MOBILITY_FILE_BYTES
             )));
         }
@@ -1040,7 +1048,7 @@ fn session_bundle_size_bytes(bundle: &WorkspaceMobilitySessionBundleData) -> u64
             bundle
                 .agent_artifacts
                 .iter()
-                .map(encoded_file_size_bytes)
+                .map(encoded_agent_artifact_size_bytes)
                 .sum::<u64>(),
         )
 }
@@ -1077,6 +1085,10 @@ fn encoded_live_config_size_bytes(
 }
 
 fn encoded_file_size_bytes(file: &MobilityFileData) -> u64 {
+    string_size(&file.relative_path) + file.mode as u64 + base64_size(file.content.len())
+}
+
+fn encoded_agent_artifact_size_bytes(file: &AgentArtifactFileData) -> u64 {
     string_size(&file.relative_path) + file.mode as u64 + base64_size(file.content.len())
 }
 

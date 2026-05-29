@@ -2,22 +2,21 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyharness_contract::v1::{
-    MarkReviewRevisionReadyRequest, PromptInputBlock, RetryReviewAssignmentRequest,
-    ReviewRunDetail, ReviewRunUpdatedPayload, StartCodeReviewRequest, StartPlanReviewRequest,
-};
+use anyharness_contract::v1::{PromptInputBlock, ReviewRunDetail, ReviewRunUpdatedPayload};
 
+mod artifacts;
+mod launch;
+
+use self::launch::{
+    build_reviewer_prompt, map_create_session_error, reviewer_system_prompt_append, verify_mode,
+};
 use super::hooks::ReviewHookEvent;
 use super::model::{
     ReviewAssignmentRecord, ReviewFeedbackJobRecord, ReviewFeedbackJobState, ReviewKind,
     ReviewModeVerificationStatus, ReviewRunRecord, ReviewRunStatus,
 };
-use super::runtime_helpers::{
-    build_reviewer_prompt, map_create_session_error, reviewer_system_prompt_append,
-    reviewers_from_contract, verify_mode,
-};
 use super::service::{ReviewError, ReviewService, StartReviewInput};
-use super::store_feedback::PendingPromptExecutionLookup;
+use super::store::feedback::PendingPromptExecutionLookup;
 use crate::acp::provider_errors::OPUS_4_6_FALLBACK_MODEL_ID;
 use crate::origin::OriginContext;
 use crate::sessions::extensions::SessionTurnOutcome;
@@ -29,6 +28,32 @@ use crate::workspaces::runtime::WorkspaceRuntime;
 
 const REVIEW_RECONCILE_INTERVAL_SECS: u64 = 15;
 const FEEDBACK_RETRY_DELAY_SECS: i64 = 30;
+
+#[derive(Debug, Clone)]
+pub struct StartPlanReviewRuntimeInput {
+    pub parent_session_id: String,
+    pub max_rounds: u32,
+    pub auto_iterate: bool,
+    pub reviewers: Vec<super::service::ReviewPersonaInput>,
+}
+
+#[derive(Debug, Clone)]
+pub struct StartCodeReviewRuntimeInput {
+    pub parent_session_id: String,
+    pub max_rounds: u32,
+    pub auto_iterate: bool,
+    pub reviewers: Vec<super::service::ReviewPersonaInput>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MarkReviewRevisionReadyInput {
+    pub revised_plan_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct RetryReviewAssignmentInput {
+    pub model_id: Option<String>,
+}
 
 #[derive(Clone)]
 pub struct ReviewRuntime {
@@ -85,7 +110,7 @@ impl ReviewRuntime {
         &self,
         workspace_id: &str,
         plan_id: &str,
-        req: StartPlanReviewRequest,
+        input: StartPlanReviewRuntimeInput,
     ) -> Result<ReviewRunDetail, ReviewError> {
         let target_plan = self
             .service
@@ -94,14 +119,14 @@ impl ReviewRuntime {
             .ok_or_else(|| ReviewError::PlanNotFound(plan_id.to_string()))?;
         let run = self.service.start_review(StartReviewInput {
             workspace_id: workspace_id.to_string(),
-            parent_session_id: req.parent_session_id,
+            parent_session_id: input.parent_session_id,
             kind: ReviewKind::Plan,
             title: format!("Plan review: {}", target_plan.title),
             target_plan: Some(target_plan),
             target_code_manifest: None,
-            max_rounds: req.max_rounds,
-            auto_iterate: req.auto_iterate,
-            reviewers: reviewers_from_contract(req.reviewers),
+            max_rounds: input.max_rounds,
+            auto_iterate: input.auto_iterate,
+            reviewers: input.reviewers,
         })?;
         self.spawn_launch_active_round(run.clone());
         self.service.get_run_detail(&run.id)
@@ -110,19 +135,19 @@ impl ReviewRuntime {
     pub async fn start_code_review(
         &self,
         workspace_id: &str,
-        req: StartCodeReviewRequest,
+        input: StartCodeReviewRuntimeInput,
     ) -> Result<ReviewRunDetail, ReviewError> {
         let manifest = self.capture_code_manifest(workspace_id).await?;
         let run = self.service.start_review(StartReviewInput {
             workspace_id: workspace_id.to_string(),
-            parent_session_id: req.parent_session_id,
+            parent_session_id: input.parent_session_id,
             kind: ReviewKind::Code,
             title: "Implementation review".to_string(),
             target_plan: None,
             target_code_manifest: Some(manifest),
-            max_rounds: req.max_rounds,
-            auto_iterate: req.auto_iterate,
-            reviewers: reviewers_from_contract(req.reviewers),
+            max_rounds: input.max_rounds,
+            auto_iterate: input.auto_iterate,
+            reviewers: input.reviewers,
         })?;
         self.spawn_launch_active_round(run.clone());
         self.service.get_run_detail(&run.id)
@@ -196,7 +221,7 @@ impl ReviewRuntime {
     pub async fn mark_revision_ready(
         &self,
         run_id: &str,
-        req: MarkReviewRevisionReadyRequest,
+        input: MarkReviewRevisionReadyInput,
     ) -> Result<ReviewRunDetail, ReviewError> {
         let existing = self
             .service
@@ -220,7 +245,7 @@ impl ReviewRuntime {
         };
         let run = self.service.start_next_round_records(
             run_id,
-            req.revised_plan_id.as_deref(),
+            input.revised_plan_id.as_deref(),
             manifest,
         )?;
         if run.status == ReviewRunStatus::Reviewing {
@@ -235,7 +260,7 @@ impl ReviewRuntime {
         &self,
         parent_session_id: &str,
         run_id: &str,
-        req: MarkReviewRevisionReadyRequest,
+        input: MarkReviewRevisionReadyInput,
     ) -> Result<ReviewRunDetail, ReviewError> {
         let run = self
             .service
@@ -249,16 +274,16 @@ impl ReviewRuntime {
         if !self.service.run_accepts_manual_revision_signal(&run) {
             return self.service.get_run_detail(run_id);
         }
-        self.mark_revision_ready(run_id, req).await
+        self.mark_revision_ready(run_id, input).await
     }
 
     pub async fn retry_assignment(
         &self,
         run_id: &str,
         assignment_id: &str,
-        req: RetryReviewAssignmentRequest,
+        input: RetryReviewAssignmentInput,
     ) -> Result<ReviewRunDetail, ReviewError> {
-        let model_id = req
+        let model_id = input
             .model_id
             .as_deref()
             .unwrap_or(OPUS_4_6_FALLBACK_MODEL_ID);
