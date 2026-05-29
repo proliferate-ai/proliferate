@@ -18,6 +18,7 @@ import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
 import { SettingsCardRow } from "@proliferate/product-ui/settings/SettingsCardRow";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { SettingsShell } from "@proliferate/product-ui/settings/SettingsShell";
+import { CloudSupportSurface } from "@proliferate/product-surfaces/support/CloudSupportSurface";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
@@ -111,7 +112,9 @@ export function SettingsScreen() {
         ) : activeSection === "billing" ? (
           <BillingSettingsSection />
         ) : (
-          <SupportSection onOpenSupport={() => navigate(routes.support)} />
+          <SupportSection
+            pathname={`${location.pathname}${location.search}${location.hash}`}
+          />
         )}
       </SettingsShell>
     </div>
@@ -296,25 +299,20 @@ function ActionButton({
   );
 }
 
-function SupportSection({ onOpenSupport }: { onOpenSupport: () => void }) {
+function SupportSection({ pathname }: { pathname: string }) {
   return (
     <section className="space-y-6">
       <SettingsPageHeader
         title="Support"
-        description="Open support and product help for cloud sessions, automations, and Desktop handoff."
+        description="Send product help requests for cloud sessions, automations, billing, and Desktop handoff."
       />
-      <SettingsCard>
-        <SettingsCardRow
-          label="Product support"
-          description="Send a support message from the dedicated support surface."
-        >
-          <ActionButton onClick={onOpenSupport}>Open support</ActionButton>
-        </SettingsCardRow>
-        <SettingsCardRow
-          label="Diagnostics"
-          description="Telemetry-sensitive support surfaces stay blocked from session replay."
-        />
-      </SettingsCard>
+      <CloudSupportSurface
+        context={{
+          source: "settings",
+          intent: "general",
+          pathname,
+        }}
+      />
     </section>
   );
 }

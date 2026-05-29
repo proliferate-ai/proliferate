@@ -1,7 +1,9 @@
-import { AlertCircle, CheckCircle2, CircleHelp, LifeBuoy, MessageSquare, Send } from "lucide-react";
+import { AlertCircle, CheckCircle2, LifeBuoy, Send } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
+import { SettingsCard } from "../settings/SettingsCard";
+import { SettingsCardRow } from "../settings/SettingsCardRow";
 
 interface SupportSurfaceProps {
   onSubmit?: (message: string) => Promise<void> | void;
@@ -35,73 +37,69 @@ export function SupportSurface({ onSubmit }: SupportSurfaceProps) {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-      <section className="space-y-3">
-        <article className="border-b border-border-light pb-4">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <MessageSquare size={16} />
-            Product help
-          </div>
-          <p className="mt-2 text-sm leading-5 text-muted-foreground">
-            Cloud sessions, Desktop handoff, billing, and workspace dispatch issues.
-          </p>
-        </article>
-        <article className="border-b border-border-light pb-4">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <CircleHelp size={16} />
-            Product docs
-          </div>
-          <p className="mt-2 text-sm leading-5 text-muted-foreground">
-            Setup, cloud sandbox, automation, and environment guidance.
-          </p>
-        </article>
-        <article className="pb-2">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <LifeBuoy size={16} />
-            Account context
-          </div>
-          <p className="mt-2 text-sm leading-5 text-muted-foreground">
-            Messages include the current app location so the team can find the right account state.
-          </p>
-        </article>
-      </section>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <LifeBuoy size={16} />
-          Contact
-        </div>
-        <Textarea
-          rows={10}
-          value={message}
-          onChange={(event) => {
-            setMessage(event.currentTarget.value);
-            if (notice) {
-              setNotice(null);
-            }
-          }}
-          className="w-full resize-none"
-          placeholder="What happened?"
-          data-telemetry-mask
+    <div className="space-y-4">
+      <SettingsCard>
+        <SettingsCardRow
+          label="Product help"
+          description="Cloud sessions, Desktop handoff, billing, automations, workspace dispatch, and account issues."
         />
-        {notice ? (
-          <div
-            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
-              notice.tone === "success"
-                ? "border-success/30 bg-success/10 text-success"
-                : "border-destructive/30 bg-destructive/10 text-destructive"
-            }`}
-          >
-            {notice.tone === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
-            <span>{notice.text}</span>
+        <SettingsCardRow
+          label="Account context"
+          description="Support messages include the current app location so we can find the right account state."
+        />
+      </SettingsCard>
+      <form onSubmit={handleSubmit}>
+        <SettingsCard>
+          <SettingsCardRow
+            label={
+              <span className="flex items-center gap-2">
+                <LifeBuoy size={15} />
+                Contact support
+              </span>
+            }
+            description="Share what happened, what you expected, and the workspace or automation involved."
+          />
+          <div className="space-y-3 px-4 py-3">
+            <Textarea
+              rows={8}
+              value={message}
+              onChange={(event) => {
+                setMessage(event.currentTarget.value);
+                if (notice) {
+                  setNotice(null);
+                }
+              }}
+              className="min-h-[9rem] w-full resize-none"
+              placeholder="What happened?"
+              data-telemetry-mask
+            />
+            {notice ? (
+              <div
+                role="status"
+                aria-live="polite"
+                className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${
+                  notice.tone === "success"
+                    ? "border-success/30 bg-success/10 text-success"
+                    : "border-destructive/30 bg-destructive/10 text-destructive"
+                }`}
+              >
+                {notice.tone === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
+                <span>{notice.text}</span>
+              </div>
+            ) : null}
+            <div className="flex justify-end">
+              <Button
+                type="submit"
+                size="sm"
+                loading={submitting}
+                disabled={!trimmedMessage || submitting}
+              >
+                <Send size={15} />
+                Send
+              </Button>
+            </div>
           </div>
-        ) : null}
-        <div className="flex justify-end">
-          <Button type="submit" loading={submitting} disabled={!trimmedMessage || submitting}>
-            <Send size={15} />
-            Send
-          </Button>
-        </div>
+        </SettingsCard>
       </form>
     </div>
   );

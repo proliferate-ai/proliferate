@@ -14,6 +14,10 @@
     "./settings/CloudEnvironmentsSettingsSurface": {
       "types": "./dist/settings/CloudEnvironmentsSettingsSurface.d.ts",
       "import": "./dist/settings/CloudEnvironmentsSettingsSurface.js"
+    },
+    "./support/CloudSupportSurface": {
+      "types": "./dist/support/CloudSupportSurface.d.ts",
+      "import": "./dist/support/CloudSupportSurface.js"
     }
   },
   "scripts": {
