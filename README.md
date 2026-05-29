@@ -46,16 +46,16 @@ Proliferate is the open source workspace for using any coding agent and getting
 real work done: local when you want desktop control, cloud when work needs to
 keep going, and shared when a workflow is ready for the rest of your team.
 
-- Bring Codex, Claude Code, Gemini CLI, OpenCode, Cursor, Amp, and future
-  harnesses without locking your workflow to one model or provider.
-- Keep agent work organized across local worktrees, cloud sandboxes, desktop,
-  and web so context travels with the work.
-- Parallelize cleanly with subagents, review agents, automations, and Slack
-  handoffs.
-- Share the workflows that stick through team workspaces, claims, shared
-  sandbox profiles, and governed cloud runs.
-- Stay open and self-hostable so companies can run agents under their own
-  infrastructure, security posture, and model choices.
+- Use the agents you already trust: Codex, Claude Code, Gemini CLI, OpenCode,
+  Cursor, Amp, and whatever comes next.
+- Start work on your machine, keep it running in cloud when it needs time, and
+  pick it back up from desktop or web.
+- Spin up focused agent runs, compare plans and diffs, and review the useful
+  work without juggling terminals.
+- Turn repeated fixes, checks, reviews, and handoffs into automations your team
+  can run from Proliferate or Slack.
+- Keep control as adoption grows with open source, self-hosting, sandbox
+  isolation, shared auth, and enterprise security boundaries.
 
 ## Bring Your Agent
 
