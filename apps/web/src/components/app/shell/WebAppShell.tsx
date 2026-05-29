@@ -74,6 +74,7 @@ export function WebAppShell() {
     <AppShell
       sidebar={sidebarRendered ? (
         <>
+          <CollapsedSidebarRailSlot />
           <button
             type="button"
             aria-label="Close sidebar"
@@ -121,6 +122,15 @@ export function WebAppShell() {
       ) : null}
       <Outlet />
     </AppShell>
+  );
+}
+
+function CollapsedSidebarRailSlot() {
+  return (
+    <div
+      aria-hidden="true"
+      className="hidden h-full w-12 shrink-0 border-r border-sidebar-border bg-sidebar sm:block lg:hidden"
+    />
   );
 }
 
