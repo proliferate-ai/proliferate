@@ -1,0 +1,264 @@
+name: Deploy Server
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      git_sha:
+        required: true
+        type: string
+      enabled:
+        default: true
+        type: boolean
+    outputs:
+      image_uri:
+        value: ${{ jobs.deploy.outputs.image_uri }}
+      task_definition_arn:
+        value: ${{ jobs.deploy.outputs.task_definition_arn }}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    if: ${{ inputs.enabled }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    outputs:
+      image_uri: ${{ steps.image.outputs.image_uri }}
+      task_definition_arn: ${{ steps.task.outputs.task_definition_arn }}
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      ECR_SERVER_REPOSITORY: ${{ vars.ECR_SERVER_REPOSITORY || 'proliferate-server' }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+      ECS_SERVER_SERVICE: ${{ vars.ECS_SERVER_SERVICE }}
+      ECS_SERVER_CONTAINER_NAME: ${{ vars.ECS_SERVER_CONTAINER_NAME || 'server' }}
+      API_URL: ${{ vars.API_URL }}
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
+      WEB_URL: ${{ vars.WEB_URL }}
+      API_HEALTH_PATH: ${{ vars.API_HEALTH_PATH || '/api/health' }}
+      E2B_TEMPLATE_REF: ${{ vars.E2B_TEMPLATE_REF }}
+      DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+      GIT_SHA: ${{ inputs.git_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_sha }}
+
+      - name: Validate server deploy config
+        run: |
+          set -euo pipefail
+          : "${AWS_DEPLOY_ROLE_ARN:?Set AWS_DEPLOY_ROLE_ARN on the GitHub environment.}"
+          : "${ECS_CLUSTER:?Set ECS_CLUSTER on the GitHub environment.}"
+          : "${ECS_SERVER_SERVICE:?Set ECS_SERVER_SERVICE on the GitHub environment.}"
+          : "${API_URL:?Set API_URL on the GitHub environment.}"
+          : "${API_BASE_URL:?Set API_BASE_URL on the GitHub environment.}"
+          : "${WEB_URL:?Set WEB_URL on the GitHub environment.}"
+          : "${E2B_TEMPLATE_REF:?Set E2B_TEMPLATE_REF on the GitHub environment.}"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Resolve image URI
+        id: image
+        run: |
+          set -euo pipefail
+          short_sha="${GIT_SHA:0:12}"
+          image_uri="${{ steps.ecr.outputs.registry }}/${ECR_SERVER_REPOSITORY}:${short_sha}"
+          echo "image_uri=$image_uri" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push server image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.image.outputs.image_uri }}
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_SERVER_REPOSITORY }}:${{ inputs.environment }}-latest
+
+      - name: Render ECS task definition
+        id: task
+        run: |
+          set -euo pipefail
+          task_definition_arn="$(
+            aws ecs describe-services \
+              --cluster "$ECS_CLUSTER" \
+              --services "$ECS_SERVER_SERVICE" \
+              --query 'services[0].taskDefinition' \
+              --output text
+          )"
+          test "$task_definition_arn" != "None"
+
+          aws ecs describe-task-definition \
+            --task-definition "$task_definition_arn" \
+            --query taskDefinition \
+            > task-definition.raw.json
+
+          jq -n \
+            --arg api_url "$API_URL" \
+            --arg api_base "$API_BASE_URL" \
+            --arg frontend "$WEB_URL" \
+            --arg environment "$DEPLOY_ENVIRONMENT" \
+            --arg e2b "$E2B_TEMPLATE_REF" \
+            --arg git "$GIT_SHA" \
+            --arg release "proliferate-server@${GIT_SHA:0:12}" \
+            '[
+              {"name":"API_URL","value":$api_url},
+              {"name":"API_BASE_URL","value":$api_base},
+              {"name":"FRONTEND_BASE_URL","value":$frontend},
+              {"name":"API_PATH_PREFIX","value":"/api"},
+              {"name":"SANDBOX_PROVIDER","value":"e2b"},
+              {"name":"E2B_TEMPLATE_NAME","value":$e2b},
+              {"name":"SERVER_GIT_SHA","value":$git},
+              {"name":"ANYHARNESS_GIT_SHA","value":$git},
+              {"name":"PROLIFERATE_TELEMETRY_MODE","value":"hosted_product"},
+              {"name":"SENTRY_ENVIRONMENT","value":$environment},
+              {"name":"SENTRY_RELEASE","value":$release},
+              {"name":"CLOUD_RUNTIME_SENTRY_ENVIRONMENT","value":$environment},
+              {"name":"CLOUD_RUNTIME_SENTRY_RELEASE","value":$release},
+              {"name":"CLOUD_TARGET_SENTRY_ENVIRONMENT","value":$environment},
+              {"name":"CLOUD_TARGET_SENTRY_RELEASE","value":$release}
+            ]' > env-updates.json
+
+          jq \
+            --arg container "$ECS_SERVER_CONTAINER_NAME" \
+            --arg image "${{ steps.image.outputs.image_uri }}" \
+            --slurpfile updates env-updates.json \
+            '
+              def merge_environment($updates):
+                (.environment // []) as $current
+                | ($updates[0] | map(.name)) as $updated_names
+                | ($current | map(select(.name as $name | ($updated_names | index($name) | not)))) + $updates[0];
+
+              del(
+                .taskDefinitionArn,
+                .revision,
+                .status,
+                .requiresAttributes,
+                .compatibilities,
+                .registeredAt,
+                .registeredBy
+              )
+              | .containerDefinitions |= map(
+                  if .name == $container then
+                    .image = $image
+                    | .environment = merge_environment($updates)
+                  else
+                    .
+                  end
+                )
+            ' task-definition.raw.json > task-definition.json
+
+          new_task_definition_arn="$(
+            aws ecs register-task-definition \
+              --cli-input-json file://task-definition.json \
+              --query 'taskDefinition.taskDefinitionArn' \
+              --output text
+          )"
+          echo "task_definition_arn=$new_task_definition_arn" >> "$GITHUB_OUTPUT"
+
+      - name: Run Alembic migrations
+        run: |
+          set -euo pipefail
+          aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVER_SERVICE" \
+            > service.json
+          network_configuration="$(
+            jq -c '{
+              awsvpcConfiguration: {
+                subnets: .services[0].networkConfiguration.awsvpcConfiguration.subnets,
+                securityGroups: (.services[0].networkConfiguration.awsvpcConfiguration.securityGroups // []),
+                assignPublicIp: (.services[0].networkConfiguration.awsvpcConfiguration.assignPublicIp // "DISABLED")
+              }
+            }' service.json
+          )"
+          overrides="$(
+            jq -n --arg container "$ECS_SERVER_CONTAINER_NAME" '{
+              containerOverrides: [
+                {
+                  name: $container,
+                  command: ["alembic", "upgrade", "head"]
+                }
+              ]
+            }'
+          )"
+          migration_task="$(
+            aws ecs run-task \
+              --cluster "$ECS_CLUSTER" \
+              --launch-type FARGATE \
+              --task-definition "${{ steps.task.outputs.task_definition_arn }}" \
+              --network-configuration "$network_configuration" \
+              --overrides "$overrides" \
+              --query 'tasks[0].taskArn' \
+              --output text
+          )"
+          test "$migration_task" != "None"
+          aws ecs wait tasks-stopped --cluster "$ECS_CLUSTER" --tasks "$migration_task"
+          exit_code="$(
+            aws ecs describe-tasks \
+              --cluster "$ECS_CLUSTER" \
+              --tasks "$migration_task" \
+              --query "tasks[0].containers[?name=='${ECS_SERVER_CONTAINER_NAME}'].exitCode | [0]" \
+              --output text
+          )"
+          if [[ "$exit_code" != "0" ]]; then
+            aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$migration_task"
+            exit 1
+          fi
+
+      - name: Roll ECS service
+        run: |
+          set -euo pipefail
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVER_SERVICE" \
+            --task-definition "${{ steps.task.outputs.task_definition_arn }}" \
+            --force-new-deployment \
+            > /tmp/service-update.json
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVER_SERVICE"
+
+      - name: Smoke API health
+        run: |
+          set -euo pipefail
+          base="${API_URL%/}"
+          path="$API_HEALTH_PATH"
+          if [[ "$path" != /* ]]; then
+            path="/$path"
+          fi
+          health_url="${base}${path}"
+          for _ in {1..30}; do
+            if curl --fail --silent --show-error "$health_url"; then
+              echo
+              echo "Health check passed: $health_url"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Health check failed: $health_url" >&2
+          exit 1
+
+      - name: Summarize server deploy
+        run: |
+          {
+            echo "### Server"
+            echo "- Environment: $DEPLOY_ENVIRONMENT"
+            echo "- Image: \`${{ steps.image.outputs.image_uri }}\`"
+            echo "- Task definition: \`${{ steps.task.outputs.task_definition_arn }}\`"
+            echo "- Service: \`$ECS_CLUSTER/$ECS_SERVER_SERVICE\`"
+          } >> "$GITHUB_STEP_SUMMARY"

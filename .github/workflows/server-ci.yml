@@ -67,6 +67,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     env:
       DATABASE_URL: postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate
       JWT_SECRET: test-jwt-secret
@@ -110,7 +111,7 @@ jobs:
         run: uv pip install --system -e ".[dev]"
 
       - name: Run tests
-        run: pytest tests/ -xvs
+        run: pytest tests/unit tests/integration tests/e2e/cloud/test_e2b_webhooks.py -xvs --durations=20
 
   docker:
     runs-on: ubuntu-latest

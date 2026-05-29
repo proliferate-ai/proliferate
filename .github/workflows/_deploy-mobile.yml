@@ -1,0 +1,97 @@
+name: Deploy Mobile
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      git_sha:
+        required: true
+        type: string
+      enabled:
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ inputs.enabled }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: apps/mobile
+    env:
+      MOBILE_DEPLOY_ENABLED: ${{ vars.MOBILE_DEPLOY_ENABLED || 'false' }}
+      EAS_BUILD_PROFILE: ${{ vars.EAS_BUILD_PROFILE || inputs.environment }}
+      EAS_SUBMIT_PROFILE: ${{ vars.EAS_SUBMIT_PROFILE || inputs.environment }}
+      EAS_SUBMIT_ENABLED: ${{ vars.EAS_SUBMIT_ENABLED || 'false' }}
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_sha }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Check mobile deploy switch
+        id: switch
+        run: |
+          set -euo pipefail
+          if [[ "$MOBILE_DEPLOY_ENABLED" != "true" ]]; then
+            echo "Mobile deploy is intentionally disabled for this environment."
+            echo "Set MOBILE_DEPLOY_ENABLED=true after the Apple/TestFlight app and EAS profile are ready."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+
+      - name: Validate mobile deploy config
+        if: ${{ steps.switch.outputs.enabled == 'true' }}
+        run: |
+          set -euo pipefail
+          : "${EXPO_TOKEN:?Set EXPO_TOKEN on the GitHub environment.}"
+          : "${EAS_BUILD_PROFILE:?Set EAS_BUILD_PROFILE on the GitHub environment.}"
+
+      - name: Install dependencies
+        if: ${{ steps.switch.outputs.enabled == 'true' }}
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      - name: Build iOS app
+        if: ${{ steps.switch.outputs.enabled == 'true' }}
+        run: >
+          pnpm dlx eas-cli@18.13.0 build
+          --platform ios
+          --profile "$EAS_BUILD_PROFILE"
+          --non-interactive
+          --wait
+
+      - name: Submit latest iOS build
+        if: ${{ steps.switch.outputs.enabled == 'true' && env.EAS_SUBMIT_ENABLED == 'true' }}
+        run: >
+          pnpm dlx eas-cli@18.13.0 submit
+          --platform ios
+          --profile "$EAS_SUBMIT_PROFILE"
+          --latest
+          --non-interactive
+
+      - name: Summarize mobile deploy
+        run: |
+          {
+            echo "### Mobile"
+            echo "- Environment: ${{ inputs.environment }}"
+            echo "- Enabled: \`$MOBILE_DEPLOY_ENABLED\`"
+            echo "- EAS build profile: \`$EAS_BUILD_PROFILE\`"
+            echo "- Submitted: \`$EAS_SUBMIT_ENABLED\`"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,64 @@
+name: Deploy Desktop
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      git_sha:
+        required: true
+        type: string
+      enabled:
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ inputs.enabled }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      DESKTOP_DEPLOY_ENABLED: ${{ vars.DESKTOP_DEPLOY_ENABLED || 'false' }}
+      DESKTOP_RELEASE_WORKFLOW: ${{ vars.DESKTOP_RELEASE_WORKFLOW || 'release-desktop.yml' }}
+      DESKTOP_RELEASE_REF: ${{ vars.DESKTOP_RELEASE_REF }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_sha }}
+
+      - name: Validate desktop deploy config
+        run: |
+          set -euo pipefail
+          if [[ "$DESKTOP_DEPLOY_ENABLED" != "true" ]]; then
+            echo "Desktop deploy is intentionally disabled for this environment."
+            echo "Set DESKTOP_DEPLOY_ENABLED=true after the beta/stable channel is ready."
+            exit 0
+          fi
+          : "${DESKTOP_RELEASE_REF:?Set DESKTOP_RELEASE_REF to the desktop tag/ref to release.}"
+
+      - name: Dispatch desktop release workflow
+        if: ${{ env.DESKTOP_DEPLOY_ENABLED == 'true' }}
+        run: |
+          set -euo pipefail
+          gh workflow run "$DESKTOP_RELEASE_WORKFLOW" \
+            --ref "$DESKTOP_RELEASE_REF" \
+            -f dry_run=false \
+            -f publish_updater=true
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Summarize desktop deploy
+        run: |
+          {
+            echo "### Desktop"
+            echo "- Environment: ${{ inputs.environment }}"
+            echo "- Enabled: \`$DESKTOP_DEPLOY_ENABLED\`"
+            if [[ "$DESKTOP_DEPLOY_ENABLED" == "true" ]]; then
+              echo "- Dispatched workflow: \`$DESKTOP_RELEASE_WORKFLOW\`"
+              echo "- Ref: \`$DESKTOP_RELEASE_REF\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

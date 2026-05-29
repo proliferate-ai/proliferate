@@ -38,6 +38,29 @@ jobs:
       - name: Check AnyHarness layer boundaries
         run: python3 scripts/check_anyharness_boundaries.py
 
+  ci-cd-config:
+    name: CI/CD config checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check CI/CD scripts parse
+        run: |
+          node --check scripts/ci-cd/detect-deploy-surfaces.mjs
+          node --check scripts/ci-cd/resolve-deploy-base.mjs
+
+      - name: Check workflow YAML parses
+        run: ruby -e 'require "yaml"; ARGV.each { |file| YAML.load_file(file); puts file }' .github/workflows/*.yml
+
+      - name: Smoke deploy surface detector
+        run: node scripts/ci-cd/detect-deploy-surfaces.mjs --base HEAD --head HEAD
+
   cargo-check:
     name: Cargo check & test
     runs-on: ubuntu-latest
