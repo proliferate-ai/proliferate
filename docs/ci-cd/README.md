@@ -193,13 +193,14 @@ Flow:
    - the Rust workspace with `cargo check` and `cargo test`
    - `@anyharness/sdk` generation and build
    - the desktop frontend build
-   - server catalog validation, Ruff, format, and pytest against Postgres
+   - server catalog validation, Ruff, format, and deterministic pytest suites
+     against Postgres
    - mobile typecheck
    - web typecheck/build
    - shared frontend package typecheck/build/tests
 3. `.github/workflows/server-ci.yml` validates the server slice separately with:
    - Ruff
-   - pytest against Postgres
+   - deterministic pytest suites against Postgres
    - versioned GHCR image publishing only on `server-v*` tags
 4. Direct, non-provider E2B webhook handler coverage stays in
    `.github/workflows/server-ci.yml` because those tests run against the local
