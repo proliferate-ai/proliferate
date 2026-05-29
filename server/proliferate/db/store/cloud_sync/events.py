@@ -973,10 +973,7 @@ async def _pending_interaction_counts_for_sessions(
         .where(CloudPendingInteraction.status.in_(("pending", "failed")))
         .group_by(CloudPendingInteraction.target_id, CloudPendingInteraction.session_id)
     )
-    return {
-        (target_id, session_id): int(count)
-        for target_id, session_id, count in count_rows
-    }
+    return {(target_id, session_id): int(count) for target_id, session_id, count in count_rows}
 
 
 async def _latest_transcript_previews_for_sessions(
