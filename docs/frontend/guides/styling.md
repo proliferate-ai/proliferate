@@ -2,10 +2,11 @@
 
 Scope:
 
-- `desktop/src/**`
-- `web/src/**`
-- shared DOM styling under `packages/design/**`, `packages/ui/**`, and
-  `packages/product-ui/**`
+- `apps/desktop/src/**`
+- `apps/web/src/**`
+- `apps/mobile/src/**`
+- shared styling under `apps/packages/design/**`, `apps/packages/ui/**`,
+  `apps/packages/product-ui/**`, and `apps/packages/product-surfaces/**`
 
 This file covers styling-only rules. Read
 [README.md](../README.md) for structure, ownership, and data-flow guidance.
@@ -27,14 +28,12 @@ supported themes instead of dropping palette classes into a component.
 
 Shared token ownership:
 
-- `packages/design/src/tokens.ts` owns serializable cross-client token values.
-- `packages/design/dist/theme.css` is generated from those tokens and exposes
+- `apps/packages/design/src/tokens.ts` owns serializable cross-client token
+  values.
+- `apps/packages/design/dist/theme.css` is generated from those tokens and exposes
   shared CSS theme variables plus shared non-product animation utilities for
-  Desktop/Web. Do not hand-edit generated theme output. Desktop currently
-  imports this generated CSS while still owning its full product theme presets
-  in `desktop/src/index.css`; moving those presets into generated shared tokens
-  is a later migration, not part of the foundation package.
-- `packages/design/src/dom.css` owns the shared Desktop/Web DOM entrypoint:
+  Desktop/Web. Do not hand-edit generated theme output.
+- `apps/packages/design/src/dom.css` owns the shared Desktop/Web DOM entrypoint:
   Tailwind setup, shared package `@source` entries, shared reset/root/body
   defaults, shared scrollbar utilities, and shared Proliferate global classes.
   Apps import this as `@proliferate/design/dom.css`.
@@ -42,10 +41,10 @@ Shared token ownership:
   under `[data-proliferate-client="desktop"]` or
   `[data-proliferate-client="web"]`.
 - Desktop keeps Desktop-only global CSS, third-party overrides, and theme
-  runtime behavior in `desktop/src/**`.
+  runtime behavior in `apps/desktop/src/**`.
 - Third-party dependency CSS, such as `@xterm/xterm/css/xterm.css`, is imported
   by the owning app directly. Do not put third-party dependency CSS in
-  `packages/design`.
+  `apps/packages/design`.
 - Mobile consumes React Native-safe values from
   `@proliferate/design/react-native`, not DOM CSS.
 
@@ -160,7 +159,16 @@ the tokens.
 
 ## UI Primitives First
 
-Outside `components/ui/**`, do not render raw:
+In DOM apps/packages, `apps/packages/ui/**` owns the primitive visual contract.
+Do not define primitive components outside that folder.
+
+Forbidden outside `apps/packages/ui/**`:
+
+- defining a local `Button`, `IconButton`, `Input`, `Dialog`, `Menu`, `Select`,
+  `Tabs`, `Tooltip`, `Badge`, layout shell, or equivalent lookalike
+- wrapping raw DOM controls in a reusable locally styled primitive
+- restyling raw controls at callsites to mimic a primitive
+- rendering raw controls directly:
 
 - `<button>`
 - `<input>`
@@ -168,16 +176,18 @@ Outside `components/ui/**`, do not render raw:
 - `<select>`
 - `<textarea>`
 
-Use an existing primitive when possible. If the visual treatment is genuinely
-new, extend the primitive cleanly or add a new dedicated primitive in
-`components/ui/**`.
+If a visual treatment is missing, extend the primitive API or add a dedicated
+primitive in `apps/packages/ui/**`. Callsite classes may handle layout,
+spacing, and sizing; primitives own color, border, radius, typography, focus,
+hover, disabled, and loading states.
 
-When using primitives from `packages/ui/**` or shared product components from
-`packages/product-ui/**`, import `@proliferate/design/dom.css`; that shared
-entrypoint owns the Tailwind package source scanning.
+When using primitives from `apps/packages/ui/**`, shared product components
+from `apps/packages/product-ui/**`, or connected surfaces from
+`apps/packages/product-surfaces/**`, import `@proliferate/design/dom.css`;
+that shared entrypoint owns the Tailwind package source scanning.
 
-Reusable icons belong in `components/ui/icons.tsx`, not inline inside feature
-components.
+Reusable icons belong in app/package primitive icon modules, not inline inside
+feature components.
 
 ## Callsite Styling
 
@@ -211,7 +221,8 @@ Global CSS is for:
 Component-specific styling belongs with the component or primitive, not in
 `index.css`.
 
-App stylesheets should be import-only where possible. `web/src/index.css`
-imports only `@proliferate/design/dom.css`. `desktop/src/index.css` imports
-the shared DOM entrypoint plus Desktop-owned third-party CSS and remaining
-legacy Desktop-specific theme/runtime CSS.
+App stylesheets should be import-only where possible. `apps/web/src/index.css`
+imports only `@proliferate/design/dom.css`. `apps/desktop/src/index.css`
+imports the shared DOM entrypoint plus Desktop-owned third-party CSS and
+Desktop-specific theme/runtime CSS. Mobile uses `apps/mobile/src/styles/**`
+and `@proliferate/design/react-native`, not DOM CSS.

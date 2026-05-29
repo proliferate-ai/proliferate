@@ -32,7 +32,9 @@ Presentation mappings convert product state to display metadata: labels, tones,
 icons, descriptions, ordering, and visibility flags.
 
 Put reusable mappings in `lib/domain/<domain>/<subdomain>/presentation.ts`.
-Keep them component-local only when they are purely visual and not reused.
+Move them to `apps/packages/product-domain/**` when the same mapping is shared
+by Desktop, Web, or Mobile. Keep them component-local only when they are purely
+visual and not reused.
 
 Examples:
 

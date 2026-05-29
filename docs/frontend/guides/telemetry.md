@@ -1,7 +1,7 @@
 # Frontend Telemetry Standards
 
-Status: authoritative for frontend telemetry in `desktop/src/**`, `web/src/**`,
-and `mobile/src/**`.
+Status: authoritative for frontend telemetry in `apps/desktop/src/**`,
+`apps/web/src/**`, and `apps/mobile/src/**`.
 
 Use this doc for analytics events, exception capture, anonymous telemetry,
 session replay, and telemetry-related provider and hook ownership.
@@ -29,9 +29,9 @@ session replay, and telemetry-related provider and hook ownership.
 - `trackProductEvent(...)` remains the frontend fanout seam. Hooks continue to
   emit typed product events, and the telemetry client decides whether they go to
   vendor telemetry, anonymous telemetry, or both.
-- Web and mobile do not yet use the desktop typed product-event catalog. Their
-  current PostHog telemetry is limited to coarse route/screen events plus
-  hosted authenticated identity sync.
+- Web and Mobile telemetry stays coarse unless a typed product event is added:
+  route/screen events, hosted authenticated identity sync, and reviewed product
+  events only.
 - Vendor telemetry is enabled only in `hosted_product`.
 - Anonymous telemetry may be enabled in all runtime modes unless explicitly
   disabled.
@@ -53,9 +53,9 @@ session replay, and telemetry-related provider and hook ownership.
   `lib/domain/telemetry/events.ts`.
 - Event names should stay stable when possible. Prefer changing payload shape
   and ownership over renaming events.
-- Hosted-product PostHog should stay intentionally allowlisted. If an event is
-  not in the vendor allowlist, it may still produce Sentry breadcrumbs without
-  becoming a PostHog event.
+- Hosted-product PostHog events should stay explicitly permitted. If an event
+  is not permitted for the vendor backend, it may still produce Sentry
+  breadcrumbs without becoming a PostHog event.
 - Event payloads must be low-risk and structured: enums, booleans, counts,
   versions, provider kinds, workspace kind, and similar fields.
 - Do not send prompts, transcript content, terminal output, file contents,

@@ -1,117 +1,69 @@
 # Frontend Standards
 
-Status: authoritative for frontend code in this repo.
+Status: authoritative for Desktop, Web, Mobile, and shared frontend packages.
 
-Scope:
+## Scope
 
-- `desktop/src/**`
-- `web/src/**`
-- `mobile/src/**`
-- shared frontend packages under `packages/design/**`, `packages/ui/**`, and
-  `packages/product-ui/**`, and `packages/product-model/**` where explicitly
-  noted by the focused guides
+These standards apply to all frontend app logic and shared frontend packages:
 
-Use this doc first to understand the frontend ownership model. Then read the
-layer doc and any surface spec that applies to the code you are changing.
+- `apps/desktop/src/**`
+- `apps/web/src/**`
+- `apps/mobile/src/**`
+- `apps/packages/design/**`
+- `apps/packages/ui/**`
+- `apps/packages/product-domain/**`
+- `apps/packages/product-ui/**`
+- `apps/packages/product-surfaces/**`
 
-## North Star
+Desktop, Web, and Mobile use the same folder logic. Platform-specific folders
+exist only where the platform genuinely differs: Desktop has Tauri and local
+AnyHarness runtime access, Web has browser/cloud access, and Mobile has native
+navigation, native styling, and React Native UI.
 
-The frontend is organized for legibility by file path. When a developer sees a
-file location, they should know what kind of logic is allowed there before
-opening the file. When something breaks or needs to change, they should know
-where to look first.
+## Goal
 
-Structural rules are not aesthetic. They prevent mixed-ownership files from
-becoming god modules that nobody can change confidently.
+The frontend is organized into distinct folders and subfolders for UI, state,
+long-lived client state, access, reusable product logic, workflows, providers,
+and shared packages.
 
-The single rule behind this guide:
+The explicit goals are:
 
-> A file should be readable cold. A contributor should be able to open the top
-> file in a feature and understand what it owns, what it exposes, and where the
-> real work lives. If understanding the file requires following imports through
-> unrelated layers, the structure is wrong.
+- make it predictable where UI, state, logic, access, and shared code live
+- make complicated product work legible, decomposed, and reviewable
+- make it easy to build broadly without re-learning the app structure per app
 
-## Read Order
-
-Always start here.
-
-Guides define reusable engineering standards: where code goes, what each layer
-may own, and which patterns are allowed.
-
-Guides:
-
-- [guides/components.md](guides/components.md) for component ownership, UI
-  primitives, and component folder hierarchy.
-- [guides/hooks.md](guides/hooks.md) for hook taxonomy, hook organization, and
-  React behavior ownership.
-- [guides/state.md](guides/state.md) for Zustand stores, React Query,
-  providers, and local state.
-- [guides/lib.md](guides/lib.md) for pure product logic, workflows, infra
-  utilities, and side-effect planners.
-- [guides/config.md](guides/config.md) for static constants, limits, option
-  sets, route ids, defaults, and ordering.
-- [guides/copy.md](guides/copy.md) for authored user-facing copy and reusable
-  presentation mappings.
-- [guides/access.md](guides/access.md) for cloud, AnyHarness, and Tauri access
-  boundaries.
-- [guides/styling.md](guides/styling.md) for styling, theme tokens,
-  primitives, and theme usage.
-- [guides/telemetry.md](guides/telemetry.md) for analytics, Sentry, replay
-  masking, or telemetry payloads.
-
-Specs define product/surface contracts: UX invariants, performance invariants,
-edge cases, and focused verification for a specific product surface.
-
-Specs:
-
-- [specs/delegated-work.md](specs/delegated-work.md) for subagents, cowork
-  agents, plan review agents, code review agents, tab indicators, delegated
-  work popovers, and delegated-work delete semantics.
-- [specs/chat-composer.md](specs/chat-composer.md) for the chat composer area.
-- [specs/chat-transcript.md](specs/chat-transcript.md) for transcript
-  streaming, replay, row models, or long-history rendering.
-- [specs/pending-workspace-shell.md](specs/pending-workspace-shell.md) for
-  pending workspace entry, projected session shell, optimistic prompts, and
-  workspace/session materialization handoff.
-- [specs/web-chat-home-component-audit.md](specs/web-chat-home-component-audit.md)
-  for the current Web chat/home component inventory and Desktop extraction
-  classification.
-- [specs/web-desktop-parity.md](specs/web-desktop-parity.md) for Web matching
-  Desktop chat/workspace UX through shared product-ui/product-model surfaces.
-- [specs/web-cloud-local-parity.md](specs/web-cloud-local-parity.md) for Web
-  cloud/local workspace identity, recents/sidebar, session switching, settings
-  modal migration, and mobile cloud UI alignment.
-- [specs/mobile-cloud-client.md](specs/mobile-cloud-client.md) for the mobile
-  cloud client, native chat parity, workspace/session flows, automations, and
-  settings.
-- [specs/mobile-claude-ui-alignment.md](specs/mobile-claude-ui-alignment.md)
-  for the screenshot-backed mobile UI alignment pass against Claude mobile.
-- [specs/workspace-files.md](specs/workspace-files.md) for workspace file
-  browsing, file viewing, diff viewing, Changes, or all-changes review.
+A file path should tell a developer what kind of code is allowed there before
+they open the file. If understanding a feature requires following imports
+through unrelated layers, the structure is wrong.
 
 ## Target Shape
 
-This is the target architecture. Some existing code is still transitional; new
-code and cleanup work should move toward this shape.
+The app tree is relative to each app source root:
+
+- `apps/desktop/src/`
+- `apps/web/src/`
+- `apps/mobile/src/`
+
+Each app starts from this shape and omits folders it does not need.
 
 ```text
-desktop/src/
+<app>/src/
   App.tsx
   main.tsx
+
   assets/
+
   components/
-    ui/
     <domain>/
       <surface>/
         <role>/
+
   config/
   copy/
+
   hooks/
     access/
-      anyharness/
-      cloud/
-      mcp/
-      tauri/
+      <external-system>/
     ui/
     <domain>/
       derived/
@@ -120,11 +72,10 @@ desktop/src/
       ui/
       cache/
       facade/
+
   lib/
     access/
-      anyharness/
-      cloud/
-      tauri/
+      <external-system>/
     domain/
       <domain>/
         <subdomain>/
@@ -132,157 +83,186 @@ desktop/src/
       <domain>/
     infra/
       <technical-concern>/
-  pages/
-  providers/
-  stores/
-    <domain>/
-  index.css
 
-web/src/
-  App.tsx
-  main.tsx
-  components/
-    <domain>/
-      <surface>/
-        <ControllerOrScreen>.tsx
-  config/
-  lib/
-    access/
-      cloud/
-    infra/
-  pages/
-  providers/
-  index.css
-
-mobile/src/
-  App.tsx
-  components/
-    <domain>/
-  config/
-  hooks/
-    <domain>/
-  lib/
-    access/
-      cloud/
-    domain/
-    infra/
   navigation/
+  pages/
   providers/
+
   stores/
     <domain>/
-  styles/
 
-packages/
+  styles/
+  index.css
+```
+
+Shared package shape:
+
+```text
+apps/packages/
   design/
     src/
       tokens.ts
       dom.css
+      react-native.ts
+
   ui/
     src/
       layout/
       primitives/
+
+  product-domain/
+    src/
+      <domain>/
+
   product-ui/
     src/
       <domain>/
+        <surface>/
+
+  product-surfaces/
+    src/
+      <domain>/
+        <surface>/
 ```
 
-Do not add new top-level frontend folders without updating this doc and the
-focused doc that owns the layer. And only update this after getting permission from a human.
+Platform notes:
+
+- Desktop uses `hooks/access/{anyharness,cloud,mcp,tauri}/**` and
+  `lib/access/{anyharness,cloud,tauri}/**` when it needs local runtime, native
+  shell, and Cloud attachment behavior.
+- Web uses Cloud/browser access and shared DOM packages. It should not rebuild
+  Desktop/Web product presentation locally when `product-ui` or
+  `product-surfaces` can own it.
+- Mobile uses Cloud/native access, native navigation, React Native components,
+  `design/react-native`, and `product-domain`. It does not import DOM packages:
+  `ui`, `product-ui`, or `product-surfaces`.
+
+## What Goes Where
+
+Use the lowest layer that can own the logic cleanly.
+
+| Area | Path | Owns | Must Not Own | Canon |
+| --- | --- | --- | --- | --- |
+| App entry | `<app>/src/App.tsx`, `<app>/src/main.tsx` | App bootstrap, provider composition, root shell mounting. | Product workflows, reusable rules, remote cache shape. | This doc |
+| Pages | `<app>/src/pages/**` | Desktop/Web route entrypoints: params, navigation state, page-level screen render. | Product visuals, access details, heavy orchestration. | This doc |
+| Navigation | `<app>/src/navigation/**` | Mobile navigation model and route typing. | Product business logic or remote access. | This doc |
+| Components | `<app>/src/components/<domain>/<surface>/<role>/**` | App-local product UI. Components render, call hooks, and forward callbacks. | Raw access, query invalidation, multi-step workflows, reusable product rules. | [guides/components.md](guides/components.md) |
+| Access hooks | `<app>/src/hooks/access/<system>/**` | React Query/mutation wrappers, query keys, invalidation, retry policy, UI-safe access state. | Product workflow branching or JSX. | [guides/hooks.md](guides/hooks.md), [guides/access.md](guides/access.md), [guides/state.md](guides/state.md) |
+| Generic UI hooks | `<app>/src/hooks/ui/<mechanic>/**` | Generic UI mechanics: keyboard, pointer, layout, measurement. | Product concepts. | [guides/hooks.md](guides/hooks.md) |
+| Derived hooks | `<app>/src/hooks/<domain>/derived/**` | UI-ready state computed from stores, providers, and queries. | Writes, effects, access construction, navigation, telemetry. | [guides/hooks.md](guides/hooks.md) |
+| Workflow hooks | `<app>/src/hooks/<domain>/workflows/**` | User-action callbacks and React-facing orchestration. | Large algorithms, raw clients, query key definitions. | [guides/hooks.md](guides/hooks.md) |
+| Lifecycle hooks | `<app>/src/hooks/<domain>/lifecycle/**` | Mounted background behavior: streams, dispatchers, polling, reconciliation, persistence bootstrap. | Render logic or click-driven branching. | [guides/hooks.md](guides/hooks.md) |
+| Product UI hooks | `<app>/src/hooks/<domain>/ui/**` | Product-specific UI mechanics. | Generic UI mechanics or product workflows. | [guides/hooks.md](guides/hooks.md) |
+| Product cache hooks | `<app>/src/hooks/<domain>/cache/**` | Product-composed caches combining multiple external/local sources. | Simple one-resource external queries. | [guides/hooks.md](guides/hooks.md), [guides/state.md](guides/state.md) |
+| Facade hooks | `<app>/src/hooks/<domain>/facade/**` | Thin composition wrappers that simplify a component API. | New product behavior or business branching. | [guides/hooks.md](guides/hooks.md) |
+| Raw access | `<app>/src/lib/access/<system>/**` | App-local raw client setup, platform bridges, native wrappers, auth/storage integration. | Product UI state, product branching, shared package logic. | [guides/access.md](guides/access.md) |
+| App product rules | `<app>/src/lib/domain/<domain>/<subdomain>/**` | Pure app-local product rules. | React, stores, query clients, access helpers, platform APIs. | [guides/lib.md](guides/lib.md) |
+| App workflows | `<app>/src/lib/workflows/<domain>/**` | Non-React product sequences with dependencies passed in. | React hooks, hidden singletons, raw endpoint construction. | [guides/lib.md](guides/lib.md) |
+| Infra | `<app>/src/lib/infra/<technical-concern>/**` | Generic technical machinery: persistence, scheduling, ids, batching, measurement. | Product-domain behavior. | [guides/lib.md](guides/lib.md) |
+| Providers | `<app>/src/providers/**` | Scoped dependencies and app/subtree boundaries. | General mutable UI state. | [guides/state.md](guides/state.md) |
+| Stores | `<app>/src/stores/<domain>/**` | Shared client-only state: selected ids, drafts, panels, local UI preferences. | Remote caches, APIs, navigation, telemetry, multi-store orchestration. | [guides/state.md](guides/state.md) |
+| Config | `<app>/src/config/**` | Static constants, limits, option sets, default ids, ordering. | Copy, presentation mappings, runtime state. | [guides/config.md](guides/config.md) |
+| Copy | `<app>/src/copy/**` | Authored user-facing copy and prompt/content strings. | Logic, access, status-to-style mappings. | [guides/copy.md](guides/copy.md) |
+| Styling | `<app>/src/styles/**`, `<app>/src/index.css` | App-local style entrypoints, native token bridge, app-specific third-party CSS. | Shared tokens or reusable DOM primitives. | [guides/styling.md](guides/styling.md) |
+| Telemetry | `<app>/src/hooks/**`, `<app>/src/lib/**`, `<app>/src/providers/**` | Product event wiring and replay/privacy boundaries at the owning app layer. | Hidden tracking inside shared product UI. | [guides/telemetry.md](guides/telemetry.md) |
+| Design package | `apps/packages/design/**` | Shared tokens, DOM CSS entrypoint, React Native-safe token values. | Product concepts, app code, SDK clients. | [packages/README.md](packages/README.md) |
+| UI package | `apps/packages/ui/**` | Canonical Desktop/Web DOM primitives and layout components. | Product concepts, app code, SDK clients, stores, React Native. | [packages/README.md](packages/README.md) |
+| Product domain package | `apps/packages/product-domain/**` | Pure shared product rules, vocabulary, validation, projections, view models. | React, DOM, React Native components, SDK clients, query clients, stores, access. | [packages/README.md](packages/README.md) |
+| Product UI package | `apps/packages/product-ui/src/<domain>/<surface>/**` | Shared Desktop/Web product presentation. Props in, callbacks out. | SDK clients, access helpers, query hooks, app stores, routes, Tauri, React Native, custom primitive redefinitions. | [packages/README.md](packages/README.md) |
+| Product surfaces package | `apps/packages/product-surfaces/src/<domain>/<surface>/**` | Shared connected Desktop/Web Cloud surfaces with SDK/query wiring and product UI composition. | Desktop/Web app internals, Tauri, AnyHarness runtime wiring, app stores, app routes, React Native, custom primitive redefinitions. | [packages/README.md](packages/README.md) |
+
+## Read Order
+
+Always start with this file. Then read the focused guide or package doc for the
+layer you are changing:
+
+- [guides/components.md](guides/components.md)
+- [guides/hooks.md](guides/hooks.md)
+- [guides/state.md](guides/state.md)
+- [guides/lib.md](guides/lib.md)
+- [guides/access.md](guides/access.md)
+- [guides/config.md](guides/config.md)
+- [guides/copy.md](guides/copy.md)
+- [guides/styling.md](guides/styling.md)
+- [guides/telemetry.md](guides/telemetry.md)
+- [packages/README.md](packages/README.md)
 
 ## Hard Rules
 
-- Use `@/` imports for app-root paths under `desktop/src/**`.
-- Keep imports direct and concrete. No barrel files or convenience re-export
-  modules.
+- Keep imports direct and concrete. Do not add barrel files or convenience
+  re-export modules.
+- Use `@/` imports for app-root paths in apps where the alias is configured.
 - `components/**` is `.tsx` only.
 - `hooks/**`, `lib/**`, `stores/**`, `config/**`, `copy/**`, and
   `providers/**` are `.ts` only unless a file must render JSX.
 - Pages are route entrypoints only: read params/navigation state, call
   page-level hooks, and render a screen component.
-- Hooks are not the default extraction unit. Use hooks for React behavior; use
-  plain functions for pure logic, product workflows, access helpers, and infra
-  utilities.
-- Product hook domains are organized by responsibility folders. New
-  non-migration hook files should not sit directly under `hooks/<domain>/`.
-- Web may own routes, providers, access/config helpers, and controller
-  components that map cloud data into shared view models. Web must not create
-  parallel product visual components when the same surface can be shared with
-  Desktop through `packages/product-ui/**`.
+- Product hook domains use responsibility folders. Hook files should not sit
+  directly under `hooks/<domain>/`.
+- Components render. Hooks own React behavior. Stores hold shared client-only
+  state. `lib/domain` and `product-domain` hold pure product rules.
+- Desktop, Web, `product-ui`, and `product-surfaces` use
+  `apps/packages/ui/**` for DOM primitives.
+- Do not define DOM primitive components outside `apps/packages/ui/**`. This
+  includes differently named local wrappers around buttons, inputs, dialogs,
+  menus, tabs, tooltips, badges, layout shells, or similar reusable controls.
+- Desktop and Web share product presentation through `product-ui` and connected
+  Cloud surfaces through `product-surfaces` when sharing keeps the product more
+  legible.
+- Mobile shares product rules through `product-domain` and renders native UI in
+  the app.
 - Preserve current UI and behavior unless an explicit behavior change is
   requested.
 - Delete dead code when replacing an implementation.
-- Move toward the target architecture incrementally. Do not create empty
-  folder trees or speculative abstractions.
-- Cleanup PRs should state whether they are behavior-preserving extractions or
-  behavior changes. Do not mix both unless the task explicitly requires it.
+- Do not create empty folder trees or speculative abstractions.
 - Avoid god modules and god stores. Prefer splitting before roughly 400 lines.
   Files at 600+ lines need a strong reason to stay whole. Mixed ownership
   should be split even below those thresholds.
 - Colocate types with the code that owns them. Generated API types live with
   the generated client. App-defined domain models live with their owning
-  domain logic. Store types live with their store. Do not create shared type
-  buckets.
-
-## Ownership Model
-
-Use the lowest layer that can own the logic cleanly.
-
-| Concern | Path | Put it here when | Do not put here | Details |
-| --- | --- | --- | --- | --- |
-| Product UI | `desktop/src/components/<domain>/<surface>/<role>/**` or `packages/product-ui/**` | It renders product-specific UI. Use `packages/product-ui/**` when the component is shared by Desktop and Web and accepts data/callback props instead of calling app access directly. | Raw access, query invalidation, multi-step workflows, reusable product rules, Web-local product visuals. | [guides/components.md](guides/components.md) |
-| UI primitives | `desktop/src/components/ui/**` or `packages/ui/**` | It is reusable without product knowledge. Use `packages/ui/**` only when the primitive is useful to both Desktop and Web and has no Desktop-only runtime dependencies. | Product-specific copy, stores, access, or workflow behavior. | [guides/components.md](guides/components.md), [guides/styling.md](guides/styling.md) |
-| Generic UI hooks | `hooks/ui/<mechanic>/**` | It wraps browser/UI mechanics with no product concepts. | Sessions, workspaces, cloud, agents, billing, or other product concepts. | [guides/hooks.md](guides/hooks.md) |
-| Access hooks | `hooks/access/<system>/**` | It is a React Query/mutation wrapper around cloud, AnyHarness, or Tauri. | Product workflow branching or JSX. | [guides/hooks.md](guides/hooks.md), [guides/access.md](guides/access.md), [guides/state.md](guides/state.md) |
-| Product derived hooks | `hooks/<domain>/derived/**` | It computes UI-ready state from stores, providers, and queries. | Writes, effects, raw access, navigation, or telemetry. | [guides/hooks.md](guides/hooks.md) |
-| Product workflow hooks | `hooks/<domain>/workflows/**` | It exposes user-action callbacks and coordinates React dependencies. | Large business algorithms or raw clients. | [guides/hooks.md](guides/hooks.md) |
-| Product lifecycle hooks | `hooks/<domain>/lifecycle/**` | It owns mounted effects, streams, dispatchers, polling, or reconciliation. | Render logic or user-click workflow branching. | [guides/hooks.md](guides/hooks.md) |
-| Product UI-mechanic hooks | `hooks/<domain>/ui/**` | It wraps UI mechanics that are specific to one product domain. | Generic browser mechanics or product workflows. | [guides/hooks.md](guides/hooks.md) |
-| Product cache hooks | `hooks/<domain>/cache/**` | It owns a product-composed cache that combines multiple external/local sources. | One-resource external query wrappers or raw access. | [guides/hooks.md](guides/hooks.md), [guides/access.md](guides/access.md), [guides/state.md](guides/state.md) |
-| Shared client state | `stores/<domain>/<concern>-store.ts` | It is client-only state such as selected ids, drafts, panels, or active UI. | Server/runtime caches, API calls, navigation, telemetry, or multi-store orchestration. | [guides/state.md](guides/state.md) |
-| Scoped dependencies | `providers/**` | It defines an app/subtree context boundary. | General mutable UI state. | [guides/state.md](guides/state.md) |
-| Pure product rules | `lib/domain/<domain>/<subdomain>/**` | It is deterministic product logic with no React or external access. | Hooks, stores, clients, query invalidation, platform APIs. | [guides/lib.md](guides/lib.md) |
-| Plain product workflows | `lib/workflows/<domain>/**` | It is a non-React sequence coordinating dependencies passed by a hook. | React hooks or hidden singleton client construction. | [guides/lib.md](guides/lib.md) |
-| Raw external access | `lib/access/<system>/**` | `lib/access` owns raw cloud, AnyHarness desktop wiring, and Tauri native wrappers. | Product UI state, product branching, or components. | [guides/access.md](guides/access.md) |
-| Technical utilities | `lib/infra/<technical-concern>/**` | It is generic machinery such as persistence, scheduling, ids, batching, or measurement. | Product-domain behavior. | [guides/lib.md](guides/lib.md) |
-| Static constants | `config/**` | It is a real constant, limit, option set, default id, or ordering. | Copy, status labels, presentation metadata, or runtime state. | [guides/config.md](guides/config.md) |
-| Product copy | `copy/<domain>/**` | It is user-facing text or authored prompt content. | Logic, access, or status-to-style mappings. | [guides/copy.md](guides/copy.md) |
-| Presentation mappings | `lib/domain/<domain>/<subdomain>/presentation.ts` | It maps product state to labels, tone, icons, descriptions, or visibility. | Transport access or mutable UI state. | [guides/copy.md](guides/copy.md) |
+  domain logic. Store types live with their store.
 
 ## Dependency Direction
 
-- Components may call hooks and render UI primitives.
-- Product hooks may read stores/providers, call access hooks, and call
-  `lib/domain` or `lib/workflows` functions.
-- Product hooks do not own React Query key definitions or query cache shape.
-  They call access hooks/cache callbacks when a workflow needs remote state
-  invalidated or updated.
-- Stores do not call hooks, clients, query invalidation, navigation, telemetry,
-  or other stores.
-- `lib/domain` does not import React, stores, query clients, access helpers, or
-  platform APIs.
-- `lib/workflows` may coordinate multiple dependencies, but those dependencies
-  are passed in. It does not import React hooks.
-- Raw cloud, AnyHarness, and Tauri access stays behind the access boundary.
-
-Dependency direction is one-way:
+App dependency direction:
 
 ```text
-components -> hooks -> lib/workflows -> lib/domain/lib/infra -> lib/access
+components -> hooks
+hooks -> hooks/access -> lib/access -> external SDK/platform
+hooks -> lib/workflows -> lib/domain/lib/infra
+hooks -> stores/providers
 ```
 
-Stores are read by hooks. `lib/**` files do not read stores directly unless a
-focused area doc explicitly marks the file as a transitional state adapter.
+Stores are read by hooks. `lib/**` files do not call hooks or read stores
+directly. Product workflows receive access calls, store setters, navigation,
+telemetry, and cache callbacks through dependency arguments.
+
+Shared package dependency direction:
+
+```text
+apps
+  -> product-surfaces
+  -> product-ui
+  -> ui
+  -> design
+
+apps
+  -> product-domain
+product-surfaces -> product-domain
+product-ui -> product-domain
+```
+
+`product-domain` is pure. It does not import React, DOM, React Native, SDK
+clients, access helpers, stores, or query clients. `product-ui` is
+presentational DOM UI. It does not import app code, raw access, stores, routes,
+or SDK clients. `product-surfaces` may use shared Cloud SDK React hooks for
+Desktop/Web surfaces, but it must not import app internals.
 
 ## CI-Enforced Repo Shape
 
 Frontend ownership boundaries are enforced by
-`scripts/check_frontend_boundaries.py` in CI. The check is a ratchet: existing
-violations live in `scripts/frontend_boundaries_allowlist.txt`, and new
-violations fail the repo-shape job.
-
-The allowlist is temporary migration debt. Cleanup PRs should remove allowlist
-entries whenever they move a path to the target architecture or reduce the
-number of violations in that file.
+`scripts/check_frontend_boundaries.py` in CI. The repo-shape job should enforce
+the ownership rules in this document.
 
 React Query cache shape is owned by access hooks by default. The only
 product-domain exception is a product-composed cache under
@@ -290,15 +270,14 @@ product-domain exception is a product-composed cache under
 files should call access/cache callbacks instead of importing `useQueryClient`
 or hand-editing query keys.
 
-## Cleanup Discipline
+## Change Discipline
 
-- Move ownership violations before introducing new abstractions.
-- Do not leave duplicate old and new paths behind after a migration.
+- Keep ownership boundaries intact before introducing new abstractions.
+- Do not leave duplicate code paths behind.
 - Do not create one-file folders or empty target trees to satisfy a diagram.
 - Prefer one bounded product area per PR.
-- Keep public hook/component APIs stable unless the cleanup explicitly changes
+- Keep public hook/component APIs stable unless the task explicitly changes
   callsites.
-- When splitting a file, preserve behavior first; improve behavior in a
-  separate PR.
+- When splitting a file, preserve behavior first; improve behavior separately.
 - Use focused tests around moved domain/workflow logic when the logic is
   meaningful or risky.
