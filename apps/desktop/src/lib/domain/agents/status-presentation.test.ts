@@ -11,7 +11,7 @@ function buildAgent(overrides: Partial<AgentSummary> = {}): AgentSummary {
     name: "Claude",
     description: "Anthropic Claude",
     readiness: "install_required",
-    installState: "not_installed",
+    installState: "install_required",
     credentialState: "not_configured",
     message: null,
     supportsLogin: false,
@@ -104,6 +104,33 @@ describe("getAgentStatusDisplay", () => {
     expect(status).toEqual({
       label: "Install failed",
       tone: "destructive",
+    });
+  });
+
+  it("shows installing only for the agent currently installing", () => {
+    const status = getAgentStatusDisplay(
+      buildAgent({ installState: "installing" }),
+      { isReconciling: true },
+    );
+
+    expect(status).toEqual({
+      label: "Installing...",
+      tone: "muted",
+    });
+  });
+
+  it("does not show every setup-needed agent as installing during reconcile", () => {
+    const status = getAgentStatusDisplay(
+      buildAgent({
+        readiness: "install_required",
+        installState: "install_required",
+      }),
+      { isReconciling: true },
+    );
+
+    expect(status).toEqual({
+      label: "Install required",
+      tone: "warning",
     });
   });
 });

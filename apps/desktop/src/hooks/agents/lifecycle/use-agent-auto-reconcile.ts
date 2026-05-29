@@ -45,13 +45,14 @@ export function useAgentAutoReconcile() {
   const agentSeedStatus = runtimeHealth?.agentSeed?.status;
   // `partial` can mean the seed preserved a user-owned Claude/Codex install.
   // Normal reconcile is still safe because non-reinstall installs short-circuit
-  // when managed launchers already exist.
+  // when managed launchers already exist. `not_configured_dev` intentionally
+  // stays manual so local dev profiles do not start long network installs on
+  // app boot.
   const seedAllowsReconcile =
     !agentSeedStatus
     || agentSeedStatus === "ready"
     || agentSeedStatus === "partial"
-    || agentSeedStatus === "failed"
-    || agentSeedStatus === "not_configured_dev";
+    || agentSeedStatus === "failed";
 
   const previousAgentSeedStatus = useRef<string | null>(null);
 

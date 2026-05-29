@@ -40,13 +40,6 @@ export function getAgentStatusDisplay(
     isReconciling?: boolean;
   },
 ): AgentStatusDisplay {
-  if (options?.isReconciling) {
-    return {
-      label: AGENT_SETUP_COPY.installing,
-      tone: "muted",
-    };
-  }
-
   if (options?.reconcileResult?.outcome === "failed") {
     return {
       label: AGENT_SETUP_COPY.installFailed,
@@ -58,6 +51,13 @@ export function getAgentStatusDisplay(
     return {
       label: AGENT_SETUP_COPY.justInstalled,
       tone: "success",
+    };
+  }
+
+  if (agent.installState === "installing") {
+    return {
+      label: AGENT_SETUP_COPY.installing,
+      tone: "muted",
     };
   }
 

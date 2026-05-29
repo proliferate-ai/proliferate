@@ -63,6 +63,35 @@ describe("useAgentAutoReconcile", () => {
     expect(mocks.invalidateAgentListResources)
       .toHaveBeenLastCalledWith("http://runtime.test");
   });
+
+  it("auto-reconciles install-required agents after seed hydration is ready", async () => {
+    arrange();
+    setRuntimeHealth("ready", 1);
+    setAgentCatalog({
+      agentsNeedingSetup: [{ readiness: "install_required" }],
+    });
+
+    renderHook(() => useAgentAutoReconcile());
+
+    await waitFor(() => {
+      expect(mocks.reconcileAgents).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("does not auto-reconcile dev profiles without a configured seed", async () => {
+    arrange();
+    setRuntimeHealth("not_configured_dev", 1);
+    setAgentCatalog({
+      agentsNeedingSetup: [{ readiness: "install_required" }],
+    });
+
+    renderHook(() => useAgentAutoReconcile());
+
+    await waitFor(() => {
+      expect(mocks.useRuntimeHealthQuery).toHaveBeenCalled();
+    });
+    expect(mocks.reconcileAgents).not.toHaveBeenCalled();
+  });
 });
 
 function arrange() {
@@ -79,6 +108,19 @@ function arrange() {
       runtimeUrl: "http://runtime.test",
     })
   );
+  setAgentCatalog();
+}
+
+function setAgentCatalog(
+  overrides: Partial<{
+    agentsNeedingSetup: Array<{ readiness: string }>;
+    hasAgents: boolean;
+    isLoading: boolean;
+    isReconciling: boolean;
+    reconcileDataUpdatedAt: number;
+    reconcileStatus: string;
+  }> = {},
+) {
   mocks.useAgentCatalog.mockReturnValue({
     agentsNeedingSetup: [],
     hasAgents: true,
@@ -86,6 +128,7 @@ function arrange() {
     isReconciling: false,
     reconcileDataUpdatedAt: 0,
     reconcileStatus: "idle",
+    ...overrides,
   });
 }
 

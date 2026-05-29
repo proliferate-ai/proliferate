@@ -35,6 +35,17 @@ start of the task, not after implementation has already started.
   - shared frontend package ownership for design, UI primitives, product-domain
     rules, product UI, and connected product surfaces
 
+## Authoritative desktop native standards
+
+- `docs/desktop/README.md`
+  - start here for the Tauri native shell, sidecar process ownership, bundled
+    resources, local secrets, and desktop native commands
+- `docs/desktop/specs/anyharness-sidecar.md`
+  - packaged AnyHarness sidecar build, lookup, launch, health, and restart flow
+- `docs/desktop/specs/agent-seeds.md`
+  - bundled agent seed build, Tauri resource lookup, hydration, ownership, and
+    reconcile interaction
+
 ## Authoritative server standards
 
 - `docs/server/README.md`
