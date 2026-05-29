@@ -20,7 +20,7 @@
   <a href="https://github.com/proliferate-ai/proliferate/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/proliferate-ai/proliferate?style=social" /></a>
   <a href="https://github.com/proliferate-ai/proliferate/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/proliferate-ai/proliferate?sort=semver" /></a>
   <a href="./LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue" /></a>
-  <a href="./docs/README.md"><img alt="Docs" src="https://img.shields.io/badge/docs-view-black" /></a>
+  <a href="https://proliferate.com/docs"><img alt="Docs" src="https://img.shields.io/badge/docs-view-black" /></a>
 </p>
 
 <p>
@@ -31,9 +31,9 @@
 <p>
   <a href="https://proliferate.com"><strong>Download for macOS</strong></a>
   ·
-  <a href="./docs/README.md">Documentation</a>
+  <a href="https://proliferate.com/docs">Documentation</a>
   ·
-  <a href="https://github.com/proliferate-ai/proliferate/releases">Changelog</a>
+  <a href="https://proliferate.com/changelog">Changelog</a>
   ·
   <a href="#community">Community</a>
 </p>
@@ -101,22 +101,25 @@ permissions, and transcript behavior stay intact.
 
 | Feature | What it unlocks |
 | --- | --- |
-| [Personal software factory](./docs/anyharness/guides/api.md) | Build, run, inspect, and improve agentic work from one open workspace. |
-| [Native agent harnesses](./docs/anyharness/guides/harnesses.md) | Use Codex, Claude Code, Gemini, OpenCode, Cursor, Amp, and more with native behavior intact. |
-| [Local and cloud workspaces](./docs/current/specs/00-sandbox-foundation.md) | Keep routine tasks fast and close, then send long-running work to managed or self-hosted cloud. |
-| [Workspace continuity](./docs/current/specs/10-migration.md) | Carry agent context across desktop, web, local runtimes, and cloud sandboxes. |
-| [Subagents and reviews](./docs/anyharness/product-mcps/reviews.md) | Split work across agents and launch code or plan review loops. |
-| [Automations](./docs/current/specs/06-automations.md) | Schedule useful agent work and promote repeatable workflows into team defaults. |
-| [Team workflows](./docs/current/specs/05-claiming.md) | Share work through Slack starts, shared sessions, claims, and multiplayer cloud chats. |
-| [Plugins, MCPs, and skills](./docs/current/specs/01-mcp-skills-plugins.md) | Package tools, prompts, and capabilities once and project them into local or cloud runtimes. |
-| [Enterprise controls](./docs/security/README.md) | Self-hosting, sandbox policy, shared auth, deployment boundaries, and security docs for companies. |
+| [Workspaces](https://proliferate.com/docs/concepts/workspaces) | Isolate repository work in a local checkout, new worktree, or cloud workspace. |
+| [Agents](https://proliferate.com/docs/concepts/agents-and-harnesses) | Run Codex, Claude Code, Gemini CLI, OpenCode, Cursor, Amp, and more with native harness behavior intact. |
+| [Subagents](https://proliferate.com/docs/concepts/subagents) | Spawn focused helper agents for investigation, implementation, and review. |
+| [Code and plan review](https://proliferate.com/docs/concepts/review) | Use reviewer agents to check plans, diffs, risks, tests, and branch readiness. |
+| [Automations](https://proliferate.com/docs/concepts/automations) | Schedule repeated fixes, checks, reviews, reports, and handoffs. |
+| [Plugins](https://proliferate.com/docs/concepts/plugins) | Bundle skills, MCPs, and Proliferate capabilities into one session-scoped unit. |
+| [Computer Use](https://proliferate.com/docs/concepts/computer-use) | Let approved agents click, type, and navigate desktop apps when APIs are not enough. |
+| [Browser Use](https://proliferate.com/docs/concepts/browser-use) | Give agents scoped browser automation for forms, dashboards, OAuth flows, and web testing. |
+| [Artifacts](https://proliferate.com/docs/concepts/artifacts) | Render agent outputs like Markdown, HTML, SVG, and React components inline. |
+| [Cloud](https://proliferate.com/docs/concepts/cloud) | Run long-lived work away from your laptop in managed or self-hosted environments. |
+| [Mobile](https://proliferate.com/docs/concepts/mobile) | Coming soon: dispatch sessions, approve actions, and follow cloud work from your phone. |
+| [Organizations](https://proliferate.com/docs/concepts/organizations) | Share seats, billing, repository settings, cloud limits, and team defaults. |
 
 ## Getting Started
 
 ### Quick Start
 
-Download Proliferate from [proliferate.com](https://proliferate.com) or the
-[latest GitHub release](https://github.com/proliferate-ai/proliferate/releases/latest).
+Download Proliferate from [proliferate.com](https://proliferate.com) or follow
+the [installation guide](https://proliferate.com/docs/installation).
 
 <details>
 <summary>Run from source</summary>
