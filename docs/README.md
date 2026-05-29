@@ -162,6 +162,9 @@ start of the task, not after implementation has already started.
 
 ## Deployment and environment reference
 
+- `docs/security/README.md`
+  - security index for deployment boundaries, sandbox isolation, auth, and
+    planned enterprise security coverage
 - `docs/reference/dev-profiles.md`
   - local multi-worktree `make dev PROFILE=<name>` workflow, profile state,
     port allocation, and generated Tauri runner behavior

@@ -5,8 +5,8 @@
     <td align="center">
       <br /><br /><br />
       <strong>Hero screenshot placeholder</strong><br />
-      Add a Proliferate product screenshot here showing the desktop workspace,
-      agent tabs, transcript, files or diffs, and local/cloud controls.
+      Add a Proliferate product screenshot here showing local and cloud
+      workspaces, agent tabs, Changes, web/desktop handoff, and team automation.
       <br /><br /><br />
     </td>
   </tr>
@@ -23,7 +23,10 @@
   <a href="./docs/README.md"><img alt="Docs" src="https://img.shields.io/badge/docs-view-black" /></a>
 </p>
 
-<p>Work better and deeper with a single workspace for all your agent work.</p>
+<p>
+  Move agent work between local desktop, cloud sandboxes, web, and Slack.
+  Bring any agent, have them work together, and make agent work team-wide.
+</p>
 
 <p>
   <a href="https://proliferate.com"><strong>Download for macOS</strong></a>
@@ -37,26 +40,24 @@
 
 </div>
 
-## The Agent IDE
+## Team-Wide Agent Work, Finally
 
-Proliferate is one workspace for serious agent work: local when you want your
-machine and credentials close, cloud when you want long-running work, shared
-sandboxes, automations, or team workflows.
+Proliferate gives teams one workspace for every agent run: local when you want
+desktop control, cloud when work needs to keep going, and shared surfaces when
+teammates need to claim, review, or continue the work.
 
-- Run Codex, Claude Code, Gemini CLI, OpenCode, and other agents with their
-  native features.
-- Isolate every task in a git worktree, local runtime, SSH target, or managed
-  cloud sandbox.
-- Share work through team-wide automations, shared cloud sessions, and the
-  Slack bot.
-- Switch agents at any time without locking your workflow into one provider.
-- Move work between local and cloud targets when the job needs a different
-  runtime.
+- Move work local <-> cloud and desktop <-> web without losing the thread.
+- Bring any agent and keep its native tools, auth, models, permissions, and
+  transcript behavior.
+- Run agents together through subagents, review agents, automations, and Slack.
+- Isolate every task in a worktree, SSH target, or managed cloud sandbox.
+- Build on enterprise-ready foundations for self-hosting, sandbox isolation,
+  shared auth, and security review.
 
-## Supported Agents
+## Bring Your Agent
 
-Run agents with their native CLIs, auth, tools, models, permissions, and
-transcript behavior.
+Proliferate runs each agent through its native harness, so auth, tools, models,
+permissions, and transcript behavior stay intact.
 
 <table>
   <tr>
@@ -97,15 +98,15 @@ transcript behavior.
 
 | Feature | What it unlocks |
 | --- | --- |
-| [Automations](./docs/current/specs/06-automations.md) | Run any agent on a schedule or trigger, locally or in cloud workspaces. |
-| [Harnesses](./docs/anyharness/guides/harnesses.md) | Use provider-native behavior for Claude Code, Codex, Gemini, OpenCode, and more. |
-| [Subagents](./docs/anyharness/product-mcps/subagents.md) | Delegate focused work to child sessions while preserving parent context and review flow. |
+| [Team-wide agent work](./docs/current/specs/05-claiming.md) | Shared sessions, claims, Slack starts, and automations your whole team can use. |
+| [Workspace mobility](./docs/current/specs/10-migration.md) | Move runnable work between local, cloud, desktop, and web surfaces. |
+| [Native agent harnesses](./docs/anyharness/guides/harnesses.md) | Use Codex, Claude Code, Gemini, OpenCode, Cursor, Amp, and more with native behavior intact. |
+| [Cloud sandboxes](./docs/current/specs/00-sandbox-foundation.md) | Run long-lived work in managed or self-hosted cloud environments. |
+| [Automations](./docs/current/specs/06-automations.md) | Schedule agents to run whenever, wherever, with team-wide defaults. |
+| [Subagents and reviews](./docs/anyharness/product-mcps/reviews.md) | Split work across agents and launch code or plan review loops. |
 | [Plugins, MCPs, and skills](./docs/current/specs/01-mcp-skills-plugins.md) | Package tools, prompts, and capabilities once and project them into local or cloud runtimes. |
-| [Code and plan review](./docs/anyharness/product-mcps/reviews.md) | Launch review agents for implementation diffs or proposed plans. |
-| [Workspace mobility](./docs/current/specs/10-migration.md) | Move runnable workspaces and sessions between local, cloud, and target runtimes. |
-| [Multiplayer cloud chats](./docs/current/specs/08-web-mobile-dispatch.md) | Project cloud sessions into desktop, web, mobile, and shared team surfaces. |
-| [Team Slack bot](./docs/current/specs/07-slack-bot.md) | Turn Slack requests into shared cloud work that teammates can claim and continue. |
-| [AnyHarness API](./docs/anyharness/guides/api.md) | Build on the HTTP and SSE runtime APIs for workspaces, sessions, transcripts, and tools. |
+| [Enterprise controls](./docs/security/README.md) | Self-hosting, sandbox policy, shared auth, deployment boundaries, and security docs for teams. |
+| [AnyHarness API](./docs/anyharness/guides/api.md) | Build directly on runtime APIs for sessions, tools, transcripts, and workspaces. |
 
 ## Getting Started
 
