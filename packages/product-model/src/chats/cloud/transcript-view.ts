@@ -51,6 +51,7 @@ export interface CloudChatTranscriptRowView {
   lastSeq?: number | null;
   sourceRequestId?: string | null;
   sourceCommandId?: string | null;
+  sourceToolCallId?: string | null;
 }
 
 export interface CloudTranscriptViewResult {
@@ -85,9 +86,12 @@ export function buildCloudTranscriptView(input: {
       input.sessionId,
       envelopes as SessionEventEnvelope[],
     );
-    const rows = buildRowsFromTranscriptState(transcript);
+    const rows = applyInteractionCommandDetails(
+      buildRowsFromTranscriptState(transcript),
+      input.events,
+    );
     if (rows.length > 0 && shouldUseEventRows(input, rows, missingEnvelopeCount)) {
-      const rowsWithPending = appendPendingPromptRows(
+      const rowsWithPending = applyPendingInteractionRows(
         rows,
         input.pendingInteractions ?? [],
         input.fallbackItems,
@@ -103,7 +107,7 @@ export function buildCloudTranscriptView(input: {
 
   if (input.fallbackItems.length > 0) {
     return {
-      rows: appendPendingPromptRows(
+      rows: applyPendingInteractionRows(
         buildRowsFromProjectedItems(input.fallbackItems),
         input.pendingInteractions ?? [],
         input.fallbackItems,
@@ -115,7 +119,7 @@ export function buildCloudTranscriptView(input: {
   }
 
   return {
-    rows: appendPendingPromptRows([], input.pendingInteractions ?? []),
+    rows: applyPendingInteractionRows([], input.pendingInteractions ?? []),
     source: "empty",
     envelopeCount: envelopes.length,
     missingEnvelopeCount,
@@ -319,7 +323,6 @@ function appendDisplayBlockRows(
       id: `${row.key}:${block.blockId}`,
       kind: "tool_group",
       title: formatCollapsedActionsSummary(summary),
-      detail: formatCount(block.itemIds.length, "action") ?? undefined,
       status: resolveGroupStatus(block.itemIds, transcript),
     });
     return;
@@ -435,6 +438,7 @@ function toolCallItemToRow(
     detail: command ?? display.hint ?? item.nativeToolName ?? item.toolKind,
     body: previewText(toolOutputPreview(item)),
     status: statusLabel(item.status),
+    sourceToolCallId: item.toolCallId ?? null,
     ...transcriptItemSeq(item),
   };
 }
@@ -449,15 +453,221 @@ function buildRowsFromProjectedItems(
       return {
         id: `projection:${item.itemId}`,
         kind,
-        title: item.title ?? item.kind ?? "Projected event",
+        title: projectedItemTitle(item, kind),
         body: previewText(item.text ?? projectedPayloadText(item.payload)),
-        status: item.status ?? undefined,
-        detail: item.sourceAgentKind ?? undefined,
+        status: projectedItemStatus(item),
+        detail: projectedItemDetail(item, kind),
         firstSeq: item.firstSeq,
         lastSeq: item.lastSeq,
         sourceRequestId: kind === "user" ? projectedItemPromptId(item) : null,
+        sourceToolCallId: kind === "tool" ? projectedItemToolCallId(item) : null,
       };
     });
+}
+
+function applyInteractionCommandDetails(
+  rows: readonly CloudChatTranscriptRowView[],
+  events: readonly CloudSessionEvent[],
+): CloudChatTranscriptRowView[] {
+  const commandsByToolCallId = interactionCommandTitlesByToolCallId(events);
+  if (commandsByToolCallId.size === 0) {
+    return [...rows];
+  }
+  return rows.map((row) => applyInteractionCommandDetailsToRow(row, commandsByToolCallId));
+}
+
+function applyInteractionCommandDetailsToRow(
+  row: CloudChatTranscriptRowView,
+  commandsByToolCallId: ReadonlyMap<string, string>,
+): CloudChatTranscriptRowView {
+  const children = row.children?.map((child) =>
+    applyInteractionCommandDetailsToRow(child, commandsByToolCallId)
+  );
+  const command = row.sourceToolCallId
+    ? commandsByToolCallId.get(row.sourceToolCallId)
+    : null;
+  if (!command) {
+    return children ? { ...row, children } : row;
+  }
+  return {
+    ...row,
+    title: row.kind === "tool" ? "Command" : row.title,
+    detail: command,
+    children,
+  };
+}
+
+function interactionCommandTitlesByToolCallId(
+  events: readonly CloudSessionEvent[],
+): Map<string, string> {
+  const commands = new Map<string, string>();
+  for (const event of events) {
+    const envelope = event.envelope;
+    if (!isSessionEventEnvelope(envelope)) {
+      continue;
+    }
+    const eventPayload = envelope.event;
+    if (!isRecord(eventPayload) || eventPayload.type !== "interaction_requested") {
+      continue;
+    }
+    const title = normalizeProjectedShellTitle(readString(eventPayload.title));
+    if (!title) {
+      continue;
+    }
+    const source = isRecord(eventPayload.source)
+      ? eventPayload.source as Record<string, unknown>
+      : null;
+    const toolCallId = readString(source?.toolCallId)
+      ?? readString(source?.["tool_call_id"])
+      ?? null;
+    if (toolCallId) {
+      commands.set(toolCallId, title);
+    }
+  }
+  return commands;
+}
+
+function applyPendingInteractionRows(
+  rows: readonly CloudChatTranscriptRowView[],
+  pendingInteractions: readonly CloudPendingInteraction[],
+  projectedItems: readonly CloudTranscriptItem[] = [],
+): CloudChatTranscriptRowView[] {
+  const rowsWithPermissions = applyPendingPermissionRows(rows, pendingInteractions);
+  return appendPendingPromptRows(rowsWithPermissions, pendingInteractions, projectedItems);
+}
+
+interface PendingPermissionRowInfo {
+  interaction: CloudPendingInteraction;
+  title: string;
+  description: string | null;
+  toolCallId: string | null;
+  itemId: string | null;
+}
+
+function applyPendingPermissionRows(
+  rows: readonly CloudChatTranscriptRowView[],
+  pendingInteractions: readonly CloudPendingInteraction[],
+): CloudChatTranscriptRowView[] {
+  const permissions = pendingInteractions
+    .map(pendingPermissionRowInfo)
+    .filter((info): info is PendingPermissionRowInfo => info !== null);
+  if (permissions.length === 0) {
+    return markStaleRunningToolRows(rows);
+  }
+
+  const unmatched = new Map(
+    permissions.map((info) => [info.interaction.requestId, info]),
+  );
+  const annotatedRows = rows.map((row) => {
+    const match = permissions.find((info) => pendingPermissionMatchesRow(info, row));
+    if (!match) {
+      return row;
+    }
+    unmatched.delete(match.interaction.requestId);
+    return {
+      ...row,
+      detail: match.title || row.detail,
+      body: row.body ?? match.description,
+      status: pendingPermissionStatusLabel(match.interaction),
+      sourceRequestId: match.interaction.requestId,
+      sourceToolCallId: match.toolCallId ?? row.sourceToolCallId ?? null,
+    };
+  });
+
+  const pendingRows = [...unmatched.values()]
+    .sort((left, right) => left.interaction.requestedSeq - right.interaction.requestedSeq)
+    .map((info): CloudChatTranscriptRowView => ({
+      id: `pending-permission:${info.interaction.requestId}`,
+      kind: "tool",
+      title: "Command",
+      body: info.description,
+      detail: info.title,
+      status: pendingPermissionStatusLabel(info.interaction),
+      firstSeq: info.interaction.requestedSeq,
+      lastSeq: info.interaction.requestedSeq,
+      sourceRequestId: info.interaction.requestId,
+      sourceToolCallId: info.toolCallId,
+    }));
+
+  const settledRows = markStaleRunningToolRows(annotatedRows);
+  return pendingRows.length === 0 ? settledRows : [...settledRows, ...pendingRows];
+}
+
+function markStaleRunningToolRows(
+  rows: readonly CloudChatTranscriptRowView[],
+): CloudChatTranscriptRowView[] {
+  return rows.map((row, index) => {
+    if (!isRunningToolRow(row)) {
+      return row;
+    }
+    const rowSeq = row.lastSeq ?? row.firstSeq;
+    if (typeof rowSeq !== "number") {
+      return row;
+    }
+    const laterTranscriptProgress = rows.slice(index + 1).some((laterRow) =>
+      laterRow.kind !== "system"
+      && typeof laterRow.firstSeq === "number"
+      && laterRow.firstSeq > rowSeq
+    );
+    return laterTranscriptProgress ? { ...row, status: "Interrupted" } : row;
+  });
+}
+
+function isRunningToolRow(row: CloudChatTranscriptRowView): boolean {
+  if (row.kind !== "tool" && row.kind !== "tool_group") {
+    return false;
+  }
+  const status = row.status?.toLowerCase();
+  return status === "in progress" || status === "in_progress" || status === "running";
+}
+
+function pendingPermissionRowInfo(
+  interaction: CloudPendingInteraction,
+): PendingPermissionRowInfo | null {
+  if (
+    interaction.kind !== "permission"
+    || (interaction.status !== "pending" && interaction.status !== "failed")
+  ) {
+    return null;
+  }
+  const payload = interaction.payload;
+  const event = isRecord(payload?.event) ? payload.event : null;
+  const source = event && isRecord(event.source) ? event.source : null;
+  const title = interaction.title?.trim()
+    || readString(event?.title)?.trim()
+    || "Permission request";
+  const description = interaction.description?.trim() || null;
+  const toolCallId = readString(source?.toolCallId)
+    ?? readString(payload?.itemId)
+    ?? null;
+  const itemId = readString(payload?.itemId) ?? toolCallId;
+  return {
+    interaction,
+    title,
+    description,
+    toolCallId,
+    itemId,
+  };
+}
+
+function pendingPermissionMatchesRow(
+  info: PendingPermissionRowInfo,
+  row: CloudChatTranscriptRowView,
+): boolean {
+  if (row.kind !== "tool" && row.kind !== "tool_group") {
+    return false;
+  }
+  if (info.toolCallId && row.sourceToolCallId === info.toolCallId) {
+    return true;
+  }
+  if (info.itemId && row.id.includes(info.itemId)) {
+    return true;
+  }
+  return false;
+}
+
+function pendingPermissionStatusLabel(interaction: CloudPendingInteraction): string {
+  return interaction.status === "failed" ? "Approval failed" : "Needs approval";
 }
 
 function appendPendingPromptRows(
@@ -502,7 +712,8 @@ function buildRowsFromPendingPromptInteractions(
     const agentProgressVisible = promptItem
       ? projectedAgentProgressAfterPrompt(projectedItems, promptItem)
       : promptRowIndex !== -1
-        && rowHasAgentProgressAfter(existingRows, promptRowIndex);
+        ? rowHasAgentProgressAfter(existingRows, promptRowIndex)
+        : rowsHaveAgentProgressAfterSeq(existingRows, interaction.requestedSeq);
     const failed = interaction.status === "failed";
     if (!promptVisible) {
       rows.push({
@@ -521,9 +732,11 @@ function buildRowsFromPendingPromptInteractions(
     rows.push({
       id: `pending-prompt:${interaction.requestId}:assistant-waiting`,
       kind: failed ? "error" : "assistant",
-      body: interaction.description ?? (failed
-        ? "Prompt could not be delivered."
-        : "Waiting for response."),
+      body: failed
+        ? interaction.description
+          ?? "Prompt could not be delivered."
+        : null,
+      detail: failed ? null : interaction.description ?? "Waiting for response.",
       streaming: !failed,
       sourceRequestId: interaction.requestId,
       sourceCommandId: commandId,
@@ -622,6 +835,17 @@ function rowHasAgentProgressAfter(
   );
 }
 
+function rowsHaveAgentProgressAfterSeq(
+  rows: readonly CloudChatTranscriptRowView[],
+  seq: number,
+): boolean {
+  return rows.some((row) =>
+    row.kind !== "user"
+    && row.kind !== "system"
+    && rowIsAfterSeq(row, seq)
+  );
+}
+
 function isPromptTranscriptKind(kind: string | null | undefined): boolean {
   return kind === "user_message" || kind === "prompt";
 }
@@ -658,6 +882,63 @@ function projectedItemKind(item: CloudTranscriptItem): CloudChatTranscriptRowVie
   }
 }
 
+function projectedItemTitle(
+  item: CloudTranscriptItem,
+  kind: CloudChatTranscriptRowView["kind"],
+): string | null {
+  if (kind === "user" || kind === "assistant") {
+    return null;
+  }
+  if (kind === "tool" && projectedItemLooksLikeShellTool(item)) {
+    return "Command";
+  }
+  const title = cleanedProjectedTitle(item.title, item.kind);
+  if (title) {
+    return title;
+  }
+  switch (kind) {
+    case "thought":
+      return "Reasoning";
+    case "tool":
+    case "tool_group":
+      return "Tool call";
+    case "error":
+      return "Error";
+    case "system":
+    default:
+      return null;
+  }
+}
+
+function projectedItemStatus(item: CloudTranscriptItem): string | null {
+  const status = item.status?.trim();
+  if (!status || status === "completed") {
+    return null;
+  }
+  return status;
+}
+
+function projectedItemDetail(
+  item: CloudTranscriptItem,
+  kind: CloudChatTranscriptRowView["kind"],
+): string | null {
+  if (kind === "tool") {
+    return projectedItemShellCommand(item);
+  }
+  return null;
+}
+
+function cleanedProjectedTitle(
+  title: string | null | undefined,
+  itemKind: string | null | undefined,
+): string | null {
+  const value = title?.trim();
+  if (!value || value === itemKind) {
+    return null;
+  }
+  return value;
+}
+
 function toolOutputPreview(item: ToolCallItem): string | null {
   const chunks: string[] = [];
   for (const part of item.contentParts) {
@@ -691,6 +972,89 @@ function projectedPayloadText(payload: CloudTranscriptItem["payload"]): string |
   return text ?? null;
 }
 
+function projectedItemShellCommand(item: CloudTranscriptItem): string | null {
+  if (!projectedItemLooksLikeShellTool(item)) {
+    return null;
+  }
+  const payloadItem = projectedPayloadItem(item.payload);
+  const titles = [
+    item.title,
+    readString(payloadItem?.title),
+    ...projectedToolCallContentParts(payloadItem).map((part) => readString(part.title)),
+  ];
+  for (const title of titles) {
+    const command = normalizeProjectedShellTitle(title);
+    if (command) {
+      return command;
+    }
+  }
+  return null;
+}
+
+function projectedItemLooksLikeShellTool(item: CloudTranscriptItem): boolean {
+  const payloadItem = projectedPayloadItem(item.payload);
+  const values = [
+    item.title,
+    readString(payloadItem?.nativeToolName),
+    readString(payloadItem?.toolKind),
+    ...projectedToolCallContentParts(payloadItem).flatMap((part) => [
+      readString(part.nativeToolName),
+      readString(part.toolKind),
+    ]),
+  ];
+  return values.some((value) => {
+    const normalized = value?.trim().toLowerCase();
+    return normalized === "bash"
+      || normalized === "shell"
+      || normalized === "terminal"
+      || normalized === "execute";
+  });
+}
+
+function projectedPayloadItem(
+  payload: CloudTranscriptItem["payload"],
+): Record<string, unknown> | null {
+  if (!payload) {
+    return null;
+  }
+  const event = payload.event;
+  if (!isRecord(event)) {
+    return null;
+  }
+  return isRecord(event.item) ? event.item : null;
+}
+
+function projectedToolCallContentParts(
+  payloadItem: Record<string, unknown> | null,
+): Record<string, unknown>[] {
+  const contentParts = payloadItem?.contentParts;
+  if (!Array.isArray(contentParts)) {
+    return [];
+  }
+  return contentParts.flatMap((part) => {
+    const record = isRecord(part) ? part : null;
+    return record?.type === "tool_call" ? [record] : [];
+  });
+}
+
+function normalizeProjectedShellTitle(value: string | null | undefined): string | null {
+  const title = value?.trim();
+  if (!title) {
+    return null;
+  }
+  const normalized = title.toLowerCase();
+  if (
+    normalized === "terminal"
+    || normalized === "command"
+    || normalized === "bash"
+    || normalized === "shell"
+    || normalized === "tool call"
+  ) {
+    return null;
+  }
+  return title;
+}
+
 function projectedItemPromptId(item: CloudTranscriptItem): string | null {
   const payload = item.payload;
   if (!payload) {
@@ -711,6 +1075,38 @@ function projectedItemPromptId(item: CloudTranscriptItem): string | null {
   return readString(eventItem.promptId);
 }
 
+function projectedItemToolCallId(item: CloudTranscriptItem): string | null {
+  const payload = item.payload;
+  if (!payload) {
+    return item.itemId;
+  }
+  const directToolCallId = readString(payload.toolCallId)
+    ?? readString(payload.tool_call_id);
+  if (directToolCallId) {
+    return directToolCallId;
+  }
+  const event = payload.event;
+  if (isRecord(event)) {
+    const eventItem = event.item;
+    if (isRecord(eventItem)) {
+      const eventToolCallId = readString(eventItem.toolCallId)
+        ?? readString(eventItem.tool_call_id);
+      if (eventToolCallId) {
+        return eventToolCallId;
+      }
+    }
+    const source = event.source;
+    if (isRecord(source)) {
+      const sourceToolCallId = readString(source.toolCallId)
+        ?? readString(source.tool_call_id);
+      if (sourceToolCallId) {
+        return sourceToolCallId;
+      }
+    }
+  }
+  return readString(payload.itemId) ?? item.itemId;
+}
+
 function resolveGroupStatus(
   itemIds: readonly string[],
   transcript: TranscriptState,
@@ -729,6 +1125,7 @@ function statusLabel(status: string | null | undefined): string | undefined {
   }
   return status.replace(/_/g, " ");
 }
+
 
 function previewText(value: string | null | undefined): string | null {
   if (!value) {

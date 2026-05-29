@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
-  Loader2,
   Terminal,
   User,
   Wrench,
@@ -107,12 +106,15 @@ function CloudChatTranscriptRow({ row }: { row: CloudChatTranscriptRowView }) {
       <CloudChatUserMessage
         content={row.body ?? ""}
         status={row.status}
-        streaming={row.streaming}
       />
     );
   }
 
   if (row.kind === "assistant") {
+    if (isAssistantLoadingRow(row)) {
+      return <CloudChatAssistantLoadingRow row={row} />;
+    }
+
     return (
       <article className="flex justify-start">
         <div className="flex min-w-0 max-w-full flex-col break-words" data-telemetry-mask>
@@ -123,12 +125,6 @@ function CloudChatTranscriptRow({ row }: { row: CloudChatTranscriptRowView }) {
             content={row.body ?? ""}
             isStreaming={row.streaming}
           />
-          {row.streaming ? (
-            <div className="mt-1 inline-flex min-h-6 items-center gap-1 text-xs text-muted-foreground">
-              <Loader2 size={12} className="animate-spin" />
-              Streaming
-            </div>
-          ) : null}
         </div>
       </article>
     );
@@ -158,6 +154,23 @@ function CloudChatTranscriptRow({ row }: { row: CloudChatTranscriptRowView }) {
   }
 
   return <CloudChatToolRow row={row} />;
+}
+
+function CloudChatAssistantLoadingRow({ row }: { row: CloudChatTranscriptRowView }) {
+  return (
+    <article
+      aria-label="Assistant response loading"
+      className="flex justify-start py-0.5"
+      data-chat-transcript-ignore
+    >
+      <div
+        className="max-w-full truncate text-chat italic leading-[var(--text-chat--line-height)] text-[#f59e0b]"
+        data-telemetry-mask
+      >
+        {loadingStatusLabel(row)}
+      </div>
+    </article>
+  );
 }
 
 function CloudChatThoughtRow({ row }: { row: CloudChatTranscriptRowView }) {
@@ -265,10 +278,6 @@ function CloudChatWorkHistoryRow({ row }: { row: CloudChatTranscriptRowView }) {
   const summary = row.detail ?? row.body ?? row.title ?? "Work history";
   const hasExpandedContent = children.length > 0 || Boolean(row.body?.trim());
 
-  if (children.length <= 1 && !row.body?.trim()) {
-    return <>{children.map((child) => <CloudChatHistoryChildRow key={child.id} row={child} />)}</>;
-  }
-
   return (
     <article className="py-1">
       <CloudTurnSeparator
@@ -317,6 +326,27 @@ function CloudChatHistoryChildRow({ row }: { row: CloudChatTranscriptRowView }) 
   }
 
   return <CloudChatTranscriptRow row={row} />;
+}
+
+function isAssistantLoadingRow(row: CloudChatTranscriptRowView): boolean {
+  return row.kind === "assistant"
+    && Boolean(row.streaming)
+    && (
+      !row.body?.trim()
+      || row.id.includes(":assistant-waiting")
+      || row.id.includes(":pending-assistant")
+    );
+}
+
+function loadingStatusText(row: CloudChatTranscriptRowView): string | null {
+  const value = row.detail ?? row.body ?? row.status ?? null;
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function loadingStatusLabel(row: CloudChatTranscriptRowView): string {
+  const status = loadingStatusText(row) ?? "Loading";
+  return `${status.replace(/[\s.]+$/g, "")}...`;
 }
 
 function CloudChatSystemRow({ row }: { row: CloudChatTranscriptRowView }) {
@@ -672,16 +702,15 @@ function renderInlineHint(hint?: ReactNode) {
 function CloudChatUserMessage({
   content,
   status = null,
-  streaming = false,
 }: {
   content: string;
   status?: string | null;
-  streaming?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [needsToggle, setNeedsToggle] = useState(false);
   const textRef = useRef<HTMLDivElement>(null);
   const hasContent = content.trim().length > 0;
+  const visibleStatus = userMessageStatusLabel(status);
 
   useLayoutEffect(() => {
     if (!hasContent) {
@@ -725,10 +754,9 @@ function CloudChatUserMessage({
             ) : null}
           </div>
         ) : null}
-        {(status || streaming) ? (
+        {visibleStatus ? (
           <div className="inline-flex items-center gap-1 pr-1 text-xs text-muted-foreground">
-            {streaming ? <Loader2 size={12} className="animate-spin" /> : null}
-            {status ?? "Sending"}
+            {visibleStatus}
           </div>
         ) : null}
         {hasContent ? (
@@ -743,6 +771,16 @@ function CloudChatUserMessage({
       </div>
     </article>
   );
+}
+
+function userMessageStatusLabel(status: string | null | undefined): string | null {
+  const value = status?.trim();
+  if (!value) {
+    return null;
+  }
+  return /\b(failed|error|rejected|expired|could not|timed out)\b/i.test(value)
+    ? value
+    : null;
 }
 
 export interface CloudChatAssistantMessageProps {
@@ -1289,6 +1327,7 @@ function resolveActionStatus(row: CloudChatTranscriptRowView): CloudTranscriptAc
     || status.includes("queued")
     || status.includes("sending")
     || status.includes("progress")
+    || status.includes("approval")
   ) {
     return "running";
   }

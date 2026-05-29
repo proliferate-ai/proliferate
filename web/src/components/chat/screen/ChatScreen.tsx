@@ -2031,6 +2031,10 @@ function buildOptimisticPromptRows(input: {
         allowTextOnlyRowFallback: input.allowTextOnlyRowFallback,
       })
       : false;
+    const hasTranscriptProgressAfterPrompt = transcriptHasAgentProgressAfterBaseline(
+      input.transcriptRows,
+      prompt.baseTranscriptSeq,
+    );
     if (!promptVisible) {
       rows.push({
         id: `${prompt.id}:user`,
@@ -2039,11 +2043,13 @@ function buildOptimisticPromptRows(input: {
         status: optimisticPromptStatusLabel(prompt.status),
       });
     }
-    if (prompt.status === "sending" && !agentStarted) {
+    if (prompt.status === "sending" && !agentStarted && !hasTranscriptProgressAfterPrompt) {
       rows.push({
         id: `${prompt.id}:assistant-waiting`,
         kind: "assistant",
-        body: "Loading...",
+        body: null,
+        detail: input.status ?? optimisticPromptStatusLabel(prompt.status),
+        streaming: true,
       });
     } else if (prompt.status === "failed" && (input.status || prompt.errorMessage)) {
       rows.push({
@@ -2054,6 +2060,18 @@ function buildOptimisticPromptRows(input: {
     }
   }
   return rows;
+}
+
+function transcriptHasAgentProgressAfterBaseline(
+  rows: readonly CloudChatTranscriptRowView[],
+  baseTranscriptSeq: number,
+): boolean {
+  return rows.some((row) =>
+    row.kind !== "user"
+    && row.kind !== "system"
+    && typeof row.firstSeq === "number"
+    && row.firstSeq > baseTranscriptSeq
+  );
 }
 
 function buildPendingHomePromptRows(input: {
@@ -2094,7 +2112,9 @@ function buildPendingHomePromptRows(input: {
     rows.push({
       id: `${input.pendingPrompt.id}:assistant-waiting`,
       kind: failed ? "error" : "assistant",
-      body: failed ? failureMessage ?? "Prompt could not be sent." : "Loading...",
+      body: failed ? failureMessage ?? "Prompt could not be sent." : null,
+      detail: failed ? null : input.status ?? "Preparing cloud session.",
+      streaming: !failed,
     });
   }
   return rows;

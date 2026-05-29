@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { CloudSessionProjection } from "@proliferate/cloud-sdk";
 import type { CloudChatComposerControlView } from "@proliferate/product-model/chats/cloud/composer-controls";
 
@@ -10,6 +11,7 @@ import { MobilePopoverRow } from "../primitives/popover/MobilePopoverRow";
 
 interface MobileWorkspaceActionSheetProps {
   visible: boolean;
+  initialExpandedId?: string | null;
   branchLabel: string;
   unclaimed: boolean;
   claimPending: boolean;
@@ -27,6 +29,7 @@ interface MobileWorkspaceActionSheetProps {
 
 export function MobileWorkspaceActionSheet({
   visible,
+  initialExpandedId,
   branchLabel,
   unclaimed,
   claimPending,
@@ -41,6 +44,12 @@ export function MobileWorkspaceActionSheet({
   onCopyBranch,
   onClose,
 }: MobileWorkspaceActionSheetProps) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setExpandedId(visible ? initialExpandedId ?? null : null);
+  }, [initialExpandedId, visible]);
+
   async function runClaim() {
     const claimed = await onClaim();
     if (claimed) {
@@ -50,7 +59,7 @@ export function MobileWorkspaceActionSheet({
 
   return (
     <MobilePopover visible={visible} onClose={onClose} anchor="top-right" insetTop={58} insetSide={8}>
-      <MobilePopoverGroup>
+      <MobilePopoverGroup expandedId={expandedId} onExpandedChange={setExpandedId}>
         {unclaimed ? (
           <MobilePopoverRow
             id="claim"
@@ -101,7 +110,7 @@ export function MobileWorkspaceActionSheet({
         <MobilePopoverDisclosure
           id="sessions"
           icon="sessions"
-          title="Switch session"
+          title={`Sessions (${sessions.length})`}
           value={activeSessionLabel(sessions, activeSessionId, newSessionMode)}
           disabled={unclaimed}
         >
@@ -110,7 +119,9 @@ export function MobileWorkspaceActionSheet({
             subtitle={
               promptSubmitting
                 ? "Wait for the current prompt first."
-                : "Start a separate chat here."
+                : sessions.length
+                  ? `Start separately from ${formatSessionCount(sessions.length)}.`
+                  : "Start the first chat here."
             }
             selected={newSessionMode}
             disabled={promptSubmitting}
@@ -125,7 +136,7 @@ export function MobileWorkspaceActionSheet({
               <MobilePopoverOption
                 key={session.sessionId}
                 title={sessionDisplayTitle(session, index)}
-                subtitle={sessionDisplaySubtitle(session)}
+                subtitle={sessionDisplaySubtitle(session, selected)}
                 selected={selected}
                 onSelect={() => {
                   onSelectSession(session.sessionId);
@@ -135,17 +146,19 @@ export function MobileWorkspaceActionSheet({
             );
           })}
         </MobilePopoverDisclosure>
-        <MobilePopoverRow
-          id="new-session"
-          icon="plus"
-          title="New session"
-          subtitle={promptSubmitting ? "Wait for this prompt first." : "Start a fresh session here."}
-          disabled={unclaimed || promptSubmitting}
-          onPress={() => {
-            onNewSession();
-            onClose();
-          }}
-        />
+        {expandedId === "sessions" ? null : (
+          <MobilePopoverRow
+            id="new-session"
+            icon="plus"
+            title="New session"
+            subtitle={promptSubmitting ? "Wait for this prompt first." : "Start a fresh session here."}
+            disabled={unclaimed || promptSubmitting}
+            onPress={() => {
+              onNewSession();
+              onClose();
+            }}
+          />
+        )}
       </MobilePopoverGroup>
     </MobilePopover>
   );
@@ -185,17 +198,18 @@ function activeSessionLabel(
   activeSessionId: string | null,
   newSessionMode: boolean,
 ): string {
+  const countLabel = formatSessionCount(sessions.length);
   if (newSessionMode) {
-    return "New session";
+    return sessions.length ? `New · ${countLabel}` : "New session";
   }
   if (!activeSessionId) {
-    return sessions.length ? "Choose" : "No sessions";
+    return sessions.length ? `Choose · ${countLabel}` : "No sessions";
   }
   const index = sessions.findIndex((session) => session.sessionId === activeSessionId);
   if (index === -1) {
     return activeSessionId.slice(0, 8);
   }
-  return sessionDisplayTitle(sessions[index], index);
+  return `${countLabel} · ${sessionDisplayTitle(sessions[index], index)}`;
 }
 
 function normalizeModelLabel(label: string): string {
@@ -244,6 +258,18 @@ function sessionDisplayTitle(session: CloudSessionProjection, index: number): st
   return title || `Session ${index + 1}`;
 }
 
-function sessionDisplaySubtitle(session: CloudSessionProjection): string {
-  return `${session.status} · ${session.sessionId.slice(0, 8)}`;
+function sessionDisplaySubtitle(session: CloudSessionProjection, selected: boolean): string {
+  const status = formatSessionStatus(session.status);
+  return selected
+    ? `Current · ${status} · ${session.sessionId.slice(0, 8)}`
+    : `${status} · ${session.sessionId.slice(0, 8)}`;
+}
+
+function formatSessionCount(count: number): string {
+  return count === 1 ? "1 session" : `${count} sessions`;
+}
+
+function formatSessionStatus(status: string): string {
+  const normalized = status.replace(/_/g, " ").trim();
+  return normalized ? normalized[0].toUpperCase() + normalized.slice(1) : "Unknown";
 }

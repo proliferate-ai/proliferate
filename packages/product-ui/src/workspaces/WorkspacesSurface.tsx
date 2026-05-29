@@ -187,10 +187,6 @@ function WorkspaceViewPopover({
     };
   }, [onClose, open]);
 
-  const primaryFilters = filterOptions.filter((option) => !option.id.includes(":"));
-  const sourceFilters = filterOptions.filter((option) => option.id.startsWith("source:"));
-  const runtimeFilters = filterOptions.filter((option) => option.id.startsWith("runtime:"));
-
   return (
     <div ref={rootRef} className="relative">
       <ToolbarIconButton
@@ -209,35 +205,14 @@ function WorkspaceViewPopover({
         <div className="absolute right-0 top-full z-40 mt-2 max-h-[min(32rem,calc(100vh-12rem))] w-64 overflow-y-auto rounded-xl bg-popover/95 p-1 text-popover-foreground shadow-popover ring-[0.5px] ring-popover-ring backdrop-blur-sm">
           <WorkspaceMenuSection label="Filter">
             <WorkspaceFilterOptions
-              options={primaryFilters}
+              options={filterOptions}
               selectedId={selectedFilterId}
-              onSelect={onFilterChange}
+              onSelect={(filterId) => {
+                onFilterChange(filterId);
+                onClose();
+              }}
             />
           </WorkspaceMenuSection>
-          {sourceFilters.length > 0 ? (
-            <>
-              <WorkspaceMenuSeparator />
-              <WorkspaceMenuSection label="Source">
-                <WorkspaceFilterOptions
-                  options={sourceFilters}
-                  selectedId={selectedFilterId}
-                  onSelect={onFilterChange}
-                />
-              </WorkspaceMenuSection>
-            </>
-          ) : null}
-          {runtimeFilters.length > 0 ? (
-            <>
-              <WorkspaceMenuSeparator />
-              <WorkspaceMenuSection label="Runtime">
-                <WorkspaceFilterOptions
-                  options={runtimeFilters}
-                  selectedId={selectedFilterId}
-                  onSelect={onFilterChange}
-                />
-              </WorkspaceMenuSection>
-            </>
-          ) : null}
           <WorkspaceMenuSeparator />
           <WorkspaceMenuSection label="Group by">
             {groupOptions.map((option) => (
@@ -245,7 +220,10 @@ function WorkspaceViewPopover({
                 key={option.id}
                 active={option.id === selectedGroupId}
                 label={option.label}
-                onClick={() => onGroupChange(option.id)}
+                onClick={() => {
+                  onGroupChange(option.id);
+                  onClose();
+                }}
               />
             ))}
           </WorkspaceMenuSection>
@@ -254,7 +232,10 @@ function WorkspaceViewPopover({
             variant="sidebar"
             label="Clear view options"
             disabled={activeOptionCount === 0}
-            onClick={onClear}
+            onClick={() => {
+              onClear();
+              onClose();
+            }}
           />
         </div>
       ) : null}

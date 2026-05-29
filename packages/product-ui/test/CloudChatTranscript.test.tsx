@@ -27,6 +27,13 @@ describe("CloudChatTranscript", () => {
             body: "```text\nfile contents\n```",
           },
           {
+            id: "command",
+            kind: "tool",
+            title: "Command",
+            detail: "pnpm test -- --runInBand",
+            status: "Interrupted",
+          },
+          {
             id: "group",
             kind: "tool_group",
             title: "Worked for 10s",
@@ -36,6 +43,25 @@ describe("CloudChatTranscript", () => {
             id: "system",
             kind: "system",
             body: "System instruction body",
+          },
+          {
+            id: "loading:assistant-waiting",
+            kind: "assistant",
+            detail: "Preparing cloud session.",
+            streaming: true,
+          },
+          {
+            id: "history",
+            kind: "system",
+            title: "Work history",
+            detail: "1 message",
+            children: [
+              {
+                id: "history-child",
+                kind: "assistant",
+                body: "Earlier assistant draft",
+              },
+            ],
           },
           {
             id: "error",
@@ -60,6 +86,9 @@ describe("CloudChatTranscript", () => {
     expect(screen.queryByText("file contents")).toBeNull();
     fireEvent.click(screen.getByText("Read file"));
     expect(screen.getByText("file contents")).toBeTruthy();
+    expect(screen.getByText("Command")).toBeTruthy();
+    expect(screen.getByText("pnpm test -- --runInBand")).toBeTruthy();
+    expect(screen.getByText("Interrupted")).toBeTruthy();
 
     expect(screen.getByText("Worked for 10s")).toBeTruthy();
     expect(screen.queryByText("Ran checks and summarized the result.")).toBeNull();
@@ -70,6 +99,16 @@ describe("CloudChatTranscript", () => {
     expect(screen.queryByText("System instruction body")).toBeNull();
     fireEvent.click(screen.getByText("System message"));
     expect(screen.getByText("System instruction body")).toBeTruthy();
+
+    expect(screen.getByLabelText("Assistant response loading")).toBeTruthy();
+    expect(screen.getByText("Preparing cloud session...")).toBeTruthy();
+    expect(screen.queryByText("Working")).toBeNull();
+    expect(screen.queryByText("Streaming")).toBeNull();
+
+    expect(screen.getByText("1 message")).toBeTruthy();
+    expect(screen.queryByText("Earlier assistant draft")).toBeNull();
+    fireEvent.click(screen.getByText("1 message"));
+    expect(screen.getByText("Earlier assistant draft")).toBeTruthy();
 
     expect(screen.getByText("Session failed")).toBeTruthy();
     expect(screen.getByText("Provider returned an error")).toBeTruthy();

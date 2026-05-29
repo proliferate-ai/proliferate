@@ -60,32 +60,40 @@ describe("workspace inventory model", () => {
     );
   });
 
-  it("filters and groups by ownership kind instead of display labels", () => {
+  it("filters by status buckets instead of source or agent labels", () => {
     const items: WorkspaceInventoryItemView[] = [
       inventoryItem({
         id: "unclaimed-with-custom-label",
         ownershipKind: "unclaimed",
         ownerLabel: "Available to claim",
+        statusFilterKind: "blocked",
       }),
       inventoryItem({
-        id: "mine",
+        id: "mine-ready",
         ownershipKind: "mine",
         ownerLabel: "Mine",
+        statusFilterKind: "ready",
       }),
       inventoryItem({
-        id: "claimed",
+        id: "errored",
         ownershipKind: "claimed",
         ownerLabel: "Claimed",
+        statusKind: "blocked",
+        statusLabel: "Error",
+        statusFilterKind: "error",
       }),
     ];
 
-    expect(buildWorkspaceInventoryFilterOptions(items).slice(0, 4)).toEqual([
+    expect(buildWorkspaceInventoryFilterOptions(items)).toEqual([
       { id: "all", label: "All", count: 3 },
-      { id: "mine", label: "Mine", count: 1 },
-      { id: "unclaimed", label: "Unclaimed", count: 1 },
-      { id: "attention", label: "Needs attention", count: 1 },
+      { id: "status:active", label: "Live", count: 0 },
+      { id: "status:running", label: "Running", count: 0 },
+      { id: "status:blocked", label: "Needs input", count: 1 },
+      { id: "status:ready", label: "Ready", count: 1 },
+      { id: "status:error", label: "Error", count: 1 },
+      { id: "status:archived", label: "Archived", count: 0 },
     ]);
-    expect(filterWorkspaceInventoryItems(items, "unclaimed").map((item) => item.id)).toEqual([
+    expect(filterWorkspaceInventoryItems(items, "status:blocked").map((item) => item.id)).toEqual([
       "unclaimed-with-custom-label",
     ]);
     expect(groupWorkspaceInventoryItems(items, "ownership").map((group) => group.id)).toEqual([

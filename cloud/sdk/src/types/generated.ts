@@ -101,6 +101,8 @@ export interface CloudWorkspaceLastSessionSummary {
   sourceAgentKind?: string | null;
   title?: string | null;
   status: string;
+  phase?: string | null;
+  pendingInteractionCount?: number;
   lastEventAt?: string | null;
   preview?: string | null;
 }

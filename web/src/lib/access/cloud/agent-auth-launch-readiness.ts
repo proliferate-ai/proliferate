@@ -32,7 +32,7 @@ export async function ensurePersonalAgentAuthLaunchReady(args: {
     return { source: "selected_credential" };
   }
 
-  args.onStatus?.("Checking cloud agent credits.");
+  args.onStatus?.("Preparing cloud session.");
   const result = await ensureFreeManagedCreditsWithRetry(args);
   if (!result.launchEnabled && !freeCreditFailureCanFallThrough(result, args.allowUnavailableFreeCredits)) {
     throw new Error(

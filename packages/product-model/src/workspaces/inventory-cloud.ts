@@ -1,6 +1,7 @@
 import type { CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
 
 import {
+  cloudWorkStatusForWorkspace,
   recentWorkCloudAccessLabel,
   recentWorkCloudAccessState,
   recentWorkCommandability,
@@ -47,6 +48,7 @@ export function cloudWorkspaceInventoryItem(
     scopeLabel: workspaceScopeLabel(workspace),
     statusKind: workspaceStatusKind(workspace),
     statusLabel: workspaceStatusLabel(workspace),
+    statusFilterKind: cloudWorkStatusForWorkspace(workspace),
     ownershipKind: workspaceOwnershipKind(workspace),
     ownerLabel: workspaceOwnerLabel(workspace),
     exposureLabel: workspaceExposureLabel(workspace.exposureState ?? null),

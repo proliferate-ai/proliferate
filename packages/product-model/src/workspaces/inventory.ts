@@ -1,6 +1,7 @@
 import type { CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
 
 import type {
+  CloudWorkStatusFilter,
   RecentWorkCloudAccessState,
   RecentWorkCommandability,
   RecentWorkRuntimeLocation,
@@ -31,6 +32,8 @@ export type WorkspaceInventoryStatusKind =
   | "blocked"
   | "done";
 
+export type WorkspaceInventoryStatusFilterKind = CloudWorkStatusFilter;
+
 export type WorkspaceInventoryOwnershipKind =
   | "mine"
   | "unclaimed"
@@ -40,11 +43,7 @@ export type WorkspaceInventoryOwnershipKind =
 
 export type WorkspaceInventoryFilterId =
   | "all"
-  | "mine"
-  | "unclaimed"
-  | "attention"
-  | `source:${WorkspaceInventorySourceKind}`
-  | `runtime:${RecentWorkRuntimeLocation}`;
+  | `status:${WorkspaceInventoryStatusFilterKind}`;
 
 export type WorkspaceInventoryGroupBy =
   | "ownership"
@@ -71,6 +70,7 @@ export interface WorkspaceInventoryItemView {
   scopeLabel?: string | null;
   statusKind: WorkspaceInventoryStatusKind;
   statusLabel: string;
+  statusFilterKind?: WorkspaceInventoryStatusFilterKind;
   ownershipKind?: WorkspaceInventoryOwnershipKind;
   ownerLabel?: string | null;
   exposureLabel?: string | null;
@@ -141,6 +141,18 @@ const STATUS_GROUP_LABELS: Record<WorkspaceInventoryStatusKind, string> = {
   done: "Done",
 };
 
+const STATUS_FILTER_OPTIONS: readonly {
+  id: WorkspaceInventoryStatusFilterKind;
+  label: string;
+}[] = [
+  { id: "active", label: "Live" },
+  { id: "running", label: "Running" },
+  { id: "blocked", label: "Needs input" },
+  { id: "ready", label: "Ready" },
+  { id: "error", label: "Error" },
+  { id: "archived", label: "Archived" },
+];
+
 export const WORKSPACE_INVENTORY_GROUP_OPTIONS: readonly WorkspaceInventoryGroupOption[] = [
   { id: "ownership", label: "Ownership" },
   { id: "source", label: "Source" },
@@ -161,53 +173,25 @@ export function buildCloudWorkspaceInventoryItems(
 export function buildWorkspaceInventoryFilterOptions(
   items: readonly WorkspaceInventoryItemView[],
 ): WorkspaceInventoryFilterOption[] {
-  const base: WorkspaceInventoryFilterOption[] = [
+  return [
     { id: "all", label: "All", count: items.length },
-    {
-      id: "mine",
-      label: "Mine",
-      count: items.filter((item) => itemOwnershipKind(item) === "mine").length,
-    },
-    {
-      id: "unclaimed",
-      label: "Unclaimed",
-      count: items.filter((item) => itemOwnershipKind(item) === "unclaimed").length,
-    },
-    {
-      id: "attention",
-      label: "Needs attention",
-      count: items.filter(workspaceNeedsAttention).length,
-    },
+    ...STATUS_FILTER_OPTIONS.map((option) => ({
+      id: `status:${option.id}` as const,
+      label: option.label,
+      count: items.filter((item) => workspaceMatchesStatusFilter(item, option.id)).length,
+    })),
   ];
-  const sourceOptions = sourceFilterOptions(items);
-  const runtimeOptions = runtimeFilterOptions(items);
-  return [...base, ...sourceOptions, ...runtimeOptions];
 }
 
 export function filterWorkspaceInventoryItems(
   items: readonly WorkspaceInventoryItemView[],
   filterId: WorkspaceInventoryFilterId,
 ): WorkspaceInventoryItemView[] {
-  switch (filterId) {
-    case "mine":
-      return items.filter((item) => itemOwnershipKind(item) === "mine");
-    case "unclaimed":
-      return items.filter((item) => itemOwnershipKind(item) === "unclaimed");
-    case "attention":
-      return items.filter(workspaceNeedsAttention);
-    case "all":
-      return [...items];
-    default:
-      if (filterId.startsWith("source:")) {
-        const sourceKind = filterId.slice("source:".length) as WorkspaceInventorySourceKind;
-        return items.filter((item) => item.sourceKind === sourceKind);
-      }
-      if (filterId.startsWith("runtime:")) {
-        const runtimeLocation = filterId.slice("runtime:".length) as RecentWorkRuntimeLocation;
-        return items.filter((item) => item.runtimeLocation === runtimeLocation);
-      }
-      return [...items];
+  if (filterId === "all") {
+    return [...items];
   }
+  const statusFilter = filterId.slice("status:".length) as WorkspaceInventoryStatusFilterKind;
+  return items.filter((item) => workspaceMatchesStatusFilter(item, statusFilter));
 }
 
 export function groupWorkspaceInventoryItems(
@@ -411,12 +395,11 @@ export function workspaceInventorySyncLabel(
   return `Updated ${Math.floor(elapsedHours / 24)}d ago`;
 }
 
-function workspaceNeedsAttention(item: WorkspaceInventoryItemView): boolean {
-  return (
-    item.statusKind === "blocked" ||
-    item.statusKind === "review" ||
-    itemOwnershipKind(item) === "unclaimed"
-  );
+function workspaceMatchesStatusFilter(
+  item: WorkspaceInventoryItemView,
+  statusFilter: WorkspaceInventoryStatusFilterKind,
+): boolean {
+  return workspaceStatusFilterKind(item) === statusFilter;
 }
 
 function groupLabelForSource(kind: WorkspaceInventorySourceKind): string {
@@ -442,46 +425,6 @@ function groupLabelForSource(kind: WorkspaceInventorySourceKind): string {
   }
 }
 
-function sourceFilterOptions(
-  items: readonly WorkspaceInventoryItemView[],
-): WorkspaceInventoryFilterOption[] {
-  const counts = new Map<WorkspaceInventorySourceKind, { label: string; count: number }>();
-  for (const item of items) {
-    const current = counts.get(item.sourceKind);
-    counts.set(item.sourceKind, {
-      label: item.sourceLabel,
-      count: (current?.count ?? 0) + 1,
-    });
-  }
-  return Array.from(counts.entries())
-    .sort(([leftKind], [rightKind]) => SOURCE_ORDER[leftKind] - SOURCE_ORDER[rightKind])
-    .map(([kind, value]) => ({
-      id: `source:${kind}` as const,
-      label: value.label,
-      count: value.count,
-    }));
-}
-
-function runtimeFilterOptions(
-  items: readonly WorkspaceInventoryItemView[],
-): WorkspaceInventoryFilterOption[] {
-  const counts = new Map<RecentWorkRuntimeLocation, { label: string; count: number }>();
-  for (const item of items) {
-    const current = counts.get(item.runtimeLocation);
-    counts.set(item.runtimeLocation, {
-      label: item.runtimeLocationLabel,
-      count: (current?.count ?? 0) + 1,
-    });
-  }
-  return Array.from(counts.entries())
-    .sort(([leftKind], [rightKind]) => RUNTIME_ORDER[leftKind] - RUNTIME_ORDER[rightKind])
-    .map(([kind, value]) => ({
-      id: `runtime:${kind}` as const,
-      label: value.label,
-      count: value.count,
-    }));
-}
-
 function itemOwnershipKind(
   item: WorkspaceInventoryItemView,
 ): WorkspaceInventoryOwnershipKind {
@@ -504,6 +447,30 @@ function itemOwnershipKind(
     default:
       return "team";
   }
+}
+
+function workspaceStatusFilterKind(
+  item: WorkspaceInventoryItemView,
+): WorkspaceInventoryStatusFilterKind {
+  if (item.statusFilterKind) {
+    return item.statusFilterKind;
+  }
+  if (itemOwnershipKind(item) === "unclaimed") {
+    return "blocked";
+  }
+  if (item.statusLabel.toLowerCase() === "error") {
+    return "error";
+  }
+  if (item.statusKind === "blocked") {
+    return "blocked";
+  }
+  if (item.statusKind === "working") {
+    return "running";
+  }
+  if (item.statusKind === "done") {
+    return "archived";
+  }
+  return "ready";
 }
 
 function formatWorkspaceCount(count: number): string {

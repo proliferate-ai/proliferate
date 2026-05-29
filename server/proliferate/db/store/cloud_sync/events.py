@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +22,10 @@ from proliferate.db.models.cloud.sync import (
 )
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.utils.time import utcnow
+
+_GENERIC_TRANSCRIPT_TOOL_TITLES = frozenset(
+    ("", "bash", "command", "shell", "terminal", "tool call")
+)
 
 
 @dataclass(frozen=True)
@@ -88,6 +92,8 @@ class CloudSessionProjectionSnapshot:
     started_at: str | None
     ended_at: str | None
     updated_at: datetime
+    pending_interaction_count: int = 0
+    preview: str | None = None
 
 
 @dataclass(frozen=True)
@@ -153,7 +159,12 @@ def _event_snapshot(row: CloudSessionEvent) -> CloudSessionEventSnapshot:
     )
 
 
-def _session_snapshot(row: CloudSessionProjection) -> CloudSessionProjectionSnapshot:
+def _session_snapshot(
+    row: CloudSessionProjection,
+    *,
+    pending_interaction_count: int = 0,
+    preview: str | None = None,
+) -> CloudSessionProjectionSnapshot:
     return CloudSessionProjectionSnapshot(
         id=row.id,
         target_id=row.target_id,
@@ -177,6 +188,8 @@ def _session_snapshot(row: CloudSessionProjection) -> CloudSessionProjectionSnap
         started_at=row.started_at,
         ended_at=row.ended_at,
         updated_at=row.updated_at,
+        pending_interaction_count=pending_interaction_count,
+        preview=preview,
     )
 
 
@@ -220,6 +233,15 @@ def _interaction_snapshot(row: CloudPendingInteraction) -> CloudPendingInteracti
         resolved_seq=row.resolved_seq,
         requested_at=row.requested_at,
         resolved_at=row.resolved_at,
+    )
+
+
+def _should_replace_transcript_item_title(current: str | None, replacement: str) -> bool:
+    normalized_current = (current or "").strip().lower()
+    normalized_replacement = replacement.strip().lower()
+    return (
+        normalized_replacement not in _GENERIC_TRANSCRIPT_TOOL_TITLES
+        and normalized_current in _GENERIC_TRANSCRIPT_TOOL_TITLES
     )
 
 
@@ -571,6 +593,35 @@ async def upsert_transcript_item(
     return _item_snapshot(row)
 
 
+async def annotate_transcript_item_title(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    session_id: str,
+    item_id: str | None,
+    title: str | None,
+) -> CloudTranscriptItemSnapshot | None:
+    cleaned_title = title.strip() if title else ""
+    if not item_id or not cleaned_title:
+        return None
+    row = (
+        await db.execute(
+            select(CloudTranscriptItem)
+            .where(CloudTranscriptItem.target_id == target_id)
+            .where(CloudTranscriptItem.session_id == session_id)
+            .where(CloudTranscriptItem.item_id == item_id)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return None
+    if not _should_replace_transcript_item_title(row.title, cleaned_title):
+        return _item_snapshot(row)
+    row.title = cleaned_title
+    row.updated_at = utcnow()
+    await db.flush()
+    return _item_snapshot(row)
+
+
 async def upsert_pending_interaction(
     db: AsyncSession,
     *,
@@ -781,7 +832,14 @@ async def get_session_projection(
             .where(CloudSessionProjection.session_id == session_id)
         )
     ).scalar_one_or_none()
-    return _session_snapshot(row) if row is not None else None
+    if row is None:
+        return None
+    pending_count = await _pending_interaction_count_for_session(
+        db,
+        target_id=row.target_id,
+        session_id=row.session_id,
+    )
+    return _session_snapshot(row, pending_interaction_count=pending_count)
 
 
 async def get_session_projection_by_session_id(
@@ -797,7 +855,14 @@ async def get_session_projection_by_session_id(
             .limit(1)
         )
     ).scalar_one_or_none()
-    return _session_snapshot(row) if row is not None else None
+    if row is None:
+        return None
+    pending_count = await _pending_interaction_count_for_session(
+        db,
+        target_id=row.target_id,
+        session_id=row.session_id,
+    )
+    return _session_snapshot(row, pending_interaction_count=pending_count)
 
 
 async def list_session_projections(
@@ -813,15 +878,26 @@ async def list_session_projections(
         query = query.where(CloudSessionProjection.cloud_workspace_id == cloud_workspace_id)
     if workspace_id is not None:
         query = query.where(CloudSessionProjection.workspace_id == workspace_id)
-    rows = (
-        await db.execute(
-            query.order_by(
-                CloudSessionProjection.updated_at.desc(),
-                CloudSessionProjection.last_event_seq.desc(),
-            ).limit(limit)
+    rows = tuple(
+        (
+            await db.execute(
+                query.order_by(
+                    CloudSessionProjection.updated_at.desc(),
+                    CloudSessionProjection.last_event_seq.desc(),
+                ).limit(limit)
+            )
+        ).scalars()
+    )
+    previews = await _latest_transcript_previews_for_sessions(db, rows)
+    pending_counts = await _pending_interaction_counts_for_sessions(db, rows)
+    return tuple(
+        _session_snapshot(
+            row,
+            pending_interaction_count=pending_counts.get((row.target_id, row.session_id), 0),
+            preview=previews.get((row.target_id, row.session_id)),
         )
-    ).scalars()
-    return tuple(_session_snapshot(row) for row in rows)
+        for row in rows
+    )
 
 
 async def list_session_projections_for_workspace(
@@ -836,15 +912,146 @@ async def list_session_projections_for_workspace(
     )
     if target_id is not None:
         query = query.where(CloudSessionProjection.target_id == target_id)
-    rows = (
-        await db.execute(
-            query.order_by(
-                CloudSessionProjection.updated_at.desc(),
-                CloudSessionProjection.last_event_seq.desc(),
-            ).limit(limit)
+    rows = tuple(
+        (
+            await db.execute(
+                query.order_by(
+                    CloudSessionProjection.updated_at.desc(),
+                    CloudSessionProjection.last_event_seq.desc(),
+                ).limit(limit)
+            )
+        ).scalars()
+    )
+    previews = await _latest_transcript_previews_for_sessions(db, rows)
+    pending_counts = await _pending_interaction_counts_for_sessions(db, rows)
+    return tuple(
+        _session_snapshot(
+            row,
+            pending_interaction_count=pending_counts.get((row.target_id, row.session_id), 0),
+            preview=previews.get((row.target_id, row.session_id)),
         )
-    ).scalars()
-    return tuple(_session_snapshot(row) for row in rows)
+        for row in rows
+    )
+
+
+async def _pending_interaction_count_for_session(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    session_id: str,
+) -> int:
+    count = await db.scalar(
+        select(func.count(CloudPendingInteraction.id))
+        .where(CloudPendingInteraction.target_id == target_id)
+        .where(CloudPendingInteraction.session_id == session_id)
+        .where(CloudPendingInteraction.status.in_(("pending", "failed")))
+    )
+    return int(count or 0)
+
+
+async def _pending_interaction_counts_for_sessions(
+    db: AsyncSession,
+    rows: tuple[CloudSessionProjection, ...],
+) -> dict[tuple[UUID, str], int]:
+    session_keys = tuple({(row.target_id, row.session_id) for row in rows})
+    if not session_keys:
+        return {}
+    conditions = [
+        and_(
+            CloudPendingInteraction.target_id == target_id,
+            CloudPendingInteraction.session_id == session_id,
+        )
+        for target_id, session_id in session_keys
+    ]
+    count_rows = await db.execute(
+        select(
+            CloudPendingInteraction.target_id,
+            CloudPendingInteraction.session_id,
+            func.count(CloudPendingInteraction.id),
+        )
+        .where(or_(*conditions))
+        .where(CloudPendingInteraction.status.in_(("pending", "failed")))
+        .group_by(CloudPendingInteraction.target_id, CloudPendingInteraction.session_id)
+    )
+    return {
+        (target_id, session_id): int(count)
+        for target_id, session_id, count in count_rows
+    }
+
+
+async def _latest_transcript_previews_for_sessions(
+    db: AsyncSession,
+    rows: tuple[CloudSessionProjection, ...],
+) -> dict[tuple[UUID, str], str]:
+    session_keys = tuple({(row.target_id, row.session_id) for row in rows})
+    if not session_keys:
+        return {}
+    conditions = [
+        and_(
+            CloudTranscriptItem.target_id == target_id,
+            CloudTranscriptItem.session_id == session_id,
+        )
+        for target_id, session_id in session_keys
+    ]
+    preview_query = (
+        select(CloudTranscriptItem)
+        .where(or_(*conditions))
+        .order_by(
+            CloudTranscriptItem.target_id.asc(),
+            CloudTranscriptItem.session_id.asc(),
+            CloudTranscriptItem.last_seq.desc(),
+            CloudTranscriptItem.updated_at.desc(),
+        )
+    )
+    if len(session_keys) == 1:
+        preview_query = preview_query.limit(50)
+    transcript_rows = (await db.execute(preview_query)).scalars()
+    previews: dict[tuple[UUID, str], str] = {}
+    fallback_previews: dict[tuple[UUID, str], str] = {}
+    for item in transcript_rows:
+        key = (item.target_id, item.session_id)
+        if key in previews:
+            continue
+        preview = _transcript_item_preview(item)
+        if not preview:
+            continue
+        if _is_conversation_preview_kind(item.kind):
+            previews[key] = preview
+        elif key not in fallback_previews:
+            fallback_previews[key] = preview
+    return {**fallback_previews, **previews}
+
+
+def _is_conversation_preview_kind(kind: str | None) -> bool:
+    normalized = (kind or "").strip().lower()
+    return normalized in {"assistant_message", "prompt", "user_message"}
+
+
+def _transcript_item_preview(item: CloudTranscriptItem) -> str | None:
+    for value in (item.text, item.title):
+        preview = _compact_preview_text(value)
+        if preview:
+            return preview
+    return None
+
+
+def _compact_preview_text(value: str | None) -> str | None:
+    text = " ".join((value or "").split())
+    if not text:
+        return None
+    if text.lower() in {
+        "assistant_message",
+        "bash",
+        "command",
+        "shell",
+        "terminal",
+        "tool call",
+        "user_message",
+    }:
+        return None
+    if len(text) <= 280:
+        return text
+    return f"{text[:277].rstrip()}..."
 
 
 async def list_transcript_items(

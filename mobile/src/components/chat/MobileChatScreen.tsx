@@ -59,12 +59,20 @@ import {
   latestCloudTranscriptSeq,
   type CloudChatTranscriptRowView,
 } from "@proliferate/product-model/chats/cloud/transcript-view";
-import { cloudCommandReadiness } from "@proliferate/product-model/workspaces/cloud-work-inventory";
+import {
+  cloudCommandReadiness,
+  recentWorkRuntimeLabel,
+  recentWorkRuntimeLocationForWorkspace,
+  recentWorkSourceForWorkspace,
+  recentWorkSourceLabel,
+  type RecentWorkRuntimeLocation,
+} from "@proliferate/product-model/workspaces/cloud-work-inventory";
 
 import { MobileIcon, type MobileIconName } from "../primitives/MobileIcon";
 import { MobileStatusDot } from "../primitives/MobileStatusDot";
 import { MobileTextInput } from "../primitives/MobileTextInput";
 import { MobileTopBar, MobileTopBarIconButton } from "../primitives/MobileTopBar";
+import { MobileMarkdownText } from "./MobileMarkdownText";
 import { MobileWorkspaceActionSheet } from "./MobileWorkspaceActionSheet";
 import type {
   MobileCloudChat,
@@ -110,6 +118,20 @@ type UpdateSessionConfigPayload = {
   value: string;
 };
 
+type ResolveInteractionPayload = {
+  requestId: string;
+  resolution: {
+    outcome: "selected";
+    optionId: string;
+  };
+};
+
+type PermissionInteractionOption = {
+  optionId: string;
+  label: string;
+  kind: string;
+};
+
 const EMPTY_TRANSCRIPT_ITEMS: CloudTranscriptItem[] = [];
 const EMPTY_SESSION_EVENTS: CloudSessionEvent[] = [];
 const EMPTY_PENDING_INTERACTIONS: CloudPendingInteraction[] = [];
@@ -146,12 +168,17 @@ export function MobileChatScreen({
     Record<string, PendingConfigChange>
   >({});
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
+  const [actionSheetInitialExpandedId, setActionSheetInitialExpandedId] = useState<string | null>(null);
   const [toolDetailRow, setToolDetailRow] = useState<CloudChatTranscriptRowView | null>(null);
+  const [permissionResolveError, setPermissionResolveError] = useState<string | null>(null);
+  const [resolvingPermissionKey, setResolvingPermissionKey] = useState<string | null>(null);
   const [claimedLocally, setClaimedLocally] = useState(false);
   const directPromptDispatchingRef = useRef(false);
   const sessionPromptDispatchingRef = useRef(false);
   const pendingDispatchRunRef = useRef<{ key: string; active: boolean } | null>(null);
   const pendingConfigMutationIdRef = useRef(0);
+  const autoOpenedPermissionIdsRef = useRef<Set<string>>(new Set());
+  const dismissedPermissionIdsRef = useRef<Set<string>>(new Set());
 
   const workspaceQuery = useCloudWorkspaceSnapshot(chat.workspaceId, true);
   const workspaceLive = useWorkspaceLive(chat.workspaceId, { enabled: true });
@@ -197,6 +224,17 @@ export function MobileChatScreen({
     sessionLive.snapshot?.pendingInteractions
     ?? transcriptQuery.data?.pendingInteractions
     ?? EMPTY_PENDING_INTERACTIONS;
+  const pendingPermissionByRequestId = useMemo(
+    () => new Map(
+      pendingInteractions
+        .filter((interaction) =>
+          interaction.kind === "permission"
+          && (interaction.status === "pending" || interaction.status === "failed")
+        )
+        .map((interaction) => [interaction.requestId, interaction]),
+    ),
+    [pendingInteractions],
+  );
   const pendingPromptCommandId = useMemo(
     () => latestPendingPromptCommandId(pendingInteractions),
     [pendingInteractions],
@@ -214,6 +252,7 @@ export function MobileChatScreen({
   const enqueuePrompt = useEnqueueCloudCommand<SendPromptPayload>();
   const enqueueStartSession = useEnqueueCloudCommand<StartSessionPayload>();
   const enqueueConfig = useEnqueueCloudCommand<UpdateSessionConfigPayload>();
+  const enqueueInteraction = useEnqueueCloudCommand<ResolveInteractionPayload>();
   const claimWorkspace = useClaimCloudWorkspace();
   const observedPromptCommandId = pendingPromptCommandId ?? latestCommandId;
   const commandStatus = useCommandStatus(observedPromptCommandId);
@@ -362,6 +401,7 @@ export function MobileChatScreen({
         transcriptItems,
         transcriptRows: transcriptView.rows,
         pendingInteractions,
+        status: pendingPromptStatus,
         allowTextOnlyRowFallback: false,
       }),
     ],
@@ -378,6 +418,74 @@ export function MobileChatScreen({
       transcriptView.rows,
     ],
   );
+  const toolDetailPermission = toolDetailRow?.sourceRequestId
+    ? pendingPermissionByRequestId.get(toolDetailRow.sourceRequestId) ?? null
+    : null;
+  const latestPendingPermission = useMemo(
+    () => [...pendingPermissionByRequestId.values()]
+      .sort((left, right) => right.requestedSeq - left.requestedSeq)[0] ?? null,
+    [pendingPermissionByRequestId],
+  );
+
+  useEffect(() => {
+    if (!toolDetailRow) {
+      return;
+    }
+    const latestRow = visibleTranscriptRows.find((row) => row.id === toolDetailRow.id);
+    if (!latestRow) {
+      return;
+    }
+    setToolDetailRow(latestRow);
+  }, [toolDetailRow?.id, visibleTranscriptRows]);
+
+  useEffect(() => {
+    const pendingIds = new Set(pendingPermissionByRequestId.keys());
+    for (const requestId of autoOpenedPermissionIdsRef.current) {
+      if (!pendingIds.has(requestId)) {
+        autoOpenedPermissionIdsRef.current.delete(requestId);
+      }
+    }
+    for (const requestId of dismissedPermissionIdsRef.current) {
+      if (!pendingIds.has(requestId)) {
+        dismissedPermissionIdsRef.current.delete(requestId);
+      }
+    }
+    const openRequestId = toolDetailRow?.sourceRequestId ?? null;
+    if (!openRequestId || pendingIds.has(openRequestId)) {
+      return;
+    }
+    if (autoOpenedPermissionIdsRef.current.has(openRequestId)) {
+      setPermissionResolveError(null);
+      setToolDetailRow(null);
+    }
+  }, [pendingPermissionByRequestId, toolDetailRow?.sourceRequestId]);
+
+  useEffect(() => {
+    if (!latestPendingPermission) {
+      return;
+    }
+    const requestId = latestPendingPermission.requestId;
+    if (
+      toolDetailRow?.sourceRequestId === requestId
+      || dismissedPermissionIdsRef.current.has(requestId)
+    ) {
+      return;
+    }
+    const permissionRow = visibleTranscriptRows.find((row) =>
+      row.sourceRequestId === requestId
+      && (row.kind === "tool" || row.kind === "tool_group")
+    );
+    if (!permissionRow) {
+      return;
+    }
+    autoOpenedPermissionIdsRef.current.add(requestId);
+    setPermissionResolveError(null);
+    setToolDetailRow(permissionRow);
+  }, [
+    latestPendingPermission?.requestId,
+    toolDetailRow?.sourceRequestId,
+    visibleTranscriptRows,
+  ]);
 
   useEffect(() => {
     setSelectedSessionId(chat.sessionId);
@@ -389,6 +497,11 @@ export function MobileChatScreen({
     setPendingConfigChanges({});
     setLatestConfigCommandId(null);
     setClaimedLocally(false);
+    setToolDetailRow(null);
+    setPermissionResolveError(null);
+    setResolvingPermissionKey(null);
+    autoOpenedPermissionIdsRef.current.clear();
+    dismissedPermissionIdsRef.current.clear();
   }, [chat.workspaceId, chat.sessionId]);
 
   useEffect(() => {
@@ -1044,6 +1157,61 @@ export function MobileChatScreen({
     }
   }
 
+  async function resolvePermissionInteraction(
+    interaction: CloudPendingInteraction,
+    option: PermissionInteractionOption,
+  ) {
+    if (!workspace || !session || !targetId) {
+      setPermissionResolveError("Session is still loading. Try again in a moment.");
+      return;
+    }
+    if (isUnclaimed) {
+      setPermissionResolveError("Claim this workspace before approving commands from mobile.");
+      return;
+    }
+    const readiness = cloudCommandReadiness(workspace);
+    if (!readiness.commandable) {
+      setPermissionResolveError(
+        readiness.message ?? "This workspace cannot accept cloud commands right now.",
+      );
+      return;
+    }
+    const key = `${interaction.requestId}:${option.optionId}`;
+    setResolvingPermissionKey(key);
+    setPermissionResolveError(null);
+    try {
+      const command = await enqueueInteraction.mutateAsync({
+        idempotencyKey: `mobile:${workspace.id}:${session.sessionId}:interaction:${interaction.requestId}:${option.optionId}:${Date.now()}`,
+        targetId,
+        workspaceId: session.workspaceId,
+        cloudWorkspaceId: workspace.id,
+        sessionId: session.sessionId,
+        kind: "resolve_interaction",
+        source: "mobile",
+        observedEventSeq: session.lastEventSeq ?? null,
+        payload: {
+          requestId: interaction.requestId,
+          resolution: {
+            outcome: "selected",
+            optionId: option.optionId,
+          },
+        },
+      });
+      setLatestCommandId(command.commandId);
+      setPendingPromptStatus(null);
+      setToolDetailRow(null);
+      void transcriptQuery.refetch();
+      void sessionEventsQuery.refetch();
+      void workspaceQuery.refetch();
+    } catch (error) {
+      setPermissionResolveError(
+        error instanceof Error ? error.message : "Permission response could not be sent.",
+      );
+    } finally {
+      setResolvingPermissionKey((current) => current === key ? null : current);
+    }
+  }
+
   async function claimChat(): Promise<boolean> {
     if (!workspace) {
       return false;
@@ -1080,7 +1248,7 @@ export function MobileChatScreen({
     setDraft("");
     setPendingPromptStatus(null);
     setPendingPromptFailed(false);
-    setActionSheetOpen(false);
+    closeWorkspaceActionSheet();
   }
 
   function selectSession(sessionId: string) {
@@ -1089,8 +1257,18 @@ export function MobileChatScreen({
     setDraft("");
     setPendingPromptStatus(null);
     setPendingPromptFailed(false);
-    setActionSheetOpen(false);
+    closeWorkspaceActionSheet();
     onSessionSelected?.(sessionId);
+  }
+
+  function openWorkspaceActionSheet(expandedId: string | null = null) {
+    setActionSheetInitialExpandedId(expandedId);
+    setActionSheetOpen(true);
+  }
+
+  function closeWorkspaceActionSheet() {
+    setActionSheetOpen(false);
+    setActionSheetInitialExpandedId(null);
   }
 
   const isUnclaimed = workspace?.visibility === "shared_unclaimed" && !claimedLocally;
@@ -1119,6 +1297,13 @@ export function MobileChatScreen({
   const subtitle = workspace?.repo
     ? `${workspace.repo.owner}/${workspace.repo.name}`
     : chat.repoLabel;
+  const runtimeContext = summarizeRuntimeContext(workspace, workspaceStatus);
+  const sessionSwitchContext = summarizeSessionSwitchContext(
+    sessions,
+    session,
+    newSessionMode,
+    sessionChoiceRequired,
+  );
   const branchLabel = workspace?.repo.branch ?? workspace?.repo.baseBranch ?? chat.branchLabel;
   const commandMessage =
     pendingPromptStatus ??
@@ -1126,6 +1311,13 @@ export function MobileChatScreen({
     (commandStatus.data?.status ? `Command ${commandStatus.data.status}` : null) ??
     (!session && !canStartNewSession ? workspaceHarnessAvailability.message : null) ??
     (!workspaceCommandReady && workspaceStatus === "ready" ? commandReadiness?.message ?? null : null);
+  const commandMessageShownInTranscript = visibleTranscriptRows.some((row) =>
+    isAssistantLoadingRow(row) && Boolean(loadingStatusText(row))
+  );
+  const footerCommandMessage =
+    commandMessageShownInTranscript || isPromptProgressStatus(commandMessage)
+      ? null
+      : commandMessage;
   const emptyTitle = !session
     ? sessionChoiceRequired ? "Choose a session" : newSessionMode ? "New session" : "No active session yet."
     : sessionEventsQuery.isLoading && transcriptView.source === "empty"
@@ -1144,6 +1336,22 @@ export function MobileChatScreen({
         : "Waiting for workspace";
   const composerControlSummary = summarizeComposerControls(composerControls);
 
+  function openToolDetailRow(row: CloudChatTranscriptRowView) {
+    if (row.sourceRequestId) {
+      dismissedPermissionIdsRef.current.delete(row.sourceRequestId);
+    }
+    setPermissionResolveError(null);
+    setToolDetailRow(row);
+  }
+
+  function closeToolDetailSheet() {
+    if (toolDetailPermission?.requestId) {
+      dismissedPermissionIdsRef.current.add(toolDetailPermission.requestId);
+    }
+    setPermissionResolveError(null);
+    setToolDetailRow(null);
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.root}
@@ -1161,11 +1369,61 @@ export function MobileChatScreen({
               <MobileTopBarIconButton
                 name="more"
                 accessibilityLabel="Workspace actions"
-                onPress={() => setActionSheetOpen(true)}
+                onPress={() => openWorkspaceActionSheet()}
               />
             </View>
           }
         />
+        <View style={styles.contextBar}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Open workspace actions. Running on ${runtimeContext.label}. ${runtimeContext.detail}.`}
+            onPress={() => openWorkspaceActionSheet()}
+            style={({ pressed }) => [
+              styles.contextChip,
+              styles.machineChip,
+              pressed && styles.contextChipPressed,
+            ]}
+          >
+            <View style={styles.contextIconSlot}>
+              <MobileIcon name={runtimeContext.icon} size={15} color={colors.fg} />
+            </View>
+            <View style={styles.contextText}>
+              <Text style={styles.contextLabel} numberOfLines={1}>
+                {runtimeContext.label}
+              </Text>
+              <View style={styles.contextDetailRow}>
+                <MobileStatusDot status={runtimeContext.status} size={6} />
+                <Text style={styles.contextDetail} numberOfLines={1}>
+                  {runtimeContext.detail}
+                </Text>
+              </View>
+            </View>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Switch session. ${sessionSwitchContext.label}. ${sessionSwitchContext.detail}.`}
+            disabled={isUnclaimed}
+            onPress={() => openWorkspaceActionSheet("sessions")}
+            style={({ pressed }) => [
+              styles.contextChip,
+              styles.sessionsChip,
+              isUnclaimed && styles.contextChipDisabled,
+              pressed && !isUnclaimed && styles.contextChipPressed,
+            ]}
+          >
+            <MobileIcon name="sessions" size={15} color={colors.fg} />
+            <View style={styles.contextText}>
+              <Text style={styles.contextLabel} numberOfLines={1}>
+                {sessionSwitchContext.label}
+              </Text>
+              <Text style={styles.contextDetail} numberOfLines={1}>
+                {sessionSwitchContext.detail}
+              </Text>
+            </View>
+            <MobileIcon name="chevron-down" size={11} color={colors.faint} />
+          </Pressable>
+        </View>
       </View>
 
       {isUnclaimed ? (
@@ -1199,7 +1457,12 @@ export function MobileChatScreen({
         keyboardShouldPersistTaps="handled"
         data={visibleTranscriptRows}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <MessageRow row={item} onToolPress={setToolDetailRow} />}
+        renderItem={({ item }) => (
+          <MessageRow
+            row={item}
+            onToolPress={openToolDetailRow}
+          />
+        )}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>{emptyTitle}</Text>
@@ -1213,9 +1476,9 @@ export function MobileChatScreen({
           </View>
         }
         ListFooterComponent={
-          commandMessage ? (
+          footerCommandMessage ? (
             <View style={styles.controlNote}>
-              <Text style={styles.controlNoteText}>{commandMessage}</Text>
+              <Text style={styles.controlNoteText}>{footerCommandMessage}</Text>
             </View>
           ) : null
         }
@@ -1223,26 +1486,6 @@ export function MobileChatScreen({
 
       <View style={styles.composer}>
         <View style={styles.composerCard}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open chat settings"
-            onPress={() => setActionSheetOpen(true)}
-            style={({ pressed }) => [
-              styles.configPill,
-              composerControlSummary.pending && styles.configPillPending,
-              pressed && styles.configPillPressed,
-            ]}
-          >
-            <MobileIcon
-              name={composerControlSummary.icon}
-              size={11}
-              color={colors.faint}
-            />
-            <Text style={styles.configPillText} numberOfLines={1}>
-              {composerControlSummary.label}
-            </Text>
-            <MobileIcon name="chevron-down" size={10} color={colors.faint} />
-          </Pressable>
           <MobileTextInput
             multiline
             value={draft}
@@ -1251,6 +1494,26 @@ export function MobileChatScreen({
             style={styles.composerInput}
           />
           <View style={styles.composerFooter}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open chat settings"
+              onPress={() => openWorkspaceActionSheet()}
+              style={({ pressed }) => [
+                styles.configPill,
+                composerControlSummary.pending && styles.configPillPending,
+                pressed && styles.configPillPressed,
+              ]}
+            >
+              <MobileIcon
+                name={composerControlSummary.icon}
+                size={11}
+                color={colors.faint}
+              />
+              <Text style={styles.configPillText} numberOfLines={1}>
+                {composerControlSummary.label}
+              </Text>
+              <MobileIcon name="chevron-down" size={10} color={colors.faint} />
+            </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Send"
@@ -1271,6 +1534,7 @@ export function MobileChatScreen({
 
       <MobileWorkspaceActionSheet
         visible={actionSheetOpen}
+        initialExpandedId={actionSheetInitialExpandedId}
         branchLabel={branchLabel}
         unclaimed={isUnclaimed}
         claimPending={claimWorkspace.isPending}
@@ -1283,9 +1547,18 @@ export function MobileChatScreen({
         onNewSession={startNewSession}
         onSelectSession={selectSession}
         onCopyBranch={() => void copyBranchToClipboard(branchLabel)}
-        onClose={() => setActionSheetOpen(false)}
+        onClose={closeWorkspaceActionSheet}
       />
-      <ToolDetailSheet row={toolDetailRow} onClose={() => setToolDetailRow(null)} />
+      <ToolDetailSheet
+        row={toolDetailRow}
+        pendingPermission={toolDetailPermission}
+        resolvingPermissionKey={resolvingPermissionKey}
+        permissionResolveError={permissionResolveError}
+        onResolvePermission={(interaction, option) => {
+          void resolvePermissionInteraction(interaction, option);
+        }}
+        onClose={closeToolDetailSheet}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -1297,18 +1570,25 @@ function MessageRow({
   row: CloudChatTranscriptRowView;
   onToolPress: (row: CloudChatTranscriptRowView) => void;
 }) {
+  if (isWorkHistoryRow(row)) {
+    return <WorkHistoryRow row={row} onPress={() => onToolPress(row)} />;
+  }
   if (row.kind === "tool" || row.kind === "tool_group") {
     return <ToolRow row={row} onPress={() => onToolPress(row)} />;
+  }
+  if (isAssistantLoadingRow(row)) {
+    return <MobileAssistantLoadingRow row={row} />;
   }
   const isUser = row.kind === "user";
   const isSystem = row.kind === "system";
   if (isUser) {
+    const visibleStatus = userMessageStatusLabel(row.status);
     return (
       <View style={styles.userRow}>
         <View style={styles.userBubble}>
           {row.body ? <Text style={styles.userBubbleText}>{row.body}</Text> : null}
-          {row.status && row.status !== "Queued" ? (
-            <Text style={styles.userBubbleStatus}>{row.status}</Text>
+          {visibleStatus ? (
+            <Text style={styles.userBubbleStatus}>{visibleStatus}</Text>
           ) : null}
         </View>
       </View>
@@ -1317,14 +1597,58 @@ function MessageRow({
   return (
     <View style={[styles.assistantRow, isSystem && styles.systemRow]}>
       {row.title ? <Text style={styles.assistantTitle}>{row.title}</Text> : null}
-      {row.body ? <Text style={styles.assistantBody}>{row.body}</Text> : null}
+      {row.body ? <MobileMarkdownText content={row.body} /> : null}
       {row.detail ? <Text style={styles.assistantDetail}>{row.detail}</Text> : null}
-      {row.streaming ? <Text style={styles.streamingText}>Working...</Text> : null}
     </View>
   );
 }
 
+function MobileAssistantLoadingRow({ row }: { row: CloudChatTranscriptRowView }) {
+  return (
+    <View
+      accessibilityLabel="Assistant response loading"
+      accessibilityRole="progressbar"
+      style={styles.assistantLoadingRow}
+    >
+      <Text style={styles.assistantLoadingText} numberOfLines={1}>
+        {loadingStatusLabel(row)}
+      </Text>
+    </View>
+  );
+}
+
+function WorkHistoryRow({
+  row,
+  onPress,
+}: {
+  row: CloudChatTranscriptRowView;
+  onPress: () => void;
+}) {
+  const summary = workHistorySummary(row);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Open work history: ${summary}`}
+      onPress={onPress}
+      style={({ pressed }) => [styles.historyRow, pressed && styles.historyRowPressed]}
+    >
+      <View style={styles.historyIcon}>
+        <MobileIcon name="terminal" size={15} color={colors.faint} />
+      </View>
+      <View style={styles.historyTextCluster}>
+        <Text style={styles.historySummary} numberOfLines={1}>
+          {summary}
+        </Text>
+        <MobileIcon name="chevron-right" size={16} color={colors.faint} />
+      </View>
+    </Pressable>
+  );
+}
+
 function ToolRow({ row, onPress }: { row: CloudChatTranscriptRowView; onPress: () => void }) {
+  const title = row.title ?? row.body ?? "Tool call";
+  const summary = toolSummary(row);
+  const visibleSummary = summary === "Tap for details" ? null : summary;
   return (
     <Pressable
       accessibilityRole="button"
@@ -1333,28 +1657,40 @@ function ToolRow({ row, onPress }: { row: CloudChatTranscriptRowView; onPress: (
       style={({ pressed }) => [styles.toolCard, pressed && styles.toolCardPressed]}
     >
       <View style={styles.toolIcon}>
-        <MobileIcon name="settings" size={15} color={colors.faint} />
+        <MobileIcon name="terminal" size={15} color={colors.faint} />
       </View>
       <View style={styles.toolText}>
-        <Text style={styles.toolTitle} numberOfLines={1}>
-          {row.title ?? row.body ?? "Tool call"}
-        </Text>
-        <Text style={styles.toolSubtitle} numberOfLines={1}>
-          {toolSummary(row)}
-        </Text>
+        <Text style={styles.toolTitle} numberOfLines={1}>{title}</Text>
+        {visibleSummary ? (
+          <Text style={styles.toolSubtitle} numberOfLines={1}>{visibleSummary}</Text>
+        ) : null}
+        <MobileIcon name="chevron-right" size={16} color={colors.faint} />
       </View>
-      <MobileIcon name="chevron-right" size={15} color={colors.faint} />
     </Pressable>
   );
 }
 
 function ToolDetailSheet({
   row,
+  pendingPermission,
+  resolvingPermissionKey,
+  permissionResolveError,
+  onResolvePermission,
   onClose,
 }: {
   row: CloudChatTranscriptRowView | null;
+  pendingPermission: CloudPendingInteraction | null;
+  resolvingPermissionKey: string | null;
+  permissionResolveError: string | null;
+  onResolvePermission: (
+    interaction: CloudPendingInteraction,
+    option: PermissionInteractionOption,
+  ) => void;
   onClose: () => void;
 }) {
+  const permissionOptions = pendingPermission
+    ? permissionInteractionOptions(pendingPermission)
+    : [];
   return (
     <Modal visible={Boolean(row)} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.toolSheetLayer}>
@@ -1367,7 +1703,9 @@ function ToolDetailSheet({
         <View style={styles.toolSheet}>
           <View style={styles.toolSheetHeader}>
             <Text style={styles.toolSheetTitle} numberOfLines={1}>
-              {row?.title ?? "Tool call"}
+              {row && isWorkHistoryRow(row)
+                ? workHistorySummary(row)
+                : row?.title ?? "Tool call"}
             </Text>
             <Pressable
               accessibilityRole="button"
@@ -1384,7 +1722,52 @@ function ToolDetailSheet({
           >
             {row?.status ? <Text style={styles.toolSheetMeta}>{row.status}</Text> : null}
             {row?.body ? <Text style={styles.toolSheetBody}>{row.body}</Text> : null}
-            {row?.detail ? <Text style={styles.toolSheetDetail}>{row.detail}</Text> : null}
+            {row?.detail && !isWorkHistoryRow(row) ? (
+              <Text style={styles.toolSheetDetail}>{row.detail}</Text>
+            ) : null}
+            {pendingPermission ? (
+              <View style={styles.permissionBox}>
+                <Text style={styles.permissionTitle}>Command approval</Text>
+                <Text style={styles.permissionBody}>
+                  Choose how to handle this request so the session can continue.
+                </Text>
+                <View style={styles.permissionActions}>
+                  {permissionOptions.map((option) => {
+                    const key = `${pendingPermission.requestId}:${option.optionId}`;
+                    const resolving = resolvingPermissionKey === key;
+                    const reject = option.kind.startsWith("reject");
+                    return (
+                      <Pressable
+                        key={option.optionId}
+                        accessibilityRole="button"
+                        accessibilityLabel={option.label}
+                        accessibilityState={{ disabled: Boolean(resolvingPermissionKey) }}
+                        disabled={Boolean(resolvingPermissionKey)}
+                        onPress={() => onResolvePermission(pendingPermission, option)}
+                        style={({ pressed }) => [
+                          styles.permissionButton,
+                          reject ? styles.permissionRejectButton : styles.permissionAllowButton,
+                          pressed && styles.permissionButtonPressed,
+                          Boolean(resolvingPermissionKey) && styles.permissionButtonDisabled,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.permissionButtonText,
+                            reject && styles.permissionRejectButtonText,
+                          ]}
+                        >
+                          {resolving ? "Sending" : option.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                {permissionResolveError ? (
+                  <Text style={styles.permissionError}>{permissionResolveError}</Text>
+                ) : null}
+              </View>
+            ) : null}
             {row?.children?.length ? (
               <View style={styles.toolChildren}>
                 {row.children.map((child) => (
@@ -1403,12 +1786,121 @@ function ToolDetailSheet({
   );
 }
 
+function permissionInteractionOptions(
+  interaction: CloudPendingInteraction,
+): PermissionInteractionOption[] {
+  const payload = interaction.payload;
+  const event = isRecord(payload?.event) ? payload.event : null;
+  const eventPayload = event && isRecord(event.payload) ? event.payload : null;
+  const rawOptions = Array.isArray(eventPayload?.options) ? eventPayload.options : [];
+  const options = rawOptions
+    .filter(isRecord)
+    .map((option) => {
+      const optionId = readNonEmptyString(option.optionId);
+      const label = readNonEmptyString(option.label);
+      const kind = readNonEmptyString(option.kind);
+      return optionId && label && kind ? { optionId, label, kind } : null;
+    })
+    .filter((option): option is PermissionInteractionOption => option !== null);
+  if (options.length > 0) {
+    return options;
+  }
+  return [
+    { optionId: "allow", label: "Allow", kind: "allow_once" },
+    { optionId: "reject", label: "Reject", kind: "reject_once" },
+  ];
+}
+
+function readNonEmptyString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function toolSummary(row: CloudChatTranscriptRowView): string {
+  if (isWorkHistoryRow(row)) {
+    return workHistorySummary(row);
+  }
   const count = row.children?.length ?? 0;
   if (count > 0) {
     return `${count} ${count === 1 ? "tool call" : "tool calls"}${row.status ? ` · ${row.status}` : ""}`;
   }
   return row.status ?? row.detail ?? "Tap for details";
+}
+
+function isWorkHistoryRow(row: CloudChatTranscriptRowView): boolean {
+  return row.kind === "system" && (row.title ?? "").toLowerCase() === "work history";
+}
+
+function workHistorySummary(row: CloudChatTranscriptRowView): string {
+  const detailFragments = (row.detail ?? "")
+    .split(",")
+    .map((fragment) => fragment.trim())
+    .filter((fragment) => fragment && !/\btool calls?\b/i.test(fragment));
+  const actionFragments = (row.children ?? [])
+    .filter((child) => child.kind === "tool_group" && child.title)
+    .map((child) => pastTenseActionSummary(child.title ?? ""))
+    .filter((value): value is string => Boolean(value));
+  const fragments = [...detailFragments, ...actionFragments];
+  if (fragments.length > 0) {
+    return sentenceCase(fragments.join(", "));
+  }
+  return row.detail ?? row.body ?? "Work history";
+}
+
+function pastTenseActionSummary(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed
+    .replace(/^Running\b/, "ran")
+    .replace(/\brunning\b/g, "ran")
+    .replace(/^Explored\b/, "explored")
+    .replace(/^Edited\b/, "edited")
+    .replace(/^Worked\b/, "worked");
+}
+
+function sentenceCase(value: string): string {
+  return value ? `${value.charAt(0).toUpperCase()}${value.slice(1)}` : value;
+}
+
+function isAssistantLoadingRow(row: CloudChatTranscriptRowView): boolean {
+  return row.kind === "assistant"
+    && Boolean(row.streaming)
+    && (
+      !row.body?.trim()
+      || row.id.includes(":assistant-waiting")
+      || row.id.includes(":pending-assistant")
+    );
+}
+
+function loadingStatusText(row: CloudChatTranscriptRowView): string | null {
+  const value = row.detail ?? row.body ?? row.status ?? null;
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function loadingStatusLabel(row: CloudChatTranscriptRowView): string {
+  const status = loadingStatusText(row) ?? "Loading";
+  return `${status.replace(/[\s.]+$/g, "")}...`;
+}
+
+function isPromptProgressStatus(message: string | null): boolean {
+  return /^(preparing|starting|sending|waiting|queued|using selected cloud agent credential|workspace is provisioning|command (queued|leased|accepted|delivered))/i
+    .test(message ?? "");
+}
+
+function userMessageStatusLabel(status: string | null | undefined): string | null {
+  const value = status?.trim();
+  if (!value) {
+    return null;
+  }
+  return /\b(failed|error|rejected|expired|could not|timed out)\b/i.test(value)
+    ? value
+    : null;
 }
 
 function messageLabel(row: CloudChatTranscriptRowView): string {
@@ -1471,9 +1963,14 @@ function buildPendingPromptRows(
         ? pendingPrompt.failureMessage
           ?? failureMessage
           ?? "Queued prompt could not be sent."
-        : pendingPrompt.dispatchedSessionId
-          ? "Waiting for response..."
-          : "Preparing workspace and session...",
+        : null,
+      detail: promptFailed
+        ? null
+        : failureMessage ?? (
+          pendingPrompt.dispatchedSessionId
+            ? "Waiting for response."
+            : "Preparing workspace and session."
+        ),
       streaming: !promptFailed,
     });
   }
@@ -1486,6 +1983,7 @@ function buildOptimisticPromptRows(input: {
   transcriptItems: readonly CloudTranscriptItem[];
   transcriptRows: readonly CloudChatTranscriptRowView[];
   pendingInteractions: readonly CloudPendingInteraction[];
+  status: string | null;
   allowTextOnlyRowFallback: boolean;
 }): CloudChatTranscriptRowView[] {
   if (!input.sessionId) {
@@ -1511,6 +2009,10 @@ function buildOptimisticPromptRows(input: {
       transcriptRows: input.transcriptRows,
       allowTextOnlyRowFallback: input.allowTextOnlyRowFallback,
     });
+    const hasTranscriptProgressAfterPrompt = transcriptHasAgentProgressAfterBaseline(
+      input.transcriptRows,
+      prompt.baseTranscriptSeq,
+    );
     if (!promptVisible) {
       rows.push({
         id: `${prompt.id}:user`,
@@ -1520,16 +2022,29 @@ function buildOptimisticPromptRows(input: {
         streaming: prompt.status !== "failed",
       });
     }
-    if (prompt.status !== "failed" && !agentStarted) {
+    if (prompt.status !== "failed" && !agentStarted && !hasTranscriptProgressAfterPrompt) {
       rows.push({
         id: `${prompt.id}:assistant-waiting`,
         kind: "assistant",
-        body: prompt.status === "sending" ? "Sending message..." : "Waiting for response...",
+        body: null,
+        detail: input.status ?? (prompt.status === "sending" ? "Sending message." : "Waiting for response."),
         streaming: true,
       });
     }
   }
   return rows;
+}
+
+function transcriptHasAgentProgressAfterBaseline(
+  rows: readonly CloudChatTranscriptRowView[],
+  baseTranscriptSeq: number,
+): boolean {
+  return rows.some((row) =>
+    row.kind !== "user"
+    && row.kind !== "system"
+    && typeof row.firstSeq === "number"
+    && row.firstSeq > baseTranscriptSeq
+  );
 }
 
 function latestPendingPromptCommandId(
@@ -1665,6 +2180,7 @@ function sessionProjectionFromChat(chat: MobileCloudChat): CloudSessionProjectio
     title: chat.title,
     status: chat.status,
     phase: null,
+    pendingInteractionCount: 0,
     liveConfig: null,
     lastEventSeq: 0,
     lastEventAt: null,
@@ -1707,6 +2223,215 @@ function sessionDisplaySubtitle(session: CloudSessionProjection): string {
 
 function shortSessionLabel(sessionId: string): string {
   return sessionId.slice(0, 8);
+}
+
+type RuntimeContextView = {
+  label: string;
+  detail: string;
+  icon: MobileIconName;
+  status: "running" | "idle" | "paused" | "failed" | "done";
+};
+
+function summarizeRuntimeContext(
+  workspace: CloudWorkspaceDetail | null,
+  workspaceStatus: string,
+): RuntimeContextView {
+  if (!workspace) {
+    return {
+      label: "Runtime",
+      detail: "Loading machine",
+      icon: "cloud",
+      status: "idle",
+    };
+  }
+
+  const runtimeLocation = recentWorkRuntimeLocationForWorkspace(workspace);
+  const runtimeLabel = workspace.executionTarget?.label?.trim()
+    || fallbackRuntimeLabel(workspace, runtimeLocation);
+  const sourceDetail = runtimeSourceDetail(workspace);
+  const statusDetail = runtimeStatusDetail(workspace, workspaceStatus);
+  const detail = joinUniqueLabels([sourceDetail, statusDetail]) || "Runtime status unknown";
+
+  return {
+    label: runtimeLabel,
+    detail,
+    icon: runtimeIcon(workspace, runtimeLocation),
+    status: runtimeDotStatus(workspace, workspaceStatus),
+  };
+}
+
+function fallbackRuntimeLabel(
+  workspace: CloudWorkspaceDetail,
+  runtimeLocation: RecentWorkRuntimeLocation,
+): string {
+  switch (workspace.executionTarget?.kind) {
+    case "managed_cloud":
+      return "Cloud runtime";
+    case "local_desktop":
+      return "Desktop dispatch";
+    case "ssh":
+      return "SSH remote";
+    case "self_hosted":
+      return "Self-hosted runner";
+    default:
+      return recentWorkRuntimeLabel(runtimeLocation);
+  }
+}
+
+function runtimeSourceDetail(workspace: CloudWorkspaceDetail): string | null {
+  const sourceKind = recentWorkSourceForWorkspace(workspace);
+  if (sourceKind === "cloud_sandbox" || sourceKind === "unknown") {
+    return null;
+  }
+  if (sourceKind === "mobile") {
+    return "Mobile dispatch";
+  }
+  if (sourceKind === "desktop_exposed") {
+    return "Desktop dispatch";
+  }
+  if (sourceKind === "web") {
+    return "Web dispatch";
+  }
+  return recentWorkSourceLabel(sourceKind);
+}
+
+function runtimeStatusDetail(workspace: CloudWorkspaceDetail, workspaceStatus: string): string {
+  switch (workspace.runtime?.status) {
+    case "running":
+      return "Running";
+    case "provisioning":
+    case "pending":
+      return "Starting";
+    case "paused":
+      return "Paused";
+    case "error":
+      return "Error";
+    case "disabled":
+      return "Disabled";
+    case undefined:
+      break;
+  }
+  if (workspace.executionTarget?.online === true) {
+    return "Online";
+  }
+  if (workspace.executionTarget?.online === false) {
+    return "Offline";
+  }
+  switch (workspaceStatus) {
+    case "ready":
+      return "Ready";
+    case "materializing":
+    case "needs_rematerialization":
+      return "Setting up";
+    case "pending":
+      return "Pending";
+    case "error":
+      return "Error";
+    default:
+      return "Status unknown";
+  }
+}
+
+function runtimeIcon(
+  workspace: CloudWorkspaceDetail,
+  runtimeLocation: RecentWorkRuntimeLocation,
+): MobileIconName {
+  switch (workspace.executionTarget?.kind) {
+    case "managed_cloud":
+      return "cloud";
+    case "local_desktop":
+      return "monitor";
+    case "ssh":
+    case "self_hosted":
+      return "terminal";
+    case undefined:
+      break;
+  }
+  switch (runtimeLocation) {
+    case "local_desktop":
+      return "monitor";
+    case "cloud_sandbox":
+      return "cloud";
+    case "ssh_remote":
+      return "terminal";
+    case "offline":
+      return workspace.sandboxType === "local" ? "monitor" : "cloud";
+    case "unknown":
+      return "cloud";
+  }
+}
+
+function runtimeDotStatus(
+  workspace: CloudWorkspaceDetail,
+  workspaceStatus: string,
+): RuntimeContextView["status"] {
+  if (workspace.runtime?.status === "provisioning" || workspace.runtime?.status === "pending") {
+    return "running";
+  }
+  if (workspace.runtime?.status) {
+    return mobileStatus(workspace.runtime.status);
+  }
+  if (workspace.executionTarget?.online === true) {
+    return "running";
+  }
+  if (workspace.executionTarget?.online === false) {
+    return "paused";
+  }
+  return mobileStatus(workspaceStatus);
+}
+
+function joinUniqueLabels(labels: Array<string | null | undefined>): string {
+  const normalized = new Set<string>();
+  const parts: string[] = [];
+  for (const label of labels) {
+    const trimmed = label?.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const key = trimmed.toLowerCase();
+    if (normalized.has(key)) {
+      continue;
+    }
+    normalized.add(key);
+    parts.push(trimmed);
+  }
+  return parts.join(" · ");
+}
+
+function summarizeSessionSwitchContext(
+  sessions: readonly CloudSessionProjection[],
+  session: CloudSessionProjection | null,
+  newSessionMode: boolean,
+  sessionChoiceRequired: boolean,
+): { label: string; detail: string } {
+  const countLabel = formatSessionCount(sessions.length);
+  if (newSessionMode) {
+    return {
+      label: "New session",
+      detail: sessions.length ? `${countLabel} existing` : "No existing sessions",
+    };
+  }
+  if (sessionChoiceRequired) {
+    return {
+      label: countLabel,
+      detail: "Choose one",
+    };
+  }
+  if (!session) {
+    return {
+      label: countLabel,
+      detail: sessions.length ? "Choose one" : "Start one",
+    };
+  }
+  const index = sessions.findIndex((candidate) => candidate.sessionId === session.sessionId);
+  return {
+    label: countLabel,
+    detail: sessionDisplayTitle(session, Math.max(index, 0)),
+  };
+}
+
+function formatSessionCount(count: number): string {
+  return count === 1 ? "1 session" : `${count} sessions`;
 }
 
 function effectiveWorkspaceStatus(
@@ -1886,6 +2611,72 @@ const styles = StyleSheet.create({
     gap: spacing[2],
     paddingRight: spacing[1],
   },
+  contextBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    paddingHorizontal: spacing[3],
+    paddingTop: spacing[2],
+    paddingBottom: spacing[2],
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
+  },
+  contextChip: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.accent,
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+  },
+  contextChipPressed: {
+    opacity: 0.72,
+  },
+  contextChipDisabled: {
+    opacity: 0.48,
+  },
+  machineChip: {
+    flex: 1,
+    minWidth: 0,
+  },
+  sessionsChip: {
+    maxWidth: "46%",
+    flexShrink: 0,
+  },
+  contextIconSlot: {
+    width: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  contextText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  contextLabel: {
+    color: colors.fg,
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: "700",
+  },
+  contextDetailRow: {
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  contextDetail: {
+    flexShrink: 1,
+    minWidth: 0,
+    color: colors.faint,
+    fontSize: 11.5,
+    lineHeight: 15,
+    fontWeight: "600",
+  },
   list: {
     flex: 1,
   },
@@ -2009,49 +2800,83 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 18,
   },
-  streamingText: {
-    marginTop: 8,
-    color: colors.faint,
-    fontSize: 12,
+  assistantLoadingRow: {
+    paddingRight: spacing[4],
+    gap: 4,
+  },
+  assistantLoadingText: {
+    color: "#f59e0b",
+    fontSize: 15,
+    lineHeight: 22,
     fontStyle: "italic",
   },
-  toolCard: {
-    minHeight: 54,
+  historyRow: {
+    minHeight: 38,
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing[3],
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderLight,
-    backgroundColor: colors.card,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
+    gap: 3,
+    paddingVertical: spacing[1],
   },
-  toolCardPressed: {
-    opacity: 0.82,
-    backgroundColor: colors.accent,
+  historyRowPressed: {
+    opacity: 0.72,
   },
-  toolIcon: {
-    width: 30,
-    height: 30,
+  historyIcon: {
+    width: 19,
+    height: 25,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: radius.full,
-    backgroundColor: colors.background,
+  },
+  historyTextCluster: {
+    maxWidth: "88%",
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  historySummary: {
+    flexShrink: 1,
+    minWidth: 0,
+    color: "rgba(255,255,255,0.78)",
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: "500",
+  },
+  toolCard: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingVertical: spacing[1],
+  },
+  toolCardPressed: {
+    opacity: 0.72,
+  },
+  toolIcon: {
+    width: 19,
+    height: 25,
+    alignItems: "center",
+    justifyContent: "center",
   },
   toolText: {
-    flex: 1,
+    maxWidth: "88%",
     minWidth: 0,
-    gap: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
   },
   toolTitle: {
-    color: colors.fg,
-    fontSize: 13.5,
-    fontWeight: "600",
+    flexShrink: 1,
+    minWidth: 0,
+    color: "rgba(255,255,255,0.78)",
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: "500",
   },
   toolSubtitle: {
     color: colors.faint,
-    fontSize: 11.5,
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: "500",
   },
   toolSheetLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -2115,6 +2940,63 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 18,
   },
+  permissionBox: {
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
+    backgroundColor: colors.background,
+    padding: spacing[3],
+    gap: spacing[2],
+  },
+  permissionTitle: {
+    color: colors.fg,
+    fontSize: 13.5,
+    fontWeight: "700",
+  },
+  permissionBody: {
+    color: colors.faint,
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
+  permissionActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing[2],
+  },
+  permissionButton: {
+    minHeight: 34,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing[3],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  permissionAllowButton: {
+    backgroundColor: colors.fg,
+  },
+  permissionRejectButton: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderLight,
+    backgroundColor: colors.card,
+  },
+  permissionButtonPressed: {
+    opacity: 0.82,
+  },
+  permissionButtonDisabled: {
+    opacity: 0.56,
+  },
+  permissionButtonText: {
+    color: colors.background,
+    fontSize: 12.5,
+    fontWeight: "700",
+  },
+  permissionRejectButtonText: {
+    color: colors.fg,
+  },
+  permissionError: {
+    color: colors.red,
+    fontSize: 12,
+    lineHeight: 16,
+  },
   toolChildren: {
     gap: spacing[2],
   },
@@ -2168,22 +3050,24 @@ const styles = StyleSheet.create({
     lineHeight: 23,
   },
   composerFooter: {
+    minHeight: 40,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
+    gap: spacing[2],
   },
   configPill: {
     flexShrink: 1,
     minWidth: 0,
-    maxWidth: "70%",
-    minHeight: 24,
+    maxWidth: "76%",
+    height: 40,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 5,
-    alignSelf: "center",
     borderRadius: radius.full,
     paddingHorizontal: spacing[2],
-    paddingVertical: 2,
+    paddingVertical: 0,
   },
   configPillPending: {
     backgroundColor: colors.accent,
@@ -2195,7 +3079,9 @@ const styles = StyleSheet.create({
     minWidth: 0,
     color: colors.faint,
     fontSize: 11.5,
+    lineHeight: 16,
     fontWeight: "500",
+    includeFontPadding: false,
   },
   send: {
     width: 40,

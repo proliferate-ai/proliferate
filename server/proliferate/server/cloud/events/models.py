@@ -57,6 +57,10 @@ class CloudSessionProjectionResponse(BaseModel):
     title: str | None = None
     status: str
     phase: str | None = None
+    pending_interaction_count: int = Field(
+        default=0,
+        serialization_alias="pendingInteractionCount",
+    )
     live_config: dict[str, object] | None = Field(default=None, serialization_alias="liveConfig")
     last_event_seq: int = Field(serialization_alias="lastEventSeq")
     last_event_at: str | None = Field(default=None, serialization_alias="lastEventAt")
@@ -146,6 +150,7 @@ def session_projection_response(
         title=value.title,
         status=value.status,
         phase=value.phase,
+        pending_interaction_count=value.pending_interaction_count,
         live_config=_json_dict(value.live_config_json),
         last_event_seq=value.last_event_seq,
         last_event_at=value.last_event_at,
