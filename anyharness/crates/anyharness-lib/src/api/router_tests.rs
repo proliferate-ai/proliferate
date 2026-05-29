@@ -20,6 +20,7 @@ use uuid::Uuid;
 use super::router::build_router;
 use crate::{
     app::{test_support, AppState},
+    domains::terminals::model::{CreateTerminalOptions, TerminalPurpose},
     domains::{
         agents::seed::AgentSeedStore,
         cowork::mcp::auth::{LEGACY_CAPABILITY_HEADER_NAME, SECRET_FILE_NAME},
@@ -27,7 +28,6 @@ use crate::{
     integrations::mcp::capability_token::{McpCapabilityTokenIssuer, McpCapabilityTokenSignature},
     persistence::Db,
     sessions::{model::SessionRecord, store::SessionStore},
-    terminals::model::{CreateTerminalOptions, TerminalPurpose},
     workspaces::{
         access_model::{WorkspaceAccessMode, WorkspaceAccessRecord},
         access_store::WorkspaceAccessStore,

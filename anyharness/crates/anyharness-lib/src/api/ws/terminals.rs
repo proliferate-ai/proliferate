@@ -10,8 +10,7 @@ use crate::api::auth::AuthContext;
 use crate::api::http::access::assert_terminal_auth_scope;
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
-use crate::terminals::model::ResizeTerminalOptions;
-use crate::terminals::service::terminal_frame_to_json;
+use crate::domains::terminals::model::ResizeTerminalOptions;
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -56,7 +55,9 @@ async fn handle_terminal_ws(
 
     let (mut ws_sink, mut ws_stream) = socket.split();
     for event in replay {
-        let json = terminal_frame_to_json(&terminal_id, event);
+        let json = state
+            .terminal_service
+            .output_event_to_json(&terminal_id, event);
         if ws_sink
             .send(Message::Text(json.to_string().into()))
             .await
@@ -125,7 +126,7 @@ async fn handle_terminal_ws(
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 };
-                let json = terminal_frame_to_json(&terminal_id, event);
+                let json = state.terminal_service.output_event_to_json(&terminal_id, event);
                 let msg = Message::Text(json.to_string().into());
                 if ws_sink.send(msg).await.is_err() {
                     break;

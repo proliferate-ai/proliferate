@@ -11,5 +11,4 @@ pub mod persistence;
 mod process_env;
 pub mod repo_roots;
 pub mod sessions;
-pub mod terminals;
 pub mod workspaces;

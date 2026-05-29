@@ -3,8 +3,8 @@ use std::sync::Arc;
 use super::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
 use super::access_store::WorkspaceAccessStore;
 use super::store::WorkspaceStore;
+use crate::live::terminals::TerminalService;
 use crate::sessions::store::SessionStore;
-use crate::terminals::service::TerminalService;
 
 #[derive(Debug, thiserror::Error)]
 pub enum WorkspaceAccessError {
@@ -214,10 +214,10 @@ mod tests {
     use std::sync::Arc;
 
     use super::WorkspaceAccessGate;
+    use crate::domains::terminals::store::TerminalStore;
+    use crate::live::terminals::TerminalService;
     use crate::persistence::Db;
     use crate::sessions::store::SessionStore;
-    use crate::terminals::service::TerminalService;
-    use crate::terminals::store::TerminalStore;
     use crate::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
     use crate::workspaces::access_store::WorkspaceAccessStore;
     use crate::workspaces::model::WorkspaceRecord;

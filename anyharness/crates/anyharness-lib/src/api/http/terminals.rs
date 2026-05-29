@@ -9,7 +9,7 @@ use crate::api::http::access::{
 };
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
-use crate::terminals::model::{
+use crate::domains::terminals::model::{
     CreateTerminalOptions, ResizeTerminalOptions, RunTerminalCommandOptions,
     TerminalCommandOutputMode as InternalTerminalCommandOutputMode,
     TerminalCommandRunRecord as InternalTerminalCommandRunRecord,
