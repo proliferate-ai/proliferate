@@ -10,11 +10,14 @@ Use these thresholds for Rust source under `anyharness/crates/**`:
 | Area | Soft limit | Hard limit | Notes |
 | --- | ---: | ---: | --- |
 | `api/**/*.rs` | 400 | 700 | Large handlers usually mean product orchestration leaked into transport. |
+| `app/**/*.rs` | 500 | 900 | Split by wiring family; app files must remain composition-only. |
 | `domains/**/store*.rs` | 500 | 900 | Split by table/query family. |
 | `domains/**/service*.rs` | 500 | 900 | Split by durable use case or subdomain. |
 | `domains/**/runtime*.rs` | 500 | 900 | Split by workflow family. |
-| `live/**/actor*.rs` | 500 | 900 | Split by command/startup/prompt/config/lifecycle concern. |
-| `live/**/event_sink*.rs` | 500 | 900 | Split by normalized event family. |
+| `live/**/actor/**/*.rs` | 500 | 900 | Split by command/startup/prompt/config/lifecycle concern. |
+| `live/**/driver/**/*.rs` | 500 | 900 | Split by external process/protocol/PTY lifecycle concern. |
+| `live/**/event_sink/**/*.rs` | 500 | 900 | Split by normalized event family. |
+| `live/**/output_sink/**/*.rs` | 500 | 900 | Split by ordered output family. |
 | `adapters/**/*.rs` | 500 | 900 | Split by capability if the adapter grows. |
 | `integrations/**/*.rs` | 400 | 800 | Split by protocol concern. |
 
@@ -28,7 +31,8 @@ Current migration reality:
 - `acp/event_sink/**` is the current split session event sink shape.
 - `sessions/runtime/**` is the current split session runtime shape.
 - `live/sessions/actor/**`, `live/sessions/connection/**`, and
-  `live/sessions/handle.rs` are the current split live session actor shape.
+  `live/sessions/handle.rs` are the current split live session shape.
+  `connection/**` is the current name for the target `driver/**` role.
   Related collaborators such as `AcpManager`, `RuntimeClient`,
   `SessionEventSink`, `InteractionBroker`, `BackgroundWorkRegistry`, and
   `replay_actor` may still use transitional `acp/**` paths until their own
@@ -77,9 +81,13 @@ owning spec or guide. For example:
 
 - durable domains split by `model`, `store`, `service`, `runtime`, and named
   subdomains.
+- app composition split by wiring family such as sessions, workspaces,
+  product extensions, product MCP registration, and startup tasks.
+- live resources split by manager, handle, private actor, private driver,
+  sink, interactions, background work, snapshot, and replay roles.
 - live actors split by command surface, loop, startup, prompt turn, config,
   notifications, interactions, and shutdown.
-- event sinks split by normalized event family.
+- event/output sinks split by normalized event or output family.
 - integrations split by protocol/vendor mechanic.
 
 ## Migration Discipline

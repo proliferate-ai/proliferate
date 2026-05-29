@@ -3,147 +3,490 @@
 Status: authoritative for long-lived in-memory runtime systems under
 `anyharness-lib/src/live/**`.
 
-The current code is transitional. The live session actor now lives under
-`live/sessions/actor/**`, its handle under `live/sessions/handle.rs`, and ACP
-process/session mechanics under `live/sessions/connection/**`.
-`SessionEventSink` has been split under `acp/event_sink/**`; the final move to
-`live/sessions/event_sink/**` is still a topology step. `AcpManager`,
-`RuntimeClient`, `InteractionBroker`, `BackgroundWorkRegistry`, and
-`replay_actor` also remain under transitional `acp/**` paths until their own
-topology passes. `terminals/**` maps to target `live/terminals/**`.
+The current code is transitional. The session actor and handle already live
+under `live/sessions/**`; session driver code still uses the current
+`live/sessions/connection/**` name; session event sink, interaction broker,
+background work, manager, and replay pieces still have transitional
+`acp/**` paths. Treat this guide as the target grammar for new work and cleanup
+passes.
 
 ## Purpose
 
 Live runtime code owns state that only exists while the AnyHarness process is
 running:
 
-- actor registries
-- session handles
-- command loops
-- subprocess clients
-- event sinks
-- interaction brokers
-- PTY handles
-- broadcast channels
-- in-memory startup/de-dupe state
+- actor tasks and command channels
+- live handles and subscriptions
+- subprocess, PTY, browser, or protocol clients
+- event/output fanout channels
+- pending permission/user-input/MCP callbacks
+- startup de-dupe maps
+- provider-reported long-running work registries
+- cheap live snapshots
 
-Live runtime code should not become durable business logic. Durable rules stay
-in `domains/**`.
+Live runtime code should not become durable business logic. Durable records,
+product policy, SQL, and cross-restart truth stay in `domains/**`.
 
-## Live Session Engine Roles
+## Placement
 
-The live session engine should read as:
+Put code in `live/**` when it answers questions like:
 
 ```text
-LiveSessionManager
-  registry and startup de-dupe for live sessions
-
-LiveSessionHandle
-  typed command port into one live session actor
-
-SessionActor
-  one running session state machine and command loop
-
-AcpClient
-  low-level ACP protocol client wrapper
-
-SessionEventSink
-  normalizes ACP notifications into durable AnyHarness events
-
-InteractionBroker
-  pending permission/user-input/MCP elicitation rendezvous
+Which resource instances are running right now?
+How do commands reach one running instance?
+How do callers subscribe to live updates?
+How do we serialize mutation while an instance is busy?
+How do we own a subprocess, PTY, browser, or protocol client?
+How do we hold a pending live request until a later API call resolves it?
 ```
 
-Current name mapping:
+Do not put code in `live/**` when it answers:
 
 ```text
-AcpManager       -> LiveSessionManager
-RuntimeClient    -> AcpClient
-SessionEventSink -> currently acp/event_sink/**; target live/sessions/event_sink/
-InteractionBroker -> currently acp/permission_broker/**; target live/sessions/interactions/
+Which product state transition is allowed?
+Which rows should be persisted as durable truth?
+Which workspace/session/team owns this thing?
+Which HTTP response should the client receive?
+How does an external protocol format its raw wire messages?
 ```
 
-## Actor Files
+Those belong in `domains/**`, `persistence/**`, `api/**`, or
+`integrations/**`.
 
-An actor file should not grow into a whole subsystem. The loop owns ordering;
-handlers own behavior. A reader should be able to open the loop file and see
-the live state machine without also reading prompt payload conversion,
-transcript normalization, MCP schemas, or plan ingestion.
+## Core Grammar
 
-Split by actor concern:
+Every live resource should be described with the same vocabulary:
 
 ```text
-live/sessions/actor/
+manager = owns/starts/de-dupes/looks up many live instances
+handle  = the only public port to one live instance
+actor   = private serialized coordinator for one live instance
+driver  = private external backing mechanism
+sink    = private sequenced event/output write path
+```
+
+Not every resource needs every role. The vocabulary is a grammar, not a
+template.
+
+Default target shape:
+
+```text
+live/<resource>/
+  mod.rs
+  manager.rs or manager/
+  handle.rs
+  actor/
+  driver/
+  event_sink/       # or output_sink/ for terminal-style streams
+  interactions/
+  background_work/
+  snapshot/
+  replay/
+```
+
+Only `manager`, `handle`, and intentionally public live result/snapshot/event
+types should be visible outside `live/<resource>`. Actor commands, driver
+clients, sink internals, and interaction waiters are private implementation
+details.
+
+## Manager
+
+The manager owns many live instances of one resource type.
+
+Manager responsibilities:
+
+- keep the registry from durable id to live handle
+- de-dupe startup for the same durable id
+- create actor tasks and their initial handles
+- remove closed instances from the registry
+- expose lookup/start/list operations for callers
+
+Manager non-responsibilities:
+
+- no product policy
+- no HTTP mapping
+- no raw SQL
+- no actor event-loop logic
+- no protocol/client implementation
+- no broad `AppState` service-locator behavior
+
+Managers may own shared live infrastructure when that infrastructure exists
+only to coordinate instances of this live resource. If a broker or service is
+used independently by other domains/resources, `app/` should compose it and
+pass it in as a dependency.
+
+Prefer explicit dependency bundles when a manager has many collaborators:
+
+```rust
+pub struct LiveSessionManagerDeps {
+    pub interaction_broker: Arc<InteractionBroker>,
+    pub actor_deps: Arc<LiveSessionActorDeps>,
+}
+```
+
+## Handle
+
+The handle is the public port to one live instance.
+
+Handle responsibilities:
+
+- expose typed commands such as `send_prompt`, `cancel`, `resize`, or `close`
+- expose subscriptions to live events/output when relevant
+- expose cheap snapshots/status reads
+- translate public live operations into private actor commands
+- hide channels, actor command enums, and driver details from callers
+
+Handle non-responsibilities:
+
+- no product policy
+- no protocol/client implementation
+- no event normalization
+- no durable SQL except through narrow dependencies owned elsewhere
+
+Code outside `live/<resource>` may hold a handle. It should not construct
+private actor commands or send directly on the actor mailbox.
+
+Good boundary:
+
+```rust
+handle
+    .send_prompt(LivePromptCommand { payload, prompt_id, latency })
+    .await?;
+```
+
+Bad boundary:
+
+```rust
+handle
+    .command_tx
+    .send(SessionCommand::Prompt { payload, prompt_id })
+    .await?;
+```
+
+The second form leaks actor internals and makes every caller part of the live
+state machine.
+
+## Actor
+
+The actor is the private serialized coordinator for one live instance.
+
+Actor responsibilities:
+
+- own authoritative live mutation for one instance
+- serialize commands, external notifications, timeouts, and shutdown
+- enforce live phase rules such as idle/busy/closing
+- decide ordering and delegate work to driver, sink, interactions, and
+  background-work helpers
+- update actor-owned snapshot state
+
+Actor non-responsibilities:
+
+- no inline external process/protocol mechanics
+- no inline event normalization or sequence assignment
+- no durable product validation
+- no HTTP transport mapping
+- no public command surface outside the handle
+
+The actor has gravity. Keep handlers thin:
+
+```text
+receive event
+validate current live phase
+update actor-owned state
+call driver/sink/interactions/background_work helper
+return accepted/queued/rejected outcome
+```
+
+The actor loop should read as dispatch, not as the full implementation of every
+subsystem.
+
+## Driver
+
+The driver owns the external backing mechanism that makes a live resource real.
+
+Driver examples:
+
+- ACP process/client for a session
+- PTY process for a terminal
+- CDP/Playwright/browser process for a browser
+- remote provider session client
+- local sidecar process
+
+Driver responsibilities:
+
+- start/connect to the external mechanism
+- manage stdin/stdout/stderr or protocol request/response I/O
+- perform external lifecycle operations such as initialize, resize, close, or
+  shutdown
+- expose narrow methods used by the actor
+- translate low-level external errors into driver-owned errors
+
+Driver non-responsibilities:
+
+- no product policy
+- no event-log sequencing
+- no API mapping
+- no direct domain service orchestration
+- no ownership of the live actor loop
+
+Current session code uses `connection/**` for this role. The target name is
+`driver/**` because it fits processes, PTYs, protocol clients, browser drivers,
+and remote providers better than `connection`.
+
+## Event And Output Sinks
+
+A sink is the sequenced write path from external/runtime events into the
+internal live stream.
+
+For sessions, this is an event sink:
+
+```text
+ACP notifications -> normalized session events -> persist -> broadcast
+```
+
+For terminals, this is more naturally an output sink:
+
+```text
+PTY bytes/lifecycle -> ordered terminal output/status -> broadcast/store
+```
+
+Sink responsibilities:
+
+- normalize external/runtime events
+- assign sequence/order when this resource owns sequencing
+- maintain open streaming item state
+- persist durable event/output rows when applicable
+- broadcast live updates
+- own replay-facing event/output shape when applicable
+
+Sink non-responsibilities:
+
+- no prompt queueing
+- no busy/idle state machine
+- no subprocess lifecycle
+- no product access-control decisions
+
+The boundary:
+
+```text
+actor decides when something happened
+sink decides how that becomes ordered output/events
+```
+
+Avoid a generic `events/` folder. Use `event_sink/`, `output_sink/`,
+`projection/`, or a more specific name that says what the folder writes.
+
+## Interactions
+
+`interactions/**` owns pending live rendezvous.
+
+Examples:
+
+- permission request id to waiter
+- user-input request id to waiter
+- MCP elicitation request id to waiter
+- dialog/credential prompt request id to waiter for a future browser/computer
+  use resource
+
+Live interaction responsibilities:
+
+- create and track pending requests
+- match resolutions by request id
+- validate protocol/schema/kind shape
+- cancel or time out waiters when the live actor closes
+- deliver resolution back to the actor or driver
+
+Domain responsibilities stay outside live:
+
+- decide whether the user/team/session may answer
+- decide what the answer means as product state
+- persist durable interaction records when needed
+- enforce product policy for submitted values
+
+Live may validate that a response is the right shape for the pending request.
+It should not decide product meaning.
+
+## Background Work
+
+`background_work/**` is only for long-running work that is reported by or
+delegated to the external provider/runtime and has identity of its own.
+
+Good examples:
+
+- Claude background work registry
+- provider task id to live updates
+- tool/background-work status updates that must be ordered into the session
+  event stream
+
+Bad examples:
+
+- arbitrary cleanup tasks
+- retry timers
+- metrics emitters
+- delayed UI notifications
+
+Those belong under the role they serve: `driver/retry.rs`,
+`actor/shutdown/cleanup.rs`, `event_sink/publish.rs`, or
+`manager/cleanup.rs`.
+
+## Snapshots And Replay
+
+Handles may expose cheap snapshots directly. The actor should still be the
+write owner for live mutation.
+
+Promote to `snapshot/**` or `projection/**` when snapshot logic becomes a real
+read model:
+
+- browser URL/title/viewport/download state
+- terminal dimensions/process status/last output position
+- active command or input mode
+- current session phase with rich pending work state
+
+Use `replay/**` when replay is more than a tiny helper:
+
+- replay filtering
+- subscription catch-up
+- persisted output/event stream reconstruction
+- replay cursor handling
+
+Do not call something `replay_actor` unless it truly has its own mailbox,
+serialized state, independent task, and lifecycle. Otherwise prefer
+`replay/stream.rs` or `event_sink/replay.rs`.
+
+## Folder Composition
+
+### `actor/**`
+
+Target shape:
+
+```text
+actor/
   mod.rs
   command.rs
   state.rs
   event_loop.rs
   spawn.rs
   startup.rs
-  background_work.rs
-  turn/
-    mod.rs
-    types.rs
-    handle.rs
-    start.rs
-    active.rs
-    finish.rs
-    queue.rs
-    diagnostics.rs
-  config/
+
+  <flow>/
     mod.rs
     types.rs
     handle.rs
     apply.rs
     queue.rs
     persist.rs
-    selection.rs
-  notifications/
-    mod.rs
-    types.rs
-    handle.rs
-    dispatch.rs
-    replay_filter.rs
-    plans.rs
-  interactions/
-    mod.rs
-    handle.rs
-    cleanup.rs
-  fork/
-    mod.rs
-    handle.rs
-  shutdown/
-    mod.rs
-    types.rs
-    handle.rs
-    cleanup.rs
-    persist.rs
+    finish.rs
+    diagnostics.rs
+```
 
-live/sessions/connection/
+Use only the files that earn their keep.
+
+Actor file roles:
+
+```text
+command.rs
+  private actor mailbox protocol
+
+state.rs
+  actor-owned mutable state and phase tracking
+
+event_loop.rs
+  select/receive loop and top-level dispatch
+
+spawn.rs/startup.rs
+  task creation and initial live setup
+
+<flow>/types.rs
+  flow-specific private actor helper types
+
+<flow>/handle.rs
+  command/notification handler for that flow
+
+<flow>/apply.rs
+  live state/protocol application helper
+
+<flow>/queue.rs
+  deferred work logic
+
+<flow>/persist.rs
+  calls into sink/domain persistence capability, not raw SQL sprawl
+
+<flow>/finish.rs
+  terminal cleanup for that flow
+
+<flow>/diagnostics.rs
+  tracing, timeout labels, and debug measurements
+```
+
+Split actor folders by live flow, not by vague helper category:
+
+```text
+turn/
+config/
+notifications/
+interactions/
+fork/
+shutdown/
+```
+
+Avoid:
+
+```text
+utils.rs
+helpers.rs
+misc.rs
+processing.rs
+logic.rs
+```
+
+### `driver/**`
+
+Target shape:
+
+```text
+driver/
   mod.rs
   types.rs
   start.rs
   process.rs
-  native_session.rs
+  client.rs
   stderr.rs
+  resize.rs
   shutdown.rs
 ```
 
-Keep `mod.rs` focused on the public actor surface. Keep `event_loop.rs` focused on
-selecting the next actor event and dispatching it. Split idle and busy command
-handling because the same command can have different legal behavior while a
-prompt is running.
-
-## Event Sink Files
-
-Event sinks are core runtime pieces, not incidental helpers. Split
-normalization by event family:
+Use concrete names for the external mechanism. For session ACP, current
+`connection/**` files map this way:
 
 ```text
-live/sessions/event_sink/
+connection/types.rs          -> driver/types.rs
+connection/start.rs          -> driver/start.rs
+connection/process.rs        -> driver/process.rs
+connection/native_session.rs -> driver/native_session.rs
+connection/stderr.rs         -> driver/stderr.rs
+connection/shutdown.rs       -> driver/shutdown.rs
+```
+
+For terminals, target driver files would likely be:
+
+```text
+live/terminals/driver/
+  pty.rs
+  process.rs
+  resize.rs
+  shutdown.rs
+```
+
+### `event_sink/**` Or `output_sink/**`
+
+Target event sink shape:
+
+```text
+event_sink/
   mod.rs
   state.rs
   publish.rs
+  lifecycle.rs
   turns.rs
   assistant.rs
   reasoning.rs
@@ -153,43 +496,238 @@ live/sessions/event_sink/
   interactions.rs
   pending_prompts.rs
   background_work.rs
-  lifecycle.rs
   runtime_events.rs
   normalization/
 ```
 
-The sink may persist and broadcast normalized events. It should not decide
-durable session business rules.
+Split by event/output family and sequencing responsibility. Keep the sink as
+the one ordered write path.
 
-Use the actor/sink boundary strictly:
+### `interactions/**`
+
+Target shape:
 
 ```text
-actor      decides when something happens
-event_sink decides how that becomes a durable SessionEventEnvelope
+interactions/
+  mod.rs
+  broker.rs
+  validation.rs
+  permission.rs
+  user_input.rs
+  cleanup.rs
+  mcp_elicitation/
 ```
 
-The actor may call sink methods such as `begin_turn`, `turn_ended`,
-`interaction_requested`, or `ingest_tool_call`. The sink should not own prompt
-queueing, busy/idle rules, ACP subprocess lifecycle, or interaction waiting.
+Use subfolders when the rendezvous kind has several protocol or normalization
+steps.
 
-## Interaction Broker
+### `background_work/**`
 
-The interaction broker owns pending request rendezvous:
+Target shape:
 
-- permission decisions
-- user-input questions
-- MCP elicitation forms and URL reveal
+```text
+background_work/
+  mod.rs
+  registry.rs
+  updates.rs
+  <provider>.rs
+```
 
-It should be under live runtime because it connects a live actor request to a
-later API resolution.
+Split provider-specific long-running work from generic registry/update logic.
+
+## Live Sessions
+
+Target session shape:
+
+```text
+live/sessions/
+  mod.rs
+  manager.rs or manager/
+  handle.rs
+
+  actor/
+    command.rs
+    state.rs
+    event_loop.rs
+    spawn.rs
+    startup.rs
+    background_work.rs
+    turn/
+    config/
+    notifications/
+    interactions/
+    fork/
+    shutdown/
+
+  driver/
+    types.rs
+    start.rs
+    process.rs
+    native_session.rs
+    stderr.rs
+    shutdown.rs
+
+  event_sink/
+  interactions/
+  background_work/
+  replay/
+```
+
+Current mapping:
+
+```text
+live/sessions/handle.rs
+  target handle
+
+live/sessions/actor/**
+  target actor
+
+live/sessions/connection/**
+  current name for target driver
+
+acp/manager.rs
+  current AcpManager; target LiveSessionManager
+
+acp/runtime_client.rs
+  current low-level ACP client; belongs under the session driver or
+  integrations/acp depending on whether the extracted piece is stateful
+
+acp/event_sink/**
+  target live/sessions/event_sink/**
+
+acp/permission_broker.rs
+acp/permission_broker/**
+acp/mcp_elicitation/**
+  target live/sessions/interactions/**
+
+acp/background_work/**
+  target live/sessions/background_work/**
+
+acp/replay_actor.rs
+  target replay/** unless it truly remains an independent actor
+```
+
+The end-to-end session mental model:
+
+```text
+SessionRuntime
+  loads durable session/workspace/agent state
+  prepares product-owned prompt/config/start data
+  calls LiveSessionManager
+
+LiveSessionManager
+  starts or finds the live session
+  returns LiveSessionHandle
+
+LiveSessionHandle
+  accepts typed public commands
+  sends private actor commands
+
+SessionActor
+  serializes live mutation
+  delegates external I/O to driver
+  delegates event persistence/broadcast to event_sink
+  delegates live rendezvous to interactions
+
+Driver
+  owns ACP process/client lifecycle
+
+EventSink
+  normalizes ACP notifications into durable/broadcast session events
+```
+
+## Live Terminals
+
+Current terminal code is transitional and still uses:
+
+```text
+terminals/
+  model.rs
+  service.rs
+  store.rs
+  shell.rs
+```
+
+The target split should make the live and durable pieces explicit:
+
+```text
+domains/terminals/
+  model.rs
+  store.rs
+  service.rs
+
+live/terminals/
+  manager.rs
+  handle.rs
+  actor/
+  driver/
+    pty.rs
+    process.rs
+    resize.rs
+    shutdown.rs
+  output_sink/
+    publish.rs
+    lifecycle.rs
+    output.rs
+  snapshot/
+```
+
+Terminal-specific mapping:
+
+```text
+domain service
+  durable terminal records, access checks, saved history/metadata if any
+
+manager
+  registry of running PTYs
+
+handle
+  write input, resize, close, subscribe, read snapshot
+
+actor
+  serialize input/resize/close/output lifecycle
+
+driver
+  PTY and shell process lifecycle
+
+output_sink
+  ordered terminal output/status stream
+```
+
+## Composite Live Resources
+
+Some future live resources are trees, not flat instances. Browsers are the
+important adversarial case:
+
+```text
+browser -> context -> page -> dialogs/downloads/network streams
+```
+
+Pick the unit of live identity explicitly. Valid options:
+
+```text
+live/browsers/
+  manager for browser instances
+  browser handles that expose context/page creation
+  page handles for page-specific commands
+
+live/browser_pages/
+  separate page resource keyed by browser/context/page ids
+```
+
+Do not hide a large tree of live instances inside one giant actor unless one
+serialized loop is truly the correct unit of mutation. Page-level actors often
+make sense for browser automation, while browser/context lifecycle can be
+managed above them.
 
 ## Dependency Rules
 
 Allowed:
 
 ```text
-live -> domains
-live -> integrations
+live -> domains through narrow stores/services/capability ports
+live -> integrations for protocol/vendor mechanics
+live -> adapters only when the live resource directly owns a local capability
 live -> observability
 ```
 
@@ -198,8 +736,48 @@ Avoid:
 ```text
 live -> api
 live -> app
-live -> adapters unless the actor directly owns the live process capability
+driver -> product domain services
+event_sink -> product access-control decisions
+integrations -> live
 ```
 
-If live code needs request latency context, import it from `observability/`, not
-from `api/http`.
+Recommended module visibility:
+
+```rust
+pub mod sessions {
+    pub use handle::LiveSessionHandle;
+    pub use manager::LiveSessionManager;
+
+    mod actor;
+    mod driver;
+    mod event_sink;
+    mod interactions;
+    mod background_work;
+}
+```
+
+Actor commands should be private to the live resource:
+
+```rust
+pub(in crate::live::sessions) enum SessionCommand {
+    // ...
+}
+```
+
+Better still, only `handle.rs` constructs them.
+
+## Review Checklist
+
+Use this checklist when reviewing live runtime changes:
+
+- Is there exactly one public command port for one live instance?
+- Can code outside the live resource construct actor commands? If yes, fix it.
+- Does the actor handler decide ordering and delegate, or did it absorb driver
+  and sink logic?
+- Is the driver free of product policy and API mapping?
+- Is the sink the only sequenced event/output writer?
+- Are live interaction waiters separated from durable product meaning?
+- Is background work limited to provider/runtime work with identity?
+- Are snapshots read-only to callers and write-owned by the actor/handle path?
+- Does a new folder represent ownership, or just a prettier `misc` bucket?
+- If the resource is composite, is the unit of serialization explicit?
