@@ -24,10 +24,10 @@ export function PluginAccessList({ items }: PluginAccessListProps) {
         title="Public credentials feed team sandboxes"
         description="Tools marked public are available to team automations, Slack sessions, and shared cloud workspaces."
       />
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2">
         {items.map((plugin) => (
           <article key={plugin.id} className="rounded-lg border border-border bg-card p-4">
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex min-w-0 gap-3">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-accent text-foreground">
                   <PlugZap size={16} />
@@ -37,7 +37,7 @@ export function PluginAccessList({ items }: PluginAccessListProps) {
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">{plugin.description}</p>
                 </div>
               </div>
-              <Badge tone={plugin.enabled ? "success" : "neutral"} className="gap-1">
+              <Badge tone={plugin.enabled ? "success" : "neutral"} className="w-fit gap-1">
                 {plugin.enabled ? <Check size={12} /> : <Lock size={12} />}
                 {plugin.enabled ? "On" : "Off"}
               </Badge>

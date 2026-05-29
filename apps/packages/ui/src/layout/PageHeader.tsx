@@ -20,14 +20,23 @@ export function PageHeader({
 
   return (
     <div
-      className={twMerge("flex items-start justify-between gap-4 border-b border-border px-6 py-5", className)}
+      className={twMerge(
+        "flex min-w-0 flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6 sm:py-5",
+        className,
+      )}
       {...props}
     >
       <div className="min-w-0">
         <h1 className="truncate text-lg font-semibold text-foreground">{title}</h1>
-        {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
+        {description && (
+          <p className="mt-1 max-w-3xl text-sm leading-5 text-muted-foreground">
+            {description}
+          </p>
+        )}
       </div>
-      {renderedActions && <div className="flex shrink-0 items-center gap-2">{renderedActions}</div>}
+      {renderedActions ? (
+        <div className="flex shrink-0 items-center gap-2">{renderedActions}</div>
+      ) : null}
     </div>
   );
 }

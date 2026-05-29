@@ -73,7 +73,7 @@ export function WebAppShell() {
       className="relative"
     >
       {!sidebarOpen ? (
-        <div className="absolute bottom-3 left-3 z-30 md:bottom-auto md:top-3">
+        <div className="absolute bottom-3 left-3 z-30">
           <IconButton
             tone="default"
             size="sm"
