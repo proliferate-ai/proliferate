@@ -20,118 +20,164 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _has_table(table_name: str) -> bool:
+    return sa.inspect(op.get_bind()).has_table(table_name)
+
+
+def _has_index(table_name: str, index_name: str) -> bool:
+    inspector = sa.inspect(op.get_bind())
+    return any(index["name"] == index_name for index in inspector.get_indexes(table_name))
+
+
+def _create_index_once(
+    index_name: str,
+    table_name: str,
+    columns: list[str],
+    *,
+    unique: bool,
+) -> None:
+    if not _has_index(table_name, index_name):
+        op.create_index(index_name, table_name, columns, unique=unique)
+
+
 def upgrade() -> None:
     """Upgrade schema."""
-    op.create_table(
-        "user",
-        sa.Column("display_name", sa.String(length=255), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("id", GUID(), nullable=False),
-        sa.Column("email", sa.String(length=320), nullable=False),
-        sa.Column("hashed_password", sa.String(length=1024), nullable=False),
-        sa.Column("is_active", sa.Boolean(), nullable=False),
-        sa.Column("is_superuser", sa.Boolean(), nullable=False),
-        sa.Column("is_verified", sa.Boolean(), nullable=False),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index("ix_user_email", "user", ["email"], unique=True)
+    if not _has_table("user"):
+        op.create_table(
+            "user",
+            sa.Column("display_name", sa.String(length=255), nullable=True),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("id", GUID(), nullable=False),
+            sa.Column("email", sa.String(length=320), nullable=False),
+            sa.Column("hashed_password", sa.String(length=1024), nullable=False),
+            sa.Column("is_active", sa.Boolean(), nullable=False),
+            sa.Column("is_superuser", sa.Boolean(), nullable=False),
+            sa.Column("is_verified", sa.Boolean(), nullable=False),
+            sa.PrimaryKeyConstraint("id"),
+        )
+    _create_index_once("ix_user_email", "user", ["email"], unique=True)
 
-    op.create_table(
+    if not _has_table("oauth_account"):
+        op.create_table(
+            "oauth_account",
+            sa.Column("id", GUID(), nullable=False),
+            sa.Column("user_id", GUID(), nullable=False),
+            sa.Column("oauth_name", sa.String(length=100), nullable=False),
+            sa.Column("access_token", sa.String(length=1024), nullable=False),
+            sa.Column("expires_at", sa.Integer(), nullable=True),
+            sa.Column("refresh_token", sa.String(length=1024), nullable=True),
+            sa.Column("account_id", sa.String(length=320), nullable=False),
+            sa.Column("account_email", sa.String(length=320), nullable=False),
+            sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="cascade"),
+            sa.PrimaryKeyConstraint("id"),
+        )
+    _create_index_once(
+        "ix_oauth_account_account_id",
         "oauth_account",
-        sa.Column("id", GUID(), nullable=False),
-        sa.Column("user_id", GUID(), nullable=False),
-        sa.Column("oauth_name", sa.String(length=100), nullable=False),
-        sa.Column("access_token", sa.String(length=1024), nullable=False),
-        sa.Column("expires_at", sa.Integer(), nullable=True),
-        sa.Column("refresh_token", sa.String(length=1024), nullable=True),
-        sa.Column("account_id", sa.String(length=320), nullable=False),
-        sa.Column("account_email", sa.String(length=320), nullable=False),
-        sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="cascade"),
-        sa.PrimaryKeyConstraint("id"),
+        ["account_id"],
+        unique=False,
     )
-    op.create_index("ix_oauth_account_account_id", "oauth_account", ["account_id"], unique=False)
-    op.create_index("ix_oauth_account_oauth_name", "oauth_account", ["oauth_name"], unique=False)
-
-    op.create_table(
-        "desktop_auth_code",
-        sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("code", sa.String(length=128), nullable=False),
-        sa.Column("user_id", sa.Uuid(), nullable=False),
-        sa.Column("code_challenge", sa.String(length=128), nullable=False),
-        sa.Column("code_challenge_method", sa.String(length=10), nullable=False),
-        sa.Column("state", sa.String(length=128), nullable=False),
-        sa.Column("redirect_uri", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("consumed", sa.Boolean(), nullable=False),
-        sa.PrimaryKeyConstraint("id"),
+    _create_index_once(
+        "ix_oauth_account_oauth_name",
+        "oauth_account",
+        ["oauth_name"],
+        unique=False,
     )
-    op.create_index("ix_desktop_auth_code_code", "desktop_auth_code", ["code"], unique=True)
 
-    op.create_table(
+    if not _has_table("desktop_auth_code"):
+        op.create_table(
+            "desktop_auth_code",
+            sa.Column("id", sa.Uuid(), nullable=False),
+            sa.Column("code", sa.String(length=128), nullable=False),
+            sa.Column("user_id", sa.Uuid(), nullable=False),
+            sa.Column("code_challenge", sa.String(length=128), nullable=False),
+            sa.Column("code_challenge_method", sa.String(length=10), nullable=False),
+            sa.Column("state", sa.String(length=128), nullable=False),
+            sa.Column("redirect_uri", sa.Text(), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("consumed", sa.Boolean(), nullable=False),
+            sa.PrimaryKeyConstraint("id"),
+        )
+    _create_index_once("ix_desktop_auth_code_code", "desktop_auth_code", ["code"], unique=True)
+
+    if not _has_table("cloud_workspace"):
+        op.create_table(
+            "cloud_workspace",
+            sa.Column("id", sa.Uuid(), nullable=False),
+            sa.Column("user_id", sa.Uuid(), nullable=False),
+            sa.Column("display_name", sa.String(length=255), nullable=False),
+            sa.Column("git_provider", sa.String(length=32), nullable=False),
+            sa.Column("git_owner", sa.String(length=255), nullable=False),
+            sa.Column("git_repo_name", sa.String(length=255), nullable=False),
+            sa.Column("git_branch", sa.String(length=255), nullable=False),
+            sa.Column("git_base_branch", sa.String(length=255), nullable=True),
+            sa.Column("status", sa.String(length=32), nullable=False),
+            sa.Column("status_detail", sa.String(length=255), nullable=True),
+            sa.Column("last_error", sa.Text(), nullable=True),
+            sa.Column("template_version", sa.String(length=64), nullable=False),
+            sa.Column("runtime_generation", sa.Integer(), nullable=False),
+            sa.Column("active_sandbox_id", sa.Uuid(), nullable=True),
+            sa.Column("runtime_url", sa.Text(), nullable=True),
+            sa.Column("runtime_token_ciphertext", sa.Text(), nullable=True),
+            sa.Column("anyharness_workspace_id", sa.String(length=255), nullable=True),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("ready_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("stopped_at", sa.DateTime(timezone=True), nullable=True),
+            sa.PrimaryKeyConstraint("id"),
+        )
+    _create_index_once(
+        "ix_cloud_workspace_user_id",
         "cloud_workspace",
-        sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("user_id", sa.Uuid(), nullable=False),
-        sa.Column("display_name", sa.String(length=255), nullable=False),
-        sa.Column("git_provider", sa.String(length=32), nullable=False),
-        sa.Column("git_owner", sa.String(length=255), nullable=False),
-        sa.Column("git_repo_name", sa.String(length=255), nullable=False),
-        sa.Column("git_branch", sa.String(length=255), nullable=False),
-        sa.Column("git_base_branch", sa.String(length=255), nullable=True),
-        sa.Column("status", sa.String(length=32), nullable=False),
-        sa.Column("status_detail", sa.String(length=255), nullable=True),
-        sa.Column("last_error", sa.Text(), nullable=True),
-        sa.Column("template_version", sa.String(length=64), nullable=False),
-        sa.Column("runtime_generation", sa.Integer(), nullable=False),
-        sa.Column("active_sandbox_id", sa.Uuid(), nullable=True),
-        sa.Column("runtime_url", sa.Text(), nullable=True),
-        sa.Column("runtime_token_ciphertext", sa.Text(), nullable=True),
-        sa.Column("anyharness_workspace_id", sa.String(length=255), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("ready_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("stopped_at", sa.DateTime(timezone=True), nullable=True),
-        sa.PrimaryKeyConstraint("id"),
+        ["user_id"],
+        unique=False,
     )
-    op.create_index("ix_cloud_workspace_user_id", "cloud_workspace", ["user_id"], unique=False)
 
-    op.create_table(
-        "cloud_sandbox",
-        sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("cloud_workspace_id", sa.Uuid(), nullable=False),
-        sa.Column("provider", sa.String(length=32), nullable=False),
-        sa.Column("external_sandbox_id", sa.String(length=255), nullable=False),
-        sa.Column("status", sa.String(length=32), nullable=False),
-        sa.Column("template_version", sa.String(length=64), nullable=False),
-        sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("stopped_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("last_heartbeat_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("external_sandbox_id"),
-    )
-    op.create_index(
+    if not _has_table("cloud_sandbox"):
+        op.create_table(
+            "cloud_sandbox",
+            sa.Column("id", sa.Uuid(), nullable=False),
+            sa.Column("cloud_workspace_id", sa.Uuid(), nullable=False),
+            sa.Column("provider", sa.String(length=32), nullable=False),
+            sa.Column("external_sandbox_id", sa.String(length=255), nullable=False),
+            sa.Column("status", sa.String(length=32), nullable=False),
+            sa.Column("template_version", sa.String(length=64), nullable=False),
+            sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("stopped_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("last_heartbeat_at", sa.DateTime(timezone=True), nullable=True),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("external_sandbox_id"),
+        )
+    _create_index_once(
         "ix_cloud_sandbox_cloud_workspace_id",
         "cloud_sandbox",
         ["cloud_workspace_id"],
         unique=False,
     )
 
-    op.create_table(
+    if not _has_table("cloud_credential"):
+        op.create_table(
+            "cloud_credential",
+            sa.Column("id", sa.Uuid(), nullable=False),
+            sa.Column("user_id", sa.Uuid(), nullable=False),
+            sa.Column("provider", sa.String(length=32), nullable=False),
+            sa.Column("auth_mode", sa.String(length=16), nullable=False),
+            sa.Column("payload_ciphertext", sa.Text(), nullable=False),
+            sa.Column("payload_format", sa.String(length=32), nullable=False),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("last_synced_at", sa.DateTime(timezone=True), nullable=False),
+            sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
+            sa.PrimaryKeyConstraint("id"),
+        )
+    _create_index_once(
+        "ix_cloud_credential_user_id",
         "cloud_credential",
-        sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("user_id", sa.Uuid(), nullable=False),
-        sa.Column("provider", sa.String(length=32), nullable=False),
-        sa.Column("auth_mode", sa.String(length=16), nullable=False),
-        sa.Column("payload_ciphertext", sa.Text(), nullable=False),
-        sa.Column("payload_format", sa.String(length=32), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("last_synced_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
-        sa.PrimaryKeyConstraint("id"),
+        ["user_id"],
+        unique=False,
     )
-    op.create_index("ix_cloud_credential_user_id", "cloud_credential", ["user_id"], unique=False)
 
 
 def downgrade() -> None:
