@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isValidElement, type ReactNode } from "react";
 import { WorkspaceMobilityOverlayView } from "./WorkspaceMobilityOverlay";
-import { CheckCircleFilled, CircleAlert } from "@/components/ui/icons";
+import { CheckCircleFilled, CircleAlert } from "@proliferate/ui/icons";
 
 function countElementsByType(node: ReactNode, targetType: unknown): number {
   if (Array.isArray(node)) {

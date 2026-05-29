@@ -5,8 +5,8 @@ import type {
   AgentGatewayCapabilities,
 } from "@proliferate/cloud-sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Badge } from "@/components/ui/Badge";
-import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
+import { Badge } from "@proliferate/ui/primitives/Badge";
+import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import {
@@ -14,7 +14,7 @@ import {
   CloudUpload,
   RefreshCw,
   Terminal,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import type {
   AgentAuthProvider,
   LocalAgentAuthSource,

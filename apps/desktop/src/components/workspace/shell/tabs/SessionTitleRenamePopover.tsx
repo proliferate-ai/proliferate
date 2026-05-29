@@ -8,7 +8,7 @@ import {
 } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 
 interface SessionTitleRenamePopoverProps {
   currentTitle: string;

@@ -6,7 +6,7 @@ import {
   Robot,
   StopSquare,
   X,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/use-delegated-work-composer";
 import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
 import type { DelegatedAgentIdentity } from "@/lib/domain/delegated-work/model";

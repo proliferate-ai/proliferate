@@ -8,13 +8,13 @@ import {
   type ReviewSetupDraft,
 } from "@/lib/domain/reviews/review-config";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { SettingsMenu } from "@/components/ui/SettingsMenu";
+import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import {
   Brain,
   Pencil,
   Plus,
   X,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import { ReviewModelSettingsMenu } from "./ReviewSetupHarnessControls";
 
 interface ReviewSetupReviewerListProps {

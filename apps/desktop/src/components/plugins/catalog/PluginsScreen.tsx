@@ -1,5 +1,5 @@
-import { PageContentFrame } from "@/components/ui/PageContentFrame";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageContentFrame } from "@proliferate/ui/layout/PageContentFrame";
+import { PageHeader } from "@proliferate/ui/layout/PageHeader";
 import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
 import { ConnectorCatalogPage } from "./ConnectorCatalogPage";
 

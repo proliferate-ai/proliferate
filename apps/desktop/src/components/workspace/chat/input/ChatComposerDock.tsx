@@ -1,6 +1,6 @@
 import { forwardRef, memo, type HTMLAttributes, type ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
-import { DebugProfiler } from "@/components/ui/DebugProfiler";
+import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import {
   CHAT_COLUMN_CLASSNAME,
   CHAT_DOCK_LOWER_BACKDROP_FADE_HEIGHT_PX,

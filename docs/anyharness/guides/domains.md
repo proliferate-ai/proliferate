@@ -297,6 +297,123 @@ Current implementations are still transitional in places:
 `app/` wires implementations into the core. The core domain depends only on the
 trait.
 
+## MCP Placement
+
+MCP crosses several owners. Do not put all MCP code in one folder.
+
+Domain-owned MCP code is product behavior:
+
+```text
+domains/<feature>/mcp/
+  definition.rs
+  auth.rs
+  context.rs
+  tools.rs
+  calls.rs
+  mod.rs
+```
+
+Use this shape when the MCP tools are part of the domain's product behavior.
+
+File roles:
+
+```text
+definition.rs
+  stable id, route slug, ACP server name, display name, instructions,
+  prompt policy, and binding summary metadata
+
+auth.rs
+  thin feature wrapper around shared product MCP auth/token mechanics
+
+context.rs
+  resolve workspace/session/domain records and validate that this tool call
+  applies to the current product context
+
+tools.rs
+  tool schemas and mutating tool name list
+
+calls.rs
+  actual product tool implementations
+
+mod.rs
+  product MCP server struct and ProductMcpServer implementation
+```
+
+Examples:
+
+```text
+domains/cowork/mcp/
+domains/reviews/mcp/
+domains/plugins/mcp/
+sessions/subagents/mcp/
+sessions/workspace_naming/mcp/
+```
+
+Generic MCP protocol/server mechanics do not belong in domains:
+
+```text
+integrations/mcp/product_server/
+integrations/mcp/json_rpc.rs
+integrations/mcp/tools.rs
+integrations/mcp/capability_token.rs
+```
+
+Session launch assembly does not belong in product domains either:
+
+```text
+sessions/mcp_bindings/assembly.rs
+sessions/mcp_bindings/product_catalog.rs
+sessions/mcp_bindings/selection.rs
+sessions/mcp_bindings/injection.rs
+sessions/mcp_bindings/product_registry.rs
+```
+
+The distinctions:
+
+```text
+domains/<feature>/mcp
+  what this product MCP does
+
+integrations/mcp/product_server
+  how every product MCP speaks MCP/JSON-RPC consistently
+
+sessions/mcp_bindings/product_registry.rs
+  serving-side registry: incoming route slug -> product MCP handler
+
+sessions/mcp_bindings/product_catalog.rs
+  launch-side facade: asks selection + injection for product MCP launch extras
+
+sessions/mcp_bindings/selection.rs
+  policy: which product MCPs should this session get?
+
+sessions/mcp_bindings/injection.rs
+  materialization: what HTTP MCP server config/token/prompt extras are handed
+  to the agent?
+
+sessions/mcp_bindings/assembly.rs
+  whole-session composer: user MCPs + product MCPs + session extensions +
+  prompt extras + summaries
+
+api/http/product_mcp.rs
+  incoming HTTP endpoint wrapper
+
+app/
+  product MCP endpoint registration
+```
+
+Add a new product MCP by touching the product and composition points, not by
+forking transport or protocol machinery:
+
+```text
+1. Add domains/<feature>/mcp/{definition,auth,context,tools,calls}.rs.
+2. Implement ProductMcpServer in domains/<feature>/mcp/mod.rs.
+3. Register the server in app's ProductMcpEndpointRegistry wiring.
+4. Add launch selection policy in sessions/mcp_bindings/selection.rs.
+5. Add launch materialization in sessions/mcp_bindings/injection.rs.
+6. Add tests for auth, selection, injection, tools/list, tools/call, and
+   endpoint dispatch.
+```
+
 ## Contract Types
 
 Avoid importing contract request/response types into domains. Use internal

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
-import { Copy } from "@/components/ui/icons";
-import { OpenTargetIcon } from "@/components/ui/OpenTargetIcon";
-import { POPOVER_SURFACE_CLASS } from "@/components/ui/PopoverButton";
+import { Copy } from "@proliferate/ui/icons";
+import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
+import { POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import type { OpenTarget } from "@/hooks/access/tauri/use-shell-actions";
 
 export function TargetIcon({ target, size = "size-3.5" }: { target: OpenTarget; size?: string }) {

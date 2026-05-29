@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Select } from "@/components/ui/Select";
+import { Select } from "@proliferate/ui/primitives/Select";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";

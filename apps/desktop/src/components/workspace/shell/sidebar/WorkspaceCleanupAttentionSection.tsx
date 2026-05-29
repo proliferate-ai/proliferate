@@ -2,10 +2,10 @@ import type { Workspace } from "@anyharness/sdk";
 import {
   CircleAlert,
   RefreshCw,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import { workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
 import { SidebarActionButton } from "./SidebarActionButton";
-import { SidebarRowSurface } from "@/components/ui/SidebarRowSurface";
+import { SidebarRowSurface } from "@proliferate/ui/layout/SidebarRowSurface";
 
 interface WorkspaceCleanupAttentionSectionProps {
   workspaces: Workspace[];

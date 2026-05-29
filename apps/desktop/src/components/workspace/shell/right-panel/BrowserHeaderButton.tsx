@@ -1,6 +1,6 @@
 import { Button } from "@proliferate/ui/primitives/Button";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { AppShellBrowserIcon, AppShellTabCloseIcon } from "@/components/ui/icons";
+import { AppShellBrowserIcon, AppShellTabCloseIcon } from "@proliferate/ui/icons";
 
 const HEADER_BROWSER_TAB_CLASS = "ui-tab-system-tab right-panel-terminal-tab";
 

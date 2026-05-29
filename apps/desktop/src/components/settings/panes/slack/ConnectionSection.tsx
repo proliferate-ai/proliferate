@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
+import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import type { SlackWorkspaceConnection } from "@proliferate/cloud-sdk";

@@ -6,8 +6,8 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { DebugProfiler } from "@/components/ui/DebugProfiler";
-import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
+import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
+import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import {
   CHAT_COLUMN_CLASSNAME,
   CHAT_SURFACE_GUTTER_CLASSNAME,

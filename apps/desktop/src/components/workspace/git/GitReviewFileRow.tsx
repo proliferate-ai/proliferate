@@ -4,8 +4,8 @@ import {
   useGitDiffQuery,
 } from "@anyharness/sdk-react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { DiffViewer } from "@/components/ui/content/DiffViewer";
-import { FileDiffCard } from "@/components/ui/content/FileDiffCard";
+import { DiffViewer } from "@/components/content/ui/DiffViewer";
+import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
 import {
   CircleAlert,
   FileCode,
@@ -13,7 +13,7 @@ import {
   Minus,
   Plus,
   RefreshCw,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import {
   GitReviewEmptyState,
   GitReviewEmptyStateAction,

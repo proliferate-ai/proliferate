@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ConnectorCatalogEntry, InstalledConnectorRecord } from "@/lib/domain/mcp/types";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ModalShell } from "@/components/ui/ModalShell";
+import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 
 export function DeleteConnectorDialog({
   onClose,

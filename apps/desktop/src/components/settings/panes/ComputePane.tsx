@@ -3,7 +3,7 @@ import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHea
 import { AddSshTargetDialog } from "@/components/settings/panes/compute/AddSshTargetDialog";
 import { ComputeTargetDetails } from "@/components/settings/panes/compute/ComputeTargetDetails";
 import { ComputeTargetList } from "@/components/settings/panes/compute/ComputeTargetList";
-import { ChevronRight } from "@/components/ui/icons";
+import { ChevronRight } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { COMPUTE_COPY } from "@/copy/settings/compute";
 import { useCloudTargetMutations } from "@/hooks/access/cloud/targets/use-cloud-target-mutations";

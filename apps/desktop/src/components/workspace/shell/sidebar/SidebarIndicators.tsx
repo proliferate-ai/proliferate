@@ -10,10 +10,10 @@ import {
   BotMessageSquare,
   MessageSquare,
   Spinner,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import type {
   SidebarDetailIndicator,

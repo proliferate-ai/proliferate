@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { FileIcon } from "@/components/ui/icons";
+import { FileIcon } from "@proliferate/ui/icons";
 import {
   CursorIcon,
   FinderIcon,
@@ -7,7 +7,7 @@ import {
   VSCodeIcon,
   WindsurfIcon,
   ZedIcon,
-} from "@/components/ui/app-icons";
+} from "@/components/workspace/open-target/app-icons";
 import type { OpenTargetIconId } from "@/lib/domain/open-targets/model";
 
 export interface OpenTargetIconDefinition {

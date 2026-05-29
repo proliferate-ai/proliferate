@@ -1,4 +1,4 @@
-import { Badge, type BadgeTone } from "@/components/ui/Badge";
+import { Badge, type BadgeTone } from "@proliferate/ui/primitives/Badge";
 import type { SlackWorkspaceConnectionStatus } from "@proliferate/cloud-sdk";
 
 const CONNECTION_STATUS_LABELS: Record<SlackWorkspaceConnectionStatus, string> = {

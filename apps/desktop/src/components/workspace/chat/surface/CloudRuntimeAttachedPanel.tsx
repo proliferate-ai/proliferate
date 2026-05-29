@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ComposerAttachedPanel } from "@/components/workspace/chat/input/ComposerAttachedPanel";
 import { CloudStatusCompactHeader } from "@/components/workspace/chat/surface/CloudStatusCompactHeader";
-import { CircleAlert, Spinner } from "@/components/ui/icons";
+import { CircleAlert, Spinner } from "@proliferate/ui/icons";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
 import type { SelectedCloudRuntimeViewModel } from "@/lib/domain/workspaces/cloud/cloud-runtime-state";
 

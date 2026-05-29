@@ -1,8 +1,8 @@
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { PickerPopoverContent } from "@/components/ui/PickerPopoverContent";
-import { PillControlButton } from "@/components/ui/PillControlButton";
-import { PopoverButton } from "@/components/ui/PopoverButton";
-import { Check } from "@/components/ui/icons";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { PickerPopoverContent } from "@proliferate/ui/primitives/PickerPopoverContent";
+import { PillControlButton } from "@proliferate/ui/primitives/PillControlButton";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { Check } from "@proliferate/ui/icons";
 import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
 import type { ConfiguredSessionControlValue } from "@/lib/domain/chat/session-controls/presentation";
 

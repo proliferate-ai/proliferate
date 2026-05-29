@@ -1,4 +1,4 @@
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 import { computeTargetReadiness } from "@/lib/domain/compute/target-readiness";
 import type {
   ComputeRuntimeConfigStatus,

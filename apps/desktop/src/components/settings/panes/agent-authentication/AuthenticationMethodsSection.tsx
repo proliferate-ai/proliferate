@@ -1,9 +1,9 @@
 import { useState } from "react";
 import type { AgentAuthAgentKind, AgentAuthCredential, AgentGatewayCapabilities } from "@proliferate/cloud-sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Badge } from "@/components/ui/Badge";
-import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
-import { Plus } from "@/components/ui/icons";
+import { Badge } from "@proliferate/ui/primitives/Badge";
+import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
+import { Plus } from "@proliferate/ui/icons";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import {
   CloudAgentAuthCredentialForm,

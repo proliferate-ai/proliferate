@@ -2,7 +2,7 @@ import type { GitBranchRef } from "@anyharness/sdk";
 import { GitReviewOptionsMenu } from "./GitReviewOptionsMenu";
 import { GitReviewBaseSelector } from "./GitReviewBaseSelector";
 import { GitReviewTargetSelector } from "./GitReviewTargetSelector";
-import { FileCode, SplitPanel } from "@/components/ui/icons";
+import { FileCode, SplitPanel } from "@proliferate/ui/icons";
 import { PaneIconButton } from "@/components/workspace/pane/PaneHeader";
 import type { GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-diff";
 

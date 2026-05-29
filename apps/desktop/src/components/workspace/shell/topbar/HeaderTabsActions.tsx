@@ -1,6 +1,6 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ListFilter, Plus } from "@/components/ui/icons";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
+import { ListFilter, Plus } from "@proliferate/ui/icons";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { ClosedChatTabsMenu } from "@/components/workspace/shell/tabs/ClosedChatTabsMenu";
 import {
   renderChatTabIcon,

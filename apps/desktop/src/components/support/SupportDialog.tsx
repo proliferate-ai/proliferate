@@ -6,8 +6,8 @@ import {
   Copy,
   FileText,
   FolderList,
-} from "@/components/ui/icons";
-import { ModalShell } from "@/components/ui/ModalShell";
+} from "@proliferate/ui/icons";
+import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { useSupportDialogState } from "@/hooks/support/facade/use-support-dialog-state";
 import type { SupportMessageContext } from "@/lib/domain/support/types";

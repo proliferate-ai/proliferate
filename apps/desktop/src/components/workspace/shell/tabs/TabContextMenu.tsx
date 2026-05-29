@@ -1,4 +1,4 @@
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
   ChevronDown,
   ChevronRight,
@@ -9,7 +9,7 @@ import {
   Pencil,
   Trash,
   X,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import { SHORTCUTS } from "@/config/shortcuts";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import type {

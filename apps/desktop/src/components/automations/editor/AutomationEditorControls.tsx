@@ -13,12 +13,12 @@ import {
 } from "@/lib/domain/automations/schedule/presentation";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@/components/ui/Label";
-import { PillControlButton } from "@/components/ui/PillControlButton";
-import { PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { Select } from "@/components/ui/Select";
-import { Textarea } from "@/components/ui/Textarea";
+import { Label } from "@proliferate/ui/primitives/Label";
+import { PillControlButton } from "@proliferate/ui/primitives/PillControlButton";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { Select } from "@proliferate/ui/primitives/Select";
+import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import {
   Brain,
   Check,
@@ -28,7 +28,7 @@ import {
   FileText,
   GitCommit,
   MessageSquare,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 
 interface AutomationControlOption {
   value: string;

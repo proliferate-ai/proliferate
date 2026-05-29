@@ -14,7 +14,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Robot } from "@/components/ui/icons";
+import { Robot } from "@proliferate/ui/icons";
 import type { DelegatedWorkTabIdentity } from "@/lib/domain/delegated-work/model";
 
 const VIEWPORT_MARGIN = 12;

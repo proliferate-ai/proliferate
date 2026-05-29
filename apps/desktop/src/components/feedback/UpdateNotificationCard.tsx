@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ProgressBar } from "@/components/ui/ProgressBar";
-import { X } from "@/components/ui/icons";
+import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";
+import { X } from "@proliferate/ui/icons";
 import { useUpdater, type UpdaterPhase } from "@/hooks/access/tauri/use-updater";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 

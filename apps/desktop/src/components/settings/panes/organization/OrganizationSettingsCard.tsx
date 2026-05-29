@@ -5,7 +5,7 @@ import {
 } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { CloudUpload } from "@/components/ui/icons";
+import { CloudUpload } from "@proliferate/ui/icons";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import {

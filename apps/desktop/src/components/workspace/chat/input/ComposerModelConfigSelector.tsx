@@ -9,13 +9,13 @@ import {
 } from "react";
 import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
   Check,
   ChevronDown,
-} from "@/components/ui/icons";
-import { ProviderIcon } from "@/components/ui/provider-icons";
+} from "@proliferate/ui/icons";
+import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { CHAT_MODEL_SELECTOR_LABELS } from "@/copy/chat/chat-copy";
 import {
   resolveReasoningEffortPresentation,

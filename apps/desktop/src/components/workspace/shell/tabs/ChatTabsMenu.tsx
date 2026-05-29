@@ -6,9 +6,9 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { POPOVER_SURFACE_CLASS } from "@/components/ui/PopoverButton";
-import { ChevronRight } from "@/components/ui/icons";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
+import { ChevronRight } from "@proliferate/ui/icons";
 import { recordSubagentChildRelationshipHint } from "@/hooks/sessions/workflows/session-relationship-hints";
 import type { HeaderChatMenuEntry } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
 import type { HeaderSubagentChildRow } from "@/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy";

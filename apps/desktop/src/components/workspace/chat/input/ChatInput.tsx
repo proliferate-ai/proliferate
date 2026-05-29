@@ -45,7 +45,7 @@ import {
   PROMPT_SUBMIT_MEASUREMENT_MAX_DURATION_MS,
   PROMPT_SUBMIT_MEASUREMENT_SURFACES,
 } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { DebugProfiler } from "@/components/ui/DebugProfiler";
+import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { ChatInputControlRow } from "./ChatInputControlRow";
 import { ChatInputDraftArea } from "./ChatInputDraftArea";
 import { ChatInputHiddenFileInput } from "./ChatInputHiddenFileInput";

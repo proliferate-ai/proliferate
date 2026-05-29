@@ -6,7 +6,7 @@ import {
   type CSSProperties,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { renderContentSearchMarkedToken } from "@/components/ui/content/search/ContentSearchMarks";
+import { renderContentSearchMarkedToken } from "@/components/content/ui/search/ContentSearchMarks";
 import { useHighlightedLines } from "@/hooks/ui/use-highlighted-lines";
 import {
   buildContentSearchLineMatchIds,

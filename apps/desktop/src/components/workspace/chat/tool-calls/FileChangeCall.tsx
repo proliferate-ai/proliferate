@@ -1,16 +1,16 @@
 import { useCallback, useState, type ReactNode } from "react";
-import { DiffViewer } from "@/components/ui/content/DiffViewer";
+import { DiffViewer } from "@/components/content/ui/DiffViewer";
 import {
   FileChangeInlineRow,
   FileDiffCard,
-} from "@/components/ui/content/FileDiffCard";
-import { HighlightedCodePanel } from "@/components/ui/content/HighlightedCodePanel";
+} from "@/components/content/ui/FileDiffCard";
+import { HighlightedCodePanel } from "@/components/content/ui/HighlightedCodePanel";
 import {
   ArrowRight,
   FilePen,
   FilePlus,
   Minus,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import { useFileReferenceActions } from "@/hooks/workspaces/files/use-file-reference-actions";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import { resolveDiffDisplayPolicy } from "@/lib/domain/workspaces/changes/diff-display-policy";

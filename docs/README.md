@@ -71,6 +71,12 @@ start of the task, not after implementation has already started.
   - legacy subsystem logic docs for ACP, agents, sessions, workspaces, git,
     files, and persistence while they are being migrated
 
+## Authoritative Proliferate Worker standards
+
+- `docs/proliferate-worker/README.md`
+  - target-side Worker structure, command downlink, event uplink, target status,
+    target-local effects, clients, store, and identity ownership
+
 ## Authoritative CI/CD standards
 
 - `docs/ci-cd/README.md`

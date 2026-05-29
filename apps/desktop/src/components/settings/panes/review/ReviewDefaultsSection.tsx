@@ -1,7 +1,7 @@
 import type { ReviewKind } from "@anyharness/sdk";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { RefreshCw } from "@/components/ui/icons";
+import { RefreshCw } from "@proliferate/ui/icons";
 import type { AgentModelGroup } from "@/lib/domain/agents/model-options";
 import {
   createStoredReviewKindDefaults,

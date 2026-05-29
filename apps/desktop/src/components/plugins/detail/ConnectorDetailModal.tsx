@@ -8,7 +8,7 @@ import {
 } from "@/lib/domain/plugins/plugin-package-view-model";
 import type { ConnectorDetailCallbacks } from "@/hooks/mcp/workflows/use-connector-detail-actions";
 import { useConnectorDetailActions } from "@/hooks/mcp/workflows/use-connector-detail-actions";
-import { ModalShell } from "@/components/ui/ModalShell";
+import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import { ConnectorAboutTab } from "./ConnectorAboutTab";
 import { ConnectorConfigureTab } from "./ConnectorConfigureTab";
 import { ConnectorDetailHeader } from "./ConnectorDetailHeader";

@@ -17,8 +17,8 @@ import {
   Shield,
   SlidersHorizontal,
   UsersRound,
-} from "@/components/ui/icons";
-import type { IconProps } from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
+import type { IconProps } from "@proliferate/ui/icons";
 import type { SettingsSection } from "@/config/settings";
 
 export type SettingsNavItem =

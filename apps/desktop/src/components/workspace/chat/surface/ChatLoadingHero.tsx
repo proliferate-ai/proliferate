@@ -1,7 +1,7 @@
 import { useChatLoadingSubstep } from "@/hooks/chat/derived/use-chat-loading-substep";
 import { SkeletonBlock } from "@/components/feedback/Skeleton";
 import { ThinkingText } from "@/components/feedback/ThinkingText";
-import { DebugProfiler } from "@/components/ui/DebugProfiler";
+import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 
 export function ChatLoadingHero() {

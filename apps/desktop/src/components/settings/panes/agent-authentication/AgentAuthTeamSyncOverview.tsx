@@ -1,5 +1,5 @@
 import type { AgentAuthCredential } from "@proliferate/cloud-sdk";
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { agentAuthenticationCopy } from "@/copy/settings/agent-authentication-copy";
 import { AgentAuthAdminTag } from "@/components/settings/panes/agent-authentication/AgentAuthAdminTag";

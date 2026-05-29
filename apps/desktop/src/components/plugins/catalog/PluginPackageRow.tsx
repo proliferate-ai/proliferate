@@ -9,10 +9,10 @@ import {
   buildConnectedPluginPresentation,
 } from "@/lib/domain/plugins/plugin-package-view-model";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Switch } from "@/components/ui/Switch";
+import { Switch } from "@proliferate/ui/primitives/Switch";
 import { ConnectorIcon } from "@/components/plugins/status/ConnectorIcon";
 import { ConnectorOverflowMenu } from "@/components/plugins/status/ConnectorOverflowMenu";
-import { Plus } from "@/components/ui/icons";
+import { Plus } from "@proliferate/ui/icons";
 
 const STATUS_TONE_CLASSES: Record<PluginPackagePresentation["statusTone"], string> = {
   neutral: "border-border/50 bg-muted/30 text-muted-foreground",

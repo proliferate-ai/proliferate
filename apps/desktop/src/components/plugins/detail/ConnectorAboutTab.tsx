@@ -5,7 +5,7 @@ import {
 } from "@/lib/domain/mcp/display";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ExternalLink } from "@/components/ui/icons";
+import { ExternalLink } from "@proliferate/ui/icons";
 
 export function ConnectorAboutTab({ entry }: { entry: ConnectorCatalogEntry }) {
   const authLabel = getConnectorAuthLabel(entry);

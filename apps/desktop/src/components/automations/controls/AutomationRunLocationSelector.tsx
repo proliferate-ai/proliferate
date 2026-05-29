@@ -1,17 +1,17 @@
 import type { MouseEvent, ReactNode } from "react";
 import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
-import { PillControlButton } from "@/components/ui/PillControlButton";
+import { PillControlButton } from "@proliferate/ui/primitives/PillControlButton";
 import {
   POPOVER_SURFACE_CLASS,
   PopoverButton,
-} from "@/components/ui/PopoverButton";
+} from "@proliferate/ui/primitives/PopoverButton";
 import {
   Check,
   CloudIcon,
   FolderOpen,
   Plus,
   Terminal,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import type {
   AutomationTargetGroup,
   AutomationTargetRow,

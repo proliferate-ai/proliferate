@@ -7,13 +7,33 @@
     "dist"
   ],
   "exports": {
+    "./command-palette-icons": {
+      "types": "./dist/command-palette-icons.d.ts",
+      "import": "./dist/command-palette-icons.js"
+    },
+    "./icons": {
+      "types": "./dist/icons.d.ts",
+      "import": "./dist/icons.js"
+    },
     "./layout/AppShell": {
       "types": "./dist/layout/AppShell.d.ts",
       "import": "./dist/layout/AppShell.js"
     },
+    "./layout/AutoHideScrollArea": {
+      "types": "./dist/layout/AutoHideScrollArea.d.ts",
+      "import": "./dist/layout/AutoHideScrollArea.js"
+    },
     "./layout/EmptyState": {
       "types": "./dist/layout/EmptyState.d.ts",
       "import": "./dist/layout/EmptyState.js"
+    },
+    "./layout/EnvironmentLayout": {
+      "types": "./dist/layout/EnvironmentLayout.d.ts",
+      "import": "./dist/layout/EnvironmentLayout.js"
+    },
+    "./layout/FixedPositionLayer": {
+      "types": "./dist/layout/FixedPositionLayer.d.ts",
+      "import": "./dist/layout/FixedPositionLayer.js"
     },
     "./layout/ListRow": {
       "types": "./dist/layout/ListRow.d.ts",
@@ -23,21 +43,21 @@
       "types": "./dist/layout/ListSurface.d.ts",
       "import": "./dist/layout/ListSurface.js"
     },
-    "./layout/PageHeader": {
-      "types": "./dist/layout/PageHeader.d.ts",
-      "import": "./dist/layout/PageHeader.js"
-    },
     "./layout/PageContentFrame": {
       "types": "./dist/layout/PageContentFrame.d.ts",
       "import": "./dist/layout/PageContentFrame.js"
+    },
+    "./layout/PageHeader": {
+      "types": "./dist/layout/PageHeader.d.ts",
+      "import": "./dist/layout/PageHeader.js"
     },
     "./layout/SectionHeader": {
       "types": "./dist/layout/SectionHeader.d.ts",
       "import": "./dist/layout/SectionHeader.js"
     },
-    "./layout/AutoHideScrollArea": {
-      "types": "./dist/layout/AutoHideScrollArea.d.ts",
-      "import": "./dist/layout/AutoHideScrollArea.js"
+    "./layout/ShortcutBadge": {
+      "types": "./dist/layout/ShortcutBadge.d.ts",
+      "import": "./dist/layout/ShortcutBadge.js"
     },
     "./layout/SidebarFrame": {
       "types": "./dist/layout/SidebarFrame.d.ts",
@@ -47,13 +67,25 @@
       "types": "./dist/layout/SidebarNavItem.d.ts",
       "import": "./dist/layout/SidebarNavItem.js"
     },
+    "./layout/SidebarNavRow": {
+      "types": "./dist/layout/SidebarNavRow.d.ts",
+      "import": "./dist/layout/SidebarNavRow.js"
+    },
     "./layout/SidebarRowSurface": {
       "types": "./dist/layout/SidebarRowSurface.d.ts",
       "import": "./dist/layout/SidebarRowSurface.js"
     },
-    "./layout/ShortcutBadge": {
-      "types": "./dist/layout/ShortcutBadge.d.ts",
-      "import": "./dist/layout/ShortcutBadge.js"
+    "./layout/SizedPanel": {
+      "types": "./dist/layout/SizedPanel.d.ts",
+      "import": "./dist/layout/SizedPanel.js"
+    },
+    "./overlays/overlay-presence": {
+      "types": "./dist/overlays/overlay-presence.d.ts",
+      "import": "./dist/overlays/overlay-presence.js"
+    },
+    "./primitives/AnimatedSwapText": {
+      "types": "./dist/primitives/AnimatedSwapText.d.ts",
+      "import": "./dist/primitives/AnimatedSwapText.js"
     },
     "./primitives/Badge": {
       "types": "./dist/primitives/Badge.d.ts",
@@ -63,6 +95,26 @@
       "types": "./dist/primitives/Button.d.ts",
       "import": "./dist/primitives/Button.js"
     },
+    "./primitives/Checkbox": {
+      "types": "./dist/primitives/Checkbox.d.ts",
+      "import": "./dist/primitives/Checkbox.js"
+    },
+    "./primitives/CollapsibleSummaryRow": {
+      "types": "./dist/primitives/CollapsibleSummaryRow.d.ts",
+      "import": "./dist/primitives/CollapsibleSummaryRow.js"
+    },
+    "./primitives/CommandPalette": {
+      "types": "./dist/primitives/CommandPalette.d.ts",
+      "import": "./dist/primitives/CommandPalette.js"
+    },
+    "./primitives/ConfirmationDialog": {
+      "types": "./dist/primitives/ConfirmationDialog.d.ts",
+      "import": "./dist/primitives/ConfirmationDialog.js"
+    },
+    "./primitives/EnvironmentSearchSelect": {
+      "types": "./dist/primitives/EnvironmentSearchSelect.d.ts",
+      "import": "./dist/primitives/EnvironmentSearchSelect.js"
+    },
     "./primitives/IconButton": {
       "types": "./dist/primitives/IconButton.d.ts",
       "import": "./dist/primitives/IconButton.js"
@@ -71,13 +123,57 @@
       "types": "./dist/primitives/Input.d.ts",
       "import": "./dist/primitives/Input.js"
     },
-    "./primitives/Spinner": {
-      "types": "./dist/primitives/Spinner.d.ts",
-      "import": "./dist/primitives/Spinner.js"
+    "./primitives/Label": {
+      "types": "./dist/primitives/Label.d.ts",
+      "import": "./dist/primitives/Label.js"
+    },
+    "./primitives/ModalShell": {
+      "types": "./dist/primitives/ModalShell.d.ts",
+      "import": "./dist/primitives/ModalShell.js"
+    },
+    "./primitives/PickerPopoverContent": {
+      "types": "./dist/primitives/PickerPopoverContent.d.ts",
+      "import": "./dist/primitives/PickerPopoverContent.js"
+    },
+    "./primitives/PillControlButton": {
+      "types": "./dist/primitives/PillControlButton.d.ts",
+      "import": "./dist/primitives/PillControlButton.js"
+    },
+    "./primitives/PopoverButton": {
+      "types": "./dist/primitives/PopoverButton.d.ts",
+      "import": "./dist/primitives/PopoverButton.js"
+    },
+    "./primitives/PopoverMenuItem": {
+      "types": "./dist/primitives/PopoverMenuItem.d.ts",
+      "import": "./dist/primitives/PopoverMenuItem.js"
+    },
+    "./primitives/ProgressBar": {
+      "types": "./dist/primitives/ProgressBar.d.ts",
+      "import": "./dist/primitives/ProgressBar.js"
+    },
+    "./primitives/RangeSlider": {
+      "types": "./dist/primitives/RangeSlider.d.ts",
+      "import": "./dist/primitives/RangeSlider.js"
     },
     "./primitives/Select": {
       "types": "./dist/primitives/Select.d.ts",
       "import": "./dist/primitives/Select.js"
+    },
+    "./primitives/SelectionRow": {
+      "types": "./dist/primitives/SelectionRow.d.ts",
+      "import": "./dist/primitives/SelectionRow.js"
+    },
+    "./primitives/SettingsMenu": {
+      "types": "./dist/primitives/SettingsMenu.d.ts",
+      "import": "./dist/primitives/SettingsMenu.js"
+    },
+    "./primitives/Spinner": {
+      "types": "./dist/primitives/Spinner.d.ts",
+      "import": "./dist/primitives/Spinner.js"
+    },
+    "./primitives/Switch": {
+      "types": "./dist/primitives/Switch.d.ts",
+      "import": "./dist/primitives/Switch.js"
     },
     "./primitives/Tabs": {
       "types": "./dist/primitives/Tabs.d.ts",
@@ -87,20 +183,38 @@
       "types": "./dist/primitives/Textarea.d.ts",
       "import": "./dist/primitives/Textarea.js"
     },
+    "./primitives/Toggle": {
+      "types": "./dist/primitives/Toggle.d.ts",
+      "import": "./dist/primitives/Toggle.js"
+    },
     "./primitives/Tooltip": {
       "types": "./dist/primitives/Tooltip.d.ts",
       "import": "./dist/primitives/Tooltip.js"
     },
-    "./primitives/Toggle": {
-      "types": "./dist/primitives/Toggle.d.ts",
-      "import": "./dist/primitives/Toggle.js"
+    "./proliferate-icons": {
+      "types": "./dist/proliferate-icons.d.ts",
+      "import": "./dist/proliferate-icons.js"
+    },
+    "./provider-icons": {
+      "types": "./dist/provider-icons.d.ts",
+      "import": "./dist/provider-icons.js"
+    },
+    "./utils/scroll-chain": {
+      "types": "./dist/utils/scroll-chain.d.ts",
+      "import": "./dist/utils/scroll-chain.js"
+    },
+    "./utils/search": {
+      "types": "./dist/utils/search.d.ts",
+      "import": "./dist/utils/search.js"
     }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "cmdk": "^1.1.1",
     "tailwind-merge": "^3.5.0"
   },
   "peerDependencies": {
@@ -108,10 +222,14 @@
     "react-dom": "^19"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
     "@types/react": "~19.1.0",
     "@types/react-dom": "~19.1.0",
+    "jsdom": "^29.1.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "typescript": "^5.7"
+    "typescript": "^5.7",
+    "vitest": "^3.2.4"
   }
 }

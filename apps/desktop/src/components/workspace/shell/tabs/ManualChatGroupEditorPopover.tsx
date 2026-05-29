@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { FixedPositionLayer } from "@/components/ui/layout/FixedPositionLayer";
-import { useNativeOverlayRegistration } from "@/hooks/ui/use-native-overlay-presence";
+import { FixedPositionLayer } from "@proliferate/ui/layout/FixedPositionLayer";
+import { useNativeOverlayRegistration } from "@proliferate/ui/overlays/overlay-presence";
 import {
   MANUAL_CHAT_GROUP_COLOR_IDS,
   resolveManualChatGroupColor,

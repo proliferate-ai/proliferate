@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { SplitPanel } from "@/components/ui/icons";
+import { SplitPanel } from "@proliferate/ui/icons";
 import { useResize } from "@/hooks/ui/layout/use-resize";
 import { useTransparentChromeEnabled } from "@/hooks/theme/derived/use-transparent-chrome";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";

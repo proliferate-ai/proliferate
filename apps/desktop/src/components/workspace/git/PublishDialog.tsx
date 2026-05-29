@@ -2,14 +2,14 @@ import { useId } from "react";
 import type { CurrentPullRequestResponse } from "@anyharness/sdk";
 import { PublishChangedFiles } from "./PublishChangedFiles";
 import { PublishSection } from "./PublishSection";
-import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
+import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@/components/ui/Label";
-import { ModalShell } from "@/components/ui/ModalShell";
-import { Switch } from "@/components/ui/Switch";
-import { Textarea } from "@/components/ui/Textarea";
-import { GitHub } from "@/components/ui/icons";
+import { Label } from "@proliferate/ui/primitives/Label";
+import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
+import { Switch } from "@proliferate/ui/primitives/Switch";
+import { Textarea } from "@proliferate/ui/primitives/Textarea";
+import { GitHub } from "@proliferate/ui/icons";
 import { useWorkspacePublishWorkflow } from "@/hooks/workspaces/workflows/use-workspace-publish-workflow";
 
 interface PublishDialogProps {

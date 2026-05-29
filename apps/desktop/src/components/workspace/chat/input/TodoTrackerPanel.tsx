@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
-import { CheckCircleFilled, Circle, ClipboardList, Spinner } from "@/components/ui/icons";
+import { CheckCircleFilled, Circle, ClipboardList, Spinner } from "@proliferate/ui/icons";
 import type { PlanEntry } from "@anyharness/sdk";
 
 interface TodoTrackerPanelProps {

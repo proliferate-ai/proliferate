@@ -1,5 +1,5 @@
 import { twMerge } from "tailwind-merge";
-import { MarkdownRenderer } from "@/components/ui/content/MarkdownRenderer";
+import { MarkdownRenderer } from "@/components/content/ui/MarkdownRenderer";
 
 interface PlanMarkdownBodyProps {
   content: string;

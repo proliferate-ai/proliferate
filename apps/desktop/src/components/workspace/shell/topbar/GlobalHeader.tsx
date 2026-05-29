@@ -8,7 +8,7 @@ import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-s
 import { resolvePreferredOpenTarget } from "@/lib/domain/chat/composer/preference-resolvers";
 import { HeaderTabs } from "@/components/workspace/shell/topbar/HeaderTabs";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { DebugProfiler } from "@/components/ui/DebugProfiler";
+import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { SplitButton } from "@/components/workspace/open-target/SplitButton";
 import {
   type OpenTarget,
@@ -18,7 +18,7 @@ import {
   FilePen,
   Play,
   SplitPanel,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import type { Workspace } from "@anyharness/sdk";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { workspaceHeaderTitle } from "@/lib/domain/workspaces/display/workspace-display";

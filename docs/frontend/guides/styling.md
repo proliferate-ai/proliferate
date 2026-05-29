@@ -33,10 +33,13 @@ Shared token ownership:
 - `apps/packages/design/dist/theme.css` is generated from those tokens and exposes
   shared CSS theme variables plus shared non-product animation utilities for
   Desktop/Web. Do not hand-edit generated theme output.
-- `apps/packages/design/src/dom.css` owns the shared Desktop/Web DOM entrypoint:
+- `apps/packages/design/src/css/dom.css` owns the shared Desktop/Web DOM entrypoint:
   Tailwind setup, shared package `@source` entries, shared reset/root/body
   defaults, shared scrollbar utilities, and shared Proliferate global classes.
   Apps import this as `@proliferate/design/dom.css`.
+- `apps/packages/design/src/css/desktop.css` owns package-managed Desktop DOM
+  CSS: fonts, desktop theme presets, and global runtime selectors. Desktop
+  imports this as `@proliferate/design/desktop.css`.
 - Client-specific global selectors are allowed only when explicitly scoped
   under `[data-proliferate-client="desktop"]` or
   `[data-proliferate-client="web"]`.
@@ -223,6 +226,6 @@ Component-specific styling belongs with the component or primitive, not in
 
 App stylesheets should be import-only where possible. `apps/web/src/index.css`
 imports only `@proliferate/design/dom.css`. `apps/desktop/src/index.css`
-imports the shared DOM entrypoint plus Desktop-owned third-party CSS and
-Desktop-specific theme/runtime CSS. Mobile uses `apps/mobile/src/styles/**`
-and `@proliferate/design/react-native`, not DOM CSS.
+imports app-owned third-party CSS plus `@proliferate/design/desktop.css`, which
+itself imports the shared DOM entrypoint. Mobile uses
+`apps/mobile/src/styles/**` and `@proliferate/design/react-native`, not DOM CSS.

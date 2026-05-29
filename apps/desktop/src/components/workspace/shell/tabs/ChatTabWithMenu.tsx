@@ -4,7 +4,7 @@ import type {
   ReactElement,
   Ref,
 } from "react";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { SessionTitleRenamePopover } from "@/components/workspace/shell/tabs/SessionTitleRenamePopover";
 import { ChromeWorkspaceTab } from "@/components/workspace/shell/tabs/ChromeWorkspaceTab";
 import { DelegatedAgentHoverCard } from "@/components/workspace/shell/tabs/DelegatedAgentHoverCard";

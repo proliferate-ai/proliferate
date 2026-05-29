@@ -1,4 +1,4 @@
-import { ThinkingGlyph } from "@/components/ui/icons";
+import { ThinkingGlyph } from "@proliferate/ui/icons";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
 import { ToolActionRow } from "./ToolActionRow";

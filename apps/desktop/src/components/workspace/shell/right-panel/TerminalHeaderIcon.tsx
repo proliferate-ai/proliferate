@@ -3,9 +3,9 @@ import type { TerminalRecord } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { ShortcutBadge } from "@/components/ui/ShortcutBadge";
-import { PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
+import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { useTerminalTabNativeContextMenu } from "@/hooks/terminals/ui/use-terminal-tab-native-context-menu";
 import {
   AppShellTabCloseIcon,
@@ -13,7 +13,7 @@ import {
   Check,
   Pencil,
   X,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 
 const HEADER_TERMINAL_TAB_CLASS = "ui-tab-system-tab right-panel-terminal-tab";
 const HEADER_TAB_EDIT_CLASS =

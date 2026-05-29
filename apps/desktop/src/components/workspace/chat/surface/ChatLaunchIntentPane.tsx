@@ -1,6 +1,6 @@
-import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
+import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ArrowLeft, RefreshCw } from "@/components/ui/icons";
+import { ArrowLeft, RefreshCw } from "@proliferate/ui/icons";
 import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage";
 import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
 import { TRAILING_STATUS_MIN_HEIGHT } from "@/components/workspace/chat/transcript/TranscriptTurnChrome";

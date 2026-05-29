@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CircleAlert } from "@/components/ui/icons";
+import { CircleAlert } from "@proliferate/ui/icons";
 import { AssistantMessage } from "@/components/workspace/chat/transcript/AssistantMessage";
 import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
 import type { ScenarioKey } from "@/config/playground";

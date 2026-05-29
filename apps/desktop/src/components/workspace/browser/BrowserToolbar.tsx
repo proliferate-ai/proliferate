@@ -8,7 +8,7 @@ import {
   Globe,
   RefreshCw,
   Spinner,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import type { RightPanelBrowserTab } from "@/lib/domain/workspaces/shell/right-panel-model";
 import type { FrameStatus } from "./BrowserPanelTypes";

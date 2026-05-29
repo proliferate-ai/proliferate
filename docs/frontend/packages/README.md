@@ -30,7 +30,9 @@ apps/packages/
   design/
     src/
       tokens.ts
-      dom.css
+      css/
+        dom.css
+        desktop.css
       react-native.ts
 
   ui/
@@ -153,7 +155,8 @@ Owns serializable design values and generated CSS.
 
 ```text
 apps/packages/design/src/tokens.ts
-apps/packages/design/src/dom.css
+apps/packages/design/src/css/dom.css
+apps/packages/design/src/css/desktop.css
 apps/packages/design/src/react-native.ts
 apps/packages/design/dist/theme.css
 ```

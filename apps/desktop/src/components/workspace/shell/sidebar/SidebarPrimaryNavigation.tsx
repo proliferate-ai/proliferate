@@ -4,7 +4,7 @@ import {
   Grid,
   Home,
   LifeBuoy,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import {
   ProductSidebarPrimaryNavigation,
   type SidebarNavItemView,

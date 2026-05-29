@@ -8,7 +8,7 @@ import {
   ClipboardList,
   FileText,
   Settings,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 
 export function collectDescendantItems(
   itemIds: readonly string[],

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ToolCallItem, TranscriptState } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ChevronRight, Robot } from "@/components/ui/icons";
+import { ChevronRight, Robot } from "@proliferate/ui/icons";
 import { DelegatedAgentHoverCard } from "@/components/workspace/shell/tabs/DelegatedAgentHoverCard";
 import {
   parseSubagentLaunchResult,

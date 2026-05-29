@@ -7,17 +7,17 @@ import type {
   ModelSelectorSelection,
 } from "@/lib/domain/chat/models/model-selection";
 import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
-import { FixedPositionLayer } from "@/components/ui/layout/FixedPositionLayer";
-import { POPOVER_FRAME_CLASS, POPOVER_SURFACE_CLASS } from "@/components/ui/PopoverButton";
+import { FixedPositionLayer } from "@proliferate/ui/layout/FixedPositionLayer";
+import { POPOVER_FRAME_CLASS, POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import {
   Check,
   ChevronDown,
   Plus,
   Search,
-} from "@/components/ui/icons";
-import { ProviderIcon } from "@/components/ui/provider-icons";
+} from "@proliferate/ui/icons";
+import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { useModelSelectorMenu } from "@/hooks/chat/ui/use-model-selector-menu";
-import { useNativeOverlayRegistration } from "@/hooks/ui/use-native-overlay-presence";
+import { useNativeOverlayRegistration } from "@proliferate/ui/overlays/overlay-presence";
 import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 

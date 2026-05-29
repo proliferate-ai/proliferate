@@ -1,8 +1,8 @@
 import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { Check, ChevronDown } from "@/components/ui/icons";
-import { ProviderIcon } from "@/components/ui/provider-icons";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { Check, ChevronDown } from "@proliferate/ui/icons";
+import { ProviderIcon } from "@proliferate/ui/provider-icons";
 
 export interface AgentHarnessModelOption {
   id: string;

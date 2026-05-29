@@ -8,7 +8,7 @@ import {
   Shield,
   Settings,
   X,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 
 type ProposedPlanDecisionState =
   | "pending"

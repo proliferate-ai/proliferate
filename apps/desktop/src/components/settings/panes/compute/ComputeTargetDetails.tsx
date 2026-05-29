@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
-import { Badge } from "@/components/ui/Badge";
-import { Archive, Check, RefreshCw, Server } from "@/components/ui/icons";
+import { Badge } from "@proliferate/ui/primitives/Badge";
+import { Archive, Check, RefreshCw, Server } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@/components/ui/Label";
+import { Label } from "@proliferate/ui/primitives/Label";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { COMPUTE_COPY } from "@/copy/settings/compute";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";

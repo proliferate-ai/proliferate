@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ErrorItem } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { CircleAlert, ChevronRight, RefreshCw } from "@/components/ui/icons";
+import { CircleAlert, ChevronRight, RefreshCw } from "@proliferate/ui/icons";
 import { useSessionModelFallbackAction } from "@/hooks/sessions/workflows/use-session-model-fallback-action";
 import { presentSessionError } from "@proliferate/product-domain/chats/transcript/session-error-presentation";
 import { useToastStore } from "@/stores/toast/toast-store";

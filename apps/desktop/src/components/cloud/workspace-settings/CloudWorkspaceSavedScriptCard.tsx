@@ -1,6 +1,6 @@
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { Badge } from "@/components/ui/Badge";
-import { Textarea } from "@/components/ui/Textarea";
+import { Badge } from "@proliferate/ui/primitives/Badge";
+import { Textarea } from "@proliferate/ui/primitives/Textarea";
 
 interface CloudWorkspaceSavedScriptCardProps {
   setupScript: string;

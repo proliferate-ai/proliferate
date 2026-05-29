@@ -1,12 +1,12 @@
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { PickerPopoverContent } from "@/components/ui/PickerPopoverContent";
-import { PillControlButton } from "@/components/ui/PillControlButton";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { PickerPopoverContent } from "@proliferate/ui/primitives/PickerPopoverContent";
+import { PillControlButton } from "@proliferate/ui/primitives/PillControlButton";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import {
   Check,
   Sparkles,
-} from "@/components/ui/icons";
-import { ProviderIcon } from "@/components/ui/provider-icons";
+} from "@proliferate/ui/icons";
+import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import type {
   HomeNextModelGroup,
   HomeNextModelInfo,

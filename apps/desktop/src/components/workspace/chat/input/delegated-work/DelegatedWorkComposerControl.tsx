@@ -1,5 +1,5 @@
-import { PopoverButton } from "@/components/ui/PopoverButton";
-import { Robot } from "@/components/ui/icons";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { Robot } from "@proliferate/ui/icons";
 import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import type { DelegatedWorkComposerViewModel } from "@/hooks/chat/use-delegated-work-composer";

@@ -1,4 +1,4 @@
-import { Globe, Spinner } from "@/components/ui/icons";
+import { Globe, Spinner } from "@proliferate/ui/icons";
 import { useWorkspaceRemoteAccessActions } from "@/hooks/workspaces/remote-access/use-workspace-remote-access-actions";
 import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
 

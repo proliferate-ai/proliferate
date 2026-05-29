@@ -1,7 +1,7 @@
 import { useRef, type ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Textarea } from "@/components/ui/Textarea";
-import { ArrowRight } from "@/components/ui/icons";
+import { Textarea } from "@proliferate/ui/primitives/Textarea";
+import { ArrowRight } from "@proliferate/ui/icons";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
 import { ChatInputControlRow } from "@/components/workspace/chat/input/ChatInputControlRow";
 import { ComposerSlashCommandSearch } from "@/components/workspace/chat/input/ComposerSlashCommandSearch";

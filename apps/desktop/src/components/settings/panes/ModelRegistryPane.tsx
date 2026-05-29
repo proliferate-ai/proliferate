@@ -1,8 +1,8 @@
 import { useId, useMemo, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ChevronDown } from "@/components/ui/icons";
+import { ChevronDown } from "@proliferate/ui/icons";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Switch } from "@/components/ui/Switch";
+import { Switch } from "@proliferate/ui/primitives/Switch";
 import type { SettingsAgentModelVisibilityRow } from "@/lib/domain/settings/agent-defaults";
 
 interface ModelRegistryPaneProps {

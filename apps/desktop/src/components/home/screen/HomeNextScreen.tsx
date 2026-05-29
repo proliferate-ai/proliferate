@@ -27,7 +27,7 @@ import {
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
-import { GitHub, Settings, SlidersHorizontal } from "@/components/ui/icons";
+import { GitHub, Settings, SlidersHorizontal } from "@proliferate/ui/icons";
 import type {
   HomeOnboardingCardModel,
   HomeOnboardingIcon,

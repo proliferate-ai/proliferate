@@ -1,10 +1,10 @@
 import { type ReactNode, useState } from "react";
-import { ChevronRight, CloudIcon, FolderClosedFilled, FolderFilled, Plus, Settings, Trash } from "@/components/ui/icons";
+import { ChevronRight, CloudIcon, FolderClosedFilled, FolderFilled, Plus, Settings, Trash } from "@proliferate/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
-import { ShortcutBadge } from "@/components/ui/ShortcutBadge";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
+import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
 import { SidebarWorkspaceVariantIcon } from "@/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
 import { SHORTCUTS } from "@/config/shortcuts";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";

@@ -5,10 +5,10 @@ import {
 } from "@/lib/domain/chat/session-controls/session-toggle-control";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 import type { ConfiguredSessionControlKey } from "@/lib/domain/chat/session-controls/presentation";
-import { Brain, Check, ChevronDown, Zap } from "@/components/ui/icons";
+import { Brain, Check, ChevronDown, Zap } from "@proliferate/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 import { SessionModeControl } from "./SessionModeControl";

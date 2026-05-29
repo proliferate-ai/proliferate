@@ -1,6 +1,6 @@
 import type { ReadWorkspaceFileResponse } from "@anyharness/sdk";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
-import { MarkdownRenderer } from "@/components/ui/content/MarkdownRenderer";
+import { MarkdownRenderer } from "@/components/content/ui/MarkdownRenderer";
 import { CenterMessage } from "@/components/workspace/files/viewer/CenterMessage";
 import { FileDiffPane } from "@/components/workspace/files/viewer/FileDiffPane";
 import { FileSourceView } from "@/components/workspace/files/viewer/FileSourceView";

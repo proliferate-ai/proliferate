@@ -1,0 +1,106 @@
+@import "tailwindcss";
+@source "../../../ui/src";
+@source "../../../product-ui/src";
+@import "../theme.css";
+
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  --color-composer-background: var(--color-card);
+  --color-composer-border: var(--color-border);
+  --color-composer-control-foreground: var(--color-muted-foreground);
+  --color-composer-control-active-foreground: var(--color-foreground);
+  --color-composer-control-muted-foreground: var(--color-faint);
+  --color-composer-control-hover: var(--color-muted);
+  --color-composer-send-background: var(--color-foreground);
+  --color-composer-send-foreground: var(--color-background);
+  --color-composer-shadow: var(--shadow-subtle);
+  --color-composer-backdrop-filter: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  min-width: 320px;
+  overflow: hidden;
+  background: var(--color-background);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.proliferate-scrollbar,
+.web-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-heavy) transparent;
+}
+
+.proliferate-scrollbar::-webkit-scrollbar,
+.web-scrollbar::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.proliferate-scrollbar::-webkit-scrollbar-thumb,
+.web-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-border-heavy);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.vertical-scroll-fade-mask {
+  --edge-fade-distance: 1.5rem;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black var(--edge-fade-distance),
+    black calc(100% - var(--edge-fade-distance)),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black var(--edge-fade-distance),
+    black calc(100% - var(--edge-fade-distance)),
+    transparent 100%
+  );
+}
+
+.chat-composer-surface {
+  background-color: var(--color-composer-background);
+  box-shadow:
+    0 0 0 1px var(--color-composer-border),
+    var(--color-composer-shadow);
+  -webkit-backdrop-filter: var(--color-composer-backdrop-filter);
+  backdrop-filter: var(--color-composer-backdrop-filter);
+}
+
+[data-proliferate-client="web"] {
+  min-height: 100%;
+}
+
+[data-proliferate-client="desktop"] {
+  min-height: 100%;
+}

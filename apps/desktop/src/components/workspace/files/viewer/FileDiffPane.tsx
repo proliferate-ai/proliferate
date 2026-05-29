@@ -1,5 +1,5 @@
 import { useGitDiffQuery } from "@anyharness/sdk-react";
-import { DiffViewer } from "@/components/ui/content/DiffViewer";
+import { DiffViewer } from "@/components/content/ui/DiffViewer";
 import { resolveDiffDisplayPolicy } from "@/lib/domain/workspaces/changes/diff-display-policy";
 import type { FileDiffTarget } from "@/lib/domain/workspaces/viewer/file-diff-options";
 import { CenterMessage } from "./CenterMessage";

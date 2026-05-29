@@ -25,7 +25,7 @@ import {
   Search,
   Sun,
   Terminal,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 
 function LinearGlyph({ className, ...props }: SVGProps<SVGSVGElement>) {
   return (

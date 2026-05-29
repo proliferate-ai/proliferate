@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useMemo, useState } from "react";
-import { DebugProfiler } from "@/components/ui/DebugProfiler";
+import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { useActiveTranscriptPaneState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { MessageList } from "@/components/workspace/chat/transcript/MessageList";

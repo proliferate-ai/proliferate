@@ -1,6 +1,6 @@
 import { ProliferateLivingMark } from "@/components/brand/ProliferateLivingMark";
 import { AuthAppearanceBoundary } from "@/components/auth/AuthAppearanceBoundary";
-import { ArrowRight, GitHub } from "@/components/ui/icons";
+import { ArrowRight, GitHub } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { AUTH_LOGIN_LABELS } from "@/copy/auth/auth-copy";
 

@@ -11,7 +11,7 @@ import {
   FolderOpen,
   Search,
   WrapText,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import {
   PaneOptionsMenu,
   PaneOptionsMenuItem,

@@ -1,6 +1,6 @@
 import type { CoworkManagedWorkspaceSummary } from "@anyharness/sdk";
 import { SkeletonBlock } from "@/components/feedback/Skeleton";
-import { SidebarRowSurface } from "@/components/ui/SidebarRowSurface";
+import { SidebarRowSurface } from "@proliferate/ui/layout/SidebarRowSurface";
 
 function workspaceLabel(workspace: CoworkManagedWorkspaceSummary, index: number): string {
   return workspace.label?.trim()

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Copy } from "@/components/ui/icons";
+import { Copy } from "@proliferate/ui/icons";
 import { COMPUTE_COPY } from "@/copy/settings/compute";
 
 interface EnrollmentCommandBlockProps {

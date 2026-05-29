@@ -213,10 +213,14 @@ Guides:
   `anyharness-lib`.
 - [guides/api.md](guides/api.md) for HTTP/SSE/WS handler ownership, contract
   mapping, and transport-boundary rules.
+- [guides/app.md](guides/app.md) for `AppState`, dependency construction,
+  session extension wiring, product MCP endpoint registration, and why
+  AnyHarness uses explicit composition instead of singletons.
 - [guides/domains.md](guides/domains.md) for durable domains, the
   `model/store/service/runtime` shape, and product surface domains.
-- [guides/live-runtime.md](guides/live-runtime.md) for managers, actors,
-  handles, event sinks, brokers, and long-lived in-memory state.
+- [guides/live-runtime.md](guides/live-runtime.md) for managers, handles,
+  actors, drivers, event sinks, interaction brokers, and long-lived
+  in-memory state.
 - [guides/adapters.md](guides/adapters.md) for files, git, hosting, and
   process capabilities.
 - [guides/integrations.md](guides/integrations.md) for MCP, ACP, agent CLI, and
@@ -288,7 +292,7 @@ which guide to read and where the code belongs.
 | Public HTTP/SSE/WS schemas, OpenAPI-visible request/response types | `anyharness-contract/src/v1/**` | `anyharness-contract` | [guides/crates.md](guides/crates.md), [contract.md](contract.md) |
 | Provider credential file discovery or portable credential export/import | `anyharness-credential-discovery/src/**` | `anyharness-credential-discovery` | [guides/crates.md](guides/crates.md) |
 | HTTP handlers, routers, auth headers, SSE/WS transport, OpenAPI wiring | `anyharness-lib/src/api/**` | `api/**` | [guides/api.md](guides/api.md) |
-| AppState, dependency construction, wiring extension implementations | `anyharness-lib/src/app/**` | `app/**` | [guides/domains.md](guides/domains.md) |
+| AppState, dependency construction, wiring extension implementations, product MCP endpoint registration | `anyharness-lib/src/app/**` | `app/**` | [guides/app.md](guides/app.md) |
 | SQLite engine setup, migrations, DB pool wiring | `anyharness-lib/src/persistence/**` | `persistence/**` | [guides/persistence.md](guides/persistence.md) |
 | Session durable records, event rows, session config, pending prompts | `anyharness-lib/src/sessions/**` | `domains/sessions/**` | [guides/domains.md](guides/domains.md), [specs/session-engine.md](specs/session-engine.md), [src/sessions.md](src/sessions.md) |
 | Live running agent process, session actor loop, ACP client, event sink, interactions | `anyharness-lib/src/acp/**` | `live/sessions/**` plus earned `integrations/acp/**` | [guides/live-runtime.md](guides/live-runtime.md), [specs/session-engine.md](specs/session-engine.md), [src/acp.md](src/acp.md) |
@@ -299,7 +303,7 @@ which guide to read and where the code belongs.
 | File browsing, file reads/writes, workspace file capabilities | `anyharness-lib/src/adapters/files/**` | `adapters/files/**` | [guides/adapters.md](guides/adapters.md), [src/files.md](src/files.md) |
 | Git status/diff/branch operations and git command parsing | `anyharness-lib/src/adapters/git/**` | `adapters/git/**` | [guides/adapters.md](guides/adapters.md), [src/git.md](src/git.md) |
 | Hosting and process helpers around local workspace capabilities | `anyharness-lib/src/adapters/hosting/**`, `anyharness-lib/src/adapters/processes/**` | `adapters/hosting/**`, `adapters/processes/**` | [guides/adapters.md](guides/adapters.md) |
-| Terminal/PTTY lifecycle, terminal stream handles, terminal registry | `anyharness-lib/src/terminals/**` | `live/terminals/**` | [guides/live-runtime.md](guides/live-runtime.md) |
+| Terminal/PTY lifecycle, terminal stream handles, terminal registry | `anyharness-lib/src/terminals/**` | `live/terminals/**` | [guides/live-runtime.md](guides/live-runtime.md) |
 | MCP user bindings attached to a session | `anyharness-lib/src/sessions/mcp_bindings/**` | current `sessions/mcp_bindings/**`; final `domains/sessions/mcp_bindings/**` | [specs/mcp.md](specs/mcp.md), [guides/domains.md](guides/domains.md) |
 | Product MCP tool servers for artifacts, reviews, subagents, workspace naming | `domains/cowork/**`, `domains/reviews/**`, `sessions/subagents/**`, `sessions/workspace_naming/**` | owning product domain | [specs/product-mcps.md](specs/product-mcps.md), [product-mcps/README.md](product-mcps/README.md), [guides/domains.md](guides/domains.md) |
 | Shared MCP JSON-RPC, capability-token, tool-formatting scaffolding | `anyharness-lib/src/integrations/mcp/**` plus any remaining feature-local wrappers | `integrations/mcp/**` | [guides/integrations.md](guides/integrations.md), [specs/mcp.md](specs/mcp.md) |
@@ -360,6 +364,7 @@ anyharness/crates/
         agent_cli/
         acp/                     # only when protocol mechanics earn it
       origin.rs
+      process_env.rs
       lib.rs
 ```
 
@@ -412,9 +417,10 @@ Known transitional issues:
   may be a deliberate durable event-log type, but other contract types should
   be mapped at the API boundary.
 - The live session actor is split under `live/sessions/actor/**`,
-  `live/sessions/connection/**`, and `live/sessions/handle.rs`. `AcpManager`,
-  `RuntimeClient`, `InteractionBroker`, `BackgroundWorkRegistry`, and
-  `replay_actor` remain transitional under `acp/**`.
+  `live/sessions/connection/**` (target role: `driver/**`), and
+  `live/sessions/handle.rs`. `AcpManager`, `RuntimeClient`,
+  `InteractionBroker`, `BackgroundWorkRegistry`, and `replay_actor` remain
+  transitional under `acp/**`.
 - Some product MCP endpoint scaffolding may still be feature-local. Common
   protocol/auth scaffolding should use `integrations/mcp/`; product tool
   semantics stay with their owning domain.
@@ -437,8 +443,8 @@ Do not leave duplicate old and new code paths after a migration.
   maps responses/errors.
 - `app/` wires dependencies. `AppState` is not a place for business logic.
 - `domains/` owns product concepts and durable business rules.
-- `live/` owns long-lived in-memory actors, registries, handles, streams,
-  subprocesses, and brokers.
+- `live/` owns long-lived in-memory managers, handles, actors, drivers,
+  streams, subprocesses, and interaction brokers.
 - `adapters/` owns local workspace/machine capabilities such as file, git,
   hosting, and process operations.
 - `integrations/` owns external protocol/vendor mechanics such as MCP, ACP

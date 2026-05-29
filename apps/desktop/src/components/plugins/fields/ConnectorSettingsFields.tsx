@@ -6,9 +6,9 @@ import type {
   ConnectorSettingsField,
 } from "@/lib/domain/mcp/types";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@/components/ui/Label";
-import { Select } from "@/components/ui/Select";
-import { Switch } from "@/components/ui/Switch";
+import { Label } from "@proliferate/ui/primitives/Label";
+import { Select } from "@proliferate/ui/primitives/Select";
+import { Switch } from "@proliferate/ui/primitives/Switch";
 
 export function ConnectorSettingsFields({
   disabled = false,

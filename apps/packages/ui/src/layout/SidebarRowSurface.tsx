@@ -1,10 +1,4 @@
-import type {
-  ButtonHTMLAttributes,
-  HTMLAttributes,
-  KeyboardEvent,
-  ReactNode,
-} from "react";
-import { twMerge } from "tailwind-merge";
+import type { ButtonHTMLAttributes, HTMLAttributes, KeyboardEvent, ReactNode } from "react";
 
 interface SidebarRowSurfaceProps extends Omit<HTMLAttributes<HTMLElement>, "onClick"> {
   children: ReactNode;
@@ -29,15 +23,12 @@ export function SidebarRowSurface({
     : disabled
       ? "text-sidebar-muted-foreground"
       : "text-sidebar-foreground hover:bg-sidebar-accent";
-  const rowClassName = twMerge(
-    "group relative flex w-full min-w-0 items-center rounded-lg text-left font-[430] transition-[background-color,color,opacity] duration-150",
-    interactive
-      ? "cursor-pointer select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-      : "",
-    disabled ? "cursor-not-allowed opacity-60" : "",
-    stateClass,
-    className,
-  );
+
+  const rowClassName = `group relative flex w-full min-w-0 items-center rounded-lg text-left font-[430] transition-[background-color,color,opacity] duration-150 ${
+    interactive ? "cursor-pointer select-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring" : ""
+  } ${
+    disabled ? "cursor-not-allowed opacity-60" : ""
+  } ${stateClass} ${className}`;
 
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (!interactive) {

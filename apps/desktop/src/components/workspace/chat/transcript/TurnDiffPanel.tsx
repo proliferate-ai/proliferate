@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { DiffViewer } from "@/components/ui/content/DiffViewer";
+import { DiffViewer } from "@/components/content/ui/DiffViewer";
 import {
   FileChangeStats,
   FileDiffCard,
-} from "@/components/ui/content/FileDiffCard";
+} from "@/components/content/ui/FileDiffCard";
 import { collectTurnFilePatches } from "@proliferate/product-domain/chats/transcript/turn-file-patches";
 import {
   CHAT_VISIBLE_FILE_CHANGE_LIMIT,

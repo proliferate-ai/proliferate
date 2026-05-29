@@ -19,14 +19,14 @@ import { RightPanel } from "@/components/workspace/shell/right-panel/RightPanel"
 import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
 import { SidebarUpdatePill } from "@/components/workspace/shell/sidebar/SidebarUpdatePill";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { DebugProfiler } from "@/components/ui/DebugProfiler";
-import { SplitPanel } from "@/components/ui/icons";
+import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
+import { SplitPanel } from "@proliferate/ui/icons";
 import { useMainScreenState } from "@/hooks/main/facade/use-main-screen-state";
 import { useMainScreenShortcuts } from "@/hooks/main/lifecycle/use-main-screen-shortcuts";
 import { useMainScreenActions } from "@/hooks/main/workflows/use-main-screen-actions";
 import { useTransparentChromeEnabled } from "@/hooks/theme/derived/use-transparent-chrome";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
-import { useNativeOverlayOpen } from "@/hooks/ui/use-native-overlay-presence";
+import { useNativeOverlayOpen } from "@proliferate/ui/overlays/overlay-presence";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
 import { useRunWorkspaceCommand } from "@/hooks/workspaces/workflows/use-run-workspace-command";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";

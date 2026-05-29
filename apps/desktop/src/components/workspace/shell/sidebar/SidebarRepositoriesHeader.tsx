@@ -4,9 +4,9 @@ import {
   ExpandAll,
   Filter,
   FolderPlusFilled,
-} from "@/components/ui/icons";
-import { PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
+} from "@proliferate/ui/icons";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { SidebarActionButton } from "@/components/workspace/shell/sidebar/SidebarActionButton";
 import { SidebarWorkspaceVariantIcon } from "@/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
 import { ProductSidebarSectionHeader } from "@proliferate/product-ui/sidebar/ProductSidebar";

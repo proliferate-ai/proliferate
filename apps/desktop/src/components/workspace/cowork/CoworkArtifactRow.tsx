@@ -1,6 +1,6 @@
 import type { CoworkArtifactSummary } from "@anyharness/sdk";
-import { FileText } from "@/components/ui/icons";
-import { SidebarRowSurface } from "@/components/ui/SidebarRowSurface";
+import { FileText } from "@proliferate/ui/icons";
+import { SidebarRowSurface } from "@proliferate/ui/layout/SidebarRowSurface";
 import { resolveCoworkArtifactTitle } from "@/lib/domain/cowork/artifacts";
 
 interface CoworkArtifactRowProps {

@@ -11,9 +11,9 @@ import type {
   TranscriptState,
 } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ChevronRight } from "@/components/ui/icons";
-import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
-import { MarkdownRenderer } from "@/components/ui/content/MarkdownRenderer";
+import { ChevronRight } from "@proliferate/ui/icons";
+import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
+import { MarkdownRenderer } from "@/components/content/ui/MarkdownRenderer";
 import { SubagentLaunchLedger } from "@/components/workspace/chat/transcript/SubagentLaunchLedger";
 import { TurnSeparator } from "@/components/workspace/chat/transcript/TurnSeparator";
 import {

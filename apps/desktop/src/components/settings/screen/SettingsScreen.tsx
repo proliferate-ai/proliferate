@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
+import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { type SettingsSection } from "@/config/settings";
 import { SettingsContentBoundary } from "./SettingsContentBoundary";
 import { AccountPane } from "@/components/settings/panes/AccountPane";

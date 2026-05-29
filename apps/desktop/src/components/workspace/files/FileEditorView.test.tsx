@@ -23,7 +23,7 @@ let workspaceFileContext = {
   treeStateKey: "workspace-1",
 };
 
-vi.mock("@/components/ui/content/DiffViewer", () => ({
+vi.mock("@/components/content/ui/DiffViewer", () => ({
   DiffViewer: () => createElement("div", null, "diff rendered"),
 }));
 

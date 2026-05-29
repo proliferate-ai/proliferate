@@ -9,9 +9,9 @@ import { AgentHarnessConfigComposer } from "@/components/settings/shared/AgentHa
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
-import { Badge, type BadgeTone } from "@/components/ui/Badge";
-import { ProviderIcon } from "@/components/ui/provider-icons";
-import { SettingsMenu } from "@/components/ui/SettingsMenu";
+import { Badge, type BadgeTone } from "@proliferate/ui/primitives/Badge";
+import { ProviderIcon } from "@proliferate/ui/provider-icons";
+import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { useModelRegistrySettings } from "@/hooks/settings/workflows/use-model-registry-settings";
 import {

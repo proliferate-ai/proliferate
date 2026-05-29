@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
-import { ChevronDown } from "@/components/ui/icons";
-import { OpenTargetIcon } from "@/components/ui/OpenTargetIcon";
+import { ChevronDown } from "@proliferate/ui/icons";
+import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
 import { OpenTargetMenu, TargetIcon } from "./OpenTargetMenu";
 import type { OpenTarget } from "@/hooks/access/tauri/use-shell-actions";
 

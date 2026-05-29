@@ -1,13 +1,13 @@
 import type { ComponentType } from "react";
-import { Badge, type BadgeTone } from "@/components/ui/Badge";
+import { Badge, type BadgeTone } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ProgressBar } from "@/components/ui/ProgressBar";
+import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";
 import {
   ArrowUp,
   Check,
   CircleAlert,
   Spinner,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import {
   UPDATE_PREVIEW_STATES,
   type UpdatePreviewPhase,

@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { ArrowLeft } from "@/components/ui/icons";
-import { SidebarNavRow } from "@/components/ui/SidebarNavRow";
+import { ArrowLeft } from "@proliferate/ui/icons";
+import { SidebarNavRow } from "@proliferate/ui/layout/SidebarNavRow";
 import { SupportDialog } from "@/components/support/SupportDialog";
 import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
 import { SHORTCUTS } from "@/config/shortcuts";

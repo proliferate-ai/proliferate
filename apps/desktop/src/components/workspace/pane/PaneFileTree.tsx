@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { FileTreeEntryIcon } from "@/components/ui/file-icons";
+import { FileTreeEntryIcon } from "@/components/workspace/files/file-icons";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
-import { ChevronRight, Search } from "@/components/ui/icons";
+import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
+import { ChevronRight, Search } from "@proliferate/ui/icons";
 
 export interface PaneFileTreeNode<TData = unknown> {
   id: string;

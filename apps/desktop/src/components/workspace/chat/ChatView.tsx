@@ -9,7 +9,7 @@ import {
 } from "react";
 import { ChatInput } from "@/components/workspace/chat/input/ChatInput";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
-import { DebugProfiler } from "@/components/ui/DebugProfiler";
+import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { WorkspaceMobilityFooterRow } from "@/components/workspace/chat/input/WorkspaceMobilityFooterRow";
 import { ChatLaunchIntentPane } from "@/components/workspace/chat/surface/ChatLaunchIntentPane";
 import { ChatLoadingHero } from "@/components/workspace/chat/surface/ChatLoadingHero";

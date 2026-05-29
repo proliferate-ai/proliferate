@@ -1,7 +1,7 @@
 import type { ToolCallItem } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { FileTreeEntryIcon } from "@/components/ui/file-icons";
-import { FileText, Spinner } from "@/components/ui/icons";
+import { FileTreeEntryIcon } from "@/components/workspace/files/file-icons";
+import { FileText, Spinner } from "@proliferate/ui/icons";
 import { ToolActionRow } from "./ToolActionRow";
 import { deriveCoworkArtifactToolPresentation } from "@proliferate/product-domain/chats/tools/cowork-artifact-tool-presentation";
 

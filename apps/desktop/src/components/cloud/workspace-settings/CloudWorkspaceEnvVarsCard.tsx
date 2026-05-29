@@ -1,5 +1,5 @@
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 
 interface CloudWorkspaceEnvVarsCardProps {
   envVarKeys: string[];

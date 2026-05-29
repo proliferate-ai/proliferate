@@ -1,4 +1,4 @@
-import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
+import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 
 export interface PublishFileRow {
   path: string;

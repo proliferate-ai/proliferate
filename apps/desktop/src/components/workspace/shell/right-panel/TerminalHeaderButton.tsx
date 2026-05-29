@@ -1,7 +1,7 @@
 import type { TerminalRecord } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ShortcutBadge } from "@/components/ui/ShortcutBadge";
-import { AppShellTerminalIcon } from "@/components/ui/icons";
+import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
+import { AppShellTerminalIcon } from "@proliferate/ui/icons";
 import { TerminalHeaderIcon } from "@/components/workspace/shell/right-panel/TerminalHeaderIcon";
 
 const HEADER_TERMINAL_TAB_CLASS = "ui-tab-system-tab right-panel-terminal-tab";

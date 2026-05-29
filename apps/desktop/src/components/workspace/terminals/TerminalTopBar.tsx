@@ -3,7 +3,7 @@ import type { TerminalRecord } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import {
   Check,
   ChevronDown,
@@ -11,7 +11,7 @@ import {
   Plus,
   Terminal as TerminalIcon,
   X,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 
 interface TerminalTopBarProps {
   terminals: readonly TerminalRecord[];

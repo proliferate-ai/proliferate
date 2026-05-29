@@ -4,7 +4,7 @@ import {
   useEffect,
   useState,
 } from "react";
-import { DebugProfiler } from "@/components/ui/DebugProfiler";
+import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import {
   ManualChatGroupEditorPopover,
   type ManualChatGroupEditorAnchorRect,

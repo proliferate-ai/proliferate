@@ -8,7 +8,7 @@ import {
   Monitor,
   Terminal,
   Zap,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import type {
   ComputeTargetAppearance,
   ComputeTargetIconId,

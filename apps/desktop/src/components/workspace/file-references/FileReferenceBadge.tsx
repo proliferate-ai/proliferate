@@ -4,9 +4,9 @@ import {
   useCallback,
 } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { FileTreeEntryIcon } from "@/components/ui/file-icons";
-import { InlinePathMentionIcon } from "@/components/ui/icons";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { FileTreeEntryIcon } from "@/components/workspace/files/file-icons";
+import { InlinePathMentionIcon } from "@proliferate/ui/icons";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import {
   FILE_REFERENCE_MENU_CLASS,
   FileReferenceMenuContent,

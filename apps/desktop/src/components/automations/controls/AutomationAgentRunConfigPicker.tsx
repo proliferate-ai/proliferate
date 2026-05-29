@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
-import { PickerEmptyRow, PickerPopoverContent } from "@/components/ui/PickerPopoverContent";
-import { PillControlButton } from "@/components/ui/PillControlButton";
-import { PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { Brain, Check, Sparkles } from "@/components/ui/icons";
-import { matchesPickerSearch } from "@/lib/infra/search/search";
+import { PickerEmptyRow, PickerPopoverContent } from "@proliferate/ui/primitives/PickerPopoverContent";
+import { PillControlButton } from "@proliferate/ui/primitives/PillControlButton";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { Brain, Check, Sparkles } from "@proliferate/ui/icons";
+import { matchesPickerSearch } from "@proliferate/ui/utils/search";
 
 interface AutomationAgentRunConfigOption {
   id: string;

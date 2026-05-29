@@ -1,4 +1,4 @@
-import { Archive, CloudIcon, RefreshCw } from "@/components/ui/icons";
+import { Archive, CloudIcon, RefreshCw } from "@proliferate/ui/icons";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import {

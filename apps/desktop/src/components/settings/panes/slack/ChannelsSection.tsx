@@ -1,6 +1,6 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Checkbox } from "@/components/ui/Checkbox";
-import { Badge } from "@/components/ui/Badge";
+import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import type {
   SlackBotConfig,

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { X } from "@/components/ui/icons";
+import { X } from "@proliferate/ui/icons";
 import { UpdateNotificationCard } from "./UpdateNotificationCard";
 
 type ToastTimer = ReturnType<typeof setTimeout>;

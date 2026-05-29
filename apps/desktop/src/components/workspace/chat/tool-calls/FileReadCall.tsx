@@ -1,5 +1,5 @@
-import { FileText } from "@/components/ui/icons";
-import { HighlightedCodePanel } from "@/components/ui/content/HighlightedCodePanel";
+import { FileText } from "@proliferate/ui/icons";
+import { HighlightedCodePanel } from "@/components/content/ui/HighlightedCodePanel";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
 import { ToolActionRow } from "./ToolActionRow";

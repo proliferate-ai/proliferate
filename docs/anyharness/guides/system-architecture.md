@@ -35,7 +35,8 @@ app
   Owns composition only.
   Construct AppState, create stores/services/runtimes/managers, wire session
   extensions, pass shared config such as runtime_home and auth tokens.
-  Do not implement product behavior here.
+  Register product MCP endpoint servers. Do not implement product behavior
+  here.
 
 domains
   Owns product concepts.
@@ -102,6 +103,32 @@ adapters -> no product domains
 
 `app/` is the composition root and may know about everything. Most other code
 should not import `app/`.
+
+## Crate Root Support Files
+
+The top-level `anyharness-lib/src` files are not all architectural layers.
+
+Expected root-level files:
+
+```text
+lib.rs
+  crate module declarations and intentional exports
+
+origin.rs
+  small shared provenance/origin value types
+
+process_env.rs
+  small private process/environment helpers
+```
+
+Treat these as crate-root support modules, not as a license to create more
+global buckets. If a root file grows into product meaning, live state,
+protocol/vendor mechanics, local-machine capability, or DB infrastructure,
+move it into the owning layer.
+
+`origin.rs` is advisory provenance, not authority. It may describe where a
+request/session/workspace came from. It should not decide auth, ownership,
+billing, mutability, or sandbox policy.
 
 ## Domains
 
@@ -420,7 +447,7 @@ Likely live systems:
 ```text
 live/sessions/
 live/terminals/
-live/browser/      # future
+live/browsers/     # future
 live/workers/      # future local worker/dispatch state if owned here
 ```
 
@@ -429,25 +456,51 @@ Default live system:
 ```text
 live/<system>/
   mod.rs
-  manager.rs
+  manager.rs or manager/
   handle.rs
-  model.rs
+  actor/              # optional, private serialized coordinator
+  driver/             # optional, private external backing mechanism
+  event_sink/         # optional, sequenced event write path
+  output_sink/        # optional terminal-style stream write path
+  interactions/       # optional pending live rendezvous
+  background_work/    # optional provider/runtime long-running work
+  snapshot/           # optional read projection
+  replay/             # optional replay/subscription mechanics
 ```
 
 Responsibilities:
 
 ```text
-manager.rs
-  registry and lifecycle for many live instances
+manager.rs or manager/
+  registry, lifecycle, startup de-dupe, and lookup for many live instances
 
 handle.rs
-  cloneable public command/subscription port for one live instance
+  the only public command/subscription/snapshot port for one live instance
 
-model.rs
-  live-only public command outcomes, snapshots, status enums
+actor/
+  private serialized mutation and ordering loop for one live instance
+
+driver/
+  external mechanism that makes the live resource real: ACP client,
+  subprocess, PTY, browser driver, remote provider, or protocol client
+
+event_sink/ or output_sink/
+  normalized, sequenced write path into durable/broadcast/live streams
+
+interactions/
+  pending request-id to waiter/resolution state for live callbacks
+
+background_work/
+  live tracking for provider/runtime work with its own external identity
+
+snapshot/ or projection/
+  optional read model when snapshots become more than a cheap handle field
+
+replay/
+  optional replay stream/filter logic when it is substantial
 
 mod.rs
-  module declarations and intentional exports
+  module declarations and narrow intentional exports
 ```
 
 Only create a `live/<system>/` folder when there is a real long-lived runtime
@@ -455,46 +508,42 @@ object: a manager, actor, handle, PTY, sidecar, watcher, stream registry, or
 pending interaction broker. A domain workflow that merely starts a session does
 not earn a `live/` folder.
 
-Common live concern folders:
+Not every live resource needs every role. The minimum shape is whatever keeps
+the live identity legible. A one-shot command runner may only need a handle
+and a process driver. A session needs the full manager/handle/actor/driver/event
+pipeline. A future browser may be a composite resource with browser, context,
+and page live identities.
+
+Public surface rule:
 
 ```text
-actor/
-  serialized state machine for one live instance
+Outside live/<resource>/:
+  may use Live<Resource>Manager
+  may use Live<Resource>Handle
+  may use public live result/snapshot/event types
 
-connection/
-  external process/protocol lifecycle
-
-event_sink/
-  normalized event persistence and broadcast fanout
-
-interactions/
-  pending request/response broker
-
-background_work/
-  long-running tool/background work tracking
-
-pty/
-  terminal PTY lifecycle
-
-streams/
-  SSE/websocket/broadcast mechanics
-
-watchers/
-  long-lived file/git/process watchers
+Outside live/<resource>/:
+  must not construct actor commands
+  must not import actor internals
+  must not import driver internals
+  must not import event sink internals
 ```
 
-Add these concern folders only after the concern has its own state or contract.
-Do not create empty target trees.
+The handle is the command facade. Code outside the live resource may hold a
+handle, call handle methods, subscribe through it, and read snapshots through
+it. Only the handle should construct actor commands or send on the actor
+mailbox.
 
 Naming rules:
 
 ```text
 manager = many live instances
-handle = one live instance public port
-actor = one serialized decision loop
-connection/process/pty = live resource lifecycle
-event_sink/streams = fanout
-interactions/broker = pending rendezvous
+handle  = one live instance public port
+actor   = private serialized coordinator for one live instance
+driver  = private external backing mechanism
+sink    = sequenced event/output write path
+interactions = pending live rendezvous
+snapshot = read projection published by the actor/handle
 ```
 
 Do not use `service.rs`, `runtime.rs`, or `store.rs` inside `live/` unless
@@ -509,14 +558,14 @@ live/sessions/
   mod.rs
   manager.rs
   handle.rs
-  model.rs
 
   actor/
-  connection/
+  driver/
   event_sink/
   interactions/
   background_work/
-  replay_actor.rs
+  snapshot/
+  replay/
 ```
 
 Ownership:
@@ -526,13 +575,13 @@ manager.rs
   live session registry and startup de-dupe
 
 handle.rs
-  command/subscription port used by SessionRuntime and API stream code
+  command/subscription/snapshot port used by SessionRuntime and API stream code
 
 actor/
   idle/busy routing, turn loop, queued prompt/config behavior,
   notification dispatch, shutdown decisions
 
-connection/
+driver/
   ACP process/session lifecycle: spawn, stdio, initialize, authenticate,
   new/load/fork native session, stderr
 
@@ -546,7 +595,13 @@ background_work/
   long-running tool/background task tracking
 ```
 
-The actor coordinates these collaborators, but it should not own all their code.
+The current tree still uses `live/sessions/connection/**` for the driver role.
+Prefer `driver/**` for new target documentation and topology passes.
+
+The actor coordinates these collaborators, but it should not own all their
+implementation code. Actor handlers are thin: they decide ordering, validate
+the live phase, update actor-owned state, and delegate to driver/event sink/
+interaction/background-work helpers.
 
 Use this boundary:
 
@@ -554,7 +609,7 @@ Use this boundary:
 actor/
   What should this live session do next?
 
-sibling under live/sessions/
+sibling/collaborator under live/sessions/
   How does this live session resource/collaborator work?
 ```
 
@@ -641,6 +696,17 @@ background work update -> background work handler
 shutdown               -> finalization
 ```
 
+Negative actor rules:
+
+```text
+actor/ must not inline external process/protocol mechanics
+actor/ must not inline event normalization/persistence
+actor/ must not decide durable product policy
+actor/ must not expose its command enum outside the live resource
+driver/ must not import api/app or product stores/services
+event_sink/ must be the only sequenced event writer for that resource
+```
+
 ## Adapters
 
 Adapters are local machine/workspace capabilities. They know how to perform an
@@ -703,9 +769,35 @@ Default adapter:
 ```text
 adapters/<capability>/
   mod.rs
-  model.rs
-  service.rs
+  types.rs
+  executor.rs      # optional
+  service.rs       # optional, rare
+  operations/
+    <operation>.rs
 ```
+
+Use `operations/**` as the normal implementation home. Split by local
+capability family:
+
+```text
+adapters/git/operations/
+  status.rs
+  diff.rs
+  branches.rs
+  commit.rs
+
+adapters/files/operations/
+  list.rs
+  read.rs
+  write.rs
+  delete.rs
+```
+
+`types.rs` holds adapter-owned input/output/error vocabulary shared by
+operations or callers. `executor.rs` is optional and should wrap one repeated
+low-level mechanism such as `git`, `gh`, or a subprocess runner. `service.rs`
+is rare; use it only when the adapter has meaningful shared state or a stable
+facade over many operations.
 
 Use free functions by default. Use a struct only when it holds dependencies,
 cache, config, subprocess state, or test-injectable behavior.
@@ -750,23 +842,23 @@ product feature were removed. If the file name wants a product noun such as
 `reviews`, `cowork`, `subagents`, `sessions`, or `workspace_naming`, it almost
 certainly belongs in a domain.
 
-Default integration:
+Canonical integration:
 
 ```text
 integrations/<integration>/
   mod.rs
-  model.rs
-  client.rs
+  types.rs          # optional external/vendor vocabulary
+  protocol.rs       # optional wire constants/types/conversions
+  auth.rs           # optional protocol/vendor auth mechanics
+  client.rs         # optional outbound client mechanics
+  server/           # optional inbound server/dispatch mechanics
+  cli/              # optional vendor CLI dialect mechanics
+  registry.rs       # optional external registry/schema mechanics
+  parsing.rs        # optional shared parsers
 ```
 
-Add when applicable:
-
-```text
-protocol.rs
-auth.rs
-errors.rs
-config.rs
-```
+Not every integration needs every role. Split by external contract mechanics,
+not by product feature.
 
 Examples:
 
@@ -776,7 +868,8 @@ integrations/mcp/
   product MCP dispatcher scaffolding
 
 integrations/acp/
-  reusable ACP protocol helpers and provider error normalization
+  reusable ACP protocol helpers and provider error normalization; not the
+  live session actor/driver lifecycle
 
 integrations/agent_cli/
   executable lookup, launcher scripts, provider CLI command mechanics
@@ -868,6 +961,11 @@ catalogs
 auth helpers
 ```
 
+It exists because AnyHarness has process-specific state that should be
+constructed once and shared deliberately: DB handles, runtime home, bearer
+token, live managers, operation gates, session extensions, product MCP endpoint
+registry, and startup tasks. Do not replace this with imported singletons.
+
 It should not implement business behavior. If `AppState::new` becomes too
 large, split wiring by system:
 
@@ -876,6 +974,8 @@ app/sessions.rs
 app/workspaces.rs
 app/agents.rs
 app/product_extensions.rs
+app/product_mcp.rs
+app/startup_tasks.rs
 ```
 
 Those files still only wire dependencies.
@@ -888,6 +988,7 @@ create service
 create runtime
 create live manager
 wire extension implementation
+register product MCP endpoint server
 store in AppState
 ```
 
