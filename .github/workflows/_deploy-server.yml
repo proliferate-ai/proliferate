@@ -38,6 +38,7 @@ jobs:
       ECS_SERVER_SERVICE: ${{ vars.ECS_SERVER_SERVICE }}
       ECS_SERVER_CONTAINER_NAME: ${{ vars.ECS_SERVER_CONTAINER_NAME || 'server' }}
       API_URL: ${{ vars.API_URL }}
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
       WEB_URL: ${{ vars.WEB_URL }}
       API_HEALTH_PATH: ${{ vars.API_HEALTH_PATH || '/api/health' }}
       E2B_TEMPLATE_REF: ${{ vars.E2B_TEMPLATE_REF }}
@@ -55,6 +56,7 @@ jobs:
           : "${ECS_CLUSTER:?Set ECS_CLUSTER on the GitHub environment.}"
           : "${ECS_SERVER_SERVICE:?Set ECS_SERVER_SERVICE on the GitHub environment.}"
           : "${API_URL:?Set API_URL on the GitHub environment.}"
+          : "${API_BASE_URL:?Set API_BASE_URL on the GitHub environment.}"
           : "${WEB_URL:?Set WEB_URL on the GitHub environment.}"
           : "${E2B_TEMPLATE_REF:?Set E2B_TEMPLATE_REF on the GitHub environment.}"
 
@@ -106,14 +108,14 @@ jobs:
             > task-definition.raw.json
 
           jq -n \
-            --arg api "$API_URL" \
+            --arg api_base "$API_BASE_URL" \
             --arg frontend "$WEB_URL" \
             --arg environment "$DEPLOY_ENVIRONMENT" \
             --arg e2b "$E2B_TEMPLATE_REF" \
             --arg git "$GIT_SHA" \
             --arg release "proliferate-server@${GIT_SHA:0:12}" \
             '[
-              {"name":"API_BASE_URL","value":$api},
+              {"name":"API_BASE_URL","value":$api_base},
               {"name":"FRONTEND_BASE_URL","value":$frontend},
               {"name":"API_PATH_PREFIX","value":"/api"},
               {"name":"SANDBOX_PROVIDER","value":"e2b"},

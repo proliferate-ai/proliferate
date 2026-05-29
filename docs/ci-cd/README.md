@@ -435,8 +435,8 @@ Hosted flow:
 3. If `server` changed, `_deploy-server.yml`:
    - builds and pushes an ECR image tagged by short SHA
    - renders a new ECS task definition from the live service task definition
-   - updates non-secret runtime environment such as API URLs, release SHA, and
-     E2B template ref
+   - updates non-secret runtime environment such as `API_BASE_URL`, release SHA,
+     and E2B template ref
    - runs `alembic upgrade head` as a one-off Fargate task
    - rolls the ECS service
    - smokes `${API_URL}${API_HEALTH_PATH:-/api/health}`
@@ -524,6 +524,7 @@ AWS_REGION
 AWS_DEPLOY_ROLE_ARN
 WEB_URL
 API_URL
+API_BASE_URL
 
 # server
 ECR_SERVER_REPOSITORY
@@ -564,6 +565,11 @@ such as `proliferate-staging`, `staging.proliferate.com`,
 `staging-app.proliferate.com`, and
 `TEAM_SLUG/proliferate-runtime-cloud:staging`. Production must point at the
 production equivalents.
+
+`API_URL` is the public API origin used for deploy smoke checks, such as
+`https://staging-app.proliferate.com`. `API_BASE_URL` is the server's canonical
+API base URL and keeps the mounted `/api` prefix, such as
+`https://staging-app.proliferate.com/api`.
 
 ## 5. Source of Truth
 
