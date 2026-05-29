@@ -3,8 +3,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { useState } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { Button } from "../src/primitives/Button";
+import { PopoverButton } from "../src/primitives/PopoverButton";
 
 afterEach(() => {
   cleanup();

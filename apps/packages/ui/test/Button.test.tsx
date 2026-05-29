@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "../src/primitives/Button";
 
 afterEach(cleanup);
 

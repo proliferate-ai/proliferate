@@ -210,21 +210,26 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "tailwind-merge": "^3.5.0",
-    "cmdk": "^1.1.1"
+    "cmdk": "^1.1.1",
+    "tailwind-merge": "^3.5.0"
   },
   "peerDependencies": {
     "react": "^19",
     "react-dom": "^19"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
     "@types/react": "~19.1.0",
     "@types/react-dom": "~19.1.0",
+    "jsdom": "^29.1.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "typescript": "^5.7"
+    "typescript": "^5.7",
+    "vitest": "^3.2.4"
   }
 }

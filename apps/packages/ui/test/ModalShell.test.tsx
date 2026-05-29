@@ -2,8 +2,8 @@
 
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
-import { useNativeOverlayOpen } from "@proliferate/ui/overlays/overlay-presence";
+import { ModalShell } from "../src/primitives/ModalShell";
+import { useNativeOverlayOpen } from "../src/overlays/overlay-presence";
 
 afterEach(() => {
   cleanup();

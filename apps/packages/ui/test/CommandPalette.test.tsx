@@ -9,7 +9,7 @@ import {
   CommandPaletteList,
   CommandPaletteRoot,
   useCommandPaletteClose,
-} from "@proliferate/ui/primitives/CommandPalette";
+} from "../src/primitives/CommandPalette";
 
 beforeEach(() => {
   class TestResizeObserver {
