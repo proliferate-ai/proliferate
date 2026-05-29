@@ -61,11 +61,11 @@ jobs:
 
       - name: Build (native)
         if: matrix.target != 'aarch64-unknown-linux-musl'
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }} -p anyharness -p proliferate-worker -p proliferate-supervisor
 
       - name: Build (cross — aarch64 linux)
         if: matrix.target == 'aarch64-unknown-linux-musl'
-        run: cross build --release --target ${{ matrix.target }}
+        run: cross build --release --target ${{ matrix.target }} -p anyharness -p proliferate-worker -p proliferate-supervisor
 
       - name: Package (tar.gz)
         if: matrix.archive == 'tar.gz'
@@ -125,7 +125,12 @@ jobs:
       - name: Publish to npm
         if: github.event_name == 'push' && !inputs.dry_run
         working-directory: anyharness/sdk
-        run: npm publish --access public
+        run: |
+          if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
+            echo "::warning::NPM_TOKEN is not configured; skipping @anyharness/sdk npm publish."
+            exit 0
+          fi
+          npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
