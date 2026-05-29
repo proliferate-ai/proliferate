@@ -12,13 +12,12 @@
   </tr>
 </table>
 
-<h1>
+<p>
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/readme/proliferate-logo-dark.svg" />
-    <img src="./docs/assets/readme/proliferate-logo-light.svg" width="42" height="42" alt="Proliferate logo" />
+    <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/readme/proliferate-wordmark-dark.svg" />
+    <img src="./docs/assets/readme/proliferate-wordmark-light.svg" width="340" alt="Proliferate" />
   </picture>
-  Proliferate
-</h1>
+</p>
 
 <p><strong>The Local and Cloud Agent IDE (YC S25 🔸)</strong></p>
 

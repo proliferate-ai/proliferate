@@ -1,11 +1,25 @@
 <svg width="1280" height="640" viewBox="0 0 1280 640" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
-  <rect width="1280" height="640" fill="#08090B"/>
-  <rect x="0.5" y="0.5" width="1279" height="639" stroke="#1C1D21"/>
-  <rect x="0" y="0" width="1280" height="5" fill="#9B7A35"/>
-  <g transform="translate(124 172)">
-    <rect width="296" height="296" rx="58" fill="#0B0B0D"/>
-    <rect x="1" y="1" width="294" height="294" rx="57" stroke="#2A2A2E" stroke-width="2"/>
-    <g transform="translate(60 60) scale(0.88)">
+  <rect width="1280" height="640" fill="#07080A"/>
+  <rect x="0.5" y="0.5" width="1279" height="639" stroke="#202126"/>
+  <rect x="94" y="84" width="1092" height="472" rx="32" fill="#0A0B0D"/>
+  <rect x="94.5" y="84.5" width="1091" height="471" rx="31.5" stroke="#22242A"/>
+  <g opacity="0.18">
+    <rect x="628" y="136" width="458" height="330" rx="18" stroke="#343741" stroke-width="2"/>
+    <rect x="628" y="136" width="458" height="42" rx="18" stroke="#343741" stroke-width="2"/>
+    <rect x="662" y="208" width="132" height="18" rx="4" fill="#2A2D35"/>
+    <rect x="662" y="244" width="186" height="18" rx="4" fill="#1E2128"/>
+    <rect x="662" y="280" width="154" height="18" rx="4" fill="#1E2128"/>
+    <rect x="662" y="316" width="212" height="18" rx="4" fill="#1E2128"/>
+    <rect x="900" y="204" width="152" height="46" rx="8" fill="#171A20" stroke="#2B2E36"/>
+    <rect x="900" y="270" width="152" height="46" rx="8" fill="#171A20" stroke="#2B2E36"/>
+    <rect x="900" y="336" width="152" height="46" rx="8" fill="#171A20" stroke="#2B2E36"/>
+    <path d="M638 178H1086" stroke="#24272E"/>
+    <path d="M876 178V466" stroke="#24272E"/>
+  </g>
+  <g transform="translate(154 174)">
+    <rect width="160" height="160" rx="34" fill="#0B0B0D"/>
+    <rect x="1" y="1" width="158" height="158" rx="33" stroke="#2B2D34" stroke-width="2"/>
+    <g transform="translate(28 28) scale(0.52)">
       <rect x="75" y="75" width="50" height="50" fill="#F3F1EF"/>
       <rect x="87.67" y="5" width="24.67" height="24.67" fill="#F3F1EF"/>
       <rect x="129" y="46.33" width="24.67" height="24.67" fill="#F3F1EF"/>
@@ -17,7 +31,16 @@
       <rect x="46.33" y="46.33" width="24.67" height="24.67" fill="#F3F1EF"/>
     </g>
   </g>
-  <text x="500" y="268" fill="#F7F5F1" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="84" font-weight="760" letter-spacing="0">Proliferate</text>
-  <text x="505" y="340" fill="#D9D4CC" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="34" font-weight="520" letter-spacing="0">The Local and Cloud Agent IDE</text>
-  <text x="505" y="396" fill="#A9A39A" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="30" font-weight="450" letter-spacing="0">Any agent. Any surface. Local or cloud.</text>
+  <text x="358" y="224" fill="#F8F6F1" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="76" font-weight="760" letter-spacing="0">Proliferate</text>
+  <text x="363" y="286" fill="#D8D3CB" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="34" font-weight="540" letter-spacing="0">The Local and Cloud Agent IDE</text>
+  <text x="363" y="340" fill="#A9A39A" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="28" font-weight="450" letter-spacing="0">Run any agent harness across local, cloud, web, and team workflows.</text>
+  <rect x="363" y="398" width="128" height="38" rx="19" fill="#111318" stroke="#2E3138"/>
+  <text x="387" y="424" fill="#E9E5DE" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" font-weight="560">Any agent</text>
+  <rect x="507" y="398" width="144" height="38" rx="19" fill="#111318" stroke="#2E3138"/>
+  <text x="530" y="424" fill="#E9E5DE" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" font-weight="560">Local + cloud</text>
+  <rect x="667" y="398" width="134" height="38" rx="19" fill="#111318" stroke="#2E3138"/>
+  <text x="690" y="424" fill="#E9E5DE" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" font-weight="560">Automations</text>
+  <rect x="817" y="398" width="162" height="38" rx="19" fill="#111318" stroke="#2E3138"/>
+  <text x="840" y="424" fill="#E9E5DE" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" font-weight="560">Team workflows</text>
+  <rect x="154" y="504" width="92" height="4" fill="#9B7A35"/>
 </svg>
