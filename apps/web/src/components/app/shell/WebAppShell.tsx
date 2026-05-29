@@ -167,13 +167,17 @@ function CollapsedSidebarRail({
   return (
     <aside
       aria-label="Collapsed sidebar"
-      className="hidden h-full w-12 shrink-0 flex-col border-r border-sidebar-border bg-sidebar px-1.5 py-2 text-sidebar-foreground sm:flex"
+      className="hidden h-full w-12 shrink-0 cursor-pointer flex-col border-r border-sidebar-border bg-sidebar px-1.5 py-2 text-sidebar-foreground transition-colors hover:bg-sidebar-accent/25 sm:flex"
+      onClick={onOpenSidebar}
     >
       <IconButton
         tone="sidebar"
         size="sm"
         title="Open sidebar"
-        onClick={onOpenSidebar}
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpenSidebar();
+        }}
         className="size-9 rounded-lg"
       >
         <PanelLeftOpen className="size-4" />
@@ -190,7 +194,10 @@ function CollapsedSidebarRail({
           tone="sidebar"
           size="sm"
           title="Settings"
-          onClick={onOpenSettings}
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenSettings();
+          }}
           className={`size-9 rounded-lg ${
             pathname.startsWith(routes.settings)
               ? "bg-sidebar-accent text-sidebar-accent-foreground"
@@ -218,7 +225,10 @@ function RailIconButton({ item }: { item: CollapsedRailItem }) {
       tone="sidebar"
       size="sm"
       title={item.label}
-      onClick={item.onSelect}
+      onClick={(event) => {
+        event.stopPropagation();
+        item.onSelect();
+      }}
       aria-current={item.active ? "page" : undefined}
       className={`size-9 rounded-lg ${
         item.active ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""
