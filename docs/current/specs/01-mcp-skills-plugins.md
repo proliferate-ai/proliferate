@@ -240,7 +240,7 @@ in any session create/resume contract.** Only
 `required_agent_auth_revision` exists.
 
 **Desktop session-plugin-bundle builder** in
-`desktop/src/lib/domain/plugins/session-plugin-bundle.ts` is the current
+`apps/desktop/src/lib/domain/plugins/session-plugin-bundle.ts` is the current
 runtime path. It assembles per-session bundles from applied MCP bindings.
 Spec 01 phases this out (Phase 5 — legacy cleanup).
 
@@ -1060,7 +1060,7 @@ ships this spec. No dual-path window.
 
 ```text
 Desktop:
-  desktop/src/lib/domain/plugins/session-plugin-bundle.ts          deleted
+  apps/desktop/src/lib/domain/plugins/session-plugin-bundle.ts          deleted
   callers of buildSessionPluginBundle                              rewritten
                                                                    to use
                                                                    runtime-config
@@ -1284,31 +1284,31 @@ server/openapi.json                                 regenerated
 Desktop:
 
 ```text
-desktop/src/hooks/access/cloud/mcp-connections/
+apps/desktop/src/hooks/access/cloud/mcp-connections/
   use-connectors.ts                                extend with public_*
   use-connector-mutations.ts                       optimistic public toggle
 
-desktop/src/hooks/access/cloud/skills/             (new)
+apps/desktop/src/hooks/access/cloud/skills/             (new)
   use-skills.ts, use-skill-mutations.ts
 
-desktop/src/hooks/access/cloud/runtime-config/     (new)
+apps/desktop/src/hooks/access/cloud/runtime-config/     (new)
   use-runtime-config-status.ts, use-refresh-runtime-config.ts
 
-desktop/src/lib/workflows/mcp/runtime-config-refresh.ts          (new)
-desktop/src/lib/workflows/mcp/runtime-config-resolution.ts       (new)
-desktop/src/hooks/sessions/workflows/use-session-runtime-config-preflight.ts (new)
+apps/desktop/src/lib/workflows/mcp/runtime-config-refresh.ts          (new)
+apps/desktop/src/lib/workflows/mcp/runtime-config-resolution.ts       (new)
+apps/desktop/src/hooks/sessions/workflows/use-session-runtime-config-preflight.ts (new)
 
-desktop/src/pages/PluginsPage.tsx
-desktop/src/components/plugins/catalog/*           augment rows with
+apps/desktop/src/pages/PluginsPage.tsx
+apps/desktop/src/components/plugins/catalog/*           augment rows with
   enabled, public_to_org, auth_status, runtime_apply_status badges
-desktop/src/components/plugins/detail/ConnectorDetailModal.tsx
+apps/desktop/src/components/plugins/detail/ConnectorDetailModal.tsx
   show where-used and admin publicize toggle
 
-desktop/src/lib/domain/plugins/session-plugin-bundle.ts
+apps/desktop/src/lib/domain/plugins/session-plugin-bundle.ts
   deleted in this PR
 
-desktop/src/lib/access/anyharness/runtime-config.ts              (new)
-desktop/src/lib/access/anyharness/sessions.ts
+apps/desktop/src/lib/access/anyharness/runtime-config.ts              (new)
+apps/desktop/src/lib/access/anyharness/sessions.ts
   carry expected_runtime_config_revision when known
 ```
 
@@ -1357,7 +1357,7 @@ Chunk D  Worker apply + Cloud-side preflight
   - Desktop local target preflight before optimistic session create
 
 Chunk E  Legacy removal
-  - delete desktop/src/lib/domain/plugins/session-plugin-bundle.ts
+  - delete apps/desktop/src/lib/domain/plugins/session-plugin-bundle.ts
   - delete AnyHarness PluginBundleRegistry and
     PluginSessionLaunchExtension
   - rewrite all callers of buildSessionPluginBundle to use the new
@@ -1432,7 +1432,7 @@ OAuth proactive refresh (optional follow-up after this PR)
     credentials. AnyHarness reports
     `RUNTIME_CONFIG_RESOLUTION_REQUIRED` with `resolution_request_ids`
     when fulfillment is required.
-19. `desktop/src/lib/domain/plugins/session-plugin-bundle.ts` is deleted.
+19. `apps/desktop/src/lib/domain/plugins/session-plugin-bundle.ts` is deleted.
     `plugin_bundle`, `mcp_servers`, and `mcp_binding_summaries` are
     removed from `CreateSessionRequest` / `ResumeSessionRequest` in the
     AnyHarness contract. `PluginBundleRegistry` and
@@ -1522,15 +1522,15 @@ cd cloud/sdk && pnpm run generate && pnpm run build
 Desktop:
 
 ```bash
-cd desktop && pnpm test -- --run && pnpm typecheck
+cd apps/desktop && pnpm test -- --run && pnpm typecheck
 ```
 
 Targeted Desktop tests:
 
 ```text
-desktop/src/hooks/access/cloud/mcp-connections/use-connectors.test.ts
-desktop/src/lib/workflows/mcp/runtime-config-refresh.test.ts
-desktop/src/hooks/sessions/workflows/use-session-runtime-config-preflight.test.ts
+apps/desktop/src/hooks/access/cloud/mcp-connections/use-connectors.test.ts
+apps/desktop/src/lib/workflows/mcp/runtime-config-refresh.test.ts
+apps/desktop/src/hooks/sessions/workflows/use-session-runtime-config-preflight.test.ts
 ```
 
 Manual smoke cases:

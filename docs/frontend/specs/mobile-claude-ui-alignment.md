@@ -6,8 +6,8 @@ Date: 2026-05-26
 
 Scope:
 
-- `mobile/src/**`
-- shared mobile-safe product rules in `packages/product-model/**`
+- `apps/mobile/src/**`
+- shared mobile-safe product rules in `apps/packages/product-domain/**`
 - `@proliferate/cloud-sdk` and `@proliferate/cloud-sdk-react` only where the
   UI needs a concrete backend contract
 - server/cloud APIs only when a mobile workflow is missing a real launch or
@@ -56,7 +56,7 @@ mobile app:
 - runtime location shown separately from cloud sync
 - workspace and session identity always visible
 
-Mobile must not import DOM components from `packages/product-ui`. It should
+Mobile must not import DOM components from `apps/packages/product-ui`. It should
 reuse product models, copy, ordering, config rules, and SDK hooks, then render
 native React Native UI.
 
@@ -78,17 +78,17 @@ native React Native UI.
 - Components render native UI and forward events. They should not own product
   filtering, sorting, status, icon semantics, command readiness, or launch
   orchestration.
-- Shared product decisions live in `packages/product-model/**`: workspace and
+- Shared product decisions live in `apps/packages/product-domain/**`: workspace and
   session inventory semantics, source/runtime/status/ownership labels and
   ordering, filter/sort rules, launch/config controls, transcript row
   semantics, command readiness, and pending prompt reconciliation rules.
-- Mobile derived hooks under `mobile/src/hooks/**/derived/**` adapt SDK/query
+- Mobile derived hooks under `apps/mobile/src/hooks/**/derived/**` adapt SDK/query
   state into mobile view models.
-- Mobile workflow hooks under `mobile/src/hooks/**/workflows/**`, or pure
-  helpers under `mobile/src/lib/workflows/**`, coordinate SDK mutations,
+- Mobile workflow hooks under `apps/mobile/src/hooks/**/workflows/**`, or pure
+  helpers under `apps/mobile/src/lib/workflows/**`, coordinate SDK mutations,
   pending prompt storage, cache invalidation, navigation, and errors.
-- Mobile-only pure presentation adapters live under `mobile/src/lib/domain/**`,
-  such as mapping product-model semantic tokens to `MobileIconName`.
+- Mobile-only pure presentation adapters live under `apps/mobile/src/lib/domain/**`,
+  such as mapping product-domain semantic tokens to `MobileIconName`.
 - Do not add new inline source/status/runtime string checks to screen
   components while implementing this spec.
 
@@ -122,7 +122,7 @@ Remaining backend QA before shipping the new UI:
 - Manually exercise `POST /v1/cloud/workspaces/target-launch` against a live
   Desktop target from mobile.
 - Confirm target launch failure messages are specific enough for mobile sheets.
-- Confirm source icons can be derived from shared product-model inventory
+- Confirm source icons can be derived from shared product-domain inventory
   fields without mobile-only guessing.
 
 ## Screen Spec Cards
@@ -170,7 +170,7 @@ Source icon rules:
 Implementation notes:
 
 - Use the existing `MobileDrawer`, but change nav IA and row presentation.
-- Source/runtime/status kinds come from `packages/product-model`; mapping those
+- Source/runtime/status kinds come from `apps/packages/product-domain`; mapping those
   semantic tokens to `MobileIconName` lives in a mobile presentation helper, not
   inline component conditionals.
 
@@ -230,10 +230,10 @@ Implementation notes:
   competing product routes after the migration.
 - Use `useCloudWorkspaces` plus the shared inventory model.
 - Filter option definitions, counts, grouping, sorting, source/runtime mapping,
-  and default-open/session-choice rules belong in `packages/product-model` or a
+  and default-open/session-choice rules belong in `apps/packages/product-domain` or a
   mobile derived hook, not in the screen component.
-- Implement source/runtime filters from shared product-model `sourceKind` and
-  `runtimeLocation`; extend product-model filters if needed rather than adding
+- Implement source/runtime filters from shared product-domain `sourceKind` and
+  `runtimeLocation`; extend product-domain filters if needed rather than adding
   backend-only UI guesses.
 - Keep pull-to-refresh as a later enhancement unless cheap.
 
@@ -303,7 +303,7 @@ Implementation notes:
 - Branch/display-name construction and first-prompt payload construction should
   move out of the component.
 - The launch workflow should live in a mobile workflow hook or
-  `mobile/src/lib/workflows/**`; the component calls `submit()` and renders the
+  `apps/mobile/src/lib/workflows/**`; the component calls `submit()` and renders the
   result.
 
 ### 4. Workspace Chat
@@ -361,7 +361,7 @@ Implementation notes:
 - Chat selection, optimistic prompt rows, pending prompt reconciliation, config
   mutation state, and command failure labels should move into hooks/domain
   helpers before adding more sheet/tool UI to `MobileChatScreen`.
-- Tool-call display semantics should reuse product-model transcript/tool
+- Tool-call display semantics should reuse product-domain transcript/tool
   presentation helpers. Mobile renders the native card and bottom sheet.
 
 ### 5. Three-Dot / Config Sheets
@@ -383,7 +383,7 @@ Target:
 - Nested selector states should visually match the Claude changing-config
   reference: a thin focused selector/list state for the active option family,
   not a separate full page.
-- Model and reasoning options come from shared product-model controls, not
+- Model and reasoning options come from shared product-domain controls, not
   hardcoded mobile lists.
 
 Behavior:
@@ -432,7 +432,7 @@ Target:
 ## Implementation Order
 
 1. Shared mobile work inventory semantics: source/runtime icon helpers, filter
-   vocabulary alignment, and product-model tests.
+   vocabulary alignment, and product-domain tests.
 2. Shell IA: route `work` as Workspaces, drawer rows
    Home/Automations/Workspaces/Settings, workspace-centric recents, sticky
    `New chat`, and no competing unused Workspaces route.
@@ -482,7 +482,7 @@ Target:
 - Drawer recents are workspace-centric and do not look like a separate chat
   product.
 - Every implementation PR runs `pnpm --filter @proliferate/mobile typecheck`.
-- Product-model changes run the relevant product-model tests.
+- Product-model changes run the relevant product-domain tests.
 - Manual QA uses a named profile, for example `make dev-init
   PROFILE=mobileclaude`, `make dev PROFILE=mobileclaude`, then mobile web on
   the profile's mobile port.

@@ -306,7 +306,7 @@ Useful current lines:
 
 ### Current Desktop Archive Gap
 
-`desktop/src/stores/preferences/workspace-ui-sidebar-actions.ts`
+`apps/desktop/src/stores/preferences/workspace-ui-sidebar-actions.ts`
 
 - Desktop sidebar archive currently stores ids in `archivedWorkspaceIds`
   starting at line 32.

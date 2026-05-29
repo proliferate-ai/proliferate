@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["anyharness/crates/*", "desktop/src-tauri", "desktop/src-tauri-debug"]
+members = ["anyharness/crates/*", "apps/desktop/src-tauri", "apps/desktop/src-tauri-debug"]
 
 [workspace.package]
 edition = "2021"

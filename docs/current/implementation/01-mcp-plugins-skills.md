@@ -994,52 +994,52 @@ Regenerate them from Rust contract types; do not hand-edit generated output.
 MCP connector access:
 
 ```text
-desktop/src/hooks/access/mcp/connectors/query-keys.ts
-desktop/src/hooks/access/mcp/connectors/use-connectors.ts
-desktop/src/hooks/access/mcp/connectors/use-connector-mutations.ts
+apps/desktop/src/hooks/access/mcp/connectors/query-keys.ts
+apps/desktop/src/hooks/access/mcp/connectors/use-connectors.ts
+apps/desktop/src/hooks/access/mcp/connectors/use-connector-mutations.ts
 ```
 
 MCP workflows:
 
 ```text
-desktop/src/hooks/mcp/workflows/use-connector-catalog-actions.ts
-desktop/src/hooks/mcp/workflows/use-installed-connector-actions.ts
-desktop/src/hooks/mcp/workflows/use-toggle-connector.ts
-desktop/src/lib/workflows/mcp/connector-persistence.ts
-desktop/src/lib/workflows/mcp/runtime-config-refresh.ts
-desktop/src/lib/workflows/mcp/runtime-config-resolution.ts
+apps/desktop/src/hooks/mcp/workflows/use-connector-catalog-actions.ts
+apps/desktop/src/hooks/mcp/workflows/use-installed-connector-actions.ts
+apps/desktop/src/hooks/mcp/workflows/use-toggle-connector.ts
+apps/desktop/src/lib/workflows/mcp/connector-persistence.ts
+apps/desktop/src/lib/workflows/mcp/runtime-config-refresh.ts
+apps/desktop/src/lib/workflows/mcp/runtime-config-resolution.ts
 ```
 
 Plugin and catalog UI:
 
 ```text
-desktop/src/pages/PluginsPage.tsx
-desktop/src/components/plugins/catalog/PluginsScreen.tsx
-desktop/src/components/plugins/catalog/ConnectorCatalogPage.tsx
-desktop/src/components/plugins/catalog/PluginPackageRow.tsx
-desktop/src/components/plugins/detail/ConnectorDetailModal.tsx
-desktop/src/components/plugins/detail/ConnectorToolsTab.tsx
-desktop/src/lib/domain/mcp/types.ts
-desktop/src/lib/domain/mcp/connector-catalog-view-model.ts
-desktop/src/lib/domain/plugins/plugin-package-view-model.ts
+apps/desktop/src/pages/PluginsPage.tsx
+apps/desktop/src/components/plugins/catalog/PluginsScreen.tsx
+apps/desktop/src/components/plugins/catalog/ConnectorCatalogPage.tsx
+apps/desktop/src/components/plugins/catalog/PluginPackageRow.tsx
+apps/desktop/src/components/plugins/detail/ConnectorDetailModal.tsx
+apps/desktop/src/components/plugins/detail/ConnectorToolsTab.tsx
+apps/desktop/src/lib/domain/mcp/types.ts
+apps/desktop/src/lib/domain/mcp/connector-catalog-view-model.ts
+apps/desktop/src/lib/domain/plugins/plugin-package-view-model.ts
 ```
 
 Cloud target config status:
 
 ```text
-desktop/src/hooks/access/cloud/target-configs/query-keys.ts
-desktop/src/hooks/access/cloud/target-configs/use-cloud-target-configs.ts
-desktop/src/hooks/access/cloud/target-configs/use-cloud-target-config-mutations.ts
+apps/desktop/src/hooks/access/cloud/target-configs/query-keys.ts
+apps/desktop/src/hooks/access/cloud/target-configs/use-cloud-target-configs.ts
+apps/desktop/src/hooks/access/cloud/target-configs/use-cloud-target-config-mutations.ts
 ```
 
 Session launch and retry:
 
 ```text
-desktop/src/hooks/sessions/use-session-creation-actions.ts  # transitional caller only
-desktop/src/hooks/sessions/workflows/use-session-runtime-config-preflight.ts
-desktop/src/lib/workflows/sessions/session-runtime.ts
-desktop/src/lib/access/anyharness/sessions.ts
-desktop/src/lib/access/anyharness/runtime-config.ts
+apps/desktop/src/hooks/sessions/use-session-creation-actions.ts  # transitional caller only
+apps/desktop/src/hooks/sessions/workflows/use-session-runtime-config-preflight.ts
+apps/desktop/src/lib/workflows/sessions/session-runtime.ts
+apps/desktop/src/lib/access/anyharness/sessions.ts
+apps/desktop/src/lib/access/anyharness/runtime-config.ts
 ```
 
 UI behavior:
@@ -1064,9 +1064,9 @@ UI behavior:
 Frontend access rules:
 
 - Raw Cloud helpers belong in `cloud/sdk/src/client/**`.
-- Desktop-specific Cloud setup belongs in `desktop/src/lib/access/cloud/**`.
-- React Query wrappers belong in `desktop/src/hooks/access/cloud/**`.
-- MCP connector cache stays under `desktop/src/hooks/access/mcp/connectors/**`
+- Desktop-specific Cloud setup belongs in `apps/desktop/src/lib/access/cloud/**`.
+- React Query wrappers belong in `apps/desktop/src/hooks/access/cloud/**`.
+- MCP connector cache stays under `apps/desktop/src/hooks/access/mcp/connectors/**`
   because it intentionally coordinates local/Desktop and Cloud connector state.
 
 ## API Surface
@@ -1391,7 +1391,7 @@ pnpm run build
 Desktop:
 
 ```bash
-cd desktop
+cd apps/desktop
 pnpm test -- --run
 pnpm typecheck
 ```

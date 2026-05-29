@@ -193,7 +193,7 @@ anyharness/crates/anyharness-lib/src/domains/plugins/mcp/
   mod.rs
   definition.rs
   tools.rs
-desktop/src/lib/domain/plugins/session-plugin-bundle.ts
+apps/desktop/src/lib/domain/plugins/session-plugin-bundle.ts
 ```
 
 Product prompts:
@@ -228,11 +228,11 @@ anyharness/crates/anyharness-lib/src/domains/plans/runtime.rs
 Frontend presentation:
 
 ```text
-desktop/src/components/workspace/chat/transcript/**
-desktop/src/components/workspace/reviews/**
-desktop/src/lib/domain/chat/subagents/provenance.ts
-desktop/src/lib/domain/reviews/**
-desktop/src/lib/domain/plans/**
+apps/desktop/src/components/workspace/chat/transcript/**
+apps/desktop/src/components/workspace/reviews/**
+apps/desktop/src/lib/domain/chat/subagents/provenance.ts
+apps/desktop/src/lib/domain/reviews/**
+apps/desktop/src/lib/domain/plans/**
 ```
 
 ## Acceptance

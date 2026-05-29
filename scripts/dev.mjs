@@ -516,7 +516,7 @@ function ensureProfileBound(profile, paths, worktreePath, branch) {
 }
 
 function generatedTauriConfig(profile, env) {
-  const basePath = path.join(repoRoot, "desktop", "src-tauri", "tauri.dev.json");
+  const basePath = path.join(repoRoot, "apps", "desktop", "src-tauri", "tauri.dev.json");
   const base = JSON.parse(readFileSync(basePath, "utf8"));
   const identifierSlug = profile.replaceAll("_", "-");
   const displayName = displayNameForProfile(profile);

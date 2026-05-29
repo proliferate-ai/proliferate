@@ -9,7 +9,7 @@ import re
 import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DESKTOP_SRC = REPO_ROOT / "desktop" / "src"
+DESKTOP_SRC = REPO_ROOT / "apps" / "desktop" / "src"
 ALLOWLIST_PATH = REPO_ROOT / "scripts" / "frontend_boundaries_allowlist.txt"
 EXTENSIONS = {".ts", ".tsx"}
 GENERATED_PREFIXES: set[str] = set()
@@ -98,26 +98,26 @@ def is_under(relative_path: str, prefix: str) -> bool:
 
 
 def is_tauri_access_path(relative_path: str) -> bool:
-    return is_under(relative_path, "desktop/src/lib/access/tauri/")
+    return is_under(relative_path, "apps/desktop/src/lib/access/tauri/")
 
 
 def is_anyharness_client_path(relative_path: str) -> bool:
     return (
-        is_under(relative_path, "desktop/src/lib/access/anyharness/")
-        or is_under(relative_path, "desktop/src/hooks/access/anyharness/")
+        is_under(relative_path, "apps/desktop/src/lib/access/anyharness/")
+        or is_under(relative_path, "apps/desktop/src/hooks/access/anyharness/")
     )
 
 
 def is_cloud_access_path(relative_path: str) -> bool:
-    return is_under(relative_path, "desktop/src/lib/access/cloud/")
+    return is_under(relative_path, "apps/desktop/src/lib/access/cloud/")
 
 
 def is_query_cache_owner_path(relative_path: str) -> bool:
     return (
-        is_under(relative_path, "desktop/src/hooks/access/")
-        or is_under(relative_path, "desktop/src/lib/infra/query/")
+        is_under(relative_path, "apps/desktop/src/hooks/access/")
+        or is_under(relative_path, "apps/desktop/src/lib/infra/query/")
         or (
-            is_under(relative_path, "desktop/src/hooks/")
+            is_under(relative_path, "apps/desktop/src/hooks/")
             and "/cache/" in relative_path
         )
     )
@@ -138,10 +138,10 @@ def add_if(
 def check_file(path: Path) -> list[Violation]:
     violations: list[Violation] = []
     rel = relative(path)
-    in_domain = is_under(rel, "desktop/src/lib/domain/")
-    in_workflows = is_under(rel, "desktop/src/lib/workflows/")
-    in_components = is_under(rel, "desktop/src/components/")
-    in_stores = is_under(rel, "desktop/src/stores/")
+    in_domain = is_under(rel, "apps/desktop/src/lib/domain/")
+    in_workflows = is_under(rel, "apps/desktop/src/lib/workflows/")
+    in_components = is_under(rel, "apps/desktop/src/components/")
+    in_stores = is_under(rel, "apps/desktop/src/stores/")
 
     for lineno, raw_line in enumerate(path.read_text().splitlines(), start=1):
         line = strip_line_comment(raw_line)
@@ -166,7 +166,7 @@ def check_file(path: Path) -> list[Violation]:
             "TAURI_API_OUTSIDE_ACCESS",
             path,
             lineno,
-            "Tauri API imports must stay under desktop/src/lib/access/tauri/**",
+            "Tauri API imports must stay under apps/desktop/src/lib/access/tauri/**",
         )
         add_if(
             violations,
@@ -182,7 +182,7 @@ def check_file(path: Path) -> list[Violation]:
             "CLOUD_OPENAPI_CLIENT_OUTSIDE_ACCESS",
             path,
             lineno,
-            "raw OpenAPI client verbs must stay under desktop/src/lib/access/cloud/**",
+            "raw OpenAPI client verbs must stay under apps/desktop/src/lib/access/cloud/**",
         )
         add_if(
             violations,

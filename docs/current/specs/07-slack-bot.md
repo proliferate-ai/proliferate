@@ -717,7 +717,7 @@ The page slot exists in spec 03 §5.1 as `slack-bot`, admin-only.
 Spec 07 fills the content:
 
 ```text
-desktop/src/components/settings/panes/SlackBotPane.tsx        (replace stub)
+apps/desktop/src/components/settings/panes/SlackBotPane.tsx        (replace stub)
 
 sections:
   Connection
@@ -844,15 +844,15 @@ cloud/sdk/src/types/generated.ts                                     regen
 Desktop:
 
 ```text
-desktop/src/components/settings/panes/SlackBotPane.tsx               replace stub
-desktop/src/components/settings/panes/slack/                         (new)
+apps/desktop/src/components/settings/panes/SlackBotPane.tsx               replace stub
+apps/desktop/src/components/settings/panes/slack/                         (new)
   ConnectionSection.tsx
   BotStatusSection.tsx
   SessionDefaultsSection.tsx
   RepoRoutingSection.tsx
   ChannelsSection.tsx
 
-desktop/src/hooks/access/cloud/slack/                                (new)
+apps/desktop/src/hooks/access/cloud/slack/                                (new)
   use-slack-connection.ts
   use-slack-bot-config.ts
   use-slack-bot-config-mutations.ts
@@ -1024,19 +1024,19 @@ server/tests/cloud/slack/test_no_organization_settings_table_in_v1.py
 Desktop:
 
 ```bash
-cd desktop && pnpm test -- --run && pnpm typecheck
+cd apps/desktop && pnpm test -- --run && pnpm typecheck
 ```
 
 Targeted Desktop tests:
 
 ```text
-desktop/src/components/settings/panes/SlackBotPane.test.tsx
+apps/desktop/src/components/settings/panes/SlackBotPane.test.tsx
   - admin gate
   - install button triggers oauth start
   - repo mode toggle behavior
   - allowed channels picker
-desktop/src/hooks/access/cloud/slack/use-slack-connection.test.ts
-desktop/src/hooks/access/cloud/slack/use-slack-bot-config.test.ts
+apps/desktop/src/hooks/access/cloud/slack/use-slack-connection.test.ts
+apps/desktop/src/hooks/access/cloud/slack/use-slack-bot-config.test.ts
 ```
 
 Manual smoke:

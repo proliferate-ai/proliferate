@@ -5,19 +5,19 @@ agents, and code review agents in the desktop app.
 
 Scope:
 
-- `desktop/src/components/workspace/chat/input/delegated-work/**`
-- `desktop/src/components/workspace/shell/tabs/**`
-- `desktop/src/components/workspace/reviews/**`
-- `desktop/src/components/workspace/chat/plans/**`
-- `desktop/src/hooks/chat/use-delegated-work-composer.ts`
-- `desktop/src/hooks/chat/subagents/**`
-- `desktop/src/hooks/cowork/**`
-- `desktop/src/hooks/reviews/**`
-- `desktop/src/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy.ts`
-- `desktop/src/lib/domain/delegated-work/**`
-- `desktop/src/lib/domain/chat/subagents/**`
-- `desktop/src/lib/domain/reviews/**`
-- `desktop/src/lib/domain/plans/**`
+- `apps/desktop/src/components/workspace/chat/input/delegated-work/**`
+- `apps/desktop/src/components/workspace/shell/tabs/**`
+- `apps/desktop/src/components/workspace/reviews/**`
+- `apps/desktop/src/components/workspace/chat/plans/**`
+- `apps/desktop/src/hooks/chat/use-delegated-work-composer.ts`
+- `apps/desktop/src/hooks/chat/subagents/**`
+- `apps/desktop/src/hooks/cowork/**`
+- `apps/desktop/src/hooks/reviews/**`
+- `apps/desktop/src/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy.ts`
+- `apps/desktop/src/lib/domain/delegated-work/**`
+- `apps/desktop/src/lib/domain/chat/subagents/**`
+- `apps/desktop/src/lib/domain/reviews/**`
+- `apps/desktop/src/lib/domain/plans/**`
 
 ## Product Model
 
@@ -502,70 +502,70 @@ Delete agent
 Components:
 
 ```text
-desktop/src/components/workspace/shell/tabs/
+apps/desktop/src/components/workspace/shell/tabs/
   WorkspaceTabStrip.tsx
   ChatTabWithMenu.tsx
   tab-rendering.tsx
   TabContextMenu.tsx
 
-desktop/src/components/workspace/shell/topbar/
+apps/desktop/src/components/workspace/shell/topbar/
   HeaderChatTab.tsx
 
-desktop/src/components/workspace/chat/input/delegated-work/
+apps/desktop/src/components/workspace/chat/input/delegated-work/
   DelegatedWorkComposerControl.tsx
   AgentsPopoverSubagentSection.tsx
   AgentsPopoverCoworkSection.tsx
   AgentsPopoverReviewSection.tsx
   PopoverSection.tsx
 
-desktop/src/components/workspace/reviews/**
-desktop/src/components/workspace/chat/plans/**
-desktop/src/components/workspace/chat/transcript/**
+apps/desktop/src/components/workspace/reviews/**
+apps/desktop/src/components/workspace/chat/plans/**
+apps/desktop/src/components/workspace/chat/transcript/**
 ```
 
 Hooks:
 
 ```text
-desktop/src/hooks/chat/use-delegated-work-composer.ts
-desktop/src/hooks/chat/subagents/**
-desktop/src/hooks/cowork/**
-desktop/src/hooks/reviews/**
-desktop/src/hooks/plans/**
-desktop/src/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy.ts
-desktop/src/hooks/workspaces/tabs/use-workspace-header-tabs-view-model.ts
-desktop/src/hooks/workspaces/tabs/use-header-tabs-close-actions.ts
+apps/desktop/src/hooks/chat/use-delegated-work-composer.ts
+apps/desktop/src/hooks/chat/subagents/**
+apps/desktop/src/hooks/cowork/**
+apps/desktop/src/hooks/reviews/**
+apps/desktop/src/hooks/plans/**
+apps/desktop/src/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy.ts
+apps/desktop/src/hooks/workspaces/tabs/use-workspace-header-tabs-view-model.ts
+apps/desktop/src/hooks/workspaces/tabs/use-header-tabs-close-actions.ts
 ```
 
 Pure domain logic:
 
 ```text
-desktop/src/lib/domain/delegated-work/
+apps/desktop/src/lib/domain/delegated-work/
   model.ts
   ordering.ts
   presentation.ts
   identity.ts
 
-desktop/src/lib/domain/chat/subagents/**
-desktop/src/lib/domain/chat/tools/**
-desktop/src/lib/domain/reviews/**
-desktop/src/lib/domain/plans/**
-desktop/src/lib/domain/workspaces/tabs/**
+apps/desktop/src/lib/domain/chat/subagents/**
+apps/desktop/src/lib/domain/chat/tools/**
+apps/desktop/src/lib/domain/reviews/**
+apps/desktop/src/lib/domain/plans/**
+apps/desktop/src/lib/domain/workspaces/tabs/**
 ```
 
 Access:
 
 ```text
-desktop/src/lib/access/anyharness/sessions.ts
-desktop/src/lib/access/anyharness/cowork.ts
-desktop/src/lib/access/anyharness/reviews.ts
-desktop/src/lib/access/anyharness/plans.ts
+apps/desktop/src/lib/access/anyharness/sessions.ts
+apps/desktop/src/lib/access/anyharness/cowork.ts
+apps/desktop/src/lib/access/anyharness/reviews.ts
+apps/desktop/src/lib/access/anyharness/plans.ts
 ```
 
 State:
 
 ```text
-desktop/src/stores/reviews/**
-desktop/src/stores/sessions/session-directory-store.ts
+apps/desktop/src/stores/reviews/**
+apps/desktop/src/stores/sessions/session-directory-store.ts
 ```
 
 ## Acceptance

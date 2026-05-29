@@ -19,7 +19,7 @@ publishing, or the desktop in-app update flow.
 .github/
   release.yml                # generated GitHub release-note grouping
   pull_request_template.md   # PR title, label, and verification checklist
-desktop/
+apps/desktop/
   infra/main.tf              # updater bucket, CloudFront, GitHub OIDC release role
   src-tauri/tauri.conf.json  # updater endpoint, public key, bundle config
   src/lib/access/tauri/updater.ts
@@ -47,16 +47,16 @@ vercel.json                  # web app deploy config (Vercel project proliferate
 - Cloud template releases are manually dispatched. They publish immutable
   `sha-*` tags, then move rolling `staging` and `production` tags separately.
 - Desktop versioning must stay consistent across
-  `desktop/package.json`, `desktop/src-tauri/tauri.conf.json`, and
-  `desktop/src-tauri/Cargo.toml`. The desktop release workflow enforces this on
+  `apps/desktop/package.json`, `apps/desktop/src-tauri/tauri.conf.json`, and
+  `apps/desktop/src-tauri/Cargo.toml`. The desktop release workflow enforces this on
   tagged releases.
 - Do not change updater endpoints, publish paths, or signing behavior in only
   one place. Keep these aligned:
   - `.github/workflows/release-desktop.yml`
   - `scripts/generate-desktop-installer-manifest.mjs`
   - `scripts/generate-updater-manifest.mjs`
-  - `desktop/src-tauri/tauri.conf.json`
-  - `desktop/infra/main.tf`
+  - `apps/desktop/src-tauri/tauri.conf.json`
+  - `apps/desktop/infra/main.tf`
 - The desktop updater must continue to consume signed artifacts plus
   `latest.json`. Do not add parallel ad hoc install paths.
 - Public human download links must consume installer artifacts from
@@ -199,17 +199,17 @@ Flow:
 Source of truth:
 
 - `.github/workflows/release-desktop.yml`
-- `desktop/src-tauri/tauri.conf.json`
-- `desktop/infra/main.tf`
+- `apps/desktop/src-tauri/tauri.conf.json`
+- `apps/desktop/infra/main.tf`
 - `scripts/generate-desktop-installer-manifest.mjs`
 - `scripts/generate-updater-manifest.mjs`
 
 Flow:
 
 1. Bump the desktop version in:
-   - `desktop/package.json`
-   - `desktop/src-tauri/tauri.conf.json`
-   - `desktop/src-tauri/Cargo.toml`
+   - `apps/desktop/package.json`
+   - `apps/desktop/src-tauri/tauri.conf.json`
+   - `apps/desktop/src-tauri/Cargo.toml`
 2. Commit and merge the version bump to `main`.
 3. From updated `main`, create and push a tag like `desktop-v0.1.0`. The
    workflow triggers automatically.
@@ -227,7 +227,7 @@ Flow:
    - validates version consistency on tag pushes
    - builds the AnyHarness sidecar for each desktop target
    - builds exactly one bundled agent seed for that target from
-     `desktop/src-tauri/agent-seed.inputs.json`
+     `apps/desktop/src-tauri/agent-seed.inputs.json`
    - verifies the bundled Node binary with `codesign` and `spctl` on macOS
    - regenerates and builds `@anyharness/sdk`
    - builds the frontend
@@ -254,7 +254,7 @@ Note:
   at `.app.tar.gz` archives plus signatures. Public download pages should use
   `installers.json`, which points at the user-facing DMG installers.
 - Agent seeds are target-specific Tauri resources under
-  `desktop/src-tauri/agent-seeds/`. The seed builder cleans previous generated
+  `apps/desktop/src-tauri/agent-seeds/`. The seed builder cleans previous generated
   seed files before writing the current target archive, and the workflow asserts
   that exactly one non-empty `agent-seed-*.tar.zst` plus matching `.sha256`
   exists before `pnpm tauri build`.
@@ -314,26 +314,26 @@ make release-desktop-draft DESKTOP_RELEASE_TAG=desktop-v0.1.28
 
 Source of truth:
 
-- `desktop/src-tauri/tauri.conf.json`
-- `desktop/src/lib/access/tauri/updater.ts`
-- `desktop/src/hooks/access/tauri/use-updater.ts`
-- `desktop/src/stores/updater/updater-store.ts`
-- `desktop/src/components/settings/UpdateSettings.tsx`
-- `desktop/src/components/feedback/UpdateBanner.tsx`
+- `apps/desktop/src-tauri/tauri.conf.json`
+- `apps/desktop/src/lib/access/tauri/updater.ts`
+- `apps/desktop/src/hooks/access/tauri/use-updater.ts`
+- `apps/desktop/src/stores/updater/updater-store.ts`
+- `apps/desktop/src/components/settings/UpdateSettings.tsx`
+- `apps/desktop/src/components/feedback/UpdateBanner.tsx`
 
 Flow:
 
-1. Tauri reads the updater endpoint from `desktop/src-tauri/tauri.conf.json`.
+1. Tauri reads the updater endpoint from `apps/desktop/src-tauri/tauri.conf.json`.
 2. The packaged app checks `https://downloads.proliferate.com/desktop/stable/latest.json`.
-3. `desktop/src/lib/access/tauri/updater.ts` is the only frontend wrapper around
+3. `apps/desktop/src/lib/access/tauri/updater.ts` is the only frontend wrapper around
    `@tauri-apps/plugin-updater` and relaunch behavior.
-4. `desktop/src/hooks/access/tauri/use-updater.ts` owns the UI-facing updater flow:
+4. `apps/desktop/src/hooks/access/tauri/use-updater.ts` owns the UI-facing updater flow:
    - initial delayed check
    - six-hour polling
    - download progress
    - install and relaunch
    - telemetry/error capture
-5. `desktop/src/stores/updater/updater-store.ts` owns local updater UI state and
+5. `apps/desktop/src/stores/updater/updater-store.ts` owns local updater UI state and
    the persisted `lastCheckedAt` timestamp.
 6. `UpdateSettings.tsx` and `UpdateBanner.tsx` are the user-facing entrypoints.
 
@@ -451,12 +451,12 @@ Current boundary:
 | Cloud template smoke test | `scripts/smoke-cloud-template.mjs` |
 | Cloud template rolling-tag promotion | `scripts/promote-cloud-template.mjs` |
 | Updater manifest format | `scripts/generate-updater-manifest.mjs` |
-| Updater endpoint and signing public key | `desktop/src-tauri/tauri.conf.json` |
-| Frontend updater platform wrapper | `desktop/src/lib/access/tauri/updater.ts` |
-| Frontend updater orchestration | `desktop/src/hooks/access/tauri/use-updater.ts` |
-| Frontend updater local state | `desktop/src/stores/updater/updater-store.ts` |
-| Frontend updater UI surfaces | `desktop/src/components/settings/UpdateSettings.tsx`, `desktop/src/components/feedback/UpdateBanner.tsx` |
-| Desktop updater infra and publish permissions | `desktop/infra/main.tf` |
+| Updater endpoint and signing public key | `apps/desktop/src-tauri/tauri.conf.json` |
+| Frontend updater platform wrapper | `apps/desktop/src/lib/access/tauri/updater.ts` |
+| Frontend updater orchestration | `apps/desktop/src/hooks/access/tauri/use-updater.ts` |
+| Frontend updater local state | `apps/desktop/src/stores/updater/updater-store.ts` |
+| Frontend updater UI surfaces | `apps/desktop/src/components/settings/UpdateSettings.tsx`, `apps/desktop/src/components/feedback/UpdateBanner.tsx` |
+| Desktop updater infra and publish permissions | `apps/desktop/infra/main.tf` |
 | Cloud API infra | `server/infra/main.tf` |
 | Self-hosted production deploy | `server/deploy/**` |
 | Hosted web app | Vercel project `proliferate-web` (team `getonyx`), serving `https://web.proliferate.com/`. Build config: `vercel.json` + `.vercelignore` at repo root. PR previews auto-created via Vercel's GitHub integration. |

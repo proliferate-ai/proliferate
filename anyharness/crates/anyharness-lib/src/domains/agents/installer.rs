@@ -8,7 +8,9 @@ use super::readiness::resolver::artifact_root;
 use super::registry::built_in_registry;
 use super::seed;
 use crate::integrations::agent_cli::acp_registry::{self, ResolvedRegistryDistribution};
-use crate::integrations::agent_cli::executable::{is_valid_executable, make_executable};
+use crate::integrations::agent_cli::executable::{
+    find_in_path, is_valid_executable, make_executable,
+};
 use crate::integrations::agent_cli::launcher::{generate_launcher_script, LauncherError};
 use uuid::Uuid;
 
@@ -217,6 +219,19 @@ fn install_native_artifact(
 
     if is_valid_executable(&target_path) && !options.reinstall {
         return Ok(None);
+    }
+
+    if !options.reinstall {
+        if let Some(path_binary) =
+            find_in_path(kind.as_str()).filter(|path| is_valid_executable(path))
+        {
+            tracing::info!(
+                agent = kind.as_str(),
+                path = %path_binary.display(),
+                "skipping managed native install because native CLI is already available on PATH"
+            );
+            return Ok(None);
+        }
     }
 
     std::fs::create_dir_all(&managed_dir)?;
@@ -1201,6 +1216,33 @@ mod tests {
     use std::fs;
     use url::Url;
 
+    struct PathEnvGuard {
+        original: Option<std::ffi::OsString>,
+    }
+
+    impl PathEnvGuard {
+        fn prepend(path: &Path) -> Self {
+            let original = std::env::var_os("PATH");
+            let mut paths = vec![path.to_path_buf()];
+            if let Some(original_path) = &original {
+                paths.extend(std::env::split_paths(original_path));
+            }
+            let joined = std::env::join_paths(paths).expect("join PATH");
+            std::env::set_var("PATH", joined);
+            Self { original }
+        }
+    }
+
+    impl Drop for PathEnvGuard {
+        fn drop(&mut self) {
+            if let Some(original) = &self.original {
+                std::env::set_var("PATH", original);
+            } else {
+                std::env::remove_var("PATH");
+            }
+        }
+    }
+
     #[test]
     fn direct_managed_npm_agent_processes_are_installable() {
         let install = AgentProcessInstallSpec::ManagedNpmPackage {
@@ -1211,6 +1253,41 @@ mod tests {
         };
 
         assert!(is_agent_process_installable(&install));
+    }
+
+    #[test]
+    fn native_install_skips_managed_download_when_cli_is_on_path() {
+        let runtime_home = TempDirGuard::new("native-path-runtime").expect("runtime dir");
+        let path_dir = TempDirGuard::new("native-path-bin").expect("path dir");
+        let binary_path = path_dir.path().join("claude");
+        fs::write(&binary_path, "#!/bin/sh\nexit 0\n").expect("write path binary");
+        make_executable(&binary_path).expect("make path binary executable");
+        let _path_guard = PathEnvGuard::prepend(path_dir.path());
+        let platform = Platform::detect().expect("supported test platform");
+        let spec = NativeArtifactSpec {
+            install: NativeInstallSpec::DirectBinary {
+                latest_version_url: None,
+                binary_url_template: "https://example.invalid/{version}/{platform}/claude".into(),
+                platform_map: vec![(platform, "test-platform".into())],
+            },
+        };
+
+        let result = install_native_artifact(
+            &spec,
+            &AgentKind::Claude,
+            runtime_home.path(),
+            &InstallOptions::default(),
+        )
+        .expect("PATH binary should skip managed native install");
+
+        assert!(result.is_none());
+        assert!(!artifact_root(
+            runtime_home.path(),
+            &AgentKind::Claude,
+            &ArtifactRole::NativeCli
+        )
+        .join("claude")
+        .exists());
     }
 
     #[test]

@@ -107,7 +107,7 @@ Recommended UI split:
 The desktop app only injects a fixed allowlist of keychain-backed env vars into
 the AnyHarness sidecar launch env.
 
-Current allowlist in `desktop/src-tauri/src/commands/keychain.rs`:
+Current allowlist in `apps/desktop/src-tauri/src/commands/keychain.rs`:
 
 - `ANTHROPIC_API_KEY`
 - `OPENAI_API_KEY`

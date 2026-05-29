@@ -1,0 +1,263 @@
+{
+  "name": "@proliferate/product-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./account/AccountIdentityCard": {
+      "types": "./dist/account/AccountIdentityCard.d.ts",
+      "import": "./dist/account/AccountIdentityCard.js"
+    },
+    "./account/ConnectedProviderRow": {
+      "types": "./dist/account/ConnectedProviderRow.d.ts",
+      "import": "./dist/account/ConnectedProviderRow.js"
+    },
+    "./account/AccountSettingsPane": {
+      "types": "./dist/account/AccountSettingsPane.d.ts",
+      "import": "./dist/account/AccountSettingsPane.js"
+    },
+    "./auth/AuthLayout": {
+      "types": "./dist/auth/AuthLayout.d.ts",
+      "import": "./dist/auth/AuthLayout.js"
+    },
+    "./auth/AuthProviderButton": {
+      "types": "./dist/auth/AuthProviderButton.d.ts",
+      "import": "./dist/auth/AuthProviderButton.js"
+    },
+    "./auth/ConnectGitHubPanel": {
+      "types": "./dist/auth/ConnectGitHubPanel.d.ts",
+      "import": "./dist/auth/ConnectGitHubPanel.js"
+    },
+    "./auth/AuthStartPanel": {
+      "types": "./dist/auth/AuthStartPanel.d.ts",
+      "import": "./dist/auth/AuthStartPanel.js"
+    },
+    "./auth/ConnectGitHubRequiredPanel": {
+      "types": "./dist/auth/ConnectGitHubRequiredPanel.d.ts",
+      "import": "./dist/auth/ConnectGitHubRequiredPanel.js"
+    },
+    "./auth/GoogleGlyph": {
+      "types": "./dist/auth/GoogleGlyph.d.ts",
+      "import": "./dist/auth/GoogleGlyph.js"
+    },
+    "./auth/ProviderBrandIcon": {
+      "types": "./dist/auth/ProviderBrandIcon.d.ts",
+      "import": "./dist/auth/ProviderBrandIcon.js"
+    },
+    "./auth/LegalLinks": {
+      "types": "./dist/auth/LegalLinks.d.ts",
+      "import": "./dist/auth/LegalLinks.js"
+    },
+    "./auth/RedirectCallbackScreen": {
+      "types": "./dist/auth/RedirectCallbackScreen.d.ts",
+      "import": "./dist/auth/RedirectCallbackScreen.js"
+    },
+    "./automations/AutomationCreatePanel": {
+      "types": "./dist/automations/AutomationCreatePanel.d.ts",
+      "import": "./dist/automations/AutomationCreatePanel.js"
+    },
+    "./automations/AutomationDetailSurface": {
+      "types": "./dist/automations/AutomationDetailSurface.d.ts",
+      "import": "./dist/automations/AutomationDetailSurface.js"
+    },
+    "./automations/AutomationCalendarView": {
+      "types": "./dist/automations/AutomationCalendarView.d.ts",
+      "import": "./dist/automations/AutomationCalendarView.js"
+    },
+    "./automations/AutomationInventoryList": {
+      "types": "./dist/automations/AutomationInventoryList.d.ts",
+      "import": "./dist/automations/AutomationInventoryList.js"
+    },
+    "./automations/AutomationRunsList": {
+      "types": "./dist/automations/AutomationRunsList.d.ts",
+      "import": "./dist/automations/AutomationRunsList.js"
+    },
+    "./automations/AutomationStatusGlyph": {
+      "types": "./dist/automations/AutomationStatusGlyph.d.ts",
+      "import": "./dist/automations/AutomationStatusGlyph.js"
+    },
+    "./automations/AutomationSurface": {
+      "types": "./dist/automations/AutomationSurface.d.ts",
+      "import": "./dist/automations/AutomationSurface.js"
+    },
+    "./billing/BillingSettingsPane": {
+      "types": "./dist/billing/BillingSettingsPane.d.ts",
+      "import": "./dist/billing/BillingSettingsPane.js"
+    },
+    "./brand/ProliferateMark": {
+      "types": "./dist/brand/ProliferateMark.d.ts",
+      "import": "./dist/brand/ProliferateMark.js"
+    },
+    "./chat/ClaimBanner": {
+      "types": "./dist/chat/ClaimBanner.d.ts",
+      "import": "./dist/chat/ClaimBanner.js"
+    },
+    "./chat/ChatPreviewSurface": {
+      "types": "./dist/chat/ChatPreviewSurface.d.ts",
+      "import": "./dist/chat/ChatPreviewSurface.js"
+    },
+    "./chat/CloudChatComposer": {
+      "types": "./dist/chat/CloudChatComposer.d.ts",
+      "import": "./dist/chat/CloudChatComposer.js"
+    },
+    "./chat/CloudChatSurface": {
+      "types": "./dist/chat/CloudChatSurface.d.ts",
+      "import": "./dist/chat/CloudChatSurface.js"
+    },
+    "./chat/CloudChatTranscript": {
+      "types": "./dist/chat/CloudChatTranscript.d.ts",
+      "import": "./dist/chat/CloudChatTranscript.js"
+    },
+    "./chat/composer/ChatComposerSurface": {
+      "types": "./dist/chat/composer/ChatComposerSurface.d.ts",
+      "import": "./dist/chat/composer/ChatComposerSurface.js"
+    },
+    "./chat/composer/ChatComposerControlRowFrame": {
+      "types": "./dist/chat/composer/ChatComposerControlRowFrame.d.ts",
+      "import": "./dist/chat/composer/ChatComposerControlRowFrame.js"
+    },
+    "./chat/composer/ComposerActionButton": {
+      "types": "./dist/chat/composer/ComposerActionButton.d.ts",
+      "import": "./dist/chat/composer/ComposerActionButton.js"
+    },
+    "./chat/composer/ComposerControlButton": {
+      "types": "./dist/chat/composer/ComposerControlButton.d.ts",
+      "import": "./dist/chat/composer/ComposerControlButton.js"
+    },
+    "./chat/composer/ComposerPopoverSurface": {
+      "types": "./dist/chat/composer/ComposerPopoverSurface.d.ts",
+      "import": "./dist/chat/composer/ComposerPopoverSurface.js"
+    },
+    "./chat/composer/ComposerTextarea": {
+      "types": "./dist/chat/composer/ComposerTextarea.d.ts",
+      "import": "./dist/chat/composer/ComposerTextarea.js"
+    },
+    "./chat/composer/ComposerTextareaFrame": {
+      "types": "./dist/chat/composer/ComposerTextareaFrame.d.ts",
+      "import": "./dist/chat/composer/ComposerTextareaFrame.js"
+    },
+    "./chat/session-controls/SessionControlIcon": {
+      "types": "./dist/chat/session-controls/SessionControlIcon.d.ts",
+      "import": "./dist/chat/session-controls/SessionControlIcon.js"
+    },
+    "./chat/transcript/AssistantMessage": {
+      "types": "./dist/chat/transcript/AssistantMessage.d.ts",
+      "import": "./dist/chat/transcript/AssistantMessage.js"
+    },
+    "./chat/transcript/CopyMessageButton": {
+      "types": "./dist/chat/transcript/CopyMessageButton.d.ts",
+      "import": "./dist/chat/transcript/CopyMessageButton.js"
+    },
+    "./feedback/LoadingState": {
+      "types": "./dist/feedback/LoadingState.d.ts",
+      "import": "./dist/feedback/LoadingState.js"
+    },
+    "./layout/ProductNotice": {
+      "types": "./dist/layout/ProductNotice.d.ts",
+      "import": "./dist/layout/ProductNotice.js"
+    },
+    "./layout/ProductPageShell": {
+      "types": "./dist/layout/ProductPageShell.d.ts",
+      "import": "./dist/layout/ProductPageShell.js"
+    },
+    "./plugins/PluginAccessList": {
+      "types": "./dist/plugins/PluginAccessList.d.ts",
+      "import": "./dist/plugins/PluginAccessList.js"
+    },
+    "./popover/PopoverMenuItem": {
+      "types": "./dist/popover/PopoverMenuItem.d.ts",
+      "import": "./dist/popover/PopoverMenuItem.js"
+    },
+    "./settings/SettingsCard": {
+      "types": "./dist/settings/SettingsCard.d.ts",
+      "import": "./dist/settings/SettingsCard.js"
+    },
+    "./settings/SettingsCardRow": {
+      "types": "./dist/settings/SettingsCardRow.d.ts",
+      "import": "./dist/settings/SettingsCardRow.js"
+    },
+    "./settings/SettingsPageHeader": {
+      "types": "./dist/settings/SettingsPageHeader.d.ts",
+      "import": "./dist/settings/SettingsPageHeader.js"
+    },
+    "./settings/SettingsShell": {
+      "types": "./dist/settings/SettingsShell.d.ts",
+      "import": "./dist/settings/SettingsShell.js"
+    },
+    "./sidebar/ProductSidebar": {
+      "types": "./dist/sidebar/ProductSidebar.d.ts",
+      "import": "./dist/sidebar/ProductSidebar.js"
+    },
+    "./new-chat/NewChatSurface": {
+      "types": "./dist/new-chat/NewChatSurface.d.ts",
+      "import": "./dist/new-chat/NewChatSurface.js"
+    },
+    "./repos/AddCloudRepoDialog": {
+      "types": "./dist/repos/AddCloudRepoDialog.d.ts",
+      "import": "./dist/repos/AddCloudRepoDialog.js"
+    },
+    "./environments/AddCloudEnvironmentDialog": {
+      "types": "./dist/environments/AddCloudEnvironmentDialog.d.ts",
+      "import": "./dist/environments/AddCloudEnvironmentDialog.js"
+    },
+    "./environments/CloudEnvironmentList": {
+      "types": "./dist/environments/CloudEnvironmentList.d.ts",
+      "import": "./dist/environments/CloudEnvironmentList.js"
+    },
+    "./environments/CloudEnvironmentEditor": {
+      "types": "./dist/environments/CloudEnvironmentEditor.d.ts",
+      "import": "./dist/environments/CloudEnvironmentEditor.js"
+    },
+    "./workspaces/WorkspaceRow": {
+      "types": "./dist/workspaces/WorkspaceRow.d.ts",
+      "import": "./dist/workspaces/WorkspaceRow.js"
+    },
+    "./workspaces/CloudWorkspaceList": {
+      "types": "./dist/workspaces/CloudWorkspaceList.d.ts",
+      "import": "./dist/workspaces/CloudWorkspaceList.js"
+    },
+    "./workspaces/WorkspaceInventory": {
+      "types": "./dist/workspaces/WorkspaceInventory.d.ts",
+      "import": "./dist/workspaces/WorkspaceInventory.js"
+    },
+    "./workspaces/WorkspacesSurface": {
+      "types": "./dist/workspaces/WorkspacesSurface.d.ts",
+      "import": "./dist/workspaces/WorkspacesSurface.js"
+    },
+    "./support/SupportSurface": {
+      "types": "./dist/support/SupportSurface.d.ts",
+      "import": "./dist/support/SupportSurface.js"
+    }
+  },
+  "scripts": {
+    "build": "pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json",
+    "typecheck": "pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json --noEmit",
+    "test": "pnpm --filter @proliferate/product-domain build && vitest run"
+  },
+  "dependencies": {
+    "@proliferate/product-domain": "workspace:*",
+    "@proliferate/ui": "workspace:*",
+    "lucide-react": "^0.468.0",
+    "react-markdown": "^9",
+    "remark-gfm": "^4",
+    "tailwind-merge": "^3.5.0"
+  },
+  "peerDependencies": {
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.0",
+    "@types/react-dom": "~19.1.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
+    "jsdom": "^29.1.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "typescript": "^5.7",
+    "vitest": "^3.2.4"
+  }
+}

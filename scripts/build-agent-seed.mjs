@@ -21,8 +21,8 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import { spawnSync } from "node:child_process";
 
 const REPO_ROOT = resolve(new URL("..", import.meta.url).pathname);
-const DEFAULT_INPUTS = join(REPO_ROOT, "desktop/src-tauri/agent-seed.inputs.json");
-const DEFAULT_OUTPUT_DIR = join(REPO_ROOT, "desktop/src-tauri/agent-seeds");
+const DEFAULT_INPUTS = join(REPO_ROOT, "apps/desktop/src-tauri/agent-seed.inputs.json");
+const DEFAULT_OUTPUT_DIR = join(REPO_ROOT, "apps/desktop/src-tauri/agent-seeds");
 
 const args = parseArgs(process.argv.slice(2));
 const target = requireArg(args.target, "--target");
@@ -31,7 +31,7 @@ const inputsPath = resolve(args.inputs ?? DEFAULT_INPUTS);
 const runtimeHome = resolve(args.runtimeHome ?? mkdtempSync(join(tmpdir(), `agent-seed-${target}-`)));
 const anyharnessBin = resolve(args.anyharnessBin ?? join(REPO_ROOT, "target/release/anyharness"));
 const inputs = JSON.parse(readFileSync(inputsPath, "utf8"));
-const desktopPackage = JSON.parse(readFileSync(join(REPO_ROOT, "desktop/package.json"), "utf8"));
+const desktopPackage = JSON.parse(readFileSync(join(REPO_ROOT, "apps/desktop/package.json"), "utf8"));
 const nodeTarget = inputs.node?.targets?.[target];
 
 if (!nodeTarget) {

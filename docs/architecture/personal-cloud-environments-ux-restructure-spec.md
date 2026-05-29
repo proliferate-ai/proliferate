@@ -140,7 +140,7 @@ Public search is not a V1 tab. The catalog is based on the connected GitHub
 grant, and manual entry still requires GitHub access plus write-capable
 permission.
 
-Blocked rows and manual validation use shared product-model helpers:
+Blocked rows and manual validation use shared product-domain helpers:
 
 ```text
 archived repo      -> blocked
@@ -182,7 +182,7 @@ env vars, setup script, run command, and tracked files.
 
 ## Shared Packages
 
-`@proliferate/product-model` owns pure planning and projection:
+`@proliferate/product-domain` owns pure planning and projection:
 
 - `repos/repo-id`
 - `environments/cloud-environments`

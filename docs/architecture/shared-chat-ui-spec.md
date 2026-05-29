@@ -2,7 +2,7 @@
 
 Status: proposed migration spec. Not yet authoritative. Three foundational
 decisions are resolved (see [§13](#13-open-decisions)): the shared components
-live in `packages/product-ui/chat/**`; the Cloud projection is extended by an
+live in `apps/packages/product-ui/chat/**`; the Cloud projection is extended by an
 owned prerequisite phase; mobile is out of scope. Once accepted, update the
 file paths in `docs/frontend/specs/chat-transcript.md` and
 `docs/frontend/specs/chat-composer.md`.
@@ -14,13 +14,13 @@ building the Web chat surface.
 
 Render the chat transcript and the chat composer with **the same React
 components** on Desktop and Web. Today Desktop has a rich chat surface
-(~141 files, ~18k lines under `desktop/src/components/workspace/chat/`) and Web
-has a hand-rolled placeholder (`web/src/components/chat/screen/ChatScreen.tsx`)
+(~141 files, ~18k lines under `apps/desktop/src/components/workspace/chat/`) and Web
+has a hand-rolled placeholder (`apps/web/src/components/chat/screen/ChatScreen.tsx`)
 that renders transcript items as flat `role + text` cards.
 
 This is the flagship instance of an existing repo rule
 (`docs/frontend/guides/components.md`): Web product surfaces are controllers
-over `packages/product-ui/**`; Desktop keeps its controller (stores, hooks,
+over `apps/packages/product-ui/**`; Desktop keeps its controller (stores, hooks,
 AnyHarness/Tauri/cloud access). The chat surface is the largest surface still
 violating that rule.
 
@@ -30,10 +30,10 @@ In scope: sharing the chat transcript and composer between Desktop and Web.
 
 Non-goals:
 
-- **Mobile.** `mobile/` is React Native / Expo — no DOM. It cannot consume
-  `packages/product-ui` (a `react-dom` package) and keeps its own
+- **Mobile.** `apps/mobile/` is React Native / Expo — no DOM. It cannot consume
+  `apps/packages/product-ui` (a `react-dom` package) and keeps its own
   `MobileChatScreen` and Cloud-transport chat implementation. If mobile chat
-  reuse is revisited later, the `packages/product-model/src/chats/**` layer
+  reuse is revisited later, the `apps/packages/product-domain/src/chats/**` layer
   (pure adapter + view models, no DOM) is the natural reuse seam — so this spec
   keeps that layer DOM-free, but does not design for mobile.
 - **Token-by-token streaming on Web.** See [§7](#7-known-fidelity-gaps).
@@ -114,10 +114,10 @@ Four layers. The middle two are shared; the outer two are per-client.
 
 | Layer | Location | Owns | Must NOT contain |
 | --- | --- | --- | --- |
-| Pure chat logic | `packages/product-model/src/chats/**` | view models, row/display-block builders, the dock-slot arbiter, tool-output parsers, the transport-neutral `envelope → TranscriptState` helper, the stream-batch scheduler | React, stores, transport, DOM APIs |
-| Presentational chat UI | `packages/product-ui/src/chat/**` | transcript rows, tool-call rows, content renderers, composer surface, dock, cards | stores, desktop/web hooks, `lib/access`, Tauri, react-router, react-query, analytics calls |
-| Desktop controller | `desktop/src/components/workspace/chat/**` | wires AnyHarness store/hooks/access into the shared UI | shared visual rows/cards |
-| Web controller | `web/src/components/chat/**` + `web/src/lib/access/cloud/**` | wires Cloud live-stream + command queue into the shared UI | shared visual rows/cards |
+| Pure chat logic | `apps/packages/product-domain/src/chats/**` | view models, row/display-block builders, the dock-slot arbiter, tool-output parsers, the transport-neutral `envelope → TranscriptState` helper, the stream-batch scheduler | React, stores, transport, DOM APIs |
+| Presentational chat UI | `apps/packages/product-ui/src/chat/**` | transcript rows, tool-call rows, content renderers, composer surface, dock, cards | stores, desktop/web hooks, `lib/access`, Tauri, react-router, react-query, analytics calls |
+| Desktop controller | `apps/desktop/src/components/workspace/chat/**` | wires AnyHarness store/hooks/access into the shared UI | shared visual rows/cards |
+| Web controller | `apps/web/src/components/chat/**` + `apps/web/src/lib/access/cloud/**` | wires Cloud live-stream + command queue into the shared UI | shared visual rows/cards |
 
 **Stripping coupling is mechanical.** Every desktop-only import in a moved
 component (`@/stores/**`, `@/hooks/**`, `@/lib/access/**`, Tauri, react-router,
@@ -144,7 +144,7 @@ history paging stay per-controller because they are transport-specific.
 Phase 0 finalizes exact props. Illustrative shapes:
 
 ```ts
-// packages/product-ui/src/chat/transcript/ChatTranscriptView.tsx
+// apps/packages/product-ui/src/chat/transcript/ChatTranscriptView.tsx
 interface ChatTranscriptViewProps {
   transcript: TranscriptState;          // from @anyharness/sdk
   pendingPrompts: PendingPromptEntry[]; // controller-owned (Web sources from command status)
@@ -164,7 +164,7 @@ force Web to rebuild every one of them, which is the exact duplication this spec
 exists to remove.
 
 ```ts
-// packages/product-model/src/chats/composer/resolve-dock-slots.ts  (pure)
+// apps/packages/product-domain/src/chats/composer/resolve-dock-slots.ts  (pure)
 function resolveComposerDockSlots(inputs: ComposerDockInputs): ComposerDockView;
 
 interface ComposerDockView {
@@ -176,7 +176,7 @@ interface ComposerDockView {
   footer: MobilityFooterView | null;
 }
 
-// packages/product-ui/src/chat/composer/ChatComposer.tsx
+// apps/packages/product-ui/src/chat/composer/ChatComposer.tsx
 interface ChatComposerProps {
   draft: ComposerDraft;
   onDraftChange(next: ComposerDraft): void;
@@ -212,7 +212,7 @@ shared components never branch on transport:
 2. **Raw tool I/O.** `rawInput`/`rawOutput` are stripped on the Cloud path;
    `contentParts` are preserved. Shared tool renderers prefer `contentParts` and
    degrade gracefully (summary, no raw dump). The parsers in
-   `product-model/chats/tools/**` own that fallback.
+   `product-domain/chats/tools/**` own that fallback.
 3. **Async submission.** Submission is a callback; only the controller differs.
 
 ## 8. Component disposition
@@ -232,17 +232,17 @@ Initial classification (validate while migrating).
   hooks → props/context); `VirtualizedTranscriptRowList` (move
   `@tanstack/react-virtual` into the shared package); `ComposerCommandEditor`
   (slash-command menu injected).
-- **Controller-only.** `ChatView`, `ChatInput` stay in `desktop/src/**` and
+- **Controller-only.** `ChatView`, `ChatInput` stay in `apps/desktop/src/**` and
   shrink to wiring once the dock is data-driven (§6).
 
 ## 9. Target file layout
 
 ```text
-packages/product-model/src/chats/
+apps/packages/product-domain/src/chats/
   transcript/
     envelope-to-state.ts          # transport-neutral SessionEventEnvelope[] -> TranscriptState
     stream-batcher.ts             # shared per-frame batch/flush scheduler (raf injected, pure)
-    transcript-row-model.ts       # moved from desktop/src/lib/domain/chat/transcript/
+    transcript-row-model.ts       # moved from apps/desktop/src/lib/domain/chat/transcript/
     transcript-presentation.ts    # moved (buildTranscriptDisplayBlocks)
     transcript-rendering.ts       # moved
   composer/
@@ -250,31 +250,31 @@ packages/product-model/src/chats/
   tools/
     <tool>-presentation.ts        # moved pure tool-output parsers
 
-packages/product-ui/src/chat/
+apps/packages/product-ui/src/chat/
   transcript/ ChatTranscriptView.tsx, TranscriptTurnRow.tsx, AssistantMessage.tsx, ...
   tool-calls/ <Tool>Row.tsx
   content/    PromptContentRenderer.tsx, ...
   composer/   ChatComposer.tsx, ChatComposerDock.tsx, ApprovalCard.tsx, ...
 
-packages/ui/src/        # prerequisite moves
-  content/MarkdownRenderer.tsx    # moved from desktop/src/components/ui/content/
+apps/packages/ui/src/        # prerequisite moves
+  content/MarkdownRenderer.tsx    # moved from apps/desktop/src/components/ui/content/
   ...                             # debug-profiler shim (no-op default)
-packages/design/        # load-bearing chat tokens move into the generated theme
+apps/packages/design/        # load-bearing chat tokens move into the generated theme
 
-web/src/lib/access/cloud/
+apps/web/src/lib/access/cloud/
   chat-transcript-adapter.ts      # transport-shaped: Cloud rows/patches -> SessionEventEnvelope[]
-desktop/src/components/workspace/chat/  # AnyHarness controllers (ChatView, ChatInput, ...)
-web/src/components/chat/                # Cloud controllers
+apps/desktop/src/components/workspace/chat/  # AnyHarness controllers (ChatView, ChatInput, ...)
+apps/web/src/components/chat/                # Cloud controllers
 ```
 
 The Cloud→`TranscriptState` adapter is **transport-shaped** (it knows cloud
 event-page and live-patch semantics), so it lives in
-`web/src/lib/access/cloud/**`, not `product-model`. It collects retained
+`apps/web/src/lib/access/cloud/**`, not `product-domain`. It collects retained
 `envelope` values from `/events` pages and live patches, sorts by `seq`, and
-calls the transport-neutral `product-model` `envelope-to-state` helper. It only
+calls the transport-neutral `product-domain` `envelope-to-state` helper. It only
 reconstructs envelopes from projection rows for legacy/fallback data.
 
-`packages/product-ui` gains `@proliferate/product-model`, `@anyharness/sdk`, and
+`apps/packages/product-ui` gains `@proliferate/product-domain`, `@anyharness/sdk`, and
 `@tanstack/react-virtual` as dependencies. The package's concrete subpath
 exports mean an `auth`-only or `settings`-only consumer still tree-shakes chat
 out of its bundle; the cost is install-time deps, accepted per
@@ -295,16 +295,16 @@ lands in Phase 5. Phase 0.5 is a parallel server track that gates Phase 5.
   `server/proliferate/server/cloud/events/**`.
 - **Phase 1 — Shared foundations.** Move view models, the dock-slot arbiter,
   tool parsers, the transport-neutral `envelope-to-state` helper, and the
-  stream-batch scheduler into `product-model/chats`. Promote load-bearing chat
-  tokens into `packages/design`. Move `MarkdownRenderer` + a debug-profiler
-  shim into `packages/ui`. Tests move with their code.
+  stream-batch scheduler into `product-domain/chats`. Promote load-bearing chat
+  tokens into `apps/packages/design`. Move `MarkdownRenderer` + a debug-profiler
+  shim into `apps/packages/ui`. Tests move with their code.
 - **Phase 2 — Leaf components → `product-ui/chat`.** Desktop re-points imports.
 - **Phase 3 — Split transcript.** Extract `ChatTranscriptView`; Desktop
   `MessageList` becomes a connected controller.
 - **Phase 4 — Split composer.** Extract `ChatComposer` + data-driven dock;
   Desktop `ChatInput` becomes a connected controller.
 - **Phase 5 — Web controllers.** Build the Cloud adapter
-  (`web/src/lib/access/cloud/`) and the Web chat controllers feeding the shared
+  (`apps/web/src/lib/access/cloud/`) and the Web chat controllers feeding the shared
   components. Land **behind a feature flag**; the old `ChatScreen` stays until
   the new path is validated.
 - **Phase 6 — Cleanup.** Remove the flag and dead Web primitives, update the
@@ -317,27 +317,27 @@ Phase 1 starts.
 ## 11. Cross-cutting concerns
 
 - **Theming tokens.** `--text-chat` and `--text-chat--line-height` are
-  generated from `packages/design/src/tokens.ts`; `vertical-scroll-fade-mask`
-  and `--edge-fade-distance` live in `packages/design/src/dom.css`. Shared
+  generated from `apps/packages/design/src/tokens.ts`; `vertical-scroll-fade-mask`
+  and `--edge-fade-distance` live in `apps/packages/design/src/dom.css`. Shared
   components must use those shared sources, and `chat-transcript.md`'s
   pinned-value table points there.
 - **Telemetry & privacy.** Masking attributes stay in shared JSX (§5).
   `trackProductEvent` analytics calls stay in controllers. Error boundaries are
   a controller responsibility (`telemetry.md` exempts them from the no-telemetry
   rule).
-- **Stream-batch invariant.** Owned by `product-model/.../stream-batcher.ts`;
+- **Stream-batch invariant.** Owned by `product-domain/.../stream-batcher.ts`;
   `chat-transcript.md` is updated to name that file as the invariant owner for
   both clients.
 - **Copy.** Shared components take controller-variable copy as props; truly
   static structural microcopy inlines. Authored chat copy that must be shared
-  moves into `product-model/chats` presentation helpers, not `desktop/src/copy`.
+  moves into `product-domain/chats` presentation helpers, not `apps/desktop/src/copy`.
 - **Tests.** Component tests move with their components into `product-ui` per
   phase; `product-ui`'s vitest/jsdom setup must cover them. Web has zero chat
   tests and no e2e harness today — Phase 5 adds at least one Web acceptance
   test and the spec flags the missing harness.
 - **Playground.** `ChatPlaygroundPage` stays desktop-only dev but renders the
   **shared** components, becoming the visual harness for both clients. Fixture
-  ownership stays in `desktop/src/config/playground.ts` / `__fixtures__`.
+  ownership stays in `apps/desktop/src/config/playground.ts` / `__fixtures__`.
 
 ## 12. CI, boundaries, verification
 
@@ -352,7 +352,7 @@ Phase 1 starts.
 
 ## 13. Open decisions
 
-Resolved: shared components live in `packages/product-ui/chat/**`; the server
+Resolved: shared components live in `apps/packages/product-ui/chat/**`; the server
 projection extension is owned here as Phase 0.5; mobile is out of scope.
 
 Still open:

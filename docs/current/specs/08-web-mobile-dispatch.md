@@ -155,7 +155,7 @@ Verified against the current repository worktree on 2026-05-20.
 
 ### 4.1 What is shipped
 
-**Web app** at `web/` (Vite + React):
+**Web app** at `apps/web/` (Vite + React):
 
 ```text
 Pages: HomePage, WorkspacesPage, ChatPage, AutomationsPage,
@@ -172,7 +172,7 @@ Web is partially wired: it lists workspaces today. It does NOT
 have a `usePublishedSessionPatches`-style hook over the SSE
 primitives; transcript views are not live.
 
-**Mobile app** at `mobile/` (React Native /
+**Mobile app** at `apps/mobile/` (React Native /
 Expo, EAS):
 
 ```text
@@ -229,7 +229,7 @@ api.py
 No WebSocket endpoint anywhere.
 
 **Workspace sidebar**
-(`desktop/src/components/workspace/shell/sidebar/MainSidebar.tsx`):
+(`apps/desktop/src/components/workspace/shell/sidebar/MainSidebar.tsx`):
 
 ```text
 SidebarWorkspaceVariant = 'local' | 'worktree' | 'cloud'
@@ -491,7 +491,7 @@ https://app.proliferate.ai/workspaces/{cloud_workspace_id}
 Generation:
 
 ```text
-desktop/src/lib/domain/workspaces/deep-links.ts            (new)
+apps/desktop/src/lib/domain/workspaces/deep-links.ts            (new)
   webWorkspaceDeepLink(workspaceId): string
   mobileWorkspaceDeepLink(workspaceId): string  -- same as web
                                                     (universal link)
@@ -513,7 +513,7 @@ Mobile app handles `https://app.proliferate.ai/workspaces/{id}`
 via universal link / app link config:
 
 ```text
-mobile/app.json (Expo)
+apps/mobile/app.json (Expo)
   ios.associatedDomains: ['applinks:app.proliferate.ai']
   android.intentFilters: [
     { action: 'VIEW', data: { scheme: 'https',
@@ -532,10 +532,10 @@ Spec 05 defines the JWT and the AnyHarness scope check. Spec 08
 wires the Desktop client:
 
 ```text
-desktop/src/hooks/access/cloud/claims/use-direct-attach-token.ts
+apps/desktop/src/hooks/access/cloud/claims/use-direct-attach-token.ts
   (spec 05 introduced; spec 08 wires UI callers)
 
-desktop/src/lib/access/anyharness/runtime-target.ts
+apps/desktop/src/lib/access/anyharness/runtime-target.ts
   new runtime location 'shared_cloud':
     {
       kind: 'shared_cloud',
@@ -546,7 +546,7 @@ desktop/src/lib/access/anyharness/runtime-target.ts
     }
   fetched lazily via use-direct-attach-token; refreshed before exp.
 
-desktop/src/components/workspace/*  CTA visibility:
+apps/desktop/src/components/workspace/*  CTA visibility:
   show "Open in Desktop (direct)" ONLY when:
     - workspace.exposure.visibility === 'claimed'
     - claim.claimed_by_user_id === current user
@@ -715,23 +715,23 @@ spec 08 adds the content.
 Mobile workspace screen wiring:
 
 ```text
-mobile/src/screens/MobileWorkspacesScreen.tsx
+apps/mobile/src/screens/MobileWorkspacesScreen.tsx
   replace mobile-fixtures.ts read with:
     useCloudWorkspaces({ scope: 'exposed' })
   render exposure / origin / sandbox_type indicators
   show "Claim" button for shared_unclaimed
   show "Open in Desktop" deep-link CTA for richer flows
 
-mobile/src/screens/MobileChatScreen.tsx
+apps/mobile/src/screens/MobileChatScreen.tsx
   useSessionLive(sessionId)
   prompt input -> POST /v1/cloud/commands (source='mobile')
   show command status from useCommandStatus
 
-mobile/src/screens/MobileSessionsScreen.tsx
+apps/mobile/src/screens/MobileSessionsScreen.tsx
   list sessions for the workspace; useWorkspaceLive
 
-mobile/src/lib/fixtures/                                     keep for tests
-mobile/src/lib/access/cloud/                                 use existing SDK
+apps/mobile/src/lib/fixtures/                                     keep for tests
+apps/mobile/src/lib/access/cloud/                                 use existing SDK
 ```
 
 Mobile keeps its in-memory token model. No push notifications in
@@ -828,78 +828,78 @@ cloud/sdk-react/src/hooks/api-keys.ts                                (new)
 Desktop:
 
 ```text
-desktop/src/lib/domain/workspaces/sidebar/sidebar-model.ts
+apps/desktop/src/lib/domain/workspaces/sidebar/sidebar-model.ts
   add 'ssh' variant; add 'personal_cloud'/'shared_cloud' subkinds
 
-desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.ts
+apps/desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.ts
   add slack / exposure / claimed / shared_unclaimed indicators
 
-desktop/src/lib/domain/workspaces/deep-links.ts                      (new)
+apps/desktop/src/lib/domain/workspaces/deep-links.ts                      (new)
 
-desktop/src/hooks/cowork/use-continue-remotely.ts                    (new)
-desktop/src/hooks/cowork/use-disable-remote-access.ts                (new)
-desktop/src/hooks/cowork/use-open-in-web.ts                          (new)
-desktop/src/hooks/cowork/use-open-on-mobile.ts                       (new)
-desktop/src/hooks/cowork/use-open-direct-attach.ts                   (new;
+apps/desktop/src/hooks/cowork/use-continue-remotely.ts                    (new)
+apps/desktop/src/hooks/cowork/use-disable-remote-access.ts                (new)
+apps/desktop/src/hooks/cowork/use-open-in-web.ts                          (new)
+apps/desktop/src/hooks/cowork/use-open-on-mobile.ts                       (new)
+apps/desktop/src/hooks/cowork/use-open-direct-attach.ts                   (new;
   consumes use-direct-attach-token from spec 05)
 
-desktop/src/components/workspace/shell/sidebar/
+apps/desktop/src/components/workspace/shell/sidebar/
   use-workspace-sidebar-native-context-menu.ts
     add the four new verbs with visibility gates
 
-desktop/src/lib/access/anyharness/runtime-target.ts
+apps/desktop/src/lib/access/anyharness/runtime-target.ts
   add 'shared_cloud' runtime location (spec 05 §5.6)
 
-desktop/src/components/settings/panes/account/
+apps/desktop/src/components/settings/panes/account/
   ApiKeysSection.tsx                                                 (new)
 
-desktop/src/components/settings/panes/organization/
+apps/desktop/src/components/settings/panes/organization/
   OrganizationApiKeysSection.tsx                                     (new; admin)
 ```
 
 Web:
 
 ```text
-web/src/pages/WorkspacesPage.tsx
+apps/web/src/pages/WorkspacesPage.tsx
   list with scope=exposed
   exposure / claim / origin badges
 
-web/src/pages/ChatPage.tsx
+apps/web/src/pages/ChatPage.tsx
   useSessionLive for transcript
   prompt composer -> POST commands with source='web'
 
-web/src/components/workspaces/
+apps/web/src/components/workspaces/
   ClaimButton.tsx                                                    (new)
   RemoteAccessBadge.tsx                                              (new)
   WorkspaceListItem.tsx                                              extend
 
-web/src/pages/SettingsPage.tsx
+apps/web/src/pages/SettingsPage.tsx
   Account > API Keys section
   Organization > API Keys section (admin)
 
-web/src/lib/deep-links.ts                                            (new)
+apps/web/src/lib/deep-links.ts                                            (new)
 ```
 
 Mobile:
 
 ```text
-mobile/src/screens/MobileWorkspacesScreen.tsx
+apps/mobile/src/screens/MobileWorkspacesScreen.tsx
   replace fixtures with useCloudWorkspaces({ scope: 'exposed' })
 
-mobile/src/screens/MobileChatScreen.tsx
+apps/mobile/src/screens/MobileChatScreen.tsx
   useSessionLive
   prompt composer
 
-mobile/src/screens/MobileSessionsScreen.tsx
+apps/mobile/src/screens/MobileSessionsScreen.tsx
   live updates
 
-mobile/app.json
+apps/mobile/app.json
   associatedDomains: ['applinks:app.proliferate.ai']
   android intentFilters for https://app.proliferate.ai/workspaces/
 
-mobile/src/lib/deep-links.ts                                         (new)
+apps/mobile/src/lib/deep-links.ts                                         (new)
 
-mobile/src/lib/fixtures/mobile-fixtures.ts                           kept for tests only
+apps/mobile/src/lib/fixtures/mobile-fixtures.ts                           kept for tests only
 ```
 
 ## 7. Implementation Chunks
@@ -1073,34 +1073,34 @@ cloud/sdk-react/src/hooks/live.test.tsx
 Desktop:
 
 ```bash
-cd desktop && pnpm test -- --run && pnpm typecheck
+cd apps/desktop && pnpm test -- --run && pnpm typecheck
 ```
 
 Targeted Desktop tests:
 
 ```text
-desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts
+apps/desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts
   - ssh variant
   - exposure / claim / origin indicators
-desktop/src/hooks/cowork/use-continue-remotely.test.ts
-desktop/src/hooks/cowork/use-open-direct-attach.test.ts
+apps/desktop/src/hooks/cowork/use-continue-remotely.test.ts
+apps/desktop/src/hooks/cowork/use-open-direct-attach.test.ts
   - shared_cloud target uses JWT from spec 05
-desktop/src/lib/domain/workspaces/deep-links.test.ts
+apps/desktop/src/lib/domain/workspaces/deep-links.test.ts
 ```
 
 Web:
 
 ```bash
-cd web && pnpm test -- --run && pnpm typecheck
+cd apps/web && pnpm test -- --run && pnpm typecheck
 ```
 
 Targeted Web tests:
 
 ```text
-web/src/pages/WorkspacesPage.test.tsx
+apps/web/src/pages/WorkspacesPage.test.tsx
   - lists from scope=exposed
   - claim button surfaces on shared_unclaimed
-web/src/pages/ChatPage.test.tsx
+apps/web/src/pages/ChatPage.test.tsx
   - useSessionLive transcript renders
   - prompt composer enqueues command source='web'
 ```
@@ -1108,17 +1108,17 @@ web/src/pages/ChatPage.test.tsx
 Mobile:
 
 ```bash
-cd mobile && pnpm test -- --run && pnpm typecheck
+cd apps/mobile && pnpm test -- --run && pnpm typecheck
 ```
 
 Targeted Mobile tests:
 
 ```text
-mobile/src/screens/MobileWorkspacesScreen.test.tsx
+apps/mobile/src/screens/MobileWorkspacesScreen.test.tsx
   - uses Cloud SDK, not fixtures
-mobile/src/screens/MobileChatScreen.test.tsx
+apps/mobile/src/screens/MobileChatScreen.test.tsx
   - live transcript + prompt
-mobile/src/lib/deep-links.test.ts
+apps/mobile/src/lib/deep-links.test.ts
 ```
 
 Manual smoke:

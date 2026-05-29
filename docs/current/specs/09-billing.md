@@ -360,8 +360,8 @@ same value.
 **Desktop billing UI**:
 
 ```text
-desktop/src/components/settings/panes/BillingPane.tsx
-packages/product-ui/src/billing/BillingSettingsPane.tsx
+apps/desktop/src/components/settings/panes/BillingPane.tsx
+apps/packages/product-ui/src/billing/BillingSettingsPane.tsx
   shared personal/org owner cards
   plan comparison, hours used/remaining, upgrade/manage/overage/invoice actions
 ```
@@ -369,7 +369,7 @@ packages/product-ui/src/billing/BillingSettingsPane.tsx
 **Web billing UI**:
 
 ```text
-web/src/components/settings/screen/BillingSettingsSection.tsx
+apps/web/src/components/settings/screen/BillingSettingsSection.tsx
   consumes the shared product-ui billing pane through cloud-sdk-react
 ```
 
@@ -794,14 +794,14 @@ sandbox before it sends a `paused` event.
 Mirror of Desktop's shared billing surface:
 
 ```text
-web/src/components/settings/screen/SettingsScreen.tsx
+apps/web/src/components/settings/screen/SettingsScreen.tsx
   Billing section under Organization & Account
   honors ?section=billing for Stripe and direct links
 
-web/src/components/settings/screen/BillingSettingsSection.tsx
+apps/web/src/components/settings/screen/BillingSettingsSection.tsx
   owner-specific personal/org billing controllers
 
-packages/product-ui/src/billing/BillingSettingsPane.tsx
+apps/packages/product-ui/src/billing/BillingSettingsPane.tsx
   shared billing cards and plan comparison
 ```
 
@@ -912,20 +912,20 @@ cloud/sdk/src/types/generated.ts                                  regen
 Web:
 
 ```text
-web/src/components/settings/screen/SettingsScreen.tsx            Billing section routing
-web/src/components/settings/screen/BillingSettingsSection.tsx    Billing owner controllers
+apps/web/src/components/settings/screen/SettingsScreen.tsx            Billing section routing
+apps/web/src/components/settings/screen/BillingSettingsSection.tsx    Billing owner controllers
 cloud/sdk-react/src/hooks/billing.ts                             Shared web SDK hooks
-packages/product-ui/src/billing/BillingSettingsPane.tsx          Shared presentation
+apps/packages/product-ui/src/billing/BillingSettingsPane.tsx          Shared presentation
 ```
 
 Desktop:
 
 ```text
-desktop/src/components/settings/panes/BillingPane.tsx
+apps/desktop/src/components/settings/panes/BillingPane.tsx
   consume the new billing envelope from workspace responses
   (optional; existing snapshot endpoint already works)
 
-desktop/src/components/workspace/shell/sidebar/
+apps/desktop/src/components/workspace/shell/sidebar/
   use-workspace-sidebar-billing-badge.ts                          (new)
   consumes billing envelope from workspace listing
 ```
@@ -965,7 +965,7 @@ Chunk D  Billing envelope in workspace responses + SSE patches
 
 Chunk E  Web billing UI
   - mirror Desktop BillingPane structure
-  - hooks in web/src/hooks/access/cloud/billing/
+  - hooks in apps/web/src/hooks/access/cloud/billing/
   - manage/upgrade buttons route to Stripe portal
 
 Chunk F  New webhook events
@@ -1110,14 +1110,14 @@ server/tests/billing/test_no_compute_subject_period_table.py
 Web:
 
 ```bash
-cd web && pnpm test -- --run && pnpm typecheck
+cd apps/web && pnpm test -- --run && pnpm typecheck
 ```
 
 Targeted web tests:
 
 ```text
-web/src/components/settings/screen/BillingSettingsSection.test.tsx
-web/src/components/settings/screen/SettingsScreen.test.tsx
+apps/web/src/components/settings/screen/BillingSettingsSection.test.tsx
+apps/web/src/components/settings/screen/SettingsScreen.test.tsx
   - Billing section visible
   - Stripe portal manage button
 ```
@@ -1125,15 +1125,15 @@ web/src/components/settings/screen/SettingsScreen.test.tsx
 Desktop:
 
 ```bash
-cd desktop && pnpm test -- --run && pnpm typecheck
+cd apps/desktop && pnpm test -- --run && pnpm typecheck
 ```
 
 Targeted Desktop tests:
 
 ```text
-desktop/src/components/workspace/shell/sidebar/
+apps/desktop/src/components/workspace/shell/sidebar/
   use-workspace-sidebar-billing-badge.test.ts
-desktop/src/components/settings/panes/BillingPane.test.tsx
+apps/desktop/src/components/settings/panes/BillingPane.test.tsx
   - existing tests pass with billing envelope shape
 ```
 

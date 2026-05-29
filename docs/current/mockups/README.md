@@ -11,5 +11,5 @@ It is not an implementation source file. Treat it as a reference artifact for:
 - card, badge, tag, list/detail, and add-row conventions.
 
 When writing or cleaning the specs, preserve the product intent from this
-mockup, but still check actual frontend area docs and current `desktop/src/**`
+mockup, but still check actual frontend area docs and current `apps/desktop/src/**`
 patterns before naming concrete implementation files.

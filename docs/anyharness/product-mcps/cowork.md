@@ -816,13 +816,13 @@ anyharness/crates/anyharness-lib/src/persistence/sql/0045_delegated_work_handles
 Frontend:
 
 ```text
-desktop/src/components/workspace/chat/input/delegated-work/**
-desktop/src/components/workspace/shell/tabs/**
-desktop/src/hooks/cowork/**
-desktop/src/hooks/chat/use-delegated-work-composer.ts
-desktop/src/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy.ts
-desktop/src/lib/domain/delegated-work/**
-desktop/src/lib/access/anyharness/cowork.ts
+apps/desktop/src/components/workspace/chat/input/delegated-work/**
+apps/desktop/src/components/workspace/shell/tabs/**
+apps/desktop/src/hooks/cowork/**
+apps/desktop/src/hooks/chat/use-delegated-work-composer.ts
+apps/desktop/src/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy.ts
+apps/desktop/src/lib/domain/delegated-work/**
+apps/desktop/src/lib/access/anyharness/cowork.ts
 ```
 
 ## Migration Notes

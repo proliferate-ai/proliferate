@@ -4,14 +4,14 @@ packages:
   - "anyharness/tests"
   - "cloud/sdk"
   - "cloud/sdk-react"
-  - "desktop"
-  - "mobile"
-  - "packages/design"
-  - "packages/product-model"
-  - "packages/product-ui"
-  - "packages/ui"
+  - "apps/desktop"
+  - "apps/mobile"
+  - "apps/packages/design"
+  - "apps/packages/product-domain"
+  - "apps/packages/product-ui"
+  - "apps/packages/ui"
   - "server/artifact-runtime"
-  - "web"
+  - "apps/web"
 
 allowBuilds:
   "@sentry/cli": true

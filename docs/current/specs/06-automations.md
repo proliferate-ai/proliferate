@@ -226,8 +226,8 @@ Workspace creation
 **Desktop UI**:
 
 ```text
-desktop/src/pages/AutomationsPage.tsx                  -> AutomationsScreen
-desktop/src/components/automations/
+apps/desktop/src/pages/AutomationsPage.tsx                  -> AutomationsScreen
+apps/desktop/src/components/automations/
   screen/AutomationsScreen.tsx
   list/AutomationListContent.tsx, AutomationRow.tsx,
         AutomationSectionHeader.tsx, AutomationDetailContent.tsx
@@ -236,7 +236,7 @@ desktop/src/components/automations/
   controls/AutomationTargetPicker.tsx, AutomationModelPicker.tsx,
            AutomationModePicker.tsx
 
-desktop/src/hooks/access/cloud/automations/
+apps/desktop/src/hooks/access/cloud/automations/
   use-automations.ts, use-automation-mutations.ts,
   use-local-automation-run-claims.ts, query-keys.ts
 ```
@@ -826,7 +826,7 @@ member claims by accident.
 - Allowed only when `owner_scope='personal'`.
 - Execute on Desktop via the existing local executor service
   (`server/automations/local_executor_service.py` +
-  `desktop/src/hooks/access/cloud/automations/use-local-automation-run-claims.ts`).
+  `apps/desktop/src/hooks/access/cloud/automations/use-local-automation-run-claims.ts`).
 - Do not call `ensure_personal_sandbox_profile` (no cloud profile
   involved) and do not preflight runtime config / agent auth (the
   local Desktop AnyHarness handles its own state).
@@ -959,17 +959,17 @@ server/proliferate/config.py
 Desktop:
 
 ```text
-desktop/src/hooks/access/cloud/automations/
+apps/desktop/src/hooks/access/cloud/automations/
   use-automations.ts                              extend response shape
   use-automation-mutations.ts                     accept owner_scope +
                                                    cloud_agent_run_config_id
 
-desktop/src/hooks/access/cloud/agent-run-configs/  (new)
+apps/desktop/src/hooks/access/cloud/agent-run-configs/  (new)
   use-agent-run-configs.ts
   use-agent-run-config-mutations.ts
   query-keys.ts
 
-desktop/src/components/automations/
+apps/desktop/src/components/automations/
   editor/AutomationEditorModal.tsx
     - new "Owner" toggle (Personal | Team), gated by useIsAdmin
     - replace AutomationModelPicker + AutomationModePicker with
@@ -986,7 +986,7 @@ desktop/src/components/automations/
     - cascade rows collapsed under the parent start_session row
       using parent_command_id
 
-desktop/src/pages/AgentRunConfigsPage.tsx                        (new)
+apps/desktop/src/pages/AgentRunConfigsPage.tsx                        (new)
   list + edit + archive cloud_agent_run_config rows
   -- placement: nested under Settings > Agents > Agent Defaults
      (spec 03 §5.1)
@@ -1152,20 +1152,20 @@ server/tests/automations/test_cascade_commands_carry_parent_id.py
 Desktop:
 
 ```bash
-cd desktop && pnpm test -- --run && pnpm typecheck
+cd apps/desktop && pnpm test -- --run && pnpm typecheck
 ```
 
 Targeted Desktop tests:
 
 ```text
-desktop/src/components/automations/editor/AutomationEditorModal.test.tsx
+apps/desktop/src/components/automations/editor/AutomationEditorModal.test.tsx
   - owner toggle visible; team disabled for non-admin
   - AgentRunConfigSelector renders configs
   - target_mode picker offers correct values per owner_scope
-desktop/src/components/automations/timeline/AutomationRunTimeline.test.tsx
+apps/desktop/src/components/automations/timeline/AutomationRunTimeline.test.tsx
   - cascade rows collapse under parent
-desktop/src/hooks/access/cloud/agent-run-configs/use-agent-run-configs.test.ts
-desktop/src/pages/AgentRunConfigsPage.test.tsx
+apps/desktop/src/hooks/access/cloud/agent-run-configs/use-agent-run-configs.test.ts
+apps/desktop/src/pages/AgentRunConfigsPage.test.tsx
 ```
 
 Manual smoke:

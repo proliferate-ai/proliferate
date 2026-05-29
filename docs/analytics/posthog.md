@@ -25,10 +25,10 @@ Server/cloud API PostHog is not configured.
 - Desktop vendor routing
   - trigger: desktop startup after runtime API config bootstrap
   - code path:
-    - `desktop/src/main.tsx`
-    - `desktop/src/lib/infra/proliferate-api.ts`
-    - `desktop/src/lib/domain/telemetry/mode.ts`
-    - `desktop/src/lib/integrations/telemetry/client.ts`
+    - `apps/desktop/src/main.tsx`
+    - `apps/desktop/src/lib/infra/proliferate-api.ts`
+    - `apps/desktop/src/lib/domain/telemetry/mode.ts`
+    - `apps/desktop/src/lib/integrations/telemetry/client.ts`
   - sends: no capture directly; resolves whether vendor telemetry is enabled
     for `hosted_product`
   - failure behavior:
@@ -37,8 +37,8 @@ Server/cloud API PostHog is not configured.
 - Desktop PostHog init and replay setup
   - trigger: `initializeDesktopTelemetry()` after runtime mode resolution
   - code path:
-    - `desktop/src/lib/integrations/telemetry/client.ts`
-    - `desktop/src/lib/integrations/telemetry/posthog.ts`
+    - `apps/desktop/src/lib/integrations/telemetry/client.ts`
+    - `apps/desktop/src/lib/integrations/telemetry/posthog.ts`
   - sends:
     - no product event directly
     - initializes PostHog with:
@@ -54,11 +54,11 @@ Server/cloud API PostHog is not configured.
 - Desktop identified-user sync
   - trigger: auth state changes in the telemetry bootstrap flow
   - code path:
-    - `desktop/src/providers/TelemetryProvider.tsx`
-    - `desktop/src/hooks/telemetry/lifecycle/use-telemetry-bootstrap.ts`
-    - `desktop/src/hooks/telemetry/lifecycle/use-telemetry-auth-identity.ts`
-    - `desktop/src/lib/integrations/telemetry/client.ts`
-    - `desktop/src/lib/integrations/telemetry/posthog.ts`
+    - `apps/desktop/src/providers/TelemetryProvider.tsx`
+    - `apps/desktop/src/hooks/telemetry/lifecycle/use-telemetry-bootstrap.ts`
+    - `apps/desktop/src/hooks/telemetry/lifecycle/use-telemetry-auth-identity.ts`
+    - `apps/desktop/src/lib/integrations/telemetry/client.ts`
+    - `apps/desktop/src/lib/integrations/telemetry/posthog.ts`
   - sends:
     - `posthog.identify(...)`
       - distinct id: `user.id`
@@ -72,8 +72,8 @@ Server/cloud API PostHog is not configured.
 - Desktop allowlisted event capture
   - trigger: existing `trackProductEvent(...)` calls from hooks/providers
   - code path:
-    - `desktop/src/lib/integrations/telemetry/client.ts`
-    - `desktop/src/lib/integrations/telemetry/posthog.ts`
+    - `apps/desktop/src/lib/integrations/telemetry/client.ts`
+    - `apps/desktop/src/lib/integrations/telemetry/posthog.ts`
   - sends: only these product events currently reach PostHog
     - `chat_session_created`
     - `chat_prompt_submitted`
@@ -85,10 +85,10 @@ Server/cloud API PostHog is not configured.
 - Web PostHog init, route capture, and identity sync
   - trigger: web app bootstrap inside `WebTelemetryProvider`
   - code path:
-    - `web/src/main.tsx`
-    - `web/src/providers/WebTelemetryProvider.tsx`
-    - `web/src/lib/integrations/telemetry/config.ts`
-    - `web/src/lib/integrations/telemetry/posthog.ts`
+    - `apps/web/src/main.tsx`
+    - `apps/web/src/providers/WebTelemetryProvider.tsx`
+    - `apps/web/src/lib/integrations/telemetry/config.ts`
+    - `apps/web/src/lib/integrations/telemetry/posthog.ts`
   - sends:
     - `web_page_viewed`
       - `surface="web"`
@@ -105,11 +105,11 @@ Server/cloud API PostHog is not configured.
 - Mobile PostHog init, screen capture, and identity sync
   - trigger: Expo app bootstrap inside `MobileTelemetryProvider`
   - code path:
-    - `mobile/src/App.tsx`
-    - `mobile/src/providers/MobileTelemetryProvider.tsx`
-    - `mobile/src/hooks/telemetry/use-mobile-screen-telemetry.ts`
-    - `mobile/src/lib/integrations/telemetry/config.ts`
-    - `mobile/src/lib/integrations/telemetry/posthog.ts`
+    - `apps/mobile/src/App.tsx`
+    - `apps/mobile/src/providers/MobileTelemetryProvider.tsx`
+    - `apps/mobile/src/hooks/telemetry/use-mobile-screen-telemetry.ts`
+    - `apps/mobile/src/lib/integrations/telemetry/config.ts`
+    - `apps/mobile/src/lib/integrations/telemetry/posthog.ts`
   - sends:
     - PostHog React Native app lifecycle events when the SDK is enabled
     - `mobile_screen_viewed`
@@ -179,18 +179,18 @@ No server PostHog env vars exist in the current implementation.
 
 ## Current Usage
 - Desktop routing and allowlist seam:
-  - `desktop/src/lib/integrations/telemetry/client.ts`
+  - `apps/desktop/src/lib/integrations/telemetry/client.ts`
 - Desktop PostHog adapter:
-  - `desktop/src/lib/integrations/telemetry/posthog.ts`
+  - `apps/desktop/src/lib/integrations/telemetry/posthog.ts`
 - Desktop auth identity hook:
-  - `desktop/src/hooks/telemetry/lifecycle/use-telemetry-auth-identity.ts`
+  - `apps/desktop/src/hooks/telemetry/lifecycle/use-telemetry-auth-identity.ts`
 - Web PostHog adapter and provider:
-  - `web/src/lib/integrations/telemetry/posthog.ts`
-  - `web/src/providers/WebTelemetryProvider.tsx`
+  - `apps/web/src/lib/integrations/telemetry/posthog.ts`
+  - `apps/web/src/providers/WebTelemetryProvider.tsx`
 - Mobile PostHog adapter and provider:
-  - `mobile/src/lib/integrations/telemetry/posthog.ts`
-  - `mobile/src/providers/MobileTelemetryProvider.tsx`
-  - `mobile/src/hooks/telemetry/use-mobile-screen-telemetry.ts`
+  - `apps/mobile/src/lib/integrations/telemetry/posthog.ts`
+  - `apps/mobile/src/providers/MobileTelemetryProvider.tsx`
+  - `apps/mobile/src/hooks/telemetry/use-mobile-screen-telemetry.ts`
 - Exact desktop product events currently captured:
   - `chat_session_created`
   - `chat_prompt_submitted`

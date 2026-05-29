@@ -22,12 +22,12 @@ exactly as shown, copy the DSN from the suggested SDK init screen.
 | Project slug | Platform | Owns errors from |
 |---|---|---|
 | `proliferate-server` | Python · FastAPI | server (`server/`) |
-| `proliferate-desktop` | JavaScript · React | desktop renderer (`desktop/src/`) |
-| `proliferate-desktop-native` | Rust | Tauri shell (`desktop/src-tauri/`) |
+| `proliferate-desktop` | JavaScript · React | desktop renderer (`apps/desktop/src/`) |
+| `proliferate-desktop-native` | Rust | Tauri shell (`apps/desktop/src-tauri/`) |
 | `anyharness` | Rust | bundled + cloud AnyHarness runtime |
 | `proliferate-target` | Rust | cloud supervisor + worker binaries |
-| `proliferate-web` | JavaScript · React | hosted web app (`web/`) |
-| `proliferate-mobile` | React Native | Expo mobile app (`mobile/`) |
+| `proliferate-web` | JavaScript · React | hosted web app (`apps/web/`) |
+| `proliferate-mobile` | React Native | Expo mobile app (`apps/mobile/`) |
 
 After creating each project, paste its DSN into the corresponding row of the
 hand-off table in section 5.

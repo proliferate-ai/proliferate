@@ -19,19 +19,19 @@
  *   sandbox config UI, or desktop replacement.
  *
  * Source map in the real codebase:
- * - mobile/src/App.tsx
- * - mobile/src/providers/MobileAuthProvider.tsx
- * - mobile/src/providers/MobileCloudProvider.tsx
- * - mobile/src/components/shell/MobileShell.tsx
- * - mobile/src/navigation/navigation-model.ts
- * - mobile/src/components/home/MobileHomeScreen.tsx
- * - mobile/src/components/workspaces/MobileWorkspacesScreen.tsx
- * - mobile/src/components/sessions/MobileSessionsScreen.tsx
- * - mobile/src/components/chat/MobileChatScreen.tsx
- * - mobile/src/components/automations/MobileAutomationsScreen.tsx
- * - mobile/src/components/settings/MobileSettingsScreen.tsx
- * - mobile/src/lib/access/cloud/pending-mobile-prompt-store.ts
- * - mobile/src/lib/access/cloud/pending-mobile-prompt-dispatch.ts
+ * - apps/mobile/src/App.tsx
+ * - apps/mobile/src/providers/MobileAuthProvider.tsx
+ * - apps/mobile/src/providers/MobileCloudProvider.tsx
+ * - apps/mobile/src/components/shell/MobileShell.tsx
+ * - apps/mobile/src/navigation/navigation-model.ts
+ * - apps/mobile/src/components/home/MobileHomeScreen.tsx
+ * - apps/mobile/src/components/workspaces/MobileWorkspacesScreen.tsx
+ * - apps/mobile/src/components/sessions/MobileSessionsScreen.tsx
+ * - apps/mobile/src/components/chat/MobileChatScreen.tsx
+ * - apps/mobile/src/components/automations/MobileAutomationsScreen.tsx
+ * - apps/mobile/src/components/settings/MobileSettingsScreen.tsx
+ * - apps/mobile/src/lib/access/cloud/pending-mobile-prompt-store.ts
+ * - apps/mobile/src/lib/access/cloud/pending-mobile-prompt-dispatch.ts
  */
 
 import type { ReactNode } from "react";

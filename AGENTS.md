@@ -97,6 +97,19 @@ at the start of the task, not halfway through implementation.
 
 1. `docs/sdk/README.md`
 
+### Desktop Native (`apps/desktop/src-tauri/**`)
+
+1. `docs/desktop/README.md`
+2. The focused desktop native spec when relevant:
+   - `docs/desktop/specs/anyharness-sidecar.md` for AnyHarness sidecar
+     packaging, lookup, launch, health, restart, or runtime-info behavior
+   - `docs/desktop/specs/agent-seeds.md` for bundled agent seed resources,
+     launch env, hydration, ownership state, or seed/reconcile interaction
+3. `docs/reference/dev-profiles.md` when changing profile launch behavior,
+   ports, generated Tauri config, app identity, or profile runtime homes.
+4. `docs/ci-cd/README.md` when changing packaging, release, updater, or
+   bundled desktop resources.
+
 ### Server (`server/**`)
 
 1. `docs/server/README.md`
@@ -115,7 +128,7 @@ at the start of the task, not halfway through implementation.
 
 ### CI/CD, Release, And Deployment
 
-Applies to `.github/workflows/**`, `desktop/infra/**`, `server/infra/**`,
+Applies to `.github/workflows/**`, `apps/desktop/infra/**`, `server/infra/**`,
 updater publishing, and the desktop updater flow.
 
 1. `docs/ci-cd/README.md`

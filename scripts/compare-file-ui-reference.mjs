@@ -15,52 +15,52 @@ const inputs = {
   referenceStyles: path.join(referenceRoot, "styles.css"),
   overlay: path.join(
     repoRoot,
-    "desktop/src/components/workspace/chat/surface/SessionContentSearchOverlay.tsx",
+    "apps/desktop/src/components/workspace/chat/surface/SessionContentSearchOverlay.tsx",
   ),
-  chatView: path.join(repoRoot, "desktop/src/components/workspace/chat/ChatView.tsx"),
-  shortcuts: path.join(repoRoot, "desktop/src/config/shortcuts.ts"),
+  chatView: path.join(repoRoot, "apps/desktop/src/components/workspace/chat/ChatView.tsx"),
+  shortcuts: path.join(repoRoot, "apps/desktop/src/config/shortcuts.ts"),
   workspaceContentShortcuts: path.join(
     repoRoot,
-    "desktop/src/hooks/workspaces/ui/use-workspace-content-shortcuts.ts",
+    "apps/desktop/src/hooks/workspaces/ui/use-workspace-content-shortcuts.ts",
   ),
   fileFrame: path.join(
     repoRoot,
-    "desktop/src/components/workspace/files/viewer/FileViewerFrame.tsx",
+    "apps/desktop/src/components/workspace/files/viewer/FileViewerFrame.tsx",
   ),
   fileBrowserOverlay: path.join(
     repoRoot,
-    "desktop/src/components/workspace/files/viewer/WorkspaceFileBrowserOverlay.tsx",
+    "apps/desktop/src/components/workspace/files/viewer/WorkspaceFileBrowserOverlay.tsx",
   ),
   fileEditor: path.join(
     repoRoot,
-    "desktop/src/components/workspace/files/FileEditorView.tsx",
+    "apps/desktop/src/components/workspace/files/FileEditorView.tsx",
   ),
   fileSource: path.join(
     repoRoot,
-    "desktop/src/components/workspace/files/viewer/FileSourceView.tsx",
+    "apps/desktop/src/components/workspace/files/viewer/FileSourceView.tsx",
   ),
   diffViewer: path.join(
     repoRoot,
-    "desktop/src/components/ui/content/diff/ChatDiffViewer.tsx",
+    "apps/desktop/src/components/ui/content/diff/ChatDiffViewer.tsx",
   ),
   diffLineContent: path.join(
     repoRoot,
-    "desktop/src/components/ui/content/diff/DiffLineContent.tsx",
+    "apps/desktop/src/components/ui/content/diff/DiffLineContent.tsx",
   ),
   marks: path.join(
     repoRoot,
-    "desktop/src/components/ui/content/search/ContentSearchMarks.tsx",
+    "apps/desktop/src/components/ui/content/search/ContentSearchMarks.tsx",
   ),
-  store: path.join(repoRoot, "desktop/src/stores/search/content-search-store.ts"),
+  store: path.join(repoRoot, "apps/desktop/src/stores/search/content-search-store.ts"),
   contentSearch: path.join(
     repoRoot,
-    "desktop/src/lib/domain/content-search/content-search.ts",
+    "apps/desktop/src/lib/domain/content-search/content-search.ts",
   ),
   paneSideOverlay: path.join(
     repoRoot,
-    "desktop/src/components/workspace/pane/PaneSideOverlay.tsx",
+    "apps/desktop/src/components/workspace/pane/PaneSideOverlay.tsx",
   ),
-  css: path.join(repoRoot, "desktop/src/index.css"),
+  css: path.join(repoRoot, "apps/desktop/src/index.css"),
 };
 
 function read(file) {
