@@ -65,7 +65,10 @@ transcript behavior.
       <strong>Claude Code</strong>
     </td>
     <td align="center" width="120">
-      <img src="./apps/desktop/public/provider-icons/codex.svg" width="40" height="40" alt="Codex" /><br />
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="./apps/desktop/public/provider-icons/codex-dark.svg" />
+        <img src="./apps/desktop/public/provider-icons/codex.svg" width="40" height="40" alt="Codex" />
+      </picture><br />
       <strong>Codex</strong>
     </td>
     <td align="center" width="120">
@@ -77,7 +80,10 @@ transcript behavior.
       <strong>OpenCode</strong>
     </td>
     <td align="center" width="120">
-      <img src="./apps/desktop/public/provider-icons/cursor.svg" width="40" height="40" alt="Cursor" /><br />
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/readme/cursor-dark.svg" />
+        <img src="./apps/desktop/public/provider-icons/cursor.svg" width="40" height="40" alt="Cursor" />
+      </picture><br />
       <strong>Cursor</strong>
     </td>
     <td align="center" width="120">
