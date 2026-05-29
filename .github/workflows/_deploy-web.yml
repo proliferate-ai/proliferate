@@ -23,7 +23,8 @@ jobs:
     environment: ${{ inputs.environment }}
     env:
       WEB_URL: ${{ vars.WEB_URL }}
-      VERCEL_ENVIRONMENT: ${{ vars.VERCEL_ENVIRONMENT || 'production' }}
+      VERCEL_ENVIRONMENT: ${{ vars.VERCEL_ENVIRONMENT || vars.VERCEL_TARGET || 'production' }}
+      VERCEL_TARGET: ${{ vars.VERCEL_TARGET || vars.VERCEL_ENVIRONMENT || 'production' }}
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
       VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE }}
@@ -69,9 +70,7 @@ jobs:
           if [[ -n "${VERCEL_SCOPE:-}" ]]; then
             args+=(--scope "$VERCEL_SCOPE")
           fi
-          if [[ "$VERCEL_ENVIRONMENT" == "production" ]]; then
-            args+=(--prod)
-          fi
+          args+=(--target "$VERCEL_TARGET")
           deployment_output="$(pnpm dlx vercel@latest deploy "${args[@]}")"
           deployment_url="$(printf '%s\n' "$deployment_output" | awk '/^https:\/\// { url=$0 } END { print url }')"
           if [[ -z "$deployment_url" ]]; then
@@ -108,6 +107,7 @@ jobs:
           {
             echo "### Web"
             echo "- Environment: ${{ inputs.environment }}"
+            echo "- Vercel target: \`$VERCEL_TARGET\`"
             echo "- Deployment: ${{ steps.deploy.outputs.deployment_url }}"
             echo "- URL: $WEB_URL"
           } >> "$GITHUB_STEP_SUMMARY"
