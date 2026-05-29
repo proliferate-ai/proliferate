@@ -204,39 +204,17 @@ impl WorkspaceStore {
         })
     }
 
-    pub fn list_standard_active_worktrees_by_activity(
-        &self,
-    ) -> anyhow::Result<Vec<WorkspaceRecord>> {
+    pub fn list_standard_active_worktrees(&self) -> anyhow::Result<Vec<WorkspaceRecord>> {
         self.db.with_conn(|conn| {
             let mut stmt = conn.prepare(
-                "WITH session_activity AS (
-                    SELECT workspace_id,
-                           MAX(MAX(COALESCE(last_prompt_at, ''), COALESCE(updated_at, ''))) AS session_at
-                      FROM sessions
-                     GROUP BY workspace_id
-                  ),
-                  terminal_activity AS (
-                    SELECT workspace_id,
-                           MAX(MAX(COALESCE(completed_at, ''), COALESCE(updated_at, ''), COALESCE(created_at, ''))) AS terminal_at
-                      FROM terminal_command_runs
-                     GROUP BY workspace_id
-                  )
-                  SELECT w.*
-                    FROM workspaces w
-                    LEFT JOIN session_activity sa ON sa.workspace_id = w.id
-                    LEFT JOIN terminal_activity ta ON ta.workspace_id = w.id
-                   WHERE w.kind = 'worktree'
-                     AND w.surface = 'standard'
-                     AND w.lifecycle_state = 'active'
-                   ORDER BY w.repo_root_id ASC,
-                            MAX(
-                              COALESCE(sa.session_at, ''),
-                              COALESCE(ta.terminal_at, ''),
-                              COALESCE(w.updated_at, ''),
-                              COALESCE(w.created_at, '')
-                            ) DESC,
-                            w.created_at DESC,
-                            w.id ASC",
+                "SELECT * FROM workspaces
+                 WHERE kind = 'worktree'
+                   AND surface = 'standard'
+                   AND lifecycle_state = 'active'
+                 ORDER BY repo_root_id ASC,
+                          updated_at DESC,
+                          created_at DESC,
+                          id ASC",
             )?;
             let rows = stmt.query_map([], map_row)?;
             rows.collect()
@@ -319,62 +297,9 @@ impl WorkspaceStore {
     }
 
     pub fn delete_by_id(&self, workspace_id: &str) -> anyhow::Result<()> {
-        self.db.with_tx(|conn| {
-            delete_workspace_scoped_rows_in_tx(conn, workspace_id)?;
-            delete_workspace_row_in_tx(conn, workspace_id)?;
-            Ok(())
-        })
+        self.db
+            .with_tx(|conn| delete_workspace_row_in_tx(conn, workspace_id))
     }
-
-    pub fn purge_workspace_with_sessions(&self, workspace_id: &str) -> anyhow::Result<()> {
-        self.db.with_tx(|conn| {
-            let session_ids = list_workspace_session_ids_in_tx(conn, workspace_id)?;
-            for session_id in session_ids {
-                crate::sessions::store::delete_session_in_tx(conn, &session_id)?;
-            }
-            delete_workspace_scoped_rows_in_tx(conn, workspace_id)?;
-            delete_workspace_row_in_tx(conn, workspace_id)?;
-            Ok(())
-        })
-    }
-}
-
-fn list_workspace_session_ids_in_tx(
-    conn: &Connection,
-    workspace_id: &str,
-) -> rusqlite::Result<Vec<String>> {
-    let mut stmt = conn.prepare("SELECT id FROM sessions WHERE workspace_id = ?1")?;
-    let rows = stmt.query_map([workspace_id], |row| row.get::<_, String>(0))?;
-    let session_ids = rows.collect::<rusqlite::Result<Vec<_>>>()?;
-    Ok(session_ids)
-}
-
-pub(crate) fn delete_workspace_scoped_rows_in_tx(
-    conn: &Connection,
-    workspace_id: &str,
-) -> rusqlite::Result<()> {
-    // Workspace-scoped rows do not all cascade today, so clear them explicitly.
-    conn.execute(
-        "DELETE FROM workspace_access_modes WHERE workspace_id = ?1",
-        [workspace_id],
-    )?;
-    conn.execute(
-        "DELETE FROM cowork_threads WHERE workspace_id = ?1",
-        [workspace_id],
-    )?;
-    conn.execute(
-        "DELETE FROM cowork_managed_workspaces WHERE workspace_id = ?1",
-        [workspace_id],
-    )?;
-    conn.execute(
-        "DELETE FROM workspace_setup_state WHERE workspace_id = ?1",
-        [workspace_id],
-    )?;
-    conn.execute(
-        "DELETE FROM terminal_command_runs WHERE workspace_id = ?1",
-        [workspace_id],
-    )?;
-    Ok(())
 }
 
 pub(crate) fn delete_workspace_row_in_tx(
@@ -460,13 +385,6 @@ mod tests {
     use super::{WorkspaceRecord, WorkspaceStore};
     use crate::origin::OriginContext;
     use crate::persistence::Db;
-    use crate::sessions::model::SessionRecord;
-    use crate::sessions::store::SessionStore;
-    use crate::terminals::model::{
-        TerminalCommandOutputMode, TerminalCommandRunRecord, TerminalCommandRunStatus,
-        TerminalPurpose,
-    };
-    use crate::terminals::store::TerminalStore;
     use crate::workspaces::creator_context::WorkspaceCreatorContext;
 
     fn workspace_record(id: &str, kind: &str, path: &str) -> WorkspaceRecord {
@@ -494,64 +412,6 @@ mod tests {
             cleanup_attempted_at: None,
             created_at: "2025-01-01T00:00:00Z".to_string(),
             updated_at: "2025-01-01T00:00:00Z".to_string(),
-        }
-    }
-
-    fn session_record(id: &str, workspace_id: &str) -> SessionRecord {
-        SessionRecord {
-            id: id.to_string(),
-            workspace_id: workspace_id.to_string(),
-            agent_kind: "claude".to_string(),
-            native_session_id: None,
-            agent_auth_scope: None,
-            required_agent_auth_revision: None,
-            requested_model_id: None,
-            current_model_id: None,
-            requested_mode_id: None,
-            current_mode_id: None,
-            title: None,
-            thinking_level_id: None,
-            thinking_budget_tokens: None,
-            status: "idle".to_string(),
-            created_at: "2025-01-01T00:00:00Z".to_string(),
-            updated_at: "2025-01-01T00:00:00Z".to_string(),
-            last_prompt_at: None,
-            closed_at: None,
-            dismissed_at: None,
-            mcp_bindings_ciphertext: None,
-            mcp_binding_summaries_json: None,
-            mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
-            system_prompt_append: None,
-            subagents_enabled: true,
-            action_capabilities_json: None,
-            origin: None,
-        }
-    }
-
-    fn terminal_run_record(
-        id: &str,
-        workspace_id: &str,
-        completed_at: &str,
-        updated_at: &str,
-    ) -> TerminalCommandRunRecord {
-        TerminalCommandRunRecord {
-            id: id.to_string(),
-            workspace_id: workspace_id.to_string(),
-            terminal_id: None,
-            purpose: TerminalPurpose::Run,
-            command: "echo ok".to_string(),
-            status: TerminalCommandRunStatus::Succeeded,
-            exit_code: Some(0),
-            output_mode: TerminalCommandOutputMode::Combined,
-            stdout: None,
-            stderr: None,
-            combined_output: None,
-            output_truncated: false,
-            started_at: None,
-            completed_at: Some(completed_at.to_string()),
-            duration_ms: Some(1),
-            created_at: "2025-01-01T00:00:00Z".to_string(),
-            updated_at: updated_at.to_string(),
         }
     }
 
@@ -857,136 +717,18 @@ mod tests {
     }
 
     #[test]
-    fn active_worktree_activity_order_uses_true_row_max() {
+    fn delete_workspace_removes_workspace_row() {
         let db = Db::open_in_memory().expect("open db");
-        let store = WorkspaceStore::new(db.clone());
-        let session_store = SessionStore::new(db.clone());
-        let terminal_store = TerminalStore::new(db.clone());
-
-        let mut session_newer =
-            workspace_record("workspace-session-newer", "worktree", "/tmp/session-newer");
-        session_newer.repo_root_id = Some("repo-root-1".to_string());
-        let mut terminal_newer = workspace_record(
-            "workspace-terminal-newer",
-            "worktree",
-            "/tmp/terminal-newer",
-        );
-        terminal_newer.repo_root_id = Some("repo-root-1".to_string());
-        let mut older = workspace_record("workspace-older", "worktree", "/tmp/older");
-        older.repo_root_id = Some("repo-root-1".to_string());
-
-        store.insert(&session_newer).expect("insert session newer");
-        store
-            .insert(&terminal_newer)
-            .expect("insert terminal newer");
-        store.insert(&older).expect("insert older");
-
-        let mut session = session_record("session-newer", &session_newer.id);
-        session.last_prompt_at = Some("2025-01-02T00:00:00Z".to_string());
-        session.updated_at = "2025-01-11T00:00:00Z".to_string();
-        session_store
-            .insert(&session)
-            .expect("insert newer session");
-
-        let mut older_session = session_record("session-older", &older.id);
-        older_session.last_prompt_at = Some("2025-01-09T00:00:00Z".to_string());
-        older_session.updated_at = "2025-01-09T00:00:00Z".to_string();
-        session_store
-            .insert(&older_session)
-            .expect("insert older session");
-
-        terminal_store
-            .insert_command_run(&terminal_run_record(
-                "terminal-run-newer",
-                &terminal_newer.id,
-                "2025-01-03T00:00:00Z",
-                "2025-01-10T00:00:00Z",
-            ))
-            .expect("insert terminal run");
-
-        let ids = store
-            .list_standard_active_worktrees_by_activity()
-            .expect("list by activity")
-            .into_iter()
-            .map(|workspace| workspace.id)
-            .collect::<Vec<_>>();
-
-        assert_eq!(
-            ids,
-            vec![
-                "workspace-session-newer".to_string(),
-                "workspace-terminal-newer".to_string(),
-                "workspace-older".to_string(),
-            ]
-        );
-    }
-
-    #[test]
-    fn delete_workspace_removes_workspace_scoped_rows() {
-        let db = Db::open_in_memory().expect("open db");
-        let store = WorkspaceStore::new(db.clone());
-        let session_store = SessionStore::new(db.clone());
+        let store = WorkspaceStore::new(db);
 
         let workspace = workspace_record("workspace-1", "worktree", "/tmp/workspace-1");
         store.insert(&workspace).expect("insert workspace");
-        session_store
-            .insert(&session_record("session-1", &workspace.id))
-            .expect("insert session");
 
-        db.with_conn(|conn| {
-            conn.execute(
-                "INSERT INTO repo_roots (
-                    id, kind, path, display_name, default_branch, remote_provider, remote_owner,
-                    remote_repo_name, remote_url, created_at, updated_at
-                 ) VALUES (
-                    'repo-root-1', 'external', '/tmp/repo-root-1', NULL, 'main', NULL, NULL,
-                    NULL, NULL, '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z'
-                 )",
-                [],
-            )?;
-            conn.execute(
-                "INSERT INTO workspace_access_modes (workspace_id, mode, handoff_op_id, updated_at)
-                 VALUES (?1, 'remote_owned', 'handoff-1', '2025-01-01T00:00:00Z')",
-                [&workspace.id],
-            )?;
-            conn.execute(
-                "INSERT INTO cowork_threads (
-                    id, repo_root_id, workspace_id, session_id, agent_kind, requested_model_id, branch_name, created_at
-                 ) VALUES (
-                    'thread-1', 'repo-root-1', ?1, 'session-1', 'claude', NULL, 'main', '2025-01-01T00:00:00Z'
-                 )",
-                [&workspace.id],
-            )?;
-            Ok(())
-        })
-        .expect("insert dependent rows");
-
-        session_store
-            .delete_session("session-1")
-            .expect("delete session first");
         store.delete_by_id(&workspace.id).expect("delete workspace");
 
-        db.with_conn(|conn| {
-            let workspace_count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM workspaces WHERE id = ?1",
-                [&workspace.id],
-                |row| row.get(0),
-            )?;
-            let access_count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM workspace_access_modes WHERE workspace_id = ?1",
-                [&workspace.id],
-                |row| row.get(0),
-            )?;
-            let thread_count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM cowork_threads WHERE workspace_id = ?1",
-                [&workspace.id],
-                |row| row.get(0),
-            )?;
-            assert_eq!(workspace_count, 0);
-            assert_eq!(access_count, 0);
-            assert_eq!(thread_count, 0);
-            Ok(())
-        })
-        .expect("verify cleanup");
+        assert!(store
+            .find_by_id(&workspace.id)
+            .expect("find deleted workspace")
+            .is_none());
     }
 }

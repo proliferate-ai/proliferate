@@ -10,6 +10,7 @@ use super::transcript::{
     SEARCH_TRANSCRIPT_DEFAULT_LIMIT, SEARCH_TRANSCRIPT_MAX_LIMIT,
 };
 use crate::sessions::delegation::read_child_events;
+use crate::sessions::deletion::SessionDeleteWorkflow;
 use crate::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
 };
@@ -65,6 +66,7 @@ pub enum SubagentError {
 #[derive(Clone)]
 pub struct SubagentService {
     session_store: SessionStore,
+    delete_workflow: SessionDeleteWorkflow,
     link_service: SessionLinkService,
     subagent_store: SubagentStore,
     workspace_runtime: std::sync::Arc<WorkspaceRuntime>,
@@ -74,6 +76,7 @@ pub struct SubagentService {
 impl SubagentService {
     pub fn new(
         session_store: SessionStore,
+        delete_workflow: SessionDeleteWorkflow,
         link_service: SessionLinkService,
         subagent_store: SubagentStore,
         workspace_runtime: std::sync::Arc<WorkspaceRuntime>,
@@ -81,6 +84,7 @@ impl SubagentService {
     ) -> Self {
         Self {
             session_store,
+            delete_workflow,
             link_service,
             subagent_store,
             workspace_runtime,
@@ -357,7 +361,7 @@ impl SubagentService {
     }
 
     pub fn delete_session(&self, session_id: &str) -> anyhow::Result<()> {
-        self.session_store.delete_session(session_id)
+        self.delete_workflow.delete_session(session_id)
     }
 
     pub fn insert_completion_and_consume_schedule(

@@ -1,5 +1,6 @@
 pub mod attachment_storage;
 pub mod delegation;
+pub mod deletion;
 pub mod execution_summary;
 pub mod extensions;
 pub mod links;

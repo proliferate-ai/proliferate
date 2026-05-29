@@ -311,6 +311,33 @@ impl SessionLinkStore {
     }
 }
 
+pub(crate) fn delete_session_link_rows_for_session_in_tx(
+    conn: &rusqlite::Connection,
+    session_id: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM session_link_wake_schedules
+         WHERE session_link_id IN (
+            SELECT id FROM session_links
+            WHERE parent_session_id = ?1 OR child_session_id = ?1
+         )",
+        [session_id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_link_completions
+         WHERE session_link_id IN (
+            SELECT id FROM session_links
+            WHERE parent_session_id = ?1 OR child_session_id = ?1
+         )",
+        [session_id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_links WHERE parent_session_id = ?1 OR child_session_id = ?1",
+        [session_id],
+    )?;
+    Ok(())
+}
+
 fn map_session_link(row: &rusqlite::Row) -> rusqlite::Result<SessionLinkRecord> {
     let relation: String = row.get("relation")?;
     let workspace_relation: String = row.get("workspace_relation")?;

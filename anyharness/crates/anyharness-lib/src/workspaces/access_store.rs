@@ -48,14 +48,20 @@ impl WorkspaceAccessStore {
     }
 
     pub fn delete(&self, workspace_id: &str) -> anyhow::Result<()> {
-        self.db.with_conn(|conn| {
-            conn.execute(
-                "DELETE FROM workspace_access_modes WHERE workspace_id = ?1",
-                [workspace_id],
-            )?;
-            Ok(())
-        })
+        self.db
+            .with_conn(|conn| delete_workspace_access_modes_in_tx(conn, workspace_id))
     }
+}
+
+pub(crate) fn delete_workspace_access_modes_in_tx(
+    conn: &rusqlite::Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM workspace_access_modes WHERE workspace_id = ?1",
+        [workspace_id],
+    )?;
+    Ok(())
 }
 
 fn map_row(row: &rusqlite::Row) -> rusqlite::Result<WorkspaceAccessRecord> {

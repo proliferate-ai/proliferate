@@ -5,7 +5,7 @@ use super::events::insert_event_row;
 use super::live_config::{upsert_live_config_snapshot_row, upsert_pending_config_change_row};
 use super::notifications::insert_raw_notification_row;
 use super::pending_prompts::insert_pending_prompt_row;
-use super::{delete_session_in_tx, SessionStore};
+use super::SessionStore;
 use crate::origin::{decode_origin_json, encode_origin_json};
 use crate::sessions::model::{
     PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentRecord, SessionEventRecord,
@@ -21,8 +21,11 @@ impl SessionStore {
         })
     }
 
+    /// Deletes only session-store-owned rows. Use the session delete workflow
+    /// when dependent product-domain rows must be removed in the same
+    /// transaction.
     pub fn delete_session(&self, id: &str) -> anyhow::Result<()> {
-        self.db.with_tx(|conn| delete_session_in_tx(conn, id))
+        self.db.with_tx(|conn| delete_session_rows_in_tx(conn, id))
     }
 
     pub fn find_by_id(&self, id: &str) -> anyhow::Result<Option<SessionRecord>> {
@@ -98,6 +101,11 @@ impl SessionStore {
             let rows = stmt.query_map([workspace_id], |row| map_session(row))?;
             rows.collect()
         })
+    }
+
+    pub(crate) fn list_workspace_session_activity(&self) -> anyhow::Result<Vec<(String, String)>> {
+        self.db
+            .with_conn(|conn| list_workspace_session_activity_in_tx(conn))
     }
 
     pub fn list_all(&self) -> anyhow::Result<Vec<SessionRecord>> {
@@ -381,6 +389,65 @@ impl SessionStore {
             Ok(())
         })
     }
+}
+
+pub(crate) fn list_session_ids_by_workspace_in_tx(
+    conn: &rusqlite::Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<String>> {
+    let mut stmt = conn.prepare("SELECT id FROM sessions WHERE workspace_id = ?1")?;
+    let rows = stmt.query_map([workspace_id], |row| row.get::<_, String>(0))?;
+    rows.collect()
+}
+
+pub(crate) fn list_workspace_session_activity_in_tx(
+    conn: &rusqlite::Connection,
+) -> rusqlite::Result<Vec<(String, String)>> {
+    let mut stmt = conn.prepare(
+        "SELECT workspace_id,
+                MAX(MAX(COALESCE(last_prompt_at, ''), COALESCE(updated_at, ''))) AS session_at
+           FROM sessions
+          GROUP BY workspace_id",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    })?;
+    rows.collect()
+}
+
+pub(crate) fn delete_session_rows_in_tx(
+    conn: &rusqlite::Connection,
+    id: &str,
+) -> rusqlite::Result<()> {
+    // These tables are owned by the session store and do not all cascade from
+    // sessions today, so the store keeps their low-level SQL cleanup.
+    conn.execute(
+        "DELETE FROM session_background_work WHERE session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_pending_prompts WHERE session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_prompt_attachments WHERE session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_pending_config_changes WHERE session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_live_config_snapshots WHERE session_id = ?1",
+        [id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_raw_notifications WHERE session_id = ?1",
+        [id],
+    )?;
+    conn.execute("DELETE FROM session_events WHERE session_id = ?1", [id])?;
+    conn.execute("DELETE FROM sessions WHERE id = ?1", [id])?;
+    Ok(())
 }
 
 pub(super) fn map_session(row: &rusqlite::Row) -> rusqlite::Result<SessionRecord> {

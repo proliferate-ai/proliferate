@@ -4,6 +4,7 @@ pub mod access_store;
 pub mod branch_refresh;
 pub mod checkout_gate;
 pub mod creator_context;
+pub mod deletion;
 pub mod detector;
 pub mod env;
 pub mod files_runtime;

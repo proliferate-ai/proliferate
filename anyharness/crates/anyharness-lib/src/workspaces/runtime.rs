@@ -9,6 +9,7 @@ use uuid::Uuid;
 #[cfg(test)]
 use super::branch_refresh::BranchRefreshBatchOutcome;
 use super::branch_refresh::WorkspaceBranchRefreshCoordinator;
+use super::deletion::WorkspaceDeleteWorkflow;
 use super::detector;
 use super::model::{ResolvedGitContext, WorkspaceRecord};
 use super::resolver;
@@ -31,6 +32,7 @@ const BRANCH_PUBLISH_TIMEOUT: Duration = Duration::from_secs(20);
 pub struct WorkspaceRuntime {
     service: WorkspaceService,
     store: WorkspaceStore,
+    delete_workflow: WorkspaceDeleteWorkflow,
     repo_root_service: RepoRootService,
     runtime_home: PathBuf,
     branch_refresh: WorkspaceBranchRefreshCoordinator,
@@ -46,12 +48,14 @@ impl WorkspaceRuntime {
     pub fn new(
         service: WorkspaceService,
         store: WorkspaceStore,
+        delete_workflow: WorkspaceDeleteWorkflow,
         repo_root_service: RepoRootService,
         runtime_home: PathBuf,
     ) -> Self {
         Self {
             service,
             store,
+            delete_workflow,
             repo_root_service,
             runtime_home,
             branch_refresh: WorkspaceBranchRefreshCoordinator::new(),
@@ -418,7 +422,7 @@ impl WorkspaceRuntime {
     }
 
     pub fn delete_workspace_record(&self, workspace_id: &str) -> anyhow::Result<()> {
-        self.store.delete_by_id(workspace_id)
+        self.delete_workflow.delete_workspace_record(workspace_id)
     }
 
     pub fn set_display_name(
@@ -673,7 +677,7 @@ impl WorkspaceRuntime {
         }
 
         if self.store.find_by_id(workspace_id)?.is_some() {
-            self.store.delete_by_id(workspace_id)?;
+            self.delete_workflow.delete_workspace_record(workspace_id)?;
         }
 
         Ok(())
@@ -719,7 +723,8 @@ impl WorkspaceRuntime {
             );
         }
 
-        self.store.delete_by_id(&workspace.id)?;
+        self.delete_workflow
+            .delete_workspace_record(&workspace.id)?;
         Ok(())
     }
 
@@ -1022,6 +1027,7 @@ mod tests {
     use crate::repo_roots::store::RepoRootStore;
     use crate::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
     use crate::sessions::store::SessionStore;
+    use crate::workspaces::deletion::WorkspaceDeleteWorkflow;
     use crate::workspaces::service::WorkspaceService;
     use crate::workspaces::store::WorkspaceStore;
 
@@ -1378,6 +1384,7 @@ mod tests {
         WorkspaceRuntime::new(
             workspace_service,
             WorkspaceStore::new(db.clone()),
+            WorkspaceDeleteWorkflow::new(db.clone()),
             repo_root_service,
             runtime_home.to_path_buf(),
         )

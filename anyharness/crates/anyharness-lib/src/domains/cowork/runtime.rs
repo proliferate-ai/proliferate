@@ -849,7 +849,7 @@ impl CoworkRuntime {
         ) {
             Ok(link) => link,
             Err(error) => {
-                let _ = self.session_service.store().delete_session(&session.id);
+                let _ = self.session_service.delete_session(&session.id);
                 return Err(error);
             }
         };
@@ -863,7 +863,7 @@ impl CoworkRuntime {
                     wake_schedule_created = created;
                 }
                 Err(error) => {
-                    let _ = self.session_service.store().delete_session(&session.id);
+                    let _ = self.session_service.delete_session(&session.id);
                     return Err(error);
                 }
             }
@@ -878,7 +878,7 @@ impl CoworkRuntime {
                 if input.wake_on_completion {
                     let _ = self.delegation_service.delete_wake_schedule(&link.id);
                 }
-                let _ = self.session_service.store().delete_session(&session.id);
+                let _ = self.session_service.delete_session(&session.id);
                 return Err(CoworkDelegationError::Internal(anyhow::anyhow!(
                     "{error:?}"
                 )));
@@ -907,8 +907,7 @@ impl CoworkRuntime {
                         "failed to close cowork agent after initial prompt dispatch failure"
                     );
                 }
-                if let Err(delete_error) = self.session_service.store().delete_session(&started.id)
-                {
+                if let Err(delete_error) = self.session_service.delete_session(&started.id) {
                     tracing::warn!(
                         session_id = %started.id,
                         error = ?delete_error,
@@ -1397,7 +1396,7 @@ impl CoworkRuntime {
         thread_path: &PathBuf,
     ) {
         if let Some(session) = session {
-            if let Err(error) = self.session_service.store().delete_session(&session.id) {
+            if let Err(error) = self.session_service.delete_session(&session.id) {
                 tracing::warn!(
                     session_id = %session.id,
                     workspace_id = %workspace.id,

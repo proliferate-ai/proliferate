@@ -618,3 +618,46 @@ impl ReviewStore {
         })
     }
 }
+
+pub(crate) fn delete_review_rows_for_session_in_tx(
+    conn: &rusqlite::Connection,
+    session_id: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM review_feedback_jobs
+         WHERE review_run_id IN (
+            SELECT id FROM review_runs
+            WHERE parent_session_id = ?1
+         )",
+        [session_id],
+    )?;
+    conn.execute(
+        "DELETE FROM review_run_candidate_plans
+         WHERE review_run_id IN (
+            SELECT id FROM review_runs
+            WHERE parent_session_id = ?1
+         )",
+        [session_id],
+    )?;
+    conn.execute(
+        "DELETE FROM review_assignments
+         WHERE review_run_id IN (
+            SELECT id FROM review_runs
+            WHERE parent_session_id = ?1
+         ) OR reviewer_session_id = ?1",
+        [session_id],
+    )?;
+    conn.execute(
+        "DELETE FROM review_rounds
+         WHERE review_run_id IN (
+            SELECT id FROM review_runs
+            WHERE parent_session_id = ?1
+         )",
+        [session_id],
+    )?;
+    conn.execute(
+        "DELETE FROM review_runs WHERE parent_session_id = ?1",
+        [session_id],
+    )?;
+    Ok(())
+}

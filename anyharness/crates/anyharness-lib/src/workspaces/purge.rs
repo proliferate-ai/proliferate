@@ -5,11 +5,11 @@ use crate::domains::agents::portability::delete_session_agent_artifacts;
 use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::store::SessionStore;
 use crate::workspaces::checkout_gate::{CheckoutDeletionGate, CheckoutPathLockKey};
+use crate::workspaces::deletion::WorkspaceDeleteWorkflow;
 use crate::workspaces::model::WorkspaceRecord;
 use crate::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::workspaces::retire_preflight::{RetirePreflightChecker, RetirePreflightMode};
 use crate::workspaces::runtime::WorkspaceRuntime;
-use crate::workspaces::store::WorkspaceStore;
 
 #[derive(Debug)]
 pub enum WorkspacePurgeServiceOutcome {
@@ -30,7 +30,7 @@ pub enum WorkspacePurgeServiceOutcome {
 #[derive(Clone)]
 pub struct WorkspacePurgeService {
     workspace_runtime: Arc<WorkspaceRuntime>,
-    workspace_store: WorkspaceStore,
+    delete_workflow: WorkspaceDeleteWorkflow,
     session_store: SessionStore,
     attachment_storage: PromptAttachmentStorage,
     operation_gate: Arc<WorkspaceOperationGate>,
@@ -41,7 +41,7 @@ pub struct WorkspacePurgeService {
 impl WorkspacePurgeService {
     pub fn new(
         workspace_runtime: Arc<WorkspaceRuntime>,
-        workspace_store: WorkspaceStore,
+        delete_workflow: WorkspaceDeleteWorkflow,
         session_store: SessionStore,
         attachment_storage: PromptAttachmentStorage,
         operation_gate: Arc<WorkspaceOperationGate>,
@@ -50,7 +50,7 @@ impl WorkspacePurgeService {
     ) -> Self {
         Self {
             workspace_runtime,
-            workspace_store,
+            delete_workflow,
             session_store,
             attachment_storage,
             operation_gate,
@@ -146,7 +146,7 @@ impl WorkspacePurgeService {
         }
 
         if let Err(error) = self
-            .workspace_store
+            .delete_workflow
             .purge_workspace_with_sessions(workspace_id)
         {
             return self.cleanup_failed(workspace_id, &pending, &attempted_at, error);

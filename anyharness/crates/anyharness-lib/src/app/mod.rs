@@ -37,6 +37,7 @@ use crate::persistence::Db;
 use crate::repo_roots::service::RepoRootService;
 use crate::repo_roots::store::RepoRootStore;
 use crate::sessions::attachment_storage::PromptAttachmentStorage;
+use crate::sessions::deletion::SessionDeleteWorkflow;
 use crate::sessions::links::completions::LinkCompletionStore;
 use crate::sessions::links::service::SessionLinkService;
 use crate::sessions::links::store::SessionLinkStore;
@@ -62,6 +63,7 @@ use crate::terminals::TerminalService;
 use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::access_store::WorkspaceAccessStore;
 use crate::workspaces::checkout_gate::CheckoutDeletionGate;
+use crate::workspaces::deletion::WorkspaceDeleteWorkflow;
 use crate::workspaces::files_runtime::WorkspaceFilesRuntime;
 use crate::workspaces::inventory::WorktreeInventoryService;
 use crate::workspaces::operation_gate::{WorkspaceOperationGate, WorkspaceOperationKind};
@@ -149,6 +151,7 @@ impl AppState {
         let workspace_runtime = Arc::new(WorkspaceRuntime::new(
             (*workspace_service).clone(),
             WorkspaceStore::new(db.clone()),
+            WorkspaceDeleteWorkflow::new(db.clone()),
             (*repo_root_service).clone(),
             runtime_home.clone(),
         ));
@@ -185,6 +188,7 @@ impl AppState {
         ));
         let session_service = Arc::new(SessionService::new(
             SessionStore::new(db.clone()),
+            SessionDeleteWorkflow::new(db.clone()),
             WorkspaceStore::new(db.clone()),
             DynamicModelRegistryStore::new(db.clone()),
             agent_auth_config_service.clone(),
@@ -227,6 +231,7 @@ impl AppState {
         ));
         let subagent_service = Arc::new(SubagentService::new(
             SessionStore::new(db.clone()),
+            SessionDeleteWorkflow::new(db.clone()),
             session_link_service.clone(),
             SubagentStore::new(db.clone()),
             workspace_runtime.clone(),
@@ -235,6 +240,7 @@ impl AppState {
         let review_service = Arc::new(ReviewService::new(
             ReviewStore::new(db.clone()),
             SessionStore::new(db.clone()),
+            SessionDeleteWorkflow::new(db.clone()),
             session_link_service.clone(),
             plan_service.clone(),
         ));
@@ -301,7 +307,7 @@ impl AppState {
         ));
         let workspace_purge_service = Arc::new(WorkspacePurgeService::new(
             workspace_runtime.clone(),
-            WorkspaceStore::new(db.clone()),
+            WorkspaceDeleteWorkflow::new(db.clone()),
             SessionStore::new(db.clone()),
             PromptAttachmentStorage::new(runtime_home.clone()),
             workspace_operation_gate.clone(),
@@ -311,6 +317,8 @@ impl AppState {
         let workspace_retention_service = Arc::new(WorkspaceRetentionService::new(
             workspace_runtime.clone(),
             WorkspaceStore::new(db.clone()),
+            SessionStore::new(db.clone()),
+            TerminalStore::new(db.clone()),
             WorktreeRetentionPolicyStore::new(db.clone()),
             retire_preflight_checker.clone(),
             workspace_operation_gate.clone(),

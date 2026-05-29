@@ -146,6 +146,23 @@ impl TerminalStore {
         })
     }
 
+    pub(crate) fn list_workspace_command_run_activity(
+        &self,
+    ) -> anyhow::Result<Vec<(String, String)>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT workspace_id,
+                        MAX(MAX(COALESCE(completed_at, ''), COALESCE(updated_at, ''), COALESCE(created_at, ''))) AS terminal_at
+                   FROM terminal_command_runs
+                  GROUP BY workspace_id",
+            )?;
+            let rows = stmt.query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?;
+            rows.collect()
+        })
+    }
+
     pub fn set_latest_setup_run(
         &self,
         workspace_id: &str,
@@ -220,6 +237,21 @@ impl TerminalStore {
             Ok(())
         })
     }
+}
+
+pub(crate) fn delete_workspace_terminal_rows_in_tx(
+    conn: &rusqlite::Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM workspace_setup_state WHERE workspace_id = ?1",
+        [workspace_id],
+    )?;
+    conn.execute(
+        "DELETE FROM terminal_command_runs WHERE workspace_id = ?1",
+        [workspace_id],
+    )?;
+    Ok(())
 }
 
 fn map_command_run_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<TerminalCommandRunRecord> {

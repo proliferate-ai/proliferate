@@ -12,12 +12,6 @@ fn count_rows(db: &Db, table: &str, session_id: &str) -> i64 {
         .expect("count rows")
 }
 
-fn count_all_rows(db: &Db, table: &str) -> i64 {
-    let sql = format!("SELECT COUNT(*) FROM {table}");
-    db.with_conn(|conn| conn.query_row(&sql, [], |row| row.get(0)))
-        .expect("count all rows")
-}
-
 fn seed_workspace(db: &Db) {
     db.with_conn(|conn| {
         conn.execute(

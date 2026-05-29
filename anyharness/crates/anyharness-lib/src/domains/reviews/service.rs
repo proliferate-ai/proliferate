@@ -14,6 +14,7 @@ use super::service_detail::{
 use super::store::ReviewStore;
 use crate::domains::plans::model::PlanRecord;
 use crate::domains::plans::service::PlanService;
+use crate::sessions::deletion::SessionDeleteWorkflow;
 use crate::sessions::links::model::{SessionLinkRelation, SessionLinkWorkspaceRelation};
 use crate::sessions::links::service::{CreateSessionLinkInput, SessionLinkService};
 use crate::sessions::store::SessionStore;
@@ -93,6 +94,7 @@ pub enum ReviewError {
 pub struct ReviewService {
     store: ReviewStore,
     session_store: SessionStore,
+    delete_workflow: SessionDeleteWorkflow,
     link_service: SessionLinkService,
     plan_service: ArcPlanService,
 }
@@ -103,12 +105,14 @@ impl ReviewService {
     pub fn new(
         store: ReviewStore,
         session_store: SessionStore,
+        delete_workflow: SessionDeleteWorkflow,
         link_service: SessionLinkService,
         plan_service: ArcPlanService,
     ) -> Self {
         Self {
             store,
             session_store,
+            delete_workflow,
             link_service,
             plan_service,
         }
@@ -471,7 +475,7 @@ impl ReviewService {
         &self,
         session_id: &str,
     ) -> Result<(), ReviewError> {
-        self.session_store
+        self.delete_workflow
             .delete_session(session_id)
             .map_err(ReviewError::Internal)
     }

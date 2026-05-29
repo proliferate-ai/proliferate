@@ -327,7 +327,9 @@ mod tests {
     use rusqlite::params;
 
     use super::*;
-    use crate::{persistence::Db, sessions::model::SessionRecord};
+    use crate::{
+        persistence::Db, sessions::deletion::SessionDeleteWorkflow, sessions::model::SessionRecord,
+    };
 
     fn seed_workspace(db: &Db) {
         db.with_conn(|conn| {
@@ -583,12 +585,12 @@ mod tests {
 
     #[test]
     fn delete_session_removes_parent_and_child_links() {
-        let (_db, session_store, service) = service_fixture();
+        let (db, _session_store, service) = service_fixture();
         service
             .create_link(create_input("parent-1", "child-1"))
             .expect("create link");
 
-        session_store
+        SessionDeleteWorkflow::new(db)
             .delete_session("parent-1")
             .expect("delete parent");
 

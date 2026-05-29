@@ -268,6 +268,36 @@ impl CoworkStore {
     }
 }
 
+pub(crate) fn delete_cowork_rows_for_session_in_tx(
+    conn: &rusqlite::Connection,
+    session_id: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM cowork_threads WHERE session_id = ?1",
+        [session_id],
+    )?;
+    conn.execute(
+        "DELETE FROM cowork_managed_workspaces WHERE parent_session_id = ?1",
+        [session_id],
+    )?;
+    Ok(())
+}
+
+pub(crate) fn delete_cowork_rows_for_workspace_in_tx(
+    conn: &rusqlite::Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM cowork_threads WHERE workspace_id = ?1",
+        [workspace_id],
+    )?;
+    conn.execute(
+        "DELETE FROM cowork_managed_workspaces WHERE workspace_id = ?1",
+        [workspace_id],
+    )?;
+    Ok(())
+}
+
 fn map_root_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<CoworkRootRecord> {
     Ok(CoworkRootRecord {
         id: row.get("id")?,
