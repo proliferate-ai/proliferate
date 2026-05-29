@@ -74,7 +74,17 @@ export function WebAppShell() {
     <AppShell
       sidebar={sidebarRendered ? (
         <>
-          <CollapsedSidebarRailSlot />
+          <CollapsedSidebarRail
+            pathname={location.pathname}
+            onOpenSidebar={() => setSidebarOpen(true)}
+            onNavigate={(path) => navigate(path)}
+            onOpenSettings={() => {
+              navigate(routes.settings, {
+                state: { backgroundLocation: location },
+              });
+            }}
+            className="lg:hidden"
+          />
           <button
             type="button"
             aria-label="Close sidebar"
@@ -125,15 +135,6 @@ export function WebAppShell() {
   );
 }
 
-function CollapsedSidebarRailSlot() {
-  return (
-    <div
-      aria-hidden="true"
-      className="hidden h-full w-12 shrink-0 border-r border-sidebar-border bg-sidebar sm:block lg:hidden"
-    />
-  );
-}
-
 function sidebarOpenFromViewport() {
   return typeof window === "undefined" || !window.matchMedia
     ? true
@@ -145,6 +146,7 @@ interface CollapsedSidebarRailProps {
   onOpenSidebar: () => void;
   onNavigate: (path: string) => void;
   onOpenSettings: () => void;
+  className?: string;
 }
 
 function CollapsedSidebarRail({
@@ -152,6 +154,7 @@ function CollapsedSidebarRail({
   onOpenSidebar,
   onNavigate,
   onOpenSettings,
+  className = "",
 }: CollapsedSidebarRailProps) {
   const items: readonly CollapsedRailItem[] = [
     {
@@ -195,7 +198,7 @@ function CollapsedSidebarRail({
   return (
     <aside
       aria-label="Collapsed sidebar"
-      className="hidden h-full w-12 shrink-0 cursor-pointer flex-col border-r border-sidebar-border bg-sidebar px-1.5 py-2 text-sidebar-foreground transition-colors hover:bg-sidebar-accent/25 sm:flex"
+      className={`hidden h-full w-12 shrink-0 cursor-pointer flex-col border-r border-sidebar-border bg-sidebar px-1.5 py-2 text-sidebar-foreground transition-colors hover:bg-sidebar-accent/25 sm:flex ${className}`}
       onClick={onOpenSidebar}
     >
       <IconButton
