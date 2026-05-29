@@ -1,6 +1,6 @@
-import { Checkbox } from "@/components/ui/Checkbox";
-import { Select } from "@/components/ui/Select";
-import { Textarea } from "@/components/ui/Textarea";
+import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
+import { Select } from "@proliferate/ui/primitives/Select";
+import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import type {

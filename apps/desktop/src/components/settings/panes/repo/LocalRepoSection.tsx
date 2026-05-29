@@ -5,15 +5,15 @@ import {
   EnvironmentAdvancedDisclosure,
   EnvironmentField,
   EnvironmentSection,
-} from "@/components/ui/EnvironmentLayout";
-import { EnvironmentSearchSelect } from "@/components/ui/EnvironmentSearchSelect";
+} from "@proliferate/ui/layout/EnvironmentLayout";
+import { EnvironmentSearchSelect } from "@proliferate/ui/primitives/EnvironmentSearchSelect";
 import { RunCommandHelp } from "@/components/settings/shared/RunCommandHelp";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Checkbox } from "@/components/ui/Checkbox";
-import { Monitor } from "@/components/ui/icons";
+import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
+import { Monitor } from "@proliferate/ui/icons";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@/components/ui/Label";
-import { Textarea } from "@/components/ui/Textarea";
+import { Label } from "@proliferate/ui/primitives/Label";
+import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { useRepositorySettings } from "@/hooks/settings/workflows/use-repository-settings";
 import {
   isSetupHintEnabled,

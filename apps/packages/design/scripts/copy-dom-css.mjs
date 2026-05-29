@@ -1,10 +1,17 @@
-import { copyFile, mkdir } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { copyFile, mkdir, readdir } from "node:fs/promises";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
-const source = resolve(root, "src/dom.css");
-const target = resolve(root, "dist/dom.css");
+const root = fileURLToPath(new URL("..", import.meta.url));
+const sourceDir = resolve(root, "src/css");
+const targetDir = resolve(root, "dist/css");
 
-await mkdir(dirname(target), { recursive: true });
-await copyFile(source, target);
+await mkdir(targetDir, { recursive: true });
+
+for (const entry of await readdir(sourceDir)) {
+  if (!entry.endsWith(".css")) {
+    continue;
+  }
+
+  await copyFile(resolve(sourceDir, entry), resolve(targetDir, entry));
+}

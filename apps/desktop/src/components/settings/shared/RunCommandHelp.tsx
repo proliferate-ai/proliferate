@@ -1,5 +1,5 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ExternalLink } from "@/components/ui/icons";
+import { ExternalLink } from "@proliferate/ui/icons";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 
 interface RunCommandHelpProps {

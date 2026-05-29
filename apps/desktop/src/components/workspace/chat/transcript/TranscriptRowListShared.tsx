@@ -1,5 +1,5 @@
 import type { ReactNode, RefObject } from "react";
-import { Spinner } from "@/components/ui/icons";
+import { Spinner } from "@proliferate/ui/icons";
 import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 

@@ -1,12 +1,12 @@
 import { useCallback, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
   AppShellBrowserIcon,
   AppShellPlusIcon,
   AppShellTerminalIcon,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import type { RightPanelNewTabMenuDefault } from "@/lib/infra/right-panel-new-tab-menu";
 
 interface RightPanelNewTabMenuProps {

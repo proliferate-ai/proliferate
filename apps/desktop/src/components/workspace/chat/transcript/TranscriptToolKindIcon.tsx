@@ -6,8 +6,8 @@ import {
   FolderList,
   Settings,
   Terminal,
-} from "@/components/ui/icons";
-import { ProliferateIcon } from "@/components/ui/proliferate-icons";
+} from "@proliferate/ui/icons";
+import { ProliferateIcon } from "@proliferate/ui/proliferate-icons";
 import type { ToolDisplayIconKey } from "@proliferate/product-domain/chats/tools/tool-call-display";
 
 export function ToolKindIcon({ iconKey }: { iconKey: ToolDisplayIconKey }) {

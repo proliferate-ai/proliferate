@@ -1,13 +1,13 @@
 import type { ChangeEvent } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@/components/ui/Label";
-import { Plus, Trash } from "@/components/ui/icons";
+import { Label } from "@proliferate/ui/primitives/Label";
+import { Plus, Trash } from "@proliferate/ui/icons";
 import {
   EnvironmentField,
   EnvironmentPanel,
   EnvironmentPanelRow,
-} from "@/components/ui/EnvironmentLayout";
+} from "@proliferate/ui/layout/EnvironmentLayout";
 import type {
   CloudRepoEnvVarRow,
   CloudRepoSharedEnvFile,

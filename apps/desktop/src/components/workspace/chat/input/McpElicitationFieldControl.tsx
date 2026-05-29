@@ -1,10 +1,10 @@
 import type { McpElicitationField } from "@anyharness/sdk";
 import type { ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Checkbox } from "@/components/ui/Checkbox";
+import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@/components/ui/Label";
-import { Select } from "@/components/ui/Select";
+import { Label } from "@proliferate/ui/primitives/Label";
+import { Select } from "@proliferate/ui/primitives/Select";
 
 export type McpDraftValue = string | boolean | string[];
 

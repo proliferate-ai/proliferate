@@ -1,5 +1,5 @@
 import { useState, type KeyboardEvent, type ReactNode } from "react";
-import { ChevronRight } from "@/components/ui/icons";
+import { ChevronRight } from "@proliferate/ui/icons";
 
 export type ToolActionStatus = "running" | "completed" | "failed";
 

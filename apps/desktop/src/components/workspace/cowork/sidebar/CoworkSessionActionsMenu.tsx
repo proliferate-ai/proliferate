@@ -1,5 +1,5 @@
-import { Pencil, Trash } from "@/components/ui/icons";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
+import { Pencil, Trash } from "@proliferate/ui/icons";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 
 export function CoworkSessionActionsMenu({
   onRename,

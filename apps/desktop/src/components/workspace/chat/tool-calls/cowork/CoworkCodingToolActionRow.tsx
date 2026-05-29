@@ -1,16 +1,16 @@
 import type { ToolCallItem, ToolResultTextContentPart } from "@anyharness/sdk";
 import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { MarkdownRenderer } from "@/components/ui/content/MarkdownRenderer";
+import { MarkdownRenderer } from "@/components/content/ui/MarkdownRenderer";
 import {
   ChevronRight,
   ExternalLink,
   FolderPlus,
   GitBranch,
   Spinner,
-} from "@/components/ui/icons";
-import { ProliferateIcon } from "@/components/ui/proliferate-icons";
-import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
+} from "@proliferate/ui/icons";
+import { ProliferateIcon } from "@proliferate/ui/proliferate-icons";
+import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { ToolActionDetailsPanel } from "@/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { ToolActionRow } from "@/components/workspace/chat/tool-calls/ToolActionRow";
 import {

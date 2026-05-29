@@ -3,11 +3,11 @@ import { useId } from "react";
 import { AGENT_SETUP_COPY } from "@/copy/agents/agents-copy";
 import { type AgentReconcileState } from "@/lib/domain/agents/status-presentation";
 import { useAgentSetupWorkflow } from "@/hooks/agents/workflows/use-agent-setup-workflow";
-import { ProviderIcon } from "@/components/ui/provider-icons";
+import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@/components/ui/Label";
-import { ModalShell } from "@/components/ui/ModalShell";
+import { Label } from "@proliferate/ui/primitives/Label";
+import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 
 interface AgentSetupModalProps {
   agent: AgentSummary;

@@ -318,7 +318,7 @@ Phase 1 starts.
 
 - **Theming tokens.** `--text-chat` and `--text-chat--line-height` are
   generated from `apps/packages/design/src/tokens.ts`; `vertical-scroll-fade-mask`
-  and `--edge-fade-distance` live in `apps/packages/design/src/dom.css`. Shared
+  and `--edge-fade-distance` live in `apps/packages/design/src/css/dom.css`. Shared
   components must use those shared sources, and `chat-transcript.md`'s
   pinned-value table points there.
 - **Telemetry & privacy.** Masking attributes stay in shared JSX (§5).

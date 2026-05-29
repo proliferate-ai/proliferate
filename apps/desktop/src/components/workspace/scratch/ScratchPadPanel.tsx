@@ -9,7 +9,7 @@ import {
   Copy,
   Plus,
   Trash,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import {
   ScratchCodeMirrorEditor,
   type ScratchCodeMirrorEditorHandle,

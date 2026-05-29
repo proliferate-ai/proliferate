@@ -11,7 +11,7 @@ import { GitPanelHeader } from "./GitPanelHeader";
 import { GitReviewFileRow } from "./GitReviewFileRow";
 import { GitReviewFileTree } from "./GitReviewFileTree";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { CheckCircleFilled, ChevronRight, GitBranchIcon, RefreshCw } from "@/components/ui/icons";
+import { CheckCircleFilled, ChevronRight, GitBranchIcon, RefreshCw } from "@proliferate/ui/icons";
 import { PaneSideOverlay } from "@/components/workspace/pane/PaneSideOverlay";
 import { useDiffReviewMeasurement } from "@/hooks/workspaces/files/use-diff-review-measurement";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";

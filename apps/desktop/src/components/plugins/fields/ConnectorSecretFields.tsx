@@ -4,8 +4,8 @@ import type { ConnectorCatalogEntry, ConnectorCatalogField } from "@/lib/domain/
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@/components/ui/Label";
-import { ExternalLink } from "@/components/ui/icons";
+import { Label } from "@proliferate/ui/primitives/Label";
+import { ExternalLink } from "@proliferate/ui/icons";
 
 export function ConnectorSecretFields({
   autoFocus = true,

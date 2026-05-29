@@ -8,8 +8,8 @@ import {
   FilePen,
   GitBranchIcon,
   type IconProps,
-} from "@/components/ui/icons";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
+} from "@proliferate/ui/icons";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import type { GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-diff";
 
 type GitReviewBaseMode = Exclude<GitPanelMode, "working_tree_composite">;

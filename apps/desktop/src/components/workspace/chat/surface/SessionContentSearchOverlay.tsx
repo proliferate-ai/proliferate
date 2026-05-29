@@ -10,7 +10,7 @@ import {
   ArrowUp,
   Search,
   X,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import {
   selectVisibleContentSearchMatchIds,
   type ContentSearchSurface,

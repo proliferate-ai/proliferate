@@ -1,10 +1,10 @@
 import { useMobilityFooterContext } from "@/hooks/workspaces/mobility/use-mobility-footer-context";
 import { useWorkspaceMobilityFooterFlow } from "@/hooks/workspaces/mobility/use-workspace-mobility-footer-flow";
-import { PopoverButton } from "@/components/ui/PopoverButton";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import {
   ChevronDown,
   Spinner,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import { SidebarWorkspaceVariantIcon } from "@/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
 import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
 import { WorkspaceMobilityLocationPopover } from "./WorkspaceMobilityLocationPopover";

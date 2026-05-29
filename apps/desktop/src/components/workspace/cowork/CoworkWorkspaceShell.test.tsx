@@ -41,7 +41,7 @@ vi.mock("@proliferate/ui/primitives/IconButton", () => ({
   ),
 }));
 
-vi.mock("@/components/ui/icons", () => ({
+vi.mock("@proliferate/ui/icons", () => ({
   SplitPanel: () => <span data-testid="split-panel-icon" />,
 }));
 

@@ -1,5 +1,5 @@
 import type { ChangeEvent } from "react";
-import { EnvironmentField } from "@/components/ui/EnvironmentLayout";
+import { EnvironmentField } from "@proliferate/ui/layout/EnvironmentLayout";
 import { RunCommandHelp } from "@/components/settings/shared/RunCommandHelp";
 import { Input } from "@proliferate/ui/primitives/Input";
 

@@ -6,7 +6,7 @@ import {
 import {
   CheckCircleFilled,
   CircleAlert,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 
 export function WorkspaceMobilityOverlay() {
   const overlayState = useWorkspaceMobilityOverlayState();

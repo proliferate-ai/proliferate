@@ -1,5 +1,5 @@
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { FileText, SplitPanel } from "@/components/ui/icons";
+import { FileText, SplitPanel } from "@proliferate/ui/icons";
 
 interface CoworkWorkspaceHeaderProps {
   title: string;

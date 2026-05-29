@@ -1,5 +1,5 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ModalShell } from "@/components/ui/ModalShell";
+import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
 
 export function UpdateRestartDialog() {

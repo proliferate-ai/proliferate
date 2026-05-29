@@ -1,10 +1,10 @@
 import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
-import { SettingsMenu } from "@/components/ui/SettingsMenu";
+import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import {
   Brain,
   Sparkles,
-} from "@/components/ui/icons";
-import { ProviderIcon } from "@/components/ui/provider-icons";
+} from "@proliferate/ui/icons";
+import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import type { AgentModelGroup } from "@/lib/domain/agents/model-options";
 import {
   listConfiguredSessionControlValues,

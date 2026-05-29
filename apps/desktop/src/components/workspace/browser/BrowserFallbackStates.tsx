@@ -3,7 +3,7 @@ import {
   CircleAlert,
   ExternalLink,
   Globe,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 
 export function BrowserUnavailableOverlay({

@@ -4,7 +4,7 @@ import {
   AccountSettingsPane,
   type AccountProviderView,
 } from "@proliferate/product-ui/account/AccountSettingsPane";
-import { ExternalLink, Link2, RefreshCw } from "@/components/ui/icons";
+import { ExternalLink, Link2, RefreshCw } from "@proliferate/ui/icons";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";

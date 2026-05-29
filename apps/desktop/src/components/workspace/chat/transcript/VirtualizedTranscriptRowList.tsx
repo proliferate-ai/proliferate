@@ -11,7 +11,7 @@ import {
 } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 import type { TranscriptVirtualizationMode } from "@proliferate/product-domain/chats/transcript/transcript-virtualization-config";
 import { useTranscriptVirtualizerBlankFallback } from "@/hooks/chat/ui/use-transcript-virtualizer-blank-fallback";
-import { DebugProfiler } from "@/components/ui/DebugProfiler";
+import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 import {
   buildRenderableRows,

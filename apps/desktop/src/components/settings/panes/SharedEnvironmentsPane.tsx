@@ -3,12 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { useAgentAuthMutations } from "@proliferate/cloud-sdk-react/hooks/agent-auth";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Badge } from "@/components/ui/Badge";
-import { CloudIcon } from "@/components/ui/icons";
+import { Badge } from "@proliferate/ui/primitives/Badge";
+import { CloudIcon } from "@proliferate/ui/icons";
 import {
   EnvironmentField,
   EnvironmentSection,
-} from "@/components/ui/EnvironmentLayout";
+} from "@proliferate/ui/layout/EnvironmentLayout";
 import { RepoEnvVarsCard } from "@/components/cloud/repo-settings/RepoEnvVarsCard";
 import { RepoRunCommandCard } from "@/components/cloud/repo-settings/RepoRunCommandCard";
 import { RepoSharedEnvFilesCard } from "@/components/cloud/repo-settings/RepoSharedEnvFilesCard";

@@ -1,0 +1,136 @@
+import { useEffect, useId, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { X } from "../icons";
+import { useNativeOverlayRegistration } from "../overlays/overlay-presence";
+
+export interface ModalShellProps {
+  open: boolean;
+  onClose: () => void;
+  disableClose?: boolean;
+  title: ReactNode;
+  description?: ReactNode;
+  headerContent?: ReactNode;
+  footer?: ReactNode;
+  children: ReactNode;
+  sizeClassName?: string;
+  bodyClassName?: string;
+  footerClassName?: string;
+  overlayClassName?: string;
+  panelClassName?: string;
+  telemetryBlocked?: boolean;
+}
+
+export function ModalShell({
+  open,
+  onClose,
+  disableClose = false,
+  title,
+  description,
+  headerContent,
+  footer,
+  children,
+  sizeClassName = "max-w-md",
+  bodyClassName = "px-5 pb-5 pt-4",
+  footerClassName = "flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-3",
+  overlayClassName = "bg-black/70 backdrop-blur-sm",
+  panelClassName = "border-border bg-background shadow-lg",
+  telemetryBlocked = false,
+}: ModalShellProps) {
+  const titleId = useId();
+  const descriptionId = useId();
+  useNativeOverlayRegistration(open);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      event.preventDefault();
+      if (disableClose) {
+        return;
+      }
+      onClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [disableClose, onClose, open]);
+
+  if (!open) {
+    return null;
+  }
+
+  return createPortal(
+    (
+      <div
+        className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${overlayClassName}`}
+        onClick={disableClose ? undefined : onClose}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          aria-describedby={description ? descriptionId : undefined}
+          data-telemetry-block={telemetryBlocked ? true : undefined}
+          className={`relative flex w-full flex-col overflow-hidden rounded-2xl border ${panelClassName} ${sizeClassName}`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={disableClose}
+            aria-label="Close"
+            className="absolute right-4 top-4 z-10 rounded-md p-1 text-muted-foreground opacity-70 transition-opacity hover:opacity-100 disabled:opacity-30"
+          >
+            <X className="size-4" />
+          </button>
+
+          {headerContent ? (
+            <>
+              <h2 id={titleId} className="sr-only">
+                {title}
+              </h2>
+              {description && (
+                <p id={descriptionId} className="sr-only">
+                  {description}
+                </p>
+              )}
+              <div className="shrink-0 px-5 py-3 pr-12">
+                {headerContent}
+              </div>
+            </>
+          ) : (
+            <div className="shrink-0 px-5 pb-3 pr-10 pt-5">
+              <h2 id={titleId} className="text-lg font-medium tracking-tight text-foreground">
+                {title}
+              </h2>
+              {description && (
+                <p id={descriptionId} className="mt-1 text-xs text-muted-foreground">
+                  {description}
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className={`min-h-0 flex-1 ${bodyClassName}`}>
+            {children}
+          </div>
+
+          {footer && (
+            <div className={footerClassName}>
+              {footer}
+            </div>
+          )}
+        </div>
+      </div>
+    ),
+    document.body,
+  );
+}

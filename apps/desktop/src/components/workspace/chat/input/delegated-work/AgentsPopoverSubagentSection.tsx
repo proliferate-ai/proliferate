@@ -1,5 +1,5 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ExternalLink, Robot } from "@/components/ui/icons";
+import { ExternalLink, Robot } from "@proliferate/ui/icons";
 import type {
   DelegatedWorkComposerViewModel,
 } from "@/hooks/chat/use-delegated-work-composer";

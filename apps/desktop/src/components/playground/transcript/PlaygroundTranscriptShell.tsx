@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { AutoHideScrollArea } from "@/components/ui/layout/AutoHideScrollArea";
-import { Settings, Sparkles } from "@/components/ui/icons";
+import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
+import { Settings, Sparkles } from "@proliferate/ui/icons";
 import { ToolActionDetailsPanel } from "@/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { ToolActionRow } from "@/components/workspace/chat/tool-calls/ToolActionRow";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";

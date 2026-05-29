@@ -1,13 +1,13 @@
 import type { FC, ReactNode } from "react";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
-import { SettingsMenu } from "@/components/ui/SettingsMenu";
+import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { DiffViewer } from "@/components/ui/content/DiffViewer";
-import { FileDiffCard } from "@/components/ui/content/FileDiffCard";
-import { Monitor, Moon, Sun } from "@/components/ui/icons";
-import { Switch } from "@/components/ui/Switch";
+import { DiffViewer } from "@/components/content/ui/DiffViewer";
+import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
+import { Monitor, Moon, Sun } from "@proliferate/ui/icons";
+import { Switch } from "@proliferate/ui/primitives/Switch";
 import {
   READABLE_CODE_FONT_SIZE_LABELS,
   READABLE_CODE_FONT_SIZE_OPTIONS,

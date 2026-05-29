@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ChevronDown } from "@/components/ui/icons";
+import { ChevronDown } from "@proliferate/ui/icons";
 
 interface ComposerAttachedPanelProps {
   header?: ReactNode;

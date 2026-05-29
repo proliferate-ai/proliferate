@@ -2,7 +2,7 @@ import type { CoworkThread } from "@anyharness/sdk";
 import {
   ChevronDown,
   ChevronRight,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { SidebarStatusIndicatorView } from "@/components/workspace/shell/sidebar/SidebarIndicators";
 import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";

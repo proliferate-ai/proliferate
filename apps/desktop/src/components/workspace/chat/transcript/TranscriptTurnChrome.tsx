@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CircleQuestion, Sparkles } from "@/components/ui/icons";
+import { CircleQuestion, Sparkles } from "@proliferate/ui/icons";
 import { CopyMessageButton } from "@/components/workspace/chat/transcript/CopyMessageButton";
 import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
 import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";

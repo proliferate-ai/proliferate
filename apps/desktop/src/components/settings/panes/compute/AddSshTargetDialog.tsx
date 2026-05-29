@@ -1,9 +1,9 @@
 import { useState, type CSSProperties, type FormEvent } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@/components/ui/Label";
-import { ModalShell } from "@/components/ui/ModalShell";
-import { Select } from "@/components/ui/Select";
+import { Label } from "@proliferate/ui/primitives/Label";
+import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
+import { Select } from "@proliferate/ui/primitives/Select";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useComputeTargetEnrollment } from "@/hooks/settings/workflows/use-compute-target-enrollment";

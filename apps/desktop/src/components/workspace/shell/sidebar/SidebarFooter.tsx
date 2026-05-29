@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { Settings } from "@/components/ui/icons";
+import { Settings } from "@proliferate/ui/icons";
 
 export function SidebarFooter() {
   const navigate = useNavigate();

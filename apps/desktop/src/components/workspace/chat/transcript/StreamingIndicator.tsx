@@ -1,5 +1,5 @@
 import { ThinkingText } from "@/components/feedback/ThinkingText";
-import { DebugProfiler } from "@/components/ui/DebugProfiler";
+import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 
 interface StreamingIndicatorProps {

@@ -1,9 +1,9 @@
 import { Fragment } from "react";
 import type { ContentPart } from "@anyharness/sdk";
-import { FileIcon, Link2, Spinner, X } from "@/components/ui/icons";
+import { FileIcon, Link2, Spinner, X } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { FilePathLink } from "@/components/ui/content/FilePathLink";
-import { FileTreeEntryIcon } from "@/components/ui/file-icons";
+import { FilePathLink } from "@/components/content/ui/FilePathLink";
+import { FileTreeEntryIcon } from "@/components/workspace/files/file-icons";
 import { PlanReferenceAttachmentCard } from "@/components/workspace/chat/content/PlanReferenceAttachmentCard";
 import { usePromptAttachmentUrl } from "@/hooks/access/anyharness/sessions/use-prompt-attachment-url";
 import {

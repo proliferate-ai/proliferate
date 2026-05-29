@@ -1,0 +1,57 @@
+// @vitest-environment jsdom
+
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
+import { useNativeOverlayOpen } from "@proliferate/ui/overlays/overlay-presence";
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+function NativeOverlayObserver() {
+  const open = useNativeOverlayOpen();
+  return <div data-testid="native-overlay-state" data-open={String(open)} />;
+}
+
+describe("ModalShell", () => {
+  it("registers as a native overlay while open", async () => {
+    const onClose = vi.fn();
+    const rendered = render(
+      <>
+        <NativeOverlayObserver />
+        <ModalShell open title="Dialog" onClose={onClose}>
+          Content
+        </ModalShell>
+      </>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("native-overlay-state").dataset.open).toBe("true");
+    });
+
+    rendered.rerender(
+      <>
+        <NativeOverlayObserver />
+        <ModalShell open={false} title="Dialog" onClose={onClose}>
+          Content
+        </ModalShell>
+      </>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("native-overlay-state").dataset.open).toBe("false");
+    });
+  });
+
+  it("can mark the portaled dialog panel as telemetry blocked", () => {
+    render(
+      <ModalShell open title="Support" onClose={vi.fn()} telemetryBlocked>
+        Content
+      </ModalShell>,
+    );
+
+    expect(screen.getByRole("dialog").getAttribute("data-telemetry-block")).toBe("true");
+  });
+});

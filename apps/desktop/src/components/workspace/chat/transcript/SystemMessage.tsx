@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ChevronRight } from "@/components/ui/icons";
+import { ChevronRight } from "@proliferate/ui/icons";
 
 export interface SystemMessageProps {
   content: string;

@@ -1,16 +1,16 @@
 import { useState } from "react";
 import type { WorktreeInventoryRow } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
-import { GitBranch, RefreshCw, Trash } from "@/components/ui/icons";
+import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
+import { GitBranch, RefreshCw, Trash } from "@proliferate/ui/icons";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@/components/ui/Label";
+import { Label } from "@proliferate/ui/primitives/Label";
 import {
   EnvironmentField,
   EnvironmentPanel,
   EnvironmentPanelRow,
   EnvironmentSection,
-} from "@/components/ui/EnvironmentLayout";
+} from "@proliferate/ui/layout/EnvironmentLayout";
 import { useWorktreeCleanupPolicy } from "@/hooks/workspaces/facade/use-worktree-cleanup-policy";
 import {
   useWorktreeSettingsTargets,

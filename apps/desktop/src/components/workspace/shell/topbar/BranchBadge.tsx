@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Check, Copy } from "@/components/ui/icons";
+import { Check, Copy } from "@proliferate/ui/icons";
 
 export function BranchBadge({ branchName }: { branchName: string }) {
   const [copied, setCopied] = useState(false);

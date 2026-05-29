@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Check, ChevronDown, Copy } from "@/components/ui/icons";
+import { Check, ChevronDown, Copy } from "@proliferate/ui/icons";
 import { PlanMarkdownBody } from "@/components/workspace/chat/content/PlanMarkdownBody";
 
 interface CollapsiblePlanCardProps {

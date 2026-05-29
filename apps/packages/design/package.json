@@ -16,13 +16,17 @@
       "import": "./dist/react-native.js"
     },
     "./theme.css": "./dist/theme.css",
-    "./dom.css": "./dist/dom.css"
+    "./dom.css": "./dist/css/dom.css",
+    "./desktop.css": "./dist/css/desktop.css"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/generate-theme.mjs && node scripts/copy-dom-css.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.2.8",
+    "@fontsource-variable/manrope": "^5.2.8",
+    "@fontsource-variable/space-grotesk": "^5.2.10",
     "tailwindcss": "^4"
   },
   "devDependencies": {

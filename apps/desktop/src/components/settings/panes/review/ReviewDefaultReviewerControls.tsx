@@ -3,7 +3,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import {
   Plus,
   X,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import type { AgentModelGroup } from "@/lib/domain/agents/model-options";
 import {
   MAX_REVIEWERS_PER_RUN,

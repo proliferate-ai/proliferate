@@ -1,8 +1,8 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { MoreHorizontal } from "@/components/ui/icons";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
+import { MoreHorizontal } from "@proliferate/ui/icons";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PaneIconButton } from "./PaneHeader";
 
 export function PaneOptionsMenu({

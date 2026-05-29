@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   Clock,
   Spinner,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import type {
   SidebarDetailIndicator,
   SidebarIndicatorAction,

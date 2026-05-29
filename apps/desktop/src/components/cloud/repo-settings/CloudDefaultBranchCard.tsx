@@ -1,5 +1,5 @@
-import { EnvironmentField } from "@/components/ui/EnvironmentLayout";
-import { EnvironmentSearchSelect } from "@/components/ui/EnvironmentSearchSelect";
+import { EnvironmentField } from "@proliferate/ui/layout/EnvironmentLayout";
+import { EnvironmentSearchSelect } from "@proliferate/ui/primitives/EnvironmentSearchSelect";
 
 interface CloudDefaultBranchCardProps {
   value: string | null;

@@ -1,7 +1,7 @@
 import { forwardRef, type HTMLAttributes } from "react";
 import { twMerge } from "tailwind-merge";
 
-type BadgeTone = "neutral" | "success" | "info" | "warning" | "destructive";
+export type BadgeTone = "neutral" | "accent" | "success" | "info" | "warning" | "destructive";
 
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   tone?: BadgeTone;
@@ -9,6 +9,7 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 
 const toneClasses: Record<BadgeTone, string> = {
   neutral: "border-border bg-accent text-muted-foreground",
+  accent: "border-border/70 bg-accent text-accent-foreground",
   success: "border-success/25 bg-success/10 text-success",
   info: "border-info/25 bg-info/10 text-info",
   warning: "border-warning/30 bg-warning/10 text-warning",

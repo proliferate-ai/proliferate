@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Badge } from "@/components/ui/Badge";
-import { ModalShell } from "@/components/ui/ModalShell";
-import { Plus, Search } from "@/components/ui/icons";
+import { Badge } from "@proliferate/ui/primitives/Badge";
+import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
+import { Plus, Search } from "@proliferate/ui/icons";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { ConnectorIcon } from "@/components/plugins/status/ConnectorIcon";
 import type { InstalledConnectorRecord } from "@/lib/domain/mcp/types";

@@ -1,7 +1,7 @@
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Select } from "@/components/ui/Select";
-import { Trash } from "@/components/ui/icons";
+import { Select } from "@proliferate/ui/primitives/Select";
+import { Trash } from "@proliferate/ui/icons";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import {
   Avatar,

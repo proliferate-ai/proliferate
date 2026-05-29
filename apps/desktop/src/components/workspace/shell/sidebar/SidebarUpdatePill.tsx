@@ -1,5 +1,5 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Check, Spinner } from "@/components/ui/icons";
+import { Check, Spinner } from "@proliferate/ui/icons";
 import type { UpdaterPhase } from "@/hooks/access/tauri/use-updater";
 
 interface SidebarUpdatePillProps {

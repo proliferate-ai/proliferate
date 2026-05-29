@@ -1,5 +1,5 @@
 import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
-import { CloudIcon, Monitor, Terminal, Tree } from "@/components/ui/icons";
+import { CloudIcon, Monitor, Terminal, Tree } from "@proliferate/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import type { ComputeTargetAppearance } from "@/lib/domain/compute/target-appearance";
 import type { SidebarWorkspaceVariant } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";

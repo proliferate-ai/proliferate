@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ArrowRight, ExternalLink, FileText } from "@/components/ui/icons";
-import { ModalShell } from "@/components/ui/ModalShell";
-import { Textarea } from "@/components/ui/Textarea";
+import { ArrowRight, ExternalLink, FileText } from "@proliferate/ui/icons";
+import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
+import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import {
   PlanHandoffModePicker,
   type PlanHandoffModePickerProps,

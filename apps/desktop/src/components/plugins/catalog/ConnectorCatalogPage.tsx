@@ -3,7 +3,7 @@ import { useConnectorsCatalogState } from "@/hooks/mcp/ui/use-connectors-catalog
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Search } from "@/components/ui/icons";
+import { Search } from "@proliferate/ui/icons";
 import {
   AvailablePluginPackageRow,
   ConnectedPluginPackageRow,

@@ -6,8 +6,8 @@ import {
   MessageSquare,
   Robot,
   Spinner,
-} from "@/components/ui/icons";
-import { ProviderIcon } from "@/components/ui/provider-icons";
+} from "@proliferate/ui/icons";
+import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import type { DelegatedWorkTabIdentity } from "@/lib/domain/delegated-work/model";
 import type {
   HeaderChatMenuEntry,

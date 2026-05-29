@@ -3,7 +3,7 @@ import type {
   PluginComponentRowModel,
   PluginPackagePresentation,
 } from "@/lib/domain/plugins/plugin-package-view-model";
-import { Blocks, FileText, Sparkles } from "@/components/ui/icons";
+import { Blocks, FileText, Sparkles } from "@proliferate/ui/icons";
 
 const PUBLIC_TONE_CLASSES: Record<NonNullable<PluginComponentRowModel["publicTone"]>, string> = {
   neutral: "border-border/50 text-muted-foreground",

@@ -5,8 +5,8 @@ import type {
   SandboxAgentAuthSelection,
 } from "@proliferate/cloud-sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Badge } from "@/components/ui/Badge";
-import { SettingsMenu } from "@/components/ui/SettingsMenu";
+import { Badge } from "@proliferate/ui/primitives/Badge";
+import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import {
   CalendarClock,
   Check,
@@ -14,9 +14,9 @@ import {
   RefreshCw,
   Terminal,
   UsersRound,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { ProviderIcon } from "@/components/ui/provider-icons";
+import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { useConnectors } from "@/hooks/access/mcp/connectors/use-connectors";
 import { useInstalledConnectorActions } from "@/hooks/mcp/workflows/use-installed-connector-actions";
 import { useAgentAuthLibraryActions } from "@/hooks/settings/workflows/use-agent-auth-library-actions";

@@ -1,5 +1,5 @@
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { Copy, Fork, Undo, FileIcon } from "@/components/ui/icons";
+import { Copy, Fork, Undo, FileIcon } from "@proliferate/ui/icons";
 
 interface FileBadge {
   filename: string;

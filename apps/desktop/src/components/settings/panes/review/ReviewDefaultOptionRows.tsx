@@ -1,7 +1,7 @@
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
-import { Checkbox } from "@/components/ui/Checkbox";
+import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@/components/ui/Label";
+import { Label } from "@proliferate/ui/primitives/Label";
 import {
   clampRounds,
   DEFAULT_REVIEW_MAX_ROUNDS,

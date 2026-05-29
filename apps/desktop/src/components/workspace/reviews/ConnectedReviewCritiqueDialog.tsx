@@ -1,7 +1,7 @@
 import { useReviewAssignmentCritiqueQuery } from "@anyharness/sdk-react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { MarkdownRenderer } from "@/components/ui/content/MarkdownRenderer";
-import { ModalShell } from "@/components/ui/ModalShell";
+import { MarkdownRenderer } from "@/components/content/ui/MarkdownRenderer";
+import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import { useReviewUiStore } from "@/stores/reviews/review-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 

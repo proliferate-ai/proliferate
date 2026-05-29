@@ -2,12 +2,12 @@ import { useMemo } from "react";
 import type { ReviewKind } from "@anyharness/sdk";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Textarea } from "@/components/ui/Textarea";
+import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import {
   Plus,
   RefreshCw,
   Trash,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import {
   isBuiltInReviewPersonaId,
   resolveReviewPersonaTemplates,

@@ -1,6 +1,6 @@
 import { CHAT_COMPOSER_LABELS } from "@/copy/chat/chat-copy";
 import { COMPOSER_SHORTCUTS } from "@/config/shortcuts";
-import { ArrowUp, StopSquare } from "@/components/ui/icons";
+import { ArrowUp, StopSquare } from "@proliferate/ui/icons";
 import { ComposerActionButton } from "@proliferate/product-ui/chat/composer/ComposerActionButton";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";

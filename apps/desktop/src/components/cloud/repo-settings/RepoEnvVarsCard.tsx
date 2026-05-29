@@ -1,8 +1,8 @@
 import type { ChangeEvent } from "react";
-import { EnvironmentField } from "@/components/ui/EnvironmentLayout";
+import { EnvironmentField } from "@proliferate/ui/layout/EnvironmentLayout";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@/components/ui/Label";
+import { Label } from "@proliferate/ui/primitives/Label";
 import type { CloudRepoEnvVarRow } from "@/hooks/cloud/ui/use-cloud-repo-config-draft";
 
 interface RepoEnvVarsCardProps {

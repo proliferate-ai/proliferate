@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { SkeletonBlock } from "@/components/feedback/Skeleton";
-import { CollapseAll, ExpandAll, Plus } from "@/components/ui/icons";
+import { CollapseAll, ExpandAll, Plus } from "@proliferate/ui/icons";
 import { SidebarShowToggleRow } from "@/components/workspace/shell/sidebar/SidebarShowToggleRow";
 import { useCoworkStatus } from "@/hooks/access/anyharness/cowork/use-cowork-status";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";

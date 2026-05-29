@@ -7,10 +7,10 @@ import type {
   SandboxAgentAuthSelection,
 } from "@proliferate/cloud-sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Badge, type BadgeTone } from "@/components/ui/Badge";
-import { SettingsMenu } from "@/components/ui/SettingsMenu";
-import { RefreshCw } from "@/components/ui/icons";
-import { ProviderIcon } from "@/components/ui/provider-icons";
+import { Badge, type BadgeTone } from "@proliferate/ui/primitives/Badge";
+import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
+import { RefreshCw } from "@proliferate/ui/icons";
+import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { AuthenticationMethodsSection } from "@/components/settings/panes/agent-authentication/AuthenticationMethodsSection";

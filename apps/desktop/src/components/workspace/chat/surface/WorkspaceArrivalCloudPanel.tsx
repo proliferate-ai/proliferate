@@ -7,7 +7,7 @@ import {
   type CloudWorkspaceStatusScreenMode,
   type CloudWorkspaceStatusScreenModel,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
-import { CircleAlert, Spinner } from "@/components/ui/icons";
+import { CircleAlert, Spinner } from "@proliferate/ui/icons";
 
 function SectionRow({
   label,

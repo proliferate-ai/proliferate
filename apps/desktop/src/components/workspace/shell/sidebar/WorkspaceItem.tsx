@@ -10,10 +10,10 @@ import {
   GitBranch,
   GitMerge,
   Pencil,
-} from "@/components/ui/icons";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { ShortcutBadge } from "@/components/ui/ShortcutBadge";
+} from "@proliferate/ui/icons";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
 import { useWorkspaceSidebarNativeContextMenu } from "@/hooks/workspaces/ui/use-workspace-sidebar-native-context-menu";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import type {

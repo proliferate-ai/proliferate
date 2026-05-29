@@ -25,7 +25,7 @@ vi.mock("@/components/support/SupportDialog", () => ({
   },
 }));
 
-vi.mock("@/components/ui/DebugProfiler", () => ({
+vi.mock("@/components/diagnostics/DebugProfiler", () => ({
   DebugProfiler: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
@@ -33,7 +33,7 @@ vi.mock("./SidebarFooter", () => ({
   SidebarFooter: () => <div data-testid="sidebar-footer" />,
 }));
 
-vi.mock("@/components/ui/SidebarRowSurface", () => ({
+vi.mock("@proliferate/ui/layout/SidebarRowSurface", () => ({
   SidebarRowSurface: ({
     active,
     children,
@@ -81,7 +81,7 @@ vi.mock("@/components/workspace/cowork/sidebar/CoworkThreadsSection", () => ({
   CoworkThreadsSection: () => <div data-testid="cowork-threads" />,
 }));
 
-vi.mock("@/components/ui/PopoverMenuItem", () => ({
+vi.mock("@proliferate/ui/primitives/PopoverMenuItem", () => ({
   PopoverMenuItem: ({
     label,
     onClick,
@@ -95,11 +95,11 @@ vi.mock("@/components/ui/PopoverMenuItem", () => ({
   ),
 }));
 
-vi.mock("@/components/ui/layout/AutoHideScrollArea", () => ({
+vi.mock("@proliferate/ui/layout/AutoHideScrollArea", () => ({
   AutoHideScrollArea: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock("@/components/ui/PopoverButton", () => ({
+vi.mock("@proliferate/ui/primitives/PopoverButton", () => ({
   PopoverButton: ({
     children,
     trigger,

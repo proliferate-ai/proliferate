@@ -9,7 +9,7 @@ import {
   Pencil,
   SplitPanel,
   SplitPanelRight,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import {
   type OpenTarget,
   useTauriShellActions,

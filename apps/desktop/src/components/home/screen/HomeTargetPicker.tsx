@@ -1,16 +1,16 @@
 import { useState, type MouseEvent, type ReactNode } from "react";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
   PickerEmptyRow,
   PickerPopoverContent,
-} from "@/components/ui/PickerPopoverContent";
-import { PillControlButton } from "@/components/ui/PillControlButton";
+} from "@proliferate/ui/primitives/PickerPopoverContent";
+import { PillControlButton } from "@proliferate/ui/primitives/PillControlButton";
 import {
   POPOVER_SURFACE_CLASS,
   PopoverButton,
-} from "@/components/ui/PopoverButton";
+} from "@proliferate/ui/primitives/PopoverButton";
 import {
   Check,
   ChevronRight,
@@ -23,8 +23,8 @@ import {
   Terminal,
   Tree,
   X,
-} from "@/components/ui/icons";
-import { matchesPickerSearch } from "@/lib/infra/search/search";
+} from "@proliferate/ui/icons";
+import { matchesPickerSearch } from "@proliferate/ui/utils/search";
 import type { ComputeLaunchTargetOption } from "@/lib/domain/compute/target-options";
 import type {
   HomeNextDestination,

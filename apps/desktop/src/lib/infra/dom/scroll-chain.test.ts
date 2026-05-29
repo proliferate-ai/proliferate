@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { chainVerticalWheelScroll } from "./scroll-chain";
+import { chainVerticalWheelScroll } from "@proliferate/ui/utils/scroll-chain";
 
 describe("chainVerticalWheelScroll", () => {
   it("scrolls the parent when the child reaches the bottom edge", () => {

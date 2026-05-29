@@ -5,9 +5,9 @@ import type {
 import { useAgentAuthMutations } from "@proliferate/cloud-sdk-react/hooks/agent-auth";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@/components/ui/Label";
-import { Select } from "@/components/ui/Select";
-import { Badge } from "@/components/ui/Badge";
+import { Label } from "@proliferate/ui/primitives/Label";
+import { Select } from "@proliferate/ui/primitives/Select";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import {

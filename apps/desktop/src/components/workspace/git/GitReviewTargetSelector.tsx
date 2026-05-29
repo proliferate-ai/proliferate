@@ -9,8 +9,8 @@ import {
   GitBranchIcon,
   GitCommit,
   Search,
-} from "@/components/ui/icons";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@/components/ui/PopoverButton";
+} from "@proliferate/ui/icons";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import type { GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-diff";
 
 const GIT_REVIEW_TARGET_TRIGGER_CLASS =

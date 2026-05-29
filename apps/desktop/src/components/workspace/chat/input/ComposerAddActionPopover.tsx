@@ -1,6 +1,6 @@
 import { useState, type MouseEvent, type ReactNode } from "react";
-import { PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
   ArrowLeft,
@@ -9,7 +9,7 @@ import {
   GitPullRequest,
   Plus,
   Settings,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import { PlanPickerContentBody } from "./PlanPickerPopover";

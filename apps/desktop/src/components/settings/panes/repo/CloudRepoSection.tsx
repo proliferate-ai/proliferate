@@ -1,11 +1,11 @@
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { CloudIcon } from "@/components/ui/icons";
+import { CloudIcon } from "@proliferate/ui/icons";
 import {
   EnvironmentPanel,
   EnvironmentPanelRow,
   EnvironmentSection,
-} from "@/components/ui/EnvironmentLayout";
+} from "@proliferate/ui/layout/EnvironmentLayout";
 import { CloudDefaultBranchCard } from "@/components/cloud/repo-settings/CloudDefaultBranchCard";
 import { RepoEnvVarsCard } from "@/components/cloud/repo-settings/RepoEnvVarsCard";
 import { RepoRunCommandCard } from "@/components/cloud/repo-settings/RepoRunCommandCard";

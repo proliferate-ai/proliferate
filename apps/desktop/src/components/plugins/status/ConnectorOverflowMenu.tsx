@@ -1,8 +1,8 @@
 import type { InstalledConnectorRecord } from "@/lib/domain/mcp/types";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { MoreHorizontal } from "@/components/ui/icons";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { MoreHorizontal } from "@proliferate/ui/icons";
 
 export function ConnectorOverflowMenu({
   disabled = false,

@@ -2,14 +2,14 @@ import { useMemo, useState } from "react";
 import {
   EnvironmentAdvancedDisclosure,
   EnvironmentField,
-} from "@/components/ui/EnvironmentLayout";
+} from "@proliferate/ui/layout/EnvironmentLayout";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Badge } from "@/components/ui/Badge";
-import { PickerEmptyRow, PickerPopoverContent } from "@/components/ui/PickerPopoverContent";
-import { PopoverButton } from "@/components/ui/PopoverButton";
-import { PopoverMenuItem } from "@/components/ui/PopoverMenuItem";
-import { Check, ChevronUpDown, RefreshCw, X } from "@/components/ui/icons";
-import { matchesPickerSearch } from "@/lib/infra/search/search";
+import { Badge } from "@proliferate/ui/primitives/Badge";
+import { PickerEmptyRow, PickerPopoverContent } from "@proliferate/ui/primitives/PickerPopoverContent";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
+import { Check, ChevronUpDown, RefreshCw, X } from "@proliferate/ui/icons";
+import { matchesPickerSearch } from "@proliferate/ui/utils/search";
 
 interface RepoTrackedFileMetadata {
   relativePath: string;

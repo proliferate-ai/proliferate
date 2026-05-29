@@ -12,8 +12,8 @@ import {
   useSandboxAgentAuthTargetStates,
 } from "@proliferate/cloud-sdk-react/hooks/agent-auth";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Badge } from "@/components/ui/Badge";
-import { Select } from "@/components/ui/Select";
+import { Badge } from "@proliferate/ui/primitives/Badge";
+import { Select } from "@proliferate/ui/primitives/Select";
 import {
   AGENT_AUTH_AGENT_ORDER,
   agentAuthAgentLabel,

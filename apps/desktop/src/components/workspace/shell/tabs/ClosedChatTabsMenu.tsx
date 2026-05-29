@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Trash } from "@/components/ui/icons";
+import { Trash } from "@proliferate/ui/icons";
 import type {
   HeaderChatMenuEntry,
 } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";

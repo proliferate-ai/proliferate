@@ -1,4 +1,4 @@
-import { ModalShell } from "@/components/ui/ModalShell";
+import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import { PlanMarkdownBody } from "@/components/workspace/chat/content/PlanMarkdownBody";
 import type { PromptDisplayPlanPart } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
 

@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { webWorkspaceDeepLink } from "@proliferate/cloud-sdk";
-import { ExternalLink } from "@/components/ui/icons";
+import { ExternalLink } from "@proliferate/ui/icons";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
 import { getProliferateWebBaseUrl } from "@/lib/infra/proliferate-web";

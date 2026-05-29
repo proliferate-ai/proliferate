@@ -8,7 +8,7 @@ import {
   formatGitRepoId,
   parseGitRepoId,
 } from "@proliferate/product-domain/repos/repo-id";
-import { ChevronRight } from "@/components/ui/icons";
+import { ChevronRight } from "@proliferate/ui/icons";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import type { SettingsFocus } from "@/lib/domain/settings/navigation";

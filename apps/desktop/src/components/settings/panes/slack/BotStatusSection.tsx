@@ -1,5 +1,5 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Switch } from "@/components/ui/Switch";
+import { Switch } from "@proliferate/ui/primitives/Switch";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import type {

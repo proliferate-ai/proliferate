@@ -243,7 +243,7 @@ All approval action buttons use `size="sm"` with `className="rounded-xl px-2.5 t
 
 - Header: tiny icon + muted status text (`text-muted-foreground`), no bold.
 - Body: `vertical-scroll-fade-mask max-h-40` (160px cap) with `[--edge-fade-distance:2rem]`.
-  The fade-mask utility lives in `apps/packages/design/src/dom.css` so shared chat
+  The fade-mask utility lives in `apps/packages/design/src/css/dom.css` so shared chat
   components can use it on Desktop and Web.
 - Completed entries: `line-through` + `text-muted-foreground/60` on both the index and the content span.
 - Default: expanded. Collapse chevron in header.

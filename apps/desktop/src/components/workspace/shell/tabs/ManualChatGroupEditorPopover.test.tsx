@@ -2,7 +2,7 @@
 
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useNativeOverlayOpen } from "@/hooks/ui/use-native-overlay-presence";
+import { useNativeOverlayOpen } from "@proliferate/ui/overlays/overlay-presence";
 import { ManualChatGroupEditorPopover } from "./ManualChatGroupEditorPopover";
 
 afterEach(() => {

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ConfirmationDialog } from "@/components/ui/ConfirmationDialog";
+import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { ModalShell } from "@/components/ui/ModalShell";
-import { Textarea } from "@/components/ui/Textarea";
+import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
+import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { AgentHarnessModelSelector } from "@/components/agents/AgentHarnessModelSelector";
 import { SessionConfigControls } from "@/components/workspace/chat/input/SessionConfigControls";
 import { useAutomationTargetSelection } from "@/hooks/automations/derived/use-automation-target-selection";

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   useNativeOverlayOpen,
   useNativeOverlayRegistration,
-} from "@/hooks/ui/use-native-overlay-presence";
+} from "@proliferate/ui/overlays/overlay-presence";
 
 afterEach(() => {
   cleanup();

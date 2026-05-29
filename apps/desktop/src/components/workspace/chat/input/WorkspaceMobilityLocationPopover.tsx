@@ -1,7 +1,7 @@
 import { Button } from "@proliferate/ui/primitives/Button";
 import type { MouseEvent, ReactNode } from "react";
 import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
-import { POPOVER_SURFACE_CLASS } from "@/components/ui/PopoverButton";
+import { POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import {
   Check,
   CircleAlert,
@@ -11,7 +11,7 @@ import {
   GitCommit,
   Spinner,
   Terminal,
-} from "@/components/ui/icons";
+} from "@proliferate/ui/icons";
 import { mobilityReconnectCopy } from "@/lib/domain/workspaces/mobility/presentation";
 import type { MobilityPromptState } from "@/lib/domain/workspaces/mobility/mobility-prompt";
 import type {

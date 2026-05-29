@@ -9,10 +9,10 @@ import {
   type ReviewSetupDraft,
 } from "@/lib/domain/reviews/review-config";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Checkbox } from "@/components/ui/Checkbox";
-import { FixedPositionLayer } from "@/components/ui/layout/FixedPositionLayer";
-import { X } from "@/components/ui/icons";
-import { useNativeOverlayRegistration } from "@/hooks/ui/use-native-overlay-presence";
+import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
+import { FixedPositionLayer } from "@proliferate/ui/layout/FixedPositionLayer";
+import { X } from "@proliferate/ui/icons";
+import { useNativeOverlayRegistration } from "@proliferate/ui/overlays/overlay-presence";
 import type { ReviewSetupAnchorRect } from "@/stores/reviews/review-ui-store";
 import { ReviewSetupLoopControls } from "./ReviewSetupLoopControls";
 import { ReviewSetupReviewerList } from "./ReviewSetupReviewerList";

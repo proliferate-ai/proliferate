@@ -5,9 +5,9 @@ import { ReviewDefaultsSection } from "@/components/settings/panes/review/Review
 import { ReviewPersonalitySection } from "@/components/settings/panes/review/ReviewPersonalitySection";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@/components/ui/Label";
-import { ModalShell } from "@/components/ui/ModalShell";
-import { Textarea } from "@/components/ui/Textarea";
+import { Label } from "@proliferate/ui/primitives/Label";
+import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
+import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import {
   isBuiltInReviewPersonaId,
   listBuiltInReviewPersonaTemplates,

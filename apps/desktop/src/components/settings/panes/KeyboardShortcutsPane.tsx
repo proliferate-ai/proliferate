@@ -10,7 +10,7 @@ import {
   type ShortcutKey,
 } from "@/config/shortcuts";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
-import { Search } from "@/components/ui/icons";
+import { Search } from "@proliferate/ui/icons";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 
