@@ -9,3 +9,62 @@
 API_LIVE_RUNTIME_IMPORT anyharness/crates/anyharness-lib/src/api/http/sessions.rs 1 transitional permission decision type still lives under live ACP runtime
 SESSION_STORE_LIVE_IMPORT anyharness/crates/anyharness-lib/src/sessions/store/events.rs 1 transitional session event sanitizer still lives under ACP runtime
 SESSION_STORE_LIVE_IMPORT anyharness/crates/anyharness-lib/src/sessions/store/notifications.rs 1 transitional raw notification sanitizer still lives under ACP runtime
+LIVE_SESSION_PRIVATE_IMPORT anyharness/crates/anyharness-lib/src/acp/manager.rs 9 transitional AcpManager still constructs live session actors
+LIVE_SESSION_PRIVATE_IMPORT anyharness/crates/anyharness-lib/src/acp/replay_actor.rs 7 transitional replay actor still lives under acp
+LIVE_SESSION_PRIVATE_IMPORT anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1 transitional cowork wake path still constructs actor commands
+LIVE_SESSION_PRIVATE_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/config.rs 2 transitional session runtime still commands live actor directly
+LIVE_SESSION_PRIVATE_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/fork.rs 3 transitional session runtime still commands live actor directly
+LIVE_SESSION_PRIVATE_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/interactions.rs 2 transitional session runtime still imports live interaction command types
+LIVE_SESSION_PRIVATE_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/lifecycle.rs 1 transitional session runtime still commands live actor directly
+LIVE_SESSION_PRIVATE_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/pending_prompts.rs 2 transitional session runtime still commands live actor directly
+LIVE_SESSION_PRIVATE_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/plans.rs 1 transitional session runtime still commands live actor directly
+LIVE_SESSION_PRIVATE_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/prompt.rs 3 transitional session runtime still commands live actor directly
+LIVE_SESSION_PRIVATE_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/replay.rs 1 transitional session runtime still commands replay actor directly
+LIVE_SESSION_PRIVATE_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/startup.rs 1 transitional session runtime still imports live startup strategy
+LIVE_SESSION_PRIVATE_IMPORT anyharness/crates/anyharness-lib/src/sessions/subagents/hooks.rs 1 transitional subagent hooks still command parent actor directly
+SESSION_COMMAND_IMPORT anyharness/crates/anyharness-lib/src/acp/manager.rs 2 transitional AcpManager still constructs live session commands
+SESSION_COMMAND_IMPORT anyharness/crates/anyharness-lib/src/acp/replay_actor.rs 1 transitional replay actor still receives session commands
+SESSION_COMMAND_IMPORT anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1 transitional cowork wake path still constructs actor commands
+SESSION_COMMAND_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/config.rs 1 transitional session runtime still constructs actor commands
+SESSION_COMMAND_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/fork.rs 1 transitional session runtime still constructs actor commands
+SESSION_COMMAND_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/lifecycle.rs 1 transitional session runtime still constructs actor commands
+SESSION_COMMAND_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/pending_prompts.rs 1 transitional session runtime still constructs actor commands
+SESSION_COMMAND_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/plans.rs 1 transitional session runtime still constructs actor commands
+SESSION_COMMAND_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/prompt.rs 1 transitional session runtime still constructs actor commands
+SESSION_COMMAND_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/replay.rs 1 transitional session runtime still constructs actor commands
+SESSION_COMMAND_IMPORT anyharness/crates/anyharness-lib/src/sessions/subagents/hooks.rs 1 transitional subagent hooks still construct actor commands
+SESSION_COMMAND_USE anyharness/crates/anyharness-lib/src/acp/manager.rs 2 transitional AcpManager still sends runtime events through actor command enum
+SESSION_COMMAND_USE anyharness/crates/anyharness-lib/src/acp/replay_actor.rs 18 transitional replay actor still handles session command enum
+SESSION_COMMAND_USE anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1 transitional cowork wake path still constructs actor commands
+SESSION_COMMAND_USE anyharness/crates/anyharness-lib/src/sessions/runtime/config.rs 1 transitional session runtime still constructs actor commands
+SESSION_COMMAND_USE anyharness/crates/anyharness-lib/src/sessions/runtime/fork.rs 3 transitional session runtime still constructs actor commands
+SESSION_COMMAND_USE anyharness/crates/anyharness-lib/src/sessions/runtime/lifecycle.rs 3 transitional session runtime still constructs actor commands
+SESSION_COMMAND_USE anyharness/crates/anyharness-lib/src/sessions/runtime/pending_prompts.rs 2 transitional session runtime still constructs actor commands
+SESSION_COMMAND_USE anyharness/crates/anyharness-lib/src/sessions/runtime/plans.rs 1 transitional session runtime still constructs actor commands
+SESSION_COMMAND_USE anyharness/crates/anyharness-lib/src/sessions/runtime/prompt.rs 2 transitional session runtime still constructs actor commands
+SESSION_COMMAND_USE anyharness/crates/anyharness-lib/src/sessions/runtime/replay.rs 1 transitional session runtime still constructs actor commands
+SESSION_COMMAND_USE anyharness/crates/anyharness-lib/src/sessions/subagents/hooks.rs 1 transitional subagent hooks still construct actor commands
+LIVE_SESSION_COMMAND_TX_ACCESS anyharness/crates/anyharness-lib/src/acp/manager.rs 1 transitional AcpManager still sends runtime events directly
+LIVE_SESSION_COMMAND_TX_ACCESS anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1 transitional cowork wake path still sends directly
+LIVE_SESSION_COMMAND_TX_ACCESS anyharness/crates/anyharness-lib/src/sessions/runtime/config.rs 1 transitional session runtime still sends directly
+LIVE_SESSION_COMMAND_TX_ACCESS anyharness/crates/anyharness-lib/src/sessions/runtime/fork.rs 3 transitional session runtime still sends directly
+LIVE_SESSION_COMMAND_TX_ACCESS anyharness/crates/anyharness-lib/src/sessions/runtime/lifecycle.rs 3 transitional session runtime still sends directly
+LIVE_SESSION_COMMAND_TX_ACCESS anyharness/crates/anyharness-lib/src/sessions/runtime/pending_prompts.rs 2 transitional session runtime still sends directly
+LIVE_SESSION_COMMAND_TX_ACCESS anyharness/crates/anyharness-lib/src/sessions/runtime/plans.rs 1 transitional session runtime still sends directly
+LIVE_SESSION_COMMAND_TX_ACCESS anyharness/crates/anyharness-lib/src/sessions/runtime/prompt.rs 2 transitional session runtime still sends directly
+LIVE_SESSION_COMMAND_TX_ACCESS anyharness/crates/anyharness-lib/src/sessions/runtime/replay.rs 1 transitional session runtime still sends directly
+LIVE_SESSION_COMMAND_TX_ACCESS anyharness/crates/anyharness-lib/src/sessions/subagents/hooks.rs 1 transitional subagent hooks still send directly
+DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/agents/auth_config.rs 3 transitional agent auth config domain still accepts API contract config/status types
+DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/cowork/artifacts.rs 2 transitional cowork artifact domain still returns API contract responses
+DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1 transitional cowork runtime still returns API contract managed-workspace response
+DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/plans/runtime.rs 4 transitional plan runtime still returns API contract responses
+DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/plugins/mcp/mod.rs 1 transitional plugin MCP domain still emits API contract status response
+DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/reviews/mcp/calls.rs 1 transitional review MCP calls still use API contract request
+DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/reviews/runtime.rs 4 transitional review runtime still returns API contract responses
+DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/reviews/runtime_helpers.rs 1 transitional review helper still uses API contract request
+DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/reviews/service.rs 2 transitional review service still returns API contract detail response
+DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/runtime_config/service.rs 3 transitional runtime config service still accepts API contract apply/status types
+DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/runtime_config/session_extension.rs 1 transitional runtime config session extension still consumes API contract response
+DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/sessions/runtime/interactions.rs 1 transitional session runtime interactions still returns API contract elicitation response
+DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/sessions/subagents/service.rs 1 transitional subagent service still returns API contract subagents response
+DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/workspaces/inventory.rs 1 transitional workspace inventory still returns API contract response
