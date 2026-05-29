@@ -431,9 +431,12 @@ Source of truth:
 Hosted flow:
 
 1. A successful `CI` run on `main` triggers `Deploy Staging`.
-2. `Deploy Staging` resolves the last successful staging SHA, diffs it against
+2. `Deploy Staging` waits for any `Server CI` run for the same SHA to finish
+   successfully before planning deploys. If no `Server CI` run exists for that
+   SHA, it continues.
+3. `Deploy Staging` resolves the last successful staging SHA, diffs it against
    the new SHA, and classifies touched deploy surfaces.
-3. If `server` changed, `_deploy-server.yml`:
+4. If `server` changed, `_deploy-server.yml`:
    - builds and pushes an ECR image tagged by short SHA
    - renders a new ECS task definition from the live service task definition
    - updates non-secret runtime environment such as `API_URL`, `API_BASE_URL`,
@@ -441,7 +444,7 @@ Hosted flow:
    - runs `alembic upgrade head` as a one-off Fargate task
    - rolls the ECS service
    - smokes `${API_URL}${API_HEALTH_PATH:-/api/health}`
-4. `Promote Production` is a manual protected workflow. It requires, by default,
+5. `Promote Production` is a manual protected workflow. It requires, by default,
    a successful staging deploy for the exact SHA being promoted, then repeats
    the same changed-surface deploy graph against production environment vars and
    secrets.

@@ -67,6 +67,53 @@ jobs:
         env:
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
 
+      - name: Wait for Server CI if present
+        run: |
+          set -euo pipefail
+          head_sha="${{ steps.meta.outputs.head_sha }}"
+
+          for _ in $(seq 1 90); do
+            mapfile -t runs < <(
+              gh run list \
+                --workflow server-ci.yml \
+                --commit "$head_sha" \
+                --limit 20 \
+                --json databaseId,status,conclusion,url \
+                --jq '.[] | select(.conclusion != "skipped") | [.databaseId, .status, (.conclusion // ""), .url] | @tsv'
+            )
+
+            if [[ "${#runs[@]}" -eq 0 ]]; then
+              echo "No Server CI run found for $head_sha; continuing."
+              exit 0
+            fi
+
+            pending=0
+            for run in "${runs[@]}"; do
+              IFS=$'\t' read -r run_id status conclusion url <<< "$run"
+              if [[ "$status" != "completed" ]]; then
+                echo "Server CI $run_id is $status; waiting. $url"
+                pending=1
+                continue
+              fi
+              if [[ "$conclusion" != "success" ]]; then
+                echo "Server CI $run_id finished with $conclusion. $url" >&2
+                exit 1
+              fi
+            done
+
+            if [[ "$pending" == "0" ]]; then
+              echo "Server CI succeeded for $head_sha."
+              exit 0
+            fi
+
+            sleep 30
+          done
+
+          echo "Timed out waiting for Server CI for $head_sha." >&2
+          exit 1
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Resolve previous successful staging deploy
         id: base
         run: >
