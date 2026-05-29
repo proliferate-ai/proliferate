@@ -18,7 +18,6 @@ import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
 import { SettingsCardRow } from "@proliferate/product-ui/settings/SettingsCardRow";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { SettingsShell } from "@proliferate/product-ui/settings/SettingsShell";
-import { CloudSupportSurface } from "@proliferate/product-surfaces/support/CloudSupportSurface";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
@@ -112,9 +111,7 @@ export function SettingsScreen() {
         ) : activeSection === "billing" ? (
           <BillingSettingsSection />
         ) : (
-          <SupportSection
-            pathname={`${location.pathname}${location.search}${location.hash}`}
-          />
+          <SupportSection onOpenSupport={() => navigate(routes.support)} />
         )}
       </SettingsShell>
     </div>
@@ -299,20 +296,25 @@ function ActionButton({
   );
 }
 
-function SupportSection({ pathname }: { pathname: string }) {
+function SupportSection({ onOpenSupport }: { onOpenSupport: () => void }) {
   return (
     <section className="space-y-6">
       <SettingsPageHeader
         title="Support"
-        description="Send product help requests for cloud sessions, automations, billing, and Desktop handoff."
+        description="Open the dedicated support page for cloud sessions, automations, billing, and Desktop handoff."
       />
-      <CloudSupportSurface
-        context={{
-          source: "settings",
-          intent: "general",
-          pathname,
-        }}
-      />
+      <SettingsCard>
+        <SettingsCardRow
+          label="Product support"
+          description="Send a support message with account and page context."
+        >
+          <ActionButton onClick={onOpenSupport}>Open support</ActionButton>
+        </SettingsCardRow>
+        <SettingsCardRow
+          label="Support context"
+          description="Support messages are telemetry-blocked and include the current app location."
+        />
+      </SettingsCard>
     </section>
   );
 }

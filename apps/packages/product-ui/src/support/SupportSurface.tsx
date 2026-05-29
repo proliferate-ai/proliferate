@@ -1,9 +1,7 @@
-import { AlertCircle, CheckCircle2, LifeBuoy, Send } from "lucide-react";
+import { AlertCircle, ArrowUp, CheckCircle2, LifeBuoy } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
-import { SettingsCard } from "../settings/SettingsCard";
-import { SettingsCardRow } from "../settings/SettingsCardRow";
 
 interface SupportSurfaceProps {
   onSubmit?: (message: string) => Promise<void> | void;
@@ -38,41 +36,50 @@ export function SupportSurface({ onSubmit }: SupportSurfaceProps) {
 
   return (
     <div className="space-y-4">
-      <SettingsCard>
-        <SettingsCardRow
-          label="Product help"
-          description="Cloud sessions, Desktop handoff, billing, automations, workspace dispatch, and account issues."
-        />
-        <SettingsCardRow
-          label="Account context"
-          description="Support messages include the current app location so we can find the right account state."
-        />
-      </SettingsCard>
       <form onSubmit={handleSubmit}>
-        <SettingsCard>
-          <SettingsCardRow
-            label={
-              <span className="flex items-center gap-2">
-                <LifeBuoy size={15} />
-                Contact support
-              </span>
-            }
-            description="Share what happened, what you expected, and the workspace or automation involved."
-          />
-          <div className="space-y-3 px-4 py-3">
-            <Textarea
-              rows={8}
-              value={message}
-              onChange={(event) => {
-                setMessage(event.currentTarget.value);
-                if (notice) {
-                  setNotice(null);
-                }
-              }}
-              className="min-h-[9rem] w-full resize-none"
-              placeholder="What happened?"
-              data-telemetry-mask
-            />
+        <section className="overflow-hidden rounded-lg border border-border-light bg-surface-elevated shadow-subtle">
+          <div className="border-b border-border-light px-4 py-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <LifeBuoy size={15} />
+              Contact support
+            </div>
+            <p className="mt-1 max-w-2xl text-xs leading-4 text-muted-foreground">
+              Share what happened, what you expected, and the workspace, automation, or billing flow involved.
+            </p>
+          </div>
+
+          <div className="space-y-3 p-3">
+            <div className="rounded-lg border border-input bg-surface-control p-3 focus-within:ring-1 focus-within:ring-ring">
+              <Textarea
+                rows={8}
+                value={message}
+                onChange={(event) => {
+                  setMessage(event.currentTarget.value);
+                  if (notice) {
+                    setNotice(null);
+                  }
+                }}
+                variant="ghost"
+                className="min-h-[12rem] w-full resize-none text-sm leading-5"
+                placeholder="What happened?"
+                data-telemetry-mask
+              />
+              <div className="mt-3 flex items-center justify-between gap-3 border-t border-border-light pt-3">
+                <p className="min-w-0 text-xs leading-4 text-muted-foreground">
+                  Includes current app location. Do not include secrets or API keys.
+                </p>
+                <Button
+                  type="submit"
+                  size="icon"
+                  loading={submitting}
+                  disabled={!trimmedMessage || submitting}
+                  aria-label="Send support message"
+                >
+                  <ArrowUp size={16} />
+                </Button>
+              </div>
+            </div>
+
             {notice ? (
               <div
                 role="status"
@@ -87,20 +94,35 @@ export function SupportSurface({ onSubmit }: SupportSurfaceProps) {
                 <span>{notice.text}</span>
               </div>
             ) : null}
-            <div className="flex justify-end">
-              <Button
-                type="submit"
-                size="sm"
-                loading={submitting}
-                disabled={!trimmedMessage || submitting}
-              >
-                <Send size={15} />
-                Send
-              </Button>
-            </div>
           </div>
-        </SettingsCard>
+        </section>
       </form>
+
+      <section className="grid gap-3 sm:grid-cols-2">
+        <InfoCard
+          title="Product help"
+          description="Cloud sessions, Desktop handoff, billing, automations, workspace dispatch, and account issues."
+        />
+        <InfoCard
+          title="Account context"
+          description="Support messages include the current app location so we can find the right account state."
+        />
+      </section>
+    </div>
+  );
+}
+
+function InfoCard({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="rounded-lg border border-border-light bg-surface-elevated px-4 py-3 shadow-subtle">
+      <div className="text-sm font-medium text-foreground">{title}</div>
+      <p className="mt-1 text-xs leading-4 text-muted-foreground">{description}</p>
     </div>
   );
 }

@@ -45,7 +45,7 @@ describe("CloudSupportSurface", () => {
     fireEvent.change(screen.getByPlaceholderText("What happened?"), {
       target: { value: "The workspace stopped syncing." },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send support message" }));
 
     await waitFor(() => {
       expect(support.sendSupportMessage).toHaveBeenCalledWith(
