@@ -61,6 +61,8 @@ const DEFAULT_LIVE_SESSION_CONTROL_KEYS = new Set<DefaultLiveSessionControlKey>(
   "fast_mode",
 ]);
 
+const CODEX_DEFAULT_APPROVAL_MODE_ID = "auto";
+
 export function sanitizeDefaultSessionModeByAgentKind(
   value: unknown,
 ): Record<string, string> {
@@ -69,11 +71,17 @@ export function sanitizeDefaultSessionModeByAgentKind(
   }
 
   return Object.fromEntries(
-    Object.entries(value).flatMap(([agentKind, modeId]) => (
-      typeof modeId === "string" && agentKind.trim().length > 0 && modeId.trim().length > 0
-        ? [[agentKind, modeId]]
-        : []
-    )),
+    Object.entries(value).flatMap(([agentKind, modeId]) => {
+      const trimmedAgentKind = agentKind.trim();
+      const trimmedModeId = typeof modeId === "string" ? modeId.trim() : "";
+      if (!trimmedAgentKind || !trimmedModeId) {
+        return [];
+      }
+      return [[
+        trimmedAgentKind,
+        normalizeDefaultSessionModeId(trimmedAgentKind, trimmedModeId),
+      ]];
+    }),
   );
 }
 
@@ -162,4 +170,11 @@ export function normalizeDefaultChatModelId(agentKind: string, modelId: string):
     return LEGACY_CURSOR_MODEL_IDS[modelId] ?? modelId;
   }
   return modelId;
+}
+
+function normalizeDefaultSessionModeId(agentKind: string, modeId: string): string {
+  if (agentKind === "codex" && (modeId === "default" || modeId === "plan")) {
+    return CODEX_DEFAULT_APPROVAL_MODE_ID;
+  }
+  return modeId;
 }

@@ -384,7 +384,7 @@ function AgentDefaultComposer({
           _rawConfigId: string,
           value: string,
         ) => {
-          if (controlKey === "mode" || controlKey === "collaboration_mode") {
+          if (controlKey === "mode") {
             preferences.set(
               "defaultSessionModeByAgentKind",
               withUpdatedDefaultSessionModeByAgentKind(

@@ -29,6 +29,7 @@ describe("user preference migration", () => {
         empty: " ",
       },
       defaultSessionModeByAgentKind: {
+        codex: " default ",
         assistant: " plan ",
         empty: " ",
         " ": "code",
@@ -55,12 +56,39 @@ describe("user preference migration", () => {
       cursor: "gpt-5.3-codex",
     });
     expect(result.preferences.defaultSessionModeByAgentKind).toEqual({
-      assistant: " plan ",
+      codex: "auto",
+      assistant: "plan",
     });
     expect(result.preferences.defaultLiveSessionControlValuesByAgentKind).toEqual({
       assistant: {
         effort: "high",
         reasoning: "medium",
+      },
+    });
+  });
+
+  it("moves misstored Codex plan defaults into live collaboration controls", () => {
+    const result = migrateUserPreferences({
+      defaultSessionModeByAgentKind: {
+        codex: " plan ",
+      },
+      defaultLiveSessionControlValuesByAgentKind: {
+        codex: {
+          effort: "xhigh",
+          fast_mode: "on",
+        },
+      },
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.defaultSessionModeByAgentKind).toEqual({
+      codex: "auto",
+    });
+    expect(result.preferences.defaultLiveSessionControlValuesByAgentKind).toEqual({
+      codex: {
+        effort: "xhigh",
+        fast_mode: "on",
+        collaboration_mode: "plan",
       },
     });
   });

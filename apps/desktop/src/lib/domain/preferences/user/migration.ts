@@ -154,6 +154,16 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
     changed = true;
   }
 
+  const migratedDefaultLiveControls = migrateMisstoredCodexCollaborationModeDefault(
+    next.defaultSessionModeByAgentKind,
+    next.defaultLiveSessionControlValuesByAgentKind,
+  );
+  if (migratedDefaultLiveControls.changed) {
+    next.defaultLiveSessionControlValuesByAgentKind =
+      migratedDefaultLiveControls.defaultLiveSessionControlValuesByAgentKind;
+    changed = true;
+  }
+
   const sanitizedDefaultSessionModeByAgentKind = sanitizeDefaultSessionModeByAgentKind(
     next.defaultSessionModeByAgentKind,
   );
@@ -192,4 +202,65 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
   }
 
   return { preferences: next, changed };
+}
+
+function migrateMisstoredCodexCollaborationModeDefault(
+  defaultSessionModeByAgentKind: unknown,
+  defaultLiveSessionControlValuesByAgentKind: unknown,
+): {
+  defaultLiveSessionControlValuesByAgentKind:
+    UserPreferences["defaultLiveSessionControlValuesByAgentKind"];
+  changed: boolean;
+} {
+  const liveDefaults = isPlainRecord(defaultLiveSessionControlValuesByAgentKind)
+    ? defaultLiveSessionControlValuesByAgentKind
+    : {};
+  if (!isPlainRecord(defaultSessionModeByAgentKind)) {
+    return {
+      defaultLiveSessionControlValuesByAgentKind:
+        liveDefaults as UserPreferences["defaultLiveSessionControlValuesByAgentKind"],
+      changed: !isPlainRecord(defaultLiveSessionControlValuesByAgentKind),
+    };
+  }
+
+  const hasCodexPlanMode = Object.entries(defaultSessionModeByAgentKind).some(
+    ([agentKind, modeId]) =>
+      agentKind.trim() === "codex"
+      && typeof modeId === "string"
+      && modeId.trim() === "plan",
+  );
+  if (!hasCodexPlanMode) {
+    return {
+      defaultLiveSessionControlValuesByAgentKind:
+        liveDefaults as UserPreferences["defaultLiveSessionControlValuesByAgentKind"],
+      changed: false,
+    };
+  }
+
+  const codexControls = isPlainRecord(liveDefaults.codex) ? liveDefaults.codex : {};
+  if (
+    typeof codexControls.collaboration_mode === "string"
+    && codexControls.collaboration_mode.trim()
+  ) {
+    return {
+      defaultLiveSessionControlValuesByAgentKind:
+        liveDefaults as UserPreferences["defaultLiveSessionControlValuesByAgentKind"],
+      changed: false,
+    };
+  }
+
+  return {
+    defaultLiveSessionControlValuesByAgentKind: {
+      ...liveDefaults,
+      codex: {
+        ...codexControls,
+        collaboration_mode: "plan",
+      },
+    } as UserPreferences["defaultLiveSessionControlValuesByAgentKind"],
+    changed: true,
+  };
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
