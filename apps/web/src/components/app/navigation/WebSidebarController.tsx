@@ -258,6 +258,7 @@ export function WebSidebarController({
       return;
     }
     if (event.scope === "footer" && event.actionId === "settings") {
+      onToggleSidebar?.();
       navigate(routes.settings, {
         state: { backgroundLocation: location },
       });
