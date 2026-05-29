@@ -21,6 +21,7 @@ import {
 
 import { useMobileHomeLaunchModel } from "../../hooks/home/derived/use-mobile-home-launch-model";
 import { useMobileHomeLaunchActions } from "../../hooks/home/workflows/use-mobile-home-launch-actions";
+import { useVisualViewportKeyboardInset } from "../../hooks/ui/keyboard/use-visual-viewport-keyboard-inset";
 import { useMobileWorkInventory } from "../../hooks/work/derived/use-mobile-work-inventory";
 import type { MobileRuntimeOption } from "../../lib/domain/home/mobile-home-launch";
 import type { MobileCloudChat } from "../../navigation/navigation-model";
@@ -50,6 +51,7 @@ export function MobileHomeScreen({
   onOpenDrawer,
   onConfigureRepos,
 }: MobileHomeScreenProps) {
+  const keyboardInset = useVisualViewportKeyboardInset();
   const [draft, setDraft] = useState("");
   const [sheet, setSheet] = useState<HomeSheet>(null);
   const launchModel = useMobileHomeLaunchModel();
@@ -142,7 +144,7 @@ export function MobileHomeScreen({
         </Text>
       ) : null}
 
-      <View style={styles.composer}>
+      <View style={[styles.composer, keyboardInset > 0 && { marginBottom: keyboardInset }]}>
         <View style={styles.composerCluster}>
           <View style={styles.selectorRow}>
             <Pressable
@@ -625,23 +627,23 @@ const styles = StyleSheet.create({
     minHeight: 40,
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing[2],
+    gap: spacing[1],
     borderRadius: radius.full,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.card,
-    paddingHorizontal: spacing[3],
+    paddingHorizontal: spacing[2],
     overflow: "hidden",
   },
   repoPillWide: {
-    flex: 1,
     flexShrink: 1,
     minWidth: 0,
+    maxWidth: "68%",
   },
   branchPill: {
-    width: 148,
-    maxWidth: "42%",
-    flexShrink: 0,
+    minWidth: 92,
+    maxWidth: "36%",
+    flexShrink: 1,
   },
   disabledPill: {
     opacity: 0.55,
@@ -703,10 +705,10 @@ const styles = StyleSheet.create({
   configLinkText: {
     flexShrink: 1,
     minWidth: 0,
-    color: colors.faint,
-    fontSize: 13.5,
-    lineHeight: 18,
-    fontWeight: "600",
+    color: colors.mutedForeground,
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: "400",
     includeFontPadding: false,
   },
   send: {

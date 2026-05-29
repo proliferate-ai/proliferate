@@ -68,6 +68,7 @@ import {
   type RecentWorkRuntimeLocation,
 } from "@proliferate/product-domain/workspaces/cloud-work-inventory";
 
+import { useVisualViewportKeyboardInset } from "../../hooks/ui/keyboard/use-visual-viewport-keyboard-inset";
 import { MobileIcon, type MobileIconName } from "../primitives/MobileIcon";
 import { MobileStatusDot } from "../primitives/MobileStatusDot";
 import { MobileTextInput } from "../primitives/MobileTextInput";
@@ -143,6 +144,7 @@ export function MobileChatScreen({
   onInitialPendingPromptConsumed,
   onSessionSelected,
 }: MobileChatScreenProps) {
+  const keyboardInset = useVisualViewportKeyboardInset();
   const queryClient = useQueryClient();
   const client = useCloudClient();
   const agentCatalog = useCloudAgentCatalog();
@@ -1456,7 +1458,7 @@ export function MobileChatScreen({
         }
       />
 
-      <View style={styles.composer}>
+      <View style={[styles.composer, keyboardInset > 0 && { marginBottom: keyboardInset }]}>
         <View style={styles.composerCard}>
           <MobileTextInput
             multiline
@@ -2992,10 +2994,10 @@ const styles = StyleSheet.create({
   configLinkText: {
     flexShrink: 1,
     minWidth: 0,
-    color: colors.faint,
-    fontSize: 13.5,
-    lineHeight: 18,
-    fontWeight: "600",
+    color: colors.mutedForeground,
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: "400",
     includeFontPadding: false,
   },
   send: {
