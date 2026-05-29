@@ -74,6 +74,9 @@ sandboxes, automations, or team workflows.
 Download Proliferate from [proliferate.com](https://proliferate.com) or the
 [latest GitHub release](https://github.com/proliferate-ai/proliferate/releases/latest).
 
+<details>
+<summary>Run from source, develop locally, or self-host</summary>
+
 ### Run Locally From Source
 
 Requirements:
@@ -118,6 +121,8 @@ generated Tauri config, and app labels.
 Full self-hosted Proliferate Cloud deployments are available for teams. Reach
 out through [proliferate.com](https://proliferate.com) for access and deployment
 support.
+
+</details>
 
 ## Development Commands
 
