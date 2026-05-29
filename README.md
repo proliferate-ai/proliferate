@@ -4,9 +4,7 @@
   <tr>
     <td align="center">
       <br /><br /><br />
-      <strong>Hero screenshot placeholder</strong><br />
-      Add a Proliferate product screenshot here showing local and cloud
-      workspaces, agent tabs, Changes, web/desktop handoff, and team automation.
+      <strong>Coming soon</strong>
       <br /><br /><br />
     </td>
   </tr>
