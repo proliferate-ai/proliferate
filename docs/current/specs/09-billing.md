@@ -815,9 +815,7 @@ Mobile billing UI is deferred (spec 08 §10 decision #5).
 
 ### 5.9 Vocabulary alignment
 
-The planning notes (`docs/current/cllloud/8) Billing.md`) used
-names that don't match the implemented schema. Spec 09 keeps the
-existing names; the planning vocabulary maps as:
+Spec 09 keeps the existing schema names. Product vocabulary maps as:
 
 ```text
 planning name             actual repo name

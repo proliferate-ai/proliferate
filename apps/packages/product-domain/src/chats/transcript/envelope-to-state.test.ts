@@ -219,8 +219,7 @@ describe("reconstructTranscriptState", () => {
   });
 });
 
-// These tests pin the Cloud-projection fidelity gaps that shared-chat-ui-spec.md
-// Phase 0.5 must close. They assert today's reducer output against a stream
+// These tests pin Cloud-projection fidelity gaps. They assert today's reducer output against a stream
 // shaped like the current Cloud projection, so each gap is a checked fact, not
 // a spec assertion.
 describe("Cloud-projection fidelity gaps", () => {

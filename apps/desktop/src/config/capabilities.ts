@@ -4,6 +4,6 @@ export const OFFICIAL_HOSTED_API_ORIGINS = [
 ] as const;
 
 export const CLOUD_SETUP_DOCS_URL =
-  "https://github.com/proliferate-ai/proliferate/blob/main/docs/reference/deployment-self-hosting.md";
+  "https://github.com/proliferate-ai/proliferate/blob/main/docs/reference/self-hosted-deploy.md";
 
 export const SUPPORT_EMAIL_ADDRESS = "support@proliferate.com";

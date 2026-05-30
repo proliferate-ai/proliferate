@@ -1065,7 +1065,7 @@ Chunk F  Capability API + Desktop selector cleanup
   - GET /v1/cloud/capabilities
   - Desktop hooks + selectors over capabilities snapshot
   - remove hardcoded AGENT_GATEWAY_BYOK_ENABLED
-  - operator runbook update (docs/reference/deployment-self-hosting.md)
+  - operator runbook update (docs/reference/self-hosted-deploy.md)
 
 Chunk G  Freshness framework + Desktop sync signals
   - freshness.py module

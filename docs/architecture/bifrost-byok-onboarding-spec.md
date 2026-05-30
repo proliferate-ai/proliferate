@@ -34,10 +34,8 @@ Proliferate server
   -> imports Bifrost logs/costs into Proliferate usage ledgers
 ```
 
-This supersedes the LiteLLM-forwarding data-plane shape in
-`docs/architecture/agent-llm-auth-gateway-spec.md` for this workstream. The old
-document remains useful as historical context for agent-auth entities and
-synced-path auth, but the target request path here is not
+This supersedes the older LiteLLM-forwarding gateway shape for this
+workstream. The target request path here is not
 `agent -> Proliferate gateway -> LiteLLM -> provider`.
 
 ## Docs Read For This Spec
@@ -49,8 +47,8 @@ synced-path auth, but the target request path here is not
 - `docs/server/guides/config.md`
 - `docs/reference/dev-profiles.md`
 - `docs/reference/env-secrets-matrix.md`
-- `docs/architecture/agent-llm-auth-gateway-spec.md`
-- `docs/architecture/shared-sandbox-config-admin-ui-spec.md`
+- `docs/current/specs/00-sandbox-foundation.md`
+- `docs/current/specs/02-agent-auth.md`
 - local Bifrost source at `/Users/pablohansen/bifrost`
   - `docs/features/governance/virtual-keys.mdx`
   - `docs/providers/request-options.mdx`

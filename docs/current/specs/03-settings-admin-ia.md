@@ -191,8 +191,7 @@ page, not under Settings. Renders `<PluginsScreen />` from
 
 ### 4.2 What is missing vs. the target IA
 
-Compared to `docs/current/mockups/settings-sample.html` and the planning
-prep section in `docs/current/overall.md`:
+Compared to the current product shape:
 
 - **Group renames**: `Environments` → `Workspace`; `Workflows` →
   `Agents`. Help becomes a real group (currently has actions only).
@@ -678,8 +677,7 @@ plugin readiness issue back to PluginsPage filtered by the relevant
 MCP/skill.
 ```
 
-The mockup (`docs/current/mockups/settings-sample.html`) does not
-include Plugins in the sidebar. This spec confirms that decision.
+Plugins stays outside the Settings sidebar. This spec confirms that decision.
 
 ### 5.7 Routing
 

@@ -7,8 +7,8 @@ self-hosting, sandbox isolation, and clear runtime boundaries for agent work.
 
 ## Current References
 
-- [Deployment self-hosting](../reference/deployment-self-hosting.md) covers
-  local, self-managed, and production deployment modes.
+- [Self-hosted deployment](../reference/self-hosted-deploy.md) covers
+  self-managed production deployment.
 - [Sandbox foundation](../current/specs/00-sandbox-foundation.md) defines cloud
   target and managed sandbox ownership.
 - [Agent auth](../current/specs/02-agent-auth.md) defines sandbox-scoped agent

@@ -46,19 +46,11 @@ The strict goal is:
 
 This spec composes existing frontend specs instead of replacing them:
 
-- `docs/frontend/specs/web-desktop-parity.md` is the broad target checklist.
-- `docs/frontend/specs/web-chat-home-component-audit.md` is the current
-  component extraction map and is more literal than older checked boxes.
 - `docs/frontend/specs/mobile-cloud-client.md` is the mobile behavior-parity
   reference.
 - `docs/frontend/specs/chat-composer.md` and
   `docs/frontend/specs/chat-transcript.md` remain authoritative for composer
   and transcript behavior.
-- `/Users/pablohansen/delete/basic_chats_sidebar.html` is a local visual
-  reference for the sidebar shape. It is useful for implementation discussion,
-  but it is not durable repo documentation. The written row/layout invariants
-  in this spec are authoritative unless the reference is moved into `docs/**`
-  as a checked-in artifact.
 
 ## Vocabulary
 
@@ -638,8 +630,6 @@ same workspace.
 
 ### Slice 4: Composer And Transcript Exactness
 
-- Continue the extraction order in
-  `docs/frontend/specs/web-chat-home-component-audit.md`.
 - First extract composer leaves and config controls.
 - Then extract transcript message leaves.
 - Then extract plan cards.

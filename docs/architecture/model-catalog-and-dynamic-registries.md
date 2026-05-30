@@ -16,7 +16,7 @@ Scope:
 Related docs:
 
 - `docs/anyharness/specs/agent-catalog-readiness.md`
-- `docs/architecture/cloud-worker-control-plane.md`
+- `docs/current/specs/04-cloud-running-alignment.md`
 - `docs/frontend/README.md`
 - `docs/server/README.md`
 

@@ -32,37 +32,15 @@ spec assumes the foundation is in place.
 
 ## Source Material
 
-These specs are derived from, but supersede, the following planning bundles in
-this repo:
+These specs supersede the raw planning notes and earlier implementation drafts
+that shaped the design. The old planning bundles have been removed; this
+directory is the durable contract.
+
+Related architecture reference that remains outside this pack:
 
 ```text
-docs/current/cllloud/             Raw discussion notes that shaped the design.
-docs/current/implementation/      Earlier numbered drafts (00, 01, 02, 04).
-docs/current/overall.md           Phase ordering and prep steps.
-docs/current/mockups/             Settings/Admin IA visual reference (settings-sample.html).
+docs/architecture/bifrost-byok-onboarding-spec.md
 ```
-
-Treat those as input. If they conflict with the files in this directory, this
-directory wins.
-
-These specs also relate to existing authoritative architecture docs:
-
-```text
-docs/architecture/cloud-work-launch-model-spec.md
-docs/architecture/cloud-worker-control-plane.md
-docs/architecture/cloud-worker-implementation-phases.md
-docs/architecture/cloud-worker-runtime-bundle-supervisor-spec.md
-docs/architecture/cloud-worker-workspace-command-spec.md
-docs/architecture/cloud-worker-automation-migration-spec.md
-docs/architecture/target-runtime-mcp-skills-config.md
-docs/architecture/shared-sandbox-config-admin-ui-spec.md
-docs/architecture/agent-llm-auth-gateway-spec.md
-docs/architecture/plugins-and-skills.md
-```
-
-When a spec in this directory contradicts an `architecture/` doc, this
-directory describes the *target* and the architecture doc describes *current
-shape*. Both should be updated as code lands.
 
 ## Canonical Vocabulary
 

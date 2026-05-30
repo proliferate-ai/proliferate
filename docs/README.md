@@ -113,63 +113,13 @@ migration exception and state the canonical owner/rule directly.
 - `docs/architecture/model-catalog-and-dynamic-registries.md`
   - model catalog, target-discovered model registry, user visibility intent,
     and launch-time model resolution boundaries
-- `docs/architecture/target-runtime-mcp-skills-config.md`
-  - target-scoped MCP/skill runtime manifests, lazy artifact/credential
-    resolution, and the Desktop/worker gap-fill boundary
-- `docs/architecture/agent-llm-auth-gateway-spec.md`
-  - historical centralized agent LLM auth gateway design, runtime grants,
-    synced-path cutover, and sandbox agent-auth selections
 - `docs/architecture/bifrost-byok-onboarding-spec.md`
   - Bifrost-backed agent LLM data plane, managed onboarding credits, BYOK
     materialization, E2B sandbox auth application, usage import, and local
     AWS/E2B/Bifrost validation
-- `docs/architecture/shared-sandbox-config-admin-ui-spec.md`
-  - personal/shared sandbox profile configuration, admin UI ownership, public
-    MCP/skill publication, and shared sandbox consumption of agent auth
-- `docs/architecture/cloud-worker-control-plane.md`
-  - reference architecture for target workers, Cloud-mediated session control,
-    command delivery, event ingestion, and snapshots
-- `docs/architecture/cloud-worker-implementation-phases.md`
-  - concrete implementation phases, file paths, ownership boundaries, and
-    acceptance criteria for the Cloud Worker migration
-- `docs/architecture/cloud-worker-pr-stack-review-guide.md`
-  - synthesized reviewer map for the worker/control-plane PR stack
-- `docs/architecture/cloud-worker-runtime-bundle-supervisor-spec.md`
-  - concrete implementation spec for supervised runtime bundle packaging,
-    SSH installation, managed cloud boot, version reporting, and smoke tests
-- `docs/architecture/cloud-worker-workspace-command-spec.md`
-  - concrete implementation spec for the `materialize_workspace`
-    CloudCommand that creates/resolves target-side AnyHarness workspaces and
-    worktrees
-- `docs/architecture/cloud-worker-automation-migration-spec.md`
-  - concrete implementation spec for migrating automations to a target-agnostic
-    staged CloudCommand pipeline
-- `docs/architecture/cloud-work-launch-model-spec.md`
-  - concrete implementation spec for the shared target/workspace/materialization
-    launch model used by automations, Slack, web, mobile, and Desktop cloud
-    surfaces
 - `docs/architecture/workspace-pruning-worktree-management-spec.md`
   - draft implementation spec for durable workspace lifecycle, worktree pruning,
     archive/restore UX, materialization state, and rehydration
-- `docs/architecture/target-runtime-mcp-skills-config.md`
-  - proposed target model for replacing session plugin bundles with
-    target-scoped MCP/skill runtime config, refresh, and lazy artifact/credential
-    resolution
-- `docs/architecture/shared-sandbox-config-admin-ui-spec.md`
-  - proposed shared sandbox configuration model for personal and organization
-    cloud profiles, agent credential sync, public MCP/skill publication, and
-    admin/user configuration UI
-- `docs/architecture/agent-llm-auth-gateway-spec.md`
-  - proposed centralized agent LLM auth gateway model for Proliferate managed
-    credits, BYOK credentials, synced-path auth selections, and sandbox runtime
-    grants; superseded for routing by the Bifrost spec above
-- `docs/architecture/plugins-and-skills.md`
-  - legacy/current-state reference for plugin packages, skill bundles,
-    plugin-owned MCP servers, the plugins UI, and the current session bundle
-    boundary
-- `docs/architecture/shared-chat-ui-spec.md`
-  - migration spec for extracting the chat transcript and composer into shared
-    presentational components reused by Desktop (AnyHarness) and Web (Cloud)
 
 ## Deployment and environment reference
 
@@ -179,24 +129,12 @@ migration exception and state the canonical owner/rule directly.
 - `docs/reference/dev-profiles.md`
   - local multi-worktree `make dev PROFILE=<name>` workflow, profile state,
     port allocation, and generated Tauri runner behavior
-- `docs/reference/deployment-self-hosting.md`
-  - complete setup runbook for every deployment mode (local dev, self-hosted,
-    AWS CloudFormation, production)
 - `docs/reference/env-vars.yaml`
   - canonical list of every env var across the stack, tagged by deployment mode
 - `docs/reference/env-secrets-matrix.md`
   - operator-facing server env var surface
 - `docs/reference/workspace-command-environment.md`
   - environment variables available to workspace run commands
-- `docs/notes/agent-credentials-sync.md`
-  - non-authoritative design/reference note for local agent credentials and
-    credential sync
-- `docs/notes/model-gateway-auth-facts.md`
-  - empirical source-inspection facts for Claude, Codex, OpenCode, Gemini, and
-    gateway auth compatibility
-- `docs/notes/agent-gateway-phase0-compatibility.md`
-  - runnable Phase 0B proof matrix for Bifrost routing, Claude streaming, Codex
-    Responses, and OpenCode isolation gates
 - `docs/reference/self-hosted-deploy.md`
   - canonical Docker Compose self-hosted deployment
 - `docs/reference/self-hosted-aws.md`
