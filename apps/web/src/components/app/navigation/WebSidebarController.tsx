@@ -38,6 +38,7 @@ import {
   ProductSidebar,
   SidebarActionButton,
 } from "@proliferate/product-ui/sidebar/ProductSidebar";
+import { RecentWorkStatusDot } from "@proliferate/product-ui/workspaces/RecentWorkStatusDot";
 
 import { routes } from "../../../config/routes";
 import {
@@ -381,6 +382,12 @@ function buildRecentWorkspaceGroups(input: {
       active: recentRowIsActive(item, input.routeState),
       archived: item.state === "done",
       status: <RecentSourceIndicator item={item} />,
+      attentionStatus: (
+        <RecentWorkStatusDot
+          indicator={item.statusIndicator}
+          surface="sidebar"
+        />
+      ),
       detail: null,
       trailingLabel: item.lastActivityLabel,
       actions: item.rowKind === "session"

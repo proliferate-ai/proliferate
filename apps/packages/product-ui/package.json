@@ -215,6 +215,10 @@
       "types": "./dist/workspaces/WorkspaceRow.d.ts",
       "import": "./dist/workspaces/WorkspaceRow.js"
     },
+    "./workspaces/RecentWorkStatusDot": {
+      "types": "./dist/workspaces/RecentWorkStatusDot.d.ts",
+      "import": "./dist/workspaces/RecentWorkStatusDot.js"
+    },
     "./workspaces/CloudWorkspaceList": {
       "types": "./dist/workspaces/CloudWorkspaceList.d.ts",
       "import": "./dist/workspaces/CloudWorkspaceList.js"

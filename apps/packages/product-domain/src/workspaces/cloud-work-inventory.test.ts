@@ -15,6 +15,7 @@ import {
   recentWorkCommandability,
   recentWorkRuntimeLocationForWorkspace,
   recentWorkSourceForWorkspace,
+  recentWorkStatusIndicatorForWorkspace,
 } from "./cloud-work-inventory";
 
 const NOW = Date.parse("2026-05-23T12:00:00Z");
@@ -69,6 +70,56 @@ describe("cloud work inventory", () => {
       },
     }))).toBe("blocked");
     expect(cloudWorkStatusForWorkspace(workspace({ workspaceStatus: "ready", runtime: runtime("paused") }))).toBe("ready");
+  });
+
+  it("derives a shared status indicator without requiring server UI fields", () => {
+    expect(recentWorkStatusIndicatorForWorkspace(workspace({
+      workspaceStatus: "error",
+      lastError: "Runtime failed",
+    }))).toMatchObject({ kind: "error", tone: "danger", label: "Error", hollow: false });
+
+    expect(recentWorkStatusIndicatorForWorkspace(workspace({
+      lastSessionSummary: {
+        targetId: "target",
+        workspaceId: "runtime",
+        sessionId: "session",
+        title: "Awaiting approval",
+        status: "idle",
+        phase: "awaiting_interaction",
+        pendingInteractionCount: 1,
+        lastEventAt: "2026-05-23T11:56:00Z",
+      },
+    }))).toMatchObject({ kind: "needs_input", tone: "attention", label: "Needs input" });
+
+    expect(recentWorkStatusIndicatorForWorkspace(workspace({
+      workspaceStatus: "materializing",
+      status: "materializing",
+      runtime: runtime("provisioning"),
+    }))).toMatchObject({ kind: "running", tone: "progress", label: "In progress", live: true });
+
+    expect(recentWorkStatusIndicatorForWorkspace(workspace({
+      lastSessionSummary: {
+        targetId: "target",
+        workspaceId: "runtime",
+        sessionId: "session",
+        title: "Review",
+        status: "ready_for_review",
+        lastEventAt: "2026-05-23T11:56:00Z",
+      },
+    }))).toMatchObject({ kind: "review_ready", tone: "success", label: "Ready for review" });
+
+    expect(recentWorkStatusIndicatorForWorkspace(workspace({
+      sandboxType: "managed_personal",
+      targetId: "target",
+      runtime: runtime("running"),
+    }))).toMatchObject({ kind: "ready", tone: "success", label: "Ready" });
+
+    expect(recentWorkStatusIndicatorForWorkspace(workspace({
+      sandboxType: "local",
+      exposureState: "untracked",
+      exposure: null,
+      runtime: runtime("running"),
+    }))).toMatchObject({ kind: "idle", tone: "muted", label: "Idle", hollow: true });
   });
 
   it("dedupes duplicate workspace rows by merging complementary details", () => {
@@ -184,6 +235,7 @@ describe("cloud work inventory", () => {
 
     expect(item.activityPreview).toBe("I fixed the mobile workspace list preview.");
     expect(item.searchText).toContain("mobile workspace list");
+    expect(item.statusIndicator.kind).toBe("ready");
   });
 
   it("falls back to specific blocker detail instead of blunt status copy", () => {
@@ -409,6 +461,7 @@ describe("cloud work inventory", () => {
       cloudAccessState: "enabled",
       commandability: "commandable",
       state: "running",
+      statusIndicator: { kind: "running", label: "In progress" },
       lastActivityLabel: "2m",
     });
     expect(rows[1]).toMatchObject({
@@ -419,7 +472,33 @@ describe("cloud work inventory", () => {
       runtimeLocation: "cloud_sandbox",
       commandability: "commandable",
       state: "idle",
+      statusIndicator: { kind: "ready", label: "Ready" },
     });
+  });
+
+  it("carries latest session previews into recent work rows", () => {
+    const rows = buildRecentWorkItems([
+      workspace({
+        id: "with-preview",
+        displayName: "Preview workspace",
+        lastSessionSummary: {
+          targetId: "target",
+          workspaceId: "runtime",
+          sessionId: "session",
+          title: "Session title",
+          status: "idle",
+          lastEventAt: "2026-05-23T11:58:00Z",
+          preview: "Want me to drill into one zone?",
+        },
+      }),
+    ], { nowMs: NOW });
+
+    expect(rows[0]).toMatchObject({
+      id: "session:with-preview:session",
+      activityPreview: "Want me to drill into one zone?",
+      statusIndicator: { kind: "ready" },
+    });
+    expect(rows[0]?.searchText).toContain("drill into one zone");
   });
 
   it("keeps the active workspace row even when that workspace has recent sessions", () => {
