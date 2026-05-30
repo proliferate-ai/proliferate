@@ -7,6 +7,7 @@ import {
   subscribeWorkspace,
   type CloudCommandResponse,
   type CloudCommandStatus,
+  type CloudSessionEventsResponse,
   type CloudSessionSnapshot,
   type CloudTargetDetail,
   type CloudWorkspaceSnapshot,
@@ -19,6 +20,7 @@ import {
   cloudWorkspaceSnapshotKey,
 } from "../lib/query-keys.js";
 import { useCloudClient } from "../context/CloudClientProvider.js";
+import { cloudSessionEventsKey } from "./events.js";
 import {
   isCloudCommandStatusPatch,
   isCloudHeartbeat,
@@ -30,6 +32,8 @@ import {
   isCloudWorkspaceSnapshot,
   reduceSessionSnapshot,
   reduceWorkspaceSnapshot,
+  sessionEventFromProjectionPatch,
+  upsertSessionEventResponse,
 } from "./live-reducer.js";
 
 const MIN_RECONNECT_DELAY_MS = 500;
@@ -124,6 +128,11 @@ export function useSessionLive(
             }
             if (isCloudSessionProjectionPatch(event)) {
               cursorRef.current = Math.max(cursorRef.current, event.patch.seq);
+              const sessionEvent = sessionEventFromProjectionPatch(event);
+              queryClient.setQueryData<CloudSessionEventsResponse>(
+                cloudSessionEventsKey(targetId, sessionId),
+                (current) => upsertSessionEventResponse(current, sessionEvent),
+              );
               setState((current) => {
                 const snapshot = reduceSessionSnapshot(current.snapshot, event);
                 if (snapshot) {

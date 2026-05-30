@@ -67,36 +67,38 @@ const PROVIDER_ICON_MAP: Record<string, ComponentType<IconProps>> = {
 export function ProviderIcon({
   kind,
   className = "size-4",
+  ...props
 }: {
   kind: string;
   className?: string;
-}) {
+} & IconProps) {
   const Icon = PROVIDER_ICON_MAP[kind];
   if (!Icon) return null;
-  return <Icon className={className} />;
+  return <Icon className={className} {...props} />;
 }
 
 export function AgentGlyph({
   agentKind,
   color,
   className = "size-4",
+  ...props
 }: {
   agentKind?: string | null;
   color?: string | null;
   className?: string;
-}) {
+} & IconProps) {
   const Icon = agentKind ? PROVIDER_ICON_MAP[agentKind] : undefined;
   const style = color ? { color } : undefined;
   if (Icon) {
     return (
       <span className="inline-flex" style={style}>
-        <Icon className={className} />
+        <Icon className={className} {...props} />
       </span>
     );
   }
   return (
     <span className="inline-flex" style={style}>
-      <ProliferateIcon className={className} />
+      <ProliferateIcon className={className} {...props} />
     </span>
   );
 }

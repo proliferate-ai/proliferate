@@ -1,5 +1,7 @@
 import type {
   CloudCommandStatusPatch,
+  CloudSessionEvent,
+  CloudSessionEventsResponse,
   CloudSessionLiveEvent,
   CloudSessionProjectionPatch,
   CloudSessionSnapshot,
@@ -70,6 +72,36 @@ export function reduceSessionSnapshot(
       snapshot.pendingInteractions,
       patch.pendingInteraction ?? null,
     ),
+  };
+}
+
+export function sessionEventFromProjectionPatch(
+  event: CloudSessionProjectionPatch,
+): CloudSessionEvent {
+  const patch = event.patch;
+  return {
+    targetId: patch.targetId,
+    sessionId: patch.sessionId,
+    seq: patch.seq,
+    eventType: patch.eventType,
+    sourceKind: "live_patch",
+    turnId: patch.envelope?.turnId ?? null,
+    itemId: patch.envelope?.itemId ?? null,
+    occurredAt: patch.envelope?.timestamp ?? patch.session.lastEventAt ?? null,
+    payload: null,
+    envelope: patch.envelope ?? null,
+  };
+}
+
+export function upsertSessionEventResponse(
+  response: CloudSessionEventsResponse | undefined,
+  event: CloudSessionEvent,
+): CloudSessionEventsResponse {
+  const events = upsertByKey(response?.events ?? [], event, (item) => String(item.seq))
+    .sort((left, right) => left.seq - right.seq);
+  return {
+    events,
+    nextCursor: Math.max(response?.nextCursor ?? 0, event.seq),
   };
 }
 

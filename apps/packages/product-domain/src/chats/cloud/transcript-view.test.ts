@@ -7,10 +7,105 @@ import type {
 } from "@proliferate/cloud-sdk";
 
 import {
+  buildCloudTranscriptState,
   buildCloudTranscriptView,
   cloudTranscriptHasAgentProgressAfterPrompt,
   cloudTranscriptHasUserPrompt,
 } from "./transcript-view";
+
+describe("buildCloudTranscriptState", () => {
+  it("returns TranscriptState when retained envelopes are renderable and current", () => {
+    const state = buildCloudTranscriptState({
+      sessionId: "session-1",
+      events: [
+        eventEnvelope(1, "item_completed", userEnvelope(1, "hello from envelope")),
+      ],
+      fallbackItems: [],
+    });
+
+    expect(state.source).toBe("events");
+    expect(state.fallbackReason).toBeNull();
+    expect(state.envelopeCount).toBe(1);
+    expect(state.missingEnvelopeCount).toBe(0);
+    expect(state.latestEnvelopeSeq).toBe(1);
+    expect(state.transcript?.sessionMeta.sessionId).toBe("session-1");
+    expect(state.transcript?.itemsById["user-1"]).toEqual(expect.objectContaining({
+      kind: "user_message",
+      text: "hello from envelope",
+    }));
+  });
+
+  it("reports projection fallback when retained events lack envelopes", () => {
+    const state = buildCloudTranscriptState({
+      sessionId: "session-1",
+      events: [
+        {
+          targetId: "target-1",
+          sessionId: "session-1",
+          seq: 2,
+          eventType: "item_completed",
+          sourceKind: "runtime",
+          envelope: null,
+        },
+      ],
+      fallbackItems: [
+        {
+          itemId: "item-1",
+          turnId: "turn-1",
+          kind: "assistant_message",
+          status: "completed",
+          text: "projection-only assistant",
+          firstSeq: 2,
+          lastSeq: 2,
+        },
+      ],
+    });
+
+    expect(state.source).toBe("projection");
+    expect(state.transcript).toBeNull();
+    expect(state.envelopeCount).toBe(0);
+    expect(state.missingEnvelopeCount).toBe(1);
+    expect(state.latestProjectedSeq).toBe(2);
+    expect(state.fallbackReason).toBe("missing_envelopes");
+  });
+
+  it("keeps projection when projected items are ahead of event-backed rows", () => {
+    const state = buildCloudTranscriptState({
+      sessionId: "session-1",
+      events: [
+        eventEnvelope(1, "item_completed", userEnvelope(1, "event-backed prompt")),
+      ],
+      fallbackItems: [
+        {
+          itemId: "item-1",
+          turnId: "turn-1",
+          kind: "user_message",
+          status: "completed",
+          text: "event-backed prompt",
+          firstSeq: 1,
+          lastSeq: 1,
+        },
+        {
+          itemId: "item-2",
+          turnId: "turn-1",
+          kind: "assistant_message",
+          status: "completed",
+          text: "projection is newer",
+          firstSeq: 2,
+          lastSeq: 2,
+        },
+      ],
+    });
+
+    expect(state.source).toBe("projection");
+    expect(state.transcript).toBeNull();
+    expect(state.envelopeCount).toBe(1);
+    expect(state.missingEnvelopeCount).toBe(0);
+    expect(state.latestEnvelopeSeq).toBe(1);
+    expect(state.latestProjectedSeq).toBe(2);
+    expect(state.fallbackReason).toBe("projection_ahead_of_events");
+  });
+});
 
 describe("buildCloudTranscriptView", () => {
   it("falls back to projected transcript items when retained events lack envelopes", () => {
