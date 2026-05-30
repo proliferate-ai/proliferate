@@ -213,11 +213,16 @@ jobs:
   deploy-desktop:
     needs: [plan]
     if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.dry_run != 'true' }}
+    permissions:
+      contents: write
+      id-token: write
     uses: ./.github/workflows/_deploy-desktop.yml
     with:
       environment: staging
       git_sha: ${{ needs.plan.outputs.head_sha }}
       enabled: ${{ needs.plan.outputs.desktop == 'true' }}
+      dry_run: true
+      publish_updater: false
     secrets: inherit
 
   summary:

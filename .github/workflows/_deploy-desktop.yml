@@ -12,6 +12,15 @@ on:
       enabled:
         default: true
         type: boolean
+      dry_run:
+        default: false
+        type: boolean
+      publish_updater:
+        default: false
+        type: boolean
+      target_os:
+        default: all
+        type: string
 
 permissions:
   contents: read
@@ -20,39 +29,71 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  deploy:
+  plan:
     if: ${{ inputs.enabled }}
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
+    outputs:
+      enabled: ${{ steps.meta.outputs.enabled }}
+      version: ${{ steps.meta.outputs.version }}
+      tag_name: ${{ steps.meta.outputs.tag_name }}
     env:
       DESKTOP_DEPLOY_ENABLED: ${{ vars.DESKTOP_DEPLOY_ENABLED || 'false' }}
-      DESKTOP_RELEASE_WORKFLOW: ${{ vars.DESKTOP_RELEASE_WORKFLOW || 'release-desktop.yml' }}
-      DESKTOP_RELEASE_REF: ${{ vars.DESKTOP_RELEASE_REF }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.git_sha }}
 
-      - name: Validate desktop deploy config
+      - name: Resolve desktop release metadata
+        id: meta
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          GIT_SHA: ${{ inputs.git_sha }}
         run: |
           set -euo pipefail
           if [[ "$DESKTOP_DEPLOY_ENABLED" != "true" ]]; then
             echo "Desktop deploy is intentionally disabled for this environment."
-            echo "Set DESKTOP_DEPLOY_ENABLED=true after the beta/stable channel is ready."
+            echo "Set DESKTOP_DEPLOY_ENABLED=true to build from the promoted SHA."
+            {
+              echo "enabled=false"
+            } >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          : "${DESKTOP_RELEASE_REF:?Set DESKTOP_RELEASE_REF to the desktop tag/ref to release.}"
 
-      - name: Dispatch desktop release workflow
-        if: ${{ env.DESKTOP_DEPLOY_ENABLED == 'true' }}
-        run: |
-          set -euo pipefail
-          gh workflow run "$DESKTOP_RELEASE_WORKFLOW" \
-            --ref "$DESKTOP_RELEASE_REF" \
-            -f dry_run=false \
-            -f publish_updater=true
-        env:
-          GH_TOKEN: ${{ github.token }}
+          package_version="$(node -p "require('./apps/desktop/package.json').version")"
+          tauri_version="$(node -p "JSON.parse(require('fs').readFileSync('./apps/desktop/src-tauri/tauri.conf.json','utf8')).version")"
+          cargo_version="$(grep '^version' apps/desktop/src-tauri/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')"
+          if [[ "$package_version" == "$tauri_version" && "$package_version" == "$cargo_version" ]]; then
+            :
+          else
+            echo "::error::Desktop version mismatch: package=$package_version tauri=$tauri_version cargo=$cargo_version"
+            exit 1
+          fi
+
+          tag_name="desktop-v$package_version"
+          tag_target="$(git ls-remote --tags origin "refs/tags/$tag_name" | awk '{ print $1 }' | head -n 1)"
+          if [[ -n "$tag_target" && "$tag_target" == "$GIT_SHA" && "$DRY_RUN" != "true" ]]; then
+            echo "Desktop tag $tag_name already points at $GIT_SHA; skipping duplicate release."
+            {
+              echo "enabled=false"
+              echo "version=$package_version"
+              echo "tag_name=$tag_name"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ -n "$tag_target" && "$tag_target" != "$GIT_SHA" && "$DRY_RUN" != "true" ]]; then
+            echo "::error::Desktop tag $tag_name already exists at $tag_target, not $GIT_SHA. Bump the desktop version before publishing desktop from this SHA."
+            exit 1
+          fi
+          if [[ -n "$tag_target" && "$DRY_RUN" == "true" ]]; then
+            echo "::warning::Desktop tag $tag_name already exists at $tag_target; dry run will build without publishing."
+          fi
+
+          {
+            echo "enabled=true"
+            echo "version=$package_version"
+            echo "tag_name=$tag_name"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Summarize desktop deploy
         run: |
@@ -60,8 +101,27 @@ jobs:
             echo "### Desktop"
             echo "- Environment: ${{ inputs.environment }}"
             echo "- Enabled: \`$DESKTOP_DEPLOY_ENABLED\`"
-            if [[ "$DESKTOP_DEPLOY_ENABLED" == "true" ]]; then
-              echo "- Dispatched workflow: \`$DESKTOP_RELEASE_WORKFLOW\`"
-              echo "- Ref: \`$DESKTOP_RELEASE_REF\`"
+            echo "- Git SHA: \`${{ inputs.git_sha }}\`"
+            if [[ "${{ steps.meta.outputs.enabled }}" == "true" ]]; then
+              echo "- Version: \`${{ steps.meta.outputs.version }}\`"
+              echo "- Tag: \`${{ steps.meta.outputs.tag_name }}\`"
+              echo "- Dry run: \`${{ inputs.dry_run }}\`"
+              echo "- Publish updater: \`${{ inputs.publish_updater }}\`"
+              echo "- Target OS: \`${{ inputs.target_os }}\`"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    needs: [plan]
+    if: ${{ needs.plan.outputs.enabled == 'true' }}
+    permissions:
+      contents: write
+      id-token: write
+    uses: ./.github/workflows/release-desktop.yml
+    with:
+      git_sha: ${{ inputs.git_sha }}
+      version: ${{ needs.plan.outputs.version }}
+      dry_run: ${{ inputs.dry_run }}
+      publish_updater: ${{ inputs.publish_updater }}
+      target_os: ${{ inputs.target_os }}
+    secrets: inherit
