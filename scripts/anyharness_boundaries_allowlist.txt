@@ -6,12 +6,7 @@
 # This is migration debt, not permission for new code. If a cleanup reduces a
 # count, update this file in the same PR.
 
-CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/mcp_bindings/injection.rs 2 transitional session MCP injection still imports product MCP modules
-CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/mcp_bindings/product_catalog.rs 2 transitional session MCP catalog still imports product MCP auth modules
-CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/mcp_bindings/selection.rs 2 transitional session MCP selection still imports product MCP modules
-CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/prompt.rs 2 transitional session prompt projection still imports plan types
 CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/mod.rs 1 transitional session runtime still owns plan service wiring
 CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/plans.rs 2 transitional session runtime still coordinates plan domain directly
-CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/prompt.rs 2 transitional session prompt runtime still coordinates plan domain directly
 CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/service.rs 1 transitional session service still accepts mobility attachment domain data
 CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/workspaces/files_runtime.rs 1 transitional workspace files runtime still serves cowork artifact files directly

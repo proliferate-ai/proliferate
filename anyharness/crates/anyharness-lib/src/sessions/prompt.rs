@@ -9,11 +9,11 @@ use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::domains::plans::{document, model::PlanRecord};
 use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::model::{
     PromptAttachmentKind, PromptAttachmentRecord, PromptAttachmentSource, PromptAttachmentState,
 };
+use crate::sessions::plan_references::{render_plan_reference_markdown, PlanReferenceResolver};
 use crate::sessions::service::read_prompt_attachment_content_with_legacy_fallback;
 use crate::sessions::store::SessionStore;
 
@@ -27,10 +27,6 @@ pub const MAX_TEXT_RESOURCE_BYTES: usize = 256 * 1024;
 pub const MAX_TOTAL_ATTACHMENT_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_TOTAL_PLAN_REFERENCE_BYTES: usize = 512 * 1024;
 pub const MAX_RESOURCE_PREVIEW_CHARS: usize = 2_000;
-
-pub trait PlanReferenceResolver {
-    fn resolve_plan_reference(&self, plan_id: &str) -> anyhow::Result<Option<PlanRecord>>;
-}
 
 pub struct PromptPrepareContext<'a> {
     pub store: &'a SessionStore,
@@ -260,7 +256,7 @@ impl PromptPayload {
                     as_resource,
                     ..
                 } => {
-                    let markdown = document::render_markdown_snapshot(title, body_markdown);
+                    let markdown = render_plan_reference_markdown(title, body_markdown);
                     if *as_resource {
                         let uri = format!("plan://{plan_id}?snapshot={snapshot_hash}");
                         let resource = acp::TextResourceContents::new(markdown, uri)
@@ -1214,18 +1210,20 @@ fn bounded_preview(text: &str) -> Option<String> {
 mod tests {
     use std::collections::HashMap;
 
-    use anyharness_contract::v1::{ProposedPlanDecisionState, ProposedPlanNativeResolutionState};
-
     use super::*;
     use crate::persistence::Db;
+    use crate::sessions::plan_references::ResolvedPlanReference;
     use crate::sessions::store::SessionStore;
 
     struct TestPlanResolver {
-        plans: HashMap<String, PlanRecord>,
+        plans: HashMap<String, ResolvedPlanReference>,
     }
 
     impl PlanReferenceResolver for TestPlanResolver {
-        fn resolve_plan_reference(&self, plan_id: &str) -> anyhow::Result<Option<PlanRecord>> {
+        fn resolve_plan_reference(
+            &self,
+            plan_id: &str,
+        ) -> anyhow::Result<Option<ResolvedPlanReference>> {
             Ok(self.plans.get(plan_id).cloned())
         }
     }
@@ -1407,26 +1405,17 @@ mod tests {
         let mut plans = HashMap::new();
         plans.insert(
             "plan-1".to_string(),
-            PlanRecord {
+            ResolvedPlanReference {
                 id: "plan-1".to_string(),
                 workspace_id: workspace_id.to_string(),
-                session_id: "session-1".to_string(),
-                item_id: "item-1".to_string(),
                 title: "Plan".to_string(),
                 body_markdown: body_markdown.to_string(),
                 snapshot_hash: "hash-1".to_string(),
-                decision_state: ProposedPlanDecisionState::Pending,
-                native_resolution_state: ProposedPlanNativeResolutionState::None,
-                decision_version: 1,
-                source_agent_kind: "codex".to_string(),
                 source_kind: "codex_turn_plan".to_string(),
                 source_session_id: "session-1".to_string(),
                 source_turn_id: Some("turn-1".to_string()),
                 source_item_id: Some("item-1".to_string()),
                 source_tool_call_id: None,
-                superseded_by_plan_id: None,
-                created_at: "now".to_string(),
-                updated_at: "now".to_string(),
             },
         );
         (store, TestPlanResolver { plans })

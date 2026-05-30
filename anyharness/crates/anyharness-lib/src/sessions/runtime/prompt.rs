@@ -2,26 +2,17 @@ use std::time::Instant;
 
 use anyharness_contract::v1::PromptInputBlock;
 
-use crate::domains::plans::model::PlanRecord;
-use crate::domains::plans::service::PlanService;
 use crate::live::sessions::{LiveSessionCommandError, PromptAcceptError, PromptAcceptance};
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::sessions::mcp_bindings::assembly::SESSION_RESTART_REQUIRED_DETAIL;
 use crate::sessions::model::PromptAttachmentState;
 use crate::sessions::prompt::{
-    capabilities_from_live_config, prepare_prompt, PlanReferenceResolver, PromptPrepareContext,
-    PromptProvenance,
+    capabilities_from_live_config, prepare_prompt, PromptPrepareContext, PromptProvenance,
 };
 
 use super::{
     SendPromptError, SendPromptOutcome, SessionLifecycleError, SessionRuntime, StartSessionError,
 };
-
-impl PlanReferenceResolver for PlanService {
-    fn resolve_plan_reference(&self, plan_id: &str) -> anyhow::Result<Option<PlanRecord>> {
-        self.get(plan_id)
-    }
-}
 
 impl SessionRuntime {
     pub async fn send_prompt(

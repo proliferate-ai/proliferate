@@ -5,6 +5,7 @@ pub mod crypto;
 pub mod injection;
 pub mod model;
 pub mod product_catalog;
+pub mod product_launch;
 pub mod product_registry;
 pub mod selection;
 pub mod summaries;
