@@ -27,6 +27,8 @@ import {
 } from "@proliferate/cloud-sdk-react";
 import {
   CloudChatSurface,
+  type CloudChatHeaderNoticeView,
+  type CloudChatHeaderView,
 } from "@proliferate/product-ui/chat/CloudChatSurface";
 import type {
   CloudChatComposerFooterControlView,
@@ -57,12 +59,15 @@ import {
 } from "@proliferate/product-domain/chats/cloud/harness-availability";
 import {
   cloudCommandReadiness,
-  recentWorkCloudAccessState,
   recentWorkCommandability,
-  recentWorkRuntimeLocationForWorkspace,
 } from "@proliferate/product-domain/workspaces/cloud-work-inventory";
 
 import { routes } from "../../../config/routes";
+import {
+  buildCloudChatHeaderDiagnosticsText,
+  buildCloudChatHeaderStatus,
+  cloudChatSessionStatusLabel,
+} from "../../../lib/domain/chat/cloud-chat-header-presentation";
 import {
   dispatchPendingHomePrompt,
   enqueuePromptCommandWithRetry,
@@ -1422,7 +1427,6 @@ export function ChatScreen() {
   const branchName = workspace.repo.branch ?? defaultBranchName;
   const workspaceDisplayName = workspace.displayName?.trim() ?? "";
   const workspaceTitle = workspaceDisplayName || branchName || repoLabel;
-  const showBranchChip = !workspaceDisplayName || branchName !== defaultBranchName;
   const activeSessionLabel = session
     ? sessionOptionLabel(session)
     : "New session";
@@ -1444,13 +1448,88 @@ export function ChatScreen() {
   const workspaceStatusNotice = commandMessage && !isUnclaimed
     ? workspaceNoticeForCommandMessage(commandMessage)
     : null;
-  const transcriptSourceLabel = transcriptView.source === "events"
-    ? "Event transcript"
-    : transcriptView.source === "projection"
-      ? "Projection fallback"
-      : "No transcript";
-  const runtimeLabel = workspaceRuntimeLabel(recentWorkRuntimeLocationForWorkspace(workspace));
-  const cloudAccessLabel = workspaceCloudAccessLabel(recentWorkCloudAccessState(workspace));
+  const headerDiagnosticsText = buildCloudChatHeaderDiagnosticsText({
+    workspace,
+    session,
+    commandReadiness,
+    commandabilityLabel,
+    commandStatus: commandStatus.data,
+    sessionLiveConnected: sessionLive.isConnected,
+    transcriptSource: transcriptView.source,
+  });
+  const headerNotice: CloudChatHeaderNoticeView | null = isUnclaimed
+    ? {
+      title: "Unclaimed shared workspace.",
+      description: "Claim this workspace before sending prompts or changing session settings.",
+      tone: "warning",
+      action: {
+        label: "Claim",
+        kind: "claim",
+        loading: claimWorkspace.isPending,
+        onClick: () => void claimCurrentWorkspace(),
+      },
+    }
+    : workspaceStatusNotice
+      ? {
+        ...workspaceStatusNotice,
+        diagnostics: {
+          text: headerDiagnosticsText,
+          onCopy: () => void copyComposerFooterValue(headerDiagnosticsText, "Workspace diagnostics"),
+        },
+      }
+      : null;
+  const header: CloudChatHeaderView = {
+    workspaceLabel: workspaceTitle,
+    status: buildCloudChatHeaderStatus({
+      workspace,
+      session,
+      pendingInteractions,
+      workspaceCommandReady,
+      commandReadiness,
+      workspacePreparationMessage: isWorkspacePreparationStatus(commandMessage),
+      promptSubmitting,
+    }),
+    sessionSwitcher: {
+      workspaceLabel: workspaceTitle,
+      activeSessionId: session?.sessionId
+        ?? (pendingSessionDraft ? webCloudSessionDraftOptionId(pendingSessionDraft.id) : null),
+      activeSessionLabel,
+      sessions: [
+        ...(pendingSessionDraft
+          ? [{
+            id: webCloudSessionDraftOptionId(pendingSessionDraft.id),
+            label: "New session",
+            detail: pendingSessionDraft.selection.agentKind,
+            statusLabel: "Draft",
+          }]
+          : []),
+        ...sessions.map((candidate) => ({
+          id: candidate.sessionId,
+          label: sessionOptionLabel(candidate),
+          detail: relativeSessionTime(candidate.lastEventAt ?? candidate.startedAt ?? null),
+          statusLabel: cloudChatSessionStatusLabel(candidate),
+        })),
+      ],
+      newSessionLabel: "New session",
+      onSelectSession: (sessionId: string) => {
+        const draftId = webCloudSessionDraftIdFromOptionId(sessionId);
+        if (draftId) {
+          navigate(`${routes.workspace(workspace.id)}${webCloudSessionDraftSearch(draftId)}`);
+          return;
+        }
+        navigate(routes.chat(workspace.id, sessionId));
+      },
+      onNewSession: () => openNewSessionDraft(),
+    },
+    notice: headerNotice,
+    desktopAction: {
+      label: "Open in Desktop",
+      kind: "desktop",
+      onClick: () => {
+        window.location.href = desktopWorkspaceDeepLink(workspace.id);
+      },
+    },
+  };
   const claimFooterControl: CloudChatComposerFooterControlView | null = isUnclaimed
     ? {
       id: "claim",
@@ -1490,101 +1569,13 @@ export function ChatScreen() {
 
   return (
     <CloudChatSurface
-      title={workspaceTitle}
-      eyebrowItems={[
-        runtimeLabel,
-        cloudAccessLabel,
-        commandabilityLabel,
-      ]}
-      chips={[
-        ...(showBranchChip
-          ? [{
-            id: "branch",
-            label: branchName,
-            icon: "branch" as const,
-          }]
-          : []),
-        {
-          id: "repo",
-          label: repoLabel,
-        },
-        ...(workspace.visibility !== "private"
-          ? [{ id: "visibility", label: workspace.visibility }]
-          : []),
-        {
-          id: "live",
-          label: sessionLive.isConnected ? "Live stream" : "Snapshot",
-        },
-        {
-          id: "source",
-          label: transcriptSourceLabel,
-        },
-        ...(session
-          ? [{
-            id: "session",
-            label: `Session: ${activeSessionLabel}`,
-          }]
-          : []),
-      ]}
+      header={header}
       transcriptRows={visibleTranscriptRows}
       emptyTitle={emptyTitle}
       emptyDescription={
         !session ? `Send a message below to start the first session in ${workspaceTitle}.` : undefined
       }
       commandMessage={null}
-      primaryAction={isUnclaimed
-        ? {
-          label: "Claim",
-          kind: "claim",
-          loading: claimWorkspace.isPending,
-          onClick: () => void claimCurrentWorkspace(),
-        }
-        : null}
-      sessionSwitcher={{
-        workspaceLabel: workspaceTitle,
-        activeSessionId: session?.sessionId
-          ?? (pendingSessionDraft ? webCloudSessionDraftOptionId(pendingSessionDraft.id) : null),
-        activeSessionLabel,
-        sessions: [
-          ...(pendingSessionDraft
-            ? [{
-              id: webCloudSessionDraftOptionId(pendingSessionDraft.id),
-              label: "New session",
-              detail: pendingSessionDraft.selection.agentKind,
-              statusLabel: "Draft",
-            }]
-            : []),
-          ...sessions.map((candidate) => ({
-            id: candidate.sessionId,
-            label: sessionOptionLabel(candidate),
-            detail: relativeSessionTime(candidate.lastEventAt ?? candidate.startedAt ?? null),
-            statusLabel: sessionStatusLabel(candidate.status),
-          })),
-        ],
-        newSessionLabel: "New session",
-        onSelectSession: (sessionId: string) => {
-          const draftId = webCloudSessionDraftIdFromOptionId(sessionId);
-          if (draftId) {
-            navigate(`${routes.workspace(workspace.id)}${webCloudSessionDraftSearch(draftId)}`);
-            return;
-          }
-          navigate(routes.chat(workspace.id, sessionId));
-        },
-        onNewSession: () => openNewSessionDraft(),
-      }}
-      topNotice={isUnclaimed
-        ? {
-          title: "Unclaimed shared workspace.",
-          description: "Claim this workspace before sending prompts or changing session settings.",
-          action: {
-            label: "Claim",
-            kind: "claim",
-            loading: claimWorkspace.isPending,
-            onClick: () => void claimCurrentWorkspace(),
-          },
-        }
-        : workspaceStatusNotice}
-      desktopHref={desktopWorkspaceDeepLink(workspace.id)}
       composer={{
         value: draft,
         onChange: setDraft,
@@ -1606,7 +1597,6 @@ export function ChatScreen() {
                 ? "Desktop or remote runtime is offline"
                 : "Waiting for workspace",
       }}
-      onBack={() => navigate(routes.workspaces)}
     />
   );
 }
@@ -1702,14 +1692,6 @@ function cleanSessionTitle(title: string | null | undefined): string | null {
   return value;
 }
 
-function sessionStatusLabel(status: string): string {
-  return status
-    .split(/[_\s-]+/u)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ") || "Session";
-}
-
 function friendlyCommandStatusMessage(message: string | null | undefined): string | null {
   if (!message) {
     return null;
@@ -1730,22 +1712,27 @@ function isWorkspacePreparationStatus(message: string | null | undefined): boole
   return friendlyCommandStatusMessage(message)?.startsWith("Workspace accepted.") ?? false;
 }
 
-function workspaceNoticeForCommandMessage(message: string) {
+function workspaceNoticeForCommandMessage(
+  message: string,
+): Omit<CloudChatHeaderNoticeView, "action" | "diagnostics"> {
   if (message.startsWith("Workspace accepted.")) {
     return {
       title: "Workspace accepted.",
       description: "Preparing the selected runtime so this session can start.",
+      tone: "info",
     };
   }
   if (message.startsWith("Cloud sandbox setup cannot reach")) {
     return {
       title: "Workspace setup failed.",
       description: message,
+      tone: "destructive",
     };
   }
   return {
     title: "Workspace is not ready yet",
     description: message,
+    tone: "warning",
   };
 }
 
@@ -1896,34 +1883,6 @@ function relativeSessionTime(value: string | null): string | null {
     return `${hours}h`;
   }
   return `${Math.floor(hours / 24)}d`;
-}
-
-function workspaceRuntimeLabel(runtime: ReturnType<typeof recentWorkRuntimeLocationForWorkspace>): string {
-  switch (runtime) {
-    case "local_desktop":
-      return "Local Desktop runtime";
-    case "cloud_sandbox":
-      return "Cloud runtime";
-    case "ssh_remote":
-      return "SSH runtime";
-    case "offline":
-      return "Runtime offline";
-    case "unknown":
-      return "Runtime unknown";
-  }
-}
-
-function workspaceCloudAccessLabel(
-  state: ReturnType<typeof recentWorkCloudAccessState>,
-): string {
-  switch (state) {
-    case "enabled":
-      return "Cloud access enabled";
-    case "not_enabled":
-      return "Cloud access off";
-    case "unknown":
-      return "Cloud access unknown";
-  }
 }
 
 function workspaceCommandabilityLabel(
