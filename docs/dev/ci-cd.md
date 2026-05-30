@@ -542,6 +542,13 @@ Deploy graph:
      is canonical
 4. Upload a deploy summary artifact.
 
+Important: `force_surfaces` is additive. It forces listed surfaces to deploy in
+addition to any surfaces detected from the diff; it is not an "only these
+surfaces" filter. Do not use `force_surfaces=web` when the diff also detects
+mobile/E2B/server and the intent is web-only. Until an explicit
+`only_surfaces`/`skip_surfaces` input exists, use the per-lane environment
+gates to suppress unwanted lanes before dispatch.
+
 Required GitHub environment vars/secrets:
 
 ```text
@@ -640,12 +647,48 @@ DESKTOP_CHANNEL=beta
 
 The production GitHub environment currently exists as `Production`; the
 workflow input still uses `production`, which GitHub resolves to that existing
-environment. Production should keep `MOBILE_DEPLOY_ENABLED=false` and
-`WORKERS_DEPLOY_ENABLED=false` until those lanes are explicitly ready.
-`DESKTOP_DEPLOY_ENABLED=true` enables production promote to publish the desktop
-updater for SHAs that include a desktop version bump. Keep `VERCEL_TOKEN` as an
-environment secret, and keep E2B API credentials as repo or environment
-secrets; do not document secret values here.
+environment. Production should keep `WORKERS_DEPLOY_ENABLED=false` until the
+hosted worker lane is canonical. `DESKTOP_DEPLOY_ENABLED=true` enables
+production promote to publish the desktop updater for SHAs that include a
+desktop version bump. Production mobile may be enabled with
+`MOBILE_DEPLOY_ENABLED=true` and `EAS_SUBMIT_ENABLED=true`, but this makes
+App Store Connect submission part of the production promote gate. For
+non-mobile promotes while submission is unhealthy, temporarily set
+`MOBILE_DEPLOY_ENABLED=false` or `EAS_SUBMIT_ENABLED=false` before dispatching.
+Keep `VERCEL_TOKEN` as an environment secret, and keep E2B API credentials as
+repo or environment secrets; do not document secret values here.
+
+Mobile/TestFlight operational notes:
+
+- `MOBILE_DEPLOY_ENABLED=true` only means the mobile lane runs.
+- The `Build iOS app` step uploads an IPA to EAS Build. That alone does not
+  update TestFlight.
+- TestFlight is updated only after `Submit latest iOS build` succeeds. If EAS
+  reports a finished IPA and then `Something went wrong when submitting your
+  app to Apple App Store Connect`, the build did not reach TestFlight.
+- Set `EAS_SUBMIT_ENABLED=false` for build-only mobile validation. Leave it
+  `true` only when App Store Connect submission is expected to work and a
+  failed submit should fail the production promote.
+
+Known failure signatures and what they mean:
+
+- `Submit latest iOS build` fails after EAS prints `Build finished`, an IPA URL,
+  `Scheduled iOS submission`, and then `Something went wrong when submitting
+  your app to Apple App Store Connect`: the app was built, but TestFlight was
+  not updated. The failure is in EAS Submit/App Store Connect after the IPA
+  exists, not in the repository build.
+- First response: open the Expo submission URL from the job log and check the
+  detailed submission error. If the EAS UI does not show a specific app metadata
+  or credential error, retry submit for the already-built IPA before changing
+  repo code.
+- Repo-side fixes are only indicated when the detailed submission error names a
+  repository-controlled value, such as bundle identifier, build number/version,
+  export method, or missing app metadata. A generic App Store Connect submit
+  failure is not enough by itself to identify a code fix.
+- E2B cache warnings such as GitHub cache `Failed to save` or `Failed to
+  restore` are not deploy failures when the E2B job completes successfully.
+- A transient CI failure in an unrelated Rust test should be rerun once before
+  blocking a web-only production promote; do not bypass a repeatable failure.
 
 ## 5. Source of Truth
 
