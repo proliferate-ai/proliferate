@@ -96,7 +96,7 @@ jobs:
           fi
 
       - name: Validate release ref
-        if: steps.filter.outputs.skip != 'true' && github.event_name == 'workflow_dispatch' && !inputs.dry_run
+        if: steps.filter.outputs.skip != 'true' && github.event_name == 'workflow_dispatch' && !inputs.dry_run && !inputs.git_sha
         shell: bash
         run: |
           if [[ "${GITHUB_REF_TYPE}" != "tag" || "${GITHUB_REF_NAME}" != desktop-v* ]]; then
@@ -491,7 +491,7 @@ jobs:
     if: github.event_name == 'push' || (github.event_name != 'push' && !inputs.dry_run)
     steps:
       - name: Validate release ref
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && !inputs.git_sha
         shell: bash
         run: |
           if [[ "${GITHUB_REF_TYPE}" != "tag" || "${GITHUB_REF_NAME}" != desktop-v* ]]; then
