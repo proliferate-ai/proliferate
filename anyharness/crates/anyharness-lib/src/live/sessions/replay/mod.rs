@@ -1,4 +1,3 @@
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -9,13 +8,13 @@ use anyharness_contract::v1::{
 };
 use tokio::sync::{broadcast, mpsc};
 
-use super::event_sink::publish::publish_session_event;
 use crate::domains::plans::service::PlanDecisionError;
 use crate::live::sessions::actor::command::{
     ForkSessionCommandError, PromptAcceptError, QueueMutationError, ResolveInteractionCommandError,
     SessionCommand, SetConfigOptionCommandError,
 };
 use crate::live::sessions::actor::spawn::ActorReadyResult;
+use crate::live::sessions::event_sink::publish::publish_session_event;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::sessions::model::SessionRecord;
 use crate::sessions::runtime_event::RuntimeEventInjectionError;
@@ -124,7 +123,7 @@ async fn run_replay_actor(
     for recorded in config.events {
         if matches!(recorded.event, SessionEvent::TurnStarted(_)) {
             if first_turn_started {
-                handle.busy.store(false, Ordering::Release);
+                handle.set_busy(false);
                 handle
                     .set_execution_phase(SessionExecutionPhase::Idle)
                     .await;
@@ -138,7 +137,7 @@ async fn run_replay_actor(
                 }
             }
             first_turn_started = true;
-            handle.busy.store(true, Ordering::Release);
+            handle.set_busy(true);
             handle
                 .set_execution_phase(SessionExecutionPhase::Running)
                 .await;
@@ -193,7 +192,7 @@ async fn run_replay_actor(
                     .await;
             }
             SessionEvent::TurnEnded(_) => {
-                handle.busy.store(false, Ordering::Release);
+                handle.set_busy(false);
                 handle
                     .set_execution_phase(SessionExecutionPhase::Idle)
                     .await;
@@ -245,7 +244,7 @@ async fn run_replay_actor(
         );
     }
 
-    handle.busy.store(false, Ordering::Release);
+    handle.set_busy(false);
     match exit {
         ReplayExitDisposition::Close => {
             handle

@@ -1,6 +1,6 @@
 use anyharness_contract::v1::{ConfigApplyState, SessionLiveConfigSnapshot};
 
-use crate::live::sessions::actor::command::{SessionCommand, SetConfigOptionCommandError};
+use crate::live::sessions::{LiveSessionCommandError, SetConfigOptionCommandError};
 use crate::sessions::mcp_bindings::assembly::SESSION_RESTART_REQUIRED_DETAIL;
 use crate::sessions::model::SessionRecord;
 
@@ -69,33 +69,19 @@ impl SessionRuntime {
 
         // Send the config update command to the actor and attach a oneshot
         // reply channel so this specific request gets a single result back.
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        if handle
-            .command_tx
-            .send(SessionCommand::SetConfigOption {
-                config_id: config_id.to_string(),
-                value: value.to_string(),
-                respond_to: tx,
-            })
+        let apply_state = handle
+            .set_config_option(config_id.to_string(), value.to_string())
             .await
-            .is_err()
-        {
-            return Err(SetSessionConfigOptionError::Internal(anyhow::anyhow!(
-                "session actor channel closed"
-            )));
-        }
-
-        let apply_state = rx
-            .await
-            .map_err(|_| {
-                SetSessionConfigOptionError::Internal(anyhow::anyhow!(
-                    "session actor dropped config update response"
-                ))
-            })?
             .map_err(|error| match error {
-                SetConfigOptionCommandError::Rejected(detail) => {
-                    SetSessionConfigOptionError::Rejected(detail)
-                }
+                LiveSessionCommandError::ActorUnavailable => SetSessionConfigOptionError::Internal(
+                    anyhow::anyhow!("session actor channel closed"),
+                ),
+                LiveSessionCommandError::ResponseDropped => SetSessionConfigOptionError::Internal(
+                    anyhow::anyhow!("session actor dropped config update response"),
+                ),
+                LiveSessionCommandError::Rejected(SetConfigOptionCommandError::Rejected(
+                    detail,
+                )) => SetSessionConfigOptionError::Rejected(detail),
             })?;
 
         // The actor persists any applied/queued changes. Reload the durable

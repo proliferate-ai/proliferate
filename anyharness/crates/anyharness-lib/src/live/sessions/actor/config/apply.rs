@@ -4,7 +4,6 @@ use agent_client_protocol::{self as acp, Agent};
 use anyharness_contract::v1::{ConfigApplyState, SessionLiveConfigSnapshot};
 use tokio::sync::Mutex;
 
-use crate::acp::event_sink::SessionEventSink;
 use crate::live::sessions::actor::command::SetConfigOptionCommandError;
 use crate::live::sessions::actor::config::persist::{
     emit_live_config_update, persist_requested_config_value_if_changed, persisted_control_values,
@@ -19,6 +18,7 @@ use crate::live::sessions::actor::config::types::{
     tracked_config_purpose, ConfigApplyOutcome, ConfigPurpose, PersistedSessionConfigState,
 };
 use crate::live::sessions::actor::state::SessionStartupState;
+use crate::live::sessions::event_sink::SessionEventSink;
 use crate::sessions::store::SessionStore;
 pub(in crate::live::sessions::actor) async fn try_apply_model_preference(
     conn: &acp::ClientSideConnection,

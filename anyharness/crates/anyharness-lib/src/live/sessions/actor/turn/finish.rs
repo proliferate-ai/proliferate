@@ -4,8 +4,6 @@ use agent_client_protocol as acp;
 use anyharness_contract::v1::{SessionExecutionPhase, StopReason};
 use tokio::sync::{mpsc, Mutex};
 
-use crate::acp::background_work::{BackgroundWorkRegistry, BackgroundWorkUpdate};
-use crate::acp::event_sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
 use crate::acp::provider_errors::{classify_provider_rate_limit_error, PROVIDER_RATE_LIMIT_CODE};
 use crate::live::sessions::actor::background_work::handle_background_work_update;
 use crate::live::sessions::actor::config::queue::apply_pending_config_changes_if_idle;
@@ -15,6 +13,8 @@ use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilt
 use crate::live::sessions::actor::state::{SessionActorConfig, SessionStartupState};
 use crate::live::sessions::actor::turn::diagnostics::{age_ms, PromptDiagnostics};
 use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
+use crate::live::sessions::background_work::{BackgroundWorkRegistry, BackgroundWorkUpdate};
+use crate::live::sessions::event_sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::sessions::extensions::SessionTurnOutcome;

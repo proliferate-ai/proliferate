@@ -1,7 +1,7 @@
 use super::super::state::{AcpToolPayload, ParsedMeta};
 use anyharness_contract::v1::ContentPart;
 
-pub(in crate::acp::event_sink) fn normalize_terminal_parts(
+pub(in crate::live::sessions::event_sink) fn normalize_terminal_parts(
     payload: &AcpToolPayload,
     meta: &ParsedMeta,
 ) -> Vec<ContentPart> {

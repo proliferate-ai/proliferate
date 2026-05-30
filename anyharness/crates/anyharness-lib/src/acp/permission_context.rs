@@ -1,7 +1,7 @@
 use agent_client_protocol as acp;
 use anyharness_contract::v1::PermissionInteractionContext;
 
-pub(super) fn permission_context_from_meta(
+pub(crate) fn permission_context_from_meta(
     meta: Option<&acp::Meta>,
 ) -> Option<PermissionInteractionContext> {
     let meta = meta?;

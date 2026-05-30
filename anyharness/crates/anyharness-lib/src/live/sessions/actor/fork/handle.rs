@@ -1,4 +1,3 @@
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use agent_client_protocol::{self as acp, Agent};
@@ -95,7 +94,7 @@ pub(in crate::live::sessions::actor) async fn verify_fork_ready(
             "agent does not advertise ACP session/fork with load_session support".to_string(),
         ));
     }
-    if handle.busy.load(Ordering::Acquire) {
+    if handle.is_busy() {
         return Err(ForkSessionCommandError::Busy);
     }
     let execution = handle.execution_snapshot().await;

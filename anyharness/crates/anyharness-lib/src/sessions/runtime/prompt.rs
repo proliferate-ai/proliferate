@@ -4,7 +4,7 @@ use anyharness_contract::v1::PromptInputBlock;
 
 use crate::domains::plans::model::PlanRecord;
 use crate::domains::plans::service::PlanService;
-use crate::live::sessions::actor::command::{PromptAcceptError, PromptAcceptance, SessionCommand};
+use crate::live::sessions::{LiveSessionCommandError, PromptAcceptError, PromptAcceptance};
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::sessions::mcp_bindings::assembly::SESSION_RESTART_REQUIRED_DETAIL;
 use crate::sessions::model::PromptAttachmentState;
@@ -96,23 +96,25 @@ impl SessionRuntime {
         // Invariant 1/2: the actor is the sole writer of `busy` and the queue.
         // The runtime no longer precaptures `busy`; it just forwards the command
         // and awaits the actor's decision (Started vs Queued).
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        if handle
-            .command_tx
-            .send(SessionCommand::Prompt {
-                payload: prepared.payload.clone(),
-                prompt_id,
-                latency: latency.cloned(),
-                from_queue_seq: None,
-                respond_to: tx,
-            })
+        let acceptance = handle
+            .send_prompt(prepared.payload.clone(), prompt_id, latency.cloned())
             .await
-            .is_err()
-        {
-            return Err(SendPromptError::Internal(anyhow::anyhow!(
-                "session actor channel closed"
-            )));
-        }
+            .map_err(|error| match error {
+                LiveSessionCommandError::ActorUnavailable => {
+                    SendPromptError::Internal(anyhow::anyhow!("session actor channel closed"))
+                }
+                LiveSessionCommandError::ResponseDropped => {
+                    SendPromptError::Internal(anyhow::anyhow!("session actor dropped response"))
+                }
+                LiveSessionCommandError::Rejected(PromptAcceptError::EnqueueFailed(detail)) => {
+                    let _ = prepared.cleanup_attachments(
+                        self.session_service.store(),
+                        self.session_service.attachment_storage(),
+                        session_id,
+                    );
+                    SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
+                }
+            })?;
         tracing::info!(
             session_id = %session_id,
             total_elapsed_ms = started.elapsed().as_millis(),
@@ -123,21 +125,6 @@ impl SessionRuntime {
             "[workspace-latency] session.runtime.prompt.command_sent"
         );
 
-        let acceptance = rx
-            .await
-            .map_err(|_| {
-                SendPromptError::Internal(anyhow::anyhow!("session actor dropped response"))
-            })?
-            .map_err(|error| match error {
-                PromptAcceptError::EnqueueFailed(detail) => {
-                    let _ = prepared.cleanup_attachments(
-                        self.session_service.store(),
-                        self.session_service.attachment_storage(),
-                        session_id,
-                    );
-                    SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
-                }
-            })?;
         tracing::info!(
             session_id = %session_id,
             total_elapsed_ms = started.elapsed().as_millis(),
@@ -183,30 +170,23 @@ impl SessionRuntime {
             .map_err(map_start_error_to_prompt)?;
         let payload =
             crate::sessions::prompt::PromptPayload::text(text).with_provenance(provenance);
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        handle
-            .command_tx
-            .send(SessionCommand::Prompt {
-                payload,
-                prompt_id: None,
-                latency: None,
-                from_queue_seq: None,
-                respond_to: tx,
-            })
-            .await
-            .map_err(|_| {
-                SendPromptError::Internal(anyhow::anyhow!("session actor channel closed"))
-            })?;
-        let acceptance = rx
-            .await
-            .map_err(|_| {
-                SendPromptError::Internal(anyhow::anyhow!("session actor dropped response"))
-            })?
-            .map_err(|error| match error {
-                PromptAcceptError::EnqueueFailed(detail) => {
-                    SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
-                }
-            })?;
+        let acceptance =
+            handle
+                .send_prompt(payload, None, None)
+                .await
+                .map_err(|error| match error {
+                    LiveSessionCommandError::ActorUnavailable => {
+                        SendPromptError::Internal(anyhow::anyhow!("session actor channel closed"))
+                    }
+                    LiveSessionCommandError::ResponseDropped => {
+                        SendPromptError::Internal(anyhow::anyhow!("session actor dropped response"))
+                    }
+                    LiveSessionCommandError::Rejected(PromptAcceptError::EnqueueFailed(detail)) => {
+                        SendPromptError::Internal(anyhow::anyhow!(
+                            "failed to enqueue prompt: {detail}"
+                        ))
+                    }
+                })?;
         let session = self
             .session_service
             .get_session(session_id)

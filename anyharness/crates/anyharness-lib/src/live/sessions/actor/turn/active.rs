@@ -1,4 +1,3 @@
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -6,8 +5,6 @@ use agent_client_protocol::{self as acp, Agent};
 use anyharness_contract::v1::SessionExecutionPhase;
 use tokio::sync::{mpsc, oneshot, Mutex};
 
-use crate::acp::background_work::{BackgroundWorkRegistry, BackgroundWorkUpdate};
-use crate::acp::event_sink::SessionEventSink;
 use crate::live::sessions::actor::background_work::handle_background_work_update;
 use crate::live::sessions::actor::command::{
     ForkSessionCommandError, InteractionResolution, PromptAcceptError, PromptAcceptance,
@@ -32,6 +29,8 @@ use crate::live::sessions::actor::turn::queue::{
     next_pending_prompt_for_drain,
 };
 use crate::live::sessions::actor::turn::start::{begin_prompt_turn, StartedPromptTurn};
+use crate::live::sessions::background_work::{BackgroundWorkRegistry, BackgroundWorkUpdate};
+use crate::live::sessions::event_sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::sessions::attachment_storage::PromptAttachmentStorage;
@@ -89,7 +88,7 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
     let source_agent_kind = config.session.agent_kind.as_str();
 
     // Invariant 2: the actor is the sole writer of `busy`.
-    handle.busy.store(true, Ordering::Release);
+    handle.set_busy(true);
 
     let mut current_payload = request.payload;
     let mut current_prompt_id = request.prompt_id;
@@ -423,6 +422,6 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
         }
     }
 
-    handle.busy.store(false, Ordering::Release);
+    handle.set_busy(false);
     exit_after_prompt
 }

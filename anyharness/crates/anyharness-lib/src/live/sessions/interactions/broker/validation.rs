@@ -6,7 +6,7 @@ use super::{
     ResolveInteractionError, StoredPermissionOption, StoredPermissionOptionKind,
     StoredUserInputQuestion, USER_INPUT_OTHER_OPTION_LABEL,
 };
-use crate::acp::mcp_elicitation::McpElicitationValidationError;
+use crate::live::sessions::interactions::mcp_elicitation::McpElicitationValidationError;
 
 pub(super) fn map_mcp_validation_error(
     error: McpElicitationValidationError,

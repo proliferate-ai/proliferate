@@ -1,6 +1,6 @@
 use anyharness_contract::v1::PromptInputBlock;
 
-use crate::live::sessions::actor::command::{QueueMutationError, SessionCommand};
+use crate::live::sessions::{LiveSessionCommandError, QueueMutationError};
 use crate::sessions::model::{PromptAttachmentState, SessionRecord};
 use crate::sessions::prompt::{
     capabilities_from_live_config, prepare_prompt, PromptPrepareContext,
@@ -62,34 +62,24 @@ impl SessionRuntime {
             )
             .map_err(PendingPromptMutationError::Internal)?;
 
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        if handle
-            .command_tx
-            .send(SessionCommand::EditPendingPrompt {
-                seq,
-                payload: prepared.payload.clone(),
-                respond_to: tx,
-            })
+        handle
+            .edit_pending_prompt(seq, prepared.payload.clone())
             .await
-            .is_err()
-        {
-            let _ = prepared.cleanup_attachments(
-                self.session_service.store(),
-                self.session_service.attachment_storage(),
-                session_id,
-            );
-            return Err(PendingPromptMutationError::Internal(anyhow::anyhow!(
-                "session actor channel closed"
-            )));
-        }
-        rx.await
-            .map_err(|_| {
-                PendingPromptMutationError::Internal(anyhow::anyhow!(
-                    "session actor dropped edit-pending-prompt response"
-                ))
-            })?
             .map_err(|error| match error {
-                QueueMutationError::NotFound => {
+                LiveSessionCommandError::ActorUnavailable => {
+                    let _ = prepared.cleanup_attachments(
+                        self.session_service.store(),
+                        self.session_service.attachment_storage(),
+                        session_id,
+                    );
+                    PendingPromptMutationError::Internal(anyhow::anyhow!(
+                        "session actor channel closed"
+                    ))
+                }
+                LiveSessionCommandError::ResponseDropped => PendingPromptMutationError::Internal(
+                    anyhow::anyhow!("session actor dropped edit-pending-prompt response"),
+                ),
+                LiveSessionCommandError::Rejected(QueueMutationError::NotFound) => {
                     let _ = prepared.cleanup_attachments(
                         self.session_service.store(),
                         self.session_service.attachment_storage(),
@@ -134,28 +124,19 @@ impl SessionRuntime {
                 ))
             })?;
 
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        if handle
-            .command_tx
-            .send(SessionCommand::DeletePendingPrompt {
-                seq,
-                respond_to: tx,
-            })
+        handle
+            .delete_pending_prompt(seq)
             .await
-            .is_err()
-        {
-            return Err(PendingPromptMutationError::Internal(anyhow::anyhow!(
-                "session actor channel closed"
-            )));
-        }
-        rx.await
-            .map_err(|_| {
-                PendingPromptMutationError::Internal(anyhow::anyhow!(
-                    "session actor dropped delete-pending-prompt response"
-                ))
-            })?
             .map_err(|error| match error {
-                QueueMutationError::NotFound => PendingPromptMutationError::NotFound,
+                LiveSessionCommandError::ActorUnavailable => PendingPromptMutationError::Internal(
+                    anyhow::anyhow!("session actor channel closed"),
+                ),
+                LiveSessionCommandError::ResponseDropped => PendingPromptMutationError::Internal(
+                    anyhow::anyhow!("session actor dropped delete-pending-prompt response"),
+                ),
+                LiveSessionCommandError::Rejected(QueueMutationError::NotFound) => {
+                    PendingPromptMutationError::NotFound
+                }
             })?;
 
         self.session_service

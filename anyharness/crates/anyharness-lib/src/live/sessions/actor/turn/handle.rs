@@ -3,8 +3,6 @@ use std::sync::Arc;
 use agent_client_protocol as acp;
 use tokio::sync::{mpsc, Mutex};
 
-use crate::acp::background_work::{BackgroundWorkRegistry, BackgroundWorkUpdate};
-use crate::acp::event_sink::SessionEventSink;
 use crate::domains::agents::model::AgentKind;
 use crate::live::sessions::actor::command::SessionCommand;
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
@@ -14,6 +12,8 @@ use crate::live::sessions::actor::state::{SessionActorConfig, SessionStartupStat
 use crate::live::sessions::actor::turn::active::{
     handle_active_prompt, ActivePromptContext, ActivePromptRequest,
 };
+use crate::live::sessions::background_work::{BackgroundWorkRegistry, BackgroundWorkUpdate};
+use crate::live::sessions::event_sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::sessions::store::SessionStore;

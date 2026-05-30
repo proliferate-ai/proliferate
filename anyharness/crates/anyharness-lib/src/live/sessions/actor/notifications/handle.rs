@@ -4,9 +4,6 @@ use std::time::Instant;
 use agent_client_protocol as acp;
 use tokio::sync::Mutex;
 
-use crate::acp::background_work::BackgroundWorkRegistry;
-use crate::acp::event_sink::SessionEventSink;
-use crate::acp::runtime_client;
 use crate::domains::plans::service::PlanService;
 use crate::domains::reviews::service::ReviewService;
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
@@ -15,6 +12,9 @@ use crate::live::sessions::actor::notifications::dispatch::{
 };
 use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilter;
 use crate::live::sessions::actor::state::SessionStartupState;
+use crate::live::sessions::background_work::BackgroundWorkRegistry;
+use crate::live::sessions::connection::runtime_client;
+use crate::live::sessions::event_sink::SessionEventSink;
 use crate::sessions::store::SessionStore;
 #[cfg(test)]
 pub(in crate::live::sessions::actor) async fn handle_notification(

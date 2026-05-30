@@ -6,7 +6,7 @@ use crate::domains::agents::model::{
     AgentKind, ArtifactRole, CredentialState, ResolvedAgent, ResolvedAgentStatus, ResolvedArtifact,
 };
 use crate::domains::agents::registry::built_in_registry;
-use crate::live::sessions::actor::state::SessionStartupStrategy;
+use crate::live::sessions::SessionStartupStrategy;
 use crate::origin::OriginContext;
 use crate::persistence::Db;
 use crate::sessions::links::model::{

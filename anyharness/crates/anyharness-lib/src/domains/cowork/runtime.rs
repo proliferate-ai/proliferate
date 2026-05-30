@@ -19,9 +19,8 @@ use super::delegation::model::{
 use super::delegation::service::{CoworkDelegationError, CoworkDelegationService};
 use super::model::{CoworkManagedWorkspaceRecord, CoworkRootRecord, CoworkThreadRecord};
 use super::service::CoworkService;
-use crate::acp::manager::AcpManager;
 use crate::adapters::git::GitService;
-use crate::live::sessions::actor::command::SessionCommand;
+use crate::live::sessions::LiveSessionManager;
 use crate::origin::OriginContext;
 use crate::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
 use crate::repo_roots::service::RepoRootService;
@@ -137,7 +136,7 @@ struct CodingWorkspaceNamePlan {
 #[derive(Clone)]
 pub struct CoworkSessionHooks {
     delegation_service: CoworkDelegationService,
-    acp_manager: AcpManager,
+    acp_manager: LiveSessionManager,
     session_store: SessionStore,
     autosave_locks: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
 }
@@ -145,7 +144,7 @@ pub struct CoworkSessionHooks {
 impl CoworkSessionHooks {
     pub fn new(
         delegation_service: CoworkDelegationService,
-        acp_manager: AcpManager,
+        acp_manager: LiveSessionManager,
         session_store: SessionStore,
     ) -> Self {
         Self {
@@ -220,7 +219,7 @@ impl SessionExtension for CoworkSessionHooks {
 
 async fn deliver_cowork_coding_completion(
     service: CoworkDelegationService,
-    acp_manager: AcpManager,
+    acp_manager: LiveSessionManager,
     session_store: SessionStore,
     ctx: SessionTurnFinishedContext,
 ) -> anyhow::Result<()> {
@@ -304,18 +303,10 @@ async fn deliver_cowork_coding_completion(
         inserted.wake_prompt.as_ref(),
         acp_manager.get_handle(&link.parent_session_id).await,
     ) {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        handle
-            .command_tx
-            .send(SessionCommand::Prompt {
-                payload: prompt_payload,
-                prompt_id: None,
-                latency: None,
-                from_queue_seq: Some(record.seq),
-                respond_to: tx,
-            })
-            .await?;
-        let _ = rx.await?.map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        let _ = handle
+            .send_queued_prompt(prompt_payload, record.seq)
+            .await
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
     }
     Ok(())
 }

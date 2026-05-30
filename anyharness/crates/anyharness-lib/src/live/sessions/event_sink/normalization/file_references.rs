@@ -3,7 +3,7 @@ use std::path::{Component, Path, PathBuf};
 use super::super::state::{FileReadLineScope, NormalizedFileReference};
 use anyharness_contract::v1::FileReadScope;
 
-pub(in crate::acp::event_sink) fn resolve_file_references(
+pub(in crate::live::sessions::event_sink) fn resolve_file_references(
     raw_input: Option<&serde_json::Value>,
     locations: Option<&Vec<serde_json::Value>>,
     preferred_path: Option<String>,
@@ -70,7 +70,7 @@ pub(in crate::acp::event_sink) fn resolve_file_references(
     )
 }
 
-pub(in crate::acp::event_sink) fn determine_file_read_scope(
+pub(in crate::live::sessions::event_sink) fn determine_file_read_scope(
     raw_input: Option<&serde_json::Value>,
     locations: Option<&Vec<serde_json::Value>>,
 ) -> FileReadLineScope {
@@ -133,7 +133,7 @@ pub(in crate::acp::event_sink) fn determine_file_read_scope(
     }
 }
 
-pub(in crate::acp::event_sink) fn extract_location_line(
+pub(in crate::live::sessions::event_sink) fn extract_location_line(
     locations: Option<&Vec<serde_json::Value>>,
 ) -> Option<i64> {
     locations.and_then(|items| {
@@ -157,7 +157,7 @@ fn read_i64_value(value: &serde_json::Value) -> Option<i64> {
         .or_else(|| value.as_str().and_then(|raw| raw.parse::<i64>().ok()))
 }
 
-pub(in crate::acp::event_sink) fn normalize_file_reference(
+pub(in crate::live::sessions::event_sink) fn normalize_file_reference(
     raw_path: &str,
     workspace_root: &Path,
     line: Option<i64>,

@@ -5,8 +5,7 @@ use uuid::Uuid;
 
 use super::model::SubagentCompletionRecord;
 use super::service::SubagentService;
-use crate::acp::manager::AcpManager;
-use crate::live::sessions::actor::command::SessionCommand;
+use crate::live::sessions::LiveSessionManager;
 use crate::sessions::extensions::{
     SessionExtension, SessionTurnFinishedContext, SessionTurnOutcome,
 };
@@ -17,14 +16,14 @@ use crate::sessions::store::SessionStore;
 #[derive(Clone)]
 pub struct SubagentSessionHooks {
     service: Arc<SubagentService>,
-    acp_manager: AcpManager,
+    acp_manager: LiveSessionManager,
     session_store: SessionStore,
 }
 
 impl SubagentSessionHooks {
     pub fn new(
         service: Arc<SubagentService>,
-        acp_manager: AcpManager,
+        acp_manager: LiveSessionManager,
         session_store: SessionStore,
     ) -> Self {
         Self {
@@ -52,7 +51,7 @@ impl SessionExtension for SubagentSessionHooks {
 
 async fn deliver_subagent_completion(
     service: Arc<SubagentService>,
-    acp_manager: AcpManager,
+    acp_manager: LiveSessionManager,
     session_store: SessionStore,
     ctx: SessionTurnFinishedContext,
 ) -> anyhow::Result<()> {
@@ -131,18 +130,10 @@ async fn deliver_subagent_completion(
         inserted.wake_prompt.as_ref(),
         acp_manager.get_handle(&link.parent_session_id).await,
     ) {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        handle
-            .command_tx
-            .send(SessionCommand::Prompt {
-                payload: prompt_payload,
-                prompt_id: None,
-                latency: None,
-                from_queue_seq: Some(record.seq),
-                respond_to: tx,
-            })
-            .await?;
-        let _ = rx.await?.map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        let _ = handle
+            .send_queued_prompt(prompt_payload, record.seq)
+            .await
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
     }
     Ok(())
 }

@@ -3,7 +3,6 @@ mod product_mcp;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::acp::manager::AcpManager;
 use crate::adapters::git::WorkspaceFileSearchCache;
 use crate::adapters::processes::ProcessService;
 use crate::api::auth::AuthManager;
@@ -32,6 +31,7 @@ use crate::domains::reviews::service::ReviewService;
 use crate::domains::reviews::store::{ReviewDeleteParticipant, ReviewStore};
 use crate::domains::runtime_config::service::{RuntimeConfigService, RuntimeConfigStore};
 use crate::domains::runtime_config::session_extension::RuntimeConfigSessionLaunchExtension;
+use crate::live::sessions::LiveSessionManager;
 use crate::persistence::Db;
 use crate::repo_roots::service::RepoRootService;
 use crate::repo_roots::store::RepoRootStore;
@@ -125,7 +125,7 @@ pub struct AppState {
     pub mobility_service: Arc<MobilityService>,
     pub plan_service: Arc<PlanService>,
     pub plan_runtime: Arc<PlanRuntime>,
-    pub acp_manager: AcpManager,
+    pub acp_manager: LiveSessionManager,
     pub terminal_service: Arc<TerminalService>,
 }
 
@@ -210,7 +210,7 @@ impl AppState {
             runtime_home.clone(),
         ));
         let plan_service = Arc::new(PlanService::new(PlanStore::new(db.clone())));
-        let acp_manager = AcpManager::new(plan_service.clone());
+        let acp_manager = LiveSessionManager::new(plan_service.clone());
         let terminal_service = Arc::new(TerminalService::new(
             TerminalStore::new(db.clone()),
             runtime_home.clone(),

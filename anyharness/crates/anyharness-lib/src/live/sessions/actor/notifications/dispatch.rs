@@ -7,8 +7,6 @@ use anyharness_contract::v1::{
 };
 use tokio::sync::Mutex;
 
-use crate::acp::background_work::BackgroundWorkRegistry;
-use crate::acp::event_sink::{AcpChunkPayload, AcpToolPayload, SessionEventSink};
 use crate::acp::persistence_sanitizer::sanitize_raw_notification_for_sqlite;
 use crate::domains::plans::service::PlanService;
 use crate::domains::reviews::service::ReviewService;
@@ -22,6 +20,8 @@ use crate::live::sessions::actor::notifications::plans::{
     maybe_ingest_tagged_completed_plan,
 };
 use crate::live::sessions::actor::state::SessionStartupState;
+use crate::live::sessions::background_work::BackgroundWorkRegistry;
+use crate::live::sessions::event_sink::{AcpChunkPayload, AcpToolPayload, SessionEventSink};
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::sessions::runtime_event::{RuntimeEventInjectionResult, RuntimeInjectedSessionEvent};
 use crate::sessions::store::SessionStore;

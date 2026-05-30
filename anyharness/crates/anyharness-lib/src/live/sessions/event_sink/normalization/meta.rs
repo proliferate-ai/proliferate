@@ -3,12 +3,14 @@ use super::super::state::{
     ASSISTANT_MESSAGE_COMPLETED_EVENT, TRANSIENT_STATUS_EVENT,
 };
 
-pub(in crate::acp::event_sink) fn parse_meta(meta: Option<&serde_json::Value>) -> ParsedMeta {
+pub(in crate::live::sessions::event_sink) fn parse_meta(
+    meta: Option<&serde_json::Value>,
+) -> ParsedMeta {
     meta.and_then(|value| serde_json::from_value(value.clone()).ok())
         .unwrap_or_default()
 }
 
-pub(in crate::acp::event_sink) fn is_assistant_message_completed_marker(
+pub(in crate::live::sessions::event_sink) fn is_assistant_message_completed_marker(
     meta: Option<&serde_json::Value>,
 ) -> bool {
     meta.and_then(|value| value.get(ANYHARNESS_TRANSCRIPT_META_KEY))
@@ -17,7 +19,7 @@ pub(in crate::acp::event_sink) fn is_assistant_message_completed_marker(
         == Some(ASSISTANT_MESSAGE_COMPLETED_EVENT)
 }
 
-pub(in crate::acp::event_sink) fn is_transient_status_marker(
+pub(in crate::live::sessions::event_sink) fn is_transient_status_marker(
     meta: Option<&serde_json::Value>,
 ) -> bool {
     parse_meta(meta)

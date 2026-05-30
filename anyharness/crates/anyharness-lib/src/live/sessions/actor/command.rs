@@ -6,9 +6,9 @@ use anyharness_contract::v1::{
 };
 use tokio::sync::oneshot;
 
-use crate::acp::permission_broker::PermissionDecision;
 use crate::domains::plans::model::PlanRecord;
 use crate::domains::plans::service::PlanDecisionError;
+use crate::live::sessions::interactions::broker::PermissionDecision;
 use crate::observability::latency::LatencyRequestContext;
 use crate::sessions::prompt::PromptPayload;
 use crate::sessions::runtime_event::{RuntimeEventInjectionResult, RuntimeInjectedSessionEvent};
@@ -117,7 +117,7 @@ pub enum ResolveInteractionCommandError {
     ActorDead,
 }
 
-pub(crate) enum SessionCommand {
+pub(in crate::live::sessions) enum SessionCommand {
     Prompt {
         payload: PromptPayload,
         prompt_id: Option<String>,

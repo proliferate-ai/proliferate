@@ -205,7 +205,7 @@ pub async fn stream_session(
 }
 
 async fn wait_for_live_receiver(
-    acp_manager: crate::acp::manager::AcpManager,
+    acp_manager: crate::live::sessions::LiveSessionManager,
     session_id: String,
 ) -> Option<broadcast::Receiver<SessionEventEnvelope>> {
     let started = Instant::now();

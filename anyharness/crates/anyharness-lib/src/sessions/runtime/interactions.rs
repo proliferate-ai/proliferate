@@ -1,10 +1,14 @@
 use anyharness_contract::v1::{InteractionKind, McpElicitationUrlRevealResponse};
 
-use crate::live::sessions::actor::command::{
-    InteractionResolution, ResolveInteractionCommandError,
+use crate::live::sessions::{
+    InteractionResolution, PermissionDecision, ResolveInteractionCommandError,
+    RevealMcpElicitationUrlError,
 };
 
-use super::{InteractionResolutionRequest, ResolveInteractionError, SessionRuntime};
+use super::{
+    InteractionPermissionDecision, InteractionResolutionRequest, ResolveInteractionError,
+    SessionRuntime,
+};
 
 impl SessionRuntime {
     pub async fn resolve_interaction_request(
@@ -72,7 +76,10 @@ impl SessionRuntime {
 
         let actor_resolution = match resolution {
             InteractionResolutionRequest::Decision(decision) => {
-                InteractionResolution::Decision(decision)
+                InteractionResolution::Decision(match decision {
+                    InteractionPermissionDecision::Allow => PermissionDecision::Allow,
+                    InteractionPermissionDecision::Deny => PermissionDecision::Deny,
+                })
             }
             InteractionResolutionRequest::OptionId(option_id) => {
                 InteractionResolution::Selected { option_id }
@@ -168,20 +175,21 @@ impl SessionRuntime {
 
         let url = self
             .acp_manager
-            .interaction_broker()
             .reveal_mcp_elicitation_url(session_id, request_id)
             .await
             .map_err(|error| match error {
-                crate::acp::permission_broker::ResolveInteractionError::NotFound => {
+                RevealMcpElicitationUrlError::NotFound => {
                     ResolveInteractionError::InteractionNotFound(request_id.to_string())
                 }
-                crate::acp::permission_broker::ResolveInteractionError::KindMismatch => {
+                RevealMcpElicitationUrlError::KindMismatch => {
                     ResolveInteractionError::InteractionKindMismatch(request_id.to_string())
                 }
-                crate::acp::permission_broker::ResolveInteractionError::NotMcpUrlElicitation => {
+                RevealMcpElicitationUrlError::NotMcpUrlElicitation => {
                     ResolveInteractionError::NotMcpUrlElicitation(request_id.to_string())
                 }
-                _ => ResolveInteractionError::InvalidMcpFieldValue(request_id.to_string()),
+                RevealMcpElicitationUrlError::InvalidMcpFieldValue => {
+                    ResolveInteractionError::InvalidMcpFieldValue(request_id.to_string())
+                }
             })?;
 
         Ok(McpElicitationUrlRevealResponse { url })

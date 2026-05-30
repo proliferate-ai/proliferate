@@ -1,5 +1,5 @@
 mod background_work;
-pub mod command;
+pub(in crate::live::sessions) mod command;
 mod config;
 mod event_loop;
 mod fork;

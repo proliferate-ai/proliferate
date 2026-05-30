@@ -4,7 +4,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
-use super::event_sink::AcpToolPayload;
+use crate::live::sessions::event_sink::AcpToolPayload;
 use crate::sessions::model::{
     SessionBackgroundWorkRecord, SessionBackgroundWorkState, SessionBackgroundWorkTrackerKind,
 };
@@ -209,7 +209,7 @@ mod tests {
     use tokio::sync::mpsc;
 
     use super::{BackgroundWorkOptions, BackgroundWorkRegistry};
-    use crate::acp::event_sink::AcpToolPayload;
+    use crate::live::sessions::event_sink::AcpToolPayload;
     use crate::persistence::Db;
     use crate::sessions::model::SessionRecord;
     use crate::sessions::store::SessionStore;

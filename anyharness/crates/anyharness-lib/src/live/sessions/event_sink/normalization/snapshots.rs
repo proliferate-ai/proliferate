@@ -5,7 +5,7 @@ use super::files::normalize_file_parts;
 use super::text::normalize_text_parts;
 use anyharness_contract::v1::{ContentPart, FileOpenTarget};
 
-pub(in crate::acp::event_sink) fn merge_snapshot_detail_parts(
+pub(in crate::live::sessions::event_sink) fn merge_snapshot_detail_parts(
     previous: Vec<ContentPart>,
     next: Vec<ContentPart>,
 ) -> Vec<ContentPart> {
@@ -171,7 +171,7 @@ fn choose_option_string(next: Option<String>, previous: Option<String>) -> Optio
     next.filter(|value| !value.trim().is_empty()).or(previous)
 }
 
-pub(in crate::acp::event_sink) fn normalize_snapshot_parts(
+pub(in crate::live::sessions::event_sink) fn normalize_snapshot_parts(
     payload: &AcpToolPayload,
     tool_kind: Option<&str>,
     native_tool_name: Option<String>,
