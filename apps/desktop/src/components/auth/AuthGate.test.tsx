@@ -7,7 +7,10 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { BootstrappedRoute } from "@/components/auth/AuthGate";
 import { LoginScreen } from "@/components/auth/LoginScreen";
 import { SessionCheckScreen } from "@/components/auth/SessionCheckScreen";
-import { BRAILLE_SWEEP_FRAMES } from "@/hooks/ui/use-braille-sweep";
+import {
+  BRAILLE_SWEEP_DOT_FRAMES,
+  BRAILLE_SWEEP_FRAME_INTERVAL_MS,
+} from "@/hooks/ui/use-braille-sweep";
 import {
   buildUiTextScaleCssVariables,
   DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES,
@@ -45,6 +48,14 @@ function expectDefaultAuthAppearance(element: HTMLElement) {
   }
 }
 
+function readVisibleBrailleDots(container: HTMLElement) {
+  return Array.from(
+    container.querySelectorAll<HTMLElement>('[data-braille-dot][data-visible="true"]'),
+  )
+    .map((element) => element.dataset.brailleDot)
+    .join(",");
+}
+
 describe("SessionCheckScreen", () => {
   it("uses the auth-style checking copy and branded mark surface", () => {
     const html = renderToStaticMarkup(<SessionCheckScreen />);
@@ -59,24 +70,25 @@ describe("SessionCheckScreen", () => {
     vi.useFakeTimers();
 
     const { container } = render(<SessionCheckScreen />);
-    const seenFrames = new Set<string>();
+    const seenDotFrames = new Set<string>([readVisibleBrailleDots(container)]);
 
-    act(() => {
-      for (let frame = 0; frame < BRAILLE_SWEEP_FRAMES.length; frame += 1) {
-        const currentFrame = BRAILLE_SWEEP_FRAMES[frame];
-        seenFrames.add(currentFrame);
-        vi.advanceTimersByTime(60);
-      }
-    });
+    for (let frame = 1; frame < BRAILLE_SWEEP_DOT_FRAMES.length; frame += 1) {
+      act(() => {
+        vi.advanceTimersByTime(BRAILLE_SWEEP_FRAME_INTERVAL_MS);
+      });
+      seenDotFrames.add(readVisibleBrailleDots(container));
+    }
+
+    expect(readVisibleBrailleDots(container)).toBe("0");
+
     act(() => {
       vi.advanceTimersByTime(120);
     });
 
     expect(container.querySelector(".animate-resolve-0")).toBeTruthy();
-    expect(seenFrames).toContain("⣿⣿");
-    expect(seenFrames).toContain("⣾⣿");
-    expect(seenFrames).toContain("⣴⣿");
-    expect(BRAILLE_SWEEP_FRAMES).not.toContain("⠀⠀");
+    expect(seenDotFrames).toContain(BRAILLE_SWEEP_DOT_FRAMES[6].join(","));
+    expect(seenDotFrames).toContain(BRAILLE_SWEEP_DOT_FRAMES[10].join(","));
+    expect(seenDotFrames).not.toContain("15");
   });
 
   it("ignores user appearance text-size preferences", () => {

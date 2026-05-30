@@ -34,20 +34,21 @@ const toneClasses: Record<RedirectCallbackTone, string> = {
   error: "bg-destructive/10 text-destructive",
 };
 
-const BRAILLE_SWEEP_FRAMES = [
-  "⠁⠀",
-  "⠋⠀",
-  "⠟⠁",
-  "⡿⠋",
-  "⣿⠟",
-  "⣿⡿",
-  "⣿⣿",
-  "⣾⣿",
-  "⣴⣿",
-  "⣠⣾",
-  "⢀⣴",
-  "⠀⣠",
-  "⠀⢀",
+const BRAILLE_DOT_INDICES = Array.from({ length: 16 }, (_, index) => index);
+const BRAILLE_SWEEP_DOT_FRAMES = [
+  [0],
+  [0, 1, 4],
+  [0, 1, 2, 4, 5, 8],
+  [0, 1, 2, 3, 4, 5, 6, 8, 9, 12],
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13],
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13],
+  [0, 1, 2, 3, 4, 5, 6, 8, 9, 12],
+  [0, 1, 2, 4, 5, 8],
+  [0, 1, 4],
+  [0],
 ] as const;
 
 const BRAILLE_FRAME_INTERVAL_MS = 60;
@@ -202,7 +203,8 @@ function RedirectCallbackLivingMark() {
   const [cycle, setCycle] = useState(0);
   const [brailleIndex, setBrailleIndex] = useState(0);
   const iconClassName = "size-12 text-foreground";
-  const brailleFrame = BRAILLE_SWEEP_FRAMES[brailleIndex] ?? BRAILLE_SWEEP_FRAMES[0];
+  const visibleBrailleDots =
+    BRAILLE_SWEEP_DOT_FRAMES[brailleIndex] ?? BRAILLE_SWEEP_DOT_FRAMES[0];
 
   useEffect(() => {
     if (phase !== "braille") {
@@ -213,7 +215,7 @@ function RedirectCallbackLivingMark() {
 
     const timer = window.setInterval(() => {
       setBrailleIndex((current) => {
-        if (current >= BRAILLE_SWEEP_FRAMES.length - 1) {
+        if (current >= BRAILLE_SWEEP_DOT_FRAMES.length - 1) {
           return current;
         }
         return current + 1;
@@ -224,7 +226,7 @@ function RedirectCallbackLivingMark() {
   }, [phase]);
 
   useEffect(() => {
-    if (phase !== "braille" || brailleIndex < BRAILLE_SWEEP_FRAMES.length - 1) {
+    if (phase !== "braille" || brailleIndex < BRAILLE_SWEEP_DOT_FRAMES.length - 1) {
       return;
     }
 
@@ -274,9 +276,7 @@ function RedirectCallbackLivingMark() {
           className={REDIRECT_MARK_LAYER_CLASS}
           data-testid="redirect-callback-braille-layer"
         >
-          <span className="inline-block w-[1em] shrink-0 font-mono text-5xl leading-none tracking-[-0.18em] text-foreground">
-            {brailleFrame}
-          </span>
+          <RedirectCallbackBrailleMark visibleDots={visibleBrailleDots} />
         </div>
       ) : null}
       {phase === "icon-enter" ? (
@@ -304,5 +304,32 @@ function RedirectCallbackLivingMark() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+function RedirectCallbackBrailleMark({ visibleDots }: { visibleDots: readonly number[] }) {
+  const visibleDotSet = new Set(visibleDots);
+
+  return (
+    <span
+      aria-hidden
+      className="grid size-12 shrink-0 grid-cols-4 grid-rows-4 gap-1.5 text-foreground"
+    >
+      {BRAILLE_DOT_INDICES.map((dotIndex) => {
+        const isVisible = visibleDotSet.has(dotIndex);
+
+        return (
+          <span
+            key={dotIndex}
+            className={twMerge(
+              "block size-2 place-self-center rounded-full bg-current transition-opacity duration-100 ease-out",
+              isVisible ? "opacity-100" : "opacity-0",
+            )}
+            data-braille-dot={dotIndex}
+            data-visible={isVisible ? "true" : "false"}
+          />
+        );
+      })}
+    </span>
   );
 }

@@ -5,10 +5,11 @@ import {
   ProliferateIconResolve,
 } from "@proliferate/ui/proliferate-icons";
 import {
-  BRAILLE_SWEEP_FRAMES,
+  BRAILLE_SWEEP_DOT_FRAMES,
   BRAILLE_SWEEP_FRAME_INTERVAL_MS,
 } from "@/hooks/ui/use-braille-sweep";
 
+const BRAILLE_DOT_INDICES = Array.from({ length: 16 }, (_, index) => index);
 const ICON_ENTER_MS = 700;
 const ICON_HOLD_MS = 950;
 const ICON_EXIT_MS = 220;
@@ -34,7 +35,7 @@ export function ProliferateLivingMark({
   const [brailleIndex, setBrailleIndex] = useState(0);
   const iconClassName = twMerge("size-12 text-foreground", className);
   const brailleClassName = twMerge(
-    "inline-block w-[1em] shrink-0 font-mono text-5xl leading-none tracking-[-0.18em] text-foreground",
+    "grid size-12 shrink-0 grid-cols-4 grid-rows-4 gap-1.5 text-foreground",
     className,
   );
 
@@ -47,7 +48,7 @@ export function ProliferateLivingMark({
 
     const timer = setInterval(() => {
       setBrailleIndex((current) => {
-        if (current >= BRAILLE_SWEEP_FRAMES.length - 1) {
+        if (current >= BRAILLE_SWEEP_DOT_FRAMES.length - 1) {
           return current;
         }
         return current + 1;
@@ -61,7 +62,7 @@ export function ProliferateLivingMark({
     if (prefersReducedMotion) {
       return;
     }
-    if (phase !== "braille" || brailleIndex < BRAILLE_SWEEP_FRAMES.length - 1) {
+    if (phase !== "braille" || brailleIndex < BRAILLE_SWEEP_DOT_FRAMES.length - 1) {
       return;
     }
 
@@ -133,12 +134,14 @@ export function ProliferateLivingMark({
   }
 
   return (
-    <div className="relative size-12">
+    <div className="relative size-12 shrink-0 overflow-hidden">
       {phase === "braille" && (
         <div className="absolute inset-0 flex items-center justify-center">
           <LivingBrailleMark
             className={brailleClassName}
-            frame={BRAILLE_SWEEP_FRAMES[brailleIndex] ?? BRAILLE_SWEEP_FRAMES[0]}
+            visibleDots={
+              BRAILLE_SWEEP_DOT_FRAMES[brailleIndex] ?? BRAILLE_SWEEP_DOT_FRAMES[0]
+            }
           />
         </div>
       )}
@@ -190,17 +193,33 @@ function usePrefersReducedMotion(): boolean {
 
 function LivingBrailleMark({
   className,
-  frame,
+  visibleDots,
 }: {
   className?: string;
-  frame: string;
+  visibleDots: readonly number[];
 }) {
+  const visibleDotSet = new Set(visibleDots);
+
   return (
     <span
       aria-hidden
       className={className}
     >
-      {frame}
+      {BRAILLE_DOT_INDICES.map((dotIndex) => {
+        const isVisible = visibleDotSet.has(dotIndex);
+
+        return (
+          <span
+            key={dotIndex}
+            className={twMerge(
+              "block size-2 place-self-center rounded-full bg-current transition-opacity duration-100 ease-out",
+              isVisible ? "opacity-100" : "opacity-0",
+            )}
+            data-braille-dot={dotIndex}
+            data-visible={isVisible ? "true" : "false"}
+          />
+        );
+      })}
     </span>
   );
 }
