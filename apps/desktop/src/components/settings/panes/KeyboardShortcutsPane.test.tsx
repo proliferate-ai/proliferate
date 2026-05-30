@@ -33,7 +33,7 @@ describe("KeyboardShortcutsPane", () => {
       throw new Error("Expected previous tab shortcut row");
     }
     expect(within(previousTabRow).getByText("⌘⇧[")).toBeTruthy();
-    expect(within(previousTabRow).getByText("⌘⌥<")).toBeTruthy();
+    expect(within(previousTabRow).getByText("⌘⌥←")).toBeTruthy();
 
     const closeOtherTabsRow = screen.getByText("Close other tabs").closest("li");
     if (!(closeOtherTabsRow instanceof HTMLElement)) {
@@ -43,11 +43,11 @@ describe("KeyboardShortcutsPane", () => {
     expect(within(closeOtherTabsRow).getByText("⌘⇧O")).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText("Search keyboard shortcuts"), {
-      target: { value: "⌘⌥<" },
+      target: { value: "⌘⌥←" },
     });
 
     expect(screen.getByText("Previous tab")).toBeTruthy();
-    expect(screen.getByText("⌘⌥<")).toBeTruthy();
+    expect(screen.getByText("⌘⌥←")).toBeTruthy();
     expect(screen.queryByText("Next tab")).toBeNull();
 
     fireEvent.change(screen.getByLabelText("Search keyboard shortcuts"), {

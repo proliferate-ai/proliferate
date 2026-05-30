@@ -1,6 +1,9 @@
 import { SHORTCUTS, type ShortcutDef } from "@/config/shortcuts";
 import { getFocusZone } from "@/lib/domain/focus-zone";
-import { isTextEntryTarget } from "@/lib/domain/shortcuts/matching";
+import {
+  isTextEntryTarget,
+  matchShortcutDef,
+} from "@/lib/domain/shortcuts/matching";
 
 type KeyboardShortcutEventLike = Pick<
   KeyboardEvent,
@@ -133,26 +136,13 @@ function canBypassDefaultPrevented(
 }
 
 function isTabCyclingShortcut(
-  shortcut: Pick<ShortcutDef, "id">,
+  shortcut: Pick<ShortcutDef, "id" | "match" | "nonMacMatch">,
   event: KeyboardShortcutEventLike,
 ): boolean {
-  if (!(event.metaKey || event.ctrlKey) || !event.shiftKey) {
-    return false;
-  }
-
   return (
     shortcut.id === SHORTCUTS.previousTab.id
-    && (
-      (!event.altKey && event.code === "BracketLeft")
-      || (event.altKey && event.code === "Comma")
-    )
-  ) || (
-    shortcut.id === SHORTCUTS.nextTab.id
-    && (
-      (!event.altKey && event.code === "BracketRight")
-      || (event.altKey && event.code === "Period")
-    )
-  );
+    || shortcut.id === SHORTCUTS.nextTab.id
+  ) && matchShortcutDef(shortcut, event) !== null;
 }
 
 function isDigitShortcutEvent(event: KeyboardShortcutEventLike): boolean {
@@ -160,7 +150,7 @@ function isDigitShortcutEvent(event: KeyboardShortcutEventLike): boolean {
 }
 
 export function shouldDispatchKeyboardShortcut(
-  shortcut: Pick<ShortcutDef, "allowInInputs" | "id">,
+  shortcut: Pick<ShortcutDef, "allowInInputs" | "id" | "match" | "nonMacMatch">,
   event: KeyboardShortcutEventLike,
 ): boolean {
   if (

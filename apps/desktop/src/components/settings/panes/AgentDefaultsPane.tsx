@@ -35,6 +35,7 @@ import {
   type AgentStatusTone,
 } from "@/lib/domain/agents/status-presentation";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
+import { useToastStore } from "@/stores/toast/toast-store";
 import type { SettingsAgentDefaultRow } from "@/lib/domain/settings/agent-defaults";
 import {
   withUpdatedDefaultLiveSessionControlValueByAgentKind,
@@ -44,6 +45,7 @@ import { buildPrimaryHarnessPreferenceUpdate } from "@/lib/domain/settings/chat-
 export function AgentDefaultsPane() {
   const navigate = useNavigate();
   const [setupAgent, setSetupAgent] = useState<AgentSummary | null>(null);
+  const showToast = useToastStore((state) => state.show);
   const {
     connectionState,
     runtimeError,
@@ -174,7 +176,20 @@ export function AgentDefaultsPane() {
                 onRefresh={() => {
                   refreshModelRegistry.mutate({
                     kind: row.kind,
-                    request: { forceProviderRefresh: false },
+                    request: { forceProviderRefresh: true },
+                  }, {
+                    onSuccess: (response) => {
+                      if (response.snapshot.status !== "available") {
+                        showToast(
+                          response.snapshot.errorMessage
+                          ?? `Could not refresh ${row.displayName} models.`,
+                        );
+                      }
+                    },
+                    onError: (error) => {
+                      const message = error instanceof Error ? error.message : String(error);
+                      showToast(message);
+                    },
                   });
                 }}
                 onVisibilityChange={(modelId, visible, catalogDefaultOptIn) => {

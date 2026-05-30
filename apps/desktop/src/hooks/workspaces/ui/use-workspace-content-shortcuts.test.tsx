@@ -78,6 +78,16 @@ describe("useWorkspaceContentShortcuts", () => {
     expect(actions.openNewSessionTab).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps shell tab shortcuts registered even before the global workspace selection store settles", () => {
+    harnessState.selectedWorkspaceId = null;
+    const actions = createActions();
+
+    renderHook(() => useWorkspaceContentShortcuts(actions));
+
+    expect(runShortcutHandler("workspace.close-active-tab", { source: "menu" })).toBe(true);
+    expect(actions.closeActiveWorkspaceTab).toHaveBeenCalledTimes(1);
+  });
+
   it("routes tab cycling to the right panel when focus is in the right panel", () => {
     const actions = createActions();
     const zone = document.createElement("div");

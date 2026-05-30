@@ -32,7 +32,9 @@ pub(in crate::live::sessions::actor) fn queue_pending_config_change(
     }
 
     if let Some(option) = option {
-        if !select_option_contains_value(option, value) && !is_model_request && !is_mode_request {
+        if !select_option_contains_value(option, value)
+            && (!is_mode_request || !startup_state.legacy_mode_contains_value(value))
+        {
             return Err(SetConfigOptionCommandError::Rejected(format!(
                 "Value '{value}' is not valid for config option '{config_id}'."
             )));

@@ -244,33 +244,33 @@ describe("resolveKeyboardShortcut", () => {
     });
 
     expect(resolveKeyboardShortcut({
-      key: "<",
-      code: "Comma",
+      key: "ArrowLeft",
+      code: "ArrowLeft",
       metaKey: true,
       ctrlKey: false,
-      shiftKey: true,
+      shiftKey: false,
       altKey: true,
     } as KeyboardEvent)).toEqual({
       id: "workspace.previous-tab",
       shortcut: expect.objectContaining({
         id: "workspace.previous-tab",
-        label: "⌘⌥<",
+        label: "⌘⌥←",
       }),
       trigger: expect.objectContaining({ source: "keyboard" }),
     });
 
     expect(resolveKeyboardShortcut({
-      key: ">",
-      code: "Period",
+      key: "ArrowRight",
+      code: "ArrowRight",
       metaKey: true,
       ctrlKey: false,
-      shiftKey: true,
+      shiftKey: false,
       altKey: true,
     } as KeyboardEvent)).toEqual({
       id: "workspace.next-tab",
       shortcut: expect.objectContaining({
         id: "workspace.next-tab",
-        label: "⌘⌥>",
+        label: "⌘⌥→",
       }),
       trigger: expect.objectContaining({ source: "keyboard" }),
     });

@@ -8,8 +8,10 @@ export interface ShortcutMatchResult {
 
 type KeyboardShortcutEventLike = Pick<
   KeyboardEvent,
-  "altKey" | "code" | "ctrlKey" | "key" | "metaKey" | "shiftKey"
->;
+  "altKey" | "ctrlKey" | "key" | "metaKey" | "shiftKey"
+> & {
+  code?: string;
+};
 
 function normalizeKey(key: string): string {
   return key.length === 1 ? key.toLowerCase() : key;
@@ -93,7 +95,7 @@ export function matchShortcut(
       return digit ? { digit } : null;
     }
     case "digit-code": {
-      const digit = getShortcutDigitByCode(event.code);
+      const digit = event.code ? getShortcutDigitByCode(event.code) : null;
       return digit ? { digit } : null;
     }
   }

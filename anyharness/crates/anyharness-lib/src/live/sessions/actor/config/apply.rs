@@ -96,6 +96,10 @@ pub(in crate::live::sessions::actor) async fn apply_select_config_option(
         return Ok(ConfigApplyOutcome::NotApplied);
     };
 
+    if !select_option_contains_value(option, desired_value) {
+        return Ok(ConfigApplyOutcome::NotApplied);
+    }
+
     if current_select_value(option).as_deref() == Some(desired_value) {
         return Ok(ConfigApplyOutcome::NoChange);
     }
@@ -110,7 +114,12 @@ pub(in crate::live::sessions::actor) async fn apply_select_config_option(
 
     startup_state.config_options = response.config_options;
 
-    Ok(ConfigApplyOutcome::AppliedAuthoritative)
+    if select_option_current_value_matches(&startup_state.config_options, config_id, desired_value)
+    {
+        Ok(ConfigApplyOutcome::AppliedAuthoritative)
+    } else {
+        Ok(ConfigApplyOutcome::NotApplied)
+    }
 }
 
 pub(in crate::live::sessions::actor) async fn apply_specific_config_option(
@@ -138,8 +147,7 @@ pub(in crate::live::sessions::actor) async fn apply_specific_config_option(
 
     if let Some(option) = option {
         if !select_option_contains_value(option, desired_value)
-            && !is_model_request
-            && !is_mode_request
+            && (!is_mode_request || !startup_state.legacy_mode_contains_value(desired_value))
         {
             return Err(SetConfigOptionCommandError::Rejected(format!(
                 "Value '{desired_value}' is not valid for config option '{config_id}'."
@@ -298,6 +306,9 @@ pub(in crate::live::sessions::actor) async fn apply_config_option_if_possible(
         }
 
         if is_model_request {
+            if !select_option_contains_value(option, desired_value) {
+                return Ok(ConfigApplyOutcome::NotApplied);
+            }
             let option_id = option.id.to_string();
             return apply_select_config_option(
                 conn,
@@ -433,4 +444,15 @@ pub(in crate::live::sessions::actor) fn set_select_option_current_value_for_purp
 
     select.current_value = desired_value.to_string().into();
     true
+}
+
+pub(in crate::live::sessions::actor) fn select_option_current_value_matches(
+    config_options: &[acp::SessionConfigOption],
+    config_id: &str,
+    desired_value: &str,
+) -> bool {
+    find_select_option_for_request(config_options, config_id)
+        .and_then(current_select_value)
+        .as_deref()
+        .is_some_and(|current| current == desired_value)
 }

@@ -32,6 +32,7 @@ export interface WorkspaceTabActionsContext {
   shellRows: HeaderWorkspaceShellStripRow[];
   orderedTabs: WorkspaceShellTab[];
   activeShellTab: WorkspaceShellTab | null;
+  activeShellTabKey: string | null;
 }
 
 export function useWorkspaceTabActions(headerTabs: WorkspaceTabActionsContext) {

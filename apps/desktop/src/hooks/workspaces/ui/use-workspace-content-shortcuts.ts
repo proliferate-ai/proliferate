@@ -1,4 +1,3 @@
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import { getFocusZone, isRightPanelFocusZone } from "@/lib/domain/focus-zone";
 import { useContentSearchStore } from "@/stores/search/content-search-store";
@@ -21,9 +20,8 @@ export function useWorkspaceContentShortcuts(
   actions: WorkspaceContentShortcutActions,
   options: { enabled?: boolean } = {},
 ): void {
-  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const openContentSearch = useContentSearchStore((state) => state.openSearch);
-  const enabled = (options.enabled ?? true) && selectedWorkspaceId !== null;
+  const enabled = options.enabled ?? true;
   const {
     activateRelativeTab,
     activateTabByShortcutIndex,

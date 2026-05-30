@@ -4,8 +4,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use super::command::{InteractionResolution, SessionCommand};
-use super::config::apply::should_apply_model_via_direct_setter;
+use super::config::apply::{
+    select_option_current_value_matches, should_apply_model_via_direct_setter,
+};
 use super::config::persist::{load_startup_restore_snapshot, persisted_control_values};
+use super::config::queue::queue_pending_config_change;
 use super::config::selection::{
     find_select_option_for_request, is_mode_config_request, is_model_config_request,
     pending_config_rank,

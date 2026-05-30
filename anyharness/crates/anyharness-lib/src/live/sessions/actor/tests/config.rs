@@ -311,6 +311,65 @@ fn generic_model_request_can_resolve_model_option_by_purpose() {
 }
 
 #[test]
+fn model_config_request_rejects_values_outside_live_select_options() {
+    let db = Db::open_in_memory().expect("open db");
+    let store = SessionStore::new(db);
+    let mut option = acp::SessionConfigOption::select(
+        "model",
+        "Model",
+        "sonnet",
+        vec![
+            acp::SessionConfigSelectOption::new("sonnet", "Sonnet"),
+            acp::SessionConfigSelectOption::new("haiku", "Haiku"),
+        ],
+    );
+    option.category = Some(acp::SessionConfigOptionCategory::Model);
+    let startup_state = SessionStartupState {
+        current_mode_id: None,
+        legacy_mode_state: None,
+        config_options: vec![option],
+        current_model_id: Some("sonnet".to_string()),
+        available_model_ids: vec!["sonnet".to_string(), "haiku".to_string()],
+        prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+    };
+
+    let error =
+        queue_pending_config_change(&store, "session-1", &startup_state, "model", "opus[1m]")
+            .expect_err("unlisted model values should be rejected");
+
+    assert!(matches!(
+        error,
+        crate::live::sessions::actor::command::SetConfigOptionCommandError::Rejected(detail)
+            if detail == "Value 'opus[1m]' is not valid for config option 'model'."
+    ));
+}
+
+#[test]
+fn select_option_current_value_must_match_requested_value() {
+    let mut option = acp::SessionConfigOption::select(
+        "provider_model",
+        "Model",
+        "sonnet[1m]",
+        vec![
+            acp::SessionConfigSelectOption::new("sonnet", "Sonnet"),
+            acp::SessionConfigSelectOption::new("sonnet[1m]", "Sonnet 1M"),
+        ],
+    );
+    option.category = Some(acp::SessionConfigOptionCategory::Model);
+
+    assert!(select_option_current_value_matches(
+        &[option.clone()],
+        "model",
+        "sonnet[1m]",
+    ));
+    assert!(!select_option_current_value_matches(
+        &[option],
+        "model",
+        "opus[1m]",
+    ));
+}
+
+#[test]
 fn generic_mode_request_can_resolve_mode_option_by_purpose() {
     let mut option = acp::SessionConfigOption::select(
         "approval_mode",

@@ -3,9 +3,12 @@ import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-ta
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
 import {
   resolveFallbackWorkspaceShellTab,
+  resolveWorkspaceShellTabFromKey,
+  type WorkspaceShellTab,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import {
   viewerTargetEditablePath,
   viewerTargetKey,
@@ -36,7 +39,7 @@ export function useCloseActiveWorkspaceTab(headerTabs: WorkspaceTabActionsContex
   });
 
   return useCallback((): CloseActiveWorkspaceTabResult => {
-    const activeShellTab = headerTabs.activeShellTab;
+    const activeShellTab = resolveActiveWorkspaceTabForClose(headerTabs);
     if (activeShellTab?.kind === "viewer") {
       const bufferPath = viewerTargetEditablePath(activeShellTab.target);
       const activeTargetKey = viewerTargetKey(activeShellTab.target);
@@ -101,8 +104,39 @@ export function useCloseActiveWorkspaceTab(headerTabs: WorkspaceTabActionsContex
     clearBuffer,
     closeTarget,
     headerTabs.activeShellTab,
+    headerTabs.activeShellTabKey,
+    headerTabs.materializedWorkspaceId,
     headerTabs.orderedTabs,
     headerTabs.selectedWorkspaceId,
+    headerTabs.shellRows,
     headerTabs.workspaceUiKey,
   ]);
+}
+
+function resolveActiveWorkspaceTabForClose(
+  headerTabs: WorkspaceTabActionsContext,
+): WorkspaceShellTab | null {
+  const activeChatRow = headerTabs.shellRows.find((shellRow) =>
+    shellRow.kind === "chat"
+    && shellRow.row.kind === "tab"
+    && shellRow.row.tab.isActive
+  );
+  if (activeChatRow?.kind === "chat" && activeChatRow.row.kind === "tab") {
+    return { kind: "chat", sessionId: activeChatRow.row.tab.id };
+  }
+
+  const workspaceUiState = useWorkspaceUiStore.getState();
+  const storedActiveKey = (
+    headerTabs.workspaceUiKey
+      ? workspaceUiState.activeShellTabKeyByWorkspace[headerTabs.workspaceUiKey] ?? null
+      : null
+  ) ?? (
+    headerTabs.materializedWorkspaceId
+      ? workspaceUiState.activeShellTabKeyByWorkspace[headerTabs.materializedWorkspaceId] ?? null
+      : null
+  );
+  return resolveWorkspaceShellTabFromKey(
+    storedActiveKey ?? headerTabs.activeShellTabKey,
+    headerTabs.orderedTabs,
+  ) ?? headerTabs.activeShellTab;
 }

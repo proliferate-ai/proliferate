@@ -69,6 +69,12 @@ export interface ModelSelectorProps {
   onSelect: (selection: ModelSelectorSelection) => void;
 }
 
+interface SelectorModel {
+  id: string;
+  displayName: string;
+  liveSwitchable: boolean;
+}
+
 export function resolveModelSelectionActionKind(
   activeSelection: ModelSelectorSelection | null | undefined,
   agentKind: string,
@@ -209,7 +215,7 @@ export function buildModelSelectorGroups(
         activeSelection,
         sourceAgentsByKind.get(agent.kind) ?? agent,
         agent.kind,
-        model.id,
+        model,
       ),
       isSelected: modelSelectionMatchesModel(
         selected,
@@ -226,7 +232,7 @@ function resolveSelectorModels(
   activeModelControl: ActiveModelSelectorControl | null | undefined,
   selected: ModelSelectorSelection | null,
   sourceAgent: DesktopAgentLaunchAgent,
-): Array<{ id: string; displayName: string }> {
+): SelectorModel[] {
   if (activeModelControl?.kind === agent.kind && activeModelControl.values.length > 0) {
     return mergeCatalogAndActiveControlSelectorModels(
       resolveCatalogSelectorModels(agent),
@@ -245,7 +251,7 @@ function resolveSelectorModels(
 
 function resolveCatalogSelectorModels(
   agent: DesktopAgentLaunchAgent,
-): Array<{ id: string; displayName: string }> {
+): SelectorModel[] {
   return agent.models.map((model) => ({
     id: model.id,
     displayName: resolveModelDisplayName({
@@ -254,6 +260,7 @@ function resolveCatalogSelectorModels(
       sourceLabels: [model.displayName],
       preferKnownAlias: shouldPreferStaticModelAlias(model.displayName),
     }) ?? model.displayName,
+    liveSwitchable: false,
   }));
 }
 
@@ -262,7 +269,7 @@ function resolveActiveControlSelectorModels(
   activeModelControl: ActiveModelSelectorControl,
   selected: ModelSelectorSelection | null,
   sourceAgent: DesktopAgentLaunchAgent,
-): Array<{ id: string; displayName: string }> {
+): SelectorModel[] {
   return activeModelControl.values.flatMap((value) => {
     const isSelected = modelSelectionMatchesModel(
       selected,
@@ -294,17 +301,18 @@ function resolveActiveControlSelectorModels(
     return [{
       id: value.value,
       displayName,
+      liveSwitchable: true,
     }];
   });
 }
 
 function mergeCatalogAndActiveControlSelectorModels(
-  catalogModels: Array<{ id: string; displayName: string }>,
-  activeControlModels: Array<{ id: string; displayName: string }>,
+  catalogModels: SelectorModel[],
+  activeControlModels: SelectorModel[],
   sourceAgent: DesktopAgentLaunchAgent,
-): Array<{ id: string; displayName: string }> {
+): SelectorModel[] {
   const emittedDedupeKeys = new Set<string>();
-  const merged: Array<{ id: string; displayName: string }> = [];
+  const merged: SelectorModel[] = [];
   for (const model of activeControlModels) {
     merged.push(model);
     for (const key of selectorModelDedupeKeys(sourceAgent, model)) {
@@ -328,7 +336,7 @@ function mergeCatalogAndActiveControlSelectorModels(
 
 function selectorModelDedupeKeys(
   agent: DesktopAgentLaunchAgent,
-  model: { id: string; displayName: string },
+  model: Pick<SelectorModel, "id" | "displayName">,
 ): string[] {
   const keys = [
     `model:${findLaunchModelByIdOrAlias(agent, model.id)?.id ?? model.id}`,
@@ -347,7 +355,7 @@ function resolveModelSelectionActionKindForModel(
   activeSelection: ModelSelectorSelection | null | undefined,
   agent: DesktopAgentLaunchAgent,
   agentKind: string,
-  modelId: string,
+  model: SelectorModel,
 ): ModelSelectionActionKind {
   if (!activeSelection) {
     return "select";
@@ -355,7 +363,12 @@ function resolveModelSelectionActionKindForModel(
   if (activeSelection.kind !== agentKind) {
     return "open_new_chat";
   }
-  return modelSelectionMatchesModel(activeSelection, agent, agentKind, modelId)
+  if (!model.liveSwitchable) {
+    return modelSelectionMatchesModel(activeSelection, agent, agentKind, model.id)
+      ? "select"
+      : "open_new_chat";
+  }
+  return modelSelectionMatchesModel(activeSelection, agent, agentKind, model.id)
     ? "select"
     : "update_current_chat";
 }
