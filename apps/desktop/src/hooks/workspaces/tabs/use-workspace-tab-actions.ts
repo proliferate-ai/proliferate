@@ -11,6 +11,7 @@ import {
   resolveWorkspaceShellTabByShortcutIndex,
   type WorkspaceShellTab,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import { resolveStoredWorkspaceShellTab } from "@/lib/domain/workspaces/tabs/active-shell-tab";
 import type {
   HeaderWorkspaceShellStripRow,
 } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
@@ -86,6 +87,7 @@ export function useWorkspaceTabActions(headerTabs: WorkspaceTabActionsContext) {
   const activateRelativeTab = useCallback((delta: number) => {
     const activeAnchor = resolveShortcutCycleAnchor({
       activeTab,
+      activeShellTabKey: headerTabs.activeShellTabKey,
       materializedWorkspaceId: headerTabs.materializedWorkspaceId,
       orderedTabs,
       workspaceUiKey: headerTabs.workspaceUiKey,
@@ -103,6 +105,7 @@ export function useWorkspaceTabActions(headerTabs: WorkspaceTabActionsContext) {
   }, [
     activateWorkspaceTab,
     activeTab,
+    headerTabs.activeShellTabKey,
     headerTabs.materializedWorkspaceId,
     headerTabs.workspaceUiKey,
     orderedTabs,
@@ -172,11 +175,13 @@ export type WorkspaceTabActions = ReturnType<typeof useWorkspaceTabActions>;
 
 function resolveShortcutCycleAnchor({
   activeTab,
+  activeShellTabKey,
   materializedWorkspaceId,
   orderedTabs,
   workspaceUiKey,
 }: {
   activeTab: WorkspaceShellTab | null;
+  activeShellTabKey: string | null;
   materializedWorkspaceId: string | null;
   orderedTabs: WorkspaceShellTab[];
   workspaceUiKey: string | null;
@@ -195,8 +200,15 @@ function resolveShortcutCycleAnchor({
     ) ?? activeTab;
   }
   const pending = workspaceUiState.pendingChatActivationByWorkspace[workspaceUiKey] ?? null;
+  const storedTab = resolveStoredWorkspaceShellTab({
+    activeShellTabKey,
+    materializedWorkspaceId,
+    orderedTabs,
+    state: workspaceUiState,
+    workspaceUiKey,
+  });
   if (!pending) {
-    return activeTab;
+    return storedTab ?? activeTab;
   }
 
   const selectionState = useSessionSelectionStore.getState();
@@ -213,8 +225,8 @@ function resolveShortcutCycleAnchor({
     && pending.guardToken === sessionEpoch
     && pending.sessionActivationEpochAtWrite === sessionEpoch;
   if (!pendingIsCurrent) {
-    return activeTab;
+    return storedTab ?? activeTab;
   }
 
-  return resolveWorkspaceShellTabFromKey(pending.intent, orderedTabs) ?? activeTab;
+  return resolveWorkspaceShellTabFromKey(pending.intent, orderedTabs) ?? storedTab ?? activeTab;
 }

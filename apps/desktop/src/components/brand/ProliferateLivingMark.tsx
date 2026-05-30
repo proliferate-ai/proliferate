@@ -133,7 +133,7 @@ export function ProliferateLivingMark({
   }
 
   return (
-    <div className="relative size-12 overflow-hidden">
+    <div className="relative size-12">
       {phase === "braille" && (
         <div className="absolute inset-0 flex items-center justify-center">
           <LivingBrailleMark

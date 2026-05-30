@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
+import { AgentDefaultComposer } from "@/components/settings/panes/AgentDefaultComposer";
 import { ModelRegistryPane } from "@/components/settings/panes/ModelRegistryPane";
-import { AgentHarnessConfigComposer } from "@/components/settings/shared/AgentHarnessConfigComposer";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
@@ -16,30 +16,15 @@ import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-clo
 import { useModelRegistrySettings } from "@/hooks/settings/workflows/use-model-registry-settings";
 import {
   mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,
-  type DesktopAgentLaunchAgent,
 } from "@/lib/domain/agents/cloud-launch-catalog";
 import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
 import { withUpdatedModelVisibilityOverride } from "@/lib/domain/chat/models/model-visibility";
-import {
-  buildLaunchControlDescriptors,
-} from "@/lib/domain/chat/models/launch-control-descriptors";
-import { withUpdatedDefaultSessionModeByAgentKind } from "@/lib/domain/chat/session-controls/session-mode-control";
-import type {
-  SupportedLiveControlKey,
-} from "@/lib/domain/chat/session-controls/session-controls";
-import type {
-  DefaultLiveSessionControlKey,
-} from "@/lib/domain/preferences/user/session-defaults";
 import {
   getAgentStatusDisplay,
   type AgentStatusTone,
 } from "@/lib/domain/agents/status-presentation";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import { useToastStore } from "@/stores/toast/toast-store";
-import type { SettingsAgentDefaultRow } from "@/lib/domain/settings/agent-defaults";
-import {
-  withUpdatedDefaultLiveSessionControlValueByAgentKind,
-} from "@/lib/domain/settings/agent-defaults";
 import { buildPrimaryHarnessPreferenceUpdate } from "@/lib/domain/settings/chat-defaults";
 
 export function AgentDefaultsPane() {
@@ -375,118 +360,6 @@ function configurationDetailForAgent(
     return "Review setup details, then refresh the runtime once the issue is fixed.";
   }
   return "This harness is not ready to use as a launch default.";
-}
-
-function AgentDefaultComposer({
-  row,
-  launchAgent,
-  preferences,
-}: {
-  row: SettingsAgentDefaultRow;
-  launchAgent: DesktopAgentLaunchAgent | null;
-  preferences: ReturnType<typeof useModelRegistrySettings>["preferences"];
-}) {
-  const controls = useMemo(
-    () => launchAgent
-      ? buildLaunchControlDescriptors({
-        selection: { kind: row.kind, modelId: row.selectedModel.id },
-        launchAgents: [launchAgent],
-        pendingConfigChanges: null,
-        preferences,
-        onSelect: (
-          _agentKind: string,
-          controlKey: SupportedLiveControlKey,
-          _rawConfigId: string,
-          value: string,
-        ) => {
-          if (controlKey === "mode") {
-            preferences.set(
-              "defaultSessionModeByAgentKind",
-              withUpdatedDefaultSessionModeByAgentKind(
-                preferences.defaultSessionModeByAgentKind,
-                row.kind,
-                value,
-              ),
-            );
-            return;
-          }
-          if (isDefaultLiveSessionControlKey(controlKey)) {
-            preferences.set(
-              "defaultLiveSessionControlValuesByAgentKind",
-              withUpdatedDefaultLiveSessionControlValueByAgentKind(
-                preferences.defaultLiveSessionControlValuesByAgentKind,
-                row.kind,
-                controlKey,
-                value,
-              ),
-            );
-          }
-        },
-      })
-      : [],
-    [launchAgent, preferences, row.kind, row.selectedModel.id],
-  );
-
-  useEffect(() => {
-    if (!import.meta.env.DEV) {
-      return;
-    }
-    console.debug("[agent-harness-config][agent-default]", {
-      agentKind: row.kind,
-      modelId: row.selectedModel.id,
-      catalogControls: launchAgent?.launchControls.map((control) => ({
-        key: control.key,
-        createField: control.createField,
-        phase: control.phase,
-        surfaces: control.surfaces,
-      })) ?? [],
-      renderedControls: controls.map((control) => ({
-        key: control.key,
-        rawConfigId: control.rawConfigId,
-        detail: control.detail,
-        optionCount: control.options.length,
-      })),
-    });
-  }, [controls, launchAgent, row.kind, row.selectedModel.id]);
-
-  return (
-    <AgentHarnessConfigComposer
-      agentKind={row.kind}
-      agentDisplayName={row.displayName}
-      selectedModelId={row.selectedModel.id}
-      selectedModelLabel={row.selectedModel.displayName}
-      modelGroups={[{
-        agentKind: row.kind,
-        agentDisplayName: row.displayName,
-        models: row.models.map((model) => ({
-          id: model.id,
-          label: model.displayName,
-          detail: model.description ?? model.id,
-        })),
-      }]}
-      controls={controls}
-      placeholder="Describe a task"
-      onSelectModel={(_agentKind, modelId) => {
-        preferences.set(
-          "defaultChatModelIdByAgentKind",
-          withUpdatedDefaultModelIdByAgentKind(
-            preferences.defaultChatModelIdByAgentKind,
-            row.kind,
-            modelId,
-          ),
-        );
-      }}
-    />
-  );
-}
-
-function isDefaultLiveSessionControlKey(
-  key: SupportedLiveControlKey,
-): key is DefaultLiveSessionControlKey {
-  return key === "collaboration_mode"
-    || key === "reasoning"
-    || key === "effort"
-    || key === "fast_mode";
 }
 
 function AgentDefaultsSection({
