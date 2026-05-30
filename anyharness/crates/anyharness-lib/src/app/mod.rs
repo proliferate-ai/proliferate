@@ -1,3 +1,5 @@
+mod product_mcp;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -13,9 +15,7 @@ use crate::domains::agents::runtime::AgentRuntime;
 use crate::domains::agents::seed::AgentSeedStore;
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
 use crate::domains::cowork::delegation::service::CoworkDelegationService;
-use crate::domains::cowork::mcp::{
-    auth::CoworkMcpAuth, tools as cowork_mcp_tools, CoworkProductMcpServer,
-};
+use crate::domains::cowork::mcp::auth::CoworkMcpAuth;
 use crate::domains::cowork::runtime::{CoworkRuntime, CoworkSessionHooks};
 use crate::domains::cowork::service::CoworkService;
 use crate::domains::cowork::store::CoworkStore;
@@ -24,11 +24,9 @@ use crate::domains::mobility::store::MobilityStore;
 use crate::domains::plans::runtime::PlanRuntime;
 use crate::domains::plans::service::PlanService;
 use crate::domains::plans::store::PlanStore;
-use crate::domains::plugins::mcp::{auth::SkillsMcpAuth, SkillsProductMcpServer};
+use crate::domains::plugins::mcp::auth::SkillsMcpAuth;
 use crate::domains::reviews::hooks::ReviewSessionHooks;
-use crate::domains::reviews::mcp::{
-    auth::ReviewMcpAuth, tools as review_mcp_tools, ReviewProductMcpServer,
-};
+use crate::domains::reviews::mcp::auth::ReviewMcpAuth;
 use crate::domains::reviews::runtime::ReviewRuntime;
 use crate::domains::reviews::service::ReviewService;
 use crate::domains::reviews::store::ReviewStore;
@@ -43,21 +41,15 @@ use crate::sessions::links::service::SessionLinkService;
 use crate::sessions::links::store::SessionLinkStore;
 use crate::sessions::mcp_bindings::crypto::{load_data_cipher_from_env, DATA_KEY_ENV_VAR};
 use crate::sessions::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
-use crate::sessions::mcp_bindings::product_registry::{
-    ProductMcpEndpointHandlerAdapter, ProductMcpEndpointRegistration, ProductMcpEndpointRegistry,
-};
+use crate::sessions::mcp_bindings::product_registry::ProductMcpEndpointRegistry;
 use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::service::SessionService;
 use crate::sessions::store::SessionStore;
 use crate::sessions::subagents::hooks::SubagentSessionHooks;
-use crate::sessions::subagents::mcp::{
-    auth::SubagentMcpAuth, tools as subagent_mcp_tools, SubagentProductMcpServer,
-};
+use crate::sessions::subagents::mcp::auth::SubagentMcpAuth;
 use crate::sessions::subagents::service::SubagentService;
 use crate::sessions::subagents::store::SubagentStore;
-use crate::sessions::workspace_naming::mcp::{
-    auth::WorkspaceNamingMcpAuth, WorkspaceNamingProductMcpServer,
-};
+use crate::sessions::workspace_naming::mcp::auth::WorkspaceNamingMcpAuth;
 use crate::terminals::store::TerminalStore;
 use crate::terminals::TerminalService;
 use crate::workspaces::access_gate::WorkspaceAccessGate;
@@ -65,7 +57,7 @@ use crate::workspaces::access_store::WorkspaceAccessStore;
 use crate::workspaces::checkout_gate::CheckoutDeletionGate;
 use crate::workspaces::files_runtime::WorkspaceFilesRuntime;
 use crate::workspaces::inventory::WorktreeInventoryService;
-use crate::workspaces::operation_gate::{WorkspaceOperationGate, WorkspaceOperationKind};
+use crate::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::workspaces::purge::WorkspacePurgeService;
 use crate::workspaces::retention::WorkspaceRetentionService;
 use crate::workspaces::retention_policy::WorktreeRetentionPolicyStore;
@@ -373,57 +365,24 @@ impl AppState {
         review_runtime
             .clone()
             .spawn_background_tasks(review_hook_event_rx);
-        let product_mcp_endpoint_registrations = vec![
-            ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
-                Arc::new(ReviewProductMcpServer::new(
-                    review_runtime.clone(),
-                    review_mcp_auth,
-                )),
-                Some(WorkspaceOperationKind::ReviewWrite),
-                review_mcp_tools::MUTATING_TOOL_NAMES,
-            ))),
-            ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
-                Arc::new(SubagentProductMcpServer::new(
-                    subagent_service.clone(),
-                    session_runtime.clone(),
-                    workspace_runtime.clone(),
-                    subagent_mcp_auth,
-                )),
-                Some(WorkspaceOperationKind::SubagentWrite),
-                subagent_mcp_tools::MUTATING_TOOL_NAMES,
-            ))),
-            ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
-                Arc::new(WorkspaceNamingProductMcpServer::new(
-                    workspace_runtime.clone(),
-                    workspace_access_gate.clone(),
-                    SessionStore::new(db.clone()),
-                    workspace_naming_mcp_auth,
-                )),
-                None,
-                &[],
-            ))),
-            ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
-                Arc::new(CoworkProductMcpServer::new(
-                    cowork_artifact_runtime.clone(),
-                    cowork_runtime.clone(),
-                    cowork_mcp_auth,
-                )),
-                Some(WorkspaceOperationKind::CoworkWrite),
-                cowork_mcp_tools::MUTATING_TOOL_NAMES,
-            ))),
-            ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
-                Arc::new(SkillsProductMcpServer::new(
-                    runtime_config_service.clone(),
-                    skills_mcp_auth,
-                )),
-                None,
-                &[],
-            ))),
-        ];
-        let product_mcp_endpoint_registry = Arc::new(
-            ProductMcpEndpointRegistry::new(product_mcp_endpoint_registrations)
-                .map_err(AppStateInitError::InvalidProductMcpRegistry)?,
-        );
+        let product_mcp_endpoint_registry =
+            product_mcp::build_product_mcp_endpoint_registry(product_mcp::EndpointRegistryDeps {
+                db: db.clone(),
+                review_runtime: review_runtime.clone(),
+                review_mcp_auth,
+                subagent_service: subagent_service.clone(),
+                session_runtime: session_runtime.clone(),
+                workspace_runtime: workspace_runtime.clone(),
+                subagent_mcp_auth,
+                workspace_access_gate: workspace_access_gate.clone(),
+                workspace_naming_mcp_auth,
+                cowork_artifact_runtime: cowork_artifact_runtime.clone(),
+                cowork_runtime: cowork_runtime.clone(),
+                cowork_mcp_auth,
+                runtime_config_service: runtime_config_service.clone(),
+                skills_mcp_auth,
+            })
+            .map_err(AppStateInitError::InvalidProductMcpRegistry)?;
         #[cfg(not(test))]
         workspace_retention_service.clone().spawn_startup_pass();
         Ok(Self {
