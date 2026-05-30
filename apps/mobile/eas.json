@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 18.13.0",
-    "appVersionSource": "local"
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -20,6 +20,7 @@
       }
     },
     "production": {
+      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_PROLIFERATE_API_BASE_URL": "https://app.proliferate.com/api",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
