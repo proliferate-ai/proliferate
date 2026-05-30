@@ -61,9 +61,101 @@ export interface CloudTranscriptViewResult {
   missingEnvelopeCount: number;
 }
 
+export type CloudTranscriptStateSource = "empty" | "events" | "projection";
+
+export type CloudTranscriptStateFallbackReason =
+  | "empty"
+  | "missing_envelopes"
+  | "no_renderable_event_rows"
+  | "projection_ahead_of_events";
+
+export interface CloudTranscriptStateResult {
+  transcript: TranscriptState | null;
+  source: CloudTranscriptStateSource;
+  envelopeCount: number;
+  missingEnvelopeCount: number;
+  latestEnvelopeSeq: number;
+  latestProjectedSeq: number;
+  fallbackReason: CloudTranscriptStateFallbackReason | null;
+}
+
 export interface CloudOptimisticPromptReference {
   text: string;
   baseTranscriptSeq: number;
+}
+
+export function buildCloudTranscriptState(input: {
+  sessionId: string | null;
+  events: readonly CloudSessionEvent[];
+  fallbackItems?: readonly CloudTranscriptItem[];
+}): CloudTranscriptStateResult {
+  const fallbackItems = input.fallbackItems ?? [];
+  const latestProjectedSeq = latestProjectedItemSeq(fallbackItems);
+  if (!input.sessionId) {
+    return emptyCloudTranscriptState({
+      latestProjectedSeq,
+      fallbackReason: "empty",
+    });
+  }
+
+  const envelopes = input.events
+    .map((event) => event.envelope)
+    .filter(isSessionEventEnvelope);
+  const missingEnvelopeCount = input.events.length - envelopes.length;
+  const latestEnvelopeSeq = latestEnvelopeSeqFromEvents(envelopes);
+
+  if (envelopes.length === 0) {
+    return {
+      transcript: null,
+      source: fallbackItems.length > 0 ? "projection" : "empty",
+      envelopeCount: 0,
+      missingEnvelopeCount,
+      latestEnvelopeSeq,
+      latestProjectedSeq,
+      fallbackReason: fallbackItems.length > 0 ? "missing_envelopes" : "empty",
+    };
+  }
+
+  const transcript = reconstructTranscriptState(input.sessionId, envelopes);
+  const rows = buildRowsFromTranscriptState(transcript);
+  if (rows.length === 0) {
+    return {
+      transcript: null,
+      source: fallbackItems.length > 0 ? "projection" : "empty",
+      envelopeCount: envelopes.length,
+      missingEnvelopeCount,
+      latestEnvelopeSeq,
+      latestProjectedSeq,
+      fallbackReason: "no_renderable_event_rows",
+    };
+  }
+  if (!shouldUseEventRows(
+    { events: input.events, fallbackItems },
+    rows,
+    missingEnvelopeCount,
+  )) {
+    return {
+      transcript: null,
+      source: fallbackItems.length > 0 ? "projection" : "empty",
+      envelopeCount: envelopes.length,
+      missingEnvelopeCount,
+      latestEnvelopeSeq,
+      latestProjectedSeq,
+      fallbackReason: latestProjectedSeq > latestTranscriptRowSeq(rows)
+        ? "projection_ahead_of_events"
+        : "missing_envelopes",
+    };
+  }
+
+  return {
+    transcript,
+    source: "events",
+    envelopeCount: envelopes.length,
+    missingEnvelopeCount,
+    latestEnvelopeSeq,
+    latestProjectedSeq,
+    fallbackReason: null,
+  };
 }
 
 export function buildCloudTranscriptView(input: {
@@ -76,33 +168,27 @@ export function buildCloudTranscriptView(input: {
     return emptyCloudTranscriptView();
   }
 
-  const envelopes = input.events
-    .map((event) => event.envelope)
-    .filter(isSessionEventEnvelope);
-  const missingEnvelopeCount = input.events.length - envelopes.length;
+  const state = buildCloudTranscriptState({
+    sessionId: input.sessionId,
+    events: input.events,
+    fallbackItems: input.fallbackItems,
+  });
 
-  if (envelopes.length > 0) {
-    const transcript = reconstructTranscriptState(
-      input.sessionId,
-      envelopes as SessionEventEnvelope[],
-    );
+  if (state.transcript) {
     const rows = applyInteractionCommandDetails(
-      buildRowsFromTranscriptState(transcript),
+      buildRowsFromTranscriptState(state.transcript),
       input.events,
     );
-    if (rows.length > 0 && shouldUseEventRows(input, rows, missingEnvelopeCount)) {
-      const rowsWithPending = applyPendingInteractionRows(
+    return {
+      rows: applyPendingInteractionRows(
         rows,
         input.pendingInteractions ?? [],
         input.fallbackItems,
-      );
-      return {
-        rows: rowsWithPending,
-        source: "events",
-        envelopeCount: envelopes.length,
-        missingEnvelopeCount,
-      };
-    }
+      ),
+      source: "events",
+      envelopeCount: state.envelopeCount,
+      missingEnvelopeCount: state.missingEnvelopeCount,
+    };
   }
 
   if (input.fallbackItems.length > 0) {
@@ -113,17 +199,38 @@ export function buildCloudTranscriptView(input: {
         input.fallbackItems,
       ),
       source: "projection",
-      envelopeCount: envelopes.length,
-      missingEnvelopeCount,
+      envelopeCount: state.envelopeCount,
+      missingEnvelopeCount: state.missingEnvelopeCount,
     };
   }
 
   return {
     rows: applyPendingInteractionRows([], input.pendingInteractions ?? []),
     source: "empty",
-    envelopeCount: envelopes.length,
-    missingEnvelopeCount,
+    envelopeCount: state.envelopeCount,
+    missingEnvelopeCount: state.missingEnvelopeCount,
   };
+}
+
+function emptyCloudTranscriptState(input: {
+  latestProjectedSeq: number;
+  fallbackReason: CloudTranscriptStateFallbackReason;
+}): CloudTranscriptStateResult {
+  return {
+    transcript: null,
+    source: "empty",
+    envelopeCount: 0,
+    missingEnvelopeCount: 0,
+    latestEnvelopeSeq: 0,
+    latestProjectedSeq: input.latestProjectedSeq,
+    fallbackReason: input.fallbackReason,
+  };
+}
+
+function latestEnvelopeSeqFromEvents(
+  envelopes: readonly SessionEventEnvelope[],
+): number {
+  return envelopes.reduce((maxSeq, envelope) => Math.max(maxSeq, envelope.seq), 0);
 }
 
 function shouldUseEventRows(
