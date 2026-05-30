@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { act, cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   AUTH_PROVIDER_ORDER,
@@ -14,7 +14,10 @@ import { ConnectGitHubRequiredPanel } from "../src/auth/ConnectGitHubRequiredPan
 import { RedirectCallbackScreen } from "../src/auth/RedirectCallbackScreen";
 
 describe("auth product panels", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
 
   it("renders the shared provider order and sign-in copy", () => {
     render(
@@ -86,5 +89,49 @@ describe("auth product panels", () => {
     );
     expect(screen.getByText("Sign-in failed")).toBeTruthy();
     expect(screen.getByText("access_denied")).toBeTruthy();
+  });
+
+  it("resolves the handoff mark after the outgoing braille sweep", () => {
+    vi.useFakeTimers();
+
+    const { container } = render(
+      <RedirectCallbackScreen
+        title="Checking your session"
+        description="Opening Proliferate."
+        statusLabel="Desktop handoff"
+        variant="handoff"
+      />,
+    );
+
+    const mark = screen.getByTestId("redirect-callback-living-mark");
+    expect(mark.className).toContain("relative size-12");
+    expect(mark.className).toContain("overflow-hidden");
+    expect(screen.getByTestId("redirect-callback-braille-layer").className).toContain(
+      "absolute inset-0 flex items-center justify-center",
+    );
+
+    const seenFrames = new Set<string>();
+    const readBrailleFrame = () =>
+      screen.queryByTestId("redirect-callback-braille-layer")?.textContent ?? "";
+    seenFrames.add(readBrailleFrame());
+    for (let frame = 1; frame < 13; frame += 1) {
+      act(() => {
+        vi.advanceTimersByTime(60);
+      });
+      seenFrames.add(readBrailleFrame());
+    }
+    act(() => {
+      vi.advanceTimersByTime(120);
+    });
+
+    expect(screen.getByTestId("redirect-callback-icon-layer").className).toContain(
+      "absolute inset-0 flex items-center justify-center",
+    );
+    expect(screen.queryByTestId("redirect-callback-braille-layer")).toBeNull();
+    expect(seenFrames).toContain("⣿⣿");
+    expect(seenFrames).toContain("⣾⣿");
+    expect(seenFrames).toContain("⣴⣿");
+    expect(seenFrames).not.toContain("⠀⠀");
+    expect(container.querySelector(".animate-resolve-0")).toBeTruthy();
   });
 });

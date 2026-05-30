@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 
 import { Button } from "@proliferate/ui/primitives/Button";
+import { ProliferateIcon, ProliferateIconResolve } from "@proliferate/ui/proliferate-icons";
 
 export type RedirectCallbackTone = "neutral" | "success" | "error";
 
@@ -47,7 +48,6 @@ const BRAILLE_SWEEP_FRAMES = [
   "⢀⣴",
   "⠀⣠",
   "⠀⢀",
-  "⠀⠀",
 ] as const;
 
 const BRAILLE_FRAME_INTERVAL_MS = 60;
@@ -55,6 +55,7 @@ const ICON_ENTER_MS = 700;
 const ICON_HOLD_MS = 950;
 const ICON_EXIT_MS = 220;
 const BRAILLE_END_HOLD_MS = 120;
+const REDIRECT_MARK_LAYER_CLASS = "absolute inset-0 flex items-center justify-center";
 
 export function RedirectCallbackScreen({
   title,
@@ -200,6 +201,8 @@ function RedirectCallbackLivingMark() {
   );
   const [cycle, setCycle] = useState(0);
   const [brailleIndex, setBrailleIndex] = useState(0);
+  const iconClassName = "size-12 text-foreground";
+  const brailleFrame = BRAILLE_SWEEP_FRAMES[brailleIndex] ?? BRAILLE_SWEEP_FRAMES[0];
 
   useEffect(() => {
     if (phase !== "braille") {
@@ -260,56 +263,46 @@ function RedirectCallbackLivingMark() {
     return () => window.clearTimeout(timer);
   }, [phase]);
 
-  if (phase === "braille") {
-    return (
-      <span
-        aria-hidden="true"
-        className="inline-block w-[1em] shrink-0 font-mono text-5xl leading-none tracking-[-0.18em] text-foreground"
-      >
-        {BRAILLE_SWEEP_FRAMES[brailleIndex] ?? BRAILLE_SWEEP_FRAMES[0]}
-      </span>
-    );
-  }
-
   return (
-    <div className={phase === "icon-exit" ? "opacity-0 transition-opacity duration-200" : ""}>
-      <RedirectCallbackMark key={cycle} className="size-12 text-foreground" />
-    </div>
-  );
-}
-
-function RedirectCallbackMark({ className }: { className?: string }) {
-  const nodes = [
-    { x: 375, y: 375, size: 50 },
-    { x: 387.67, y: 305, size: 24.67 },
-    { x: 429, y: 346.33, size: 24.67 },
-    { x: 470.33, y: 387.67, size: 24.67 },
-    { x: 429, y: 429, size: 24.67 },
-    { x: 387.67, y: 470.33, size: 24.67 },
-    { x: 346.33, y: 429, size: 24.67 },
-    { x: 305, y: 387.67, size: 24.67 },
-    { x: 346.33, y: 346.33, size: 24.67 },
-  ];
-
-  return (
-    <svg
-      className={className}
-      viewBox="300 300 200 200"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      shapeRendering="crispEdges"
+    <div
       aria-hidden="true"
+      className="relative size-12 shrink-0 overflow-hidden"
+      data-testid="redirect-callback-living-mark"
     >
-      {nodes.map((node, index) => (
-        <rect
-          key={`redirect-callback-mark-${index}`}
-          x={node.x}
-          y={node.y}
-          width={node.size}
-          height={node.size}
-          fill="currentColor"
-        />
-      ))}
-    </svg>
+      {phase === "braille" ? (
+        <div
+          className={REDIRECT_MARK_LAYER_CLASS}
+          data-testid="redirect-callback-braille-layer"
+        >
+          <span className="inline-block w-[1em] shrink-0 font-mono text-5xl leading-none tracking-[-0.18em] text-foreground">
+            {brailleFrame}
+          </span>
+        </div>
+      ) : null}
+      {phase === "icon-enter" ? (
+        <div
+          className={REDIRECT_MARK_LAYER_CLASS}
+          data-testid="redirect-callback-icon-layer"
+        >
+          <ProliferateIconResolve key={cycle} className={iconClassName} />
+        </div>
+      ) : null}
+      {phase === "icon-hold" ? (
+        <div
+          className={REDIRECT_MARK_LAYER_CLASS}
+          data-testid="redirect-callback-icon-layer"
+        >
+          <ProliferateIcon className={iconClassName} />
+        </div>
+      ) : null}
+      {phase === "icon-exit" ? (
+        <div
+          className={twMerge(REDIRECT_MARK_LAYER_CLASS, "animate-brand-mark-fade-out")}
+          data-testid="redirect-callback-icon-layer"
+        >
+          <ProliferateIcon className={iconClassName} />
+        </div>
+      ) : null}
+    </div>
   );
 }
