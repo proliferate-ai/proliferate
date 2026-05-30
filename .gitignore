@@ -33,6 +33,7 @@ Thumbs.db
 e2b-connection.json
 .env.local
 .env.prod
+.env.prod.server
 .env.*.local
 
 reference/
