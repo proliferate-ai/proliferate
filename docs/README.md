@@ -1,13 +1,21 @@
 # Proliferate Docs
 
-This repo includes both:
+Docs exist to make product work predictable: where UI, state, logic, runtime
+behavior, and operating procedures live should be obvious before code changes.
+Read the relevant spec before touching code in that area and update it in the
+same PR when behavior or ownership changes.
 
-- implementation docs for Proliferate itself
-- implementation docs for AnyHarness itself
-- design/reference research snapshots
+## Top-Level Shape
 
-Read the relevant area doc before touching code in that area. Do that at the
-start of the task, not after implementation has already started.
+```text
+docs/
+  README.md
+  structures/   Folder rules, ownership boundaries, and code maps by system.
+  primitives/   Reusable product/runtime concepts used by multiple features.
+  features/     User-facing workflows and product surfaces.
+  dev/          Local dev, release, deployment, analytics, and ops runbooks.
+  tbd/          Docs that are intentionally not yet authoritative.
+```
 
 ## Documentation Style
 
@@ -16,126 +24,35 @@ cleanup promises, tentative caveats, or "eventually" architecture inside
 canonical guides and READMEs. If existing code violates a rule, name it as a
 migration exception and state the canonical owner/rule directly.
 
-## Authoritative development process
+## Where Things Go
 
-- `docs/dev/README.md`
-  - start here for local dev workflow
-- `docs/dev/running-locally.md`
-  - dev profiles, local Stripe, web, desktop, and mobile runbooks
-- `docs/dev/ci-cd.md`
-  - release workflows, staging deploys, production promotion, deployment infra,
-    updater publishing, and the desktop in-app update flow
+| Folder | Owns | Start here |
+| --- | --- | --- |
+| `docs/structures/` | Folder decomposition, dependency direction, ownership rules, and code maps for each major system. | `docs/structures/frontend/README.md`, `docs/structures/anyharness/README.md`, `docs/structures/proliferate-worker/README.md`, `docs/structures/server/README.md`, `docs/structures/desktop-native/README.md`, `docs/structures/sdk/README.md` |
+| `docs/primitives/` | Reusable product/runtime concepts: sandbox provisioning, workspace lifecycle, MCP/skills, agent auth, cloud commands, claiming, billing, model catalog, and related low-level contracts. | Read the primitive that owns the tables, command contracts, or runtime behavior you are changing. |
+| `docs/features/` | Product workflows and surfaces built from primitives: onboarding, automations, Slack, dispatch, chat surfaces, workspace files, product MCPs, and settings/admin IA. | Read the feature spec for the user-facing workflow being changed, plus any primitive it depends on. |
+| `docs/dev/` | How to run, verify, release, deploy, observe, and operate the repo. | `docs/dev/README.md`, `docs/dev/running-locally.md`, `docs/dev/ci-cd.md`, `docs/dev/reference/env-vars.yaml` |
+| `docs/tbd/` | Material that should not be treated as current operating law yet. | Move a doc out of `tbd` only when it has a clear owner and canonical contract. |
 
-## Authoritative frontend standards
+## Current Read Map
 
-- `docs/frontend/README.md`
-  - start here for frontend ownership, dependency direction, guides, and specs
-- `docs/frontend/guides/components.md`
-  - component ownership, UI primitive usage, and component folder hierarchy
-- `docs/frontend/guides/hooks.md`
-  - hook taxonomy, hook organization, and React behavior ownership
-- `docs/frontend/guides/state.md`
-  - Zustand, React Query, providers, local state, and derived state
-- `docs/frontend/guides/lib.md`
-  - domain logic, workflows, infra, and side-effect planners
-- `docs/frontend/guides/config.md`
-  - static constants, limits, option sets, route ids, defaults, and ordering
-- `docs/frontend/guides/copy.md`
-  - authored user-facing copy and reusable presentation mappings
-- `docs/frontend/guides/access.md`
-  - cloud, AnyHarness, and Tauri access boundaries
-- `docs/frontend/guides/styling.md`
-  - styling, theme token, and UI primitive rules
-- `docs/frontend/guides/telemetry.md`
-  - analytics, Sentry, replay masking, and telemetry payload rules
-- `docs/frontend/packages/README.md`
-  - shared frontend package ownership for design, UI primitives, product-domain
-    rules, product UI, and connected product surfaces
+| Area | Docs |
+| --- | --- |
+| Frontend apps and shared packages | `docs/structures/frontend/README.md`; focused guides under `docs/structures/frontend/guides/`; shared package rules in `docs/structures/frontend/packages/README.md`; feature specs under `docs/features/` |
+| Desktop native / Tauri | `docs/structures/desktop-native/README.md`; sidecar and agent seed specs under `docs/structures/desktop-native/specs/` |
+| AnyHarness runtime | `docs/structures/anyharness/README.md`; guides under `docs/structures/anyharness/guides/`; contract in `docs/structures/anyharness/contract.md`; active runtime specs under `docs/structures/anyharness/specs/` |
+| Proliferate Worker | `docs/structures/proliferate-worker/README.md` |
+| Server | `docs/structures/server/README.md`; focused guides under `docs/structures/server/guides/` |
+| AnyHarness SDKs | `docs/structures/sdk/README.md` |
+| Cloud provisioning, commands, auth, MCPs, billing, claiming | `docs/primitives/` |
+| Product workflows and surfaces | `docs/features/` |
+| Local dev, CI/CD, deployment, env vars, analytics, observability | `docs/dev/` |
 
-## Authoritative desktop native standards
+## Spec Rules
 
-- `docs/desktop/README.md`
-  - start here for the Tauri native shell, sidecar process ownership, bundled
-    resources, local secrets, and desktop native commands
-- `docs/desktop/specs/anyharness-sidecar.md`
-  - packaged AnyHarness sidecar build, lookup, launch, health, and restart flow
-- `docs/desktop/specs/agent-seeds.md`
-  - bundled agent seed build, Tauri resource lookup, hydration, ownership, and
-    reconcile interaction
-
-## Authoritative server standards
-
-- `docs/server/README.md`
-  - start here for backend control-plane structure, hard rules, ownership, and folder rules
-
-## Authoritative SDK standards
-
-- `docs/sdk/README.md`
-  - start here for `@anyharness/sdk` and `@anyharness/sdk-react` structure, boundaries, and ownership
-
-## Authoritative AnyHarness standards
-
-- `docs/anyharness/README.md`
-  - start here for runtime crate boundaries, runtime structure, ownership, code map, and read order
-- `docs/anyharness/guides/*.md`
-  - focused standards for crates, API, domains, live runtime, adapters,
-    integrations, harnesses, persistence, observability, and repo shape
-- `docs/anyharness/specs/*.md`
-  - focused runtime specs for flows such as the session engine and MCP
-- `docs/anyharness/contract.md`
-  - `anyharness-contract` transport schema rules
-- `docs/anyharness/src/*.md`
-  - legacy subsystem logic docs for ACP, agents, sessions, workspaces, git,
-    files, and persistence
-
-## Authoritative Proliferate Worker standards
-
-- `docs/proliferate-worker/README.md`
-  - target-side Worker structure, command downlink, event uplink, target status,
-    target-local effects, clients, store, and identity ownership
-
-## Analytics and lifecycle reference
-
-- `docs/analytics/anonymous-telemetry.md`
-  - first-party install-level analytics records, routing, and storage
-- `docs/analytics/metabase.md`
-  - first-party dashboard views, source tables, deferred metrics, and
-    read-only Metabase access
-- `docs/analytics/posthog.md`
-  - hosted-product desktop vendor analytics and replay
-- `docs/analytics/sentry.md`
-  - exception monitoring, Sentry projects, env vars, and alert ownership
-- `docs/analytics/customerio.md`
-  - Customer.io lifecycle messaging integration
-
-## Architecture reference
-
-- `docs/architecture/model-catalog-and-dynamic-registries.md`
-  - model catalog, target-discovered model registry, user visibility intent,
-    and launch-time model resolution boundaries
-- `docs/architecture/bifrost-byok-onboarding-spec.md`
-  - Bifrost-backed agent LLM data plane, managed onboarding credits, BYOK
-    materialization, E2B sandbox auth application, usage import, and local
-    AWS/E2B/Bifrost validation
-- `docs/architecture/workspace-pruning-worktree-management-spec.md`
-  - draft implementation spec for durable workspace lifecycle, worktree pruning,
-    archive/restore UX, materialization state, and rehydration
-
-## Deployment and environment reference
-
-- `docs/security/README.md`
-  - security index for deployment boundaries, sandbox isolation, auth, and
-    planned enterprise security coverage
-- `docs/reference/dev-profiles.md`
-  - local multi-worktree `make dev PROFILE=<name>` workflow, profile state,
-    port allocation, and generated Tauri runner behavior
-- `docs/reference/env-vars.yaml`
-  - canonical list of every env var across the stack, tagged by deployment mode
-- `docs/reference/env-secrets-matrix.md`
-  - operator-facing server env var surface
-- `docs/reference/workspace-command-environment.md`
-  - environment variables available to workspace run commands
-- `docs/reference/self-hosted-deploy.md`
-  - canonical Docker Compose self-hosted deployment
-- `docs/reference/self-hosted-aws.md`
-  - AWS CloudFormation one-click stack
+- Every durable feature, primitive, and structure rule belongs in a spec.
+- Start implementation by reading the relevant structure doc and primitive or
+  feature spec.
+- Align implementation with the spec before coding; do not add a separate
+  "best practices pass" after the product plan is already set.
+- Keep specs current in the same PR as the behavior they describe.
