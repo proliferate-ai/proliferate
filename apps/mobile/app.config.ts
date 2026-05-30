@@ -24,7 +24,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   ios: {
     bundleIdentifier: BUNDLE_ID,
-    buildNumber: "28",
+    buildNumber: "29",
     supportsTablet: true,
     usesAppleSignIn: true,
     associatedDomains: ["applinks:app.proliferate.ai"],
