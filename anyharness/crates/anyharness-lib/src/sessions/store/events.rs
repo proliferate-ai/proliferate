@@ -1,7 +1,7 @@
 use rusqlite::params;
 
+use super::persisted_payloads::sanitize_session_event_for_sqlite;
 use super::SessionStore;
-use crate::acp::persistence_sanitizer::sanitize_session_event_for_sqlite;
 use crate::sessions::model::SessionEventRecord;
 
 impl SessionStore {

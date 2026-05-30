@@ -1,4 +1,3 @@
-use agent_client_protocol as acp;
 use anyharness_contract::v1::{
     ContentPart, ItemCompletedEvent, ItemDeltaEvent, ItemStartedEvent, SessionEvent,
     TranscriptItemDeltaPayload, TranscriptItemPayload,
@@ -7,7 +6,7 @@ use anyharness_contract::v1::{
 const MAX_PERSISTED_OUTPUT_BYTES: usize = 16 * 1024;
 const TRUNCATION_MARKER: &str = "\n[truncated for storage]";
 
-pub fn sanitize_session_event_for_sqlite(event: &SessionEvent) -> SessionEvent {
+pub(crate) fn sanitize_session_event_for_sqlite(event: &SessionEvent) -> SessionEvent {
     let mut event = event.clone();
     match &mut event {
         SessionEvent::ItemStarted(ItemStartedEvent { item }) => sanitize_item_payload(item),
@@ -18,15 +17,7 @@ pub fn sanitize_session_event_for_sqlite(event: &SessionEvent) -> SessionEvent {
     event
 }
 
-pub fn sanitize_raw_notification_for_sqlite(
-    notification: &acp::SessionNotification,
-) -> serde_json::Value {
-    let mut value = serde_json::to_value(notification).unwrap_or_else(|_| serde_json::Value::Null);
-    sanitize_generated_output_json(&mut value);
-    value
-}
-
-pub fn sanitize_raw_notification_json_for_sqlite(payload_json: &str) -> String {
+pub(crate) fn sanitize_raw_notification_json_for_sqlite(payload_json: &str) -> String {
     let Ok(mut value) = serde_json::from_str::<serde_json::Value>(payload_json) else {
         return payload_json.to_string();
     };

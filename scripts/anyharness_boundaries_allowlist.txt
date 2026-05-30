@@ -6,8 +6,6 @@
 # This is migration debt, not permission for new code. If a cleanup reduces a
 # count, update this file in the same PR.
 
-SESSION_STORE_LIVE_IMPORT anyharness/crates/anyharness-lib/src/sessions/store/events.rs 1 transitional session event sanitizer still lives under live session event sink
-SESSION_STORE_LIVE_IMPORT anyharness/crates/anyharness-lib/src/sessions/store/notifications.rs 1 transitional raw notification sanitizer still lives under live session event sink
 CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/mcp_bindings/injection.rs 2 transitional session MCP injection still imports product MCP modules
 CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/mcp_bindings/product_catalog.rs 2 transitional session MCP catalog still imports product MCP auth modules
 CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/mcp_bindings/selection.rs 2 transitional session MCP selection still imports product MCP modules

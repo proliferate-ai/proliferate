@@ -7,6 +7,7 @@ mod links;
 mod live_config;
 mod notifications;
 mod pending_prompts;
+pub(crate) mod persisted_payloads;
 pub(crate) mod sessions;
 
 #[cfg(test)]

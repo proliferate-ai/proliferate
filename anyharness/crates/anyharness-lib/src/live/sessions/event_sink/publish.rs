@@ -1,7 +1,6 @@
 use tokio::sync::broadcast;
 
 use super::SessionEventSink;
-use crate::acp::persistence_sanitizer::sanitize_session_event_for_sqlite;
 use crate::sessions::model::SessionEventRecord;
 use crate::sessions::runtime_event::RuntimeEventInjectionError;
 use crate::sessions::store::SessionStore;
@@ -55,8 +54,7 @@ pub(crate) fn publish_session_event(
         event,
     };
 
-    let persisted_event = sanitize_session_event_for_sqlite(&envelope.event);
-    let payload_json = serde_json::to_string(&persisted_event).unwrap_or_default();
+    let payload_json = serde_json::to_string(&envelope.event).unwrap_or_default();
     tracing::debug!(session_id = %session_id, seq = seq, "event_sink: event persisted");
     let record = SessionEventRecord {
         id: 0,
@@ -97,8 +95,7 @@ pub(super) fn publish_session_event_strict(
         item_id: item_id.clone(),
         event,
     };
-    let persisted_event = sanitize_session_event_for_sqlite(&envelope.event);
-    let payload_json = serde_json::to_string(&persisted_event)
+    let payload_json = serde_json::to_string(&envelope.event)
         .map_err(|error| RuntimeEventInjectionError::PersistenceFailed(error.to_string()))?;
     let record = SessionEventRecord {
         id: 0,
