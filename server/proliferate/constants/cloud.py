@@ -497,6 +497,7 @@ class CloudCommandKind(StrEnum):
     materialize_environment = "materialize_environment"
     refresh_agent_auth_config = "refresh_agent_auth_config"
     send_prompt = "send_prompt"
+    decide_plan = "decide_plan"
     resolve_interaction = "resolve_interaction"
     update_session_config = "update_session_config"
     cancel_turn = "cancel_turn"
@@ -543,6 +544,7 @@ ACTIVE_CLOUD_COMMAND_KINDS: tuple[str, ...] = (
     CloudCommandKind.materialize_environment.value,
     CloudCommandKind.refresh_agent_auth_config.value,
     CloudCommandKind.send_prompt.value,
+    CloudCommandKind.decide_plan.value,
     CloudCommandKind.resolve_interaction.value,
     CloudCommandKind.update_session_config.value,
     CloudCommandKind.cancel_turn.value,
@@ -556,6 +558,7 @@ DEFAULT_CLOUD_WORKER_COMMAND_KINDS: tuple[str, ...] = (
     CloudCommandKind.materialize_workspace.value,
     CloudCommandKind.materialize_environment.value,
     CloudCommandKind.send_prompt.value,
+    CloudCommandKind.decide_plan.value,
     CloudCommandKind.resolve_interaction.value,
     CloudCommandKind.update_session_config.value,
     CloudCommandKind.cancel_turn.value,

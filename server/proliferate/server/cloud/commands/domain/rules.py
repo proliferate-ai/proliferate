@@ -35,6 +35,19 @@ _PRUNE_WORKSPACE_WORKTREE_FIELDS = {
     "cloudWorkspaceId",
     "reason",
 }
+_RUNTIME_CONFIG_PREFLIGHT_FIELDS = {
+    "sandboxProfileId",
+    "requiredRuntimeConfigRevisionId",
+    "requiredRuntimeConfigSequence",
+    "requiredRuntimeConfigContentHash",
+}
+_DECIDE_PLAN_FIELDS = {
+    "workspaceId",
+    "planId",
+    "decision",
+    "expectedDecisionVersion",
+    *_RUNTIME_CONFIG_PREFLIGHT_FIELDS,
+}
 _CONFIGURE_GIT_IDENTITY_FIELDS = {"targetGitIdentityId", "configVersion"}
 _ENSURE_REPO_CHECKOUT_FIELDS = {"provider", "owner", "name", "path", "baseBranch"}
 _REFRESH_AGENT_AUTH_CONFIG_FIELDS = {
@@ -110,6 +123,7 @@ def validate_command_shape(
         kind
         in {
             CloudCommandKind.send_prompt.value,
+            CloudCommandKind.decide_plan.value,
             CloudCommandKind.resolve_interaction.value,
             CloudCommandKind.update_session_config.value,
             CloudCommandKind.cancel_turn.value,
@@ -140,7 +154,15 @@ def validate_command_payload(*, kind: str, payload: dict[str, object]) -> None:
     if kind == CloudCommandKind.refresh_agent_auth_config.value:
         _validate_refresh_agent_auth_config_payload(payload)
         return
-    if kind in {CloudCommandKind.start_session.value, CloudCommandKind.send_prompt.value}:
+    if kind in {
+        CloudCommandKind.start_session.value,
+        CloudCommandKind.send_prompt.value,
+        CloudCommandKind.decide_plan.value,
+    }:
+        if kind == CloudCommandKind.decide_plan.value:
+            _validate_decide_plan_payload(payload)
+            _validate_optional_runtime_config_preflight_payload(kind=kind, payload=payload)
+            return
         _validate_optional_agent_auth_preflight_payload(kind=kind, payload=payload)
         _validate_optional_runtime_config_preflight_payload(kind=kind, payload=payload)
         return
@@ -209,6 +231,51 @@ def _validate_prune_workspace_worktree_payload(payload: dict[str, object]) -> No
     _optional_string(payload, "workspaceId")
     _optional_string(payload, "cloudWorkspaceId")
     _optional_string(payload, "reason")
+
+
+def _validate_decide_plan_payload(payload: dict[str, object]) -> None:
+    _reject_unknown_fields(
+        payload,
+        _DECIDE_PLAN_FIELDS,
+        code="cloud_command_decide_plan_payload_unknown",
+        message_prefix="decide_plan payload contains unsupported field(s): ",
+    )
+    _required_string(
+        payload,
+        "workspaceId",
+        code="cloud_command_decide_plan_workspace_required",
+        message="decide_plan payload must contain workspaceId.",
+    )
+    _required_string(
+        payload,
+        "planId",
+        code="cloud_command_decide_plan_plan_required",
+        message="decide_plan payload must contain planId.",
+    )
+    decision = _required_string(
+        payload,
+        "decision",
+        code="cloud_command_decide_plan_decision_required",
+        message="decide_plan payload must contain decision.",
+    )
+    if decision not in {"approve", "reject"}:
+        raise CloudApiError(
+            "cloud_command_decide_plan_decision_invalid",
+            "decide_plan decision must be approve or reject.",
+            status_code=400,
+        )
+    version = _required_int(
+        payload,
+        "expectedDecisionVersion",
+        code="cloud_command_decide_plan_version_required",
+        message="decide_plan payload must contain expectedDecisionVersion.",
+    )
+    if version < 0:
+        raise CloudApiError(
+            "cloud_command_decide_plan_version_invalid",
+            "decide_plan expectedDecisionVersion must be non-negative.",
+            status_code=400,
+        )
 
 
 def _validate_configure_git_identity_payload(payload: dict[str, object]) -> None:

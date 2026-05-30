@@ -23,37 +23,32 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@proliferate/ui/primitives/Button";
+import type { CloudChatTranscriptRowView } from "@proliferate/product-domain/chats/cloud/transcript-view";
 import { AssistantMessage } from "./transcript/AssistantMessage";
 import { CopyMessageButton } from "./transcript/CopyMessageButton";
+import { ProposedPlanCard } from "./transcript/ProposedPlanCard";
 
 const STREAM_FLUSH_MS = 32;
 const MIN_STREAM_STEP = 20;
 const MAX_STREAM_STEP = 120;
 
-export type CloudChatTranscriptRowKind =
-  | "assistant"
-  | "error"
-  | "system"
-  | "thought"
-  | "tool"
-  | "tool_group"
-  | "user";
-
-export interface CloudChatTranscriptRowView {
-  id: string;
-  kind: CloudChatTranscriptRowKind;
-  title?: string | null;
-  body?: string | null;
-  detail?: string | null;
-  status?: string | null;
-  streaming?: boolean;
-  children?: CloudChatTranscriptRowView[];
-}
+export type {
+  CloudChatTranscriptRowKind,
+  CloudChatTranscriptRowView,
+} from "@proliferate/product-domain/chats/cloud/transcript-view";
 
 export interface CloudChatTranscriptProps {
   rows: readonly CloudChatTranscriptRowView[];
   emptyTitle: string;
   emptyDescription?: string;
+  planActions?: CloudChatTranscriptPlanActions;
+}
+
+export interface CloudChatTranscriptPlanActions {
+  approvePlan?: (planId: string, expectedDecisionVersion: number) => void;
+  rejectPlan?: (planId: string, expectedDecisionVersion: number) => void;
+  isApprovingPlan?: boolean | ((planId: string, expectedDecisionVersion: number) => boolean);
+  isRejectingPlan?: boolean | ((planId: string, expectedDecisionVersion: number) => boolean);
 }
 
 type MdElementProps = HTMLAttributes<HTMLElement> & {
@@ -79,6 +74,7 @@ export function CloudChatTranscript({
   rows,
   emptyTitle,
   emptyDescription,
+  planActions,
 }: CloudChatTranscriptProps) {
   if (rows.length === 0) {
     return (
@@ -92,15 +88,33 @@ export function CloudChatTranscript({
   }
 
   return (
+    <CloudChatTranscriptRows rows={rows} planActions={planActions} />
+  );
+}
+
+export function CloudChatTranscriptRows({
+  rows,
+  planActions,
+}: {
+  rows: readonly CloudChatTranscriptRowView[];
+  planActions?: CloudChatTranscriptPlanActions;
+}) {
+  return (
     <div className="space-y-4">
       {rows.map((row) => (
-        <CloudChatTranscriptRow key={row.id} row={row} />
+        <CloudChatTranscriptRow key={row.id} row={row} planActions={planActions} />
       ))}
     </div>
   );
 }
 
-function CloudChatTranscriptRow({ row }: { row: CloudChatTranscriptRowView }) {
+export function CloudChatTranscriptRow({
+  row,
+  planActions,
+}: {
+  row: CloudChatTranscriptRowView;
+  planActions?: CloudChatTranscriptPlanActions;
+}) {
   if (row.kind === "user") {
     return (
       <CloudChatUserMessage
@@ -130,6 +144,10 @@ function CloudChatTranscriptRow({ row }: { row: CloudChatTranscriptRowView }) {
     );
   }
 
+  if (row.kind === "proposed_plan") {
+    return <CloudChatProposedPlanRow row={row} planActions={planActions} />;
+  }
+
   if (row.kind === "thought") {
     return <CloudChatThoughtRow row={row} />;
   }
@@ -156,6 +174,67 @@ function CloudChatTranscriptRow({ row }: { row: CloudChatTranscriptRowView }) {
   return <CloudChatToolRow row={row} />;
 }
 
+function CloudChatProposedPlanRow({
+  row,
+  planActions,
+}: {
+  row: CloudChatTranscriptRowView;
+  planActions?: CloudChatTranscriptPlanActions;
+}) {
+  const planId = row.planId ?? null;
+  const decisionVersion = row.planDecisionVersion ?? null;
+  const canDecide = !!planId && decisionVersion !== null;
+  return (
+    <article className="flex justify-start">
+      <div className="flex w-full max-w-full flex-col break-words" data-telemetry-mask>
+        <ProposedPlanCard
+          title={row.planTitle ?? row.title ?? "Plan"}
+          content={row.planBodyMarkdown ?? row.body ?? ""}
+          isStreaming={Boolean(row.streaming)}
+          decisionState={row.planDecisionState ?? null}
+          nativeResolutionState={row.planNativeResolutionState ?? null}
+          decisionVersion={decisionVersion}
+          errorMessage={row.planErrorMessage ?? null}
+          nativeContinuation={Boolean(row.planNativeContinuation)}
+          onApprove={
+            canDecide && planActions?.approvePlan
+              ? () => planActions.approvePlan!(planId, decisionVersion)
+              : undefined
+          }
+          onReject={
+            canDecide && planActions?.rejectPlan
+              ? () => planActions.rejectPlan!(planId, decisionVersion)
+              : undefined
+          }
+          isApproving={planDecisionActionActive(
+            planActions?.isApprovingPlan,
+            planId,
+            decisionVersion,
+          )}
+          isRejecting={planDecisionActionActive(
+            planActions?.isRejectingPlan,
+            planId,
+            decisionVersion,
+          )}
+        />
+      </div>
+    </article>
+  );
+}
+
+function planDecisionActionActive(
+  value: CloudChatTranscriptPlanActions["isApprovingPlan"],
+  planId: string | null,
+  expectedDecisionVersion: number | null,
+): boolean {
+  if (typeof value === "function") {
+    return !!planId && expectedDecisionVersion !== null
+      ? value(planId, expectedDecisionVersion)
+      : false;
+  }
+  return Boolean(value);
+}
+
 function CloudChatAssistantLoadingRow({ row }: { row: CloudChatTranscriptRowView }) {
   return (
     <article
@@ -164,7 +243,7 @@ function CloudChatAssistantLoadingRow({ row }: { row: CloudChatTranscriptRowView
       data-chat-transcript-ignore
     >
       <div
-        className="max-w-full truncate text-chat italic leading-[var(--text-chat--line-height)] text-[#f59e0b]"
+        className="max-w-full truncate text-chat italic leading-[var(--text-chat--line-height)] text-muted-foreground/80"
         data-telemetry-mask
       >
         {loadingStatusLabel(row)}

@@ -443,8 +443,7 @@ async def complete_cloud_mcp_oauth_callback(
         return _callback_result(failed, ok=False, status=failed.status)
     if not code:
         failed = (
-            await fail_oauth_flow(db, flow_id=flow.id, failure_code="invalid_callback")
-            or flow
+            await fail_oauth_flow(db, flow_id=flow.id, failure_code="invalid_callback") or flow
         )
         if connection is not None:
             await _record_oauth_connection_event(
@@ -476,8 +475,7 @@ async def complete_cloud_mcp_oauth_callback(
         return _callback_result(failed, ok=False, status="failed")
     if connection is None:
         failed = (
-            await fail_oauth_flow(db, flow_id=flow.id, failure_code="connection_deleted")
-            or flow
+            await fail_oauth_flow(db, flow_id=flow.id, failure_code="connection_deleted") or flow
         )
         return _callback_result(failed, ok=False, status="failed")
     oauth_client = await get_oauth_client(

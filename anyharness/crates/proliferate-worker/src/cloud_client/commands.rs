@@ -99,6 +99,7 @@ pub const SUPPORTED_COMMAND_KINDS: &[&str] = &[
     "materialize_environment",
     "refresh_agent_auth_config",
     "send_prompt",
+    "decide_plan",
     "resolve_interaction",
     "update_session_config",
     "cancel_turn",

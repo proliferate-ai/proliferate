@@ -1,4 +1,5 @@
 import { Cloud, GitBranch } from "lucide-react";
+import { twMerge } from "tailwind-merge";
 import { EmptyState } from "@proliferate/ui/layout/EmptyState";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 
@@ -24,8 +25,15 @@ export function CloudWorkspaceList({
 }: CloudWorkspaceListProps) {
   if (loading) {
     return (
-      <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-        Loading workspaces
+      <div
+        className="grid gap-3"
+        role="status"
+        aria-live="polite"
+        aria-label="Loading workspaces"
+      >
+        <WorkspaceListSkeletonRow />
+        <WorkspaceListSkeletonRow widthClassName="w-[88%]" />
+        <span className="sr-only">Loading workspaces</span>
       </div>
     );
   }
@@ -78,5 +86,32 @@ export function CloudWorkspaceList({
         </article>
       ))}
     </div>
+  );
+}
+
+function WorkspaceListSkeletonRow({ widthClassName = "w-full" }: { widthClassName?: string }) {
+  return (
+    <div className={twMerge("rounded-lg bg-foreground/5 p-4", widthClassName)}>
+      <div className="flex items-center gap-2">
+        <SkeletonBlock className="size-8 rounded-md" />
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <SkeletonBlock className="h-2 w-40" />
+          <SkeletonBlock className="h-2 w-28 bg-muted/45" />
+        </div>
+      </div>
+      <div className="mt-4 flex gap-2">
+        <SkeletonBlock className="h-6 w-24 bg-muted/45" />
+        <SkeletonBlock className="h-6 w-20 bg-muted/45" />
+      </div>
+    </div>
+  );
+}
+
+function SkeletonBlock({ className }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={twMerge("block rounded-md bg-muted/60 motion-safe:animate-pulse", className)}
+    />
   );
 }

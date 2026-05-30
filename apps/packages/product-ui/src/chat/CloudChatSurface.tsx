@@ -19,8 +19,13 @@ import {
 } from "./CloudChatComposer";
 import {
   CloudChatTranscript,
+  type CloudChatTranscriptPlanActions,
   type CloudChatTranscriptRowView,
 } from "./CloudChatTranscript";
+import {
+  CloudChatTranscriptState,
+  type CloudChatTranscriptStateView,
+} from "./CloudChatTranscriptState";
 
 export interface CloudChatHeaderActionView {
   label: string;
@@ -84,6 +89,9 @@ export interface CloudChatHeaderView {
 export interface CloudChatSurfaceProps {
   header: CloudChatHeaderView;
   transcriptRows: readonly CloudChatTranscriptRowView[];
+  transcriptState?: CloudChatTranscriptStateView | null;
+  transcriptStatus?: string | null;
+  transcriptPlanActions?: CloudChatTranscriptPlanActions;
   emptyTitle: string;
   emptyDescription?: string;
   composer: CloudChatComposerView;
@@ -94,6 +102,9 @@ export interface CloudChatSurfaceProps {
 export function CloudChatSurface({
   header,
   transcriptRows,
+  transcriptState = null,
+  transcriptStatus = null,
+  transcriptPlanActions,
   emptyTitle,
   emptyDescription,
   composer,
@@ -140,15 +151,26 @@ export function CloudChatSurface({
       </header>
       {header.notice ? <CloudChatHeaderNotice notice={header.notice} /> : null}
 
-      <div className="web-scrollbar min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-3xl flex-col px-6 py-6">
-          <CloudChatTranscript
-            rows={transcriptRows}
-            emptyTitle={emptyTitle}
-            emptyDescription={emptyDescription}
-          />
+      {transcriptState ? (
+        <CloudChatTranscriptState
+          view={transcriptState}
+          emptyTitle={emptyTitle}
+          emptyDescription={emptyDescription}
+          pendingStatus={transcriptStatus}
+          planActions={transcriptPlanActions}
+        />
+      ) : (
+        <div className="web-scrollbar min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto flex w-full max-w-3xl flex-col px-6 py-6">
+            <CloudChatTranscript
+              rows={transcriptRows}
+              emptyTitle={emptyTitle}
+              emptyDescription={emptyDescription}
+              planActions={transcriptPlanActions}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       <footer className="relative z-20 shrink-0 border-t border-border/40 px-6 py-4">
         <CloudChatComposer composer={composer} />

@@ -8,11 +8,12 @@ import {
   Hash,
   LifeBuoy,
   ListFilter,
-  LoaderCircle,
+  Monitor,
   PanelLeftClose,
   Plus,
   Settings,
   Smartphone,
+  Terminal,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -107,18 +108,16 @@ export function WebSidebarController({
     () => buildNavItems(location.pathname, routeState),
     [location.pathname, routeState],
   );
+  const workspaceSectionLoading = (workspaces.isLoading || activeWorkspaceSnapshot.isLoading) &&
+    cloudWorkspaces.length === 0;
   const workspaceSectionMessage = useMemo(
     () => buildWorkspaceSectionMessage({
-      isLoading: (workspaces.isLoading || activeWorkspaceSnapshot.isLoading) &&
-        cloudWorkspaces.length === 0,
       hasError: Boolean(workspaces.error) && cloudWorkspaces.length === 0,
       hasWorkspaces: cloudWorkspaces.length > 0,
     }),
     [
-      activeWorkspaceSnapshot.isLoading,
       cloudWorkspaces.length,
       workspaces.error,
-      workspaces.isLoading,
     ],
   );
   const recentItems = useMemo(
@@ -264,30 +263,6 @@ export function WebSidebarController({
       });
       return;
     }
-    if (
-      event.scope === "workspace" &&
-      event.actionId === "open-latest-session" &&
-      event.itemId
-    ) {
-      const sessionId = latestSessionByWorkspaceId.get(event.itemId);
-      if (sessionId) {
-        navigate(routes.chat(event.itemId, sessionId));
-      }
-      return;
-    }
-    if (event.scope === "workspace" && event.actionId === "open-workspace" && event.itemId) {
-      const item = recentItemByRowId.get(event.itemId);
-      if (item) {
-        navigate(routes.workspace(item.workspaceId));
-      }
-      return;
-    }
-    if (event.scope === "chat" && event.actionId === "open-workspace" && event.itemId) {
-      const item = recentItems.find((candidate) => candidate.sessionId === event.itemId);
-      if (item) {
-        navigate(routes.workspace(item.workspaceId));
-      }
-    }
   }
 
   return (
@@ -309,6 +284,7 @@ export function WebSidebarController({
         workspaceGroups={workspaceGroups}
         workspaceSectionLabel="Recents"
         workspaceSectionActions={filterAction}
+        workspaceSectionPanel={workspaceSectionLoading ? <SidebarLoadingState /> : null}
         workspaceSectionMessage={workspaceSectionMessage}
         footerActions={[
           {
@@ -390,13 +366,7 @@ function buildRecentWorkspaceGroups(input: {
       ),
       detail: null,
       trailingLabel: item.lastActivityLabel,
-      actions: item.rowKind === "session"
-        ? [{
-          id: "open-workspace",
-          label: "Open workspace",
-          icon: <Cloud className="size-3.5" />,
-        }]
-        : [],
+      actions: [],
     })),
     actions: [],
   }];
@@ -437,20 +407,36 @@ function recentRowIsActive(
 }
 
 function RecentSourceIndicator({ item }: { item: RecentWorkItemView }) {
-  const icon = sourceIcon(item.sourceKind);
+  const icon = runtimeIcon(item.runtimeLocation, item.sourceKind);
   return (
     <span
       className="flex size-4 items-center justify-center text-sidebar-muted-foreground"
-      title={sourceIndicatorLabel(item)}
-      aria-label={sourceIndicatorLabel(item)}
+      title={runtimeIndicatorLabel(item)}
+      aria-label={runtimeIndicatorLabel(item)}
     >
       {icon}
     </span>
   );
 }
 
-function sourceIcon(source: RecentWorkSourceKind): ReactNode {
-  switch (source) {
+function runtimeIcon(
+  runtimeLocation: RecentWorkRuntimeLocation,
+  sourceKind: RecentWorkSourceKind,
+): ReactNode {
+  switch (runtimeLocation) {
+    case "local_desktop":
+      return <Monitor className="size-3.5" />;
+    case "ssh_remote":
+      return <Terminal className="size-3.5" />;
+    case "offline":
+      return <CircleAlert className="size-3.5" />;
+    case "cloud_sandbox":
+      return <Cloud className="size-3.5" />;
+    case "unknown":
+      break;
+  }
+
+  switch (sourceKind) {
     case "mobile":
       return <Smartphone className="size-3.5" />;
     case "slack":
@@ -467,27 +453,9 @@ function sourceIcon(source: RecentWorkSourceKind): ReactNode {
   }
 }
 
-function sourceIndicatorLabel(item: RecentWorkItemView): string {
-  switch (item.sourceKind) {
-    case "mobile":
-      return "Mobile dispatch";
-    case "web":
-      return item.ownership === "unclaimed"
-        ? "Cloud workspace, unclaimed"
-        : "Cloud workspace";
-    case "slack":
-      return "Slack";
-    case "personal_automation":
-    case "team_automation":
-      return "Automation";
-    case "desktop_exposed":
-    case "cloud_sandbox":
-    case "api":
-    case "unknown":
-      return item.ownership === "unclaimed"
-        ? "Cloud workspace, unclaimed"
-        : "Cloud workspace";
-  }
+function runtimeIndicatorLabel(item: RecentWorkItemView): string {
+  const ownership = item.ownership === "unclaimed" ? " Unclaimed." : "";
+  return `Runtime: ${item.runtimeLabel}. Source: ${item.sourceLabel}.${ownership}`;
 }
 
 function RecentFilterPopover({
@@ -625,20 +593,32 @@ function FilterMenuOption({
   );
 }
 
+function SidebarLoadingState() {
+  return (
+    <div className="flex flex-col gap-1 py-1" aria-label="Loading cloud workspaces" role="status">
+      <SkeletonBlock className="h-7 w-full bg-sidebar-accent" />
+      <SkeletonBlock className="h-7 w-[82%] bg-sidebar-accent/80" />
+      <SkeletonBlock className="h-7 w-[68%] bg-sidebar-accent/70" />
+      <span className="sr-only">Loading cloud workspaces</span>
+    </div>
+  );
+}
+
+function SkeletonBlock({ className }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`block rounded-md bg-sidebar-accent motion-safe:animate-pulse ${className ?? ""}`}
+    />
+  );
+}
+
 function buildWorkspaceSectionMessage(input: {
-  isLoading: boolean;
   hasError: boolean;
   hasWorkspaces: boolean;
 }): SidebarSectionMessageView | null {
   if (input.hasWorkspaces) {
     return null;
-  }
-  if (input.isLoading) {
-    return {
-      title: "Loading cloud workspaces",
-      description: "Fetching exposed and claimed workspaces for this account.",
-      status: <LoaderCircle className="size-3.5 animate-spin" />,
-    };
   }
   if (input.hasError) {
     return {

@@ -3,6 +3,7 @@ use reqwest::StatusCode;
 use serde_json::Value;
 use tokio::time::{sleep, Duration, Instant};
 
+use crate::commands::mapping::PlanDecision;
 use crate::error::WorkerError;
 
 use super::AnyHarnessClient;
@@ -76,6 +77,33 @@ impl AnyHarnessClient {
             body,
         )
         .await
+    }
+
+    pub async fn decide_plan(
+        &self,
+        workspace_id: &str,
+        plan_id: &str,
+        decision: &PlanDecision,
+        expected_decision_version: i64,
+    ) -> Result<AnyHarnessCommandResponse, WorkerError> {
+        let action = match decision {
+            PlanDecision::Approve => "approve",
+            PlanDecision::Reject => "reject",
+        };
+        let response = self
+            .authenticate(self.http().post(format!(
+                "{}/v1/workspaces/{}/plans/{}/{}",
+                self.base_url(),
+                workspace_id,
+                plan_id,
+                action
+            )))
+            .json(&serde_json::json!({
+                "expectedDecisionVersion": expected_decision_version,
+            }))
+            .send()
+            .await?;
+        parse_anyharness_response(response).await
     }
 
     pub async fn update_session_config(

@@ -445,6 +445,9 @@ importers:
       '@proliferate/ui':
         specifier: workspace:*
         version: link:../ui
+      '@tanstack/react-virtual':
+        specifier: 3.13.24
+        version: 3.13.24(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.1.0)

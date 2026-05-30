@@ -5,10 +5,10 @@ import {
   TRANSCRIPT_VIRTUALIZATION_STORAGE_KEY,
   type TranscriptVirtualizationMode,
 } from "@proliferate/product-domain/chats/transcript/transcript-virtualization-config";
-import { FullTranscriptRowList } from "@/components/workspace/chat/transcript/FullTranscriptRowList";
 import type {
   TranscriptRowListBaseProps,
-} from "@/components/workspace/chat/transcript/TranscriptRowListShared";
+} from "./TranscriptRowListShared";
+import { FullTranscriptRowList } from "./FullTranscriptRowList";
 import { VirtualizedTranscriptRowList } from "./VirtualizedTranscriptRowList";
 
 const LEGACY_ENABLE_VIRTUALIZATION_STORAGE_KEY = "proliferate:enableTranscriptVirtualization";

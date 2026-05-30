@@ -1660,6 +1660,234 @@ class TestCloudCommandsApi:
         assert command_payload["requiredRuntimeConfigContentHash"]
 
     @pytest.mark.asyncio
+    async def test_managed_decide_plan_stamps_projected_workspace(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-decide-plan",
+        )
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="decide-plan",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="decide-plan",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-decide-plan",
+        )
+        await db_session.commit()
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "managed-decide-plan",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-decide-plan",
+                "kind": "decide_plan",
+                "payload": {
+                    "workspaceId": "anyharness-managed-decide-plan",
+                    "planId": "plan-1",
+                    "decision": "approve",
+                    "expectedDecisionVersion": 0,
+                },
+            },
+        )
+
+        assert created.status_code == 200, created.text
+        payload = created.json()
+        assert payload["workspaceId"] == "anyharness-managed-decide-plan"
+        assert payload["cloudWorkspaceId"] == cloud_workspace_id
+        command = await db_session.get(CloudCommand, UUID(payload["commandId"]))
+        assert command is not None
+        assert command.workspace_id == "anyharness-managed-decide-plan"
+        command_payload = json.loads(command.payload_json)
+        assert command_payload["workspaceId"] == "anyharness-managed-decide-plan"
+        assert command_payload["sandboxProfileId"] == str(profile.id)
+        assert command_payload["requiredRuntimeConfigRevisionId"]
+        assert command_payload["requiredRuntimeConfigContentHash"]
+
+    @pytest.mark.asyncio
+    async def test_managed_decide_plan_rejects_payload_workspace_mismatch(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-decide-plan-mismatch",
+        )
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="decide-plan-mismatch",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="decide-plan-mismatch",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-decide-plan-mismatch",
+        )
+        await db_session.commit()
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "managed-decide-plan-mismatch",
+                "targetId": target_id,
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-decide-plan-mismatch",
+                "kind": "decide_plan",
+                "payload": {
+                    "workspaceId": cloud_workspace_id,
+                    "planId": "plan-1",
+                    "decision": "approve",
+                    "expectedDecisionVersion": 0,
+                },
+            },
+        )
+
+        assert created.status_code == 409
+        assert created.json()["detail"]["code"] == "cloud_command_workspace_target_mismatch"
+
+    @pytest.mark.asyncio
+    async def test_managed_decide_plan_rejects_missing_projected_runtime_workspace(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-command-decide-plan-missing-workspace",
+        )
+        target_id, _worker_headers, profile = await _create_managed_profile_target(
+            client,
+            db_session,
+            auth,
+            suffix="decide-plan-missing-workspace",
+        )
+        target_uuid = UUID(target_id)
+        await _mark_agent_and_runtime_config_applied(
+            db_session,
+            target_id=target_uuid,
+            profile=profile,
+            user_id=UUID(auth.user_id),
+        )
+        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
+            db_session,
+            profile_id=profile.id,
+            target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="decide-plan-missing-workspace",
+        )
+        await _seed_managed_session_projection(
+            db_session,
+            target_id=target_uuid,
+            cloud_workspace_id=cloud_workspace_id,
+            user_id=UUID(auth.user_id),
+            session_id="session-decide-plan-missing-workspace",
+        )
+        projection = (
+            await db_session.execute(
+                select(CloudSessionProjection).where(
+                    CloudSessionProjection.target_id == target_uuid,
+                    CloudSessionProjection.session_id == "session-decide-plan-missing-workspace",
+                )
+            )
+        ).scalar_one()
+        projection.workspace_id = None
+        exposure = (
+            await db_session.execute(
+                select(CloudWorkspaceExposure).where(
+                    CloudWorkspaceExposure.target_id == target_uuid,
+                    CloudWorkspaceExposure.cloud_workspace_id == UUID(cloud_workspace_id),
+                )
+            )
+        ).scalar_one()
+        exposure.anyharness_workspace_id = None
+        await db_session.commit()
+        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+
+        created = await client.post(
+            "/v1/cloud/commands",
+            headers=auth.headers,
+            json={
+                "idempotencyKey": "managed-decide-plan-missing-workspace",
+                "targetId": target_id,
+                "workspaceId": "caller-supplied-workspace",
+                "cloudWorkspaceId": cloud_workspace_id,
+                "sessionId": "session-decide-plan-missing-workspace",
+                "kind": "decide_plan",
+                "payload": {
+                    "workspaceId": "caller-supplied-workspace",
+                    "planId": "plan-1",
+                    "decision": "approve",
+                    "expectedDecisionVersion": 0,
+                },
+            },
+        )
+
+        assert created.status_code == 409
+        assert created.json()["detail"]["code"] == "cloud_command_workspace_required"
+        queued = (
+            await db_session.execute(
+                select(CloudCommand).where(
+                    CloudCommand.target_id == target_uuid,
+                    CloudCommand.kind == "decide_plan",
+                    CloudCommand.idempotency_key == "managed-decide-plan-missing-workspace",
+                )
+            )
+        ).scalar_one_or_none()
+        assert queued is None
+
+    @pytest.mark.asyncio
     async def test_web_send_prompt_records_pending_prompt_interaction(
         self,
         client: AsyncClient,

@@ -34,6 +34,7 @@ from proliferate.utils.time import utcnow
 COMMAND_WAIT_POLL_SECONDS = 1.0
 _MANAGED_SESSION_COMMAND_KINDS = {
     CloudCommandKind.send_prompt.value,
+    CloudCommandKind.decide_plan.value,
     CloudCommandKind.resolve_interaction.value,
     CloudCommandKind.update_session_config.value,
     CloudCommandKind.cancel_turn.value,

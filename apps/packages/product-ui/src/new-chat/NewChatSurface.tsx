@@ -9,8 +9,8 @@ import {
 } from "../chat/CloudChatComposer";
 import {
   CloudChatTranscript,
-  type CloudChatTranscriptRowView,
 } from "../chat/CloudChatTranscript";
+import type { CloudChatTranscriptRowView } from "@proliferate/product-domain/chats/cloud/transcript-view";
 import { RecentWorkStatusDot } from "../workspaces/RecentWorkStatusDot";
 
 export interface PickerItemView {

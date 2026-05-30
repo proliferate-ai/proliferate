@@ -7,10 +7,181 @@ import type {
 } from "@proliferate/cloud-sdk";
 
 import {
+  buildCloudTranscriptState,
   buildCloudTranscriptView,
+  cloudPendingInteractionsRequireProjectedRows,
   cloudTranscriptHasAgentProgressAfterPrompt,
   cloudTranscriptHasUserPrompt,
 } from "./transcript-view";
+
+describe("buildCloudTranscriptState", () => {
+  it("returns TranscriptState when retained envelopes are renderable and current", () => {
+    const state = buildCloudTranscriptState({
+      sessionId: "session-1",
+      events: [
+        eventEnvelope(1, "item_completed", userEnvelope(1, "hello from envelope")),
+      ],
+      fallbackItems: [],
+    });
+
+    expect(state.source).toBe("events");
+    expect(state.fallbackReason).toBeNull();
+    expect(state.envelopeCount).toBe(1);
+    expect(state.missingEnvelopeCount).toBe(0);
+    expect(state.latestEnvelopeSeq).toBe(1);
+    expect(state.transcript?.sessionMeta.sessionId).toBe("session-1");
+    expect(state.transcript?.itemsById["user-1"]).toEqual(expect.objectContaining({
+      kind: "user_message",
+      text: "hello from envelope",
+    }));
+  });
+
+  it("synthesizes TranscriptState from projection when retained events lack envelopes", () => {
+    const state = buildCloudTranscriptState({
+      sessionId: "session-1",
+      events: [
+        {
+          targetId: "target-1",
+          sessionId: "session-1",
+          seq: 2,
+          eventType: "item_completed",
+          sourceKind: "runtime",
+          envelope: null,
+        },
+      ],
+      fallbackItems: [
+        {
+          itemId: "item-1",
+          turnId: "turn-1",
+          kind: "assistant_message",
+          status: "completed",
+          text: "projection-only assistant",
+          firstSeq: 2,
+          lastSeq: 2,
+        },
+      ],
+    });
+
+    expect(state.source).toBe("projection");
+    expect(state.transcript?.sessionMeta.sessionId).toBe("session-1");
+    expect(state.transcript?.itemsById["item-1"]).toEqual(expect.objectContaining({
+      kind: "assistant_prose",
+      text: "projection-only assistant",
+    }));
+    expect(state.envelopeCount).toBe(0);
+    expect(state.missingEnvelopeCount).toBe(1);
+    expect(state.latestProjectedSeq).toBe(2);
+    expect(state.fallbackReason).toBe("missing_envelopes");
+  });
+
+  it("uses synthetic projection state when projected items are ahead of event-backed rows", () => {
+    const state = buildCloudTranscriptState({
+      sessionId: "session-1",
+      events: [
+        eventEnvelope(1, "item_completed", userEnvelope(1, "event-backed prompt")),
+      ],
+      fallbackItems: [
+        {
+          itemId: "item-1",
+          turnId: "turn-1",
+          kind: "user_message",
+          status: "completed",
+          text: "event-backed prompt",
+          firstSeq: 1,
+          lastSeq: 1,
+        },
+        {
+          itemId: "item-2",
+          turnId: "turn-1",
+          kind: "assistant_message",
+          status: "completed",
+          text: "projection is newer",
+          firstSeq: 2,
+          lastSeq: 2,
+        },
+      ],
+    });
+
+    expect(state.source).toBe("projection");
+    expect(state.transcript?.turnOrder).toEqual(["turn-1"]);
+    expect(state.transcript?.itemsById["item-2"]).toEqual(expect.objectContaining({
+      kind: "assistant_prose",
+      text: "projection is newer",
+    }));
+    expect(state.envelopeCount).toBe(1);
+    expect(state.missingEnvelopeCount).toBe(0);
+    expect(state.latestEnvelopeSeq).toBe(1);
+    expect(state.latestProjectedSeq).toBe(2);
+    expect(state.fallbackReason).toBe("projection_ahead_of_events");
+  });
+
+  it("uses projection when mixed retained events omit older projected transcript rows", () => {
+    const state = buildCloudTranscriptState({
+      sessionId: "session-1",
+      events: [
+        {
+          targetId: "target-1",
+          sessionId: "session-1",
+          seq: 1,
+          eventType: "item_completed",
+          sourceKind: "runtime",
+          envelope: null,
+        },
+        eventEnvelope(3, "item_completed", assistantEnvelope(3, "event-backed latest")),
+      ],
+      fallbackItems: [
+        {
+          itemId: "item-1",
+          turnId: "turn-1",
+          kind: "user_message",
+          status: "completed",
+          text: "projection-only prompt",
+          firstSeq: 1,
+          lastSeq: 1,
+        },
+        {
+          itemId: "assistant-3",
+          turnId: "turn-1",
+          kind: "assistant_message",
+          status: "completed",
+          text: "event-backed latest",
+          firstSeq: 3,
+          lastSeq: 3,
+        },
+      ],
+    });
+
+    expect(state.source).toBe("projection");
+    expect(state.fallbackReason).toBe("missing_envelopes");
+    expect(state.transcript?.itemsById["item-1"]).toEqual(expect.objectContaining({
+      kind: "user_message",
+      text: "projection-only prompt",
+    }));
+  });
+});
+
+describe("cloudPendingInteractionsRequireProjectedRows", () => {
+  it("requires projected rows for cloud-only permission affordances", () => {
+    expect(cloudPendingInteractionsRequireProjectedRows([
+      pendingPermissionInteraction({
+        requestId: "permission-1",
+        requestedSeq: 5,
+        toolCallId: "tool-1",
+        title: "npm test",
+      }),
+    ])).toBe(true);
+  });
+
+  it("allows shared transcript state for pending prompt echoes", () => {
+    expect(cloudPendingInteractionsRequireProjectedRows([
+      pendingPromptInteraction({
+        requestId: "prompt-1",
+        requestedSeq: 1,
+        text: "hello",
+      }),
+    ])).toBe(false);
+  });
+});
 
 describe("buildCloudTranscriptView", () => {
   it("falls back to projected transcript items when retained events lack envelopes", () => {
@@ -48,9 +219,6 @@ describe("buildCloudTranscriptView", () => {
       expect.objectContaining({
         body: "hello from projection",
         kind: "user",
-        title: null,
-        detail: null,
-        status: null,
       }),
     ]);
   });
@@ -98,11 +266,10 @@ describe("buildCloudTranscriptView", () => {
 
     expect(view.rows).toEqual([
       expect.objectContaining({
-        id: "projection:tool-1",
         kind: "tool",
         title: "Command",
         detail: command,
-        status: null,
+        status: "completed",
         sourceToolCallId: "tool-1",
       }),
     ]);
@@ -327,16 +494,10 @@ describe("buildCloudTranscriptView", () => {
       expect.objectContaining({
         body: "rendered from event",
         kind: "user",
-        title: null,
-        detail: null,
-        status: null,
       }),
       expect.objectContaining({
         body: "projection-only assistant",
         kind: "assistant",
-        title: null,
-        detail: null,
-        status: null,
       }),
     ]);
   });
@@ -450,12 +611,10 @@ describe("buildCloudTranscriptView", () => {
 
     expect(view.rows).toEqual([
       expect.objectContaining({
-        id: "projection:old-user",
         body: "repeatable prompt",
         kind: "user",
       }),
       expect.objectContaining({
-        id: "projection:old-assistant",
         body: "old response",
         kind: "assistant",
       }),
@@ -511,7 +670,6 @@ describe("buildCloudTranscriptView", () => {
 
     expect(view.rows).toEqual([
       expect.objectContaining({
-        id: "projection:tool-1",
         kind: "tool",
         title: "Tool call",
         detail: "npm test",
@@ -591,12 +749,10 @@ describe("buildCloudTranscriptView", () => {
 
     expect(view.rows).toEqual([
       expect.objectContaining({
-        id: "projection:tool-1",
         kind: "tool",
         status: "Interrupted",
       }),
       expect.objectContaining({
-        id: "projection:assistant-1",
         kind: "assistant",
       }),
     ]);

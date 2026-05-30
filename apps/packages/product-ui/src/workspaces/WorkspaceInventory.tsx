@@ -47,17 +47,13 @@ export interface WorkspaceInventoryProps {
 
 const STATUS_GLYPH_CLASSES: Record<WorkspaceInventoryStatusKind, string> = {
   waiting: "text-muted-foreground",
-  working: "",
+  working: "text-muted-foreground",
   review: "text-success",
   blocked: "text-destructive",
   done: "text-muted-foreground",
 };
 
-const STATUS_GLYPH_STYLES: Partial<Record<WorkspaceInventoryStatusKind, CSSProperties>> = {
-  working: {
-    color: "var(--color-status-in-progress, var(--color-warning))",
-  },
-};
+const STATUS_GLYPH_STYLES: Partial<Record<WorkspaceInventoryStatusKind, CSSProperties>> = {};
 
 export function WorkspaceInventory({
   groups,
@@ -74,15 +70,7 @@ export function WorkspaceInventory({
   const itemCount = groups.reduce((sum, g) => sum + g.items.length, 0);
 
   if (loading) {
-    return (
-      <div
-        className={twMerge("py-4 text-xs text-muted-foreground", className)}
-        role="status"
-        aria-live="polite"
-      >
-        Loading workspaces
-      </div>
-    );
+    return <WorkspaceInventoryLoadingState className={className} />;
   }
 
   if (error) {
@@ -122,6 +110,37 @@ export function WorkspaceInventory({
         />
       ))}
     </div>
+  );
+}
+
+function WorkspaceInventoryLoadingState({ className }: { className?: string }) {
+  return (
+    <div
+      className={twMerge("w-full min-w-0 overflow-hidden pb-10 pt-2", className)}
+      role="status"
+      aria-live="polite"
+      aria-label="Loading workspaces"
+    >
+      <div className="flex flex-col gap-1">
+        <SkeletonBlock className="h-9 w-full bg-foreground/5" />
+        <SkeletonBlock className="h-9 w-[92%] bg-foreground/5" />
+        <SkeletonBlock className="h-9 w-[76%] bg-foreground/5" />
+      </div>
+      <div className="mt-5 flex flex-col gap-1">
+        <SkeletonBlock className="h-9 w-full bg-foreground/5" />
+        <SkeletonBlock className="h-9 w-[84%] bg-foreground/5" />
+      </div>
+      <span className="sr-only">Loading workspaces</span>
+    </div>
+  );
+}
+
+function SkeletonBlock({ className }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={twMerge("block rounded-md bg-muted/60 motion-safe:animate-pulse", className)}
+    />
   );
 }
 
