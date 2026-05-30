@@ -83,6 +83,10 @@
       "types": "./dist/chats/transcript/transcript-action-time.d.ts",
       "import": "./dist/chats/transcript/transcript-action-time.js"
     },
+    "./chats/transcript/chat-transcript-state": {
+      "types": "./dist/chats/transcript/chat-transcript-state.d.ts",
+      "import": "./dist/chats/transcript/chat-transcript-state.js"
+    },
     "./chats/transcript/transcript-open-target": {
       "types": "./dist/chats/transcript/transcript-open-target.d.ts",
       "import": "./dist/chats/transcript/transcript-open-target.js"

@@ -51,7 +51,7 @@ import type {
 } from "@proliferate/product-ui/new-chat/NewChatSurface";
 import type { CloudChatComposerControlView } from "@proliferate/product-ui/chat/CloudChatComposer";
 import { NewChatSurface } from "@proliferate/product-ui/new-chat/NewChatSurface";
-import type { CloudChatTranscriptRowView } from "@proliferate/product-ui/chat/CloudChatTranscript";
+import type { CloudChatTranscriptRowView } from "@proliferate/product-domain/chats/cloud/transcript-view";
 import { AddCloudEnvironmentDialogController } from "@proliferate/product-surfaces/settings/CloudEnvironmentsSettingsSurface";
 
 import { webEnv } from "../../../config/env";

@@ -439,9 +439,6 @@ importers:
 
   apps/packages/product-ui:
     dependencies:
-      '@anyharness/sdk':
-        specifier: workspace:*
-        version: link:../../../anyharness/sdk
       '@proliferate/product-domain':
         specifier: workspace:*
         version: link:../product-domain

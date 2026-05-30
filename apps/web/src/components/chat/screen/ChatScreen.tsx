@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   createTranscriptState,
@@ -36,11 +36,12 @@ import {
 import type {
   CloudChatComposerFooterControlView,
 } from "@proliferate/product-ui/chat/CloudChatComposer";
-import type { ChatTranscriptState } from "@proliferate/product-ui/chat/transcript/ChatTranscriptState";
+import type { ChatTranscriptState } from "@proliferate/product-domain/chats/transcript/chat-transcript-state";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
   buildCloudTranscriptState,
   buildCloudTranscriptView,
+  cloudPendingInteractionsRequireProjectedRows,
   cloudTranscriptHasAgentProgressAfterPrompt,
   cloudTranscriptHasUserPrompt,
   latestCloudTranscriptSeq,
@@ -125,6 +126,13 @@ type PlanDecisionPayload = {
   expectedDecisionVersion: number;
 };
 
+type ActivePlanDecision = {
+  planId: string;
+  expectedDecisionVersion: number;
+  decision: "approve" | "reject";
+  commandId: string | null;
+};
+
 const EMPTY_SESSION_EVENTS: CloudSessionEvent[] = [];
 const EMPTY_TRANSCRIPT_ITEMS: CloudTranscriptItem[] = [];
 const EMPTY_PENDING_INTERACTIONS: CloudPendingInteraction[] = [];
@@ -202,6 +210,10 @@ export function ChatScreen() {
   const pendingInteractions = sessionLive.snapshot?.pendingInteractions
     ?? transcriptQuery.data?.pendingInteractions
     ?? EMPTY_PENDING_INTERACTIONS;
+  const pendingInteractionsRequireProjectedRows = useMemo(
+    () => cloudPendingInteractionsRequireProjectedRows(pendingInteractions),
+    [pendingInteractions],
+  );
   const visiblePendingHomePromptStatus = isCopyFeedbackStatus(pendingHomePromptStatus)
     ? null
     : friendlyCommandStatusMessage(pendingHomePromptStatus) ?? pendingHomePromptStatus;
@@ -267,7 +279,9 @@ export function ChatScreen() {
       ?? pendingHomePrompt?.id
       ?? optimisticPrompts[0]?.id
       ?? null;
-    const transcript = transcriptState.transcript
+    const transcript = pendingInteractionsRequireProjectedRows
+      ? null
+      : transcriptState.transcript
       ?? (
         syntheticSessionId && transcriptView.rows.length === 0 && sharedOutboxEntries.length > 0
           ? createTranscriptState(`web-draft:${syntheticSessionId}`)
@@ -294,6 +308,7 @@ export function ChatScreen() {
     optimisticPrompts,
     pendingHomePrompt,
     pendingSessionDraft?.id,
+    pendingInteractionsRequireProjectedRows,
     pendingInteractions,
     session?.sessionId,
     session?.status,
@@ -338,7 +353,7 @@ export function ChatScreen() {
   const enqueueStartSession = useEnqueueCloudCommand<StartSessionPayload>();
   const enqueueConfig = useEnqueueCloudCommand<UpdateSessionConfigPayload>();
   const enqueuePlanDecision = useEnqueueCloudCommand<PlanDecisionPayload>();
-  const [activePlanDecisionKey, setActivePlanDecisionKey] = useState<string | null>(null);
+  const [activePlanDecision, setActivePlanDecision] = useState<ActivePlanDecision | null>(null);
   const claimWorkspace = useClaimCloudWorkspace();
   const observedPromptCommandId = pendingPromptCommandId ?? latestCommandId;
   const commandStatus = useCommandStatus(observedPromptCommandId);
@@ -1113,6 +1128,100 @@ export function ChatScreen() {
   ]);
 
   useEffect(() => {
+    if (!activePlanDecision) {
+      return;
+    }
+    if (!visibleTranscriptRows.some((row) => planDecisionResolvedInRow(row, activePlanDecision))) {
+      return;
+    }
+    setActivePlanDecision(null);
+    setPendingHomePromptStatus((current) =>
+      current === planDecisionProgressMessage(activePlanDecision.decision) ? null : current
+    );
+  }, [activePlanDecision, visibleTranscriptRows]);
+
+  useEffect(() => {
+    const commandId = activePlanDecision?.commandId;
+    if (!commandId) {
+      return;
+    }
+    let active = true;
+    let timeoutId: number | undefined;
+
+    const pollPlanDecisionCommand = async () => {
+      try {
+        const command = await getCommandStatus(commandId, client);
+        if (!active) {
+          return;
+        }
+        if (isRejectedCommandStatus(command.status)) {
+          setActivePlanDecision((current) =>
+            current?.commandId === command.commandId ? null : current
+          );
+          setPendingHomePromptStatus(
+            commandStatusFailureMessage(
+              command,
+              planDecisionFailureMessage(activePlanDecision.decision),
+            ) ?? planDecisionFailureMessage(activePlanDecision.decision),
+          );
+          void transcriptQuery.refetch();
+          void sessionEventsQuery.refetch();
+          return;
+        }
+        if (isTerminalCommandStatus(command.status)) {
+          void transcriptQuery.refetch();
+          void sessionEventsQuery.refetch();
+        }
+      } catch {
+        // Keep polling; transient status reads should not strand the plan action UI.
+      }
+      if (active) {
+        timeoutId = window.setTimeout(pollPlanDecisionCommand, 1500);
+      }
+    };
+
+    timeoutId = window.setTimeout(pollPlanDecisionCommand, 0);
+    return () => {
+      active = false;
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [
+    activePlanDecision?.commandId,
+    activePlanDecision?.decision,
+    client,
+    sessionEventsQuery.refetch,
+    transcriptQuery.refetch,
+  ]);
+
+  useEffect(() => {
+    const command = commandStatus.data;
+    if (
+      !activePlanDecision?.commandId
+      || !command
+      || command.commandId !== activePlanDecision.commandId
+      || !isRejectedCommandStatus(command.status)
+    ) {
+      return;
+    }
+    setActivePlanDecision(null);
+    setPendingHomePromptStatus(
+      commandStatusFailureMessage(
+        command,
+        planDecisionFailureMessage(activePlanDecision.decision),
+      ) ?? planDecisionFailureMessage(activePlanDecision.decision),
+    );
+  }, [
+    activePlanDecision?.commandId,
+    activePlanDecision?.decision,
+    commandStatus.data?.commandId,
+    commandStatus.data?.errorCode,
+    commandStatus.data?.errorMessage,
+    commandStatus.data?.status,
+  ]);
+
+  useEffect(() => {
     const command = commandStatus.data;
     if (!command || !isRejectedCommandStatus(command.status)) {
       return;
@@ -1422,11 +1531,11 @@ export function ChatScreen() {
     }
   }
 
-  async function submitPlanDecision(
+  const submitPlanDecision = useCallback(async (
     planId: string,
     expectedDecisionVersion: number,
     decision: "approve" | "reject",
-  ) {
+  ) => {
     if (!workspace || !session) {
       return;
     }
@@ -1439,10 +1548,18 @@ export function ChatScreen() {
       setPendingHomePromptStatus(readiness.message ?? "This workspace cannot accept cloud commands right now.");
       return;
     }
-    const commandWorkspaceId = session.workspaceId ?? workspace.id;
-    const decisionKey = `${planId}:${expectedDecisionVersion}:${decision}`;
-    setActivePlanDecisionKey(decisionKey);
-    setPendingHomePromptStatus(decision === "approve" ? "Approving plan." : "Rejecting plan.");
+    const commandWorkspaceId = session.workspaceId;
+    if (!commandWorkspaceId) {
+      setPendingHomePromptStatus("Session is not attached to a runtime workspace yet.");
+      return;
+    }
+    setActivePlanDecision({
+      planId,
+      expectedDecisionVersion,
+      decision,
+      commandId: null,
+    });
+    setPendingHomePromptStatus(planDecisionProgressMessage(decision));
     try {
       const commandWorkspace = await prepareManagedWorkspaceForCloudCommands({
         client,
@@ -1474,6 +1591,15 @@ export function ChatScreen() {
         return;
       }
       setLatestCommandId(command.commandId);
+      setActivePlanDecision((current) => {
+        if (
+          !current
+          || !activePlanDecisionMatches(current, planId, expectedDecisionVersion, decision)
+        ) {
+          return current;
+        }
+        return { ...current, commandId: command.commandId };
+      });
       if (isRejectedCommandStatus(command.status)) {
         throw new Error(
           commandStatusFailureMessage(command, planDecisionFailureMessage(decision))
@@ -1487,15 +1613,36 @@ export function ChatScreen() {
       if (!mountedRef.current) {
         return;
       }
+      setActivePlanDecision((current) =>
+        activePlanDecisionMatches(current, planId, expectedDecisionVersion, decision)
+          ? null
+          : current
+      );
       setPendingHomePromptStatus(
         error instanceof Error ? error.message : planDecisionFailureMessage(decision),
       );
-    } finally {
-      if (mountedRef.current) {
-        setActivePlanDecisionKey(null);
-      }
     }
-  }
+  }, [
+    client,
+    enqueuePlanDecision.mutateAsync,
+    isUnclaimed,
+    resolvedLaunchSelection.agentKind,
+    session,
+    sessionEventsQuery.refetch,
+    sessionModelId,
+    transcriptQuery.refetch,
+    workspace,
+  ]);
+  const transcriptPlanActions = useMemo(() => ({
+    approvePlan: (planId: string, expectedDecisionVersion: number) =>
+      void submitPlanDecision(planId, expectedDecisionVersion, "approve"),
+    rejectPlan: (planId: string, expectedDecisionVersion: number) =>
+      void submitPlanDecision(planId, expectedDecisionVersion, "reject"),
+    isApprovingPlan: (planId: string, expectedDecisionVersion: number) =>
+      activePlanDecisionMatches(activePlanDecision, planId, expectedDecisionVersion, "approve"),
+    isRejectingPlan: (planId: string, expectedDecisionVersion: number) =>
+      activePlanDecisionMatches(activePlanDecision, planId, expectedDecisionVersion, "reject"),
+  }), [activePlanDecision, submitPlanDecision]);
 
   async function claimCurrentWorkspace() {
     if (!workspace || claimWorkspace.isPending) {
@@ -1746,14 +1893,7 @@ export function ChatScreen() {
       transcriptRows={visibleTranscriptRows}
       transcriptState={sharedTranscriptState}
       transcriptStatus={commandMessage}
-      transcriptPlanActions={{
-        approvePlan: (planId, expectedDecisionVersion) =>
-          void submitPlanDecision(planId, expectedDecisionVersion, "approve"),
-        rejectPlan: (planId, expectedDecisionVersion) =>
-          void submitPlanDecision(planId, expectedDecisionVersion, "reject"),
-        isApprovingPlan: activePlanDecisionKey?.endsWith(":approve") ?? false,
-        isRejectingPlan: activePlanDecisionKey?.endsWith(":reject") ?? false,
-      }}
+      transcriptPlanActions={transcriptPlanActions}
       emptyTitle={emptyTitle}
       emptyDescription={
         !session ? `Send a message below to start the first session in ${workspaceTitle}.` : undefined
@@ -2714,6 +2854,39 @@ function isTerminalCommandStatus(status: CloudCommandStatus): boolean {
   return status === "accepted"
     || status === "accepted_but_queued"
     || isRejectedCommandStatus(status);
+}
+
+function activePlanDecisionMatches(
+  activeDecision: ActivePlanDecision | null,
+  planId: string,
+  expectedDecisionVersion: number,
+  decision: "approve" | "reject",
+): boolean {
+  return activeDecision?.planId === planId
+    && activeDecision.expectedDecisionVersion === expectedDecisionVersion
+    && activeDecision.decision === decision;
+}
+
+function planDecisionResolvedInRow(
+  row: CloudChatTranscriptRowView,
+  activeDecision: ActivePlanDecision,
+): boolean {
+  if (row.kind === "proposed_plan" && row.planId === activeDecision.planId) {
+    const state = row.planDecisionState ?? null;
+    const version = row.planDecisionVersion ?? null;
+    if (
+      state !== null
+      && state !== "pending"
+      && (version === null || version >= activeDecision.expectedDecisionVersion)
+    ) {
+      return true;
+    }
+  }
+  return row.children?.some((child) => planDecisionResolvedInRow(child, activeDecision)) ?? false;
+}
+
+function planDecisionProgressMessage(decision: "approve" | "reject"): string {
+  return decision === "approve" ? "Approving plan." : "Rejecting plan.";
 }
 
 function sessionConfigCommandFailureMessage(status: CloudCommandStatus): string {

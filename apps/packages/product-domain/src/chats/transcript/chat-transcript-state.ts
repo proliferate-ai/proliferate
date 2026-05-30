@@ -2,8 +2,14 @@ import type {
   PendingPromptEntry,
   TranscriptState,
 } from "@anyharness/sdk";
-import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";
-import type { PromptOutboxEntry } from "@proliferate/product-domain/sessions/intents/session-intent-model";
+import type { SessionViewState } from "../../sessions/activity";
+import type { PromptOutboxEntry } from "../../sessions/intents/session-intent-model";
+
+export type {
+  PendingPromptEntry,
+  TranscriptState,
+  TurnRecord,
+} from "@anyharness/sdk";
 
 export interface ChatTranscriptState {
   activeSessionId: string;

@@ -23,6 +23,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@proliferate/ui/primitives/Button";
+import type { CloudChatTranscriptRowView } from "@proliferate/product-domain/chats/cloud/transcript-view";
 import { AssistantMessage } from "./transcript/AssistantMessage";
 import { CopyMessageButton } from "./transcript/CopyMessageButton";
 import { ProposedPlanCard } from "./transcript/ProposedPlanCard";
@@ -31,34 +32,10 @@ const STREAM_FLUSH_MS = 32;
 const MIN_STREAM_STEP = 20;
 const MAX_STREAM_STEP = 120;
 
-export type CloudChatTranscriptRowKind =
-  | "assistant"
-  | "error"
-  | "system"
-  | "thought"
-  | "tool"
-  | "tool_group"
-  | "proposed_plan"
-  | "user";
-
-export interface CloudChatTranscriptRowView {
-  id: string;
-  kind: CloudChatTranscriptRowKind;
-  title?: string | null;
-  body?: string | null;
-  detail?: string | null;
-  status?: string | null;
-  streaming?: boolean;
-  children?: CloudChatTranscriptRowView[];
-  planId?: string | null;
-  planTitle?: string | null;
-  planBodyMarkdown?: string | null;
-  planDecisionState?: "pending" | "approved" | "rejected" | "superseded" | null;
-  planNativeResolutionState?: "none" | "pending_link" | "pending_resolution" | "finalized" | "failed" | null;
-  planDecisionVersion?: number | null;
-  planErrorMessage?: string | null;
-  planNativeContinuation?: boolean;
-}
+export type {
+  CloudChatTranscriptRowKind,
+  CloudChatTranscriptRowView,
+} from "@proliferate/product-domain/chats/cloud/transcript-view";
 
 export interface CloudChatTranscriptProps {
   rows: readonly CloudChatTranscriptRowView[];
@@ -70,8 +47,8 @@ export interface CloudChatTranscriptProps {
 export interface CloudChatTranscriptPlanActions {
   approvePlan?: (planId: string, expectedDecisionVersion: number) => void;
   rejectPlan?: (planId: string, expectedDecisionVersion: number) => void;
-  isApprovingPlan?: boolean;
-  isRejectingPlan?: boolean;
+  isApprovingPlan?: boolean | ((planId: string, expectedDecisionVersion: number) => boolean);
+  isRejectingPlan?: boolean | ((planId: string, expectedDecisionVersion: number) => boolean);
 }
 
 type MdElementProps = HTMLAttributes<HTMLElement> & {
@@ -229,12 +206,33 @@ function CloudChatProposedPlanRow({
               ? () => planActions.rejectPlan!(planId, decisionVersion)
               : undefined
           }
-          isApproving={Boolean(planActions?.isApprovingPlan)}
-          isRejecting={Boolean(planActions?.isRejectingPlan)}
+          isApproving={planDecisionActionActive(
+            planActions?.isApprovingPlan,
+            planId,
+            decisionVersion,
+          )}
+          isRejecting={planDecisionActionActive(
+            planActions?.isRejectingPlan,
+            planId,
+            decisionVersion,
+          )}
         />
       </div>
     </article>
   );
+}
+
+function planDecisionActionActive(
+  value: CloudChatTranscriptPlanActions["isApprovingPlan"],
+  planId: string | null,
+  expectedDecisionVersion: number | null,
+): boolean {
+  if (typeof value === "function") {
+    return !!planId && expectedDecisionVersion !== null
+      ? value(planId, expectedDecisionVersion)
+      : false;
+  }
+  return Boolean(value);
 }
 
 function CloudChatAssistantLoadingRow({ row }: { row: CloudChatTranscriptRowView }) {

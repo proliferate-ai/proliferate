@@ -400,19 +400,29 @@ fn plan_decision_body(
             "decide_plan payload must be a JSON object.",
         ));
     };
-    let workspace_id = string_field(object, "workspaceId", "workspace_id")
-        .or_else(|| {
-            command
-                .workspace_id
-                .clone()
-                .filter(|value| !value.trim().is_empty())
-        })
-        .ok_or_else(|| {
-            CommandMappingError::new(
+    let command_workspace_id = command
+        .workspace_id
+        .clone()
+        .filter(|value| !value.trim().is_empty());
+    let payload_workspace_id = string_field(object, "workspaceId", "workspace_id");
+    let workspace_id = match (command_workspace_id, payload_workspace_id) {
+        (Some(command_workspace_id), Some(payload_workspace_id))
+            if command_workspace_id != payload_workspace_id =>
+        {
+            return Err(CommandMappingError::new(
+                "workspace_id_mismatch",
+                "decide_plan payload workspaceId does not match the command workspace.",
+            ));
+        }
+        (Some(command_workspace_id), _) => command_workspace_id,
+        (None, Some(payload_workspace_id)) => payload_workspace_id,
+        (None, None) => {
+            return Err(CommandMappingError::new(
                 "missing_workspace_id",
-                "decide_plan payload must contain workspaceId.",
-            )
-        })?;
+                "decide_plan command must contain workspaceId.",
+            ));
+        }
+    };
     let plan_id = string_field(object, "planId", "plan_id").ok_or_else(|| {
         CommandMappingError::new(
             "missing_plan_id",
@@ -889,6 +899,7 @@ mod tests {
         }));
         command.kind = "decide_plan".to_string();
         command.session_id = Some("session-1".to_string());
+        command.workspace_id = Some("workspace-1".to_string());
 
         let mapped = map_cloud_command(&command).expect("mapped");
         let AnyHarnessCommand::DecidePlan {
@@ -896,13 +907,30 @@ mod tests {
             plan_id,
             decision,
             expected_decision_version,
-        } = mapped else {
+        } = mapped
+        else {
             panic!("expected decide plan");
         };
         assert_eq!(workspace_id, "workspace-1");
         assert_eq!(plan_id, "plan-1");
         assert_eq!(decision, PlanDecision::Approve);
         assert_eq!(expected_decision_version, 3);
+    }
+
+    #[test]
+    fn rejects_decide_plan_payload_workspace_mismatch() {
+        let mut command = test_command(json!({
+            "workspaceId": "workspace-from-payload",
+            "planId": "plan-1",
+            "decision": "approve",
+            "expectedDecisionVersion": 3
+        }));
+        command.kind = "decide_plan".to_string();
+        command.session_id = Some("session-1".to_string());
+        command.workspace_id = Some("workspace-from-command".to_string());
+
+        let err = map_cloud_command(&command).expect_err("workspace mismatch rejected");
+        assert_eq!(err.code, "workspace_id_mismatch");
     }
 
     fn test_command(payload: serde_json::Value) -> CloudCommandEnvelope {

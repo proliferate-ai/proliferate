@@ -1,18 +1,19 @@
+import { useCallback, useMemo } from "react";
 import {
   buildCloudTranscriptRowsFromTurnRow,
+  type CloudChatTranscriptRowView,
 } from "@proliferate/product-domain/chats/cloud/transcript-view";
 import type { PromptOutboxEntry } from "@proliferate/product-domain/sessions/intents/session-intent-model";
+import type { ChatTranscriptState } from "@proliferate/product-domain/chats/transcript/chat-transcript-state";
 import {
   ChatTranscriptView,
   type ChatTranscriptPendingPromptRenderInput,
   type ChatTranscriptTurnRowRenderInput,
 } from "./transcript/ChatTranscriptView";
-import type { ChatTranscriptState } from "./transcript/ChatTranscriptState";
 import {
   CloudChatTranscript,
   CloudChatTranscriptRows,
   type CloudChatTranscriptPlanActions,
-  type CloudChatTranscriptRowView,
 } from "./CloudChatTranscript";
 
 export type CloudChatTranscriptStateView = ChatTranscriptState;
@@ -30,6 +31,27 @@ export function CloudChatTranscriptState({
   pendingStatus?: string | null;
   planActions?: CloudChatTranscriptPlanActions;
 }) {
+  const transcriptViewState = useMemo<CloudChatTranscriptStateView>(() => ({
+    ...view,
+    layout: {
+      bottomInsetPx: 32,
+      columnClassName: "mx-auto w-full max-w-3xl",
+      gutterClassName: "px-6",
+      ...view.layout,
+    },
+  }), [view]);
+  const renderPendingPromptRow = useCallback(
+    (input: ChatTranscriptPendingPromptRenderInput) =>
+      renderCloudPendingPromptRow(input, pendingStatus),
+    [pendingStatus],
+  );
+  const renderTurnRow = useCallback(
+    (input: ChatTranscriptTurnRowRenderInput) =>
+      renderCloudTranscriptTurnRow(input, planActions),
+    [planActions],
+  );
+  const renderPendingPromptTrailingStatus = useCallback(() => pendingStatus, [pendingStatus]);
+
   if (
     view.transcript.turnOrder.length === 0
     && !view.optimisticPrompt
@@ -50,18 +72,10 @@ export function CloudChatTranscriptState({
 
   return (
     <ChatTranscriptView
-      state={{
-        ...view,
-        layout: {
-          bottomInsetPx: 32,
-          columnClassName: "mx-auto w-full max-w-3xl",
-          gutterClassName: "px-6",
-          ...view.layout,
-        },
-      }}
-      renderPendingPromptRow={(input) => renderCloudPendingPromptRow(input, pendingStatus)}
-      renderTurnRow={(input) => renderCloudTranscriptTurnRow(input, planActions)}
-      renderPendingPromptTrailingStatus={() => pendingStatus}
+      state={transcriptViewState}
+      renderPendingPromptRow={renderPendingPromptRow}
+      renderTurnRow={renderTurnRow}
+      renderPendingPromptTrailingStatus={renderPendingPromptTrailingStatus}
     />
   );
 }

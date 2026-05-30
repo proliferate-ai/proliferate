@@ -151,10 +151,6 @@
       "types": "./dist/chat/transcript/ChatTranscriptView.d.ts",
       "import": "./dist/chat/transcript/ChatTranscriptView.js"
     },
-    "./chat/transcript/ChatTranscriptState": {
-      "types": "./dist/chat/transcript/ChatTranscriptState.d.ts",
-      "import": "./dist/chat/transcript/ChatTranscriptState.js"
-    },
     "./chat/transcript/ProposedPlanCard": {
       "types": "./dist/chat/transcript/ProposedPlanCard.d.ts",
       "import": "./dist/chat/transcript/ProposedPlanCard.js"
@@ -258,7 +254,6 @@
     "test": "pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && vitest run"
   },
   "dependencies": {
-    "@anyharness/sdk": "workspace:*",
     "@proliferate/product-domain": "workspace:*",
     "@proliferate/ui": "workspace:*",
     "@tanstack/react-virtual": "3.13.24",

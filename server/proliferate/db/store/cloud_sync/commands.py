@@ -561,6 +561,7 @@ async def _runtime_config_lease_blocker(
     if row.kind not in {
         CloudCommandKind.start_session.value,
         CloudCommandKind.send_prompt.value,
+        CloudCommandKind.decide_plan.value,
     }:
         return None
     try:

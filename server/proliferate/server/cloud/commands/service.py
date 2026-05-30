@@ -647,9 +647,42 @@ async def _resolve_projected_session_command_workspace(
         workspace_archived=False,
         exposure=exposure,
     )
+    if body.kind == CloudCommandKind.decide_plan.value:
+        resolved_workspace_id = projection.workspace_id or exposure.anyharness_workspace_id
+    else:
+        resolved_workspace_id = (
+            projection.workspace_id or exposure.anyharness_workspace_id or body.workspace_id
+        )
+    if (
+        body.workspace_id is not None
+        and resolved_workspace_id is not None
+        and body.workspace_id != resolved_workspace_id
+    ):
+        raise CloudApiError(
+            "cloud_command_workspace_target_mismatch",
+            "Session is not attached to the requested runtime workspace.",
+            status_code=409,
+        )
+    payload = body.payload
+    if body.kind == CloudCommandKind.decide_plan.value:
+        if resolved_workspace_id is None:
+            raise CloudApiError(
+                "cloud_command_workspace_required",
+                "Projected plan decisions require a runtime workspace id.",
+                status_code=409,
+            )
+        payload = dict(body.payload)
+        payload_workspace_id = _str_or_none(payload.get("workspaceId"))
+        if payload_workspace_id is not None and payload_workspace_id != resolved_workspace_id:
+            raise CloudApiError(
+                "cloud_command_workspace_target_mismatch",
+                "Plan decision workspace does not match the projected session workspace.",
+                status_code=409,
+            )
+        payload["workspaceId"] = resolved_workspace_id
     return (
-        projection.workspace_id or body.workspace_id,
-        body.payload,
+        resolved_workspace_id,
+        payload,
         str(projection.cloud_workspace_id),
     )
 
@@ -1398,6 +1431,7 @@ async def _validate_managed_runtime_config_current_for_command(
     require_target_config: bool = True,
 ) -> None:
     if kind not in {
+        CloudCommandKind.decide_plan.value,
         CloudCommandKind.resolve_interaction.value,
         CloudCommandKind.update_session_config.value,
         CloudCommandKind.cancel_turn.value,
@@ -1474,7 +1508,11 @@ async def _stamp_managed_runtime_config_preflight(
     require_target_config: bool = True,
 ) -> dict[str, object]:
     del actor_user_id
-    if kind not in {CloudCommandKind.start_session.value, CloudCommandKind.send_prompt.value}:
+    if kind not in {
+        CloudCommandKind.start_session.value,
+        CloudCommandKind.send_prompt.value,
+        CloudCommandKind.decide_plan.value,
+    }:
         return payload
     if target.sandbox_profile_id is None:
         return payload

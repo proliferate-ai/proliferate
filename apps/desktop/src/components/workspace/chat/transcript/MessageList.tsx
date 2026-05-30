@@ -29,7 +29,7 @@ import {
   type ChatTranscriptPendingPromptRenderInput,
   type ChatTranscriptTurnRowRenderInput,
 } from "@proliferate/product-ui/chat/transcript/ChatTranscriptView";
-import type { ChatTranscriptState } from "@proliferate/product-ui/chat/transcript/ChatTranscriptState";
+import type { ChatTranscriptState } from "@proliferate/product-domain/chats/transcript/chat-transcript-state";
 import {
   resolvePendingPromptTrailingStatus,
   resolveTurnTrailingStatus,

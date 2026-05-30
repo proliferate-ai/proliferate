@@ -240,6 +240,14 @@ export function buildCloudTranscriptRowsFromTurnRow(input: {
   return buildRowsFromTurnRow(input.row, input.transcript);
 }
 
+export function cloudPendingInteractionsRequireProjectedRows(
+  pendingInteractions: readonly CloudPendingInteraction[],
+): boolean {
+  return pendingInteractions.some((interaction) =>
+    interaction.status === "pending" && interaction.kind !== "send_prompt"
+  );
+}
+
 function emptyCloudTranscriptState(input: {
   latestProjectedSeq: number;
   fallbackReason: CloudTranscriptStateFallbackReason;
@@ -275,7 +283,7 @@ function shouldUseEventRows(
   if (missingEnvelopeCount === 0 || input.fallbackItems.length === 0) {
     return true;
   }
-  return latestTranscriptRowSeq(rows) >= latestProjectedItemSeq(input.fallbackItems);
+  return projectedItemsAreCoveredByRows(input.fallbackItems, rows);
 }
 
 function latestProjectedItemSeq(items: readonly CloudTranscriptItem[]): number {
@@ -286,7 +294,44 @@ function latestProjectedItemSeq(items: readonly CloudTranscriptItem[]): number {
 }
 
 function latestTranscriptRowSeq(rows: readonly CloudChatTranscriptRowView[]): number {
-  return rows.reduce((maxSeq, row) => Math.max(maxSeq, row.lastSeq ?? row.firstSeq ?? 0), 0);
+  let latestSeq = 0;
+  for (const row of rows) {
+    latestSeq = Math.max(latestSeq, row.lastSeq ?? row.firstSeq ?? 0);
+    if (row.children) {
+      latestSeq = Math.max(latestSeq, latestTranscriptRowSeq(row.children));
+    }
+  }
+  return latestSeq;
+}
+
+function projectedItemsAreCoveredByRows(
+  items: readonly CloudTranscriptItem[],
+  rows: readonly CloudChatTranscriptRowView[],
+): boolean {
+  return items.every((item) => projectedItemIsCoveredByRows(item, rows));
+}
+
+function projectedItemIsCoveredByRows(
+  item: CloudTranscriptItem,
+  rows: readonly CloudChatTranscriptRowView[],
+): boolean {
+  return rows.some((row) => rowCoversProjectedItem(row, item));
+}
+
+function rowCoversProjectedItem(
+  row: CloudChatTranscriptRowView,
+  item: CloudTranscriptItem,
+): boolean {
+  const firstSeq = row.firstSeq ?? row.lastSeq ?? null;
+  const lastSeq = row.lastSeq ?? row.firstSeq ?? null;
+  const coversSelf = typeof firstSeq === "number"
+    && typeof lastSeq === "number"
+    && firstSeq <= item.firstSeq
+    && lastSeq >= item.lastSeq;
+  if (coversSelf) {
+    return true;
+  }
+  return row.children?.some((child) => rowCoversProjectedItem(child, item)) ?? false;
 }
 
 export function cloudTranscriptHasUserPrompt(input: {

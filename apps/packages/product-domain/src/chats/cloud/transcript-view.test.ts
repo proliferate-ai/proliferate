@@ -9,6 +9,7 @@ import type {
 import {
   buildCloudTranscriptState,
   buildCloudTranscriptView,
+  cloudPendingInteractionsRequireProjectedRows,
   cloudTranscriptHasAgentProgressAfterPrompt,
   cloudTranscriptHasUserPrompt,
 } from "./transcript-view";
@@ -112,6 +113,73 @@ describe("buildCloudTranscriptState", () => {
     expect(state.latestEnvelopeSeq).toBe(1);
     expect(state.latestProjectedSeq).toBe(2);
     expect(state.fallbackReason).toBe("projection_ahead_of_events");
+  });
+
+  it("uses projection when mixed retained events omit older projected transcript rows", () => {
+    const state = buildCloudTranscriptState({
+      sessionId: "session-1",
+      events: [
+        {
+          targetId: "target-1",
+          sessionId: "session-1",
+          seq: 1,
+          eventType: "item_completed",
+          sourceKind: "runtime",
+          envelope: null,
+        },
+        eventEnvelope(3, "item_completed", assistantEnvelope(3, "event-backed latest")),
+      ],
+      fallbackItems: [
+        {
+          itemId: "item-1",
+          turnId: "turn-1",
+          kind: "user_message",
+          status: "completed",
+          text: "projection-only prompt",
+          firstSeq: 1,
+          lastSeq: 1,
+        },
+        {
+          itemId: "assistant-3",
+          turnId: "turn-1",
+          kind: "assistant_message",
+          status: "completed",
+          text: "event-backed latest",
+          firstSeq: 3,
+          lastSeq: 3,
+        },
+      ],
+    });
+
+    expect(state.source).toBe("projection");
+    expect(state.fallbackReason).toBe("missing_envelopes");
+    expect(state.transcript?.itemsById["item-1"]).toEqual(expect.objectContaining({
+      kind: "user_message",
+      text: "projection-only prompt",
+    }));
+  });
+});
+
+describe("cloudPendingInteractionsRequireProjectedRows", () => {
+  it("requires projected rows for cloud-only permission affordances", () => {
+    expect(cloudPendingInteractionsRequireProjectedRows([
+      pendingPermissionInteraction({
+        requestId: "permission-1",
+        requestedSeq: 5,
+        toolCallId: "tool-1",
+        title: "npm test",
+      }),
+    ])).toBe(true);
+  });
+
+  it("allows shared transcript state for pending prompt echoes", () => {
+    expect(cloudPendingInteractionsRequireProjectedRows([
+      pendingPromptInteraction({
+        requestId: "prompt-1",
+        requestedSeq: 1,
+        text: "hello",
+      }),
+    ])).toBe(false);
   });
 });
 

@@ -3,8 +3,8 @@ use reqwest::StatusCode;
 use serde_json::Value;
 use tokio::time::{sleep, Duration, Instant};
 
-use crate::error::WorkerError;
 use crate::commands::mapping::PlanDecision;
+use crate::error::WorkerError;
 
 use super::AnyHarnessClient;
 

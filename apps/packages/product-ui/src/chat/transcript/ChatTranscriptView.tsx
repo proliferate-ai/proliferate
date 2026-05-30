@@ -7,10 +7,11 @@ import {
   type ReactNode,
 } from "react";
 import type {
+  ChatTranscriptState,
   PendingPromptEntry,
   TranscriptState,
   TurnRecord,
-} from "@anyharness/sdk";
+} from "@proliferate/product-domain/chats/transcript/chat-transcript-state";
 import type { PromptOutboxEntry } from "@proliferate/product-domain/sessions/intents/session-intent-model";
 import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";
 import {
@@ -42,7 +43,6 @@ import type { TurnDisplayBlock } from "@proliferate/product-domain/chats/transcr
 import { buildTranscriptCopyText } from "@proliferate/product-domain/chats/transcript/transcript-copy";
 import { VirtualTranscriptRowList } from "./VirtualTranscriptRowList";
 import { useChatTranscriptSelection } from "./ChatTranscriptSelection";
-import type { ChatTranscriptState } from "./ChatTranscriptState";
 
 const noop = () => {};
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];

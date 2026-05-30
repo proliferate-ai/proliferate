@@ -86,7 +86,6 @@ export function ProposedPlanCard({
   const canReview =
     (!!onReview || !!onConfigureReview)
     && (decisionState === null || decisionState === "pending" || decisionState === "approved");
-  const hasFooterActions = !!decisionState || !!onHandOffToNewSession || canReview;
   const status = decisionState
     ? resolveDecisionStatus(
       decisionState,
@@ -99,6 +98,13 @@ export function ProposedPlanCard({
     decisionState === "approved"
     && !!onImplementHere
     && (!nativeContinuation || nativeResolutionState === "failed");
+  const hasFooterActions = Boolean(
+    canDecide
+      || canRetryNativeApproval
+      || canReview
+      || onHandOffToNewSession
+      || showImplementHere,
+  );
   const approveLabel = nativeContinuation ? "Approve and continue" : "Approve plan";
 
   return (
