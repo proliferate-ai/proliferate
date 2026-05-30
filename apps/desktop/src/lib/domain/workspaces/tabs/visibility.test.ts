@@ -96,6 +96,19 @@ describe("chat tab visibility", () => {
     })).toBe("b");
   });
 
+  it("does not force a recently hidden active session back into visible tabs", () => {
+    expect(resolveVisibleChatSessionIds({
+      liveSessions: [
+        { sessionId: "a" },
+        { sessionId: "b" },
+        { sessionId: "c" },
+      ],
+      persistedVisibleIds: ["a", "c"],
+      recentlyHiddenIds: ["b"],
+      activeSessionId: "b",
+    }).visibleSessionIds).toEqual(["a", "c"]);
+  });
+
   it("tracks recently hidden sessions most-recent-first with a cap", () => {
     const ids = Array.from({ length: MAX_RECENTLY_HIDDEN_CHAT_TABS + 5 }, (_, index) => `s${index}`);
     const result = ids.reduce((current, id) => rememberHiddenChatSessionId(current, id), [] as string[]);

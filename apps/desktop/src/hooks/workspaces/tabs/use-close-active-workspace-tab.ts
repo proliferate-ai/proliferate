@@ -4,8 +4,10 @@ import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspa
 import {
   resolveFallbackWorkspaceShellTab,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import { resolveActiveWorkspaceShellTab } from "@/lib/domain/workspaces/tabs/active-shell-tab";
 import { useWorkspaceFileBuffersStore } from "@/stores/editor/workspace-file-buffers-store";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import {
   viewerTargetEditablePath,
   viewerTargetKey,
@@ -36,7 +38,7 @@ export function useCloseActiveWorkspaceTab(headerTabs: WorkspaceTabActionsContex
   });
 
   return useCallback((): CloseActiveWorkspaceTabResult => {
-    const activeShellTab = headerTabs.activeShellTab;
+    const activeShellTab = resolveActiveWorkspaceTabForClose(headerTabs);
     if (activeShellTab?.kind === "viewer") {
       const bufferPath = viewerTargetEditablePath(activeShellTab.target);
       const activeTargetKey = viewerTargetKey(activeShellTab.target);
@@ -101,8 +103,33 @@ export function useCloseActiveWorkspaceTab(headerTabs: WorkspaceTabActionsContex
     clearBuffer,
     closeTarget,
     headerTabs.activeShellTab,
+    headerTabs.activeShellTabKey,
+    headerTabs.materializedWorkspaceId,
     headerTabs.orderedTabs,
     headerTabs.selectedWorkspaceId,
+    headerTabs.shellRows,
     headerTabs.workspaceUiKey,
   ]);
+}
+
+function resolveActiveWorkspaceTabForClose(
+  headerTabs: WorkspaceTabActionsContext,
+): ReturnType<typeof resolveActiveWorkspaceShellTab> {
+  const activeChatRow = headerTabs.shellRows.find((shellRow) =>
+    shellRow.kind === "chat"
+    && shellRow.row.kind === "tab"
+    && shellRow.row.tab.isActive
+  );
+  return resolveActiveWorkspaceShellTab({
+    activeShellTab: headerTabs.activeShellTab,
+    activeShellTabKey: headerTabs.activeShellTabKey,
+    materializedWorkspaceId: headerTabs.materializedWorkspaceId,
+    orderedTabs: headerTabs.orderedTabs,
+    renderedActiveChatSessionId:
+      activeChatRow?.kind === "chat" && activeChatRow.row.kind === "tab"
+        ? activeChatRow.row.tab.id
+        : null,
+    state: useWorkspaceUiStore.getState(),
+    workspaceUiKey: headerTabs.workspaceUiKey,
+  });
 }

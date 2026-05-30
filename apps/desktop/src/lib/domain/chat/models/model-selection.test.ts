@@ -237,7 +237,7 @@ describe("buildModelSelectorGroups", () => {
     ]);
   });
 
-  it("keeps catalog-visible Claude models when active live controls omit them", () => {
+  it("shows catalog-only Claude models as new-chat actions when active live controls omit them", () => {
     const groups = buildModelSelectorGroups(
       [
         launchAgent("claude", [
@@ -293,7 +293,7 @@ describe("buildModelSelectorGroups", () => {
         kind: "claude",
         modelId: "us.anthropic.claude-opus-4-7",
         displayName: "Opus 4.7",
-        actionKind: "update_current_chat",
+        actionKind: "open_new_chat",
         isSelected: false,
       },
     ]);

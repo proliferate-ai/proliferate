@@ -757,7 +757,9 @@ export function ProductSidebarWorkspaceRow({
         </div>
 
         {(trailingLabel || shortcutLabel || hoverAction) ? (
-          <div className="ml-1.5 grid h-5 min-w-[26px] shrink-0 items-center justify-items-end">
+          <div className={`grid h-5 min-w-[26px] shrink-0 items-center justify-items-end ${
+            detail ? "ml-[5px]" : "ml-1.5"
+          }`}>
             {trailingLabel ? (
               <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-sm leading-4 tabular-nums text-sidebar-muted-foreground transition-opacity duration-150 ${
                 shortcutLabel && shortcutRevealVisible

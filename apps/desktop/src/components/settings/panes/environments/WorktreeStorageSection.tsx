@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { WorktreeInventoryRow } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
-import { GitBranch, RefreshCw, Trash } from "@proliferate/ui/icons";
+import { RefreshCw, Trash, Tree } from "@proliferate/ui/icons";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import {
@@ -282,7 +282,7 @@ function WorktreeRow({
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="flex min-w-0 items-center gap-3">
-        <GitBranch className="size-5 shrink-0 text-muted-foreground" />
+        <Tree className="size-5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium text-foreground">{label}</span>

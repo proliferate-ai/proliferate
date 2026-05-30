@@ -62,7 +62,7 @@ describe("shortcut dispatch policy", () => {
 
   it("still blocks rename in disallowed text-entry targets", () => {
     expect(shouldDispatchKeyboardShortcut({
-      ...SHORTCUTS.addRepository,
+      ...SHORTCUTS.settingsSectionByIndex,
       id: SHORTCUTS.renameSession.id,
     }, {
       key: "r",
@@ -87,9 +87,9 @@ describe("shortcut dispatch policy", () => {
       },
     });
 
-    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.addRepository, {
-      key: "o",
-      code: "KeyO",
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.settingsSectionByIndex, {
+      key: "3",
+      code: "Digit3",
       metaKey: true,
       ctrlKey: false,
       shiftKey: false,
@@ -99,7 +99,7 @@ describe("shortcut dispatch policy", () => {
     } as KeyboardEvent)).toBe(false);
   });
 
-  it("blocks add repository in text-entry targets", () => {
+  it("allows workspace commands from text-entry targets", () => {
     expect(shouldDispatchKeyboardShortcut(SHORTCUTS.addRepository, {
       key: "o",
       code: "KeyO",
@@ -112,7 +112,21 @@ describe("shortcut dispatch policy", () => {
         tagName: "TEXTAREA",
         isContentEditable: false,
       } as unknown as EventTarget,
-    } as KeyboardEvent)).toBe(false);
+    } as KeyboardEvent)).toBe(true);
+
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.closeOtherTabsShiftAlias, {
+      key: "O",
+      code: "KeyO",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+      defaultPrevented: true,
+      target: {
+        tagName: "TEXTAREA",
+        isContentEditable: false,
+      } as unknown as EventTarget,
+    } as KeyboardEvent)).toBe(true);
   });
 
   it("allows the keyboard shortcut sheet from text-entry targets", () => {
@@ -387,12 +401,12 @@ describe("shortcut dispatch policy", () => {
       } as unknown as EventTarget,
     } as KeyboardEvent)).toBe(true);
 
-    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.previousTabAngle, {
-      key: "<",
-      code: "Comma",
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.previousTabArrow, {
+      key: "ArrowLeft",
+      code: "ArrowLeft",
       metaKey: true,
       ctrlKey: false,
-      shiftKey: true,
+      shiftKey: false,
       altKey: true,
       defaultPrevented: true,
       target: {
@@ -415,12 +429,12 @@ describe("shortcut dispatch policy", () => {
       } as unknown as EventTarget,
     } as KeyboardEvent)).toBe(true);
 
-    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.nextTabAngle, {
-      key: ">",
-      code: "Period",
+    expect(shouldDispatchKeyboardShortcut(SHORTCUTS.nextTabArrow, {
+      key: "ArrowRight",
+      code: "ArrowRight",
       metaKey: true,
       ctrlKey: false,
-      shiftKey: true,
+      shiftKey: false,
       altKey: true,
       defaultPrevented: true,
       target: {

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026-05-26.1",
-  "generatedAt": "2026-05-26T06:25:25Z",
+  "catalogVersion": "2026-05-29.1",
+  "generatedAt": "2026-05-29T00:00:00Z",
   "compatibility": {
     "minRuntimeVersion": "0.1.0",
     "maxRuntimeVersion": null,
@@ -69,6 +69,7 @@
         "dynamicModels": false,
         "modelDisplayPolicy": {
           "defaultVisibleModelIds": [
+            "us.anthropic.claude-opus-4-8",
             "us.anthropic.claude-opus-4-7",
             "us.anthropic.claude-sonnet-4-6",
             "haiku"
@@ -83,11 +84,11 @@
         },
         "models": [
           {
-            "id": "us.anthropic.claude-opus-4-7",
-            "displayName": "Opus 4.7",
-            "description": "Opus 4.7 · Most capable for complex work",
+            "id": "us.anthropic.claude-opus-4-8",
+            "displayName": "Opus 4.8",
+            "description": "Opus 4.8 · Most capable for complex work",
             "aliases": [
-              "claude-opus-4-7"
+              "claude-opus-4-8"
             ],
             "status": "active",
             "isDefault": false,
@@ -105,20 +106,63 @@
             "defaultOptIn": true
           },
           {
-            "id": "us.anthropic.claude-opus-4-7[1m]",
-            "displayName": "Opus 4.7 (1M context)",
-            "description": "Opus 4.7 for long sessions",
+            "id": "us.anthropic.claude-opus-4-8[1m]",
+            "displayName": "Opus 4.8 (1M context)",
+            "description": "Opus 4.8 for long sessions",
             "aliases": [
               "opus[1m]",
-              "claude-opus-4-7-1m",
-              "claude-opus-4-6-1m",
-              "claude-opus-4-5-1m"
+              "claude-opus-4-8-1m"
             ],
             "status": "active",
             "isDefault": false,
             "provider": "anthropic",
             "tags": [
               "frontier",
+              "long-context"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": "1m"
+            },
+            "compatibility": {},
+            "launchRemediation": null,
+            "defaultOptIn": false
+          },
+          {
+            "id": "us.anthropic.claude-opus-4-7",
+            "displayName": "Opus 4.7",
+            "description": "Opus 4.7 · Most capable for complex work",
+            "aliases": [
+              "claude-opus-4-7"
+            ],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [
+              "previous"
+            ],
+            "capabilities": {
+              "image": true,
+              "audio": false,
+              "contextWindow": null
+            },
+            "compatibility": {},
+            "launchRemediation": null,
+            "defaultOptIn": true
+          },
+          {
+            "id": "us.anthropic.claude-opus-4-7[1m]",
+            "displayName": "Opus 4.7 (1M context)",
+            "description": "Opus 4.7 for long sessions",
+            "aliases": [
+              "claude-opus-4-7-1m"
+            ],
+            "status": "active",
+            "isDefault": false,
+            "provider": "anthropic",
+            "tags": [
+              "previous",
               "long-context"
             ],
             "capabilities": {

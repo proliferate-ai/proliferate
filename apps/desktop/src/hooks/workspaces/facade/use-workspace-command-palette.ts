@@ -346,7 +346,7 @@ export function useWorkspaceCommandPalette({
       value: commandPaletteCommandValue("workspace.new-worktree"),
       group: "app",
       label: "New Worktree Workspace",
-      icon: "git-branch",
+      icon: "tree",
       shortcut: getShortcutDisplayLabel(SHORTCUTS.newWorktree),
       disabledReason: appActions.newWorktreeWorkspace.disabledReason,
       execute: () => appActions.newWorktreeWorkspace.execute("palette"),

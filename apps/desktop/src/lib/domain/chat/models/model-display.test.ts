@@ -8,7 +8,7 @@ import {
 const MODEL_CONTROL = {
   currentValue: "opus[1m]",
   values: [
-    { value: "opus[1m]", label: "Opus 4.7" },
+    { value: "opus[1m]", label: "Opus 4.8" },
     { value: "claude-opus-4-6", label: "Opus 4.6" },
   ],
 };
@@ -19,9 +19,9 @@ describe("resolveModelDisplayName", () => {
       resolveModelDisplayName({
         agentKind: "claude",
         modelId: "opus[1m]",
-        sourceLabels: ["Opus 4.7"],
+        sourceLabels: ["Opus 4.8"],
       }),
-    ).toBe("Opus 4.7");
+    ).toBe("Opus 4.8");
   });
 
   it("keeps 1M context out of fallback primary labels", () => {
@@ -114,7 +114,7 @@ describe("resolveMatchingModelControlLabel", () => {
     expect(resolveMatchingModelControlLabel({
       modelId: "opus[1m]",
       control: MODEL_CONTROL,
-    })).toBe("Opus 4.7");
+    })).toBe("Opus 4.8");
   });
 
   it("ignores stale live-config labels for a different selected model", () => {

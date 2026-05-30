@@ -46,10 +46,12 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
     activeSessionId,
     currentLaunchIdentity,
     currentModelConfigId,
+    modelControl,
   } = useActiveSessionLaunchState();
   const scopedActiveSessionId = suppressActiveSessionState ? null : activeSessionId;
   const scopedCurrentLaunchIdentity = suppressActiveSessionState ? null : currentLaunchIdentity;
   const scopedCurrentModelConfigId = suppressActiveSessionState ? null : currentModelConfigId;
+  const scopedModelControl = suppressActiveSessionState ? null : modelControl;
 
   const handleLaunchSelect = useCallback((selection: ModelSelectorSelection) => {
     if (
@@ -63,6 +65,10 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
       scopedActiveSessionId
       && scopedCurrentLaunchIdentity?.kind === selection.kind
       && scopedCurrentModelConfigId
+      && (
+        !scopedModelControl
+        || scopedModelControl.values.some((value) => value.value === selection.modelId)
+      )
     ) {
       void setActiveSessionConfigOption(scopedCurrentModelConfigId, selection.modelId)
         .then(() => {
@@ -126,6 +132,7 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
     scopedActiveSessionId,
     scopedCurrentLaunchIdentity,
     scopedCurrentModelConfigId,
+    scopedModelControl,
   ]);
 
   return {

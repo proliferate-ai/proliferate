@@ -1,4 +1,4 @@
-use crate::domains::agents::model::ModelRegistryMetadata;
+use crate::domains::agents::model::{ModelRegistryMetadata, ModelRegistryModelMetadata};
 
 use super::model::{DynamicModelRegistrySnapshot, DynamicModelRegistryStatus, ResolvedModelIntent};
 use super::projection::{is_snapshot_launch_usable, launch_registry_for_kind};
@@ -7,11 +7,6 @@ use super::store::DynamicModelRegistryStore;
 #[derive(Debug)]
 pub enum ModelResolutionError {
     Unsupported(String),
-    Invalid(String),
-}
-
-#[derive(Debug)]
-enum CatalogIdResolutionError {
     Invalid(String),
 }
 
@@ -102,36 +97,26 @@ pub fn resolve_model_id(
     model_registry: &ModelRegistryMetadata,
     provided_model_id: Option<&str>,
 ) -> Result<Option<String>, ModelResolutionError> {
-    let valid_ids = model_registry
-        .models
-        .iter()
-        .map(|model| model.id.as_str())
-        .collect::<Vec<_>>();
-    let resolved_model_id = provided_model_id
+    let selected_model = match provided_model_id
         .map(str::trim)
         .filter(|model_id| !model_id.is_empty())
-        .map(|model_id| {
-            if valid_ids.contains(&model_id) {
-                return model_id;
-            }
-            let normalized_model_id =
-                normalize_legacy_model_id(model_registry.kind.as_str(), model_id)
-                    .unwrap_or(model_id);
-            resolve_model_alias(model_registry, normalized_model_id).unwrap_or(normalized_model_id)
-        });
-
-    resolve_catalog_id(
-        resolved_model_id,
-        &valid_ids,
-        model_registry.default_model_id.as_deref(),
-        "model",
-    )
-    .map_err(|error| match (provided_model_id, error) {
-        (Some(model_id), CatalogIdResolutionError::Invalid(_)) => {
-            ModelResolutionError::Unsupported(model_id.trim().to_string())
+    {
+        Some(model_id) => resolve_requested_model(model_registry, model_id)
+            .ok_or_else(|| ModelResolutionError::Unsupported(model_id.to_string()))?,
+        None => {
+            let Some(default_model_id) = model_registry.default_model_id.as_deref() else {
+                return Ok(None);
+            };
+            find_model_by_id(model_registry, default_model_id).ok_or_else(|| {
+                ModelResolutionError::Invalid(format!("invalid model ID: '{default_model_id}'"))
+            })?
         }
-        (_, CatalogIdResolutionError::Invalid(detail)) => ModelResolutionError::Invalid(detail),
-    })
+    };
+
+    Ok(Some(resolve_model_launch_id(
+        model_registry,
+        selected_model,
+    )))
 }
 
 enum LaunchSnapshotDecision {
@@ -200,34 +185,54 @@ fn unusable_dynamic_snapshot_message(
     format!("{agent_kind} model registry is unusable; refresh models before launching")
 }
 
-fn resolve_model_alias<'a>(
+fn resolve_requested_model<'a>(
     model_registry: &'a ModelRegistryMetadata,
     provided_model_id: &str,
-) -> Option<&'a str> {
+) -> Option<&'a ModelRegistryModelMetadata> {
+    find_model_by_id(model_registry, provided_model_id).or_else(|| {
+        let normalized_model_id =
+            normalize_legacy_model_id(model_registry.kind.as_str(), provided_model_id)
+                .unwrap_or(provided_model_id);
+        find_model_by_id_or_alias(model_registry, normalized_model_id)
+    })
+}
+
+fn find_model_by_id<'a>(
+    model_registry: &'a ModelRegistryMetadata,
+    model_id: &str,
+) -> Option<&'a ModelRegistryModelMetadata> {
     model_registry
         .models
         .iter()
-        .find(|model| model.aliases.iter().any(|alias| alias == provided_model_id))
-        .map(|model| model.id.as_str())
+        .find(|model| model.id == model_id)
 }
 
-fn resolve_catalog_id(
-    provided: Option<&str>,
-    valid_ids: &[&str],
-    default_id: Option<&str>,
-    label: &str,
-) -> Result<Option<String>, CatalogIdResolutionError> {
-    match provided {
-        Some(id) => {
-            if !valid_ids.contains(&id) {
-                return Err(CatalogIdResolutionError::Invalid(format!(
-                    "invalid {label} ID: '{id}'"
-                )));
+fn find_model_by_id_or_alias<'a>(
+    model_registry: &'a ModelRegistryMetadata,
+    model_id: &str,
+) -> Option<&'a ModelRegistryModelMetadata> {
+    model_registry
+        .models
+        .iter()
+        .find(|model| model.id == model_id || model.aliases.iter().any(|alias| alias == model_id))
+}
+
+fn resolve_model_launch_id(
+    model_registry: &ModelRegistryMetadata,
+    model: &ModelRegistryModelMetadata,
+) -> String {
+    if model_registry.kind == "claude" {
+        for launch_id in ["sonnet", "sonnet[1m]", "opus[1m]", "haiku"] {
+            if model.id == launch_id || model.aliases.iter().any(|alias| alias == launch_id) {
+                return launch_id.to_string();
             }
-            Ok(Some(id.to_string()))
         }
-        None => Ok(default_id.map(|value| value.to_string())),
+        if let Some(normalized) = normalize_legacy_model_id("claude", &model.id) {
+            return normalized.to_string();
+        }
     }
+
+    model.id.clone()
 }
 
 fn normalize_legacy_model_id(agent_kind: &str, model_id: &str) -> Option<&'static str> {
@@ -236,9 +241,25 @@ fn normalize_legacy_model_id(agent_kind: &str, model_id: &str) -> Option<&'stati
     }
 
     match model_id {
-        "claude-sonnet-4-5" | "claude-sonnet-4-6" => Some("sonnet"),
-        "claude-sonnet-4-5-1m" | "claude-sonnet-4-6-1m" => Some("sonnet[1m]"),
-        "claude-opus-4-5" | "claude-opus-4-6-1m" | "opus" => Some("opus[1m]"),
+        "claude-sonnet-4-5" | "claude-sonnet-4-6" | "us.anthropic.claude-sonnet-4-6" => {
+            Some("sonnet")
+        }
+        "claude-sonnet-4-5-1m" | "claude-sonnet-4-6-1m" | "us.anthropic.claude-sonnet-4-6[1m]" => {
+            Some("sonnet[1m]")
+        }
+        "claude-opus-4-5"
+        | "claude-opus-4-6-1m"
+        | "claude-opus-4-7"
+        | "claude-opus-4-7-1m"
+        | "claude-opus-4-8"
+        | "claude-opus-4-8-1m"
+        | "us.anthropic.claude-opus-4-6-v1"
+        | "us.anthropic.claude-opus-4-6-v1[1m]"
+        | "us.anthropic.claude-opus-4-7"
+        | "us.anthropic.claude-opus-4-7[1m]"
+        | "us.anthropic.claude-opus-4-8"
+        | "us.anthropic.claude-opus-4-8[1m]"
+        | "opus" => Some("opus[1m]"),
         "claude-haiku-4-5" => Some("haiku"),
         _ => None,
     }
@@ -335,6 +356,33 @@ mod tests {
             .expect("catalog alias should resolve");
 
         assert_eq!(resolved.as_deref(), Some("opus[1m]"));
+    }
+
+    #[test]
+    fn resolves_claude_catalog_ids_to_live_launch_ids() {
+        let mut sonnet = plain_model("us.anthropic.claude-sonnet-4-6", true);
+        sonnet.aliases = vec!["sonnet".to_string(), "claude-sonnet-4-6".to_string()];
+        let opus = plain_model("us.anthropic.claude-opus-4-8", false);
+        let mut opus_1m = plain_model("us.anthropic.claude-opus-4-8[1m]", false);
+        opus_1m.aliases = vec!["opus[1m]".to_string(), "claude-opus-4-8-1m".to_string()];
+        let registry = ModelRegistryMetadata {
+            kind: "claude".to_string(),
+            display_name: "Claude".to_string(),
+            default_model_id: Some("us.anthropic.claude-sonnet-4-6".to_string()),
+            models: vec![sonnet, opus, opus_1m],
+        };
+
+        let default_resolved =
+            resolve_model_id(&registry, None).expect("default catalog model should resolve");
+        let opus_resolved = resolve_model_id(&registry, Some("us.anthropic.claude-opus-4-8"))
+            .expect("catalog Opus model should resolve");
+        let opus_1m_resolved =
+            resolve_model_id(&registry, Some("us.anthropic.claude-opus-4-8[1m]"))
+                .expect("catalog Opus 1M model should resolve");
+
+        assert_eq!(default_resolved.as_deref(), Some("sonnet"));
+        assert_eq!(opus_resolved.as_deref(), Some("opus[1m]"));
+        assert_eq!(opus_1m_resolved.as_deref(), Some("opus[1m]"));
     }
 
     #[test]

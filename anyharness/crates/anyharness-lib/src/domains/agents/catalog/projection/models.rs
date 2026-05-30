@@ -216,8 +216,8 @@ mod tests {
                     .contains("Best for everyday tasks")
         }));
         assert!(labels.iter().any(|(id, name, description)| {
-            *id == "us.anthropic.claude-opus-4-7[1m]"
-                && *name == "Opus 4.7 (1M context)"
+            *id == "us.anthropic.claude-opus-4-8[1m]"
+                && *name == "Opus 4.8 (1M context)"
                 && description.unwrap_or("").contains("long sessions")
         }));
     }

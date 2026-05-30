@@ -186,7 +186,7 @@ export const SHORTCUTS = {
     description: "Add repository",
     owner: "js",
     match: { kind: "fixed", key: "o", meta: true, shift: false, alt: false },
-    allowInInputs: false,
+    allowInInputs: true,
   },
   copyWorkspacePath: {
     id: "workspace.copy-path",
@@ -242,13 +242,13 @@ export const SHORTCUTS = {
     match: { kind: "fixed-code", code: "BracketLeft", meta: true, shift: true, alt: false },
     allowInInputs: true,
   },
-  previousTabAngle: {
+  previousTabArrow: {
     id: "workspace.previous-tab",
-    label: "⌘⌥<",
-    nonMacLabel: "Ctrl+Alt+<",
+    label: "⌘⌥←",
+    nonMacLabel: "Ctrl+Alt+←",
     description: "Previous tab",
     owner: "js",
-    match: { kind: "fixed-code", code: "Comma", meta: true, shift: true, alt: true },
+    match: { kind: "fixed", key: "ArrowLeft", meta: true, shift: false, alt: true },
     allowInInputs: true,
   },
   nextTab: {
@@ -260,13 +260,13 @@ export const SHORTCUTS = {
     match: { kind: "fixed-code", code: "BracketRight", meta: true, shift: true, alt: false },
     allowInInputs: true,
   },
-  nextTabAngle: {
+  nextTabArrow: {
     id: "workspace.next-tab",
-    label: "⌘⌥>",
-    nonMacLabel: "Ctrl+Alt+>",
+    label: "⌘⌥→",
+    nonMacLabel: "Ctrl+Alt+→",
     description: "Next tab",
     owner: "js",
-    match: { kind: "fixed-code", code: "Period", meta: true, shift: true, alt: true },
+    match: { kind: "fixed", key: "ArrowRight", meta: true, shift: false, alt: true },
     allowInInputs: true,
   },
   tabByIndex: {
@@ -337,7 +337,7 @@ export const SHORTCUTS = {
     description: "Close other tabs",
     owner: "js",
     match: { kind: "fixed", key: "o", meta: true, shift: true, alt: false },
-    allowInInputs: false,
+    allowInInputs: true,
   },
   focusChat: {
     id: "workspace.focus-chat",
@@ -471,9 +471,9 @@ export const SHORTCUT_GROUPS = [
     title: "Tabs",
     shortcutKeys: [
       "previousTab",
-      "previousTabAngle",
+      "previousTabArrow",
       "nextTab",
-      "nextTabAngle",
+      "nextTabArrow",
       "tabByIndex",
       "newSessionTab",
       "restoreTab",

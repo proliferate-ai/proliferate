@@ -27,6 +27,7 @@ export type CommandPaletteIconId =
   | "rotate-ccw"
   | "settings"
   | "terminal"
+  | "tree"
   | "arrow-left"
   | "arrow-right";
 

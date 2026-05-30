@@ -46,10 +46,12 @@ export function resolveVisibleChatSessionIds(args: {
   recentlyHiddenIds?: string[];
   activeSessionId?: string | null;
 }): VisibleChatSessionResolution {
+  const hiddenSet = new Set(args.recentlyHiddenIds ?? []);
+  const activeSessionId = args.activeSessionId ?? null;
   const unresolvedPersistedIds = args.includeUnresolvedPersistedIds
     ? uniqueIds([
       ...(args.persistedVisibleIds ?? []),
-      args.activeSessionId ?? "",
+      activeSessionId && !hiddenSet.has(activeSessionId) ? activeSessionId : "",
     ]).filter(Boolean)
     : [];
   const liveIds = uniqueIds([
@@ -62,7 +64,6 @@ export function resolveVisibleChatSessionIds(args: {
       .filter((session) => !!session.parentSessionId)
       .map((session) => [session.sessionId, session.parentSessionId!]),
   );
-  const hiddenSet = new Set(args.recentlyHiddenIds ?? []);
   const topLevelIds = liveIds.filter((id) => !childToParent.has(id));
   const prunedPersistedVisibleIds = uniqueIds(args.persistedVisibleIds ?? [])
     .filter((id) => liveSet.has(id));
@@ -84,8 +85,12 @@ export function resolveVisibleChatSessionIds(args: {
     }
   }
 
-  const activeSessionId = args.activeSessionId ?? null;
-  if (activeSessionId && liveSet.has(activeSessionId) && !baseSet.has(activeSessionId)) {
+  if (
+    activeSessionId
+    && liveSet.has(activeSessionId)
+    && !hiddenSet.has(activeSessionId)
+    && !baseSet.has(activeSessionId)
+  ) {
     baseVisible.push(activeSessionId);
     baseSet.add(activeSessionId);
   }

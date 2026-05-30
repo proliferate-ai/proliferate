@@ -10,6 +10,7 @@ import { ConnectedReviewSetupDialog } from "@/components/workspace/reviews/Conne
 import { ChatView } from "@/components/workspace/chat/ChatView";
 import { GlobalHeader } from "@/components/workspace/shell/topbar/GlobalHeader";
 import { WorkspaceContentView } from "@/components/workspace/shell/screen/WorkspaceContentView";
+import { WorkspaceShellShortcuts } from "@/components/workspace/shell/screen/WorkspaceShellShortcuts";
 import {
   WorkspaceHeaderTabsViewModelProvider,
 } from "@/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
@@ -194,6 +195,9 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
           <WorkspaceHeaderTabsViewModelProvider
             enabled={hasWorkspaceShell && !hasLaunchIntentOnlyShell}
           >
+            {hasWorkspaceShell && !hasLaunchIntentOnlyShell ? (
+              <WorkspaceShellShortcuts enabled={visible} />
+            ) : null}
             <div
               className={`h-screen flex overflow-hidden ${chromeClasses.root}`}
               data-workspace-shell

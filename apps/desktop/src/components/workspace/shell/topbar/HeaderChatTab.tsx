@@ -109,6 +109,10 @@ export function HeaderChatTab({
     if (!canMultiSelect || !isPrimaryMultiSelectPointer(event)) {
       if (event.isPrimary && event.button === 0) {
         onPreview(tab.id);
+        if (!tab.isActive) {
+          activateTab();
+          suppressNextSelectClick(tab.id);
+        }
       }
       return;
     }
@@ -120,6 +124,7 @@ export function HeaderChatTab({
 
   const handleSelect = (event: MouseEvent<HTMLButtonElement>) => {
     if (shouldSuppressClick()) {
+      consumeSuppressedSelectClick(tab.id);
       onSuppressSelect();
       return;
     }

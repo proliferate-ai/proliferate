@@ -7,7 +7,6 @@ import {
   CreditCard,
   Archive,
   FolderList,
-  GitBranch,
   Keyboard,
   LifeBuoy,
   Palette,
@@ -16,6 +15,7 @@ import {
   Settings,
   Shield,
   SlidersHorizontal,
+  Tree,
   UsersRound,
 } from "@proliferate/ui/icons";
 import type { IconProps } from "@proliferate/ui/icons";
@@ -61,7 +61,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     heading: "Workspace",
     items: [
       { kind: "section", id: "environments", label: "Environments", icon: FolderList },
-      { kind: "section", id: "worktrees", label: "Worktrees", icon: GitBranch },
+      { kind: "section", id: "worktrees", label: "Worktrees", icon: Tree },
       { kind: "section", id: "archived-chats", label: "Archived chats", icon: Archive },
       {
         kind: "section",

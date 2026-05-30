@@ -11,6 +11,7 @@ import {
   GitCommit,
   Spinner,
   Terminal,
+  Tree,
 } from "@proliferate/ui/icons";
 import { mobilityReconnectCopy } from "@/lib/domain/workspaces/mobility/presentation";
 import type { MobilityPromptState } from "@/lib/domain/workspaces/mobility/mobility-prompt";
@@ -70,6 +71,7 @@ function DestinationOptionIcon({
     case "ssh_target":
       return <Terminal className="size-full" />;
     case "local_worktree":
+      return <Tree className="size-full" />;
     case "local_workspace":
     default:
       return <FolderOpen className="size-full" />;
