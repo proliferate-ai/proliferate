@@ -19,6 +19,14 @@ describe("auth product panels", () => {
     vi.useRealTimers();
   });
 
+  function readVisibleBrailleDots(container: HTMLElement) {
+    return Array.from(
+      container.querySelectorAll<HTMLElement>('[data-braille-dot][data-visible="true"]'),
+    )
+      .map((element) => element.dataset.brailleDot)
+      .join(",");
+  }
+
   it("renders the shared provider order and sign-in copy", () => {
     render(
       <AuthStartPanel
@@ -110,16 +118,16 @@ describe("auth product panels", () => {
       "absolute inset-0 flex items-center justify-center",
     );
 
-    const seenFrames = new Set<string>();
-    const readBrailleFrame = () =>
-      screen.queryByTestId("redirect-callback-braille-layer")?.textContent ?? "";
-    seenFrames.add(readBrailleFrame());
+    const seenDotFrames = new Set<string>([readVisibleBrailleDots(container)]);
     for (let frame = 1; frame < 13; frame += 1) {
       act(() => {
         vi.advanceTimersByTime(60);
       });
-      seenFrames.add(readBrailleFrame());
+      seenDotFrames.add(readVisibleBrailleDots(container));
     }
+
+    expect(readVisibleBrailleDots(container)).toBe("0");
+
     act(() => {
       vi.advanceTimersByTime(120);
     });
@@ -128,10 +136,9 @@ describe("auth product panels", () => {
       "absolute inset-0 flex items-center justify-center",
     );
     expect(screen.queryByTestId("redirect-callback-braille-layer")).toBeNull();
-    expect(seenFrames).toContain("⣿⣿");
-    expect(seenFrames).toContain("⣾⣿");
-    expect(seenFrames).toContain("⣴⣿");
-    expect(seenFrames).not.toContain("⠀⠀");
+    expect(seenDotFrames).toContain("0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15");
+    expect(seenDotFrames).toContain("0,1,2,4,5,8");
+    expect(seenDotFrames).not.toContain("15");
     expect(container.querySelector(".animate-resolve-0")).toBeTruthy();
   });
 });
