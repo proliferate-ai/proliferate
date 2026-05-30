@@ -6,10 +6,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use anyharness_contract::v1::{
-    ContentPart, CoworkCodingCompletionSummary, CoworkCodingSessionSummary,
-    CoworkManagedWorkspaceSummary, CoworkManagedWorkspacesResponse, SessionEvent,
-    SessionLinkTurnCompletedPayload, SubagentTurnOutcome,
+    ContentPart, SessionEvent, SessionLinkTurnCompletedPayload, SubagentTurnOutcome,
 };
+use serde::Serialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -120,6 +119,69 @@ pub struct CoworkCodingStatusResult {
     pub session_link: crate::sessions::links::model::SessionLinkRecord,
     pub wake_scheduled: bool,
     pub latest_completion: Option<LinkCompletionRecord>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoworkManagedWorkspacesContext {
+    pub workspaces: Vec<CoworkManagedWorkspaceContext>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoworkManagedWorkspaceContext {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cowork_workspace_id: Option<String>,
+    pub ownership_id: String,
+    pub workspace_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_workspace_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub closed_at: Option<String>,
+    pub sessions: Vec<CoworkCodingSessionContext>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoworkCodingSessionContext {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cowork_agent_id: Option<String>,
+    pub session_link_id: String,
+    pub coding_session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    pub status: String,
+    pub agent_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode_id: Option<String>,
+    pub wake_scheduled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latest_completion: Option<CoworkCodingCompletion>,
+    pub link_created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub link_closed_at: Option<String>,
+    pub session_created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoworkCodingCompletion {
+    pub completion_id: String,
+    pub child_turn_id: String,
+    pub child_last_event_seq: i64,
+    pub outcome: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_event_seq: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_prompt_seq: Option<i64>,
+    pub created_at: String,
 }
 
 const DEFAULT_CODING_WORKSPACE_NAME: &str = "coding-workspace";
@@ -1225,7 +1287,7 @@ impl CoworkRuntime {
     pub async fn managed_workspaces_context(
         &self,
         parent_session_id: &str,
-    ) -> Result<CoworkManagedWorkspacesResponse, CoworkDelegationError> {
+    ) -> Result<CoworkManagedWorkspacesContext, CoworkDelegationError> {
         let workspaces = self
             .delegation_service
             .list_managed_workspaces(parent_session_id)?;
@@ -1252,11 +1314,11 @@ impl CoworkRuntime {
             let sessions = linked_sessions
                 .into_iter()
                 .map(|(link, session)| {
-                    let status = session.to_contract().status;
+                    let status = normalized_session_status(&session.status).to_string();
                     let latest_completion = self
                         .delegation_service
                         .latest_completion_for_link(&link.id)?
-                        .map(|record| CoworkCodingCompletionSummary {
+                        .map(|record| CoworkCodingCompletion {
                             completion_id: record.completion_id,
                             child_turn_id: record.child_turn_id,
                             child_last_event_seq: record.child_last_event_seq,
@@ -1265,7 +1327,7 @@ impl CoworkRuntime {
                             parent_prompt_seq: record.parent_prompt_seq,
                             created_at: record.created_at,
                         });
-                    Ok(CoworkCodingSessionSummary {
+                    Ok(CoworkCodingSessionContext {
                         cowork_agent_id: link.public_id.clone(),
                         session_link_id: link.id.clone(),
                         coding_session_id: session.id,
@@ -1283,7 +1345,7 @@ impl CoworkRuntime {
                     })
                 })
                 .collect::<anyhow::Result<Vec<_>>>()?;
-            summaries.push(CoworkManagedWorkspaceSummary {
+            summaries.push(CoworkManagedWorkspaceContext {
                 cowork_workspace_id: managed.public_id,
                 ownership_id: managed.id,
                 workspace_id: managed.workspace_id,
@@ -1294,7 +1356,7 @@ impl CoworkRuntime {
                 sessions,
             });
         }
-        Ok(CoworkManagedWorkspacesResponse {
+        Ok(CoworkManagedWorkspacesContext {
             workspaces: summaries,
         })
     }
@@ -1430,6 +1492,18 @@ fn normalize_optional_text(value: Option<String>) -> Option<String> {
 
 fn normalize_optional_ref(value: Option<&str>) -> Option<&str> {
     value.map(str::trim).filter(|value| !value.is_empty())
+}
+
+fn normalized_session_status(status: &str) -> &'static str {
+    match status {
+        "starting" => "starting",
+        "idle" => "idle",
+        "running" => "running",
+        "completed" => "completed",
+        "closed" => "closed",
+        "errored" => "errored",
+        _ => "errored",
+    }
 }
 
 fn cowork_transcript_search_text(record: &crate::sessions::model::SessionEventRecord) -> String {

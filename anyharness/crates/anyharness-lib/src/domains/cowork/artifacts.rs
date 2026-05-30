@@ -2,15 +2,13 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use anyharness_contract::v1::{
-    CoworkArtifactDetailResponse, CoworkArtifactManifestResponse, CoworkArtifactSummary,
-};
+use serde::Serialize;
 use uuid::Uuid;
 
 use super::manifest::{
     artifact_type_from_path, enrich_manifest_entry, load_manifest_if_present,
     load_manifest_or_empty, manifest_path, validate_relative_artifact_path,
-    ArtifactManifestDocument, ArtifactManifestEntry, CoworkArtifactError,
+    ArtifactManifestDocument, ArtifactManifestEntry, CoworkArtifactError, CoworkArtifactSummary,
     COWORK_ARTIFACT_MANIFEST_RELATIVE_PATH, COWORK_ARTIFACT_MANIFEST_VERSION,
 };
 use crate::workspaces::model::WorkspaceRecord;
@@ -36,6 +34,20 @@ pub struct UpdateCoworkArtifactInput {
     pub description: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoworkArtifactManifest {
+    pub version: u32,
+    pub artifacts: Vec<CoworkArtifactSummary>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoworkArtifactDetail {
+    pub artifact: CoworkArtifactSummary,
+    pub content: String,
+}
+
 impl CoworkArtifactRuntime {
     pub fn new() -> Self {
         Self::default()
@@ -44,7 +56,7 @@ impl CoworkArtifactRuntime {
     pub fn get_manifest(
         &self,
         workspace: &WorkspaceRecord,
-    ) -> Result<CoworkArtifactManifestResponse, CoworkArtifactError> {
+    ) -> Result<CoworkArtifactManifest, CoworkArtifactError> {
         ensure_cowork_workspace(workspace)?;
         let workspace_root = Path::new(&workspace.path);
         let manifest = load_manifest_or_empty(workspace_root)?;
@@ -54,7 +66,7 @@ impl CoworkArtifactRuntime {
             .map(|entry| enrich_manifest_entry(workspace_root, entry))
             .collect();
         artifacts.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
-        Ok(CoworkArtifactManifestResponse {
+        Ok(CoworkArtifactManifest {
             version: COWORK_ARTIFACT_MANIFEST_VERSION,
             artifacts,
         })
@@ -64,7 +76,7 @@ impl CoworkArtifactRuntime {
         &self,
         workspace: &WorkspaceRecord,
         artifact_id: &str,
-    ) -> Result<CoworkArtifactDetailResponse, CoworkArtifactError> {
+    ) -> Result<CoworkArtifactDetail, CoworkArtifactError> {
         ensure_cowork_workspace(workspace)?;
         let workspace_root = Path::new(&workspace.path);
         let manifest = load_manifest_or_empty(workspace_root)?;
@@ -78,7 +90,7 @@ impl CoworkArtifactRuntime {
         }
         let content = std::fs::read_to_string(workspace_root.join(&entry.path))
             .map_err(|error| CoworkArtifactError::ArtifactFileInvalid(error.to_string()))?;
-        Ok(CoworkArtifactDetailResponse { artifact, content })
+        Ok(CoworkArtifactDetail { artifact, content })
     }
 
     pub fn create_artifact(

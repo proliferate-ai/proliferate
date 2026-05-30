@@ -1156,7 +1156,7 @@ pub async fn reveal_mcp_elicitation_url(
     ApiError,
 > {
     assert_session_auth_scope(&state, &auth, &session_id)?;
-    let response = state
+    let reveal = state
         .session_runtime
         .reveal_mcp_elicitation_url(&session_id, &request_id)
         .await
@@ -1164,7 +1164,10 @@ pub async fn reveal_mcp_elicitation_url(
 
     let mut headers = HeaderMap::new();
     headers.insert("cache-control", HeaderValue::from_static("no-store"));
-    Ok((headers, Json(response)))
+    Ok((
+        headers,
+        Json(anyharness_contract::v1::McpElicitationUrlRevealResponse { url: reveal.url }),
+    ))
 }
 
 fn raw_notification_record_to_envelope(

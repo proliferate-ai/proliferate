@@ -1,9 +1,10 @@
 use super::model::{
-    SubagentCompletionRecord, SubagentEventSlice, SubagentLatestTurn, SubagentSummary,
-    SubagentTranscriptSearchMatch, SubagentWakeScheduleRecord,
+    normalized_session_status, ChildSubagentContext, ParentSubagentLinkContext,
+    SessionSubagentsContext, SubagentCompletionRecord, SubagentEventSlice, SubagentLatestTurn,
+    SubagentSummary, SubagentTranscriptSearchMatch, SubagentWakeScheduleRecord,
 };
 use super::store::{SubagentCompletionInsert, SubagentStore};
-use super::summary::completion_to_contract;
+use super::summary::completion_to_summary;
 use super::transcript::{
     search_match_for_record, summarize_turn_events, LATEST_TURN_EVENT_BUDGET,
     READ_LATEST_TURNS_DEFAULT_LIMIT, READ_LATEST_TURNS_MAX_LIMIT, SEARCH_EVENT_BUDGET,
@@ -22,9 +23,6 @@ use crate::sessions::prompt::PromptPayload;
 use crate::sessions::store::SessionStore;
 use crate::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::workspaces::runtime::WorkspaceRuntime;
-use anyharness_contract::v1::{
-    ChildSubagentSummary, ParentSubagentLinkSummary, SessionSubagentsResponse,
-};
 use std::collections::HashSet;
 
 pub const MAX_SUBAGENTS_PER_PARENT: usize = 8;
@@ -286,7 +284,7 @@ impl SubagentService {
     pub fn subagent_context(
         &self,
         session_id: &str,
-    ) -> Result<SessionSubagentsResponse, SubagentError> {
+    ) -> Result<SessionSubagentsContext, SubagentError> {
         self.session_store
             .find_by_id(session_id)?
             .ok_or_else(|| SubagentError::ParentNotFound(session_id.to_string()))?;
@@ -294,7 +292,7 @@ impl SubagentService {
         let parent = if let Some(link) = self.link_service.find_subagent_parent(session_id)? {
             self.session_store
                 .find_by_id(&link.parent_session_id)?
-                .map(|parent| ParentSubagentLinkSummary {
+                .map(|parent| ParentSubagentLinkContext {
                     subagent_id: link.public_id.clone(),
                     session_link_id: link.id,
                     parent_session_id: parent.id,
@@ -326,15 +324,15 @@ impl SubagentService {
             let latest_completion = self
                 .subagent_store
                 .latest_completion_for_link(&link.id)?
-                .map(completion_to_contract);
+                .map(completion_to_summary);
             let wake_scheduled = scheduled_link_ids.contains(&link.id);
-            children.push(ChildSubagentSummary {
+            children.push(ChildSubagentContext {
                 subagent_id: link.public_id.clone(),
                 session_link_id: link.id,
                 child_session_id: child.id.clone(),
                 title: child.title.clone(),
                 label: link.label,
-                status: child.to_contract().status,
+                status: normalized_session_status(&child.status).to_string(),
                 agent_kind: child.agent_kind,
                 model_id: child.current_model_id.or(child.requested_model_id),
                 mode_id: child.current_mode_id.or(child.requested_mode_id),
@@ -346,7 +344,7 @@ impl SubagentService {
             });
         }
 
-        Ok(SessionSubagentsResponse { parent, children })
+        Ok(SessionSubagentsContext { parent, children })
     }
 
     pub fn find_subagent_parent(

@@ -1,6 +1,7 @@
 use anyharness_contract::v1::{
-    ProblemDetails, ScheduleSubagentWakeRequest, ScheduleSubagentWakeResponse,
-    SessionSubagentsResponse,
+    ChildSubagentSummary, ParentSubagentLinkSummary, ProblemDetails, ScheduleSubagentWakeRequest,
+    ScheduleSubagentWakeResponse, SessionStatus, SessionSubagentsResponse,
+    SubagentCompletionSummary as ContractSubagentCompletionSummary, SubagentTurnOutcome,
 };
 use axum::{
     extract::{Path, State},
@@ -11,6 +12,11 @@ use super::access::{assert_session_auth_scope, assert_workspace_mutable};
 use super::error::ApiError;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
+use crate::sessions::extensions::SessionTurnOutcome;
+use crate::sessions::subagents::model::{
+    ChildSubagentContext, ParentSubagentLinkContext, SessionSubagentsContext,
+    SubagentCompletionSummary,
+};
 use crate::sessions::subagents::service::SubagentError;
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
@@ -34,7 +40,7 @@ pub async fn get_session_subagents(
         .subagent_service
         .subagent_context(&session_id)
         .map_err(map_subagent_error)?;
-    Ok(Json(context))
+    Ok(Json(session_subagents_to_contract(context)))
 }
 
 #[utoipa::path(
@@ -88,6 +94,79 @@ pub async fn schedule_subagent_wake(
 
 #[allow(dead_code)]
 fn _problem_details_reference(_: ProblemDetails) {}
+
+fn session_subagents_to_contract(context: SessionSubagentsContext) -> SessionSubagentsResponse {
+    SessionSubagentsResponse {
+        parent: context.parent.map(parent_subagent_to_contract),
+        children: context
+            .children
+            .into_iter()
+            .map(child_subagent_to_contract)
+            .collect(),
+    }
+}
+
+fn parent_subagent_to_contract(parent: ParentSubagentLinkContext) -> ParentSubagentLinkSummary {
+    ParentSubagentLinkSummary {
+        subagent_id: parent.subagent_id,
+        session_link_id: parent.session_link_id,
+        parent_session_id: parent.parent_session_id,
+        parent_title: parent.parent_title,
+        parent_agent_kind: parent.parent_agent_kind,
+        parent_model_id: parent.parent_model_id,
+        label: parent.label,
+        link_created_at: parent.link_created_at,
+        link_closed_at: parent.link_closed_at,
+    }
+}
+
+fn child_subagent_to_contract(child: ChildSubagentContext) -> ChildSubagentSummary {
+    ChildSubagentSummary {
+        subagent_id: child.subagent_id,
+        session_link_id: child.session_link_id,
+        child_session_id: child.child_session_id,
+        title: child.title,
+        label: child.label,
+        status: session_status_to_contract(&child.status),
+        agent_kind: child.agent_kind,
+        model_id: child.model_id,
+        mode_id: child.mode_id,
+        link_created_at: child.link_created_at,
+        link_closed_at: child.link_closed_at,
+        child_created_at: child.child_created_at,
+        latest_completion: child.latest_completion.map(subagent_completion_to_contract),
+        wake_scheduled: child.wake_scheduled,
+    }
+}
+
+fn subagent_completion_to_contract(
+    completion: SubagentCompletionSummary,
+) -> ContractSubagentCompletionSummary {
+    ContractSubagentCompletionSummary {
+        completion_id: completion.completion_id,
+        child_turn_id: completion.child_turn_id,
+        outcome: match completion.outcome {
+            SessionTurnOutcome::Completed => SubagentTurnOutcome::Completed,
+            SessionTurnOutcome::Failed => SubagentTurnOutcome::Failed,
+            SessionTurnOutcome::Cancelled => SubagentTurnOutcome::Cancelled,
+        },
+        child_last_event_seq: completion.child_last_event_seq,
+        created_at: completion.created_at,
+        parent_event_seq: completion.parent_event_seq,
+        parent_prompt_seq: completion.parent_prompt_seq,
+    }
+}
+
+fn session_status_to_contract(status: &str) -> SessionStatus {
+    match status {
+        "starting" => SessionStatus::Starting,
+        "idle" => SessionStatus::Idle,
+        "running" => SessionStatus::Running,
+        "completed" => SessionStatus::Completed,
+        "closed" => SessionStatus::Closed,
+        _ => SessionStatus::Errored,
+    }
+}
 
 fn map_subagent_error(error: SubagentError) -> ApiError {
     match error {

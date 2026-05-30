@@ -1,11 +1,40 @@
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Component, Path, PathBuf};
 
-use anyharness_contract::v1::{CoworkArtifactSummary, CoworkArtifactType};
 use serde::{Deserialize, Serialize};
 
 pub const COWORK_ARTIFACT_MANIFEST_VERSION: u32 = 1;
 pub const COWORK_ARTIFACT_MANIFEST_RELATIVE_PATH: &str = ".proliferate/artifacts.json";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CoworkArtifactType {
+    #[serde(rename = "text/markdown")]
+    TextMarkdown,
+    #[serde(rename = "text/html")]
+    TextHtml,
+    #[serde(rename = "image/svg+xml")]
+    ImageSvgXml,
+    #[serde(rename = "application/vnd.proliferate.react")]
+    ApplicationVndProliferateReact,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoworkArtifactSummary {
+    pub id: String,
+    pub path: String,
+    pub r#type: CoworkArtifactType,
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub exists: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modified_at: Option<String>,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum CoworkArtifactError {
