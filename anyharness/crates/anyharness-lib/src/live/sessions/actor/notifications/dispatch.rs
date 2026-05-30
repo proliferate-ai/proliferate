@@ -7,7 +7,6 @@ use anyharness_contract::v1::{
 };
 use tokio::sync::Mutex;
 
-use crate::acp::persistence_sanitizer::sanitize_raw_notification_for_sqlite;
 use crate::domains::plans::service::PlanService;
 use crate::domains::reviews::service::ReviewService;
 use crate::live::sessions::actor::config::apply::set_select_option_current_value_for_purpose;
@@ -334,7 +333,7 @@ pub(in crate::live::sessions::actor) fn persist_raw_notification(
     kind: &str,
     notif: &acp::SessionNotification,
 ) -> anyhow::Result<()> {
-    let payload_json = serde_json::to_string(&sanitize_raw_notification_for_sqlite(notif))?;
+    let payload_json = serde_json::to_string(notif)?;
     session_store.append_raw_notification(
         session_id,
         kind,

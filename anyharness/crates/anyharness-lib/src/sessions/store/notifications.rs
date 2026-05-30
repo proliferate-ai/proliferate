@@ -1,7 +1,7 @@
 use rusqlite::params;
 
+use super::persisted_payloads::sanitize_raw_notification_json_for_sqlite;
 use super::SessionStore;
-use crate::acp::persistence_sanitizer::sanitize_raw_notification_json_for_sqlite;
 use crate::sessions::model::SessionRawNotificationRecord;
 
 impl SessionStore {

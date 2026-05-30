@@ -33,6 +33,51 @@ fn detects_when_a_session_has_started_a_turn() {
 }
 
 #[test]
+fn append_event_sanitizes_large_persisted_payloads() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+
+    let store = SessionStore::new(db);
+    store.insert(&session_record()).expect("insert session");
+
+    let oversized_text = "x".repeat(16 * 1024 + 128);
+    let payload_json = serde_json::json!({
+        "type": "item_delta",
+        "delta": {
+            "appendContentParts": [
+                {
+                    "type": "tool_result_text",
+                    "text": oversized_text,
+                }
+            ]
+        }
+    })
+    .to_string();
+
+    store
+        .append_event(&SessionEventRecord {
+            id: 0,
+            session_id: "session-1".to_string(),
+            seq: 1,
+            timestamp: "2026-03-25T00:01:00Z".to_string(),
+            event_type: "item_delta".to_string(),
+            turn_id: Some("turn-1".to_string()),
+            item_id: Some("item-1".to_string()),
+            payload_json,
+        })
+        .expect("append event");
+
+    let events = store.list_events("session-1").expect("list events");
+    let persisted: serde_json::Value =
+        serde_json::from_str(&events[0].payload_json).expect("parse event payload");
+    let content_part = &persisted["delta"]["appendContentParts"][0];
+
+    assert_eq!(content_part["textTruncated"], true);
+    assert_eq!(content_part["textOriginalBytes"], 16 * 1024 + 128);
+    assert!(content_part["text"].as_str().unwrap().len() <= 16 * 1024);
+}
+
+#[test]
 fn limited_event_reads_return_newest_events_in_ascending_order() {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);
