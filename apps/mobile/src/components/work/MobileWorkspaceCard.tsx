@@ -1,6 +1,10 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { mobileIconForRuntimeLocation, mobileIconForWorkSourceKind } from "../../lib/domain/work/mobile-work-presentation";
+import {
+  mobileColorKeyForWorkStatusTone,
+  mobileIconForRuntimeLocation,
+  mobileIconForWorkSourceKind,
+} from "../../lib/domain/work/mobile-work-presentation";
 import type { MobileWorkItem } from "../../hooks/work/derived/use-mobile-work-inventory";
 import { MobileIcon } from "../primitives/MobileIcon";
 import { colors, radius, spacing } from "../../styles/tokens";
@@ -21,14 +25,14 @@ export function MobileWorkspaceCard({
   onClaim,
 }: MobileWorkspaceCardProps) {
   const detailText = workspaceDetailText(item);
-  const blocked = item.view.status === "blocked" || item.view.status === "error";
-  const active = item.view.status === "active" || item.view.status === "running";
+  const statusColor = colors[mobileColorKeyForWorkStatusTone(item.view.statusIndicator.tone)];
   const unclaimed = item.view.unclaimed;
   const canClaim = Boolean(onClaim) && unclaimed;
 
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={`${item.view.title}, ${item.view.statusIndicator.label}`}
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
@@ -46,9 +50,9 @@ export function MobileWorkspaceCard({
           <View
             style={[
               styles.stateDot,
-              active && styles.stateDotActive,
-              blocked && styles.stateDotBlocked,
-              unclaimed && styles.stateDotUnclaimed,
+              item.view.statusIndicator.hollow
+                ? [styles.stateDotHollow, { borderColor: statusColor }]
+                : { backgroundColor: statusColor },
             ]}
           />
         </View>
@@ -103,7 +107,13 @@ function workspaceDetailText(item: MobileWorkItem): string | null {
     return item.view.activityPreview;
   }
   if (item.view.unclaimed) {
-    return "Unclaimed workspace";
+    return item.view.statusIndicator.label;
+  }
+  if (
+    item.view.statusIndicator.kind !== "idle" &&
+    item.view.statusIndicator.kind !== "ready"
+  ) {
+    return item.view.statusIndicator.label;
   }
   if (item.view.commandability !== "commandable") {
     return item.view.commandabilityLabel;
@@ -157,14 +167,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.borderHeavy,
   },
-  stateDotActive: {
-    backgroundColor: colors.info,
-  },
-  stateDotBlocked: {
-    backgroundColor: colors.destructive,
-  },
-  stateDotUnclaimed: {
-    backgroundColor: colors.success,
+  stateDotHollow: {
+    borderWidth: StyleSheet.hairlineWidth,
+    backgroundColor: "transparent",
   },
   cardTitleBlock: {
     flex: 1,

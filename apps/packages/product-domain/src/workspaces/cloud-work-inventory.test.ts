@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
+import type { CloudSessionProjection, CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
 
 import {
   buildCloudWorkInventory,
@@ -15,6 +15,7 @@ import {
   recentWorkCommandability,
   recentWorkRuntimeLocationForWorkspace,
   recentWorkSourceForWorkspace,
+  recentWorkStatusIndicatorForWorkspace,
 } from "./cloud-work-inventory";
 
 const NOW = Date.parse("2026-05-23T12:00:00Z");
@@ -71,6 +72,74 @@ describe("cloud work inventory", () => {
     expect(cloudWorkStatusForWorkspace(workspace({ workspaceStatus: "ready", runtime: runtime("paused") }))).toBe("ready");
   });
 
+  it("derives a shared status indicator without requiring server UI fields", () => {
+    expect(recentWorkStatusIndicatorForWorkspace(workspace({
+      workspaceStatus: "error",
+      lastError: "Runtime failed",
+    }))).toMatchObject({ kind: "error", tone: "danger", label: "Error", hollow: false });
+
+    expect(recentWorkStatusIndicatorForWorkspace(workspace({
+      lastSessionSummary: {
+        targetId: "target",
+        workspaceId: "runtime",
+        sessionId: "session",
+        title: "Awaiting approval",
+        status: "idle",
+        phase: "awaiting_interaction",
+        pendingInteractionCount: 1,
+        lastEventAt: "2026-05-23T11:56:00Z",
+      },
+    }))).toMatchObject({ kind: "needs_input", tone: "attention", label: "Needs input" });
+
+    expect(recentWorkStatusIndicatorForWorkspace(workspace({
+      workspaceStatus: "materializing",
+      status: "materializing",
+      runtime: runtime("provisioning"),
+    }))).toMatchObject({ kind: "running", tone: "progress", label: "In progress", live: true });
+
+    expect(recentWorkStatusIndicatorForWorkspace(workspace({
+      lastSessionSummary: {
+        targetId: "target",
+        workspaceId: "runtime",
+        sessionId: "session",
+        title: "Review",
+        status: "ready_for_review",
+        lastEventAt: "2026-05-23T11:56:00Z",
+      },
+    }))).toMatchObject({ kind: "review_ready", tone: "success", label: "Ready for review" });
+
+    expect(recentWorkStatusIndicatorForWorkspace(workspace({
+      sandboxType: "managed_personal",
+      targetId: "target",
+      anyharnessWorkspaceId: "runtime-workspace",
+      runtime: runtime("running"),
+    }))).toMatchObject({ kind: "ready", tone: "success", label: "Ready" });
+
+    expect(recentWorkStatusIndicatorForWorkspace(workspace({
+      sandboxType: "managed_personal",
+      targetId: "target",
+      runtime: runtime("running"),
+    }))).toMatchObject({ kind: "idle", tone: "muted", label: "Idle" });
+
+    expect(recentWorkStatusIndicatorForWorkspace(workspace({
+      lastSessionSummary: {
+        targetId: "target",
+        workspaceId: "runtime",
+        sessionId: "session",
+        title: "Failed session",
+        status: "failed",
+        lastEventAt: "2026-05-23T11:56:00Z",
+      },
+    }))).toMatchObject({ kind: "error", tone: "danger", label: "Error" });
+
+    expect(recentWorkStatusIndicatorForWorkspace(workspace({
+      sandboxType: "local",
+      exposureState: "untracked",
+      exposure: null,
+      runtime: runtime("running"),
+    }))).toMatchObject({ kind: "idle", tone: "muted", label: "Idle", hollow: true });
+  });
+
   it("dedupes duplicate workspace rows by merging complementary details", () => {
     const sparse = workspace({ id: "same", exposure: null });
     const rich = workspace({
@@ -124,6 +193,40 @@ describe("cloud work inventory", () => {
     expect(groups.map((group) => group.id)).toEqual(["chats", "slack"]);
     expect(groups[0]?.items.map((item) => item.id)).toEqual(["recent", "blocked"]);
     expect(groups[1]?.items[0]?.lastActivityLabel).toBe("2m");
+  });
+
+  it("includes billing-blocked work in needs-attention filters", () => {
+    const groups = buildCloudWorkInventory([
+      workspace({
+        id: "billing-blocked",
+        displayName: "Billing blocked",
+        billing: {
+          plan: "free",
+          billingMode: "free",
+          blockStatus: "allowed",
+          overageEnabled: false,
+          overageUsedCentsThisPeriod: 0,
+          startBlocked: true,
+          activeSpendHold: false,
+          activeSandboxCount: 0,
+        },
+      }),
+      workspace({
+        id: "quiet",
+        displayName: "Quiet",
+      }),
+    ], {
+      filters: { needsAttention: true },
+      nowMs: NOW,
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.items).toHaveLength(1);
+    expect(groups[0]?.items[0]).toMatchObject({
+      id: "billing-blocked",
+      status: "ready",
+      statusIndicator: { kind: "needs_input", label: "Needs input" },
+    });
   });
 
   it("uses latest session activity before workspace activity", () => {
@@ -184,6 +287,7 @@ describe("cloud work inventory", () => {
 
     expect(item.activityPreview).toBe("I fixed the mobile workspace list preview.");
     expect(item.searchText).toContain("mobile workspace list");
+    expect(item.statusIndicator.kind).toBe("idle");
   });
 
   it("falls back to specific blocker detail instead of blunt status copy", () => {
@@ -409,6 +513,7 @@ describe("cloud work inventory", () => {
       cloudAccessState: "enabled",
       commandability: "commandable",
       state: "running",
+      statusIndicator: { kind: "running", label: "In progress" },
       lastActivityLabel: "2m",
     });
     expect(rows[1]).toMatchObject({
@@ -419,7 +524,33 @@ describe("cloud work inventory", () => {
       runtimeLocation: "cloud_sandbox",
       commandability: "commandable",
       state: "idle",
+      statusIndicator: { kind: "idle", label: "Idle" },
     });
+  });
+
+  it("carries latest session previews into recent work rows", () => {
+    const rows = buildRecentWorkItems([
+      workspace({
+        id: "with-preview",
+        displayName: "Preview workspace",
+        lastSessionSummary: {
+          targetId: "target",
+          workspaceId: "runtime",
+          sessionId: "session",
+          title: "Session title",
+          status: "idle",
+          lastEventAt: "2026-05-23T11:58:00Z",
+          preview: "Want me to drill into one zone?",
+        },
+      }),
+    ], { nowMs: NOW });
+
+    expect(rows[0]).toMatchObject({
+      id: "session:with-preview:session",
+      activityPreview: "Want me to drill into one zone?",
+      statusIndicator: { kind: "idle" },
+    });
+    expect(rows[0]?.searchText).toContain("drill into one zone");
   });
 
   it("keeps the active workspace row even when that workspace has recent sessions", () => {
@@ -462,6 +593,43 @@ describe("cloud work inventory", () => {
       sessionId: null,
       title: "Bramble",
     });
+  });
+
+  it("keeps active session projection status separate from the workspace last session", () => {
+    const rows = buildRecentWorkItems([
+      workspace({
+        id: "multi-session",
+        displayName: "Multi session",
+        lastSessionSummary: {
+          targetId: "target",
+          workspaceId: "runtime",
+          sessionId: "needs-input-session",
+          title: "Needs input session",
+          status: "idle",
+          phase: "awaiting_interaction",
+          pendingInteractionCount: 1,
+          lastEventAt: "2026-05-23T11:58:00Z",
+        },
+      }),
+    ], {
+      activeWorkspaceSessions: [
+        sessionProjection({
+          cloudWorkspaceId: "multi-session",
+          sessionId: "running-session",
+          title: "Running session",
+          status: "running",
+          pendingInteractionCount: 0,
+          lastEventAt: "2026-05-23T11:59:00Z",
+        }),
+      ],
+      nowMs: NOW,
+    });
+
+    const runningSession = rows.find((row) => row.sessionId === "running-session");
+    const needsInputSession = rows.find((row) => row.sessionId === "needs-input-session");
+
+    expect(runningSession?.statusIndicator).toMatchObject({ kind: "running", label: "In progress" });
+    expect(needsInputSession?.statusIndicator).toMatchObject({ kind: "needs_input", label: "Needs input" });
   });
 
   it("distinguishes cloud access from cloud runtime", () => {
@@ -582,6 +750,27 @@ function runtime(status: RuntimeSummary["status"]): RuntimeSummary {
     runtimeAuth: null,
     actionBlockKind: null,
     actionBlockReason: null,
+  };
+}
+
+function sessionProjection(overrides: Partial<CloudSessionProjection> = {}): CloudSessionProjection {
+  return {
+    targetId: "target",
+    cloudWorkspaceId: "workspace",
+    workspaceId: "runtime",
+    sessionId: "session",
+    nativeSessionId: null,
+    sourceAgentKind: "codex",
+    title: "Session",
+    status: "idle",
+    phase: null,
+    pendingInteractionCount: 0,
+    liveConfig: null,
+    lastEventSeq: 1,
+    lastEventAt: "2026-05-23T11:45:00Z",
+    startedAt: "2026-05-23T11:00:00Z",
+    endedAt: null,
+    ...overrides,
   };
 }
 
