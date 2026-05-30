@@ -15,6 +15,9 @@ ownership rules stay in the area docs under `docs/frontend`, `docs/server`,
 - [ci-cd.md](ci-cd.md)
   - CI, PR metadata, staging deploys, production promotion, desktop releases,
     runtime releases, E2B template releases, and deployment infra
+- [billing-pro-promo-codes.md](billing-pro-promo-codes.md)
+  - granting free / discounted Pro via Stripe coupons and per-person promotion
+    codes
 
 PR title, label, release-note, and checklist rules live in
 [`ci-cd.md`](ci-cd.md) and
