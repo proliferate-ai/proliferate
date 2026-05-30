@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { BootstrappedRoute } from "@/components/auth/AuthGate";
 import { LoginScreen } from "@/components/auth/LoginScreen";
 import { SessionCheckScreen } from "@/components/auth/SessionCheckScreen";
+import { BRAILLE_SWEEP_FRAMES } from "@/hooks/ui/use-braille-sweep";
 import {
   buildUiTextScaleCssVariables,
   DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES,
@@ -16,6 +17,7 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   for (const property of Object.keys(DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES)) {
     document.documentElement.style.removeProperty(property);
   }
@@ -51,6 +53,30 @@ describe("SessionCheckScreen", () => {
     expect(html).toContain("Checking your session");
     expect(html).toContain("Proliferate is restoring your account");
     expect(html).not.toContain("data-jank-canary=\"braille\"");
+  });
+
+  it("fades the branded mark through the outgoing braille sweep", () => {
+    vi.useFakeTimers();
+
+    const { container } = render(<SessionCheckScreen />);
+    const seenFrames = new Set<string>();
+
+    act(() => {
+      for (let frame = 0; frame < BRAILLE_SWEEP_FRAMES.length; frame += 1) {
+        const currentFrame = BRAILLE_SWEEP_FRAMES[frame];
+        seenFrames.add(currentFrame);
+        vi.advanceTimersByTime(60);
+      }
+    });
+    act(() => {
+      vi.advanceTimersByTime(120);
+    });
+
+    expect(container.querySelector(".animate-resolve-0")).toBeTruthy();
+    expect(seenFrames).toContain("⣿⣿");
+    expect(seenFrames).toContain("⣾⣿");
+    expect(seenFrames).toContain("⣴⣿");
+    expect(BRAILLE_SWEEP_FRAMES).not.toContain("⠀⠀");
   });
 
   it("ignores user appearance text-size preferences", () => {
