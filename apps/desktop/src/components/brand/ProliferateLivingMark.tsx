@@ -133,19 +133,27 @@ export function ProliferateLivingMark({
   }
 
   return (
-    <div className="flex size-12 items-center justify-center">
+    <div className="relative size-12 overflow-hidden">
       {phase === "braille" && (
-        <LivingBrailleMark
-          className={brailleClassName}
-          frame={BRAILLE_SWEEP_FRAMES[brailleIndex] ?? BRAILLE_SWEEP_FRAMES[0]}
-        />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <LivingBrailleMark
+            className={brailleClassName}
+            frame={BRAILLE_SWEEP_FRAMES[brailleIndex] ?? BRAILLE_SWEEP_FRAMES[0]}
+          />
+        </div>
       )}
       {phase === "icon-enter" && (
-        <ProliferateIconResolve key={cycle} className={iconClassName} />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <ProliferateIconResolve key={cycle} className={iconClassName} />
+        </div>
       )}
-      {phase === "icon-hold" && <ProliferateIcon className={iconClassName} />}
+      {phase === "icon-hold" && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <ProliferateIcon className={iconClassName} />
+        </div>
+      )}
       {phase === "icon-exit" && (
-        <div className="animate-brand-mark-fade-out">
+        <div className="absolute inset-0 flex animate-brand-mark-fade-out items-center justify-center">
           <ProliferateIcon className={iconClassName} />
         </div>
       )}

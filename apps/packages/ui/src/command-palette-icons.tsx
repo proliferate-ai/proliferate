@@ -16,7 +16,8 @@ export type CommandPaletteGlyphName =
   | "rotate-ccw"
   | "search"
   | "settings"
-  | "terminal";
+  | "terminal"
+  | "tree";
 
 export function CommandPaletteGlyph({
   name,
@@ -157,6 +158,15 @@ function renderCommandPaletteGlyph(name: CommandPaletteGlyphName) {
           <path d="m4 17 6-6-6-6" />
           <path d="M12 19h8" />
         </>
+      );
+    case "tree":
+      return (
+        <path
+          d="M15.8 11.535c.367 0 .665.298.665.665v5a.665.665 0 0 1-.665.665h-5a.665.665 0 1 1 0-1.33h3.394l-3.565-3.564a.666.666 0 0 1 .942-.942l3.564 3.565V12.2c0-.367.298-.665.665-.665Zm0-9.4c.367 0 .665.298.665.665v5a.665.665 0 0 1-1.33 0V4.405l-5.128 5.128c-.323.324-.558.565-.842.74a2.668 2.668 0 0 1-.771.319c-.324.078-.662.073-1.12.073H1.93a.665.665 0 1 1 0-1.33h5.345c.52 0 .673-.005.809-.037.136-.033.266-.086.385-.16.12-.072.23-.177.598-.545l5.128-5.128H10.8a.665.665 0 0 1 0-1.33h5Z"
+          fill="currentColor"
+          stroke="none"
+          transform="translate(2 2) scale(1)"
+        />
       );
   }
 }
