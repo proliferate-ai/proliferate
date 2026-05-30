@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import { Badge, type BadgeTone } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";
@@ -13,6 +13,34 @@ import {
   type UpdatePreviewPhase,
   type UpdatePreviewState,
 } from "@/config/update-playground";
+
+type ProductionSurfacePreview =
+  | "available"
+  | "downloading"
+  | "ready-reminder"
+  | "restart-dialog";
+
+interface DevUpdaterMockState {
+  phase: "available" | "downloading" | "ready";
+  version: string;
+  downloadProgress: number | null;
+  restartPromptOpen: boolean;
+  lastCheckedAt: string | null;
+  errorMessage: string | null;
+}
+
+const DEV_UPDATER_MOCK_KEY = "proliferate.dev.updaterMock";
+const DEV_UPDATER_MOCK_EVENT = "proliferate:dev-updater-mock";
+const PREVIEW_VERSION = "0.1.42";
+const PRODUCTION_SURFACE_PREVIEWS: {
+  id: ProductionSurfacePreview;
+  label: string;
+}[] = [
+  { id: "available", label: "Available" },
+  { id: "downloading", label: "Downloading" },
+  { id: "ready-reminder", label: "Ready reminder" },
+  { id: "restart-dialog", label: "Restart dialog" },
+];
 
 const PHASE_LABELS: Record<UpdatePreviewPhase, string> = {
   checking: "Checking",
@@ -47,6 +75,16 @@ const PHASE_BADGE_TONES: Record<UpdatePreviewPhase, BadgeTone> = {
 };
 
 export function UpdateUiPlayground() {
+  const [productionSurfacePreview, setProductionSurfacePreview] =
+    useState<ProductionSurfacePreview>("available");
+
+  useEffect(() => {
+    writeDevUpdaterMock(buildProductionSurfaceMock(productionSurfacePreview));
+    return () => {
+      clearDevUpdaterMock();
+    };
+  }, [productionSurfacePreview]);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border/60 px-7 py-5">
@@ -67,6 +105,24 @@ export function UpdateUiPlayground() {
       </header>
 
       <main className="mx-auto grid max-w-6xl gap-8 px-7 py-7">
+        <PreviewSection
+          title="Production Surfaces"
+          description="Live updater components driven by the dev updater mock. The toast renders in the app toast position; the restart dialog renders as the real app modal."
+        >
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card/60 p-3">
+            {PRODUCTION_SURFACE_PREVIEWS.map((preview) => (
+              <Button
+                key={preview.id}
+                variant={productionSurfacePreview === preview.id ? "primary" : "secondary"}
+                size="sm"
+                onClick={() => setProductionSurfacePreview(preview.id)}
+              >
+                {preview.label}
+              </Button>
+            ))}
+          </div>
+        </PreviewSection>
+
         <PreviewSection
           title="Variant A: Workspace Banner"
           description="A compact global surface for active workspaces. It should tell the user enough without stealing the main task."
@@ -91,6 +147,58 @@ export function UpdateUiPlayground() {
       </main>
     </div>
   );
+}
+
+function buildProductionSurfaceMock(preview: ProductionSurfacePreview): DevUpdaterMockState {
+  const baseState = {
+    version: PREVIEW_VERSION,
+    lastCheckedAt: new Date().toISOString(),
+    errorMessage: null,
+  };
+
+  if (preview === "downloading") {
+    return {
+      ...baseState,
+      phase: "downloading",
+      downloadProgress: 68,
+      restartPromptOpen: false,
+    };
+  }
+
+  if (preview === "ready-reminder") {
+    return {
+      ...baseState,
+      phase: "ready",
+      downloadProgress: null,
+      restartPromptOpen: false,
+    };
+  }
+
+  if (preview === "restart-dialog") {
+    return {
+      ...baseState,
+      phase: "ready",
+      downloadProgress: null,
+      restartPromptOpen: true,
+    };
+  }
+
+  return {
+    ...baseState,
+    phase: "available",
+    downloadProgress: null,
+    restartPromptOpen: false,
+  };
+}
+
+function writeDevUpdaterMock(state: DevUpdaterMockState): void {
+  window.localStorage.setItem(DEV_UPDATER_MOCK_KEY, JSON.stringify(state));
+  window.dispatchEvent(new Event(DEV_UPDATER_MOCK_EVENT));
+}
+
+function clearDevUpdaterMock(): void {
+  window.localStorage.removeItem(DEV_UPDATER_MOCK_KEY);
+  window.dispatchEvent(new Event(DEV_UPDATER_MOCK_EVENT));
 }
 
 function PreviewSection({

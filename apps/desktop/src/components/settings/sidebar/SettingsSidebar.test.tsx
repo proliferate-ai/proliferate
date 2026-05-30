@@ -44,11 +44,20 @@ function renderSettingsSidebar({
   disabledSections,
   onNavigateHome = vi.fn(),
   onSelectSection = vi.fn(),
+  onCheckForUpdates = vi.fn(),
+  updateActionState,
 }: {
   adminAccess?: { isAdmin: boolean; isLoading?: boolean };
   disabledSections?: Partial<Record<SettingsSection, boolean>>;
   onNavigateHome?: () => void;
   onSelectSection?: (section: SettingsSection) => void;
+  onCheckForUpdates?: () => void;
+  updateActionState?: Partial<{
+    isChecking: boolean;
+    hasAvailableUpdate: boolean;
+    phase: "idle" | "checking" | "current" | "available" | "downloading" | "ready" | "error";
+    updatesSupported: boolean;
+  }>;
 } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -66,16 +75,13 @@ function renderSettingsSidebar({
           disabledSections={disabledSections}
           onNavigateHome={onNavigateHome}
           onSelectSection={onSelectSection}
-          onCheckForUpdates={vi.fn()}
-          onDownloadUpdate={vi.fn()}
-          onOpenRestartPrompt={vi.fn()}
+          onCheckForUpdates={onCheckForUpdates}
           updateActionState={{
-            availableVersion: null,
-            downloadProgress: null,
             isChecking: false,
             hasAvailableUpdate: false,
             phase: "idle",
             updatesSupported: true,
+            ...updateActionState,
           }}
         />
       </MemoryRouter>
@@ -181,6 +187,25 @@ describe("SettingsSidebar layout and shortcuts", () => {
     const backRow = screen.getByRole("button", { name: "Back to app" });
     expect(backRow.className).toContain("w-full");
     expect(backRow.className).not.toContain("w-fit");
+  });
+
+  it("keeps desktop update actions on the single settings row", () => {
+    const onCheckForUpdates = vi.fn();
+    renderSettingsSidebar({
+      onCheckForUpdates,
+      updateActionState: {
+        hasAvailableUpdate: true,
+        phase: "ready",
+      },
+    });
+
+    const desktopUpdates = screen.getByRole("button", { name: /Desktop updates/ });
+    expect(desktopUpdates.textContent).toContain("Available");
+    expect(screen.queryByRole("button", { name: /Restart to update/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Download update/ })).toBeNull();
+
+    fireEvent.click(desktopUpdates);
+    expect(onCheckForUpdates).toHaveBeenCalledTimes(1);
   });
 
   it("uses the product sidebar rail width", () => {

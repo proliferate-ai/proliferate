@@ -17,6 +17,7 @@ export interface ModalShellProps {
   footerClassName?: string;
   overlayClassName?: string;
   panelClassName?: string;
+  showCloseButton?: boolean;
   telemetryBlocked?: boolean;
 }
 
@@ -34,6 +35,7 @@ export function ModalShell({
   footerClassName = "flex shrink-0 items-center justify-end gap-2 border-t border-border/60 px-5 py-3",
   overlayClassName = "bg-black/70 backdrop-blur-sm",
   panelClassName = "border-border bg-background shadow-lg",
+  showCloseButton = true,
   telemetryBlocked = false,
 }: ModalShellProps) {
   const titleId = useId();
@@ -82,15 +84,17 @@ export function ModalShell({
           className={`relative flex w-full flex-col overflow-hidden rounded-2xl border ${panelClassName} ${sizeClassName}`}
           onClick={(event) => event.stopPropagation()}
         >
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={disableClose}
-            aria-label="Close"
-            className="absolute right-4 top-4 z-10 rounded-md p-1 text-muted-foreground opacity-70 transition-opacity hover:opacity-100 disabled:opacity-30"
-          >
-            <X className="size-4" />
-          </button>
+          {showCloseButton ? (
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={disableClose}
+              aria-label="Close"
+              className="absolute right-4 top-4 z-10 rounded-md p-1 text-muted-foreground opacity-70 transition-opacity hover:opacity-100 disabled:opacity-30"
+            >
+              <X className="size-4" />
+            </button>
+          ) : null}
 
           {headerContent ? (
             <>
@@ -102,12 +106,12 @@ export function ModalShell({
                   {description}
                 </p>
               )}
-              <div className="shrink-0 px-5 py-3 pr-12">
+              <div className={`shrink-0 px-5 py-3 ${showCloseButton ? "pr-12" : ""}`}>
                 {headerContent}
               </div>
             </>
           ) : (
-            <div className="shrink-0 px-5 pb-3 pr-10 pt-5">
+            <div className={`shrink-0 px-5 pb-3 pt-5 ${showCloseButton ? "pr-10" : ""}`}>
               <h2 id={titleId} className="text-lg font-medium tracking-tight text-foreground">
                 {title}
               </h2>

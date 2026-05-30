@@ -16,30 +16,49 @@ export function UpdateRestartDialog() {
       open={restartPromptOpen && phase === "ready"}
       onClose={closeRestartPrompt}
       title="Restart to finish updating"
-      description={
-        availableVersion
-          ? `Version ${availableVersion} has been installed and is ready to use.`
-          : "The update has been installed and is ready to use."
-      }
+      showCloseButton={false}
+      sizeClassName="max-w-[420px]"
+      overlayClassName="bg-black/70"
+      panelClassName="!rounded-lg border-border/80 bg-card shadow-floating-dark"
+      bodyClassName="px-5 pb-0 pt-0"
+      footerClassName="flex shrink-0 items-center justify-end gap-2 px-5 pb-4 pt-5"
+      headerContent={(
+        <div>
+          <h2 className="text-base font-medium leading-6 text-foreground">
+            Restart to finish updating
+          </h2>
+          <p className="mt-1.5 text-[13px] leading-5 text-muted-foreground">
+            {availableVersion
+              ? `Proliferate ${availableVersion} is installed and ready.`
+              : "Proliferate is installed and ready."}
+          </p>
+        </div>
+      )}
       footer={(
         <>
-          <Button variant="ghost" onClick={closeRestartPrompt}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-[34px] px-3.5 text-[13px]"
+            onClick={closeRestartPrompt}
+          >
             Later
           </Button>
-          <Button variant="primary" onClick={() => void restartNow()}>
+          <Button
+            variant="primary"
+            size="sm"
+            className="h-[34px] px-4 text-[13px]"
+            onClick={() => void restartNow()}
+          >
             Restart now
           </Button>
         </>
       )}
     >
-      <div className="space-y-2">
-        <p className="text-sm text-foreground">
-          Restarting closes Proliferate and starts the new version.
-        </p>
-        <p className="text-xs text-muted-foreground">
-          If you have local work in progress, wait until you are ready before restarting.
-        </p>
-      </div>
+      <p className="text-[13px] leading-[1.55] text-muted-foreground">
+        Restarting closes Proliferate and reopens on the new version. Anything running locally
+        will stop, so finish in-progress work first.
+      </p>
     </ModalShell>
   );
 }

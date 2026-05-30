@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ProgressBar } from "@proliferate/ui/primitives/ProgressBar";
 import { X } from "@proliferate/ui/icons";
 import { useUpdater, type UpdaterPhase } from "@/hooks/access/tauri/use-updater";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
@@ -17,97 +16,106 @@ export function UpdateNotificationCard() {
   const {
     phase,
     availableVersion,
-    downloadProgress,
+    restartPromptOpen,
     downloadUpdate,
     openRestartPrompt,
   } = useUpdater();
   const { openExternal } = useTauriShellActions();
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
-  const visibleKey = `${phase}:${availableVersion ?? "unknown"}`;
+  const visibleKey = [
+    phase,
+    availableVersion ?? "unknown",
+    restartPromptOpen ? "prompt-open" : "prompt-closed",
+  ].join(":");
 
   useEffect(() => {
     setDismissedKey(null);
   }, [visibleKey]);
 
-  if (!UPDATE_CARD_PHASES.has(phase) || dismissedKey === visibleKey) {
+  if (
+    !UPDATE_CARD_PHASES.has(phase)
+    || dismissedKey === visibleKey
+    || (phase === "ready" && restartPromptOpen)
+  ) {
     return null;
   }
 
-  const card = updateCardPresentation(phase, downloadProgress);
+  const card = updateCardPresentation(phase, availableVersion);
+  const canDismiss = phase !== "downloading";
 
   return (
     <aside
       aria-label={card.ariaLabel}
-      className="relative flex w-[min(22rem,calc(100vw-2rem))] flex-wrap items-start gap-2 rounded-lg border border-border bg-background px-3 py-3 pr-10 text-sm text-foreground shadow-floating-dark animate-toast-in"
+      className="relative w-[min(20rem,calc(100vw-2rem))] rounded-lg border border-border/80 bg-card px-3 py-2.5 text-sm text-card-foreground shadow-floating-dark animate-toast-in"
     >
-      <Button
-        type="button"
-        variant="unstyled"
-        size="unstyled"
-        aria-label="Dismiss update notification"
-        className="absolute right-2 top-2 flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-        onClick={() => setDismissedKey(visibleKey)}
-      >
-        <X className="size-3" />
-      </Button>
+      {canDismiss ? (
+        <Button
+          type="button"
+          variant="unstyled"
+          size="unstyled"
+          aria-label="Dismiss update notification"
+          className="absolute right-2 top-2 flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+          onClick={() => setDismissedKey(visibleKey)}
+        >
+          <X className="size-3" />
+        </Button>
+      ) : null}
 
-      <div className="w-full min-w-0">
-        <h2 className="select-text truncate text-sm font-medium leading-5 text-foreground">
+      <div className={`${canDismiss ? "pr-7" : ""}`}>
+        <h2 className="select-text truncate text-[13px] font-medium leading-5 text-card-foreground">
           {card.title}
         </h2>
+        <p className="mt-0.5 text-xs leading-4 text-muted-foreground">
+          {card.description}
+        </p>
       </div>
 
-      {phase === "downloading" && typeof downloadProgress === "number" && (
-        <ProgressBar
-          value={downloadProgress}
-          className="h-1 w-full bg-muted"
-          indicatorClassName="h-full bg-foreground transition-[width]"
-        />
-      )}
-
-      <div className="flex items-center gap-2 pt-1">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-7 rounded-md border-input bg-background px-2.5 text-xs font-normal"
-          onClick={() => { void openExternal(CHANGELOG_URL); }}
-        >
-          See changes
-        </Button>
-        <Button
-          type="button"
-          variant="inverted"
-          size="sm"
-          disabled={phase === "downloading"}
-          className="h-7 rounded-md px-2.5 text-xs font-medium"
-          onClick={() => {
-            if (phase === "available") {
-              void downloadUpdate();
-              return;
-            }
-            if (phase === "ready") {
-              openRestartPrompt();
-            }
-          }}
-        >
-          {card.actionLabel}
-        </Button>
-      </div>
+      {phase !== "downloading" ? (
+        <div className="mt-2 flex items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2.5 text-xs"
+            onClick={() => { void openExternal(CHANGELOG_URL); }}
+          >
+            See changes
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            className="h-7 px-2.5 text-xs"
+            onClick={() => {
+              if (phase === "available") {
+                void downloadUpdate();
+                return;
+              }
+              if (phase === "ready") {
+                openRestartPrompt();
+              }
+            }}
+          >
+            {card.actionLabel}
+          </Button>
+        </div>
+      ) : null}
     </aside>
   );
 }
 
 function updateCardPresentation(
   phase: UpdaterPhase,
-  downloadProgress: number | null,
+  availableVersion: string | null,
 ) {
+  const versionLabel = availableVersion ? ` ${availableVersion}` : "";
+
   if (phase === "downloading") {
-    const progressLabel = typeof downloadProgress === "number" ? ` ${downloadProgress}%` : "";
     return {
       phase,
-      ariaLabel: `Desktop update is downloading${progressLabel}`,
+      ariaLabel: "Desktop update is downloading",
       title: "Downloading update",
+      description: "Preparing the update in the background.",
       actionLabel: "Downloading",
     } as const;
   }
@@ -116,7 +124,8 @@ function updateCardPresentation(
     return {
       phase,
       ariaLabel: "Desktop update is ready to install",
-      title: "New update available",
+      title: "Update ready",
+      description: `Restart to finish installing Proliferate${versionLabel}.`,
       actionLabel: "Restart",
     } as const;
   }
@@ -124,7 +133,8 @@ function updateCardPresentation(
   return {
     phase: "available",
     ariaLabel: "Desktop update is available",
-    title: "New update available",
+    title: "Update available",
+    description: `Proliferate${versionLabel} is ready to download.`,
     actionLabel: "Download",
   } as const;
 }

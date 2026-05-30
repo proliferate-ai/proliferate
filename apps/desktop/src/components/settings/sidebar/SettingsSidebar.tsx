@@ -31,11 +31,7 @@ interface SettingsSidebarProps {
   onNavigateHome: () => void;
   onSelectSection: (section: SettingsSection) => void;
   onCheckForUpdates: () => void;
-  onDownloadUpdate: () => void;
-  onOpenRestartPrompt: () => void;
   updateActionState: {
-    availableVersion: string | null;
-    downloadProgress: number | null;
     isChecking: boolean;
     hasAvailableUpdate: boolean;
     phase: UpdaterPhase;
@@ -103,6 +99,9 @@ function settingsItemStatus(
   if (updateActionState.isChecking) {
     return "Checking...";
   }
+  if (updateActionState.phase === "downloading") {
+    return "Downloading";
+  }
   if (updateActionState.hasAvailableUpdate) {
     return "Available";
   }
@@ -142,8 +141,6 @@ export function SettingsSidebar({
   onNavigateHome,
   onSelectSection,
   onCheckForUpdates,
-  onDownloadUpdate,
-  onOpenRestartPrompt,
   updateActionState,
 }: SettingsSidebarProps) {
   const location = useLocation();
@@ -202,51 +199,6 @@ export function SettingsSidebar({
     }
 
     onSelectSection(item.id);
-  }
-
-  function renderUpdateCommand() {
-    if (
-      updateActionState.phase !== "available"
-      && updateActionState.phase !== "downloading"
-      && updateActionState.phase !== "ready"
-    ) {
-      return null;
-    }
-
-    const disabled = updateActionState.phase === "downloading";
-    const label =
-      updateActionState.phase === "ready"
-        ? "Restart to update"
-        : updateActionState.phase === "downloading"
-          ? "Downloading update"
-          : "Download update";
-    const status =
-      updateActionState.phase === "ready"
-        ? "Ready"
-        : updateActionState.phase === "downloading"
-          ? `${updateActionState.downloadProgress ?? 0}%`
-          : updateActionState.availableVersion
-            ? `v${updateActionState.availableVersion}`
-            : "Available";
-
-    return (
-      <SidebarNavRow
-        onPress={() => {
-          if (disabled) {
-            return;
-          }
-          if (updateActionState.phase === "ready") {
-            onOpenRestartPrompt();
-            return;
-          }
-          onDownloadUpdate();
-        }}
-        disabled={disabled}
-        label={label}
-        status={status}
-        className={settingsRowClass(false, disabled)}
-      />
-    );
   }
 
   return (
@@ -317,9 +269,6 @@ export function SettingsSidebar({
                       className={settingsRowClass(active, disabled)}
                       shortcutRevealVisible={shortcutRevealVisible}
                     />
-                    {item.kind === "action" && item.id === "checkForUpdates"
-                      ? renderUpdateCommand()
-                      : null}
                   </Fragment>
                 );
               })}
