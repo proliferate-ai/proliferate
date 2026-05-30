@@ -127,13 +127,19 @@ impl LiveSessionHandle {
         self.set_busy(false);
     }
 
-    pub async fn set_execution_phase(&self, phase: SessionExecutionPhase) {
+    pub(in crate::live::sessions) async fn set_execution_phase(
+        &self,
+        phase: SessionExecutionPhase,
+    ) {
         let mut execution = self.execution.write().await;
         execution.phase = phase;
         execution.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
-    pub async fn add_pending_interaction(&self, pending_interaction: PendingInteractionSummary) {
+    pub(in crate::live::sessions) async fn add_pending_interaction(
+        &self,
+        pending_interaction: PendingInteractionSummary,
+    ) {
         let mut execution = self.execution.write().await;
         execution.phase = SessionExecutionPhase::AwaitingInteraction;
         execution
@@ -143,7 +149,11 @@ impl LiveSessionHandle {
         execution.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
-    pub async fn link_pending_interaction_to_plan(&self, request_id: &str, plan_id: &str) {
+    pub(in crate::live::sessions) async fn link_pending_interaction_to_plan(
+        &self,
+        request_id: &str,
+        plan_id: &str,
+    ) {
         let mut execution = self.execution.write().await;
         let Some(pending) = execution
             .pending_interactions
@@ -156,7 +166,7 @@ impl LiveSessionHandle {
         execution.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
-    pub async fn remove_pending_interaction(&self, request_id: &str) {
+    pub(in crate::live::sessions) async fn remove_pending_interaction(&self, request_id: &str) {
         let mut execution = self.execution.write().await;
         execution
             .pending_interactions
@@ -169,7 +179,7 @@ impl LiveSessionHandle {
         execution.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
-    pub async fn clear_pending_interactions_for_terminal_state(
+    pub(in crate::live::sessions) async fn clear_pending_interactions_for_terminal_state(
         &self,
         phase: SessionExecutionPhase,
     ) {
@@ -179,7 +189,7 @@ impl LiveSessionHandle {
         execution.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
-    pub async fn mark_activity_at(&self, updated_at: String) {
+    pub(in crate::live::sessions) async fn mark_activity_at(&self, updated_at: String) {
         let mut execution = self.execution.write().await;
         execution.updated_at = updated_at;
     }
@@ -328,7 +338,7 @@ impl LiveSessionHandle {
         .map_err(anyhow_command_error)
     }
 
-    pub async fn inject_runtime_event(
+    pub(in crate::live::sessions) async fn inject_runtime_event(
         &self,
         event: RuntimeInjectedSessionEvent,
     ) -> RuntimeEventInjectionResult {

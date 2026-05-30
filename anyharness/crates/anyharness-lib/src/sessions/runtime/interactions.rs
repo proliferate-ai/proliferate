@@ -2,7 +2,7 @@ use anyharness_contract::v1::{InteractionKind, McpElicitationUrlRevealResponse};
 
 use crate::live::sessions::{
     InteractionResolution, PermissionDecision, ResolveInteractionCommandError,
-    ResolveInteractionError as LiveResolveInteractionError,
+    RevealMcpElicitationUrlError,
 };
 
 use super::{
@@ -175,20 +175,21 @@ impl SessionRuntime {
 
         let url = self
             .acp_manager
-            .interaction_broker()
             .reveal_mcp_elicitation_url(session_id, request_id)
             .await
             .map_err(|error| match error {
-                LiveResolveInteractionError::NotFound => {
+                RevealMcpElicitationUrlError::NotFound => {
                     ResolveInteractionError::InteractionNotFound(request_id.to_string())
                 }
-                LiveResolveInteractionError::KindMismatch => {
+                RevealMcpElicitationUrlError::KindMismatch => {
                     ResolveInteractionError::InteractionKindMismatch(request_id.to_string())
                 }
-                LiveResolveInteractionError::NotMcpUrlElicitation => {
+                RevealMcpElicitationUrlError::NotMcpUrlElicitation => {
                     ResolveInteractionError::NotMcpUrlElicitation(request_id.to_string())
                 }
-                _ => ResolveInteractionError::InvalidMcpFieldValue(request_id.to_string()),
+                RevealMcpElicitationUrlError::InvalidMcpFieldValue => {
+                    ResolveInteractionError::InvalidMcpFieldValue(request_id.to_string())
+                }
             })?;
 
         Ok(McpElicitationUrlRevealResponse { url })

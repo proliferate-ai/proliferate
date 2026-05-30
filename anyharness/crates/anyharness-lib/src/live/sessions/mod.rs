@@ -15,5 +15,6 @@ pub use handle::{
     PromptAcceptance, QueueMutationError, ResolveInteractionCommandError,
     SetConfigOptionCommandError,
 };
-pub use interactions::broker::{PermissionDecision, ResolveInteractionError};
+pub use interactions::broker::PermissionDecision;
 pub use manager::LiveSessionManager;
+pub(crate) use manager::RevealMcpElicitationUrlError;
