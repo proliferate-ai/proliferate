@@ -405,6 +405,7 @@ dependencies = [
  "utoipa",
  "utoipa-axum",
  "uuid",
+ "zip",
  "zstd",
 ]
 

@@ -22,7 +22,7 @@ fn find_in_path_matching(
     None
 }
 
-fn is_known_agent_wrapper(path: &Path) -> bool {
+pub(crate) fn is_known_agent_wrapper(path: &Path) -> bool {
     use std::io::Read;
 
     let Ok(mut file) = std::fs::File::open(path) else {

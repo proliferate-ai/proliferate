@@ -106,6 +106,7 @@ export function makeCloudWorkspace(args: {
   sandboxType?: SidebarCloudWorkspaceSummary["sandboxType"];
   status?: SidebarCloudWorkspaceSummary["status"];
   updatedAt?: string;
+  readyAt?: string | null;
 }): SidebarCloudWorkspaceSummary {
   const {
     id,
@@ -119,6 +120,7 @@ export function makeCloudWorkspace(args: {
     sandboxType,
     status = "ready",
     updatedAt = DEFAULT_UPDATED_AT,
+    readyAt = status === "ready" ? updatedAt : null,
   } = args;
 
   return {
@@ -149,6 +151,7 @@ export function makeCloudWorkspace(args: {
     actionBlockKind: null,
     createdAt: updatedAt,
     updatedAt,
+    readyAt,
     postReadyPhase: "idle",
     postReadyFilesTotal: 0,
     postReadyFilesApplied: 0,
@@ -221,6 +224,7 @@ export function makeLocalLogicalWorkspace(args: {
 
 export function makeCloudLogicalWorkspace(args: {
   id: string;
+  cloudWorkspaceId?: string;
   repoKey: string;
   repoName: string;
   branch?: string;
@@ -230,6 +234,7 @@ export function makeCloudLogicalWorkspace(args: {
 }): LogicalWorkspace {
   const {
     id,
+    cloudWorkspaceId = `${id}-cloud`,
     repoKey,
     repoName,
     branch = "main",
@@ -238,7 +243,7 @@ export function makeCloudLogicalWorkspace(args: {
     updatedAt = DEFAULT_UPDATED_AT,
   } = args;
   const cloudWorkspace = makeCloudWorkspace({
-    id: `${id}-cloud`,
+    id: cloudWorkspaceId,
     repoName,
     branch,
     origin,

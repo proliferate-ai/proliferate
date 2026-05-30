@@ -41,7 +41,7 @@ pub fn resolve_agent_with_env(
             agent_process = fallback_artifact;
             spawn = fallback_spawn;
         } else if !agent_process.installed {
-            if let Some(found) = find_in_path(&descriptor.launch.executable_name) {
+            if let Some(found) = resolve_agent_process_path_fallback(descriptor) {
                 agent_process = found_artifact(ArtifactRole::AgentProcess, found, "path");
             }
         }
@@ -181,7 +181,7 @@ fn resolve_agent_process_artifact(
                 .file_name()
                 .and_then(|name| name.to_str())
             {
-                if let Some(found) = find_in_path(binary_name) {
+                if let Some(found) = find_real_binary_in_path(binary_name) {
                     return found_artifact(ArtifactRole::AgentProcess, found, "path");
                 }
             }
@@ -295,7 +295,7 @@ fn resolve_agent_process_fallback(
             executable_relpath, ..
         } => {
             let binary_name = executable_relpath.file_name()?.to_str()?;
-            find_in_path(binary_name).map(|found| {
+            find_real_binary_in_path(binary_name).map(|found| {
                 (
                     found_artifact(ArtifactRole::AgentProcess, found, "path"),
                     None,
@@ -303,6 +303,23 @@ fn resolve_agent_process_fallback(
             })
         }
     }
+}
+
+fn resolve_agent_process_path_fallback(descriptor: &AgentDescriptor) -> Option<PathBuf> {
+    if uses_registry_binary_hint(&descriptor.agent_process.install) {
+        return None;
+    }
+    find_real_binary_in_path(&descriptor.launch.executable_name)
+}
+
+fn uses_registry_binary_hint(install: &AgentProcessInstallSpec) -> bool {
+    matches!(
+        install,
+        AgentProcessInstallSpec::RegistryBacked {
+            fallback: AgentProcessFallback::BinaryHint { .. },
+            ..
+        }
+    )
 }
 
 fn resolve_agent_process_override(kind: &AgentKind) -> Option<(SpawnSpec, ResolvedArtifact)> {
@@ -706,6 +723,30 @@ mod tests {
         path
     }
 
+    struct PathEnvGuard {
+        original: Option<std::ffi::OsString>,
+    }
+
+    impl PathEnvGuard {
+        fn set(path: &Path) -> Self {
+            let original = std::env::var_os("PATH");
+            let paths = vec![path.to_path_buf()];
+            let joined = std::env::join_paths(paths).expect("join PATH");
+            std::env::set_var("PATH", joined);
+            Self { original }
+        }
+    }
+
+    impl Drop for PathEnvGuard {
+        fn drop(&mut self) {
+            if let Some(original) = &self.original {
+                std::env::set_var("PATH", original);
+            } else {
+                std::env::remove_var("PATH");
+            }
+        }
+    }
+
     #[test]
     fn parses_node_versions() {
         assert_eq!(
@@ -824,6 +865,36 @@ mod tests {
             .is_some_and(|message| message.contains(&missing_binary)));
 
         let _ = std::fs::remove_dir_all(runtime_home);
+    }
+
+    #[test]
+    fn registry_backed_binary_hint_does_not_resolve_superset_wrapper_as_agent_process() {
+        let registry = built_in_registry();
+        let cursor = registry
+            .into_iter()
+            .find(|descriptor| descriptor.kind == AgentKind::Cursor)
+            .expect("missing Cursor descriptor");
+        let runtime_home = make_temp_dir("anyharness-cursor-wrapper-fallback-test");
+        let path_dir = make_temp_dir("anyharness-cursor-wrapper-path-test");
+        let wrapper_path = path_dir.join("cursor-agent");
+        std::fs::write(
+            &wrapper_path,
+            "#!/bin/sh\n# Superset agent-wrapper v3\nexec cursor-agent \"$@\"\n",
+        )
+        .expect("write wrapper");
+        make_executable(&wrapper_path).expect("make wrapper executable");
+        let _path_guard = PathEnvGuard::set(&path_dir);
+        let mut env = BTreeMap::new();
+        env.insert("CURSOR_API_KEY".to_string(), "test-token".to_string());
+
+        let resolved = resolve_agent_with_env(&cursor, &runtime_home, &env);
+
+        assert_eq!(resolved.status, ResolvedAgentStatus::InstallRequired);
+        assert!(!resolved.agent_process.installed);
+        assert_eq!(resolved.agent_process.path, None);
+
+        let _ = std::fs::remove_dir_all(runtime_home);
+        let _ = std::fs::remove_dir_all(path_dir);
     }
 
     #[test]

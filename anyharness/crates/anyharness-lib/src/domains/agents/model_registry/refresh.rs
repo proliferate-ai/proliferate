@@ -9,7 +9,9 @@ use crate::domains::agents::model::{
 use crate::domains::agents::readiness::resolver::{
     artifact_root, managed_registry_binary_for_names, resolve_agent,
 };
-use crate::integrations::agent_cli::executable::find_in_path;
+use crate::integrations::agent_cli::executable::{
+    find_real_binary_in_path, is_known_agent_wrapper,
+};
 use crate::integrations::agent_cli::model_discovery::{
     discover_cursor_models, discover_opencode_models, DiscoveredCliModel,
 };
@@ -117,11 +119,9 @@ fn resolve_discovery_executable(
         {
             return Ok(path);
         }
-        if let Some(path) = resolved
-            .agent_process
-            .path
-            .filter(|path| is_discovery_executable_name(path, executable_names))
-        {
+        if let Some(path) = resolved.agent_process.path.filter(|path| {
+            is_discovery_executable_name(path, executable_names) && !is_known_agent_wrapper(path)
+        }) {
             return Ok(path);
         }
         if let Some(path) = resolved.spawn.and_then(|spawn| {
@@ -132,7 +132,7 @@ fn resolve_discovery_executable(
     }
 
     for candidate in executable_names {
-        if let Some(path) = find_in_path(candidate) {
+        if let Some(path) = find_real_binary_in_path(candidate) {
             return Ok(path);
         }
     }
@@ -229,6 +229,29 @@ mod tests {
         path
     }
 
+    struct PathEnvGuard {
+        original: Option<std::ffi::OsString>,
+    }
+
+    impl PathEnvGuard {
+        fn set(path: &Path) -> Self {
+            let original = std::env::var_os("PATH");
+            let joined = std::env::join_paths([path]).expect("join PATH");
+            std::env::set_var("PATH", joined);
+            Self { original }
+        }
+    }
+
+    impl Drop for PathEnvGuard {
+        fn drop(&mut self) {
+            if let Some(original) = &self.original {
+                std::env::set_var("PATH", original);
+            } else {
+                std::env::remove_var("PATH");
+            }
+        }
+    }
+
     #[test]
     fn managed_discovery_executable_uses_registry_binary() {
         let cursor = built_in_registry()
@@ -254,5 +277,31 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(runtime_home);
+    }
+
+    #[test]
+    fn discovery_executable_ignores_superset_wrapper_on_path() {
+        let cursor = built_in_registry()
+            .into_iter()
+            .find(|descriptor| descriptor.kind == AgentKind::Cursor)
+            .expect("missing Cursor descriptor");
+        let runtime_home = make_temp_dir("anyharness-model-refresh-wrapper-runtime-test");
+        let path_dir = make_temp_dir("anyharness-model-refresh-wrapper-path-test");
+        let wrapper_path = path_dir.join("cursor-agent");
+        std::fs::write(
+            &wrapper_path,
+            "#!/bin/sh\n# Superset agent-wrapper v3\nexec cursor-agent \"$@\"\n",
+        )
+        .expect("write wrapper");
+        make_executable(&wrapper_path).expect("make wrapper executable");
+        let _path_guard = PathEnvGuard::set(&path_dir);
+
+        let failure = resolve_discovery_executable(&cursor, &runtime_home)
+            .expect_err("wrapper path should not be usable for model discovery");
+
+        assert_eq!(failure.status, DynamicModelRegistryStatus::AgentNotReady);
+
+        let _ = std::fs::remove_dir_all(runtime_home);
+        let _ = std::fs::remove_dir_all(path_dir);
     }
 }

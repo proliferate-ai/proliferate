@@ -48,7 +48,6 @@ apps/desktop/src/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy.t
 apps/desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts
 apps/desktop/src/hooks/home/workflows/use-home-next-launch.ts
 apps/desktop/src/lib/integrations/auth/orchestration.ts
-apps/desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.ts
 apps/desktop/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts
 apps/desktop/src/lib/infra/measurement/boot-stall-diagnostics.ts
 apps/desktop/src-tauri/src/commands/ssh_tunnel.rs

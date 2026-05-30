@@ -139,6 +139,9 @@ export function buildSidebarGroupStates(args: {
       const rawGroupWorkspaces = groups.get(repoKey) ?? [];
       const pendingItem =
         pendingProjection?.repoKey === repoKey ? pendingProjection.item : null;
+      const pendingOwnedWorkspaceId = pendingItem
+        ? args.pendingWorkspaceEntry?.workspaceId ?? null
+        : null;
       const groupWorkspaces = groupHasWorkActivity(
         rawGroupWorkspaces,
         args.workspaceLastInteracted,
@@ -229,13 +232,17 @@ export function buildSidebarGroupStates(args: {
           },
         };
       });
-      const workspaceItems = applyDuplicateLocalNameSuffixes(workspaceItemsWithWorkspace);
-      const visibleWorkspaceItems = pendingItem
-        ? workspaceItems.filter((item) => item.id !== pendingItem.id)
-        : workspaceItems;
+      const workspaceItems = applyDuplicateLocalNameSuffixes(
+        pendingItem
+          ? workspaceItemsWithWorkspace.filter(({ workspace, item }) =>
+            item.id !== pendingItem.id
+            && !pendingOwnsLogicalWorkspace(pendingOwnedWorkspaceId, workspace)
+          )
+          : workspaceItemsWithWorkspace,
+      );
       const items = pendingItem
-        ? [pendingItem, ...visibleWorkspaceItems]
-        : visibleWorkspaceItems;
+        ? [pendingItem, ...workspaceItems]
+        : workspaceItems;
       const visibleItems = items.filter((item) => {
         if (args.showArchived) {
           return item.archived && visibleWorkspaceTypes.has(item.variant);
@@ -300,8 +307,11 @@ export function buildSidebarGroupStates(args: {
           allLogicalWorkspaceIds: [
             ...(pendingItem ? [pendingItem.id] : []),
             ...groupWorkspaces
-              .map((entry) => entry.id)
-              .filter((id) => id !== pendingItem?.id),
+              .filter((entry) =>
+                entry.id !== pendingItem?.id
+                && !pendingOwnsLogicalWorkspace(pendingOwnedWorkspaceId, entry)
+              )
+              .map((entry) => entry.id),
           ],
           repoRootId:
             repoRoot?.id
@@ -384,6 +394,16 @@ function logicalWorkspaceRelatedCount(
   return logicalWorkspaceRelatedIds(workspace).reduce(
     (total, id) => total + (counts[id] ?? 0),
     0,
+  );
+}
+
+function pendingOwnsLogicalWorkspace(
+  pendingWorkspaceId: string | null,
+  workspace: LogicalWorkspace,
+): boolean {
+  return Boolean(
+    pendingWorkspaceId
+    && logicalWorkspaceMatchesId(workspace, pendingWorkspaceId),
   );
 }
 
