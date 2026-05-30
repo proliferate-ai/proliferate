@@ -107,7 +107,7 @@ at the start of the task, not halfway through implementation.
      launch env, hydration, ownership state, or seed/reconcile interaction
 3. `docs/reference/dev-profiles.md` when changing profile launch behavior,
    ports, generated Tauri config, app identity, or profile runtime homes.
-4. `docs/ci-cd/README.md` when changing packaging, release, updater, or
+4. `docs/dev/ci-cd.md` when changing packaging, release, updater, or
    bundled desktop resources.
 
 ### Server (`server/**`)
@@ -131,7 +131,7 @@ at the start of the task, not halfway through implementation.
 Applies to `.github/workflows/**`, `apps/desktop/infra/**`, `server/infra/**`,
 updater publishing, and the desktop updater flow.
 
-1. `docs/ci-cd/README.md`
+1. `docs/dev/ci-cd.md`
 
 If a release or deployment change also touches frontend, server, SDK, or
 AnyHarness code, read the relevant area doc too.
@@ -150,7 +150,7 @@ AnyHarness code, read the relevant area doc too.
 - Delete dead code when replacing an implementation.
 - Do not use destructive git commands such as `git reset --hard` or
   `git checkout --` unless the user explicitly asks for that operation.
-- PR titles and labels must follow `docs/ci-cd/README.md`. Use exactly one
+- PR titles and labels must follow `docs/dev/ci-cd.md`. Use exactly one
   `release:*` label and at least one `area:*` label before marking a PR ready
   for review.
 
@@ -175,6 +175,6 @@ These are repo-level invariants. Area docs explain the concrete folder rules.
 ## Desktop Release Procedure
 
 If you are releasing a new version of the product, read
-`docs/ci-cd/README.md` first. That document is the source of truth for desktop
+`docs/dev/ci-cd.md` first. That document is the source of truth for desktop
 version bumps, `desktop-v*` tags, draft GitHub releases, updater publishing,
 release dry runs, and PR release-note metadata.

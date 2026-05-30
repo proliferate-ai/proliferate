@@ -90,7 +90,7 @@ This spec is cross-cutting and follows:
 - `docs/frontend/README.md`
 - `docs/frontend/guides/access.md`
 - `docs/anyharness/README.md`
-- `docs/ci-cd/README.md` before adding deployable gateway/LiteLLM services,
+- `docs/dev/ci-cd.md` before adding deployable gateway/LiteLLM services,
   deployment env vars, or runtime process changes
 - `docs/architecture/cloud-worker-control-plane.md`
 - `docs/architecture/cloud-worker-workspace-command-spec.md`

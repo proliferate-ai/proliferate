@@ -32,7 +32,7 @@ ownership and style:
 server code       -> docs/server/**
 AnyHarness code   -> docs/anyharness/**
 frontend code     -> docs/frontend/**
-deployment        -> docs/ci-cd/** and docs/reference/**
+deployment        -> docs/dev/ci-cd.md and docs/reference/**
 ```
 
 Use this note for the post-stack facts that the older architecture spec may not

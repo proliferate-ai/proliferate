@@ -22,6 +22,9 @@ migration exception and state the canonical owner/rule directly.
   - start here for local dev workflow
 - `docs/dev/running-locally.md`
   - dev profiles, local Stripe, web, desktop, and mobile runbooks
+- `docs/dev/ci-cd.md`
+  - release workflows, staging deploys, production promotion, deployment infra,
+    updater publishing, and the desktop in-app update flow
 
 ## Authoritative frontend standards
 
@@ -90,12 +93,6 @@ migration exception and state the canonical owner/rule directly.
 - `docs/proliferate-worker/README.md`
   - target-side Worker structure, command downlink, event uplink, target status,
     target-local effects, clients, store, and identity ownership
-
-## Authoritative CI/CD standards
-
-- `docs/ci-cd/README.md`
-  - start here for release workflows, deployment infra, updater publishing, and
-    the desktop in-app update flow
 
 ## Analytics and lifecycle reference
 
