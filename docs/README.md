@@ -9,6 +9,20 @@ This repo includes both:
 Read the relevant area doc before touching code in that area. Do that at the
 start of the task, not after implementation has already started.
 
+## Documentation Style
+
+Authoritative docs describe the contract as operating law. Do not write
+cleanup promises, tentative caveats, or "eventually" architecture inside
+canonical guides and READMEs. If existing code violates a rule, name it as a
+migration exception and state the canonical owner/rule directly.
+
+## Authoritative development process
+
+- `docs/dev/README.md`
+  - start here for local dev workflow
+- `docs/dev/running-locally.md`
+  - dev profiles, local Stripe, web, desktop, and mobile runbooks
+
 ## Authoritative frontend standards
 
 - `docs/frontend/README.md`
@@ -69,7 +83,7 @@ start of the task, not after implementation has already started.
   - `anyharness-contract` transport schema rules
 - `docs/anyharness/src/*.md`
   - legacy subsystem logic docs for ACP, agents, sessions, workspaces, git,
-    files, and persistence while they are being migrated
+    files, and persistence
 
 ## Authoritative Proliferate Worker standards
 
@@ -179,7 +193,7 @@ start of the task, not after implementation has already started.
   - environment variables available to workspace run commands
 - `docs/notes/agent-credentials-sync.md`
   - non-authoritative design/reference note for local agent credentials and
-    future credential sync
+    credential sync
 - `docs/notes/model-gateway-auth-facts.md`
   - empirical source-inspection facts for Claude, Codex, OpenCode, Gemini, and
     gateway auth compatibility
