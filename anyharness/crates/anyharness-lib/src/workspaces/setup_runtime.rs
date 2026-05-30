@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use crate::terminals::model::TerminalCommandRunRecord;
-use crate::terminals::TerminalService;
+use crate::domains::terminals::model::TerminalCommandRunRecord;
+use crate::live::terminals::TerminalService;
 use crate::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::workspaces::model::WorkspaceRecord;
 use crate::workspaces::operation_gate::{WorkspaceOperationGate, WorkspaceOperationKind};

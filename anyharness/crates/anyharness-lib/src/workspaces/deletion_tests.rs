@@ -5,10 +5,10 @@ use crate::persistence::Db;
 use crate::sessions::deletion::SessionDeleteWorkflow;
 use crate::sessions::model::{SessionEventRecord, SessionMcpBindingPolicy, SessionRecord};
 use crate::sessions::store::SessionStore;
-use crate::terminals::model::{
+use crate::domains::terminals::model::{
     TerminalCommandOutputMode, TerminalCommandRunRecord, TerminalCommandRunStatus, TerminalPurpose,
 };
-use crate::terminals::store::TerminalStore;
+use crate::domains::terminals::store::TerminalStore;
 use std::sync::Arc;
 
 #[test]

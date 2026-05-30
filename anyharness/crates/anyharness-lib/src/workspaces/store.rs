@@ -383,11 +383,6 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<WorkspaceRecord> {
 #[cfg(test)]
 mod tests {
     use super::{WorkspaceRecord, WorkspaceStore};
-    use crate::domains::terminals::model::{
-        TerminalCommandOutputMode, TerminalCommandRunRecord, TerminalCommandRunStatus,
-        TerminalPurpose,
-    };
-    use crate::domains::terminals::store::TerminalStore;
     use crate::origin::OriginContext;
     use crate::persistence::Db;
     use crate::workspaces::creator_context::WorkspaceCreatorContext;

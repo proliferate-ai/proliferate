@@ -30,6 +30,7 @@ use crate::domains::reviews::runtime::ReviewRuntime;
 use crate::domains::reviews::service::ReviewService;
 use crate::domains::reviews::store::{ReviewDeleteParticipant, ReviewStore};
 use crate::domains::runtime_config::service::{RuntimeConfigService, RuntimeConfigStore};
+use crate::domains::runtime_config::session_extension::RuntimeConfigSessionLaunchExtension;
 use crate::domains::terminals::store::TerminalStore;
 use crate::live::sessions::LiveSessionManager;
 use crate::live::terminals::TerminalService;

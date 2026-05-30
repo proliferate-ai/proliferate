@@ -73,7 +73,7 @@ impl WorkspaceDeleteWorkflow {
         for participant in &self.participants {
             participant.delete_workspace_rows_in_tx(conn, workspace_id)?;
         }
-        crate::terminals::store::delete_workspace_terminal_rows_in_tx(conn, workspace_id)?;
+        crate::domains::terminals::store::delete_workspace_terminal_rows_in_tx(conn, workspace_id)?;
         Ok(())
     }
 }
