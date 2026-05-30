@@ -344,6 +344,14 @@ impl LiveSessionManager {
         let mut sessions = self.live_sessions.write().await;
         sessions.remove(session_id);
     }
+
+    /// Synchronous variant for mobility install/export code that runs inside a
+    /// blocking task. Dropping the handle forces the next prompt to start a
+    /// fresh native agent with the destination workspace path.
+    pub fn remove_session_blocking(&self, session_id: &str) {
+        self.live_sessions.blocking_write().remove(session_id);
+        self.pending_startups.blocking_write().remove(session_id);
+    }
 }
 
 fn append_offline_runtime_event(
@@ -672,6 +680,52 @@ mod tests {
 
         assert!(Arc::ptr_eq(&returned_handle, &handle));
         assert_eq!(ready.native_session_id, "fresh-native");
+    }
+
+    #[tokio::test]
+    async fn blocking_remove_discards_live_and_pending_handles() {
+        let plan_db = Db::open_in_memory().expect("open plan db");
+        let manager = LiveSessionManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+        let (command_tx, _command_rx) = mpsc::channel(4);
+        let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
+        let handle = Arc::new(LiveSessionHandle::new_for_test(
+            "session-1",
+            command_tx,
+            event_tx,
+            Some("old-native".to_string()),
+            SessionExecutionPhase::Idle,
+        ));
+        let (_ready_tx, ready_rx) = watch::channel::<super::StartupReadinessState>(None);
+        manager
+            .live_sessions
+            .write()
+            .await
+            .insert("session-1".to_string(), handle);
+        manager
+            .pending_startups
+            .write()
+            .await
+            .insert("session-1".to_string(), ready_rx);
+
+        let manager_for_remove = manager.clone();
+        tokio::task::spawn_blocking(move || {
+            manager_for_remove.remove_session_blocking("session-1");
+        })
+        .await
+        .expect("blocking remove task");
+
+        assert!(manager
+            .live_sessions
+            .read()
+            .await
+            .get("session-1")
+            .is_none());
+        assert!(manager
+            .pending_startups
+            .read()
+            .await
+            .get("session-1")
+            .is_none());
     }
 
     #[tokio::test]

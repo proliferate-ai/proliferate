@@ -19,6 +19,7 @@ pub struct MobilityFileData {
 
 #[derive(Debug, Clone)]
 pub struct WorkspaceMobilityArchiveData {
+    pub source_workspace_id: Option<String>,
     pub source_workspace_path: String,
     pub repo_root_path: String,
     pub branch_name: Option<String>,
@@ -29,6 +30,15 @@ pub struct WorkspaceMobilityArchiveData {
     pub session_links: Vec<SessionLinkRecord>,
     pub session_link_completions: Vec<SubagentCompletionRecord>,
     pub session_link_wake_schedules: Vec<SubagentWakeScheduleRecord>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct WorkspaceMobilityExportOptions {
+    pub exclude_paths: Vec<String>,
+    pub expected_base_commit_sha: Option<String>,
+    pub expected_branch_name: Option<String>,
+    pub expected_handoff_op_id: Option<String>,
+    pub require_clean_git_state: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -66,6 +76,12 @@ pub struct DestroyedWorkspaceSourceSummary {
     pub deleted_session_ids: Vec<String>,
     pub closed_terminal_ids: Vec<String>,
     pub source_destroyed: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct PreparedWorkspaceMobilityDestination {
+    pub workspace: crate::workspaces::model::WorkspaceRecord,
+    pub created: bool,
 }
 
 #[derive(Debug, Clone)]

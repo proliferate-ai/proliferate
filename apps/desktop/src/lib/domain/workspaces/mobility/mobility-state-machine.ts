@@ -47,8 +47,7 @@ export function isWorkspaceMobilityTransitionPhase(
 ): boolean {
   return phase === "provisioning"
     || phase === "transferring"
-    || phase === "finalizing"
-    || phase === "cleanup_pending";
+    || phase === "finalizing";
 }
 
 function normalizeDirection(

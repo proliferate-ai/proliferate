@@ -115,12 +115,26 @@ describe("cloud display name sync", () => {
   it("backfills a trimmed runtime display name when propagation is not suppressed", () => {
     const decision = shouldBackfillCloudDisplayNameFromRuntime({
       runtimeDisplayName: "  New runtime name  ",
+      runtimeWorkspaceId: "runtime-workspace-1",
       backfillSuppressed: false,
     });
 
     expect(decision).toEqual({
       shouldBackfill: true,
       displayName: "New runtime name",
+    });
+  });
+
+  it("does not backfill AnyHarness workspace id fallback as a display name", () => {
+    const decision = shouldBackfillCloudDisplayNameFromRuntime({
+      runtimeDisplayName: "  runtime-workspace-1  ",
+      runtimeWorkspaceId: "runtime-workspace-1",
+      backfillSuppressed: false,
+    });
+
+    expect(decision).toEqual({
+      shouldBackfill: false,
+      displayName: null,
     });
   });
 

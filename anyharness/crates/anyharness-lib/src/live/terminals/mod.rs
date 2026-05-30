@@ -1,3 +1,4 @@
+mod agent_login;
 mod driver;
 mod handle;
 mod manager;
@@ -8,5 +9,9 @@ mod setup_process;
 mod shell;
 
 pub use crate::domains::terminals::model::TerminalOutputEvent;
+pub use agent_login::{
+    AgentLoginTerminalHandle, AgentLoginTerminalRecord, AgentLoginTerminalService,
+    AgentLoginTerminalStatus, StartAgentLoginTerminalOptions,
+};
 pub use handle::TerminalHandle;
 pub use manager::TerminalService;

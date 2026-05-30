@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import timedelta
 from types import SimpleNamespace
 from typing import NoReturn
@@ -67,6 +67,7 @@ from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_workspaces import (
     CloudRepoLimitExceededError,
+    archive_cloud_workspace_record_by_id,
     archive_cloud_workspace_record,
     create_cloud_workspace_for_user,
     create_direct_target_cloud_workspace,
@@ -1921,7 +1922,17 @@ async def ensure_cloud_workspace_for_existing_branch(
         git_branch=cleaned_branch_name,
     )
     if existing_cloud_workspace is not None:
-        return existing_cloud_workspace
+        if _cloud_workspace_should_be_replaced_for_mobility_retry(existing_cloud_workspace):
+            await _archive_failed_cloud_workspace_for_mobility_retry(existing_cloud_workspace.id)
+            log_cloud_event(
+                "failed cloud workspace archived before mobility retry",
+                workspace_id=existing_cloud_workspace.id,
+                repo=f"{git_owner}/{git_repo_name}",
+                branch_name=cleaned_branch_name,
+                last_error=existing_cloud_workspace.last_error,
+            )
+        else:
+            return existing_cloud_workspace
 
     repo_config = await load_repo_config_value(
         user_id=user.id,
@@ -1972,6 +1983,21 @@ async def ensure_cloud_workspace_for_existing_branch(
     return workspace
 
 
+def _cloud_workspace_should_be_replaced_for_mobility_retry(
+    workspace: CloudWorkspace,
+) -> bool:
+    return (
+        workspace.status == CloudWorkspaceStatus.error.value
+        and workspace.anyharness_workspace_id is None
+    )
+
+
+async def _archive_failed_cloud_workspace_for_mobility_retry(workspace_id: UUID) -> None:
+    async with db_engine.async_session_factory() as db:
+        await archive_cloud_workspace_record_by_id(db, workspace_id=workspace_id)
+        await db.commit()
+
+
 async def _refresh_repo_env_snapshot_for_workspace(
     workspace: CloudWorkspace,
 ) -> CloudWorkspace:
@@ -2001,8 +2027,18 @@ async def start_cloud_workspace(
     requested_base_sha: str | None = None,
 ) -> WorkspaceDetail:
     workspace = await cloud_workspace_user_can_interact(user.id, workspace_id)
-    if start_request_should_return_existing(workspace.status):
+    has_requested_revision = bool((requested_base_sha or "").strip())
+    if start_request_should_return_existing(workspace.status) and not has_requested_revision:
         return await _build_workspace_detail(workspace)
+    if (
+        has_requested_revision
+        and workspace.status == CloudWorkspaceStatus.materializing.value
+    ):
+        raise CloudApiError(
+            "cloud_workspace_already_materializing",
+            "Cloud workspace is already preparing. Try the move again once it is ready.",
+            status_code=409,
+        )
 
     repo_branches = await get_github_repo_branches(
         user,
@@ -2076,7 +2112,23 @@ async def start_cloud_workspace(
         return await _build_workspace_detail(workspace)
 
     if start_decision.action in {"return_ready", "return_current"}:
-        return await _build_workspace_detail(workspace)
+        if not has_requested_revision:
+            return await _build_workspace_detail(workspace)
+        if start_decision.action == "return_current":
+            raise CloudApiError(
+                "cloud_workspace_already_materializing",
+                "Cloud workspace is already preparing. Try the move again once it is ready.",
+                status_code=409,
+            )
+        start_decision = replace(
+            start_decision,
+            action="restart_materializing",
+            clear_last_error=True,
+            persist_before_schedule=True,
+            schedule_provision=True,
+            target_status=CloudWorkspaceStatus.materializing,
+            status_detail="Preparing requested revision",
+        )
 
     if start_decision.target_status is None:
         raise CloudApiError(

@@ -11,6 +11,7 @@ import {
   resolveWorkspaceShellTabByShortcutIndex,
   type WorkspaceShellTab,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import { resolveAvailableLaunchSelection } from "@/lib/domain/chat/models/model-selection";
 import { resolveStoredWorkspaceShellTab } from "@/lib/domain/workspaces/tabs/active-shell-tab";
 import type {
   HeaderWorkspaceShellStripRow,
@@ -126,7 +127,11 @@ export function useWorkspaceTabActions(headerTabs: WorkspaceTabActionsContext) {
   );
 
   const openNewSessionTab = useCallback(() => {
-    const selection = currentLaunchIdentity ?? configuredLaunch.selection;
+    const selection = resolveAvailableLaunchSelection(
+      configuredLaunch.launchCatalog.launchAgents,
+      currentLaunchIdentity,
+      configuredLaunch.selection,
+    );
     if (!selection) {
       return false;
     }
@@ -149,13 +154,18 @@ export function useWorkspaceTabActions(headerTabs: WorkspaceTabActionsContext) {
     return true;
   }, [
     configuredLaunch.selection,
+    configuredLaunch.launchCatalog.launchAgents,
     currentLaunchIdentity,
     createEmptySessionWithResolvedConfig,
     headerTabs.selectedWorkspaceId,
     showToast,
   ]);
 
-  const canOpenNewSessionTab = Boolean(currentLaunchIdentity ?? configuredLaunch.selection);
+  const canOpenNewSessionTab = Boolean(resolveAvailableLaunchSelection(
+    configuredLaunch.launchCatalog.launchAgents,
+    currentLaunchIdentity,
+    configuredLaunch.selection,
+  ));
 
   return {
     orderedTabs,
@@ -165,7 +175,7 @@ export function useWorkspaceTabActions(headerTabs: WorkspaceTabActionsContext) {
     activateTabByShortcutIndex,
     closeActiveWorkspaceTab,
     canOpenNewSessionTab,
-    newSessionDisabledReason: currentLaunchIdentity ? null : configuredLaunch.disabledReason,
+    newSessionDisabledReason: canOpenNewSessionTab ? null : configuredLaunch.disabledReason,
     openNewSessionTab,
     restoreLastDismissedTab,
   };

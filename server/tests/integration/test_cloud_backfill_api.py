@@ -88,7 +88,7 @@ async def _seed_exposed_workspace(
     auth: AuthSession,
     target_id: str,
     anyharness_workspace_id: str,
-    display_name: str = "Local Workspace",
+    display_name: str | None = "Local Workspace",
     commandable: bool = True,
 ) -> str:
     user_id = UUID(auth.user_id)
@@ -268,6 +268,64 @@ class TestCloudBackfillApi:
         )
         assert cleared_snapshot.status_code == 200
         assert cleared_snapshot.json()["pendingInteractions"] == []
+
+    @pytest.mark.asyncio
+    async def test_worker_backfill_does_not_promote_workspace_id_fallback_to_display_name(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await create_user_and_login(
+            client,
+            db_session,
+            email_prefix="cloud-backfill-display-name",
+        )
+        target_id, worker_headers = await _create_enrolled_target(
+            client,
+            db_session,
+            auth,
+            suffix="display-name",
+        )
+        seeded_cloud_workspace_id = await _seed_exposed_workspace(
+            db_session,
+            auth=auth,
+            target_id=target_id,
+            anyharness_workspace_id="runtime-workspace-id",
+            display_name=None,
+        )
+
+        backfill = await client.post(
+            "/v1/cloud/worker/backfill",
+            headers=worker_headers,
+            json={
+                "workspaces": [
+                    {
+                        "workspaceId": "runtime-workspace-id",
+                        "displayName": "runtime-workspace-id",
+                        "path": "/tmp/proliferate",
+                        "repo": {
+                            "provider": "github",
+                            "owner": "proliferate-ai",
+                            "name": "proliferate",
+                            "branch": "worker-sync",
+                            "baseBranch": "main",
+                        },
+                    }
+                ],
+                "sessions": [],
+            },
+        )
+        assert backfill.status_code == 200
+        assert backfill.json()["mappedWorkspaces"][0]["cloudWorkspaceId"] == (
+            seeded_cloud_workspace_id
+        )
+
+        workspaces = await client.get("/v1/cloud/workspaces", headers=auth.headers)
+        assert workspaces.status_code == 200
+        workspace = workspaces.json()[0]
+        assert workspace["id"] == seeded_cloud_workspace_id
+        assert workspace["displayName"] is None
+        assert workspace["repo"]["branch"] == "worker-sync"
 
     @pytest.mark.asyncio
     async def test_backfill_keeps_same_repo_branch_distinct_per_target(

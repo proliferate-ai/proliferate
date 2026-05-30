@@ -11,6 +11,8 @@ export interface TerminalStreamOptions {
   onClose?: (event: CloseEvent) => void;
 }
 
+export type AgentLoginTerminalStreamOptions = TerminalStreamOptions;
+
 export interface TerminalDataFrame {
   type: "data";
   seq: number;
@@ -43,6 +45,25 @@ export interface TerminalStreamHandle {
 }
 
 export function connectTerminal(options: TerminalStreamOptions): TerminalStreamHandle {
+  return connectTerminalStream(
+    options,
+    `/v1/terminals/${encodeURIComponent(options.terminalId)}/ws`,
+  );
+}
+
+export function connectAgentLoginTerminal(
+  options: AgentLoginTerminalStreamOptions,
+): TerminalStreamHandle {
+  return connectTerminalStream(
+    options,
+    `/v1/agents/login-terminals/${encodeURIComponent(options.terminalId)}/ws`,
+  );
+}
+
+function connectTerminalStream(
+  options: TerminalStreamOptions,
+  pathname: string,
+): TerminalStreamHandle {
   const wsUrl = options.baseUrl
     .replace(/^http/, "ws")
     .replace(/\/+$/, "");
@@ -54,7 +75,7 @@ export function connectTerminal(options: TerminalStreamOptions): TerminalStreamH
     params.set("after_seq", String(options.afterSeq));
   }
   const suffix = params.size > 0 ? `?${params.toString()}` : "";
-  const url = `${wsUrl}/v1/terminals/${encodeURIComponent(options.terminalId)}/ws${suffix}`;
+  const url = `${wsUrl}${pathname}${suffix}`;
 
   const ws = new WebSocket(url);
   ws.binaryType = "arraybuffer";

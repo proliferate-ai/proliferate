@@ -8,10 +8,13 @@ import {
   resolveChatInputAvailability,
   type ChatInputAvailabilityState,
 } from "@/lib/domain/chat/composer/chat-input";
+import { launchSelectionIsAvailable } from "@/lib/domain/chat/models/model-selection";
+import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
+import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 
 export type ChatAvailabilityState = ChatInputAvailabilityState;
 
@@ -37,6 +40,7 @@ export function useChatAvailabilityState(options?: {
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const mobility = useWorkspaceMobilityState();
   const configuredLaunch = useConfiguredLaunchReadiness();
+  const { currentLaunchIdentity } = useActiveSessionLaunchState();
 
   const selectedCloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
   const selectedCloudWorkspace =
@@ -52,6 +56,18 @@ export function useChatAvailabilityState(options?: {
     selectedCloudRuntimePhase: selectedCloudRuntime.state?.phase ?? null,
     selectedCloudRuntimeActionBlockReason: selectedCloudRuntime.state?.actionBlockReason ?? null,
     activeSessionId,
+    activeSessionLaunchDisabledReason:
+      activeSessionId
+      && currentLaunchIdentity
+      && !launchSelectionIsAvailable(
+        configuredLaunch.launchCatalog.launchAgents,
+        currentLaunchIdentity,
+      )
+        ? `${
+          getProviderDisplayName(currentLaunchIdentity.kind)
+          ?? currentLaunchIdentity.kind
+        } isn't ready on this target. Open a new chat with a ready agent.`
+        : null,
     isConfiguredLaunchLoading: configuredLaunch.isLoading,
     hasReadyConfiguredLaunch: configuredLaunch.isReady,
     configuredLaunchDisabledReason: configuredLaunch.disabledReason,
@@ -68,6 +84,8 @@ export function useChatAvailabilityState(options?: {
     configuredLaunch.disabledReason,
     configuredLaunch.isLoading,
     configuredLaunch.isReady,
+    configuredLaunch.launchCatalog.launchAgents,
+    currentLaunchIdentity,
     mobility.handoffActive,
     mobility.selectedLogicalWorkspace?.effectiveOwner,
     mobility.status.description,

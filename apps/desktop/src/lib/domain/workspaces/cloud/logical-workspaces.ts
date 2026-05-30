@@ -131,6 +131,49 @@ function cloudWorkspaceMatchesSelection(
     || currentSelectionId === cloudWorkspaceSyntheticId(workspace.id);
 }
 
+function cloudWorkspaceSelectedByMaterialization(
+  workspace: CloudWorkspaceSummary,
+  currentSelectionId: string | null | undefined,
+): boolean {
+  return currentSelectionId === cloudWorkspaceSyntheticId(workspace.id);
+}
+
+function cloudWorkspaceIsArchived(workspace: CloudWorkspaceSummary): boolean {
+  return workspace.productLifecycle === "archived"
+    || workspace.status === "archived"
+    || workspace.workspaceStatus === "archived";
+}
+
+function cloudWorkspaceTimestamp(workspace: CloudWorkspaceSummary): number {
+  return new Date(workspace.updatedAt ?? workspace.createdAt ?? "").getTime() || 0;
+}
+
+function preferCloudWorkspaceForLogicalSlot(
+  current: CloudWorkspaceSummary | null,
+  candidate: CloudWorkspaceSummary,
+  currentSelectionId: string | null | undefined,
+): CloudWorkspaceSummary {
+  if (!current) {
+    return candidate;
+  }
+
+  const candidateSelected = cloudWorkspaceSelectedByMaterialization(candidate, currentSelectionId);
+  const currentSelected = cloudWorkspaceSelectedByMaterialization(current, currentSelectionId);
+  if (candidateSelected !== currentSelected) {
+    return candidateSelected ? candidate : current;
+  }
+
+  const candidateArchived = cloudWorkspaceIsArchived(candidate);
+  const currentArchived = cloudWorkspaceIsArchived(current);
+  if (candidateArchived !== currentArchived) {
+    return candidateArchived ? current : candidate;
+  }
+
+  return cloudWorkspaceTimestamp(candidate) >= cloudWorkspaceTimestamp(current)
+    ? candidate
+    : current;
+}
+
 function localDefaultDisplayName(workspace: Workspace): string {
   return workspaceDisplayName(workspace);
 }
@@ -240,6 +283,10 @@ export function buildLogicalWorkspaces(args: {
   currentSelectionId?: string | null;
 }): LogicalWorkspace[] {
   const repoRootsById = new Map(args.repoRoots.map((repoRoot) => [repoRoot.id, repoRoot]));
+  const cloudWorkspacesById = new Map(args.cloudWorkspaces.map((workspace) => [
+    workspace.id,
+    workspace,
+  ]));
   const repoRootsByRemoteKey = new Map(
     args.repoRoots
       .filter((repoRoot) => (
@@ -303,7 +350,11 @@ export function buildLogicalWorkspaces(args: {
       continue;
     }
 
-    current.cloudWorkspace = workspace;
+    current.cloudWorkspace = preferCloudWorkspaceForLogicalSlot(
+      current.cloudWorkspace,
+      workspace,
+      args.currentSelectionId,
+    );
   }
 
   for (const workspace of args.cloudMobilityWorkspaces ?? []) {
@@ -317,12 +368,18 @@ export function buildLogicalWorkspaces(args: {
     if (!current) {
       byId.set(logicalId, {
         localWorkspace: null,
-        cloudWorkspace: null,
+        cloudWorkspace: workspace.cloudWorkspaceId
+          ? cloudWorkspacesById.get(workspace.cloudWorkspaceId) ?? null
+          : null,
         mobilityWorkspace: workspace,
       });
       continue;
     }
 
+    if (workspace.cloudWorkspaceId) {
+      current.cloudWorkspace = cloudWorkspacesById.get(workspace.cloudWorkspaceId)
+        ?? current.cloudWorkspace;
+    }
     current.mobilityWorkspace = workspace;
   }
 

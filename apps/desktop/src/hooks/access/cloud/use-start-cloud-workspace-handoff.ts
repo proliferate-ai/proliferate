@@ -47,7 +47,7 @@ export function useStartCloudWorkspaceHandoff() {
         queryClient.invalidateQueries({
           queryKey: cloudMobilityWorkspacesKey(),
         }),
-      ]);
+      ]).catch(() => undefined);
     },
   });
 }

@@ -127,6 +127,47 @@ def _active_lifecycle_state_for_owner(owner: str) -> str:
     }.get(_normalize_owner(owner), "cloud_active")
 
 
+_ACTIVE_LIFECYCLE_STATES = frozenset(
+    {
+        "local_active",
+        "cloud_active",
+        "shared_cloud_active",
+        "ssh_active",
+    }
+)
+
+
+def _owner_hint_for_backfilled_workspace(workspace: CloudWorkspace) -> str:
+    # Rows without a sandbox profile or runtime environment are direct target
+    # projections, such as desktop-dispatch worktrees. They should not make the
+    # logical workspace look owned by a managed cloud sandbox.
+    if workspace.sandbox_profile_id is None and workspace.runtime_environment_id is None:
+        return "local"
+    return "personal_cloud"
+
+
+def _should_repair_active_backfill_owner(
+    record: CloudWorkspaceMobility,
+    *,
+    owner_hint: str,
+    active_lifecycle_state: str,
+    cloud_workspace_id: UUID | None,
+) -> bool:
+    if record.active_handoff_op_id is not None:
+        return False
+    if record.lifecycle_state not in _ACTIVE_LIFECYCLE_STATES:
+        return False
+    if cloud_workspace_id is not None and record.cloud_workspace_id not in {
+        None,
+        cloud_workspace_id,
+    }:
+        return False
+    return (
+        _normalize_owner(record.owner) != _normalize_owner(owner_hint)
+        or record.lifecycle_state != active_lifecycle_state
+    )
+
+
 def _handoff_value(record: CloudWorkspaceHandoffOp) -> CloudWorkspaceHandoffOpValue:
     return CloudWorkspaceHandoffOpValue(
         id=record.id,
@@ -425,6 +466,7 @@ async def ensure_cloud_workspace_mobility(
     is_retryable_failure: RetryableMobilityFailurePredicate,
     display_name: str | None,
     cloud_workspace_id: UUID | None,
+    repair_active_owner: bool = False,
 ) -> CloudWorkspaceMobilityValue:
     record = await get_cloud_workspace_mobility_by_identity(
         db,
@@ -466,10 +508,31 @@ async def ensure_cloud_workspace_mobility(
         active_lifecycle_state=active_lifecycle_state,
         is_retryable_failure=is_retryable_failure,
     )
+    if repair_active_owner and _should_repair_active_backfill_owner(
+        record,
+        owner_hint=owner_hint,
+        active_lifecycle_state=active_lifecycle_state,
+        cloud_workspace_id=cloud_workspace_id,
+    ):
+        record.owner = _normalize_owner(owner_hint)
+        record.lifecycle_state = active_lifecycle_state
+        record.status_detail = None
+        record.last_error = None
+        changed = True
     if display_name is not None and display_name != record.display_name:
         record.display_name = display_name
         changed = True
-    if cloud_workspace_id is not None and record.cloud_workspace_id != cloud_workspace_id:
+    should_update_cloud_workspace_id = (
+        cloud_workspace_id is not None and record.cloud_workspace_id != cloud_workspace_id
+    )
+    if (
+        should_update_cloud_workspace_id
+        and repair_active_owner
+        and _normalize_owner(owner_hint) == "local"
+        and record.cloud_workspace_id is not None
+    ):
+        should_update_cloud_workspace_id = False
+    if should_update_cloud_workspace_id:
         record.cloud_workspace_id = cloud_workspace_id
         changed = True
     if changed:
@@ -494,6 +557,7 @@ async def backfill_cloud_workspace_mobility_from_workspace(
     active_lifecycle_state: str,
     is_retryable_failure: RetryableMobilityFailurePredicate,
 ) -> CloudWorkspaceMobilityValue:
+    owner_hint = _owner_hint_for_backfilled_workspace(workspace)
     return await ensure_cloud_workspace_mobility(
         db,
         user_id=workspace.user_id,
@@ -501,11 +565,16 @@ async def backfill_cloud_workspace_mobility_from_workspace(
         git_owner=workspace.git_owner,
         git_repo_name=workspace.git_repo_name,
         git_branch=workspace.git_branch,
-        owner_hint="personal_cloud",
-        active_lifecycle_state=active_lifecycle_state,
+        owner_hint=owner_hint,
+        active_lifecycle_state=(
+            active_lifecycle_state
+            if _normalize_owner(owner_hint) == "personal_cloud"
+            else _active_lifecycle_state_for_owner(owner_hint)
+        ),
         is_retryable_failure=is_retryable_failure,
         display_name=workspace.display_name,
         cloud_workspace_id=workspace.id,
+        repair_active_owner=_normalize_owner(owner_hint) == "local",
     )
 
 
@@ -674,6 +743,23 @@ async def complete_cloud_workspace_handoff_cleanup(
     handoff_op: CloudWorkspaceHandoffOp,
     mobility_workspace: CloudWorkspaceMobility,
 ) -> CloudWorkspaceHandoffOpValue:
+    if handoff_op.phase == "completed":
+        if (
+            handoff_op.canonical_side != "destination"
+            or handoff_op.finalized_at is None
+            or handoff_op.cleanup_completed_at is None
+        ):
+            raise ValueError("handoff cleanup cannot complete before cutover")
+        return _handoff_value(handoff_op)
+    if handoff_op.phase not in {
+        "cutover_committed",
+        "cleanup_pending",
+        "cleanup_failed",
+    }:
+        raise ValueError("handoff cleanup cannot complete before cutover")
+    if handoff_op.canonical_side != "destination" or handoff_op.finalized_at is None:
+        raise ValueError("handoff cleanup cannot complete before cutover")
+
     now = utcnow()
     previous_phase = handoff_op.phase
     handoff_op.phase = "completed"

@@ -52,4 +52,5 @@ pub struct PrepareRepoRootMobilityDestinationRequest {
 #[serde(rename_all = "camelCase")]
 pub struct PrepareRepoRootMobilityDestinationResponse {
     pub workspace: crate::v1::Workspace,
+    pub created: bool,
 }

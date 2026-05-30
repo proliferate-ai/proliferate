@@ -26,6 +26,19 @@ describe("deriveHandoffFailureRecovery", () => {
     });
   });
 
+  it("keeps the source remote-owned when finalize state is ambiguous", () => {
+    expect(deriveHandoffFailureRecovery({
+      handoffStarted: true,
+      finalized: false,
+      finalizationUnresolved: true,
+      cleanupCompleted: false,
+    })).toEqual({
+      shouldMarkHandoffFailed: false,
+      shouldRestoreSourceRuntimeState: false,
+      shouldRefreshWorkspaceSelection: true,
+    });
+  });
+
   it("keeps the source remote-owned and refreshes selection after finalize when cleanup did not complete", () => {
     expect(deriveHandoffFailureRecovery({
       handoffStarted: true,

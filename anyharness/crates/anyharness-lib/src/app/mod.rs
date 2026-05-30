@@ -34,7 +34,7 @@ use crate::domains::runtime_config::session_extension::RuntimeConfigSessionLaunc
 use crate::domains::runtime_config::store::RuntimeConfigStore;
 use crate::domains::terminals::store::TerminalStore;
 use crate::live::sessions::LiveSessionManager;
-use crate::live::terminals::TerminalService;
+use crate::live::terminals::{AgentLoginTerminalService, TerminalService};
 use crate::persistence::Db;
 use crate::repo_roots::service::RepoRootService;
 use crate::repo_roots::store::RepoRootStore;
@@ -127,6 +127,7 @@ pub struct AppState {
     pub plan_runtime: Arc<PlanRuntime>,
     pub acp_manager: LiveSessionManager,
     pub terminal_service: Arc<TerminalService>,
+    pub agent_login_terminal_service: Arc<AgentLoginTerminalService>,
 }
 
 impl AppState {
@@ -215,6 +216,7 @@ impl AppState {
             TerminalStore::new(db.clone()),
             runtime_home.clone(),
         ));
+        let agent_login_terminal_service = Arc::new(AgentLoginTerminalService::new());
         let worktree_inventory_service = Arc::new(WorktreeInventoryService::new(
             WorkspaceStore::new(db.clone()),
             SessionStore::new(db.clone()),
@@ -368,6 +370,7 @@ impl AppState {
             session_service.clone(),
             session_runtime.clone(),
             subagent_service.clone(),
+            ReviewStore::new(db.clone()),
             workspace_access_gate.clone(),
             terminal_service.clone(),
         ));
@@ -449,6 +452,7 @@ impl AppState {
             plan_runtime,
             acp_manager,
             terminal_service,
+            agent_login_terminal_service,
         })
     }
 }

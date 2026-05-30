@@ -7,12 +7,17 @@ import type {
 } from "@/lib/access/cloud/client";
 import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 import {
+  buildWorkspaceCollections,
   type WorkspaceCollections,
   upsertCloudWorkspaceCollections,
   upsertLocalWorkspaceCollections,
   upsertRepoRootCollections,
 } from "@/lib/domain/workspaces/cloud/collections";
-import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/cache/query-keys";
+import {
+  getWorkspaceCollectionsFromCache,
+  workspaceCollectionsKey,
+  workspaceCollectionsScopeKey,
+} from "@/hooks/workspaces/cache/query-keys";
 
 export interface WorkspaceCollectionsLocalUpsertSummary {
   previousLocalCount: number;
@@ -60,6 +65,22 @@ function upsertRepoRootForRuntime(
   );
 }
 
+export function upsertCloudWorkspaceForRuntime(
+  queryClient: QueryClient,
+  runtimeUrl: string,
+  workspace: CloudWorkspaceDetail,
+): void {
+  const nextCollections = upsertCloudWorkspaceCollections(
+    getWorkspaceCollectionsFromCache(queryClient, runtimeUrl),
+    workspace,
+  ) ?? buildWorkspaceCollections([], [], [workspace]);
+
+  queryClient.setQueryData(
+    workspaceCollectionsKey(runtimeUrl, true),
+    nextCollections,
+  );
+}
+
 export function useWorkspaceCollectionsMutationCache(runtimeUrl: string) {
   const queryClient = useQueryClient();
 
@@ -74,10 +95,7 @@ export function useWorkspaceCollectionsMutationCache(runtimeUrl: string) {
   }, [queryClient, runtimeUrl]);
 
   const upsertCloudWorkspace = useCallback((workspace: CloudWorkspaceDetail) => {
-    queryClient.setQueriesData<WorkspaceCollections | undefined>(
-      { queryKey: workspaceCollectionsScopeKey(runtimeUrl) },
-      (collections) => upsertCloudWorkspaceCollections(collections, workspace),
-    );
+    upsertCloudWorkspaceForRuntime(queryClient, runtimeUrl, workspace);
     queryClient.setQueryData<CloudMobilityWorkspaceSummary[] | undefined>(
       cloudMobilityWorkspacesKey(),
       (workspaces) => workspaces?.map((candidate) => (

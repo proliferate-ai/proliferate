@@ -1,5 +1,7 @@
 import { useCallback } from "react";
+import { useDestroyWorkspaceMobilitySourceMutation } from "@anyharness/sdk-react";
 import { useCompleteCloudWorkspaceHandoffCleanup } from "@/hooks/access/cloud/use-complete-cloud-workspace-handoff-cleanup";
+import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
 import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobility-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import type { WorkspaceMobilityState } from "./use-workspace-mobility-state";
@@ -9,6 +11,8 @@ export function useWorkspaceMobilityCleanupActions(state: WorkspaceMobilityState
     isPending,
     mutateAsync: completeCleanup,
   } = useCompleteCloudWorkspaceHandoffCleanup();
+  const cleanupWorkspace = useDestroyWorkspaceMobilitySourceMutation();
+  const { clearWorkspaceRuntimeState } = useWorkspaceSelection();
   const dismissMcpNotice = useWorkspaceMobilityUiStore((store) => store.dismissMcpNotice);
   const showToast = useToastStore((store) => store.show);
 
@@ -27,6 +31,16 @@ export function useWorkspaceMobilityCleanupActions(state: WorkspaceMobilityState
     }
 
     try {
+      if (state.status.activeHandoff?.direction === "local_to_cloud") {
+        if (!state.localWorkspaceId) {
+          showToast("Cleanup needs retry once the local runtime is connected.");
+          return;
+        }
+        await cleanupWorkspace.mutateAsync({
+          workspaceId: state.localWorkspaceId,
+        });
+        clearWorkspaceRuntimeState(state.localWorkspaceId);
+      }
       await completeCleanup({
         mobilityWorkspaceId: state.mobilityWorkspaceId,
         handoffOpId,
@@ -39,14 +53,18 @@ export function useWorkspaceMobilityCleanupActions(state: WorkspaceMobilityState
       );
     }
   }, [
+    cleanupWorkspace,
+    clearWorkspaceRuntimeState,
     completeCleanup,
     showToast,
+    state.localWorkspaceId,
     state.mobilityWorkspaceId,
+    state.status.activeHandoff?.direction,
     state.status.activeHandoff?.id,
   ]);
 
   return {
-    isRetryingCleanup: isPending,
+    isRetryingCleanup: isPending || cleanupWorkspace.isPending,
     dismissNotice,
     retryCleanup,
   };

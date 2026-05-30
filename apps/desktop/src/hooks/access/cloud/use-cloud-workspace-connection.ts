@@ -1,28 +1,20 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import type { CloudConnectionInfo } from "@/lib/access/cloud/client";
-import { ProliferateClientError } from "@/lib/access/cloud/client";
 import { getCloudWorkspaceConnection } from "@proliferate/cloud-sdk/client/workspaces";
 import { cloudWorkspaceConnectionKey } from "@/hooks/access/cloud/query-keys";
+import {
+  CLOUD_WORKSPACE_CONNECTION_MAX_RETRIES,
+  CLOUD_WORKSPACE_CONNECTION_RETRY_DELAY_MS,
+  isCloudWorkspaceNotReadyError,
+  isRetryableCloudWorkspaceConnectionError,
+} from "@/lib/access/cloud/workspace-connection-retry";
 
-const CLOUD_WORKSPACE_CONNECTION_RETRY_DELAY_MS = 750;
-const CLOUD_WORKSPACE_CONNECTION_MAX_RETRIES = 8;
-
-function isRetryableNetworkError(error: unknown): boolean {
-  return error instanceof TypeError;
-}
-
-export function isRetryableCloudWorkspaceConnectionError(error: unknown): boolean {
-  if (error instanceof ProliferateClientError) {
-    return isCloudWorkspaceNotReadyError(error) || error.status >= 500;
-  }
-
-  return isRetryableNetworkError(error);
-}
-
-export function isCloudWorkspaceNotReadyError(error: unknown): boolean {
-  return error instanceof ProliferateClientError
-    && error.code === "workspace_not_ready";
-}
+export {
+  CLOUD_WORKSPACE_CONNECTION_MAX_RETRIES,
+  CLOUD_WORKSPACE_CONNECTION_RETRY_DELAY_MS,
+  isCloudWorkspaceNotReadyError,
+  isRetryableCloudWorkspaceConnectionError,
+};
 
 export function cloudWorkspaceConnectionQueryOptions(workspaceId: string) {
   return queryOptions<CloudConnectionInfo>({

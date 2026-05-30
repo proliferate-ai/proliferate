@@ -15,9 +15,11 @@ from proliferate.db.store.cloud_mobility import (
     list_cleanup_items_for_handoff,
     update_cleanup_item_status,
 )
+from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync.exposures import archive_workspace_exposure
 from proliferate.db.store.cloud_sync.projections import end_session_projection_by_id
 from proliferate.db.store.cloud_workspaces import archive_cloud_workspace_record_by_id
+from proliferate.integrations.anyharness import destroy_runtime_mobility_source
 from proliferate.server.cloud.mobility.domain.lifecycle import (
     HANDOFF_PHASE_CLEANUP_FAILED,
     LIFECYCLE_CLEANUP_FAILED,
@@ -25,9 +27,11 @@ from proliferate.server.cloud.mobility.domain.lifecycle import (
     visible_failure_last_error,
     visible_failure_status_detail,
 )
+from proliferate.utils.crypto import decrypt_text
 
 SERVER_CLEANUP_ITEM_KINDS: frozenset[str] = frozenset(
     {
+        "anyharness_workspace",
         "cloud_workspace",
         "cloud_exposure",
         "cloud_session_projection",
@@ -88,7 +92,9 @@ async def execute_server_cleanup_item(
 
     await update_cleanup_item_status(db, cleanup_item=item, status="in_progress")
     try:
-        if item.item_kind == "cloud_workspace" and item.object_id is not None:
+        if item.item_kind == "anyharness_workspace":
+            await _destroy_anyharness_workspace_cleanup_item(db, item=item)
+        elif item.item_kind == "cloud_workspace" and item.object_id is not None:
             await archive_cloud_workspace_record_by_id(db, workspace_id=item.object_id)
         elif item.item_kind == "cloud_exposure" and item.object_id is not None:
             await archive_workspace_exposure(db, exposure_id=item.object_id)
@@ -151,3 +157,26 @@ async def execute_server_cleanup_item(
             handoff_op=handoff,
             mobility_workspace=mobility_workspace,
         )
+
+
+async def _destroy_anyharness_workspace_cleanup_item(
+    db: AsyncSession,
+    *,
+    item,
+) -> None:
+    if item.target_id is None or not item.anyharness_workspace_id:
+        return
+    runtime_access = await targets_store.load_active_runtime_access_for_target(
+        db,
+        target_id=item.target_id,
+    )
+    if runtime_access is None or not runtime_access.anyharness_base_url:
+        raise RuntimeError("Cloud runtime access is unavailable for source cleanup.")
+    if not runtime_access.runtime_token_ciphertext:
+        raise RuntimeError("Cloud runtime token is unavailable for source cleanup.")
+
+    await destroy_runtime_mobility_source(
+        runtime_access.anyharness_base_url,
+        decrypt_text(runtime_access.runtime_token_ciphertext),
+        anyharness_workspace_id=item.anyharness_workspace_id,
+    )

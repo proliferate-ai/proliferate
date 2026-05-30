@@ -124,6 +124,38 @@ export function resolveEffectiveLaunchSelection(
   return null;
 }
 
+export function launchSelectionIsAvailable(
+  agents: readonly DesktopAgentLaunchAgent[],
+  selection: ModelSelectorSelection | null | undefined,
+): boolean {
+  if (!selection) {
+    return false;
+  }
+
+  const agent = agents.find((candidate) => candidate.kind === selection.kind);
+  if (!agent) {
+    return false;
+  }
+
+  if (dynamicLaunchAgentAcceptsModel(agent)) {
+    return selection.modelId.trim().length > 0;
+  }
+
+  return agent.models.some((model) =>
+    model.id === selection.modelId || model.aliases.includes(selection.modelId)
+  );
+}
+
+export function resolveAvailableLaunchSelection(
+  agents: readonly DesktopAgentLaunchAgent[],
+  preferredSelection: ModelSelectorSelection | null | undefined,
+  fallbackSelection: ModelSelectorSelection | null | undefined,
+): ModelSelectorSelection | null {
+  return launchSelectionIsAvailable(agents, preferredSelection)
+    ? preferredSelection ?? null
+    : fallbackSelection ?? null;
+}
+
 export function resolveConfiguredLaunchAgentSelection(
   agents: DesktopAgentLaunchAgent[],
   preferences: ChatLaunchPreferences,

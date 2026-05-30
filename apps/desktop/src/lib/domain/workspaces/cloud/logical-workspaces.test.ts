@@ -449,6 +449,40 @@ describe("logical workspaces", () => {
     )).toBe(cloudSelectionId);
   });
 
+  it("prefers the mobility-linked cloud workspace over an archived duplicate branch", () => {
+    const archivedCloudWorkspace = makeCloudWorkspace({
+      id: "cloud-archived",
+      branch: "main",
+      status: "archived",
+      productLifecycle: "archived",
+      updatedAt: "2026-04-13T11:00:00Z",
+    });
+    const activeCloudWorkspace = makeCloudWorkspace({
+      id: "cloud-active",
+      branch: "main",
+      updatedAt: "2026-04-13T10:00:00Z",
+    });
+    const logicalWorkspaces = buildLogicalWorkspaces({
+      localWorkspaces: [],
+      repoRoots: [],
+      cloudWorkspaces: [activeCloudWorkspace, archivedCloudWorkspace],
+      cloudMobilityWorkspaces: [
+        makeMobilityWorkspace({
+          owner: "cloud",
+          branch: "main",
+          cloudWorkspaceId: activeCloudWorkspace.id,
+        }),
+      ],
+      currentSelectionId: cloudWorkspaceSyntheticId(archivedCloudWorkspace.id),
+    });
+
+    expect(logicalWorkspaces).toHaveLength(1);
+    expect(logicalWorkspaces[0]?.cloudWorkspace?.id).toBe(activeCloudWorkspace.id);
+    expect(logicalWorkspaces[0]?.preferredMaterializationId).toBe(
+      cloudWorkspaceSyntheticId(activeCloudWorkspace.id),
+    );
+  });
+
   it("groups logical, local, and cloud materialization ids for attention timestamps", () => {
     const localWorkspace = makeWorkspace({
       id: "local-1",

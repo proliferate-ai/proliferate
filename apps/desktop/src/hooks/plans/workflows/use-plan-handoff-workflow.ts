@@ -64,7 +64,7 @@ export function usePlanHandoffWorkflow({
   const setSessionConfigOptionMutation = useSetSessionConfigOptionMutation();
 
   const resolvedConnectionState = selectedCloudRuntime.state?.phase === "ready"
-    ? connectionState
+    ? "healthy"
     : selectedCloudRuntime.state
       ? "connecting"
       : connectionState;

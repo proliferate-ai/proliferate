@@ -181,6 +181,34 @@ fn choose_startup_strategy_prefers_fresh_when_no_native_session_exists() {
 }
 
 #[test]
+fn choose_startup_strategy_resumes_sequence_when_history_exists_without_native_session() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+
+    let store = SessionStore::new(db);
+    let mut record = session_record("codex");
+    record.native_session_id = None;
+    store.insert(&record).expect("insert session");
+    store
+        .append_event(&SessionEventRecord {
+            id: 0,
+            session_id: "session-1".to_string(),
+            seq: 1,
+            timestamp: "2026-03-25T00:01:00Z".to_string(),
+            event_type: "turn_started".to_string(),
+            turn_id: Some("turn-1".to_string()),
+            item_id: None,
+            payload_json: r#"{"type":"turn_started"}"#.to_string(),
+        })
+        .expect("append turn_started");
+
+    let strategy =
+        choose_session_startup_strategy(&record, &store).expect("select startup strategy");
+
+    assert_eq!(strategy, SessionStartupStrategy::ResumeSeqFreshNative);
+}
+
+#[test]
 fn choose_startup_strategy_uses_fresh_native_for_zero_turn_claude_sessions() {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);

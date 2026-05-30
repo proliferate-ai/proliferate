@@ -128,6 +128,21 @@ _TERMINAL_AGENT_AUTH_REFRESH_COMMAND_STATUSES = frozenset(
 )
 
 
+async def _kick_agent_auth_refresh_wake_after_commit(
+    db: AsyncSession,
+    command: commands_store.CloudCommandSnapshot,
+) -> None:
+    if command.status in _TERMINAL_AGENT_AUTH_REFRESH_COMMAND_STATUSES:
+        return
+
+    async def _wake_after_commit() -> None:
+        from proliferate.server.cloud.runtime.wake import kick_off_managed_slot_wake
+
+        kick_off_managed_slot_wake(command.target_id, command.id)
+
+    await db_engine.run_after_commit(db, _wake_after_commit)
+
+
 @dataclass(frozen=True)
 class CreateGatewayCredentialResult:
     credential: AgentAuthCredentialRecord
@@ -4607,6 +4622,7 @@ async def _queue_agent_auth_refresh_command(
             active_slot=active_slot,
         ):
             await publish_command_status_after_commit(db, existing)
+            await _kick_agent_auth_refresh_wake_after_commit(db, existing)
             return existing
         idempotency_key = (
             f"{base_idempotency_key}:retry:{_agent_auth_retry_marker(existing_state)}"
@@ -4618,6 +4634,7 @@ async def _queue_agent_auth_refresh_command(
         )
         if retry_existing is not None:
             await publish_command_status_after_commit(db, retry_existing)
+            await _kick_agent_auth_refresh_wake_after_commit(db, retry_existing)
             return retry_existing
     payload = {
         "sandboxProfileId": str(profile.id),
@@ -4669,6 +4686,7 @@ async def _queue_agent_auth_refresh_command(
             raise
         command = duplicate
     await publish_command_status_after_commit(db, command)
+    await _kick_agent_auth_refresh_wake_after_commit(db, command)
     return command
 
 

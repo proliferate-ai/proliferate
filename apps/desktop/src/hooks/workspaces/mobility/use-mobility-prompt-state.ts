@@ -15,11 +15,16 @@ export function useMobilityPromptState(
 ): MobilityPromptState | null {
   const mobility = useWorkspaceMobilityState();
   const footerContext = useMobilityFooterContext();
+  const sourceWorkspaceId = mobility.confirmSnapshot?.sourceWorkspaceId
+    ?? (mobility.canMoveToCloud
+      ? mobility.localWorkspaceId
+      : mobility.canBringBackLocal
+        ? mobility.cloudMaterializationId
+        : null);
   const shouldResolveGitSync = isPromptActive
-    && mobility.canMoveToCloud
-    && Boolean(mobility.localWorkspaceId);
+    && Boolean(sourceWorkspaceId);
   const gitStatusQuery = useGitStatusQuery({
-    workspaceId: mobility.localWorkspaceId,
+    workspaceId: sourceWorkspaceId,
     enabled: shouldResolveGitSync,
   });
   const gitSync = useMemo(() => {
@@ -37,6 +42,9 @@ export function useMobilityPromptState(
   const isGitSyncResolved = !shouldResolveGitSync
     || gitStatusQuery.status === "success"
     || gitStatusQuery.status === "error";
+  const gitSyncError = shouldResolveGitSync && gitStatusQuery.status === "error"
+    ? `Git status couldn't be loaded: ${errorMessage(gitStatusQuery.error)}`
+    : null;
 
   return useMemo(() => {
     if (!footerContext) {
@@ -46,7 +54,7 @@ export function useMobilityPromptState(
     return buildMobilityPromptState({
       isPreparing,
       hasResolvedPrompt,
-      preparationError,
+      preparationError: preparationError ?? gitSyncError,
       locationKind: footerContext.locationKind,
       repoBacked: mobility.repoBacked,
       canMoveToCloud: mobility.canMoveToCloud,
@@ -61,12 +69,14 @@ export function useMobilityPromptState(
   }, [
     footerContext,
     gitSync,
+    gitSyncError,
     hasResolvedPrompt,
     isGitSyncResolved,
     isPreparing,
     preparationError,
     mobility.canBringBackLocal,
     mobility.canMoveToCloud,
+    mobility.cloudMaterializationId,
     mobility.confirmSnapshot,
     mobility.localWorkspaceId,
     mobility.repoBacked,
@@ -75,4 +85,8 @@ export function useMobilityPromptState(
     mobility.status,
     shouldResolveGitSync,
   ]);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Try again in a moment.";
 }

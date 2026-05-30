@@ -65,6 +65,22 @@ impl ReviewStore {
         })
     }
 
+    pub fn list_active_runs_for_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> anyhow::Result<Vec<ReviewRunRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT * FROM review_runs
+                 WHERE workspace_id = ?1
+                   AND status IN ('reviewing', 'feedback_ready', 'parent_revising', 'waiting_for_revision')
+                 ORDER BY created_at DESC, id DESC",
+            )?;
+            let rows = stmt.query_map([workspace_id], map_run)?;
+            rows.collect()
+        })
+    }
+
     pub fn mark_run_passed(&self, run_id: &str, round_id: &str) -> anyhow::Result<()> {
         let now = chrono::Utc::now().to_rfc3339();
         self.db.with_tx(|tx| {

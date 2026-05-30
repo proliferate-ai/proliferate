@@ -454,6 +454,10 @@ impl SessionService {
         result
     }
 
+    pub fn relocate_session_for_mobility(&self, session: &SessionRecord) -> anyhow::Result<()> {
+        self.session_store.relocate_for_mobility(session)
+    }
+
     pub fn delete_session(&self, session_id: &str) -> anyhow::Result<()> {
         self.delete_workflow.delete_session(session_id)?;
         if let Err(error) = self.attachment_storage.delete_session_dir(session_id) {

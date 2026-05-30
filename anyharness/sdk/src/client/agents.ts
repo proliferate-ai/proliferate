@@ -11,7 +11,9 @@ import type {
   ReconcileAgentsResponse,
   RefreshAgentModelRegistryRequest,
   RefreshAgentModelRegistryResponse,
+  AgentLoginTerminalRecord,
   StartAgentLoginResponse,
+  StartAgentLoginTerminalResponse,
 } from "../types/agents.js";
 import type { AnyHarnessRequestOptions, AnyHarnessTransport } from "./core.js";
 
@@ -92,6 +94,29 @@ export class AgentsClient {
     return this.transport.post<StartAgentLoginResponse>(
       `/v1/agents/${encodeURIComponent(kind)}/login/start`,
       {},
+    );
+  }
+
+  async startLoginTerminal(kind: string): Promise<StartAgentLoginTerminalResponse> {
+    return this.transport.post<StartAgentLoginTerminalResponse>(
+      `/v1/agents/${encodeURIComponent(kind)}/login/terminal`,
+      {},
+    );
+  }
+
+  async getLoginTerminal(
+    terminalId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<AgentLoginTerminalRecord> {
+    return this.transport.get<AgentLoginTerminalRecord>(
+      `/v1/agents/login-terminals/${encodeURIComponent(terminalId)}`,
+      options,
+    );
+  }
+
+  async closeLoginTerminal(terminalId: string): Promise<void> {
+    return this.transport.delete(
+      `/v1/agents/login-terminals/${encodeURIComponent(terminalId)}`,
     );
   }
 

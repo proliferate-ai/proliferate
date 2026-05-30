@@ -157,7 +157,9 @@ export function buildSidebarGroupStates(args: {
       }
       const workspaceItemsWithWorkspace = groupWorkspaces.map((entry) => {
         const active = logicalWorkspaceMatchesId(entry, args.selectedLogicalWorkspaceId);
-        const archived = entry.cloudWorkspace?.productLifecycle === "archived"
+        const cloudOnlyArchived = !entry.localWorkspace
+          && entry.cloudWorkspace?.productLifecycle === "archived";
+        const archived = cloudOnlyArchived
           || logicalWorkspaceRelatedIds(entry).some((id) => args.archivedSet.has(id));
         const recency = resolveLogicalWorkspaceRecency(entry, args.workspaceLastInteracted);
         const activityLastInteracted = recency.displayAt;

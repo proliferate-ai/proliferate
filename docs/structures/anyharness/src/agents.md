@@ -197,8 +197,31 @@ Public HTTP routes include:
 - `GET /v1/agents/{kind}`
 - `POST /v1/agents/{kind}/install`
 - `POST /v1/agents/{kind}/login/start`
+- `POST /v1/agents/{kind}/login/terminal`
+- `GET /v1/agents/login-terminals/{id}`
+- `DELETE /v1/agents/login-terminals/{id}`
+- `GET /v1/agents/login-terminals/{id}/ws`
 - `GET /v1/agents/{kind}/model-registry`
 - `POST /v1/agents/{kind}/model-registry/refresh`
+
+`login/start` is a compatibility endpoint for older clients that still show a
+command. New local/Desktop clients use `login/terminal`: AnyHarness resolves
+the correct provider executable, starts an ephemeral runtime-scoped PTY, and
+streams it over the agent-login terminal websocket. These terminals are not
+workspace terminals, do not mutate workspace terminal state, and do not persist
+output to `terminal_command_runs`.
+
+Login command resolution is runtime-owned and must not assume that the provider
+CLI is available on global `PATH`. Resolution order is:
+
+1. managed native executable
+2. managed agent-process registry binary or registry npm binary
+3. global `PATH`, only when the executable is actually resolvable
+
+The launched auth process receives a `PATH` prefixed with the resolved
+executable directory and managed runtime binary directories. It keeps the
+user's normal `HOME` and runs from the user home directory when available, so
+vendor CLIs write their usual local auth files.
 
 Cloud target enrollment, Git bootstrap, and workspace materialization do not
 install agents. A fresh cloud/SSH target may report worker and AnyHarness

@@ -41,6 +41,7 @@ from proliferate.integrations.anyharness.workspace_ops import (
     write_remote_workspace_file,
 )
 from proliferate.integrations.anyharness.workspaces import (
+    destroy_runtime_mobility_source,
     list_runtime_workspaces,
     prepare_runtime_mobility_destination,
     resolve_runtime_workspace,
@@ -71,6 +72,7 @@ __all__ = [
     "check_runtime_auth_enforcement",
     "close_runtime_session",
     "create_runtime_session",
+    "destroy_runtime_mobility_source",
     "get_remote_terminal_command_run",
     "install_runtime_agent",
     "list_runtime_agents",

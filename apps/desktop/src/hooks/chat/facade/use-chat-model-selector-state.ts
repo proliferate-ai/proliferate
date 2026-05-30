@@ -121,7 +121,7 @@ export function useChatModelSelectorState(options?: { suppressActiveSessionState
     && (agentsLoading || launchCatalog.isLoading);
 
   const resolvedConnectionState = selectedCloudRuntime.state?.phase === "ready"
-    ? connectionState
+    ? "healthy"
     : selectedCloudRuntime.state
       ? "connecting"
       : connectionState;

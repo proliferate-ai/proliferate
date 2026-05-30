@@ -274,6 +274,18 @@ pub fn user_route_allowed(
         ["workspaces", workspace_id, "terminals"] if method == Method::POST => {
             require_workspace_permission(claim, workspace_id, Permission::Write)
         }
+        ["agents", _, "login", "terminal"] if method == Method::POST => {
+            require_permission(claim, Permission::Write)
+        }
+        ["agents", "login-terminals", _] if method == Method::GET => {
+            require_permission(claim, Permission::Read)
+        }
+        ["agents", "login-terminals", _, "ws"] if method == Method::GET => {
+            require_permission(claim, Permission::Write)
+        }
+        ["agents", "login-terminals", _] if method == Method::DELETE => {
+            require_permission(claim, Permission::Control)
+        }
         ["sessions"] if method == Method::GET => require_permission(claim, Permission::Read),
         ["sessions"] if method == Method::POST => require_permission(claim, Permission::Write),
         ["sessions", session_id] if method == Method::GET => {

@@ -34,7 +34,7 @@ export function useFailCloudWorkspaceHandoff() {
         queryClient.invalidateQueries({
           queryKey: cloudMobilityWorkspacesKey(),
         }),
-      ]);
+      ]).catch(() => undefined);
     },
   });
 }

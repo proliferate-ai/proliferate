@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
 import {
   buildModelSelectorGroups,
+  launchSelectionIsAvailable,
+  resolveAvailableLaunchSelection,
   resolveEffectiveLaunchSelection,
 } from "./model-selection";
 
@@ -577,6 +579,42 @@ describe("resolveEffectiveLaunchSelection", () => {
     expect(selection).toEqual({
       kind: "cursor",
       modelId: "cursor/auto",
+    });
+  });
+});
+
+describe("launch selection availability", () => {
+  it("falls back when the active session agent is not launchable on this target", () => {
+    const agents = [
+      launchAgent("codex", [model("gpt-5.4", "GPT 5.4", true)]),
+    ];
+
+    expect(launchSelectionIsAvailable(agents, {
+      kind: "claude",
+      modelId: "sonnet",
+    })).toBe(false);
+    expect(resolveAvailableLaunchSelection(
+      agents,
+      { kind: "claude", modelId: "sonnet" },
+      { kind: "codex", modelId: "gpt-5.4" },
+    )).toEqual({
+      kind: "codex",
+      modelId: "gpt-5.4",
+    });
+  });
+
+  it("keeps the active session selection when the target can launch it", () => {
+    const agents = [
+      launchAgent("codex", [model("gpt-5.4", "GPT 5.4", true)]),
+    ];
+
+    expect(resolveAvailableLaunchSelection(
+      agents,
+      { kind: "codex", modelId: "gpt-5.4" },
+      { kind: "claude", modelId: "sonnet" },
+    )).toEqual({
+      kind: "codex",
+      modelId: "gpt-5.4",
     });
   });
 });

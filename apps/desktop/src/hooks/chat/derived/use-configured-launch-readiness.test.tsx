@@ -161,7 +161,7 @@ describe("useConfiguredLaunchReadiness", () => {
     });
   });
 
-  it("blocks the fresh Claude default when it is unavailable", () => {
+  it("falls back to a ready target agent when the fresh Claude default is unavailable", () => {
     useUserPreferencesStore.setState({
       defaultChatAgentKind: "claude",
       defaultChatModelIdByAgentKind: {},
@@ -198,11 +198,11 @@ describe("useConfiguredLaunchReadiness", () => {
     const { result } = renderHook(() => useConfiguredLaunchReadiness());
 
     expect(result.current).toMatchObject({
-      configuredKind: "claude",
-      selection: null,
-      disabledReason: "claude isn't supported by this runtime yet.",
-      status: "unavailable",
-      isReady: false,
+      configuredKind: "codex",
+      selection: { kind: "codex", modelId: "gpt-5.4" },
+      displayName: "GPT 5.4",
+      status: "ready",
+      isReady: true,
     });
   });
 });

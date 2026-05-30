@@ -13,11 +13,17 @@ from proliferate.db.store.cloud_mobility import (
     CloudWorkspaceMoveCleanupItemValue,
 )
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.mobility import cleanup_executor
 from proliferate.server.cloud.mobility import service as mobility_service
 from proliferate.server.cloud.mobility.domain.lifecycle import (
+    CANONICAL_SIDE_DESTINATION,
+    HANDOFF_PHASE_COMPLETED,
     HANDOFF_PHASE_HANDOFF_FAILED,
     LIFECYCLE_HANDOFF_FAILED,
 )
+
+REQUESTED_SHA = "a" * 40
+GITHUB_SHA = "b" * 40
 
 
 def _workspace(
@@ -61,7 +67,7 @@ def _handoff(*, mobility_workspace_id=None) -> CloudWorkspaceHandoffOpValue:
         target_owner="cloud",
         phase="start_requested",
         requested_branch="feature/cloud",
-        requested_base_sha="abc123",
+        requested_base_sha=REQUESTED_SHA,
         exclude_paths=(),
         failure_code=None,
         failure_detail=None,
@@ -144,6 +150,50 @@ async def test_list_mobility_skips_error_cloud_workspace_backfill(
 
 
 @pytest.mark.asyncio
+async def test_list_mobility_backfill_does_not_clear_failed_handoff_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_id = uuid4()
+    predicate_results: list[bool] = []
+
+    async def _list_workspaces(_user_id):
+        assert _user_id == user_id
+        return [SimpleNamespace(status=CloudWorkspaceStatus.ready.value)]
+
+    async def _backfill(**kwargs):
+        predicate_results.append(
+            kwargs["is_retryable_failure"](
+                lifecycle_state=LIFECYCLE_HANDOFF_FAILED,
+                has_active_handoff=False,
+            )
+        )
+
+    async def _list_mobility(**kwargs):
+        assert kwargs["user_id"] == user_id
+        return []
+
+    monkeypatch.setattr(
+        mobility_service,
+        "expire_stale_cloud_workspace_handoffs_for_user",
+        _noop_expire,
+    )
+    monkeypatch.setattr(mobility_service, "list_cloud_workspaces_store", _list_workspaces)
+    monkeypatch.setattr(
+        mobility_service,
+        "backfill_cloud_workspace_mobility_for_workspace",
+        _backfill,
+    )
+    monkeypatch.setattr(
+        mobility_service,
+        "list_cloud_workspace_mobility_store",
+        _list_mobility,
+    )
+
+    assert await mobility_service.list_cloud_workspace_mobility_for_user(user_id) == []
+    assert predicate_results == [False]
+
+
+@pytest.mark.asyncio
 async def test_preflight_blocks_when_workspace_handoff_is_already_active(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -165,7 +215,7 @@ async def test_preflight_blocks_when_workspace_handoff_is_already_active(
     async def _repo_branches(*_args, **_kwargs):
         return SimpleNamespace(
             branches=["feature/cloud"],
-            branch_heads_by_name={"feature/cloud": "abc123"},
+            branch_heads_by_name={"feature/cloud": REQUESTED_SHA},
         )
 
     async def _load_repo_config(**_kwargs):
@@ -195,11 +245,12 @@ async def test_preflight_blocks_when_workspace_handoff_is_already_active(
         mobility_workspace_id=workspace.id,
         direction="local_to_cloud",
         requested_branch="feature/cloud",
-        requested_base_sha="abc123",
+        requested_base_sha=REQUESTED_SHA,
     )
 
     assert response.can_start is False
-    assert "handoff already in progress for workspace" in response.blockers
+    assert response.blockers[0].code == "workspace_handoff_in_progress"
+    assert response.blockers[0].message == "Handoff already in progress for workspace."
 
 
 @pytest.mark.asyncio
@@ -251,13 +302,15 @@ async def test_preflight_blocks_when_github_repo_access_is_missing(
         mobility_workspace_id=workspace.id,
         direction="local_to_cloud",
         requested_branch="feature/cloud",
-        requested_base_sha="abc123",
+        requested_base_sha=REQUESTED_SHA,
     )
 
     assert response.can_start is False
-    assert response.blockers == [
+    assert response.blockers[0].code == "github_repo_access_required"
+    assert response.blockers[0].retry_action == "manage_github_access"
+    assert response.blockers[0].message == (
         "Reconnect GitHub and grant repository access before moving this workspace to cloud."
-    ]
+    )
 
 
 @pytest.mark.asyncio
@@ -278,7 +331,7 @@ async def test_preflight_blocks_when_branch_is_not_published(
     async def _repo_branches(*_args, **_kwargs):
         return SimpleNamespace(
             branches=["main"],
-            branch_heads_by_name={"main": "def456"},
+            branch_heads_by_name={"main": GITHUB_SHA},
         )
 
     async def _load_repo_config(**_kwargs):
@@ -308,11 +361,13 @@ async def test_preflight_blocks_when_branch_is_not_published(
         mobility_workspace_id=workspace.id,
         direction="local_to_cloud",
         requested_branch="feature/cloud",
-        requested_base_sha="abc123",
+        requested_base_sha=REQUESTED_SHA,
     )
 
     assert response.can_start is False
-    assert response.blockers == ["The branch 'feature/cloud' was not found on GitHub."]
+    assert response.blockers[0].code == "branch_not_published"
+    assert response.blockers[0].retry_action == "push_branch"
+    assert response.blockers[0].message == "The branch 'feature/cloud' was not found on GitHub."
 
 
 @pytest.mark.asyncio
@@ -333,7 +388,7 @@ async def test_preflight_blocks_when_github_branch_head_is_behind_requested_comm
     async def _repo_branches(*_args, **_kwargs):
         return SimpleNamespace(
             branches=["feature/cloud"],
-            branch_heads_by_name={"feature/cloud": "def456"},
+            branch_heads_by_name={"feature/cloud": GITHUB_SHA},
         )
 
     async def _load_repo_config(**_kwargs):
@@ -363,13 +418,20 @@ async def test_preflight_blocks_when_github_branch_head_is_behind_requested_comm
         mobility_workspace_id=workspace.id,
         direction="local_to_cloud",
         requested_branch="feature/cloud",
-        requested_base_sha="abc123",
+        requested_base_sha=REQUESTED_SHA,
     )
 
     assert response.can_start is False
-    assert response.blockers == [
+    assert response.blockers[0].code == "head_commit_not_published"
+    assert response.blockers[0].retry_action == "push_branch"
+    assert response.blockers[0].details == {
+        "branch": "feature/cloud",
+        "requestedBaseSha": REQUESTED_SHA,
+        "githubHeadSha": GITHUB_SHA,
+    }
+    assert response.blockers[0].message == (
         "The branch 'feature/cloud' on GitHub is not at the requested commit."
-    ]
+    )
 
 
 @pytest.mark.asyncio
@@ -407,7 +469,7 @@ async def test_start_handoff_maps_existing_workspace_conflict_to_409(
             mobility_workspace_id=workspace.id,
             direction="local_to_cloud",
             requested_branch="feature/cloud",
-            requested_base_sha="abc123",
+            requested_base_sha=REQUESTED_SHA,
             exclude_paths=[],
         )
 
@@ -489,7 +551,7 @@ async def test_start_local_to_cloud_marks_handoff_failed_when_cloud_setup_fails(
             mobility_workspace_id=workspace.id,
             direction="local_to_cloud",
             requested_branch="feature/cloud",
-            requested_base_sha="abc123",
+            requested_base_sha=REQUESTED_SHA,
             exclude_paths=[],
         )
 
@@ -517,25 +579,92 @@ async def test_start_local_to_cloud_marks_handoff_failed_when_cloud_setup_fails(
 
 
 @pytest.mark.asyncio
-async def test_cleanup_completion_completes_non_server_items_before_server_cleanup(
+async def test_fail_handoff_does_not_overwrite_completed_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_id = uuid4()
+    mobility_workspace_id = uuid4()
+    now = datetime.now(UTC)
+    handoff = CloudWorkspaceHandoffOpValue(
+        id=uuid4(),
+        mobility_workspace_id=mobility_workspace_id,
+        user_id=user_id,
+        direction="cloud_to_local",
+        source_owner="cloud",
+        target_owner="local",
+        phase=HANDOFF_PHASE_COMPLETED,
+        canonical_side=CANONICAL_SIDE_DESTINATION,
+        requested_branch="feature/cloud",
+        requested_base_sha=REQUESTED_SHA,
+        exclude_paths=(),
+        failure_code=None,
+        failure_detail=None,
+        started_at=now,
+        heartbeat_at=now,
+        finalized_at=now,
+        cleanup_completed_at=now,
+        created_at=now,
+        updated_at=now,
+    )
+
+    async def _require(*_args, **_kwargs):
+        return None
+
+    async def _get_handoff(*_args, **_kwargs):
+        return handoff
+
+    async def _unexpected_fail(**_kwargs):
+        raise AssertionError("completed cleanup must not be failed")
+
+    monkeypatch.setattr(
+        mobility_service,
+        "expire_stale_cloud_workspace_handoffs_for_user",
+        _noop_expire,
+    )
+    monkeypatch.setattr(
+        mobility_service,
+        "_require_handoff_belongs_to_workspace",
+        _require,
+    )
+    monkeypatch.setattr(mobility_service, "get_cloud_workspace_handoff_op", _get_handoff)
+    monkeypatch.setattr(
+        mobility_service,
+        "fail_cloud_workspace_handoff_op_for_user",
+        _unexpected_fail,
+    )
+
+    result = await mobility_service.fail_cloud_workspace_handoff(
+        SimpleNamespace(),
+        user_id=user_id,
+        mobility_workspace_id=mobility_workspace_id,
+        handoff_op_id=handoff.id,
+        failure_code="cleanup_failed",
+        failure_detail="late client failure",
+    )
+
+    assert result == handoff
+
+
+@pytest.mark.asyncio
+async def test_cleanup_completion_executes_anyharness_item_before_projection_cleanup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     user_id = uuid4()
     mobility_workspace_id = uuid4()
     handoff = _handoff(mobility_workspace_id=mobility_workspace_id)
+    anyharness_item = _cleanup_item(
+        handoff_op_id=handoff.id,
+        item_kind="anyharness_workspace",
+    )
     server_item = _cleanup_item(
         handoff_op_id=handoff.id,
         item_kind="cloud_session_projection",
-    )
-    non_server_item = _cleanup_item(
-        handoff_op_id=handoff.id,
-        item_kind="anyharness_workspace",
     )
     terminal_server_item = _cleanup_item(
         handoff_op_id=handoff.id,
         item_kind="cloud_workspace",
     )
-    items = [server_item, non_server_item, terminal_server_item]
+    items = [anyharness_item, server_item, terminal_server_item]
     statuses = {item.id: item.status for item in items}
     executed_server_items: list[str] = []
 
@@ -574,8 +703,9 @@ async def test_cleanup_completion_completes_non_server_items_before_server_clean
         return _current_value(next(item for item in items if item.id == cleanup_item.id))
 
     async def _execute_server_cleanup_item(*_args, **kwargs):
-        assert statuses[non_server_item.id] == "completed"
         cleanup_item_id = kwargs["cleanup_item_id"]
+        if cleanup_item_id != anyharness_item.id:
+            assert statuses[anyharness_item.id] == "completed"
         executed_server_items.append(str(cleanup_item_id))
         statuses[cleanup_item_id] = "completed"
 
@@ -634,8 +764,104 @@ async def test_cleanup_completion_completes_non_server_items_before_server_clean
 
     assert completed.phase == "completed"
     assert statuses == {
+        anyharness_item.id: "completed",
         server_item.id: "completed",
-        non_server_item.id: "completed",
         terminal_server_item.id: "completed",
     }
-    assert executed_server_items == [str(server_item.id), str(terminal_server_item.id)]
+    assert executed_server_items == [
+        str(anyharness_item.id),
+        str(server_item.id),
+        str(terminal_server_item.id),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_execute_cleanup_item_destroys_anyharness_workspace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    handoff = _handoff()
+    item = _cleanup_item(
+        handoff_op_id=handoff.id,
+        item_kind="anyharness_workspace",
+    )
+    target_id = uuid4()
+    item = CloudWorkspaceMoveCleanupItemValue(
+        id=item.id,
+        handoff_op_id=item.handoff_op_id,
+        item_kind=item.item_kind,
+        target_id=target_id,
+        anyharness_workspace_id="ah-workspace-1",
+        object_id=item.object_id,
+        status=item.status,
+        attempt_count=item.attempt_count,
+        next_attempt_at=item.next_attempt_at,
+        error_code=item.error_code,
+        error_message=item.error_message,
+        started_at=item.started_at,
+        completed_at=item.completed_at,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+    )
+    destroyed: list[tuple[str, str, str]] = []
+    statuses: list[str] = []
+    failed_update_errors: list[str | None] = []
+
+    async def _get_cleanup_item(*_args, **_kwargs):
+        return item
+
+    async def _list_cleanup_items(*_args, **_kwargs):
+        return [item]
+
+    async def _update_cleanup_item_status(*_args, **kwargs):
+        statuses.append(kwargs["status"])
+        if kwargs["status"] == "failed":
+            failed_update_errors.append(kwargs.get("error_message"))
+        return item
+
+    async def _load_runtime_access(*_args, **kwargs):
+        assert kwargs["target_id"] == target_id
+        return SimpleNamespace(
+            anyharness_base_url="https://runtime.example",
+            runtime_token_ciphertext="ciphertext",
+        )
+
+    async def _destroy_runtime_mobility_source(runtime_url, access_token, *, anyharness_workspace_id):
+        destroyed.append((runtime_url, access_token, anyharness_workspace_id))
+
+    async def _all_cleanup_items_completed(*_args, **_kwargs):
+        return False
+
+    monkeypatch.setattr(cleanup_executor, "get_cleanup_item_for_handoff", _get_cleanup_item)
+    monkeypatch.setattr(cleanup_executor, "list_cleanup_items_for_handoff", _list_cleanup_items)
+    monkeypatch.setattr(
+        cleanup_executor,
+        "update_cleanup_item_status",
+        _update_cleanup_item_status,
+    )
+    monkeypatch.setattr(
+        cleanup_executor.targets_store,
+        "load_active_runtime_access_for_target",
+        _load_runtime_access,
+    )
+    monkeypatch.setattr(cleanup_executor, "decrypt_text", lambda value: f"plain:{value}")
+    monkeypatch.setattr(
+        cleanup_executor,
+        "destroy_runtime_mobility_source",
+        _destroy_runtime_mobility_source,
+    )
+    monkeypatch.setattr(
+        cleanup_executor,
+        "all_cleanup_items_completed",
+        _all_cleanup_items_completed,
+    )
+
+    await cleanup_executor.execute_server_cleanup_item(
+        db=SimpleNamespace(),
+        handoff_op_id=handoff.id,
+        cleanup_item_id=item.id,
+    )
+
+    assert statuses == ["in_progress", "completed"], failed_update_errors
+    assert destroyed == [
+        ("https://runtime.example", "plain:ciphertext", "ah-workspace-1")
+    ]

@@ -58,7 +58,8 @@ export function useWorkspaceMobilityHandoffActions(state: WorkspaceMobilityState
     cloudMaterializationId: state.cloudMaterializationId,
     mobilityWorkspaceId: state.mobilityWorkspaceId,
   });
-  const pushMutation = usePushGitMutation({ workspaceId: state.localWorkspaceId });
+  const sourceWorkspaceId = state.confirmSnapshot?.sourceWorkspaceId ?? null;
+  const pushMutation = usePushGitMutation({ workspaceId: sourceWorkspaceId });
 
   const preparePrompt = useCallback(async (
     requestId?: number,
@@ -161,17 +162,17 @@ export function useWorkspaceMobilityHandoffActions(state: WorkspaceMobilityState
     clearActivePromptRequestId(state.selectedLogicalWorkspaceId);
   }, [clearActivePromptRequestId, state.selectedLogicalWorkspaceId]);
 
-  const confirmMove = useCallback(async () => {
-    if (!state.confirmSnapshot) {
+  const confirmMove = useCallback(async (snapshot = state.confirmSnapshot) => {
+    if (!snapshot) {
       return;
     }
 
-    if (state.confirmSnapshot.direction === "local_to_cloud") {
-      await confirmLocalToCloud(state.confirmSnapshot);
+    if (snapshot.direction === "local_to_cloud") {
+      await confirmLocalToCloud(snapshot);
       return;
     }
 
-    await confirmCloudToLocal(state.confirmSnapshot);
+    await confirmCloudToLocal(snapshot);
   }, [confirmCloudToLocal, confirmLocalToCloud, state.confirmSnapshot]);
 
   const clearPrompt = useCallback(() => {
@@ -181,8 +182,8 @@ export function useWorkspaceMobilityHandoffActions(state: WorkspaceMobilityState
     clearConfirmSnapshot(state.selectedLogicalWorkspaceId);
   }, [clearConfirmSnapshot, state.selectedLogicalWorkspaceId]);
 
-  const syncBranchForCloudMove = useCallback(async (): Promise<boolean> => {
-    if (!state.localWorkspaceId) {
+  const syncBranchForSelectedMove = useCallback(async (): Promise<boolean> => {
+    if (!sourceWorkspaceId) {
       showToast("This workspace can't push right now.");
       return false;
     }
@@ -198,7 +199,7 @@ export function useWorkspaceMobilityHandoffActions(state: WorkspaceMobilityState
       );
       return false;
     }
-  }, [pushMutation, showToast, state.localWorkspaceId]);
+  }, [pushMutation, showToast, sourceWorkspaceId]);
 
   return {
     isHandoffPending: isLocalToCloudPending || isCloudToLocalPending,
@@ -208,6 +209,6 @@ export function useWorkspaceMobilityHandoffActions(state: WorkspaceMobilityState
     clearPromptRequest,
     confirmMove,
     clearPrompt,
-    syncBranchForCloudMove,
+    syncBranchForSelectedMove,
   };
 }

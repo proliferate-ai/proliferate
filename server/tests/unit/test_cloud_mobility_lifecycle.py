@@ -307,6 +307,9 @@ async def test_cleanup_completion_clears_active_handoff_and_marks_completed(
     mobility_record = await db_session.get(CloudWorkspaceMobility, mobility.id)
     assert handoff_record is not None
     assert mobility_record is not None
+    handoff_record.phase = "cleanup_pending"
+    handoff_record.canonical_side = "destination"
+    handoff_record.finalized_at = datetime.now(UTC)
 
     completed = await complete_cloud_workspace_handoff_cleanup(
         db_session,
@@ -324,6 +327,41 @@ async def test_cleanup_completion_clears_active_handoff_and_marks_completed(
     assert visible is not None
     assert visible.active_handoff_op_id is None
     assert visible.status_detail == "Ready"
+
+
+@pytest.mark.asyncio
+async def test_cleanup_completion_rejects_handoff_before_cutover(
+    db_session: AsyncSession,
+) -> None:
+    user_id = uuid4()
+    mobility = await _create_mobility(db_session, user_id=user_id)
+    handoff = await create_cloud_workspace_handoff_op(
+        db_session,
+        mobility_workspace=mobility,
+        direction="local_to_cloud",
+        source_owner="local",
+        target_owner="cloud",
+        moving_lifecycle_state=moving_lifecycle_state(OWNER_CLOUD),
+        requested_branch="feature/cloud",
+        requested_base_sha="abc123",
+        exclude_paths=[],
+    )
+    handoff_record = await db_session.get(CloudWorkspaceHandoffOp, handoff.id)
+    mobility_record = await db_session.get(CloudWorkspaceMobility, mobility.id)
+    assert handoff_record is not None
+    assert mobility_record is not None
+    handoff_record.phase = "install_succeeded"
+
+    with pytest.raises(ValueError, match="cannot complete before cutover"):
+        await complete_cloud_workspace_handoff_cleanup(
+            db_session,
+            handoff_op=handoff_record,
+            mobility_workspace=mobility_record,
+        )
+
+    assert handoff_record.phase == "install_succeeded"
+    assert handoff_record.cleanup_completed_at is None
+    assert mobility_record.active_handoff_op_id == handoff.id
 
 
 @pytest.mark.asyncio
@@ -348,6 +386,8 @@ async def test_cleanup_completion_restores_active_lifecycle_after_cleanup_failur
     assert handoff_record is not None
     assert mobility_record is not None
     handoff_record.phase = "cleanup_failed"
+    handoff_record.canonical_side = "destination"
+    handoff_record.finalized_at = datetime.now(UTC)
     handoff_record.failure_code = "cleanup_failed"
     handoff_record.failure_detail = "Cleanup failed"
     mobility_record.owner = "local"

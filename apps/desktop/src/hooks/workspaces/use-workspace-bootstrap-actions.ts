@@ -330,10 +330,11 @@ export function useWorkspaceBootstrapActions() {
           source: "react_query",
         });
       }
+      const requestHeaders = getLatencyFlowRequestHeaders(latencyFlowId) ?? undefined;
       const sessionRequestOptions = getMeasurementRequestOptions({
         operationId: measurementOperationId,
         category: "session.list",
-        headers: getLatencyFlowRequestHeaders(latencyFlowId) ?? undefined,
+        headers: requestHeaders,
       });
       const sessions = await loadWorkspaceSessions({
         runtimeUrl,
@@ -561,17 +562,30 @@ export function useWorkspaceBootstrapActions() {
       if (targetSession && isCurrent()) {
         const currentActiveSessionId = useSessionSelectionStore.getState().activeSessionId;
         if (currentActiveSessionId && currentActiveSessionId !== targetSession.id) {
-          logLatency("workspace.select.session_select.skipped", {
-            workspaceId,
-            sessionId: targetSession.id,
-            currentActiveSessionId,
-            reason: "active_session_changed",
-            totalElapsedMs: elapsedMs(startedAt),
-          });
-          if (isCurrent()) {
-            markWorkspaceBootstrappedInSession(workspaceId);
+          const currentActiveSession = getSessionRecord(currentActiveSessionId);
+          if (!currentActiveSession || currentActiveSession.workspaceId !== workspaceId) {
+            useSessionSelectionStore.getState().setActiveSessionId(null);
+            logLatency("workspace.select.stale_active_session_cleared", {
+              workspaceId,
+              sessionId: targetSession.id,
+              currentActiveSessionId,
+              currentActiveWorkspaceId: currentActiveSession?.workspaceId ?? null,
+              reason: currentActiveSession ? "workspace_mismatch" : "missing_slot",
+              totalElapsedMs: elapsedMs(startedAt),
+            });
+          } else {
+            logLatency("workspace.select.session_select.skipped", {
+              workspaceId,
+              sessionId: targetSession.id,
+              currentActiveSessionId,
+              reason: "active_session_changed",
+              totalElapsedMs: elapsedMs(startedAt),
+            });
+            if (isCurrent()) {
+              markWorkspaceBootstrappedInSession(workspaceId);
+            }
+            return { sessions };
           }
-          return { sessions };
         }
         logLatency("workspace.select.session_select.start", {
           workspaceId,
@@ -579,16 +593,37 @@ export function useWorkspaceBootstrapActions() {
           totalElapsedMs: elapsedMs(startedAt),
         });
         const sessionSelectStartedAt = performance.now();
-        await selectSessionWithShellIntentRollback({
+        const selectionOutcome = await selectSessionWithShellIntentRollback({
           workspaceId,
           sessionId: targetSession.id,
           options: { latencyFlowId },
           selectSession,
         });
+        if (selectionOutcome?.result === "stale" || !isCurrent()) {
+          return { sessions };
+        }
         recordMeasurementWorkflowStep({
           operationId: measurementOperationId,
           step: "workspace.bootstrap.session_select",
           startedAt: sessionSelectStartedAt,
+        });
+        const hydrateStartedAt = startLatencyTimer();
+        await rehydrateSessionSlotFromHistory(targetSession.id, {
+          replace: true,
+          requestHeaders,
+          measurementOperationId,
+          isCurrent: () =>
+            isCurrent()
+            && useSessionSelectionStore.getState().activeSessionId === targetSession.id,
+        });
+        if (!isCurrent()) {
+          return { sessions };
+        }
+        patchSessionRecord(targetSession.id, { transcriptHydrated: true });
+        recordMeasurementWorkflowStep({
+          operationId: measurementOperationId,
+          step: "session.select.history_hydrate",
+          startedAt: hydrateStartedAt,
         });
         logLatency("workspace.select.success", {
           workspaceId,
@@ -636,6 +671,7 @@ export function useWorkspaceBootstrapActions() {
     getWorkspaceSessionsCacheDecision,
     scheduleDeferredFileTreePrefetch,
     selectSession,
+    rehydrateSessionSlotFromHistory,
     loadWorkspaceSessions,
     workspaceCollections,
   ]);

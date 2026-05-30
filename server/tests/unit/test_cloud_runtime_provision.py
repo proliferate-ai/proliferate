@@ -1362,6 +1362,10 @@ class TestProvisionWorkspaceGitSetup:
         async def _wait_for_worker_target_online(*args, **kwargs):
             calls.append("wait_worker_online")
 
+        async def _wake_reused_runtime_if_worker_stale(*args, **kwargs):
+            calls.append("wake_reused_worker_if_stale")
+            return False
+
         async def _request_agent_auth_refresh_and_wait(*args, **kwargs):
             calls.append("refresh_agent_auth")
 
@@ -1406,6 +1410,11 @@ class TestProvisionWorkspaceGitSetup:
             runtime_provision,
             "_wait_for_worker_target_online",
             _wait_for_worker_target_online,
+        )
+        monkeypatch.setattr(
+            runtime_provision,
+            "_wake_reused_runtime_if_worker_stale",
+            _wake_reused_runtime_if_worker_stale,
         )
         monkeypatch.setattr(
             runtime_provision,
@@ -1458,6 +1467,7 @@ class TestProvisionWorkspaceGitSetup:
 
         assert calls == [
             "connect_existing_runtime",
+            "wake_reused_worker_if_stale",
             "wait_worker_online",
             "refresh_agent_auth",
             "refresh_runtime_config",

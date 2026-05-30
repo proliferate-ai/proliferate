@@ -84,6 +84,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/login-terminals/{terminal_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_agent_login_terminal"];
+        put?: never;
+        post?: never;
+        delete: operations["close_agent_login_terminal"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents/reconcile": {
         parameters: {
             query?: never;
@@ -142,6 +158,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["start_agent_login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{kind}/login/terminal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["start_agent_login_terminal"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1810,6 +1842,20 @@ export interface components {
             agents: components["schemas"]["AgentLaunchOption"][];
             workspaceId?: string | null;
         };
+        AgentLoginTerminalRecord: {
+            commandDisplay: string;
+            createdAt: string;
+            cwd: string;
+            /** Format: int32 */
+            exitCode?: number | null;
+            id: string;
+            kind: string;
+            status: components["schemas"]["AgentLoginTerminalStatus"];
+            title: string;
+            updatedAt: string;
+        };
+        /** @enum {string} */
+        AgentLoginTerminalStatus: "starting" | "running" | "exited" | "failed";
         AgentModelRegistryModel: {
             aliases: string[];
             defaultOptIn?: boolean | null;
@@ -2325,6 +2371,10 @@ export interface components {
         };
         ExportWorkspaceMobilityArchiveRequest: {
             excludePaths?: string[];
+            expectedBaseCommitSha?: string | null;
+            expectedBranchName?: string | null;
+            expectedHandoffOpId?: string | null;
+            requireCleanGitState?: boolean;
         };
         /** @enum {string} */
         FileChangeOperation: "create" | "edit" | "delete" | "move";
@@ -2999,6 +3049,7 @@ export interface components {
             requestedBranch: string;
         };
         PrepareRepoRootMobilityDestinationResponse: {
+            created: boolean;
             workspace: components["schemas"]["Workspace"];
         };
         ProblemDetails: {
@@ -3917,6 +3968,12 @@ export interface components {
             mode: string;
             reusesUserState: boolean;
         };
+        StartAgentLoginTerminalResponse: {
+            agentLoginTerminal: components["schemas"]["AgentLoginTerminalRecord"];
+            kind: string;
+            label: string;
+            message?: string | null;
+        };
         StartCodeReviewRequest: {
             autoIterate?: boolean;
             /** Format: int32 */
@@ -4201,6 +4258,7 @@ export interface components {
             sessionLinkWakeSchedules?: components["schemas"]["MobilitySessionLinkWakeScheduleRecord"][];
             sessionLinks?: components["schemas"]["MobilitySessionLinkRecord"][];
             sessions?: components["schemas"]["WorkspaceMobilitySessionBundle"][];
+            sourceWorkspaceId?: string | null;
             sourceWorkspacePath: string;
         };
         WorkspaceMobilityBlocker: {
@@ -4493,6 +4551,68 @@ export interface operations {
             };
         };
     };
+    get_agent_login_terminal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Agent login terminal ID */
+                terminal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent login terminal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentLoginTerminalRecord"];
+                };
+            };
+            /** @description Agent login terminal not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    close_agent_login_terminal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Agent login terminal ID */
+                terminal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent login terminal closed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Agent login terminal not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_reconcile_status: {
         parameters: {
             query?: never;
@@ -4659,6 +4779,60 @@ export interface operations {
             };
             /** @description Agent not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    start_agent_login_terminal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Agent kind identifier */
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartAgentLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Agent login terminal started */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartAgentLoginTerminalResponse"];
+                };
+            };
+            /** @description Login not supported */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agent not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Login command not found */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

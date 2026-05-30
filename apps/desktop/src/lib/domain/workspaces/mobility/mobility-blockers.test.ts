@@ -22,6 +22,26 @@ describe("pickPrimaryMobilityBlocker", () => {
     expect(blocker?.body).toBe("One active session can't move yet.");
   });
 
+  it("prioritizes in-progress Git operations over dirty prep", () => {
+    const blocker = pickPrimaryMobilityBlocker({
+      sourcePreflight: {
+        canMove: false,
+        blockers: [
+          { code: "workspace_dirty", message: "Dirty workspace" },
+          { code: "git_operation_in_progress", message: "Git operation running" },
+        ],
+        warnings: [],
+        sessions: [],
+      } as never,
+      cloudPreflight: null,
+      direction: "local_to_cloud",
+      branchName: "feature/workspace-mobility",
+    });
+
+    expect(blocker?.code).toBe("git_operation_in_progress");
+    expect(blocker?.body).toBe("A Git operation is still in progress.");
+  });
+
   it("maps cloud branch mismatch blockers to product copy", () => {
     const blocker = pickPrimaryMobilityBlocker({
       sourcePreflight: null,
@@ -53,7 +73,29 @@ describe("pickPrimaryMobilityBlocker", () => {
     });
 
     expect(blocker?.code).toBe("branch_not_published");
-    expect(blocker?.actionLabel).toBe("Publish branch");
+    expect(blocker?.actionLabel).toBe("Push and move");
+  });
+
+  it("maps typed cloud blockers without parsing copy", () => {
+    const blocker = pickPrimaryMobilityBlocker({
+      sourcePreflight: null,
+      cloudPreflight: {
+        canStart: false,
+        blockers: [{
+          code: "head_commit_not_published",
+          message: "Requested head has not been pushed.",
+          source: "cloud",
+          retryAction: "push_branch",
+        }],
+        excludedPaths: [],
+        workspace: {} as never,
+      },
+      direction: "cloud_to_local",
+      branchName: "feature/workspace-mobility",
+    });
+
+    expect(blocker?.code).toBe("head_commit_not_published");
+    expect(blocker?.actionLabel).toBe("Push and move");
   });
 
   it("normalizes head-mismatch blockers without collapsing them into cloud repo access", () => {

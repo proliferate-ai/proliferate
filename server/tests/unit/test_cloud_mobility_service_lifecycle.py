@@ -13,6 +13,8 @@ from proliferate.db.store.cloud_mobility import (
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mobility import service as mobility_service
 
+REQUESTED_SHA = "a" * 40
+
 
 def _workspace(
     *,
@@ -56,7 +58,7 @@ def _handoff(*, mobility_workspace_id=None) -> CloudWorkspaceHandoffOpValue:
         target_owner="cloud",
         phase="start_requested",
         requested_branch="feature/cloud",
-        requested_base_sha="abc123",
+        requested_base_sha=REQUESTED_SHA,
         exclude_paths=(),
         failure_code=None,
         failure_detail=None,
@@ -91,7 +93,7 @@ def _stub_common_preflight_dependencies(
     async def _repo_branches(*_args, **_kwargs):
         return SimpleNamespace(
             branches=["feature/cloud"],
-            branch_heads_by_name={"feature/cloud": "abc123"},
+            branch_heads_by_name={"feature/cloud": REQUESTED_SHA},
         )
 
     async def _load_repo_config(**_kwargs):
@@ -135,11 +137,12 @@ async def test_preflight_blocks_another_active_handoff_for_same_user(
         mobility_workspace_id=workspace.id,
         direction="local_to_cloud",
         requested_branch="feature/cloud",
-        requested_base_sha="abc123",
+        requested_base_sha=REQUESTED_SHA,
     )
 
     assert response.can_start is False
-    assert "another handoff is already in progress for this user" in response.blockers
+    assert response.blockers[0].code == "user_handoff_in_progress"
+    assert response.blockers[0].message == "Another handoff is already in progress for this user."
 
 
 @pytest.mark.asyncio
@@ -164,11 +167,12 @@ async def test_preflight_blocks_owner_direction_mismatch(
         mobility_workspace_id=workspace.id,
         direction=direction,
         requested_branch="feature/cloud",
-        requested_base_sha="abc123",
+        requested_base_sha=REQUESTED_SHA,
     )
 
     assert response.can_start is False
-    assert blocker in response.blockers
+    assert response.blockers[0].code == "owner_mismatch"
+    assert response.blockers[0].message == blocker
 
 
 @pytest.mark.asyncio
@@ -183,11 +187,12 @@ async def test_preflight_blocks_cloud_lost_workspace(
         mobility_workspace_id=workspace.id,
         direction="local_to_cloud",
         requested_branch="feature/cloud",
-        requested_base_sha="abc123",
+        requested_base_sha=REQUESTED_SHA,
     )
 
     assert response.can_start is False
-    assert "cloud workspace is in cloud_lost state" in response.blockers
+    assert response.blockers[0].code == "cloud_lost"
+    assert response.blockers[0].message == "Cloud workspace is in cloud_lost state."
 
 
 @pytest.mark.asyncio
@@ -263,7 +268,7 @@ async def test_start_local_to_cloud_creates_handoff_before_provisioning(
         mobility_workspace_id=workspace.id,
         direction="local_to_cloud",
         requested_branch="feature/cloud",
-        requested_base_sha="abc123",
+        requested_base_sha=REQUESTED_SHA,
         exclude_paths=[],
     )
 
@@ -321,7 +326,7 @@ async def test_start_cloud_to_local_creates_handoff_without_cloud_provisioning(
         mobility_workspace_id=workspace.id,
         direction="cloud_to_local",
         requested_branch="feature/cloud",
-        requested_base_sha="abc123",
+        requested_base_sha=REQUESTED_SHA,
         exclude_paths=[],
     )
 

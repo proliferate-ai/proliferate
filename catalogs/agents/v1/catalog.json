@@ -938,7 +938,7 @@
               "args": []
             },
             "reusesUserState": true,
-            "message": "Run Gemini in a terminal, then choose Sign in with Google. If Gemini opens directly into chat, run /auth to switch authentication."
+            "message": "When Gemini opens, choose Sign in with Google. If it opens into chat, type `/auth`."
           },
           "discovery": "gemini"
         },

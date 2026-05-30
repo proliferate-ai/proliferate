@@ -48,13 +48,76 @@ export function resolveMobilitySyncRecovery(args: {
   isGitSyncResolved: boolean;
 }): MobilitySyncRecoveryState {
   if (!args.blocker) {
+    if (!args.isGitSyncResolved) {
+      return { kind: "loading" };
+    }
+
+    if (!args.gitSync) {
+      return {
+        kind: "passthrough",
+        blocker: null,
+      };
+    }
+
+    if (args.gitSync.behind > 0) {
+      return {
+        kind: "resolved",
+        blocker: buildResolvedBlocker({
+          code: "branch_out_of_sync",
+          rawMessage: "This branch is behind its upstream.",
+          direction: args.direction,
+          branchName: args.branchName,
+        }),
+      };
+    }
+
+    if (!args.gitSync.clean) {
+      return {
+        kind: "resolved",
+        blocker: buildResolvedBlocker({
+          code: "workspace_dirty",
+          rawMessage: "Workspace must be committed and clean before moving",
+          direction: args.direction,
+          branchName: args.branchName,
+        }),
+      };
+    }
+
+    if (!args.gitSync.upstreamBranch) {
+      return {
+        kind: "resolved",
+        blocker: buildResolvedBlocker({
+          code: "branch_not_published",
+          rawMessage: "This branch is not published to GitHub.",
+          direction: args.direction,
+          branchName: args.branchName,
+        }),
+      };
+    }
+
+    if (args.gitSync.ahead > 0) {
+      return {
+        kind: "resolved",
+        blocker: buildResolvedBlocker({
+          code: "head_commit_not_published",
+          rawMessage: "This branch has commits that only exist on this runtime.",
+          direction: args.direction,
+          branchName: args.branchName,
+        }),
+      };
+    }
+
     return {
       kind: "passthrough",
       blocker: null,
     };
   }
 
-  if (args.blocker.code !== "cloud_head_mismatch") {
+  if (
+    args.blocker.code !== "branch_not_published"
+    && args.blocker.code !== "cloud_head_mismatch"
+    && args.blocker.code !== "head_commit_not_published"
+  ) {
     return {
       kind: "passthrough",
       blocker: args.blocker,
@@ -84,7 +147,31 @@ export function resolveMobilitySyncRecovery(args: {
     };
   }
 
-  if (args.gitSync.ahead === 0) {
+  if (!args.gitSync.clean) {
+    return {
+      kind: "resolved",
+      blocker: buildResolvedBlocker({
+        code: "workspace_dirty",
+        rawMessage: args.blocker.rawMessage,
+        direction: args.direction,
+        branchName: args.branchName,
+      }),
+    };
+  }
+
+  if (args.blocker.code === "branch_not_published") {
+    return {
+      kind: "resolved",
+      blocker: buildResolvedBlocker({
+        code: "branch_not_published",
+        rawMessage: args.blocker.rawMessage,
+        direction: args.direction,
+        branchName: args.branchName,
+      }),
+    };
+  }
+
+  if (args.blocker.code === "cloud_head_mismatch" && args.gitSync.ahead === 0) {
     return {
       kind: "passthrough",
       blocker: args.blocker,

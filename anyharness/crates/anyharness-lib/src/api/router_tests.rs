@@ -20,11 +20,16 @@ use uuid::Uuid;
 use super::router::build_router;
 use crate::{
     app::{test_support, AppState},
+    domains::agents::{
+        model::{AgentKind, ArtifactRole},
+        readiness::resolver::artifact_root,
+    },
     domains::terminals::model::{CreateTerminalOptions, TerminalPurpose},
     domains::{
         agents::seed::AgentSeedStore,
         cowork::mcp::auth::{LEGACY_CAPABILITY_HEADER_NAME, SECRET_FILE_NAME},
     },
+    integrations::agent_cli::executable::make_executable,
     integrations::mcp::capability_token::{McpCapabilityTokenIssuer, McpCapabilityTokenSignature},
     persistence::Db,
     sessions::{model::SessionRecord, store::SessionStore},
@@ -84,6 +89,27 @@ fn seed_workspace(state: &AppState, workspace_id: &str, path: &str) {
             Ok(())
         })
         .expect("seed workspace");
+}
+
+fn install_fake_managed_registry_npm_binary(
+    state: &AppState,
+    kind: AgentKind,
+    name: &str,
+) -> PathBuf {
+    let binary_path = artifact_root(&state.runtime_home, &kind, &ArtifactRole::AgentProcess)
+        .join("registry_npm")
+        .join("node_modules")
+        .join(".bin")
+        .join(name);
+    fs::create_dir_all(binary_path.parent().expect("binary parent"))
+        .expect("create fake managed registry npm bin dir");
+    fs::write(
+        &binary_path,
+        "#!/bin/sh\necho agent-login-ready\nsleep 30\n",
+    )
+    .expect("write fake managed registry npm binary");
+    make_executable(&binary_path).expect("make fake managed registry npm binary executable");
+    binary_path
 }
 
 fn configure_direct_attach_auth(state: &AppState, target_id: &str) {
@@ -685,6 +711,101 @@ async fn terminal_create_tolerates_missing_workspace_repo_root_id() {
         .close_terminal(terminal_id)
         .await
         .expect("close terminal");
+}
+
+#[tokio::test]
+async fn agent_login_terminal_routes_start_status_and_close_managed_npm_binary() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let repo_root = TempDirGuard::new("agent-login-terminal");
+    let state = test_state(false);
+    let managed_binary =
+        install_fake_managed_registry_npm_binary(&state, AgentKind::Gemini, "gemini");
+    seed_workspace(
+        &state,
+        "workspace-frozen-for-agent-login",
+        &repo_root.path().display().to_string(),
+    );
+    WorkspaceAccessStore::new(state.db.clone())
+        .upsert(&WorkspaceAccessRecord {
+            workspace_id: "workspace-frozen-for-agent-login".to_string(),
+            mode: WorkspaceAccessMode::FrozenForHandoff,
+            handoff_op_id: Some("handoff-agent-login".to_string()),
+            updated_at: "2026-03-25T00:00:01Z".to_string(),
+        })
+        .expect("freeze unrelated workspace");
+
+    let app = build_router(state.clone());
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/agents/gemini/login/terminal")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from("{}"))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("read response body");
+    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+    assert_eq!(payload["kind"], "gemini");
+    assert_eq!(payload["agentLoginTerminal"]["kind"], "gemini");
+    assert_eq!(payload["agentLoginTerminal"]["status"], "running");
+    let managed_binary_display = managed_binary.display().to_string();
+    assert!(payload["agentLoginTerminal"]["commandDisplay"]
+        .as_str()
+        .expect("command display")
+        .contains(&managed_binary_display));
+    let terminal_id = payload["agentLoginTerminal"]["id"]
+        .as_str()
+        .expect("terminal id");
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/v1/agents/login-terminals/{terminal_id}"))
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/v1/agents/login-terminals/{terminal_id}"))
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/v1/agents/login-terminals/{terminal_id}"))
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]

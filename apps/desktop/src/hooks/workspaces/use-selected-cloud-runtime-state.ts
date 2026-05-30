@@ -92,14 +92,14 @@ export function useSelectedCloudRuntimeState(): SelectedCloudRuntimeState {
     if (usesDirectAttach) {
       return "ready" as const;
     }
+    if (connectionQuery.data) {
+      return "ready" as const;
+    }
     if (connectionQuery.fetchStatus !== "idle" || connectionQuery.status === "pending") {
       return "resolving" as const;
     }
     if (connectionQuery.status === "error") {
       return "failed" as const;
-    }
-    if (connectionQuery.data) {
-      return "ready" as const;
     }
     return "failed" as const;
   }, [

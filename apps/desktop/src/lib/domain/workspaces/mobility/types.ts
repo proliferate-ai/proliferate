@@ -4,13 +4,21 @@ export type WorkspaceMobilityDirection = "local_to_cloud" | "cloud_to_local";
 
 export interface WorkspaceMobilityCloudPreflightResponse {
   canStart: boolean;
-  blockers: string[];
+  blockers: Array<string | WorkspaceMobilityCloudPreflightBlocker>;
   excludedPaths: string[];
   workspace?: {
     repo?: {
       branch?: string | null;
     } | null;
   } | null;
+}
+
+export interface WorkspaceMobilityCloudPreflightBlocker {
+  code: string;
+  message: string;
+  source?: string | null;
+  retryAction?: string | null;
+  details?: Record<string, string> | null;
 }
 
 export interface WorkspaceMobilityHandoffSummary {
@@ -54,14 +62,20 @@ export type WorkspaceMobilityBlockerCode =
   | "default_branch_unknown"
   | "setup_running"
   | "workspace_dirty"
+  | "workspace_detached"
+  | "workspace_conflicted"
+  | "git_operation_in_progress"
   | "workspace_status_unknown"
   | "local_default_branch_in_use"
   | "session_running"
   | "session_awaiting_interaction"
+  | "unsupported_session"
+  | "review_active"
   | "pending_prompt"
   | "archive_too_large"
   | "missing_branch_name"
   | "missing_base_commit_sha"
+  | "invalid_base_commit_sha"
   | "workspace_handoff_in_progress"
   | "user_handoff_in_progress"
   | "branch_mismatch"

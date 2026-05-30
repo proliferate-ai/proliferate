@@ -87,6 +87,9 @@ export type {
   InstallAgentResponse,
   LoginCommand,
   StartAgentLoginResponse,
+  AgentLoginTerminalStatus,
+  AgentLoginTerminalRecord,
+  StartAgentLoginTerminalResponse,
   ReconcileOutcome,
   ReconcileJobStatus,
   ReconcileAgentsRequest,
@@ -488,8 +491,9 @@ export type {
   RunCommandResponse,
 } from "./types/processes.js";
 
-export { connectTerminal } from "./streams/terminals.js";
+export { connectAgentLoginTerminal, connectTerminal } from "./streams/terminals.js";
 export type {
+  AgentLoginTerminalStreamOptions,
   TerminalDataFrame,
   TerminalExitFrame,
   TerminalReplayGapFrame,

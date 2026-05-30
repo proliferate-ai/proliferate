@@ -37,25 +37,32 @@ describe("buildChangedFileTree", () => {
     expect(tree).toMatchObject([
       {
         kind: "directory",
-        name: "desktop",
-        path: "desktop",
+        name: "apps",
+        path: "apps",
         children: [
           {
             kind: "directory",
-            name: "src",
-            path: "apps/desktop/src",
+            name: "desktop",
+            path: "apps/desktop",
             children: [
               {
+                kind: "directory",
+                name: "src",
+                path: "apps/desktop/src",
+                children: [
+                  {
+                    kind: "file",
+                    name: "App.tsx",
+                    path: "apps/desktop/src/App.tsx",
+                  },
+                ],
+              },
+              {
                 kind: "file",
-                name: "App.tsx",
-                path: "apps/desktop/src/App.tsx",
+                name: "package.json",
+                path: "apps/desktop/package.json",
               },
             ],
-          },
-          {
-            kind: "file",
-            name: "package.json",
-            path: "apps/desktop/package.json",
           },
         ],
       },

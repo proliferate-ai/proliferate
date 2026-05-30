@@ -114,6 +114,41 @@ async def checkout_cloud_branch(
         raise RuntimeError(f"Git branch checkout failed: {str(stderr).strip()[:400]}")
 
 
+async def ensure_requested_base_sha_available(
+    provider: SandboxProvider,
+    sandbox: Any,
+    *,
+    ctx: CloudProvisionInput,
+    runtime_context: SandboxRuntimeContext,
+) -> None:
+    requested_base_sha = (ctx.requested_base_sha or "").strip()
+    if not requested_base_sha:
+        return
+
+    quoted_workdir = shlex.quote(runtime_context.runtime_workdir)
+    remote_branch_ref = f"refs/remotes/origin/{ctx.git_branch}"
+    quoted_branch = shlex.quote(f"refs/heads/{ctx.git_branch}:{remote_branch_ref}")
+    quoted_remote_branch_ref = shlex.quote(remote_branch_ref)
+    quoted_requested_base_sha = shlex.quote(requested_base_sha)
+    quoted_ref = shlex.quote(f"{requested_base_sha}^{{commit}}")
+    sync_result = await run_sandbox_command_logged(
+        provider,
+        sandbox,
+        workspace_id=ctx.workspace_id,
+        label="sync_requested_base_sha",
+        command=(
+            f"git -C {quoted_workdir} fetch origin {quoted_branch} "
+            f"&& test \"$(git -C {quoted_workdir} rev-parse --verify {quoted_remote_branch_ref})\" = {quoted_requested_base_sha} "
+            f"&& git -C {quoted_workdir} rev-parse --verify {quoted_ref}"
+        ),
+        runtime_context=runtime_context,
+        timeout_seconds=120,
+    )
+    if result_exit_code(sync_result) != 0:
+        stderr = result_stderr(sync_result) or result_stdout(sync_result)
+        raise RuntimeError(f"Git branch sync failed: {str(stderr).strip()[:400]}")
+
+
 async def configure_git_identity(
     provider: SandboxProvider,
     sandbox: Any,

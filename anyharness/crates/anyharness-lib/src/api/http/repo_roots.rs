@@ -262,7 +262,7 @@ pub async fn prepare_repo_root_mobility_destination(
     let destination_id = req.destination_id;
     let preferred_workspace_name = req.preferred_workspace_name;
 
-    let record = mobility_service
+    let prepared = mobility_service
         .prepare_repo_root_destination(
             &repo_root_id,
             &requested_branch,
@@ -297,7 +297,8 @@ pub async fn prepare_repo_root_mobility_destination(
         })?;
 
     Ok(Json(PrepareRepoRootMobilityDestinationResponse {
-        workspace: workspace_to_contract(&state, record).await?,
+        workspace: workspace_to_contract(&state, prepared.workspace).await?,
+        created: prepared.created,
     }))
 }
 

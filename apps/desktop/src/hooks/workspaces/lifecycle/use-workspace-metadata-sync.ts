@@ -177,6 +177,7 @@ export function useWorkspaceMetadataSync() {
         }, runtimeWorkspaceId);
         const backfill = shouldBackfillCloudDisplayNameFromRuntime({
           runtimeDisplayName: runtimeWorkspace.displayName,
+          runtimeWorkspaceId,
           backfillSuppressed: isCloudDisplayNameBackfillSuppressed(selectedCloudWorkspaceId),
         });
         if (!backfill.shouldBackfill || !backfill.displayName) {

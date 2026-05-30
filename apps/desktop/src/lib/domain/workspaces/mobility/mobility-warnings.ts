@@ -51,5 +51,5 @@ export function summarizeBranchSyncRecoveryWarning(args: {
     return null;
   }
 
-  return "Uncommitted changes will move with the workspace after this branch is synced.";
+  return "Uncommitted changes must be committed before the move can continue.";
 }

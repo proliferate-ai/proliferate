@@ -274,4 +274,8 @@ impl SessionRuntime {
             agent_auth_config_service,
         }
     }
+
+    pub fn forget_live_session_for_mobility_blocking(&self, session_id: &str) {
+        self.acp_manager.remove_session_blocking(session_id);
+    }
 }

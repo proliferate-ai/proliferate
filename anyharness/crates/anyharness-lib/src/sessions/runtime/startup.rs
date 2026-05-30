@@ -50,6 +50,9 @@ pub(super) fn choose_session_startup_strategy(
     }
 
     let Some(native_session_id) = record.native_session_id.clone() else {
+        if session_store.has_turn_started_event(&record.id)? {
+            return Ok(SessionStartupStrategy::ResumeSeqFreshNative);
+        }
         return Ok(SessionStartupStrategy::Fresh);
     };
 

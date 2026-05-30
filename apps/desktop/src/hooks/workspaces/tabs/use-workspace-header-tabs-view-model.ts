@@ -59,6 +59,9 @@ import { measureDebugComputation } from "@/lib/infra/measurement/debug-measureme
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import { useWorkspaceHeaderTabsPreferenceEffects } from "@/hooks/workspaces/lifecycle/use-workspace-header-tabs-preference-effects";
 import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
+import {
+  shouldUseLocalRuntimeWorkspaceSessionsQuery,
+} from "@/lib/domain/workspaces/tabs/workspace-session-query-target";
 
 const EMPTY_OPEN_TARGETS: ViewerTarget[] = [];
 const EMPTY_SESSION_ID_LIST: string[] = [];
@@ -123,7 +126,10 @@ export function useWorkspaceHeaderTabsViewModel() {
 
   const workspaceSessionsQuery = useWorkspaceSessionsQuery({
     workspaceId: selectedWorkspaceId,
-    enabled: !!selectedWorkspaceId && !hotPaintPending,
+    enabled: shouldUseLocalRuntimeWorkspaceSessionsQuery({
+      workspaceId: selectedWorkspaceId,
+      hotPaintPending,
+    }),
   });
   const workspaceSessionsLoaded = workspaceSessionsQuery.data !== undefined;
 

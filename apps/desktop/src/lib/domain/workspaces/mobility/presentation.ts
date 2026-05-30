@@ -179,25 +179,25 @@ export function mobilityBlockerCopy(args: {
       };
     case "branch_not_published":
       return {
-        headline: moveLabel,
+        headline: "Publish branch before moving",
         body: "This branch isn't on GitHub yet.",
         helper: args.branchName
-          ? `Publish \`${args.branchName}\` before moving to cloud.`
-          : "Publish this branch before moving to cloud.",
-        actionLabel: "Publish branch",
+          ? `Push \`${args.branchName}\` so the destination can check out the exact commit.`
+          : "Push this branch so the destination can check out the exact commit.",
+        actionLabel: "Push and move",
       };
     case "head_commit_not_published":
       return {
-        headline: moveLabel,
-        body: "Your latest commit isn't on GitHub yet.",
+        headline: "Publish branch before moving",
+        body: "This branch has commits that only exist on this runtime.",
         helper: args.branchName
-          ? `Push \`${args.branchName}\` before moving to cloud.`
-          : "Push this branch before moving to cloud.",
-        actionLabel: "Push commits",
+          ? `Push \`${args.branchName}\` so the destination can check out the exact commit.`
+          : "Push this branch so the destination can check out the exact commit.",
+        actionLabel: "Push and move",
       };
     case "branch_out_of_sync":
       return {
-        headline: moveLabel,
+        headline: "Sync branch before moving",
         body: "This branch is out of sync with GitHub.",
         helper: "Pull or rebase locally, then try again.",
         actionLabel: "Got it",
@@ -225,10 +225,31 @@ export function mobilityBlockerCopy(args: {
       };
     case "workspace_dirty":
       return {
-        headline: moveLabel,
+        headline: "Prepare branch for move",
         body: "This workspace has uncommitted changes.",
-        helper: "Commit or stash your changes, then try again.",
-        actionLabel: "Got it",
+        helper: "Commit and push these changes so the destination can check out the exact code.",
+        actionLabel: "Prepare branch",
+      };
+    case "workspace_detached":
+      return {
+        headline: moveLabel,
+        body: "This workspace is checked out at a detached commit.",
+        helper: "Switch to a branch, then try again.",
+        actionLabel: "Open Git tools",
+      };
+    case "workspace_conflicted":
+      return {
+        headline: moveLabel,
+        body: "This workspace has Git conflicts.",
+        helper: "Resolve the conflicts, then try again.",
+        actionLabel: "Open Git tools",
+      };
+    case "git_operation_in_progress":
+      return {
+        headline: moveLabel,
+        body: "A Git operation is still in progress.",
+        helper: "Finish the operation, then try again.",
+        actionLabel: "Open Git tools",
       };
     case "workspace_status_unknown":
       return {
@@ -256,6 +277,20 @@ export function mobilityBlockerCopy(args: {
         headline: moveLabel,
         body: "A session is waiting on an interaction.",
         helper: "Resolve that request, then try again.",
+        actionLabel: "Got it",
+      };
+    case "review_active":
+      return {
+        headline: moveLabel,
+        body: "A review is still active in this workspace.",
+        helper: "Finish or stop the review, then try again.",
+        actionLabel: "Got it",
+      };
+    case "unsupported_session":
+      return {
+        headline: moveLabel,
+        body: "One session can't move yet.",
+        helper: "Finish or archive that session, then try again.",
         actionLabel: "Got it",
       };
     case "pending_prompt":
@@ -286,6 +321,13 @@ export function mobilityBlockerCopy(args: {
         helper: "Refresh the workspace, then try again.",
         actionLabel: "Got it",
       };
+    case "invalid_base_commit_sha":
+      return {
+        headline: moveLabel,
+        body: "This workspace doesn't have a usable sync base yet.",
+        helper: "Refresh the workspace, then try again.",
+        actionLabel: "Got it",
+      };
     case "workspace_handoff_in_progress":
     case "user_handoff_in_progress":
       return {
@@ -304,6 +346,22 @@ export function mobilityBlockerCopy(args: {
         actionLabel: "Got it",
       };
     case "owner_mismatch":
+      if (args.direction === "local_to_cloud") {
+        return {
+          headline: "Workspace is already in cloud",
+          body: "This branch is already owned by the cloud workspace.",
+          helper: "Open the cloud workspace or refresh the workspace list.",
+          actionLabel: "Got it",
+        };
+      }
+      if (args.direction === "cloud_to_local") {
+        return {
+          headline: "Workspace is already local",
+          body: "This branch is already owned by a local worktree.",
+          helper: "Open the local worktree or refresh the workspace list.",
+          actionLabel: "Got it",
+        };
+      }
       return {
         headline: moveLabel,
         body: "This workspace isn't on the expected runtime anymore.",

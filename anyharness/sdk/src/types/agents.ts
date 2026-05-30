@@ -27,6 +27,10 @@ export type InstallAgentRequest = components["schemas"]["InstallAgentRequest"];
 export type InstallAgentResponse = components["schemas"]["InstallAgentResponse"];
 export type LoginCommand = components["schemas"]["LoginCommand"];
 export type StartAgentLoginResponse = components["schemas"]["StartAgentLoginResponse"];
+export type AgentLoginTerminalStatus = components["schemas"]["AgentLoginTerminalStatus"];
+export type AgentLoginTerminalRecord = components["schemas"]["AgentLoginTerminalRecord"];
+export type StartAgentLoginTerminalResponse =
+  components["schemas"]["StartAgentLoginTerminalResponse"];
 export type ReconcileOutcome = components["schemas"]["ReconcileOutcome"];
 export type ReconcileJobStatus = components["schemas"]["ReconcileJobStatus"];
 export type ReconcileAgentsRequest = components["schemas"]["ReconcileAgentsRequest"];

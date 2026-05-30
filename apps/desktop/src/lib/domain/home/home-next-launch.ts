@@ -1,9 +1,11 @@
 import type {
-  AgentSummary,
   GitBranchRef,
   Workspace,
 } from "@anyharness/sdk";
-import type { AgentModelRegistry as ModelRegistry } from "@/lib/domain/agents/model-options";
+import type {
+  AgentCatalogSummary,
+  AgentModelRegistry as ModelRegistry,
+} from "@/lib/domain/agents/model-options";
 import { compareChatLaunchKinds } from "@/config/chat-launch";
 import {
   buildAgentModelGroups,
@@ -90,7 +92,7 @@ export function resolveHomeModelAvailabilityState(input: {
 }
 
 export function buildHomeNextAgentOptions(
-  agents: AgentSummary[],
+  agents: AgentCatalogSummary[],
   modelRegistries: ModelRegistry[],
 ): HomeNextAgentOption[] {
   const registryByKind = new Map(modelRegistries.map((registry) => [registry.kind, registry]));
@@ -100,9 +102,10 @@ export function buildHomeNextAgentOptions(
     .map((agent) => {
       const registry = registryByKind.get(agent.kind) ?? null;
       const model = registry ? resolveModelForRegistry(registry, registry.defaultModelId) : null;
+      const displayName = registry?.displayName ?? agent.displayName ?? agent.kind;
       return {
         kind: agent.kind,
-        displayName: registry?.displayName ?? agent.displayName,
+        displayName,
         modelId: model?.id ?? null,
         modelDisplayName: model?.displayName ?? null,
         disabledReason: model ? null : "No launchable model",
@@ -119,7 +122,7 @@ export function buildHomeNextAgentOptions(
 }
 
 export function buildHomeNextModelGroups(
-  agents: AgentSummary[],
+  agents: AgentCatalogSummary[],
   modelRegistries: ModelRegistry[],
   selected: HomeNextModelSelection | null,
 ): HomeNextModelGroup[] {

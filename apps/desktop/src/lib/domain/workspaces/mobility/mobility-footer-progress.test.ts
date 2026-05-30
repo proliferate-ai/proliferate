@@ -40,4 +40,15 @@ describe("resolveMobilityFooterProgressStatus", () => {
       statusLabel: "Syncing workspace",
     });
   });
+
+  it("does not show move progress for background cleanup", () => {
+    expect(resolveMobilityFooterProgressStatus({
+      canBringBackLocal: true,
+      canMoveToCloud: false,
+      confirmDirection: "cloud_to_local",
+      optimisticProgressDirection: null,
+      statusDirection: "cloud_to_local",
+      statusPhase: "cleanup_pending",
+    })).toBeNull();
+  });
 });

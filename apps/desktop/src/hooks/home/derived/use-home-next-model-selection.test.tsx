@@ -3,6 +3,10 @@
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentSummary } from "@anyharness/sdk";
+import type {
+  CloudTargetSummary,
+  SandboxAgentAuthSelection,
+} from "@proliferate/cloud-sdk";
 import type { AgentModelRegistry as ModelRegistry } from "@/lib/domain/agents/model-options";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useHomeNextModelSelection } from "./use-home-next-model-selection";
@@ -26,6 +30,18 @@ const selectionMocks = vi.hoisted(() => ({
     isError: false,
     error: null as Error | null,
   },
+  cloudTargetsQuery: {
+    data: [] as CloudTargetSummary[],
+    isLoading: false,
+    isError: false,
+    error: null as Error | null,
+  },
+  sandboxSelectionsQuery: {
+    data: [] as SandboxAgentAuthSelection[],
+    isLoading: false,
+    isError: false,
+    error: null as Error | null,
+  },
 }));
 
 vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
@@ -38,6 +54,14 @@ vi.mock("@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog", () => ({
 
 vi.mock("@anyharness/sdk-react", () => ({
   useAgentLaunchOptionsQuery: () => selectionMocks.runtimeLaunchOptions,
+}));
+
+vi.mock("@/hooks/access/cloud/targets/use-cloud-targets", () => ({
+  useCloudTargets: () => selectionMocks.cloudTargetsQuery,
+}));
+
+vi.mock("@proliferate/cloud-sdk-react/hooks/agent-auth", () => ({
+  useSandboxAgentAuthSelections: () => selectionMocks.sandboxSelectionsQuery,
 }));
 
 function agent(kind: string): AgentSummary {
@@ -55,6 +79,60 @@ function agent(kind: string): AgentSummary {
       role: "agent",
     },
   };
+}
+
+function cloudTarget(overrides: Partial<CloudTargetSummary> = {}): CloudTargetSummary {
+  return {
+    id: "target-1",
+    displayName: "Personal cloud sandbox",
+    kind: "managed_cloud",
+    status: "online",
+    ownerScope: "personal",
+    sandboxProfileId: "profile-1",
+    profileTargetRole: "primary",
+    organizationId: null,
+    defaultWorkspaceRoot: null,
+    inventory: null,
+    statusDetail: null,
+    update: {
+      channel: null,
+      generation: 1,
+      desiredVersions: {
+        anyharnessVersion: null,
+        workerVersion: null,
+        supervisorVersion: null,
+      },
+      currentVersions: null,
+      status: null,
+      statusDetail: null,
+      component: null,
+      version: null,
+      reportedAt: null,
+    },
+    archivedAt: null,
+    createdAt: "2026-05-25T00:00:00Z",
+    updatedAt: "2026-05-25T00:00:00Z",
+    ...overrides,
+  } as CloudTargetSummary;
+}
+
+function selection(
+  agentKind: string,
+  status = "active",
+): SandboxAgentAuthSelection {
+  return {
+    id: `${agentKind}-selection`,
+    sandboxProfileId: "profile-1",
+    ownerScope: "personal",
+    agentKind,
+    credentialId: `${agentKind}-credential`,
+    credentialShareId: null,
+    materializationMode: "gateway",
+    selectedRevision: 1,
+    status,
+    lastErrorCode: null,
+    lastErrorMessage: null,
+  } as SandboxAgentAuthSelection;
 }
 
 function registry(kind: string): ModelRegistry {
@@ -99,6 +177,14 @@ function resetMocks() {
   selectionMocks.runtimeLaunchOptions.isLoading = false;
   selectionMocks.runtimeLaunchOptions.isError = false;
   selectionMocks.runtimeLaunchOptions.error = null;
+  selectionMocks.cloudTargetsQuery.data = [];
+  selectionMocks.cloudTargetsQuery.isLoading = false;
+  selectionMocks.cloudTargetsQuery.isError = false;
+  selectionMocks.cloudTargetsQuery.error = null;
+  selectionMocks.sandboxSelectionsQuery.data = [];
+  selectionMocks.sandboxSelectionsQuery.isLoading = false;
+  selectionMocks.sandboxSelectionsQuery.isError = false;
+  selectionMocks.sandboxSelectionsQuery.error = null;
   useUserPreferencesStore.setState({
     defaultChatAgentKind: "codex",
     defaultChatModelIdByAgentKind: {},
@@ -268,5 +354,28 @@ describe("useHomeNextModelSelection", () => {
     });
     expect(result.current.modelGroups[0]?.models.map((model) => model.modelId))
       .toEqual(["anthropic/claude-sonnet-4-6"]);
+  });
+
+  it("filters cloud launches to agents selected on the managed cloud profile", () => {
+    selectionMocks.agentCatalog.readyAgents = [agent("codex"), agent("claude")];
+    selectionMocks.modelRegistriesQuery.data = [registry("codex"), registry("claude")];
+    selectionMocks.cloudTargetsQuery.data = [cloudTarget()];
+    selectionMocks.sandboxSelectionsQuery.data = [selection("codex")];
+    useUserPreferencesStore.setState({
+      defaultChatAgentKind: "claude",
+      defaultChatModelIdByAgentKind: { claude: "default-model" },
+      chatModelVisibilityOverridesByAgentKind: {},
+    });
+
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+      repoLaunchKind: "cloud",
+    }));
+
+    expect(result.current.modelGroups.map((group) => group.kind)).toEqual(["codex"]);
+    expect(result.current.effectiveModelSelection).toEqual({
+      kind: "codex",
+      modelId: "default-model",
+    });
   });
 });

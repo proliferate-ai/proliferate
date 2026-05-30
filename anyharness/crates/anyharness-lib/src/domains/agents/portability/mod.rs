@@ -212,14 +212,15 @@ fn collect_codex_artifacts(
     };
 
     let sessions_root = home_dir.join(".codex").join("sessions");
-    let rollout_path =
-        find_codex_rollout_path(&sessions_root, native_session_id)?.ok_or_else(|| {
-            anyhow::anyhow!(
-                "expected Codex rollout file for session {} ({native_session_id}) under {}",
-                session.id,
-                sessions_root.display()
-            )
-        })?;
+    let Some(rollout_path) = find_codex_rollout_path(&sessions_root, native_session_id)? else {
+        tracing::warn!(
+            session_id = %session.id,
+            native_session_id = %native_session_id,
+            sessions_root = %sessions_root.display(),
+            "Codex rollout file missing; continuing without portable Codex artifacts"
+        );
+        return Ok(Vec::new());
+    };
 
     Ok(vec![read_file_relative_to_home(home_dir, &rollout_path)?])
 }
@@ -434,4 +435,102 @@ fn to_base36(mut value: u64) -> String {
         value /= 36;
     }
     chars.iter().rev().collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sessions::model::SessionMcpBindingPolicy;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    struct TempDirGuard {
+        path: PathBuf,
+    }
+
+    impl TempDirGuard {
+        fn new(prefix: &str) -> Self {
+            let nanos = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "anyharness-portability-{prefix}-{}-{nanos}",
+                std::process::id()
+            ));
+            fs::create_dir_all(&path).expect("create temp dir");
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDirGuard {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn codex_session(native_session_id: &str) -> SessionRecord {
+        SessionRecord {
+            id: "session-1".to_string(),
+            workspace_id: "workspace-1".to_string(),
+            agent_kind: "codex".to_string(),
+            native_session_id: Some(native_session_id.to_string()),
+            agent_auth_scope: None,
+            required_agent_auth_revision: None,
+            requested_model_id: None,
+            current_model_id: None,
+            requested_mode_id: None,
+            current_mode_id: None,
+            title: None,
+            thinking_level_id: None,
+            thinking_budget_tokens: None,
+            status: "ended".to_string(),
+            created_at: "2026-05-30T00:00:00Z".to_string(),
+            updated_at: "2026-05-30T00:00:00Z".to_string(),
+            last_prompt_at: None,
+            closed_at: None,
+            dismissed_at: None,
+            mcp_bindings_ciphertext: None,
+            mcp_binding_summaries_json: None,
+            mcp_binding_policy: SessionMcpBindingPolicy::InheritWorkspace,
+            system_prompt_append: None,
+            subagents_enabled: false,
+            action_capabilities_json: None,
+            origin: None,
+        }
+    }
+
+    #[test]
+    fn collect_codex_artifacts_skips_missing_rollout_file() {
+        let home = TempDirGuard::new("missing-codex-rollout");
+        let session = codex_session("native-123");
+
+        let artifacts = collect_codex_artifacts(home.path(), &session)
+            .expect("missing rollout should not fail");
+
+        assert!(artifacts.is_empty());
+    }
+
+    #[test]
+    fn collect_codex_artifacts_reads_matching_rollout_file() {
+        let home = TempDirGuard::new("codex-rollout");
+        let session = codex_session("native-123");
+        let rollout_dir = home.path().join(".codex").join("sessions").join("2026");
+        fs::create_dir_all(&rollout_dir).expect("create rollout dir");
+        let rollout_path = rollout_dir.join("rollout-native-123.jsonl");
+        fs::write(&rollout_path, b"{\"event\":\"ok\"}\n").expect("write rollout");
+
+        let artifacts =
+            collect_codex_artifacts(home.path(), &session).expect("collect rollout artifact");
+
+        assert_eq!(artifacts.len(), 1);
+        assert_eq!(
+            artifacts[0].relative_path,
+            ".codex/sessions/2026/rollout-native-123.jsonl"
+        );
+        assert_eq!(artifacts[0].content, b"{\"event\":\"ok\"}\n");
+    }
 }

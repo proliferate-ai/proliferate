@@ -39,6 +39,7 @@ import {
 import {
   getSessionClientAndWorkspace,
 } from "@/lib/workflows/sessions/session-runtime";
+import { sendCloudPromptCommand } from "@/lib/access/cloud/session-commands";
 import {
   waitForSessionMaterialization,
 } from "@/lib/workflows/sessions/session-materialization";
@@ -146,6 +147,7 @@ export function useSessionIntentDispatcher(): void {
         return;
       }
       const {
+        target,
         workspaceId,
         materializedSessionId: resolvedSessionId,
       } = await getSessionClientAndWorkspace(entry.clientSessionId);
@@ -160,15 +162,35 @@ export function useSessionIntentDispatcher(): void {
         dispatchedAt: new Date().toISOString(),
       });
       requestStarted = true;
-      const response = await promptSessionMutation.mutateAsync({
-        workspaceId,
-        sessionId: resolvedSessionId,
-        request: {
+      let response;
+      if (target.location === "cloud") {
+        if (!target.cloudWorkspaceId || !target.targetId) {
+          throw new Error("Cloud workspace is missing command routing metadata.");
+        }
+        response = await sendCloudPromptCommand({
+          idempotencyKey: `desktop:send-prompt:${target.cloudWorkspaceId}:${resolvedSessionId}:${entry.clientPromptId}`,
+          targetId: target.targetId,
+          cloudWorkspaceId: target.cloudWorkspaceId,
+          anyharnessWorkspaceId: target.anyharnessWorkspaceId,
+          sessionId: resolvedSessionId,
           promptId: entry.clientPromptId,
           blocks: preparedBlocks,
-        },
-        requestOptions,
-      });
+          text: entry.text,
+        });
+      } else {
+        response = await promptSessionMutation.mutateAsync({
+          workspaceId,
+          sessionId: resolvedSessionId,
+          request: {
+            promptId: entry.clientPromptId,
+            blocks: preparedBlocks,
+          },
+          requestOptions,
+        });
+      }
+      if (!response) {
+        throw new Error("Cloud prompt command completed without a prompt response.");
+      }
 
       applySessionSummary(entry.clientSessionId, response.session, workspaceId);
       upsertWorkspaceSessionRecord(workspaceId, response.session);
