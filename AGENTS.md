@@ -49,7 +49,7 @@ make dev PROFILE=<name> STRIPE=1
 Profile state lives under
 `~/.proliferate-local/dev/profiles/<name>/`; AnyHarness runtime state lives
 under `~/.proliferate-local/runtimes/<name>/`. Read
-`docs/reference/dev-profiles.md` before changing profile launch behavior,
+`docs/dev/reference/dev-profiles.md` before changing profile launch behavior,
 ports, generated Tauri config, or dev app identity.
 
 ## Read This First
@@ -66,64 +66,66 @@ at the start of the task, not halfway through implementation.
 
 ### Frontend (`apps/desktop/src/**`, `apps/web/src/**`, `apps/mobile/src/**`, `apps/packages/**`)
 
-1. `docs/frontend/README.md`
+1. `docs/structures/frontend/README.md`
 2. The focused frontend doc for the layer being changed:
-   - `docs/frontend/guides/components.md`
-   - `docs/frontend/guides/hooks.md`
-   - `docs/frontend/guides/state.md`
-   - `docs/frontend/guides/lib.md`
-   - `docs/frontend/guides/config.md`
-   - `docs/frontend/guides/copy.md`
-   - `docs/frontend/guides/access.md`
-   - `docs/frontend/packages/README.md` for shared frontend packages, package
+   - `docs/structures/frontend/guides/components.md`
+   - `docs/structures/frontend/guides/hooks.md`
+   - `docs/structures/frontend/guides/state.md`
+   - `docs/structures/frontend/guides/lib.md`
+   - `docs/structures/frontend/guides/config.md`
+   - `docs/structures/frontend/guides/copy.md`
+   - `docs/structures/frontend/guides/access.md`
+   - `docs/structures/frontend/packages/README.md` for shared frontend packages, package
      dependency direction, shared product rules, product UI, or connected
      product surfaces
 3. Specialized docs when relevant:
-   - `docs/frontend/guides/styling.md` for styling, primitives, tokens, or
+   - `docs/structures/frontend/guides/styling.md` for styling, primitives, tokens, or
      theme usage
-   - `docs/frontend/guides/telemetry.md` for analytics, Sentry, replay
+   - `docs/structures/frontend/guides/telemetry.md` for analytics, Sentry, replay
      masking, or telemetry payloads
-   - `docs/frontend/specs/chat-composer.md` for the composer, composer-adjacent
+   - `docs/features/chat-composer.md` for the composer, composer-adjacent
      panels, workspace review panels/defaults, or Claude plan card
-   - `docs/frontend/specs/chat-transcript.md` for transcript streaming,
+   - `docs/features/chat-transcript.md` for transcript streaming,
      replay, transcript row models, or long-history rendering
-   - `docs/frontend/specs/pending-workspace-shell.md` for pending workspace
+   - `docs/features/pending-workspace-shell.md` for pending workspace
      entry, projected session shell, optimistic prompts, or
      workspace/session materialization handoff
-   - `docs/frontend/specs/workspace-files.md` for workspace file browsing,
+   - `docs/features/workspace-files.md` for workspace file browsing,
      file viewing, diff viewing, Changes, or all-changes review
 
 ### SDK (`anyharness/sdk/**`, `anyharness/sdk-react/**`)
 
-1. `docs/sdk/README.md`
+1. `docs/structures/sdk/README.md`
 
 ### Desktop Native (`apps/desktop/src-tauri/**`)
 
-1. `docs/desktop/README.md`
+1. `docs/structures/desktop-native/README.md`
 2. The focused desktop native spec when relevant:
-   - `docs/desktop/specs/anyharness-sidecar.md` for AnyHarness sidecar
+   - `docs/structures/desktop-native/specs/anyharness-sidecar.md` for AnyHarness sidecar
      packaging, lookup, launch, health, restart, or runtime-info behavior
-   - `docs/desktop/specs/agent-seeds.md` for bundled agent seed resources,
+   - `docs/structures/desktop-native/specs/agent-seeds.md` for bundled agent seed resources,
      launch env, hydration, ownership state, or seed/reconcile interaction
-3. `docs/reference/dev-profiles.md` when changing profile launch behavior,
+3. `docs/dev/reference/dev-profiles.md` when changing profile launch behavior,
    ports, generated Tauri config, app identity, or profile runtime homes.
 4. `docs/dev/ci-cd.md` when changing packaging, release, updater, or
    bundled desktop resources.
 
 ### Server (`server/**`)
 
-1. `docs/server/README.md`
+1. `docs/structures/server/README.md`
 
 ### AnyHarness Runtime (`anyharness/crates/**`)
 
-1. `docs/anyharness/README.md`
-2. The focused guide under `docs/anyharness/guides/**` for the layer being
+1. `docs/structures/anyharness/README.md`
+2. The focused guide under `docs/structures/anyharness/guides/**` for the layer being
    changed, such as API, domains, live runtime, adapters, integrations,
    harnesses, persistence, observability, repo shape, or crate ownership.
-3. The focused spec under `docs/anyharness/specs/**` when changing a covered
-   subsystem such as the session engine or MCP.
-4. `docs/anyharness/contract.md` if the change touches contract schemas.
-5. The relevant legacy subsystem doc under `docs/anyharness/src/**` when the
+3. The focused spec under `docs/structures/anyharness/specs/**` when changing a covered
+   subsystem such as the session actor or session engine.
+4. `docs/primitives/mcp-runtime.md` for MCP runtime behavior, and
+   `docs/features/product-mcps/servers.md` for product MCP server behavior.
+5. `docs/structures/anyharness/contract.md` if the change touches contract schemas.
+6. The relevant legacy subsystem doc under `docs/structures/anyharness/src/**` when the
    change touches runtime logic not yet covered by a newer guide or spec.
 
 ### CI/CD, Release, And Deployment

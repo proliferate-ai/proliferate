@@ -12,8 +12,8 @@
 
 <p>
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/readme/proliferate-wordmark-dark.svg" />
-    <img src="./docs/assets/readme/proliferate-wordmark-light.svg" width="320" alt="Proliferate" />
+    <source media="(prefers-color-scheme: dark)" srcset="./docs/dev/assets/readme/proliferate-wordmark-dark.svg" />
+    <img src="./docs/dev/assets/readme/proliferate-wordmark-light.svg" width="320" alt="Proliferate" />
   </picture>
 </p>
 
@@ -90,7 +90,7 @@ permissions, and transcript behavior stay intact.
     </td>
     <td align="center" width="120">
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/readme/cursor-dark.svg" />
+        <source media="(prefers-color-scheme: dark)" srcset="./docs/dev/assets/readme/cursor-dark.svg" />
         <img src="./apps/desktop/public/provider-icons/cursor.svg" width="40" height="40" alt="Cursor" />
       </picture><br />
       <strong>Cursor</strong>
@@ -165,7 +165,7 @@ make dev-list
 make dev PROFILE=main
 ```
 
-See [dev profiles](./docs/reference/dev-profiles.md) for profile state, ports,
+See [dev profiles](./docs/dev/reference/dev-profiles.md) for profile state, ports,
 generated Tauri config, and app labels.
 
 </details>

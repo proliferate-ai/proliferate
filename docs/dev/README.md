@@ -4,8 +4,7 @@ Status: authoritative for day-to-day local development process.
 
 Use this folder for operating procedures: running the product locally,
 preparing PRs, and deploying to staging or production. Architecture and
-ownership rules stay in the area docs under `docs/frontend`, `docs/server`,
-`docs/anyharness`, `docs/proliferate-worker`, and `docs/desktop`.
+ownership rules stay in the area docs under `docs/structures/**`.
 
 ## Read Order
 

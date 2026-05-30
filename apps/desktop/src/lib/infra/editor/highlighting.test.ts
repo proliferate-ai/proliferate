@@ -11,7 +11,7 @@ describe("highlightMarkdownDiffLines", () => {
         "make test             # Rust workspace tests",
         "```",
         "- Run `make dev` now",
-        "See [`docs/reference/dev-profiles.md`](docs/reference/dev-profiles.md)",
+        "See [`docs/dev/reference/dev-profiles.md`](docs/dev/reference/dev-profiles.md)",
       ],
       "dark",
     );
@@ -36,10 +36,10 @@ describe("highlightMarkdownDiffLines", () => {
       { content: "See ", color: "#FBFBFB" },
       { content: "[", color: "#79797F" },
       { content: "`", color: "#79797F" },
-      { content: "docs/reference/dev-profiles.md", color: "#5ECC71" },
+      { content: "docs/dev/reference/dev-profiles.md", color: "#5ECC71" },
       { content: "`", color: "#79797F" },
       { content: "]", color: "#79797F" },
-      { content: "(docs/reference/dev-profiles.md)", color: "#FF678D" },
+      { content: "(docs/dev/reference/dev-profiles.md)", color: "#FF678D" },
     ]);
   });
 });

@@ -9,12 +9,12 @@ area doc for the part of the repo you are touching.
 
 Examples:
 
-- Frontend changes: [docs/frontend/README.md](./docs/frontend/README.md)
-- Desktop native changes: [docs/desktop/README.md](./docs/desktop/README.md)
-- Server changes: [docs/server/README.md](./docs/server/README.md)
-- AnyHarness runtime changes: [docs/anyharness/README.md](./docs/anyharness/README.md)
-- SDK changes: [docs/sdk/README.md](./docs/sdk/README.md)
-- CI/CD or release changes: [docs/ci-cd/README.md](./docs/ci-cd/README.md)
+- Frontend changes: [docs/structures/frontend/README.md](./docs/structures/frontend/README.md)
+- Desktop native changes: [docs/structures/desktop-native/README.md](./docs/structures/desktop-native/README.md)
+- Server changes: [docs/structures/server/README.md](./docs/structures/server/README.md)
+- AnyHarness runtime changes: [docs/structures/anyharness/README.md](./docs/structures/anyharness/README.md)
+- SDK changes: [docs/structures/sdk/README.md](./docs/structures/sdk/README.md)
+- CI/CD or release changes: [docs/dev/ci-cd.md](./docs/dev/ci-cd.md)
 
 ## Local Development
 
@@ -36,6 +36,6 @@ make dev PROFILE=main
 
 Keep PRs focused and leave unrelated files alone.
 
-PR titles and labels must follow [CI/CD docs](./docs/ci-cd/README.md): use
+PR titles and labels must follow [CI/CD docs](./docs/dev/ci-cd.md): use
 exactly one `release:*` label and at least one `area:*` label before marking a
 PR ready for review.

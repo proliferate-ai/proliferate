@@ -39,7 +39,7 @@ overrides remain in the server config layer; customize
 [template.yaml](/Users/pablo/proliferate-local-desktop/server/infra/self-hosted-aws/template.yaml)
 if you need to promote more of them into CloudFormation parameters. The full
 env surface is documented in
-[docs/reference/env-secrets-matrix.md](/Users/pablo/proliferate-local-desktop/docs/reference/env-secrets-matrix.md).
+[docs/dev/reference/env-secrets-matrix.md](/Users/pablo/proliferate-local-desktop/docs/dev/reference/env-secrets-matrix.md).
 
 ## Versioned Release Assets
 

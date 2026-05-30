@@ -5,7 +5,7 @@ Status: authoritative for running Proliferate in local development.
 Use dev profiles for full-stack development. A profile owns ports, database,
 runtime state, desktop app home, and generated Tauri dev identity for one local
 run. The low-level profile contract lives in
-[`docs/reference/dev-profiles.md`](../reference/dev-profiles.md); this runbook
+[`docs/dev/reference/dev-profiles.md`](reference/dev-profiles.md); this runbook
 is the day-to-day path.
 
 ## Quick Start
@@ -108,7 +108,7 @@ any CVC
 ```
 
 The billing-specific runbook is
-[`docs/reference/stripe-local-testing.md`](../reference/stripe-local-testing.md).
+[`docs/dev/reference/stripe-local-testing.md`](reference/stripe-local-testing.md).
 
 ## Web
 
