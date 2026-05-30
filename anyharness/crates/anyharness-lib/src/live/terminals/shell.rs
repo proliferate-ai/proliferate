@@ -4,7 +4,7 @@ use std::path::Path;
 
 use portable_pty::CommandBuilder;
 
-use super::model::ShellKind;
+use crate::domains::terminals::model::ShellKind;
 
 pub(super) fn detect_default_shell() -> String {
     let shell_env = std::env::var("SHELL").ok();
@@ -176,7 +176,7 @@ fn is_executable_path(path: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::terminals::model::ShellKind;
+    use crate::domains::terminals::model::ShellKind;
 
     #[test]
     fn detect_default_shell_avoids_nonexistent_zsh_fallback() {

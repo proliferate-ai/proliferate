@@ -93,11 +93,15 @@ pub async fn assert_terminal_auth_scope(
     let AuthContext::UserClaim(claim) = auth else {
         return Ok(());
     };
-    let terminal = state
+    let terminal_handle = state
         .terminal_service
-        .get_terminal(terminal_id)
+        .lookup_terminal(terminal_id)
         .await
         .ok_or_else(|| ApiError::not_found("Terminal not found", "TERMINAL_NOT_FOUND"))?;
+    let terminal = terminal_handle
+        .snapshot()
+        .await
+        .map_err(|_| ApiError::not_found("Terminal not found", "TERMINAL_NOT_FOUND"))?;
     require_workspace_scope(claim, &terminal.workspace_id).map_err(auth_scope_error_to_api)
 }
 

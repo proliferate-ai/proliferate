@@ -9,7 +9,7 @@ use crate::api::http::access::{
 };
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
-use crate::terminals::model::{
+use crate::domains::terminals::model::{
     CreateTerminalOptions, ResizeTerminalOptions, RunTerminalCommandOptions,
     TerminalCommandOutputMode as InternalTerminalCommandOutputMode,
     TerminalCommandRunRecord as InternalTerminalCommandRunRecord,
@@ -170,11 +170,15 @@ pub async fn start_terminal_command(
     Json(request): Json<StartTerminalCommandRequest>,
 ) -> Result<Json<StartTerminalCommandResponse>, ApiError> {
     assert_terminal_auth_scope(&state, &auth, &terminal_id).await?;
-    let terminal_for_gate = state
+    let terminal_handle = state
         .terminal_service
-        .get_terminal(&terminal_id)
+        .lookup_terminal(&terminal_id)
         .await
         .ok_or_else(|| ApiError::not_found("terminal not found", "TERMINAL_NOT_FOUND"))?;
+    let terminal_for_gate = terminal_handle
+        .snapshot()
+        .await
+        .map_err(|_| ApiError::not_found("terminal not found", "TERMINAL_NOT_FOUND"))?;
     let _lease = state
         .workspace_operation_gate
         .acquire_shared(
@@ -190,24 +194,19 @@ pub async fn start_terminal_command(
             "INVALID_TERMINAL_COMMAND",
         ));
     }
-    let run = state
-        .terminal_service
-        .run_terminal_command(
-            &terminal_id,
-            RunTerminalCommandOptions {
-                command,
-                env: request.env.unwrap_or_default().into_iter().collect(),
-                interrupt: request.interrupt.unwrap_or(false),
-                timeout_ms: request.timeout_ms,
-            },
-        )
+    let run = terminal_handle
+        .run_command(RunTerminalCommandOptions {
+            command,
+            env: request.env.unwrap_or_default().into_iter().collect(),
+            interrupt: request.interrupt.unwrap_or(false),
+            timeout_ms: request.timeout_ms,
+        })
         .await
         .map_err(map_terminal_command_error)?;
-    let terminal = state
-        .terminal_service
-        .get_terminal(&terminal_id)
+    let terminal = terminal_handle
+        .snapshot()
         .await
-        .ok_or_else(|| ApiError::not_found("terminal not found", "TERMINAL_NOT_FOUND"))?;
+        .map_err(|_| ApiError::not_found("terminal not found", "TERMINAL_NOT_FOUND"))?;
     Ok(Json(StartTerminalCommandResponse {
         terminal: terminal_record_to_contract(terminal),
         command_run: terminal_command_run_summary_to_contract(run),
@@ -256,9 +255,12 @@ pub async fn get_terminal(
     assert_terminal_auth_scope(&state, &auth, &terminal_id).await?;
     let record = state
         .terminal_service
-        .get_terminal(&terminal_id)
+        .lookup_terminal(&terminal_id)
         .await
-        .ok_or_else(|| ApiError::not_found("terminal not found", "TERMINAL_NOT_FOUND"))?;
+        .ok_or_else(|| ApiError::not_found("terminal not found", "TERMINAL_NOT_FOUND"))?
+        .snapshot()
+        .await
+        .map_err(|_| ApiError::not_found("terminal not found", "TERMINAL_NOT_FOUND"))?;
     Ok(Json(terminal_record_to_contract(record)))
 }
 
@@ -285,7 +287,10 @@ pub async fn update_terminal_title(
     let title = validate_terminal_title(request.title)?;
     let record = state
         .terminal_service
-        .update_terminal_title(&terminal_id, title)
+        .lookup_terminal(&terminal_id)
+        .await
+        .ok_or_else(|| ApiError::not_found("terminal not found", "TERMINAL_NOT_FOUND"))?
+        .update_title(title)
         .await
         .map_err(|e| ApiError::not_found(e.to_string(), "TERMINAL_NOT_FOUND"))?;
     Ok(Json(terminal_record_to_contract(record)))
@@ -312,13 +317,13 @@ pub async fn resize_terminal(
     assert_terminal_mutable(&state, &terminal_id).await?;
     let record = state
         .terminal_service
-        .resize_terminal(
-            &terminal_id,
-            ResizeTerminalOptions {
-                cols: request.cols,
-                rows: request.rows,
-            },
-        )
+        .lookup_terminal(&terminal_id)
+        .await
+        .ok_or_else(|| ApiError::not_found("terminal not found", "TERMINAL_NOT_FOUND"))?
+        .resize(ResizeTerminalOptions {
+            cols: request.cols,
+            rows: request.rows,
+        })
         .await
         .map_err(|e| ApiError::not_found(e.to_string(), "TERMINAL_NOT_FOUND"))?;
     Ok(Json(terminal_record_to_contract(record)))
@@ -343,7 +348,10 @@ pub async fn delete_terminal(
     assert_terminal_mutable(&state, &terminal_id).await?;
     state
         .terminal_service
-        .close_terminal(&terminal_id)
+        .lookup_terminal(&terminal_id)
+        .await
+        .ok_or_else(|| ApiError::not_found("terminal not found", "TERMINAL_NOT_FOUND"))?
+        .close()
         .await
         .map_err(|e| ApiError::internal(e.to_string()))?;
     Ok(axum::http::StatusCode::NO_CONTENT)

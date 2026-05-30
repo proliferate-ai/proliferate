@@ -6,10 +6,10 @@ use anyharness_contract::v1::{
     WorkspaceRetireBlocker, WorkspaceRetireBlockerCode, WorkspaceRetireBlockerSeverity,
 };
 
+use crate::domains::terminals::model::TerminalStatus;
+use crate::live::terminals::TerminalService;
 use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::service::SessionService;
-use crate::terminals::model::TerminalStatus;
-use crate::terminals::TerminalService;
 use crate::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::workspaces::managed_root::is_managed_worktree_path;
 use crate::workspaces::model::WorkspaceRecord;

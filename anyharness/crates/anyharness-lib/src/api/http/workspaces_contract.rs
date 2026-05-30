@@ -5,7 +5,7 @@ use anyharness_contract::v1::{
 };
 
 use super::error::ApiError;
-use crate::terminals::model::{TerminalCommandRunRecord, TerminalCommandRunStatus};
+use crate::domains::terminals::model::{TerminalCommandRunRecord, TerminalCommandRunStatus};
 use crate::workspaces::model::WorkspaceRecord;
 use crate::workspaces::types::{
     DetectedHintCategory, DetectedSetupHint, ProjectSetupDetectionResult,

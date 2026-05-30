@@ -3,8 +3,8 @@ use std::sync::Arc;
 use super::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
 use super::access_store::WorkspaceAccessStore;
 use super::store::WorkspaceStore;
+use crate::live::terminals::TerminalService;
 use crate::sessions::store::SessionStore;
-use crate::terminals::service::TerminalService;
 
 #[derive(Debug, thiserror::Error)]
 pub enum WorkspaceAccessError {
@@ -173,11 +173,15 @@ impl WorkspaceAccessGate {
         &self,
         terminal_id: &str,
     ) -> Result<(), WorkspaceAccessError> {
-        let terminal = self
+        let terminal_handle = self
             .terminal_service
-            .get_terminal(terminal_id)
+            .lookup_terminal(terminal_id)
             .await
             .ok_or_else(|| WorkspaceAccessError::TerminalNotFound(terminal_id.to_string()))?;
+        let terminal = terminal_handle
+            .snapshot()
+            .await
+            .map_err(|_| WorkspaceAccessError::TerminalNotFound(terminal_id.to_string()))?;
         self.assert_can_mutate_for_workspace(&terminal.workspace_id)
     }
 
@@ -214,10 +218,10 @@ mod tests {
     use std::sync::Arc;
 
     use super::WorkspaceAccessGate;
+    use crate::domains::terminals::store::TerminalStore;
+    use crate::live::terminals::TerminalService;
     use crate::persistence::Db;
     use crate::sessions::store::SessionStore;
-    use crate::terminals::service::TerminalService;
-    use crate::terminals::store::TerminalStore;
     use crate::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
     use crate::workspaces::access_store::WorkspaceAccessStore;
     use crate::workspaces::model::WorkspaceRecord;

@@ -18,11 +18,11 @@ use crate::domains::mobility::model::{
 };
 use crate::domains::mobility::store::MobilityStore;
 use crate::domains::mobility::workspace_delta::{collect_workspace_delta, current_branch_name};
+use crate::domains::terminals::model::{TerminalRecord, TerminalStatus};
+use crate::live::terminals::TerminalService;
 use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::service::SessionService;
 use crate::sessions::subagents::service::SubagentService;
-use crate::terminals::model::{TerminalRecord, TerminalStatus};
-use crate::terminals::service::TerminalService;
 use crate::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::workspaces::access_model::WorkspaceAccessMode;
 use crate::workspaces::model::WorkspaceRecord;
