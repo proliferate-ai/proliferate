@@ -1,27 +1,10 @@
 use std::sync::Arc;
 
-use base64::Engine;
 use tokio::sync::{broadcast, Mutex};
 
-use super::replay::ReplayBuffer;
+use crate::domains::terminals::model::TerminalOutputEvent;
 
-#[derive(Debug, Clone)]
-pub enum TerminalOutputEvent {
-    Data {
-        seq: u64,
-        data: Vec<u8>,
-        stream: Option<&'static str>,
-        command_run_id: Option<String>,
-    },
-    Exit {
-        seq: u64,
-        code: Option<i32>,
-    },
-    ReplayGap {
-        requested_after_seq: u64,
-        floor_seq: u64,
-    },
-}
+use super::replay::ReplayBuffer;
 
 #[derive(Clone)]
 pub(super) struct TerminalOutputHub {
@@ -110,48 +93,5 @@ impl TerminalOutputEvent {
             TerminalOutputEvent::Exit { .. } => 32,
             TerminalOutputEvent::ReplayGap { .. } => 32,
         }
-    }
-}
-
-pub(super) fn terminal_frame_to_json(
-    terminal_id: &str,
-    event: TerminalOutputEvent,
-) -> serde_json::Value {
-    match event {
-        TerminalOutputEvent::Data {
-            seq,
-            data,
-            stream,
-            command_run_id,
-        } => {
-            let mut value = serde_json::json!({
-                "type": "data",
-                "seq": seq,
-                "terminalId": terminal_id,
-                "dataBase64": base64::engine::general_purpose::STANDARD.encode(data),
-            });
-            if let Some(stream) = stream {
-                value["stream"] = serde_json::Value::String(stream.to_string());
-            }
-            if let Some(command_run_id) = command_run_id {
-                value["commandRunId"] = serde_json::Value::String(command_run_id);
-            }
-            value
-        }
-        TerminalOutputEvent::Exit { seq, code } => serde_json::json!({
-            "type": "exit",
-            "seq": seq,
-            "terminalId": terminal_id,
-            "code": code,
-        }),
-        TerminalOutputEvent::ReplayGap {
-            requested_after_seq,
-            floor_seq,
-        } => serde_json::json!({
-            "type": "replay_gap",
-            "terminalId": terminal_id,
-            "requestedAfterSeq": requested_after_seq,
-            "floorSeq": floor_seq,
-        }),
     }
 }

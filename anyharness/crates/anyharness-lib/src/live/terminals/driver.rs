@@ -3,7 +3,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::Mutex;
 
 use crate::domains::terminals::model::{
     CreateTerminalOptions, TerminalCommandOutputMode, TerminalCommandRunStatus, TerminalPurpose,
@@ -14,7 +14,7 @@ use crate::domains::terminals::service::{
 };
 use crate::process_env::remove_runtime_private_pty_env;
 
-use super::handle::{PtyHandle, TerminalRegistry};
+use super::handle::{PtyHandle, TerminalOutputRegistry, TerminalRegistry};
 use super::output_sink::TerminalOutputHub;
 use super::pty_command::process_pty_output;
 use super::shell::{
@@ -23,7 +23,7 @@ use super::shell::{
 
 pub(super) async fn create_terminal_shell(
     terminals: &TerminalRegistry,
-    output_hubs: &Arc<RwLock<std::collections::HashMap<String, TerminalOutputHub>>>,
+    output_hubs: &TerminalOutputRegistry,
     command_service: &TerminalCommandService,
     workspace_id: &str,
     workspace_path: &str,

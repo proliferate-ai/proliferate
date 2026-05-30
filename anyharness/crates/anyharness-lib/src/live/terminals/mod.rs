@@ -7,5 +7,6 @@ mod replay;
 mod setup_process;
 mod shell;
 
+pub use crate::domains::terminals::model::TerminalOutputEvent;
+pub use handle::TerminalHandle;
 pub use manager::TerminalService;
-pub use output_sink::TerminalOutputEvent;

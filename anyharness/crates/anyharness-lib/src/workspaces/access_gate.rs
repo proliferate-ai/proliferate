@@ -173,11 +173,15 @@ impl WorkspaceAccessGate {
         &self,
         terminal_id: &str,
     ) -> Result<(), WorkspaceAccessError> {
-        let terminal = self
+        let terminal_handle = self
             .terminal_service
-            .get_terminal(terminal_id)
+            .lookup_terminal(terminal_id)
             .await
             .ok_or_else(|| WorkspaceAccessError::TerminalNotFound(terminal_id.to_string()))?;
+        let terminal = terminal_handle
+            .snapshot()
+            .await
+            .map_err(|_| WorkspaceAccessError::TerminalNotFound(terminal_id.to_string()))?;
         self.assert_can_mutate_for_workspace(&terminal.workspace_id)
     }
 

@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use super::output_sink::TerminalOutputEvent;
+use crate::domains::terminals::model::TerminalOutputEvent;
 
 const MAX_REPLAY_BYTES: usize = 1024 * 1024;
 const MAX_REPLAY_FRAMES: usize = 5_000;

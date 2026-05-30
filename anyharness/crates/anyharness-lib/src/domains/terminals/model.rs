@@ -79,6 +79,24 @@ pub struct TerminalRecord {
 }
 
 #[derive(Debug, Clone)]
+pub enum TerminalOutputEvent {
+    Data {
+        seq: u64,
+        data: Vec<u8>,
+        stream: Option<&'static str>,
+        command_run_id: Option<String>,
+    },
+    Exit {
+        seq: u64,
+        code: Option<i32>,
+    },
+    ReplayGap {
+        requested_after_seq: u64,
+        floor_seq: u64,
+    },
+}
+
+#[derive(Debug, Clone)]
 pub struct CreateTerminalOptions {
     pub cwd: Option<String>,
     pub shell: Option<String>,

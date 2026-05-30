@@ -7,8 +7,8 @@ use tokio::sync::{broadcast, Mutex, RwLock};
 
 use crate::domains::terminals::model::{
     CreateTerminalOptions, ResizeTerminalOptions, RunTerminalCommandOptions,
-    TerminalCommandOutputMode, TerminalCommandRunRecord, TerminalCommandRunStatus, TerminalPurpose,
-    TerminalRecord,
+    TerminalCommandOutputMode, TerminalCommandRunRecord, TerminalCommandRunStatus,
+    TerminalOutputEvent, TerminalPurpose, TerminalRecord,
 };
 use crate::domains::terminals::service::{
     new_command_run_record, validate_env_vars, TerminalCommandService,
@@ -16,9 +16,7 @@ use crate::domains::terminals::service::{
 use crate::domains::terminals::store::TerminalStore;
 
 use super::driver;
-use super::handle::TerminalRegistry;
-use super::output_sink::{TerminalOutputEvent, TerminalOutputHub};
-use super::pty_command;
+use super::handle::{TerminalHandle, TerminalOutputRegistry, TerminalRegistry};
 use super::setup_process::{run_setup_process, ActiveSetupTask};
 use super::shell::detect_posix_shell;
 
@@ -26,7 +24,7 @@ const DEFAULT_SETUP_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub struct TerminalService {
     terminals: TerminalRegistry,
-    output_hubs: Arc<RwLock<HashMap<String, TerminalOutputHub>>>,
+    output_hubs: TerminalOutputRegistry,
     command_service: TerminalCommandService,
     runtime_home: PathBuf,
     active_setup_tasks: Arc<Mutex<HashMap<String, ActiveSetupTask>>>,
@@ -78,10 +76,23 @@ impl TerminalService {
     }
 
     pub async fn get_terminal(&self, terminal_id: &str) -> Option<TerminalRecord> {
-        let map = self.terminals.read().await;
-        let handle = map.get(terminal_id)?;
-        let h = handle.lock().await;
-        Some(h.record_with_latest_command_run(&self.command_service))
+        let handle = self.lookup_terminal(terminal_id).await?;
+        handle.snapshot().await.ok()
+    }
+
+    pub async fn lookup_terminal(&self, terminal_id: &str) -> Option<TerminalHandle> {
+        let pty = {
+            let map = self.terminals.read().await;
+            map.get(terminal_id).cloned()
+        }?;
+        Some(TerminalHandle::new(
+            terminal_id.to_string(),
+            pty,
+            self.terminals.clone(),
+            self.output_hubs.clone(),
+            self.command_service.clone(),
+            self.runtime_home.clone(),
+        ))
     }
 
     pub fn get_command_run(&self, id: &str) -> anyhow::Result<Option<TerminalCommandRunRecord>> {
@@ -152,14 +163,11 @@ impl TerminalService {
         terminal_id: &str,
         request: RunTerminalCommandOptions,
     ) -> anyhow::Result<TerminalCommandRunRecord> {
-        pty_command::run_terminal_command(
-            &self.terminals,
-            &self.command_service,
-            &self.runtime_home,
-            terminal_id,
-            request,
-        )
-        .await
+        let handle = self
+            .lookup_terminal(terminal_id)
+            .await
+            .ok_or_else(|| anyhow::anyhow!("terminal not found"))?;
+        handle.run_command(request).await
     }
 
     pub async fn start_setup_command(
@@ -301,28 +309,19 @@ impl TerminalService {
         terminal_id: &str,
         title: String,
     ) -> anyhow::Result<TerminalRecord> {
-        let map = self.terminals.read().await;
-        let handle = map
-            .get(terminal_id)
+        let handle = self
+            .lookup_terminal(terminal_id)
+            .await
             .ok_or_else(|| anyhow::anyhow!("terminal not found"))?;
-        let mut h = handle.lock().await;
-        Ok(h.update_title(title, &self.command_service))
+        handle.update_title(title).await
     }
 
     pub async fn write_input(&self, terminal_id: &str, data: &[u8]) -> anyhow::Result<()> {
-        let map = self.terminals.read().await;
-        let handle = map
-            .get(terminal_id)
+        let handle = self
+            .lookup_terminal(terminal_id)
+            .await
             .ok_or_else(|| anyhow::anyhow!("terminal not found"))?;
-        let mut h = handle.lock().await;
-        if h.record.purpose == TerminalPurpose::Setup
-            && self
-                .command_service
-                .is_setup_running(&h.record.workspace_id)
-        {
-            anyhow::bail!("setup terminal input is blocked while setup is running");
-        }
-        h.write_input(data)
+        handle.write_input(data).await
     }
 
     pub async fn resize_terminal(
@@ -330,40 +329,16 @@ impl TerminalService {
         terminal_id: &str,
         request: ResizeTerminalOptions,
     ) -> anyhow::Result<TerminalRecord> {
-        let map = self.terminals.read().await;
-        let handle = map
-            .get(terminal_id)
+        let handle = self
+            .lookup_terminal(terminal_id)
+            .await
             .ok_or_else(|| anyhow::anyhow!("terminal not found"))?;
-        let mut h = handle.lock().await;
-        h.resize(request, &self.command_service)
+        handle.resize(request).await
     }
 
     pub async fn close_terminal(&self, terminal_id: &str) -> anyhow::Result<()> {
-        let handle = {
-            let map = self.terminals.read().await;
-            map.get(terminal_id).cloned()
-        };
-        if let Some(handle) = &handle {
-            let h = handle.lock().await;
-            if h.record.purpose == TerminalPurpose::Setup
-                && self
-                    .command_service
-                    .is_setup_running(&h.record.workspace_id)
-            {
-                anyhow::bail!("cannot close setup terminal while setup is running");
-            }
-        }
-        let handle = {
-            let mut map = self.terminals.write().await;
-            map.remove(terminal_id)
-        };
-        if let Some(handle) = handle {
-            let mut h = handle.lock().await;
-            h.kill();
-        }
-        {
-            let mut hubs = self.output_hubs.write().await;
-            hubs.remove(terminal_id);
+        if let Some(handle) = self.lookup_terminal(terminal_id).await {
+            handle.close().await?;
         }
         Ok(())
     }
@@ -380,18 +355,8 @@ impl TerminalService {
         Vec<TerminalOutputEvent>,
         broadcast::Receiver<TerminalOutputEvent>,
     )> {
-        let hubs = self.output_hubs.read().await;
-        let hub = hubs.get(terminal_id)?;
-        let replay = hub.replay(after_seq.unwrap_or(0)).await;
-        Some((replay, hub.sender.subscribe()))
-    }
-
-    pub fn output_event_to_json(
-        &self,
-        terminal_id: &str,
-        event: TerminalOutputEvent,
-    ) -> serde_json::Value {
-        super::output_sink::terminal_frame_to_json(terminal_id, event)
+        let handle = self.lookup_terminal(terminal_id).await?;
+        handle.subscribe_output(after_seq).await
     }
 
     async fn find_live_setup_terminal(&self, workspace_id: &str) -> Option<TerminalRecord> {
