@@ -301,18 +301,18 @@ function SupportSection({ onOpenSupport }: { onOpenSupport: () => void }) {
     <section className="space-y-6">
       <SettingsPageHeader
         title="Support"
-        description="Open support and product help for cloud sessions, automations, and Desktop handoff."
+        description="Open the dedicated support page for cloud sessions, automations, billing, and Desktop handoff."
       />
       <SettingsCard>
         <SettingsCardRow
           label="Product support"
-          description="Send a support message from the dedicated support surface."
+          description="Send a support message with account and page context."
         >
           <ActionButton onClick={onOpenSupport}>Open support</ActionButton>
         </SettingsCardRow>
         <SettingsCardRow
-          label="Diagnostics"
-          description="Telemetry-sensitive support surfaces stay blocked from session replay."
+          label="Support context"
+          description="Support messages are telemetry-blocked and include the current app location."
         />
       </SettingsCard>
     </section>

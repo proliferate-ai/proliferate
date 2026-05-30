@@ -183,6 +183,12 @@ describe("SettingsSidebar layout and shortcuts", () => {
     expect(backRow.className).not.toContain("w-fit");
   });
 
+  it("uses the product sidebar rail width", () => {
+    const { container } = renderSettingsSidebar();
+
+    expect(container.firstElementChild?.className).toContain("w-[280px]");
+  });
+
   it("renders Cmd number labels with the sidebar reveal treatment", () => {
     vi.stubGlobal("navigator", {
       platform: "MacIntel",

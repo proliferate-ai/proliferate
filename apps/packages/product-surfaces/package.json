@@ -1,0 +1,51 @@
+{
+  "name": "@proliferate/product-surfaces",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    "./settings/BillingSettingsSurface": {
+      "types": "./dist/settings/BillingSettingsSurface.d.ts",
+      "import": "./dist/settings/BillingSettingsSurface.js"
+    },
+    "./settings/CloudEnvironmentsSettingsSurface": {
+      "types": "./dist/settings/CloudEnvironmentsSettingsSurface.d.ts",
+      "import": "./dist/settings/CloudEnvironmentsSettingsSurface.js"
+    },
+    "./support/CloudSupportSurface": {
+      "types": "./dist/support/CloudSupportSurface.d.ts",
+      "import": "./dist/support/CloudSupportSurface.js"
+    }
+  },
+  "scripts": {
+    "build": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && tsc -p tsconfig.json",
+    "typecheck": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && tsc -p tsconfig.json --noEmit",
+    "test": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @proliferate/cloud-sdk-react build && pnpm --filter @proliferate/product-domain build && pnpm --filter @proliferate/ui build && pnpm --filter @proliferate/product-ui build && vitest run"
+  },
+  "dependencies": {
+    "@proliferate/cloud-sdk": "workspace:*",
+    "@proliferate/cloud-sdk-react": "workspace:*",
+    "@proliferate/product-domain": "workspace:*",
+    "@proliferate/product-ui": "workspace:*",
+    "@proliferate/ui": "workspace:*"
+  },
+  "peerDependencies": {
+    "@tanstack/react-query": "^5.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.0",
+    "@tanstack/react-query": "^5.95.2",
+    "@types/react": "~19.1.0",
+    "@types/react-dom": "~19.1.0",
+    "jsdom": "^29.1.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "typescript": "^5.7",
+    "vitest": "^3.2.4"
+  }
+}

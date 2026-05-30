@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2, CircleHelp, LifeBuoy, MessageSquare, Send } from "lucide-react";
+import { AlertCircle, ArrowUp, CheckCircle2, LifeBuoy } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
@@ -35,74 +35,94 @@ export function SupportSurface({ onSubmit }: SupportSurfaceProps) {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-      <section className="space-y-3">
-        <article className="border-b border-border-light pb-4">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <MessageSquare size={16} />
-            Product help
+    <div className="space-y-4">
+      <form onSubmit={handleSubmit}>
+        <section className="overflow-hidden rounded-lg border border-border-light bg-surface-elevated shadow-subtle">
+          <div className="border-b border-border-light px-4 py-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <LifeBuoy size={15} />
+              Contact support
+            </div>
+            <p className="mt-1 max-w-2xl text-xs leading-4 text-muted-foreground">
+              Share what happened, what you expected, and the workspace, automation, or billing flow involved.
+            </p>
           </div>
-          <p className="mt-2 text-sm leading-5 text-muted-foreground">
-            Cloud sessions, Desktop handoff, billing, and workspace dispatch issues.
-          </p>
-        </article>
-        <article className="border-b border-border-light pb-4">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <CircleHelp size={16} />
-            Product docs
-          </div>
-          <p className="mt-2 text-sm leading-5 text-muted-foreground">
-            Setup, cloud sandbox, automation, and environment guidance.
-          </p>
-        </article>
-        <article className="pb-2">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <LifeBuoy size={16} />
-            Account context
-          </div>
-          <p className="mt-2 text-sm leading-5 text-muted-foreground">
-            Messages include the current app location so the team can find the right account state.
-          </p>
-        </article>
-      </section>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <LifeBuoy size={16} />
-          Contact
-        </div>
-        <Textarea
-          rows={10}
-          value={message}
-          onChange={(event) => {
-            setMessage(event.currentTarget.value);
-            if (notice) {
-              setNotice(null);
-            }
-          }}
-          className="w-full resize-none"
-          placeholder="What happened?"
-          data-telemetry-mask
-        />
-        {notice ? (
-          <div
-            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
-              notice.tone === "success"
-                ? "border-success/30 bg-success/10 text-success"
-                : "border-destructive/30 bg-destructive/10 text-destructive"
-            }`}
-          >
-            {notice.tone === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
-            <span>{notice.text}</span>
+          <div className="space-y-3 p-3">
+            <div className="rounded-lg border border-input bg-surface-control p-3 focus-within:ring-1 focus-within:ring-ring">
+              <Textarea
+                rows={8}
+                value={message}
+                onChange={(event) => {
+                  setMessage(event.currentTarget.value);
+                  if (notice) {
+                    setNotice(null);
+                  }
+                }}
+                variant="ghost"
+                className="min-h-[12rem] w-full resize-none text-sm leading-5"
+                placeholder="What happened?"
+                data-telemetry-mask
+              />
+              <div className="mt-3 flex items-center justify-between gap-3 border-t border-border-light pt-3">
+                <p className="min-w-0 text-xs leading-4 text-muted-foreground">
+                  Includes current app location. Do not include secrets or API keys.
+                </p>
+                <Button
+                  type="submit"
+                  size="icon"
+                  loading={submitting}
+                  disabled={!trimmedMessage || submitting}
+                  aria-label="Send support message"
+                >
+                  <ArrowUp size={16} />
+                </Button>
+              </div>
+            </div>
+
+            {notice ? (
+              <div
+                role="status"
+                aria-live="polite"
+                className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${
+                  notice.tone === "success"
+                    ? "border-success/30 bg-success/10 text-success"
+                    : "border-destructive/30 bg-destructive/10 text-destructive"
+                }`}
+              >
+                {notice.tone === "success" ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}
+                <span>{notice.text}</span>
+              </div>
+            ) : null}
           </div>
-        ) : null}
-        <div className="flex justify-end">
-          <Button type="submit" loading={submitting} disabled={!trimmedMessage || submitting}>
-            <Send size={15} />
-            Send
-          </Button>
-        </div>
+        </section>
       </form>
+
+      <section className="grid gap-3 sm:grid-cols-2">
+        <InfoCard
+          title="Product help"
+          description="Cloud sessions, Desktop handoff, billing, automations, workspace dispatch, and account issues."
+        />
+        <InfoCard
+          title="Account context"
+          description="Support messages include the current app location so we can find the right account state."
+        />
+      </section>
+    </div>
+  );
+}
+
+function InfoCard({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="rounded-lg border border-border-light bg-surface-elevated px-4 py-3 shadow-subtle">
+      <div className="text-sm font-medium text-foreground">{title}</div>
+      <p className="mt-1 text-xs leading-4 text-muted-foreground">{description}</p>
     </div>
   );
 }

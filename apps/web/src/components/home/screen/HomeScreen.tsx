@@ -46,13 +46,13 @@ import type {
 import type { CloudChatComposerControlView } from "@proliferate/product-ui/chat/CloudChatComposer";
 import { NewChatSurface } from "@proliferate/product-ui/new-chat/NewChatSurface";
 import type { CloudChatTranscriptRowView } from "@proliferate/product-ui/chat/CloudChatTranscript";
+import { AddCloudEnvironmentDialogController } from "@proliferate/product-surfaces/settings/CloudEnvironmentsSettingsSurface";
 
 import { webEnv } from "../../../config/env";
 import { routes } from "../../../config/routes";
 import { ensurePersonalAgentAuthLaunchReady } from "../../../lib/access/cloud/agent-auth-launch-readiness";
 import { isRecoverableCloudDispatchError } from "../../../lib/access/cloud/pending-home-prompt-dispatch";
 import { savePendingHomePrompt } from "../../../lib/access/cloud/pending-home-prompt-store";
-import { AddCloudEnvironmentDialogController } from "../../environments/screen/AddCloudEnvironmentDialogController";
 import { saveWebCloudPromptIntents } from "../../../stores/cloud/web-cloud-chat-state-store";
 
 const HOME_PLACEHOLDER = "Describe a quick remote task...";

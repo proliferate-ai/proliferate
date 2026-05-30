@@ -1,14 +1,39 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { EnvironmentsPane } from "./EnvironmentsPane";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 
-const cloudRepoConfigsMock = vi.hoisted(() => vi.fn());
+const cloudSurfacePropsMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@/hooks/access/cloud/use-cloud-repo-configs", () => ({
-  useCloudRepoConfigs: cloudRepoConfigsMock,
+vi.mock("@proliferate/product-surfaces/settings/CloudEnvironmentsSettingsSurface", () => ({
+  CloudEnvironmentsSettingsSurface: (props: {
+    mode: "cloud-only" | "hybrid";
+    enabled: boolean;
+    localCheckouts: Array<{ id: string; name: string; description: string }>;
+    onSelectCloudEnvironment: (repo: { gitOwner: string; gitRepoName: string }) => void;
+  }) => {
+    cloudSurfacePropsMock(props);
+    return (
+      <div data-testid="cloud-environments-surface">
+        <div>{props.mode}</div>
+        <div>{props.enabled ? "enabled" : "disabled"}</div>
+        {props.localCheckouts.map((checkout) => (
+          <div key={checkout.id}>{checkout.name}</div>
+        ))}
+        <button
+          type="button"
+          onClick={() => props.onSelectCloudEnvironment({
+            gitOwner: "octo",
+            gitRepoName: "desktop-only",
+          })}
+        >
+          Select cloud
+        </button>
+      </div>
+    );
+  },
 }));
 
 vi.mock("./environments/AutomaticSyncSection", () => ({
@@ -17,11 +42,6 @@ vi.mock("./environments/AutomaticSyncSection", () => ({
 
 vi.mock("./environments/WorktreeStorageSection", () => ({
   WorktreeStorageSection: () => <div data-testid="worktree-storage" />,
-}));
-
-vi.mock("./environments/AddCloudEnvironmentDialogController", () => ({
-  AddCloudEnvironmentDialogController: ({ open }: { open: boolean }) =>
-    open ? <div data-testid="add-cloud-environment-dialog" /> : null,
 }));
 
 function repository(overrides: Partial<SettingsRepositoryEntry> = {}): SettingsRepositoryEntry {
@@ -40,38 +60,12 @@ function repository(overrides: Partial<SettingsRepositoryEntry> = {}): SettingsR
 }
 
 describe("EnvironmentsPane", () => {
-  beforeEach(() => {
-    cloudRepoConfigsMock.mockReturnValue({
-      data: {
-        configs: [
-          {
-            gitOwner: "octo",
-            gitRepoName: "desktop-cloud",
-            configured: true,
-            configuredAt: "2026-05-24T09:00:00.000Z",
-            filesVersion: 0,
-          },
-          {
-            gitOwner: "octo",
-            gitRepoName: "desktop-only",
-            configured: false,
-            configuredAt: "2026-05-23T09:00:00.000Z",
-            filesVersion: 1,
-          },
-        ],
-      },
-      isLoading: false,
-      isError: false,
-      refetch: vi.fn(),
-    });
-  });
-
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  it("renders local checkouts separately from cloud environments", () => {
+  it("passes local checkouts into the shared hybrid cloud environments surface", () => {
     render(
       <EnvironmentsPane
         repositories={[repository()]}
@@ -87,18 +81,23 @@ describe("EnvironmentsPane", () => {
       />,
     );
 
-    expect(screen.queryByText("Local checkouts")).not.toBeNull();
-    expect(screen.queryByText("Cloud environments")).not.toBeNull();
+    expect(screen.queryByTestId("cloud-environments-surface")).not.toBeNull();
+    expect(screen.queryByText("hybrid")).not.toBeNull();
+    expect(screen.queryByText("enabled")).not.toBeNull();
     expect(screen.queryByText("project")).not.toBeNull();
-    expect(screen.queryByText("Cloud enabled")).not.toBeNull();
-    expect(screen.queryByText("octo/desktop-cloud")).not.toBeNull();
-    expect(screen.queryByText("octo/desktop-only")).not.toBeNull();
-    expect(screen.queryByText("Local + cloud")).not.toBeNull();
-    expect(screen.queryByText("Cloud only")).not.toBeNull();
-    expect(screen.queryByText("Disabled")).not.toBeNull();
+    expect(cloudSurfacePropsMock).toHaveBeenCalledWith(expect.objectContaining({
+      mode: "hybrid",
+      enabled: true,
+      localCheckouts: [expect.objectContaining({
+        id: "/Users/dev/project",
+        name: "project",
+        gitOwner: "octo",
+        gitRepoName: "desktop-cloud",
+      })],
+    }));
   });
 
-  it("selects cloud-only environments by owner and repo", () => {
+  it("forwards cloud environment selection by owner and repo", () => {
     const onSelectCloudEnvironment = vi.fn();
     render(
       <EnvironmentsPane
@@ -115,8 +114,7 @@ describe("EnvironmentsPane", () => {
       />,
     );
 
-    expect(screen.queryByText("octo/desktop-only")).not.toBeNull();
-    fireEvent.click(screen.getAllByRole("button", { name: "Configure" })[2]);
+    fireEvent.click(screen.getByRole("button", { name: "Select cloud" }));
 
     expect(onSelectCloudEnvironment).toHaveBeenCalledWith("octo", "desktop-only");
   });

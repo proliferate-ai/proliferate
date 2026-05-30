@@ -45,9 +45,9 @@ export function SettingsShell({
         className,
       )}
     >
-      <aside className="flex h-full w-[280px] shrink-0 flex-col border-r border-border bg-sidebar px-3 py-4 text-sidebar-foreground">
-        <div className="mb-4 flex items-center gap-2 px-2">
-          <div className="text-sm font-semibold text-sidebar-foreground">Settings</div>
+      <aside className="flex h-full w-[210px] shrink-0 flex-col border-r border-border bg-sidebar px-2.5 py-3 text-sidebar-foreground">
+        <div className="mb-3 flex items-center gap-2 px-2">
+          <div className="text-sm font-medium text-sidebar-foreground">Settings</div>
         </div>
 
         {onNavigateHome ? (
@@ -62,7 +62,7 @@ export function SettingsShell({
           </div>
         ) : null}
 
-        <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto">
+        <nav className="min-h-0 flex-1 space-y-4 overflow-y-auto">
           {groups.map((group, groupIndex) => (
             <div key={group.label ?? `settings-group-${groupIndex}`} className="space-y-1">
               {group.label ? (
@@ -77,7 +77,7 @@ export function SettingsShell({
                   active={item.id === activeSectionId}
                   disabled={item.disabled}
                   onPress={() => onSelectSection(item.id)}
-                  className="h-7 gap-2 px-2 text-[13px] leading-4"
+                  className="h-9 gap-2 px-2.5 text-sm leading-5"
                 >
                   <span className="flex size-3.5 shrink-0 items-center justify-center text-sidebar-muted-foreground transition-colors group-data-[active=true]:text-sidebar-foreground">
                     {item.icon}
@@ -91,13 +91,13 @@ export function SettingsShell({
         </nav>
 
         {updateAction ? (
-          <div className="mt-4 border-t border-sidebar-border pt-3">{updateAction}</div>
+          <div className="mt-3 border-t border-sidebar-border pt-3">{updateAction}</div>
         ) : null}
       </aside>
 
       <main className="min-w-0 flex-1">
         <AutoHideScrollArea className="h-full">
-          <div className={twMerge("mx-auto w-full max-w-3xl px-8 py-10", contentClassName)}>
+          <div className={twMerge("mx-auto w-full max-w-[680px] px-4 py-5", contentClassName)}>
             {children}
           </div>
         </AutoHideScrollArea>
