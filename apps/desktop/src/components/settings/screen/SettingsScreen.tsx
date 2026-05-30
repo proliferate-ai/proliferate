@@ -187,12 +187,8 @@ export function SettingsScreen({
   const admin = useIsAdmin(activeOrganizationId);
   const {
     phase,
-    availableVersion,
     checkNow,
-    downloadProgress,
-    downloadUpdate,
     updatesSupported,
-    openRestartPrompt,
   } = useUpdater();
   const activeRepository = repositories.find(
     (repository) => repository.sourceRoot === activeRepoSourceRoot,
@@ -216,15 +212,11 @@ export function SettingsScreen({
         }}
         onCheckForUpdates={() => { void checkNow(); }}
         updateActionState={{
-          availableVersion,
-          downloadProgress,
           isChecking: phase === "checking",
           hasAvailableUpdate: phase === "available" || phase === "ready",
           phase,
           updatesSupported,
         }}
-        onDownloadUpdate={() => { void downloadUpdate(); }}
-        onOpenRestartPrompt={openRestartPrompt}
       />
 
       <div className="relative flex-1 bg-background">

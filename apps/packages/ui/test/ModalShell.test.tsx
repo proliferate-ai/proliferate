@@ -54,4 +54,14 @@ describe("ModalShell", () => {
 
     expect(screen.getByRole("dialog").getAttribute("data-telemetry-block")).toBe("true");
   });
+
+  it("can hide the close button for focused system prompts", () => {
+    render(
+      <ModalShell open title="Restart" onClose={vi.fn()} showCloseButton={false}>
+        Content
+      </ModalShell>,
+    );
+
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+  });
 });
