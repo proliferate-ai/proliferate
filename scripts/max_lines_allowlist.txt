@@ -1,6 +1,6 @@
 # Existing oversized source files. Keep this list shrinking over time.
-anyharness/crates/anyharness-lib/src/acp/manager.rs
-anyharness/crates/anyharness-lib/src/acp/runtime_client.rs
+anyharness/crates/anyharness-lib/src/live/sessions/manager.rs
+anyharness/crates/anyharness-lib/src/live/sessions/connection/runtime_client.rs
 anyharness/crates/anyharness-lib/src/adapters/git/diff.rs
 anyharness/crates/anyharness-lib/src/domains/agents/installer.rs
 anyharness/crates/anyharness-lib/src/domains/agents/auth_config.rs
@@ -13,7 +13,7 @@ anyharness/crates/anyharness-lib/src/api/http/git.rs
 anyharness/crates/anyharness-lib/src/api/http/sessions.rs
 anyharness/crates/anyharness-lib/src/api/http/workspaces.rs
 anyharness/crates/anyharness-lib/src/api/http/mobility.rs
-anyharness/crates/anyharness-lib/src/acp/background_work/claude.rs
+anyharness/crates/anyharness-lib/src/live/sessions/background_work/claude.rs
 anyharness/crates/anyharness-contract/src/v1/events.rs
 anyharness/crates/anyharness-contract/src/v1/sessions.rs
 anyharness/crates/anyharness-lib/src/adapters/files/service.rs
