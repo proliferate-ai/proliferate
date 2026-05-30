@@ -82,6 +82,7 @@ impl WorkspaceDeleteWorkflow {
 mod tests {
     use super::WorkspaceDeleteWorkflow;
     use crate::domains::cowork::store::CoworkDeleteParticipant;
+    use crate::domains::reviews::store::ReviewDeleteParticipant;
     use crate::persistence::Db;
     use crate::sessions::deletion::SessionDeleteWorkflow;
     use crate::sessions::model::{SessionEventRecord, SessionMcpBindingPolicy, SessionRecord};
@@ -136,9 +137,16 @@ mod tests {
     }
 
     fn test_delete_workflow(db: Db) -> WorkspaceDeleteWorkflow {
+        let session_delete_workflow = SessionDeleteWorkflow::with_participants(
+            db.clone(),
+            vec![
+                Arc::new(CoworkDeleteParticipant),
+                Arc::new(ReviewDeleteParticipant),
+            ],
+        );
         WorkspaceDeleteWorkflow::with_participants(
             db.clone(),
-            SessionDeleteWorkflow::new(db),
+            session_delete_workflow,
             vec![Arc::new(CoworkDeleteParticipant)],
         )
     }
