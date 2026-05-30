@@ -163,9 +163,9 @@
       "types": "./dist/layout/ProductPageShell.d.ts",
       "import": "./dist/layout/ProductPageShell.js"
     },
-    "./plugins/PluginAccessList": {
-      "types": "./dist/plugins/PluginAccessList.d.ts",
-      "import": "./dist/plugins/PluginAccessList.js"
+    "./plugins/PluginsSurface": {
+      "types": "./dist/plugins/PluginsSurface.d.ts",
+      "import": "./dist/plugins/PluginsSurface.js"
     },
     "./popover/PopoverMenuItem": {
       "types": "./dist/popover/PopoverMenuItem.d.ts",

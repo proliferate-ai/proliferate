@@ -7,6 +7,10 @@
     "dist"
   ],
   "exports": {
+    "./plugins/CloudPluginsSurface": {
+      "types": "./dist/plugins/CloudPluginsSurface.d.ts",
+      "import": "./dist/plugins/CloudPluginsSurface.js"
+    },
     "./settings/BillingSettingsSurface": {
       "types": "./dist/settings/BillingSettingsSurface.d.ts",
       "import": "./dist/settings/BillingSettingsSurface.js"

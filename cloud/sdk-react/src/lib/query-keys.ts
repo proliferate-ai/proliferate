@@ -26,6 +26,30 @@ export function cloudAgentCatalogKey() {
   return [...cloudRootKey(), "agent-catalog", "v1"] as const;
 }
 
+export function cloudPluginInventoryRootKey() {
+  return [...cloudRootKey(), "plugin-inventory"] as const;
+}
+
+export function cloudMcpCatalogKey() {
+  return [...cloudPluginInventoryRootKey(), "mcp-catalog", "v1"] as const;
+}
+
+export function cloudMcpConnectionsKey() {
+  return [...cloudPluginInventoryRootKey(), "mcp-connections"] as const;
+}
+
+export function cloudMcpOAuthFlowKey(flowId: string | null) {
+  return [...cloudPluginInventoryRootKey(), "mcp-oauth-flow", flowId] as const;
+}
+
+export function cloudConfiguredPluginsKey() {
+  return [...cloudPluginInventoryRootKey(), "configured-plugins"] as const;
+}
+
+export function cloudConfiguredSkillsKey() {
+  return [...cloudPluginInventoryRootKey(), "configured-skills"] as const;
+}
+
 export function agentAuthCredentialsKey(
   organizationId: string | null = null,
   agentKind: string | null = null,

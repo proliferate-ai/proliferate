@@ -4,7 +4,11 @@ import hashlib
 from datetime import UTC, datetime, timedelta
 
 from proliferate.server.cloud.mcp_oauth.domain.flow_rules import (
+    OAUTH_WEB_COMPLETION_PATH,
+    OAuthReturnTargetError,
+    build_oauth_web_completion_url,
     build_oauth_auth_payload,
+    normalize_oauth_return_target,
     oauth_flow_is_expired,
     oauth_redirect_uri,
     oauth_requested_scopes_json,
@@ -67,6 +71,68 @@ def test_requested_scopes_and_cached_client_policy() -> None:
     assert oauth_requested_scopes_json(None) == "[]"
     assert should_drop_cached_oauth_client_on_token_error("invalid_client")
     assert not should_drop_cached_oauth_client_on_token_error("invalid_grant")
+
+
+def test_oauth_return_target_defaults_to_legacy_desktop() -> None:
+    target = normalize_oauth_return_target(
+        callback_surface=None,
+        final_surface=None,
+        return_path=None,
+        frontend_base_url="",
+    )
+
+    assert target.callback_surface == "desktop"
+    assert target.final_surface == "desktop"
+    assert target.return_path is None
+
+
+def test_oauth_return_target_accepts_web_completion_for_desktop_final_surface() -> None:
+    target = normalize_oauth_return_target(
+        callback_surface="web",
+        final_surface="desktop",
+        return_path=OAUTH_WEB_COMPLETION_PATH,
+        frontend_base_url="https://app.example.com/",
+    )
+
+    assert target.callback_surface == "web"
+    assert target.final_surface == "desktop"
+    assert target.return_path == OAUTH_WEB_COMPLETION_PATH
+
+
+def test_oauth_return_target_rejects_unsafe_paths() -> None:
+    for path in (
+        "https://evil.example.com/plugins/connect/complete",
+        "//evil.example.com/plugins/connect/complete",
+        "/plugins/connect/complete?source=bad",
+        "/plugins/connect/complete#frag",
+        "/plugins",
+        "/plugins\\connect\\complete",
+    ):
+        try:
+            normalize_oauth_return_target(
+                callback_surface="web",
+                final_surface="web",
+                return_path=path,
+                frontend_base_url="https://app.example.com",
+            )
+        except OAuthReturnTargetError:
+            continue
+        raise AssertionError(f"accepted unsafe return path: {path}")
+
+
+def test_oauth_web_completion_url_uses_server_owned_params() -> None:
+    assert build_oauth_web_completion_url(
+        frontend_base_url="https://app.example.com/",
+        return_path=OAUTH_WEB_COMPLETION_PATH,
+        flow_id="flow-id",
+        status="failed",
+        final_surface="desktop",
+        failure_code="access_denied",
+    ) == (
+        "https://app.example.com/plugins/connect/complete?"
+        "source=mcp_oauth_callback&flowId=flow-id&status=failed&"
+        "finalSurface=desktop&failureCode=access_denied"
+    )
 
 
 def test_build_oauth_auth_payload_keeps_wire_keys() -> None:

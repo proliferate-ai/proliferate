@@ -8,6 +8,8 @@ interface ConfirmationDialogProps {
   confirmLabel: string;
   cancelLabel?: string;
   confirmVariant?: "primary" | "destructive";
+  disableClose?: boolean;
+  loading?: boolean;
   onClose: () => void;
   onConfirm: () => void;
 }
@@ -19,6 +21,8 @@ export function ConfirmationDialog({
   confirmLabel,
   cancelLabel = "Cancel",
   confirmVariant = "primary",
+  disableClose = false,
+  loading = false,
   onClose,
   onConfirm,
 }: ConfirmationDialogProps) {
@@ -26,6 +30,7 @@ export function ConfirmationDialog({
     <ModalShell
       open={open}
       onClose={onClose}
+      disableClose={disableClose}
       title={title}
       description={description}
       sizeClassName="max-w-md"
@@ -34,10 +39,17 @@ export function ConfirmationDialog({
       panelClassName="border-border/70 bg-background/95 shadow-floating"
       footer={(
         <>
-          <Button type="button" variant="ghost" size="md" onClick={onClose}>
+          <Button type="button" variant="ghost" size="md" disabled={loading} onClick={onClose}>
             {cancelLabel}
           </Button>
-          <Button type="button" variant={confirmVariant} size="md" onClick={onConfirm}>
+          <Button
+            type="button"
+            variant={confirmVariant}
+            size="md"
+            loading={loading}
+            disabled={loading}
+            onClick={onConfirm}
+          >
             {confirmLabel}
           </Button>
         </>

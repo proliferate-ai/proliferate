@@ -1,4 +1,4 @@
-import { getProliferateClient } from "./core.js";
+import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import type {
   CloudMcpConnection,
   CloudMcpConnectionsResponse,
@@ -8,21 +8,25 @@ import type {
   PutCloudMcpSecretAuthRequest,
 } from "../types/index.js";
 
-export async function listCloudMcpConnections(): Promise<CloudMcpConnectionsResponse> {
-  return (await getProliferateClient().GET("/v1/cloud/mcp/connections")).data!;
+export async function listCloudMcpConnections(
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CloudMcpConnectionsResponse> {
+  return (await client.GET("/v1/cloud/mcp/connections")).data!;
 }
 
 export async function createCloudMcpConnection(
   body: CreateCloudMcpConnectionRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudMcpConnection> {
-  return (await getProliferateClient().POST("/v1/cloud/mcp/connections", { body })).data!;
+  return (await client.POST("/v1/cloud/mcp/connections", { body })).data!;
 }
 
 export async function patchCloudMcpConnection(
   connectionId: string,
   body: PatchCloudMcpConnectionRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudMcpConnection> {
-  return (await getProliferateClient().PATCH("/v1/cloud/mcp/connections/{connection_id}", {
+  return (await client.PATCH("/v1/cloud/mcp/connections/{connection_id}", {
     params: { path: { connection_id: connectionId } },
     body,
   })).data!;
@@ -31,8 +35,9 @@ export async function patchCloudMcpConnection(
 export async function publicizeCloudMcpConnection(
   connectionId: string,
   body: PublicizeCloudMcpConnectionRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudMcpConnection> {
-  return (await getProliferateClient().POST(
+  return (await client.POST(
     "/v1/cloud/mcp/connections/{connection_id}/publicize",
     {
       params: { path: { connection_id: connectionId } },
@@ -43,8 +48,9 @@ export async function publicizeCloudMcpConnection(
 
 export async function unpublicizeCloudMcpConnection(
   connectionId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudMcpConnection> {
-  return (await getProliferateClient().POST(
+  return (await client.POST(
     "/v1/cloud/mcp/connections/{connection_id}/unpublicize",
     {
       params: { path: { connection_id: connectionId } },
@@ -55,8 +61,9 @@ export async function unpublicizeCloudMcpConnection(
 export async function putCloudMcpSecretAuth(
   connectionId: string,
   body: PutCloudMcpSecretAuthRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<CloudMcpConnection> {
-  return (await getProliferateClient().PUT(
+  return (await client.PUT(
     "/v1/cloud/mcp/connections/{connection_id}/auth/secret",
     {
       params: { path: { connection_id: connectionId } },
@@ -65,8 +72,11 @@ export async function putCloudMcpSecretAuth(
   )).data!;
 }
 
-export async function deleteCloudMcpConnectionV2(connectionId: string): Promise<void> {
-  await getProliferateClient().DELETE("/v1/cloud/mcp/connections/{connection_id}", {
+export async function deleteCloudMcpConnectionV2(
+  connectionId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<void> {
+  await client.DELETE("/v1/cloud/mcp/connections/{connection_id}", {
     params: { path: { connection_id: connectionId } },
   });
 }

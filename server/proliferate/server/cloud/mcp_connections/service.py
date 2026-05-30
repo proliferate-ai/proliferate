@@ -21,6 +21,7 @@ from proliferate.db.store.cloud_mcp.connections import (
     patch_user_connection,
     upsert_user_connection,
 )
+from proliferate.db.store.cloud_mcp.oauth_flows import cancel_active_oauth_flows_for_connection
 from proliferate.db.store.cloud_mcp.types import CloudMcpConnectionRecord
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mcp_catalog.availability import catalog_entry_is_configured
@@ -529,6 +530,11 @@ async def delete_cloud_mcp_connection_for_user(
         connection,
         event_type="deleted",
         enabled=connection.enabled,
+    )
+    await cancel_active_oauth_flows_for_connection(
+        db,
+        connection_db_id=connection.id,
+        failure_code="connection_deleted",
     )
     await delete_user_connection(db, connection.user_id, connection.connection_id)
     await _refresh_personal_runtime_config(

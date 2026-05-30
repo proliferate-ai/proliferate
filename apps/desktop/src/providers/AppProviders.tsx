@@ -5,8 +5,10 @@ import {
 } from "@anyharness/sdk-react";
 import type { CoworkStatus } from "@anyharness/sdk";
 import type { CloudMobilityWorkspaceSummary } from "@/lib/access/cloud/client";
+import { getProliferateClient } from "@/lib/access/cloud/client";
+import { CloudClientProvider } from "@proliferate/cloud-sdk-react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { useCallback, type ReactNode } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { appQueryClient } from "@/lib/infra/query/query-client";
 import { resolveWorkspaceConnection } from "@/lib/access/anyharness/resolve-workspace-connection";
@@ -30,11 +32,15 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { TelemetryProvider } from "./TelemetryProvider";
 
 export function AppProviders({ children }: { children: ReactNode }) {
+  const cloudClient = useMemo(() => getProliferateClient(), []);
+
   return (
     <QueryClientProvider client={appQueryClient}>
-      <WorkspaceProviders>
-        <TelemetryProvider>{children}</TelemetryProvider>
-      </WorkspaceProviders>
+      <CloudClientProvider client={cloudClient}>
+        <WorkspaceProviders>
+          <TelemetryProvider>{children}</TelemetryProvider>
+        </WorkspaceProviders>
+      </CloudClientProvider>
     </QueryClientProvider>
   );
 }

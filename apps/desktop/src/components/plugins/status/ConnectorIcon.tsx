@@ -111,7 +111,7 @@ export function ConnectorIcon({
   entry,
   size = "md",
 }: {
-  entry: ConnectorCatalogEntry;
+  entry: Pick<ConnectorCatalogEntry, "iconId">;
   size?: ConnectorIconSize;
 }) {
   const resolvedMode = useResolvedMode();

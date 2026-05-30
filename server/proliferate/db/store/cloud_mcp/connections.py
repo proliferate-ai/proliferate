@@ -3,13 +3,12 @@ from __future__ import annotations
 import uuid
 from uuid import UUID
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.mcp import (
     CloudMcpConnection,
     CloudMcpConnectionAuth,
-    CloudMcpOAuthFlow,
 )
 from proliferate.db.store.cloud_mcp.types import CloudMcpAuthRecord, CloudMcpConnectionRecord
 from proliferate.utils.time import utcnow
@@ -255,12 +254,6 @@ async def delete_user_connection(
     connection = await _get_connection_orm(db, user_id, connection_id)
     if connection is None:
         return
-    await db.execute(
-        delete(CloudMcpOAuthFlow).where(
-            CloudMcpOAuthFlow.connection_db_id == connection.id,
-            CloudMcpOAuthFlow.status == "active",
-        )
-    )
     await db.delete(connection)
     await db.flush()
 
