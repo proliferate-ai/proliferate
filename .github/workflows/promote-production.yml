@@ -139,7 +139,7 @@ jobs:
       git_sha: ${{ needs.plan.outputs.head_sha }}
       enabled: ${{ needs.plan.outputs.e2b == 'true' }}
       rolling_tag: production
-      mode: promote_only
+      mode: ${{ github.event.inputs.require_staging_success == 'true' && 'promote_only' || 'build_and_promote' }}
     secrets: inherit
 
   deploy-server:
