@@ -2,6 +2,7 @@ import type {
   CloudWorkStatusFilter,
   RecentWorkRuntimeLocation,
   RecentWorkSourceKind,
+  RecentWorkStatusIndicatorTone,
 } from "@proliferate/product-domain/workspaces/cloud-work-inventory";
 
 import type { MobileIconName } from "../../../components/primitives/MobileIcon";
@@ -58,5 +59,29 @@ export function mobileIconForWorkStatus(status: CloudWorkStatusFilter): MobileIc
     case "ready":
     default:
       return "check";
+  }
+}
+
+export type MobileWorkStatusColorKey =
+  | "warning"
+  | "info"
+  | "success"
+  | "destructive"
+  | "borderHeavy";
+
+export function mobileColorKeyForWorkStatusTone(
+  tone: RecentWorkStatusIndicatorTone,
+): MobileWorkStatusColorKey {
+  switch (tone) {
+    case "attention":
+      return "warning";
+    case "progress":
+      return "info";
+    case "success":
+      return "success";
+    case "danger":
+      return "destructive";
+    case "muted":
+      return "borderHeavy";
   }
 }

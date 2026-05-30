@@ -15,6 +15,29 @@ export type CloudWorkSort = "recent" | "created" | "name" | "repo" | "status";
 
 export type CloudWorkOwnerKind = "private" | "claimed" | "unclaimed" | "archived";
 
+export type RecentWorkStatusIndicatorKind =
+  | "needs_input"
+  | "running"
+  | "review_ready"
+  | "ready"
+  | "error"
+  | "idle";
+
+export type RecentWorkStatusIndicatorTone =
+  | "attention"
+  | "progress"
+  | "success"
+  | "danger"
+  | "muted";
+
+export interface RecentWorkStatusIndicatorView {
+  kind: RecentWorkStatusIndicatorKind;
+  tone: RecentWorkStatusIndicatorTone;
+  label: string;
+  hollow: boolean;
+  live: boolean;
+}
+
 export interface CloudWorkFilters {
   ownership?: CloudWorkOwnerFilter;
   sources?: ReadonlySet<CloudWorkSource>;
@@ -51,6 +74,7 @@ export interface CloudWorkItemView {
   ownerLabel: string;
   status: CloudWorkStatusFilter;
   statusLabel: string;
+  statusIndicator: RecentWorkStatusIndicatorView;
   activityPreview: string | null;
   branchLabel: string;
   repoLabel: string;
@@ -150,6 +174,8 @@ export interface RecentWorkItemView {
   lastActivityLabel: string;
   state: RecentWorkState;
   stateLabel: string;
+  statusIndicator: RecentWorkStatusIndicatorView;
+  activityPreview: string | null;
   searchText: string;
 }
 
@@ -335,6 +361,7 @@ export function cloudWorkItemForWorkspace(
   const cloudAccessState = recentWorkCloudAccessState(workspace);
   const commandability = recentWorkCommandability(workspace);
   const status = cloudWorkStatusForWorkspace(workspace);
+  const statusIndicator = recentWorkStatusIndicatorForWorkspace(workspace);
   const ownerKind = cloudWorkOwnerKind(workspace);
   const lastActivityMs = cloudWorkLastActivityMs(workspace);
   const createdAtMs = parseTime(workspace.createdAt) || lastActivityMs;
@@ -359,6 +386,7 @@ export function cloudWorkItemForWorkspace(
     ownerLabel: cloudWorkOwnerLabel(workspace),
     status,
     statusLabel: STATUS_LABELS[status],
+    statusIndicator,
     activityPreview,
     branchLabel,
     repoLabel,
@@ -649,6 +677,34 @@ export function cloudCommandReadiness(
   };
 }
 
+export function recentWorkStatusIndicatorForWorkspace(
+  workspace: CloudWorkspaceStatusIndicatorFacts,
+): RecentWorkStatusIndicatorView {
+  return recentWorkStatusIndicatorForSession(workspace, workspace.lastSessionSummary?.status);
+}
+
+export function recentWorkStatusIndicatorForSession(
+  workspace: CloudWorkspaceStatusIndicatorFacts,
+  sessionStatus: string | null | undefined,
+): RecentWorkStatusIndicatorView {
+  if (workspaceHasErrorStatus(workspace)) {
+    return STATUS_INDICATORS.error;
+  }
+  if (workspaceNeedsInput(workspace)) {
+    return STATUS_INDICATORS.needs_input;
+  }
+  if (sessionIsReviewReady(sessionStatus)) {
+    return STATUS_INDICATORS.review_ready;
+  }
+  if (sessionIsRunning(sessionStatus) || workspaceIsInProgress(workspace)) {
+    return STATUS_INDICATORS.running;
+  }
+  if (workspaceIsCommandReady(workspace)) {
+    return STATUS_INDICATORS.ready;
+  }
+  return STATUS_INDICATORS.idle;
+}
+
 function commandStatusDetailMessage(statusDetail: string | null | undefined): string | null {
   const trimmed = statusDetail?.trim();
   if (!trimmed || /^ready$/i.test(trimmed)) {
@@ -674,6 +730,24 @@ type CloudWorkspaceCommandFacts = Pick<
     | "status"
   > &
   Partial<Pick<CloudWorkspaceSummary, "lastError" | "statusDetail">> &
+  Partial<Pick<CloudWorkspaceDetail, "anyharnessWorkspaceId">>;
+
+type CloudWorkspaceStatusIndicatorFacts = Pick<
+  CloudWorkspaceSummary,
+  | "actionBlockKind"
+  | "actionBlockReason"
+  | "billing"
+  | "exposure"
+  | "exposureState"
+  | "lastError"
+  | "lastSessionSummary"
+  | "runtime"
+  | "sandboxType"
+  | "status"
+  | "targetId"
+  | "visibility"
+  | "workspaceStatus"
+> &
   Partial<Pick<CloudWorkspaceDetail, "anyharnessWorkspaceId">>;
 
 export function cloudWorkStatusForWorkspace(
@@ -713,6 +787,110 @@ export function cloudWorkStatusForWorkspace(
     return "active";
   }
   return "ready";
+}
+
+const STATUS_INDICATORS: Record<RecentWorkStatusIndicatorKind, RecentWorkStatusIndicatorView> = {
+  needs_input: {
+    kind: "needs_input",
+    tone: "attention",
+    label: "Needs input",
+    hollow: false,
+    live: false,
+  },
+  running: {
+    kind: "running",
+    tone: "progress",
+    label: "In progress",
+    hollow: false,
+    live: true,
+  },
+  review_ready: {
+    kind: "review_ready",
+    tone: "success",
+    label: "Ready for review",
+    hollow: false,
+    live: false,
+  },
+  ready: {
+    kind: "ready",
+    tone: "success",
+    label: "Ready",
+    hollow: false,
+    live: false,
+  },
+  error: {
+    kind: "error",
+    tone: "danger",
+    label: "Error",
+    hollow: false,
+    live: false,
+  },
+  idle: {
+    kind: "idle",
+    tone: "muted",
+    label: "Idle",
+    hollow: true,
+    live: false,
+  },
+};
+
+function workspaceHasErrorStatus(
+  workspace: Pick<CloudWorkspaceSummary, "lastError" | "runtime" | "status" | "workspaceStatus">,
+): boolean {
+  return Boolean(workspace.lastError)
+    || workspace.workspaceStatus === "error"
+    || workspace.status === "error"
+    || workspace.runtime?.status === "error"
+    || workspace.runtime?.status === "disabled";
+}
+
+function workspaceNeedsInput(
+  workspace: Pick<
+    CloudWorkspaceSummary,
+    | "actionBlockKind"
+    | "actionBlockReason"
+    | "billing"
+    | "lastSessionSummary"
+    | "visibility"
+  >,
+): boolean {
+  return workspace.visibility === "shared_unclaimed"
+    || workspaceHasPendingSessionInput(workspace)
+    || Boolean(workspace.actionBlockKind || workspace.actionBlockReason)
+    || workspace.billing?.blockStatus === "blocked"
+    || workspace.billing?.startBlocked === true
+    || workspace.billing?.activeSpendHold === true;
+}
+
+function workspaceIsInProgress(
+  workspace: Pick<CloudWorkspaceSummary, "runtime" | "status" | "workspaceStatus">,
+): boolean {
+  return workspace.workspaceStatus === "pending"
+    || workspace.workspaceStatus === "materializing"
+    || workspace.workspaceStatus === "needs_rematerialization"
+    || workspace.status === "pending"
+    || workspace.status === "materializing"
+    || workspace.status === "needs_rematerialization"
+    || workspace.runtime?.status === "pending"
+    || workspace.runtime?.status === "provisioning";
+}
+
+function workspaceIsCommandReady(workspace: CloudWorkspaceStatusIndicatorFacts): boolean {
+  return recentWorkCommandability(workspace) === "commandable";
+}
+
+function sessionIsRunning(status: string | null | undefined): boolean {
+  const normalized = normalizedStatusToken(status);
+  return normalized === "running" || normalized === "queued";
+}
+
+function sessionIsReviewReady(status: string | null | undefined): boolean {
+  const normalized = normalizedStatusToken(status);
+  return normalized === "review" || normalized === "ready_for_review";
+}
+
+function normalizedStatusToken(value: string | null | undefined): string {
+  return value?.toLowerCase().replace(/[\s-]+/gu, "_") ?? "";
 }
 
 function workspaceHasPendingSessionInput(
@@ -852,6 +1030,7 @@ function recentWorkItemForWorkspace(
   options: { nowMs: number },
 ): RecentWorkItemView {
   const base = recentWorkBase(workspace, { nowMs: options.nowMs, rowActivityAt: cloudWorkLastActivityIso(workspace) });
+  const state = workspaceState(workspace);
   return {
     ...base,
     id: recentWorkspaceRowId(workspace.id),
@@ -861,8 +1040,10 @@ function recentWorkItemForWorkspace(
     openTarget: { kind: "workspace", workspaceId: workspace.id },
     title: workspace.displayName ?? workspace.repo.name,
     subtitle: "Workspace",
-    state: workspaceState(workspace),
-    stateLabel: recentWorkStateLabel(workspaceState(workspace)),
+    state,
+    stateLabel: recentWorkStateLabel(state),
+    statusIndicator: recentWorkStatusIndicatorForWorkspace(workspace),
+    activityPreview: cloudWorkActivityPreview(workspace),
     searchText: recentSearchText(base, [workspace.displayName, workspace.repo.name, "workspace"]),
   };
 }
@@ -874,6 +1055,7 @@ function recentWorkItemForSessionSummary(
 ): RecentWorkItemView {
   const base = recentWorkBase(workspace, { nowMs: options.nowMs, rowActivityAt: summary.lastEventAt ?? cloudWorkLastActivityIso(workspace) });
   const state = sessionState(summary.status, workspace);
+  const activityPreview = compactPreviewText(summary.preview);
   return {
     ...base,
     id: recentSessionRowId(workspace.id, summary.sessionId),
@@ -885,7 +1067,9 @@ function recentWorkItemForSessionSummary(
     subtitle: `${workspace.displayName ?? workspace.repo.name} session`,
     state,
     stateLabel: recentWorkStateLabel(state),
-    searchText: recentSearchText(base, [summary.title, summary.preview, workspace.displayName, workspace.repo.name, "session"]),
+    statusIndicator: recentWorkStatusIndicatorForSession(workspace, summary.status),
+    activityPreview,
+    searchText: recentSearchText(base, [summary.title, activityPreview, workspace.displayName, workspace.repo.name, "session"]),
   };
 }
 
@@ -907,6 +1091,8 @@ function recentWorkItemForSessionProjection(
     subtitle: `${workspace.displayName ?? workspace.repo.name} session`,
     state,
     stateLabel: recentWorkStateLabel(state),
+    statusIndicator: recentWorkStatusIndicatorForSession(workspace, session.status),
+    activityPreview: null,
     searchText: recentSearchText(base, [session.title, session.sourceAgentKind, workspace.displayName, workspace.repo.name, "session"]),
   };
 }
@@ -926,6 +1112,8 @@ function recentWorkBase(
   | "subtitle"
   | "state"
   | "stateLabel"
+  | "statusIndicator"
+  | "activityPreview"
   | "searchText"
 > {
   const sourceKind = recentWorkSourceForWorkspace(workspace);

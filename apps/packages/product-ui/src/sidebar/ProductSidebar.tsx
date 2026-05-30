@@ -36,6 +36,7 @@ export interface SidebarWorkspaceRowView {
   active: boolean;
   archived?: boolean;
   status?: ReactNode;
+  attentionStatus?: ReactNode;
   detail?: ReactNode;
   trailingLabel?: string | null;
   shortcutLabel?: string | null;
@@ -668,6 +669,7 @@ function WorkspaceRow({
       active={row.active}
       archived={row.archived}
       status={row.status}
+      attentionStatus={row.attentionStatus}
       label={row.label}
       subtitle={row.subtitle}
       detail={row.detail}
@@ -684,6 +686,7 @@ export interface ProductSidebarWorkspaceRowProps extends Omit<HTMLAttributes<HTM
   active?: boolean;
   archived?: boolean;
   status?: ReactNode;
+  attentionStatus?: ReactNode;
   label: string;
   subtitle?: string | null;
   detail?: ReactNode;
@@ -698,6 +701,7 @@ export function ProductSidebarWorkspaceRow({
   active = false,
   archived = false,
   status = null,
+  attentionStatus = null,
   label,
   subtitle = null,
   detail = null,
@@ -728,7 +732,13 @@ export function ProductSidebarWorkspaceRow({
           {status}
         </div>
 
-        <div className="ml-1.5 flex min-w-0 flex-1 items-center gap-2 pl-0.5">
+        {attentionStatus ? (
+          <div className="ml-1 flex w-3 shrink-0 items-center justify-center">
+            {attentionStatus}
+          </div>
+        ) : null}
+
+        <div className={`${attentionStatus ? "ml-1" : "ml-1.5"} flex min-w-0 flex-1 items-center gap-2 pl-0.5`}>
           <div className={`flex min-w-0 flex-1 self-stretch ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} text-base leading-5 ${archived ? "text-sidebar-muted-foreground/60" : "text-sidebar-foreground"
             }`}>
             <span

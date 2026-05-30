@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   type CloudTargetSummary,
+  type CloudWorkspaceSummary,
   listCloudWorkspaces,
   type CloudWorkspaceDetail,
   type CreateCloudWorkspaceRequest,
@@ -16,6 +17,7 @@ import {
   useCloudRepoConfigs,
   useCreateCloudWorkspace,
   useCloudTargets,
+  useVisibleCloudWorkspaces,
   useLaunchCloudWorkspaceOnTarget,
   useTargetLive,
   useAgentAuthCredentials,
@@ -28,6 +30,10 @@ import {
   resolveCloudLaunchSelection,
   type CloudLaunchComposerSelection,
 } from "@proliferate/product-domain/chats/cloud/composer-controls";
+import {
+  buildRecentWorkItems,
+  type RecentWorkItemView,
+} from "@proliferate/product-domain/workspaces/cloud-work-inventory";
 import {
   readySyncedCloudAgentKinds,
   resolveCloudHarnessAvailability,
@@ -56,6 +62,7 @@ import { savePendingHomePrompt } from "../../../lib/access/cloud/pending-home-pr
 import { saveWebCloudPromptIntents } from "../../../stores/cloud/web-cloud-chat-state-store";
 
 const HOME_PLACEHOLDER = "Describe a quick remote task...";
+const HOME_RECENT_LIMIT = 6;
 
 interface RepoOption {
   id: string;
@@ -115,6 +122,7 @@ export function HomeScreen() {
   const agentAuthCredentials = useAgentAuthCredentials();
   const createWorkspace = useCreateCloudWorkspace();
   const launchOnTarget = useLaunchCloudWorkspaceOnTarget();
+  const visibleWorkspaces = useVisibleCloudWorkspaces();
   const targets = useCloudTargets();
   const liveTargetId = runtimeId === "cloud" ? null : runtimeId;
   const targetLive = useTargetLive(liveTargetId, { enabled: Boolean(liveTargetId) });
@@ -463,6 +471,24 @@ export function HomeScreen() {
   if (runtimeNotice) notices.push(runtimeNotice);
   if (harnessNotice) notices.push(harnessNotice);
   if (errorNotice) notices.push(errorNotice);
+  const recentItems = useMemo(
+    () => homeRecentItems(visibleWorkspaces.data ?? []),
+    [visibleWorkspaces.data],
+  );
+
+  function handleRecentSelect(item: RecentWorkItemView) {
+    switch (item.openTarget.kind) {
+      case "session":
+        navigate(routes.chat(item.openTarget.workspaceId, item.openTarget.sessionId));
+        return;
+      case "workspace":
+        navigate(routes.workspace(item.openTarget.workspaceId));
+        return;
+      case "pending-session":
+        navigate(routes.workspace(item.openTarget.workspaceId));
+        return;
+    }
+  }
 
   return (
     <div className="h-full" data-telemetry-block>
@@ -485,6 +511,8 @@ export function HomeScreen() {
         extraComposerControls={composerControls}
         notices={notices}
         transcriptRows={transcriptRows}
+        recentItems={recentItems}
+        recentLoading={visibleWorkspaces.isLoading}
         commandMessage={
           pendingPrompt?.status === "creating"
             ? selectedRuntime?.kind === "target"
@@ -503,6 +531,7 @@ export function HomeScreen() {
         onSubmit={() => void handleSubmit()}
         onPickerSelect={handlePickerSelect}
         onAction={handleAction}
+        onRecentSelect={handleRecentSelect}
       />
       <AddCloudEnvironmentDialogController
         open={addRepoOpen}
@@ -511,6 +540,13 @@ export function HomeScreen() {
       />
     </div>
   );
+}
+
+function homeRecentItems(workspaces: readonly CloudWorkspaceSummary[]): RecentWorkItemView[] {
+  const items = buildRecentWorkItems(workspaces, { nowMs: Date.now() });
+  const nonErrorItems = items.filter((item) => item.statusIndicator.kind !== "error");
+  const activeItems = nonErrorItems.filter((item) => item.statusIndicator.kind !== "idle");
+  return (activeItems.length >= 3 ? activeItems : nonErrorItems).slice(0, HOME_RECENT_LIMIT);
 }
 
 function buildPendingPromptRows(
