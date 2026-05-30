@@ -2,9 +2,11 @@ use std::path::PathBuf;
 
 use sha2::{Digest, Sha256};
 
-use super::model::{ReviewAssignmentRecord, ReviewChangedFileManifest, ReviewCodeTargetManifest};
-use super::runtime::ReviewRuntime;
-use super::service::ReviewError;
+use super::super::model::{
+    ReviewAssignmentRecord, ReviewChangedFileManifest, ReviewCodeTargetManifest,
+};
+use super::super::service::ReviewError;
+use super::ReviewRuntime;
 use crate::adapters::git::GitService;
 
 impl ReviewRuntime {

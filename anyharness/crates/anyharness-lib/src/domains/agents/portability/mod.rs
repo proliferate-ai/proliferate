@@ -3,7 +3,6 @@ use std::path::{Component, Path, PathBuf};
 
 use anyhow::Context;
 
-use crate::domains::mobility::model::MobilityFileData;
 use crate::sessions::model::SessionRecord;
 
 const CLAUDE_SANITIZED_PATH_LIMIT: usize = 200;
@@ -12,10 +11,17 @@ const SAFE_ARTIFACT_FILE_MODE: u32 = 0o600;
 #[cfg(not(unix))]
 const SAFE_ARTIFACT_FILE_MODE: u32 = 0;
 
+#[derive(Debug, Clone)]
+pub struct AgentArtifactFileData {
+    pub relative_path: String,
+    pub mode: u32,
+    pub content: Vec<u8>,
+}
+
 pub fn collect_agent_artifacts(
     session: &SessionRecord,
     workspace_path: &Path,
-) -> anyhow::Result<Vec<MobilityFileData>> {
+) -> anyhow::Result<Vec<AgentArtifactFileData>> {
     let Some(home_dir) = dirs::home_dir() else {
         anyhow::bail!("unable to resolve the current user's home directory");
     };
@@ -30,7 +36,7 @@ pub fn collect_agent_artifacts(
 pub fn install_session_agent_artifacts(
     session: &SessionRecord,
     workspace_path: &Path,
-    files: &[MobilityFileData],
+    files: &[AgentArtifactFileData],
 ) -> anyhow::Result<()> {
     let Some(home_dir) = dirs::home_dir() else {
         anyhow::bail!("unable to resolve the current user's home directory");
@@ -46,7 +52,7 @@ pub fn install_session_agent_artifacts(
 pub fn validate_session_agent_artifacts(
     session: &SessionRecord,
     workspace_path: &Path,
-    files: &[MobilityFileData],
+    files: &[AgentArtifactFileData],
 ) -> anyhow::Result<()> {
     match session.agent_kind.as_str() {
         "claude" => {
@@ -123,7 +129,7 @@ fn collect_claude_artifacts(
     home_dir: &Path,
     session: &SessionRecord,
     workspace_path: &Path,
-) -> anyhow::Result<Vec<MobilityFileData>> {
+) -> anyhow::Result<Vec<AgentArtifactFileData>> {
     let Some(native_session_id) = session.native_session_id.as_deref() else {
         return Ok(Vec::new());
     };
@@ -149,7 +155,7 @@ fn collect_claude_artifacts(
 fn install_claude_artifacts(
     home_dir: &Path,
     workspace_path: &Path,
-    files: &[MobilityFileData],
+    files: &[AgentArtifactFileData],
 ) -> anyhow::Result<()> {
     let target_slug = sanitize_claude_path(&workspace_path.to_string_lossy());
     let allowed_prefix = Path::new(".claude").join("projects").join(&target_slug);
@@ -173,13 +179,13 @@ fn install_claude_artifacts(
     Ok(())
 }
 
-fn install_codex_artifacts(home_dir: &Path, files: &[MobilityFileData]) -> anyhow::Result<()> {
+fn install_codex_artifacts(home_dir: &Path, files: &[AgentArtifactFileData]) -> anyhow::Result<()> {
     install_agent_artifacts(home_dir, files, &Path::new(".codex").join("sessions"))
 }
 
 fn install_agent_artifacts(
     home_dir: &Path,
-    files: &[MobilityFileData],
+    files: &[AgentArtifactFileData],
     allowed_prefix: &Path,
 ) -> anyhow::Result<()> {
     for file in files {
@@ -200,7 +206,7 @@ fn install_agent_artifacts(
 fn collect_codex_artifacts(
     home_dir: &Path,
     session: &SessionRecord,
-) -> anyhow::Result<Vec<MobilityFileData>> {
+) -> anyhow::Result<Vec<AgentArtifactFileData>> {
     let Some(native_session_id) = session.native_session_id.as_deref() else {
         return Ok(Vec::new());
     };
@@ -221,7 +227,7 @@ fn collect_codex_artifacts(
 fn read_tree_relative_to_home(
     home_dir: &Path,
     root: &Path,
-) -> anyhow::Result<Vec<MobilityFileData>> {
+) -> anyhow::Result<Vec<AgentArtifactFileData>> {
     let mut files = Vec::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(path) = stack.pop() {
@@ -242,7 +248,10 @@ fn read_tree_relative_to_home(
     Ok(files)
 }
 
-fn read_file_relative_to_home(home_dir: &Path, path: &Path) -> anyhow::Result<MobilityFileData> {
+fn read_file_relative_to_home(
+    home_dir: &Path,
+    path: &Path,
+) -> anyhow::Result<AgentArtifactFileData> {
     let content = fs::read(path).with_context(|| format!("reading {}", path.display()))?;
     let relative_path = path
         .strip_prefix(home_dir)
@@ -250,7 +259,7 @@ fn read_file_relative_to_home(home_dir: &Path, path: &Path) -> anyhow::Result<Mo
         .to_string_lossy()
         .to_string();
 
-    Ok(MobilityFileData {
+    Ok(AgentArtifactFileData {
         relative_path,
         mode: file_mode(path)?,
         content,

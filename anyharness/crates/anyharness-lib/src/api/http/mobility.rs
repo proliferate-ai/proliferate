@@ -24,6 +24,7 @@ use super::access::assert_workspace_not_retired;
 use super::blocking::run_blocking;
 use super::error::ApiError;
 use crate::app::AppState;
+use crate::domains::agents::portability::AgentArtifactFileData;
 use crate::domains::mobility::model::{
     ImportedWorkspaceArchiveSummary, MobilityBlocker, MobilityFileData,
     MobilityPromptAttachmentData, MobilitySessionCandidate, WorkspaceMobilityArchiveData,
@@ -424,6 +425,14 @@ fn to_contract_file(file: MobilityFileData) -> WorkspaceMobilityFileEntry {
     }
 }
 
+fn to_contract_agent_artifact(file: AgentArtifactFileData) -> WorkspaceMobilityFileEntry {
+    WorkspaceMobilityFileEntry {
+        relative_path: file.relative_path,
+        mode: file.mode,
+        content_base64: STANDARD.encode(file.content),
+    }
+}
+
 fn to_contract_session_bundle(
     bundle: WorkspaceMobilitySessionBundleData,
 ) -> WorkspaceMobilitySessionBundle {
@@ -456,7 +465,7 @@ fn to_contract_session_bundle(
         agent_artifacts: bundle
             .agent_artifacts
             .into_iter()
-            .map(to_contract_file)
+            .map(to_contract_agent_artifact)
             .collect(),
     }
 }
@@ -676,6 +685,17 @@ fn from_contract_file(file: WorkspaceMobilityFileEntry) -> Result<MobilityFileDa
     })
 }
 
+fn from_contract_agent_artifact(
+    file: WorkspaceMobilityFileEntry,
+) -> Result<AgentArtifactFileData, ApiError> {
+    let file = from_contract_file(file)?;
+    Ok(AgentArtifactFileData {
+        relative_path: file.relative_path,
+        mode: file.mode,
+        content: file.content,
+    })
+}
+
 fn from_contract_session_bundle(
     bundle: WorkspaceMobilitySessionBundle,
     workspace_id: &str,
@@ -712,7 +732,7 @@ fn from_contract_session_bundle(
         agent_artifacts: bundle
             .agent_artifacts
             .into_iter()
-            .map(from_contract_file)
+            .map(from_contract_agent_artifact)
             .collect::<Result<Vec<_>, _>>()?,
     })
 }

@@ -11,8 +11,13 @@ use serde::Deserialize;
 use super::access::{assert_workspace_mutable, assert_workspace_not_retired, map_access_error};
 use super::error::ApiError;
 use crate::app::AppState;
+use crate::domains::plans::model::{
+    PlanDecisionOutcome, PlanDocument, PlanHandoffInput, PlanHandoffOutcome,
+    PlanHandoffPromptOutcome,
+};
 use crate::domains::plans::runtime::{GetPlanError, HandoffPlanError};
 use crate::domains::plans::service::{plan_to_summary, PlanDecisionError};
+use crate::origin::OriginContext;
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[derive(Debug, Deserialize)]
@@ -96,7 +101,7 @@ pub async fn get_plan_document(
     state
         .plan_runtime
         .document(&workspace_id, &plan_id, query.materialize.unwrap_or(false))
-        .map(Json)
+        .map(|document| Json(plan_document_response(document)))
         .map_err(map_get_plan_error)
 }
 
@@ -125,7 +130,7 @@ pub async fn approve_plan(
         .plan_runtime
         .approve(&workspace_id, &plan_id, req.expected_decision_version)
         .await
-        .map(Json)
+        .map(|outcome| Json(plan_decision_response(outcome)))
         .map_err(map_decision_error)
 }
 
@@ -154,7 +159,7 @@ pub async fn reject_plan(
         .plan_runtime
         .reject(&workspace_id, &plan_id, req.expected_decision_version)
         .await
-        .map(Json)
+        .map(|outcome| Json(plan_decision_response(outcome)))
         .map_err(map_decision_error)
 }
 
@@ -181,10 +186,55 @@ pub async fn handoff_plan(
     assert_workspace_mutable(&state, &workspace_id)?;
     state
         .plan_runtime
-        .handoff(&workspace_id, &plan_id, req)
+        .handoff(&workspace_id, &plan_id, handoff_plan_input(req))
         .await
-        .map(Json)
+        .map(|outcome| Json(handoff_plan_response(outcome)))
         .map_err(map_handoff_error)
+}
+
+fn plan_document_response(document: PlanDocument) -> ProposedPlanDocumentResponse {
+    ProposedPlanDocumentResponse {
+        markdown: document.markdown,
+        snapshot_hash: document.snapshot_hash,
+        projection_path: document.projection_path,
+        projection_hash: document.projection_hash,
+    }
+}
+
+fn plan_decision_response(outcome: PlanDecisionOutcome) -> PlanDecisionResponse {
+    PlanDecisionResponse { plan: outcome.plan }
+}
+
+fn handoff_plan_input(request: HandoffPlanRequest) -> PlanHandoffInput {
+    PlanHandoffInput {
+        target_session_id: request.target_session_id,
+        agent_kind: request.agent_kind,
+        model_id: request.model_id,
+        mode_id: request.mode_id,
+        instruction: request.instruction,
+        origin: request.origin.map(OriginContext::from_contract),
+    }
+}
+
+fn handoff_plan_response(outcome: PlanHandoffOutcome) -> HandoffPlanResponse {
+    HandoffPlanResponse {
+        handoff_id: outcome.handoff_id,
+        plan_id: outcome.plan_id,
+        source_session_id: outcome.source_session_id,
+        target_session_id: outcome.target_session_id,
+        prompt_status: match outcome.prompt_status {
+            PlanHandoffPromptOutcome::Queued => {
+                anyharness_contract::v1::PlanHandoffPromptStatus::Queued
+            }
+            PlanHandoffPromptOutcome::Sent => {
+                anyharness_contract::v1::PlanHandoffPromptStatus::Sent
+            }
+            PlanHandoffPromptOutcome::Failed => {
+                anyharness_contract::v1::PlanHandoffPromptStatus::Failed
+            }
+        },
+        session: outcome.session,
+    }
 }
 
 fn ensure_workspace_access(state: &AppState, workspace_id: &str) -> Result<(), ApiError> {

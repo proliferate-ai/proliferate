@@ -3,11 +3,11 @@ use std::collections::BTreeMap;
 use anyharness_contract::v1;
 use uuid::Uuid;
 
-use super::model::{
+use super::super::model::{
     ReviewAssignmentRecord, ReviewAssignmentStatus, ReviewFeedbackJobRecord, ReviewKind,
     ReviewModeVerificationStatus, ReviewRoundRecord, ReviewRunRecord,
 };
-use super::service::{
+use super::{
     ReviewError, ReviewPersonaInput, ReviewService, MAX_REVIEWERS_PER_RUN,
     MAX_REVIEW_CRITIQUE_BYTES, MAX_REVIEW_ROUNDS, MAX_REVIEW_SUMMARY_BYTES,
     REVIEWER_DEADLINE_MINUTES,

@@ -1,26 +1,8 @@
-use anyharness_contract::v1::ReviewPersonaRequest;
-
-use super::model::{
+use super::super::model::{
     ReviewAssignmentRecord, ReviewKind, ReviewModeVerificationStatus, ReviewRunRecord,
 };
-use super::service::{ReviewError, ReviewPersonaInput};
+use super::super::service::ReviewError;
 use crate::sessions::runtime::CreateAndStartSessionError;
-
-pub(super) fn reviewers_from_contract(
-    reviewers: Vec<ReviewPersonaRequest>,
-) -> Vec<ReviewPersonaInput> {
-    reviewers
-        .into_iter()
-        .map(|reviewer| ReviewPersonaInput {
-            persona_id: reviewer.persona_id,
-            label: reviewer.label,
-            prompt: reviewer.prompt,
-            agent_kind: reviewer.agent_kind,
-            model_id: reviewer.model_id,
-            mode_id: reviewer.mode_id,
-        })
-        .collect()
-}
 
 pub(super) fn verify_mode(
     requested_mode_id: Option<&str>,
@@ -90,7 +72,7 @@ fn review_markdown_instructions(kind: ReviewKind) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::super::model::{ReviewAssignmentStatus, ReviewRunStatus};
+    use super::super::super::model::{ReviewAssignmentStatus, ReviewRunStatus};
     use super::*;
 
     #[test]

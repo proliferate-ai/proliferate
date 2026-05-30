@@ -5,6 +5,9 @@ use axum::{extract::State, Json};
 
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
+use crate::domains::agents::auth_config::{
+    AgentAuthConfigApplyOutcome, AgentAuthConfigInput, AgentAuthConfigStatus,
+};
 
 #[utoipa::path(
     put,
@@ -21,9 +24,9 @@ pub async fn apply_agent_auth_config(
 ) -> Result<Json<ApplyAgentAuthConfigResponse>, ApiError> {
     let response = state
         .agent_auth_config_service
-        .apply_config(request)
+        .apply_config(agent_auth_config_input(request))
         .map_err(|error| ApiError::bad_request(error.to_string(), "agent_auth_config_invalid"))?;
-    Ok(Json(response))
+    Ok(Json(agent_auth_config_apply_response(response)))
 }
 
 #[utoipa::path(
@@ -41,5 +44,36 @@ pub async fn get_agent_auth_config_status(
         .agent_auth_config_service
         .status()
         .map_err(|error| ApiError::internal(error.to_string()))?;
-    Ok(Json(response))
+    Ok(Json(agent_auth_config_status_response(response)))
+}
+
+fn agent_auth_config_input(request: ApplyAgentAuthConfigRequest) -> AgentAuthConfigInput {
+    AgentAuthConfigInput {
+        external_auth_scope: request.external_auth_scope,
+        revision: request.revision,
+        selections: request.selections,
+    }
+}
+
+fn agent_auth_config_apply_response(
+    outcome: AgentAuthConfigApplyOutcome,
+) -> ApplyAgentAuthConfigResponse {
+    ApplyAgentAuthConfigResponse {
+        applied: outcome.applied,
+        revision: outcome.revision,
+        selection_count: outcome.selection_count,
+        no_selection_kinds: outcome.no_selection_kinds,
+        status: outcome.status,
+    }
+}
+
+fn agent_auth_config_status_response(
+    status: AgentAuthConfigStatus,
+) -> AgentAuthConfigStatusResponse {
+    AgentAuthConfigStatusResponse {
+        external_auth_scope: status.external_auth_scope,
+        revision: status.revision,
+        status: status.status,
+        selections: status.selections,
+    }
 }

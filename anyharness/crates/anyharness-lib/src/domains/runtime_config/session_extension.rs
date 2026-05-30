@@ -107,17 +107,18 @@ mod tests {
     use std::sync::Arc;
 
     use anyharness_contract::v1::{
-        ApplyRuntimeConfigRequest, RuntimeArtifactPayload, RuntimeArtifactRef,
-        RuntimeConfigExternalScope, RuntimeConfigRevision, RuntimeConfigSource, RuntimeMcpLaunch,
-        RuntimeMcpServer, RuntimeMcpTransport, RuntimeMcpValue, RuntimeSkill,
-        RuntimeSkillSourceKind, SessionMcpBindingOutcome, SessionMcpBindingSummary,
-        SessionMcpTransport,
+        RuntimeArtifactPayload, RuntimeArtifactRef, RuntimeConfigExternalScope,
+        RuntimeConfigRevision, RuntimeMcpLaunch, RuntimeMcpServer, RuntimeMcpTransport,
+        RuntimeMcpValue, RuntimeSkill, RuntimeSkillSourceKind, SessionMcpBindingOutcome,
+        SessionMcpBindingSummary, SessionMcpTransport,
     };
     use sha2::{Digest, Sha256};
 
     use super::RuntimeConfigSessionLaunchExtension;
     use crate::domains::plugins::mcp::auth::SkillsMcpAuth;
-    use crate::domains::runtime_config::service::{RuntimeConfigService, RuntimeConfigStore};
+    use crate::domains::runtime_config::model::RuntimeConfigApplyInput;
+    use crate::domains::runtime_config::service::RuntimeConfigService;
+    use crate::domains::runtime_config::store::RuntimeConfigStore;
     use crate::persistence::Db;
     use crate::sessions::extensions::{SessionExtension, SessionLaunchContext};
     use crate::sessions::mcp_bindings::model::SessionMcpServer;
@@ -201,7 +202,7 @@ mod tests {
         path
     }
 
-    fn apply_request() -> ApplyRuntimeConfigRequest {
+    fn apply_request() -> RuntimeConfigApplyInput {
         let instruction_content = "# Use GitHub\n";
         let instruction_hash = runtime_artifact_hash(instruction_content);
         let artifact = RuntimeArtifactRef {
@@ -212,7 +213,7 @@ mod tests {
             resource_id: None,
             display_name: None,
         };
-        ApplyRuntimeConfigRequest {
+        RuntimeConfigApplyInput {
             revision: RuntimeConfigRevision {
                 id: "rev-1".to_string(),
                 sequence: 2,
@@ -271,7 +272,7 @@ mod tests {
                 content: instruction_content.to_string(),
             }],
             credential_values: Vec::new(),
-            source: RuntimeConfigSource::Worker,
+            source: "worker".to_string(),
         }
     }
 

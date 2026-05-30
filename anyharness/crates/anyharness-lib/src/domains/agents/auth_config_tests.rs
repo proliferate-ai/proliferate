@@ -1,14 +1,14 @@
 use std::collections::BTreeMap;
 
-use anyharness_contract::v1::{
-    AgentAuthExternalScope, AgentAuthSelectionConfig, ApplyAgentAuthConfigRequest,
-};
+use anyharness_contract::v1::{AgentAuthExternalScope, AgentAuthSelectionConfig};
 use serde_json::json;
 
 use crate::persistence::Db;
 use crate::sessions::mcp_bindings::crypto::SessionDataCipher;
 
-use super::{AgentAuthConfigService, AgentAuthConfigStore, AgentAuthLaunchOverlayError};
+use super::{
+    AgentAuthConfigInput, AgentAuthConfigService, AgentAuthConfigStore, AgentAuthLaunchOverlayError,
+};
 
 fn cipher() -> SessionDataCipher {
     SessionDataCipher::from_env_value("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
@@ -29,7 +29,7 @@ fn applies_status_without_secret_values() {
     );
 
     service
-        .apply_config(ApplyAgentAuthConfigRequest {
+        .apply_config(AgentAuthConfigInput {
             external_auth_scope: Some(AgentAuthExternalScope {
                 provider: "proliferate-cloud".to_string(),
                 id: "profile-1".to_string(),
@@ -79,7 +79,7 @@ fn codex_launch_overlay_sets_managed_codex_home() {
         root.clone(),
     );
     service
-        .apply_config(ApplyAgentAuthConfigRequest {
+        .apply_config(AgentAuthConfigInput {
             external_auth_scope: None,
             revision: 1,
             selections: vec![AgentAuthSelectionConfig {
@@ -185,7 +185,7 @@ fn launch_overlay_uses_requested_scope() {
         (scope_2.clone(), 2, "https://profile-2.example"),
     ] {
         service
-            .apply_config(ApplyAgentAuthConfigRequest {
+            .apply_config(AgentAuthConfigInput {
                 external_auth_scope: Some(scope),
                 revision,
                 selections: vec![AgentAuthSelectionConfig {
@@ -238,7 +238,7 @@ fn apply_config_stale_response_reports_current_revision() {
         target_id: Some("target-1".to_string()),
     };
     service
-        .apply_config(ApplyAgentAuthConfigRequest {
+        .apply_config(AgentAuthConfigInput {
             external_auth_scope: Some(scope.clone()),
             revision: 2,
             selections: Vec::new(),
@@ -246,7 +246,7 @@ fn apply_config_stale_response_reports_current_revision() {
         .expect("apply current");
 
     let stale = service
-        .apply_config(ApplyAgentAuthConfigRequest {
+        .apply_config(AgentAuthConfigInput {
             external_auth_scope: Some(scope),
             revision: 1,
             selections: Vec::new(),
@@ -280,7 +280,7 @@ fn launch_overlay_separates_same_profile_by_target_scope() {
         (target_2.clone(), "https://target-2.example"),
     ] {
         service
-            .apply_config(ApplyAgentAuthConfigRequest {
+            .apply_config(AgentAuthConfigInput {
                 external_auth_scope: Some(scope),
                 revision: 1,
                 selections: vec![AgentAuthSelectionConfig {
@@ -329,7 +329,7 @@ fn launch_overlay_fails_when_required_revision_is_not_applied() {
         target_id: Some("target-1".to_string()),
     };
     service
-        .apply_config(ApplyAgentAuthConfigRequest {
+        .apply_config(AgentAuthConfigInput {
             external_auth_scope: Some(scope.clone()),
             revision: 3,
             selections: Vec::new(),
@@ -355,7 +355,7 @@ fn launch_overlay_fails_closed_for_missing_scoped_selection() {
         target_id: Some("target-1".to_string()),
     };
     service
-        .apply_config(ApplyAgentAuthConfigRequest {
+        .apply_config(AgentAuthConfigInput {
             external_auth_scope: Some(scope.clone()),
             revision: 1,
             selections: Vec::new(),
@@ -386,7 +386,7 @@ fn launch_overlay_fails_closed_for_invalid_scoped_selection() {
         target_id: Some("target-1".to_string()),
     };
     service
-        .apply_config(ApplyAgentAuthConfigRequest {
+        .apply_config(AgentAuthConfigInput {
             external_auth_scope: Some(scope.clone()),
             revision: 1,
             selections: vec![AgentAuthSelectionConfig {
@@ -423,7 +423,7 @@ fn apply_config_rejects_disallowed_protected_env_key() {
         std::env::temp_dir(),
     );
     let error = service
-        .apply_config(ApplyAgentAuthConfigRequest {
+        .apply_config(AgentAuthConfigInput {
             external_auth_scope: None,
             revision: 1,
             selections: vec![AgentAuthSelectionConfig {
@@ -456,7 +456,7 @@ fn apply_config_rejects_claude_synced_protected_env() {
         std::env::temp_dir(),
     );
     let error = service
-        .apply_config(ApplyAgentAuthConfigRequest {
+        .apply_config(AgentAuthConfigInput {
             external_auth_scope: None,
             revision: 1,
             selections: vec![AgentAuthSelectionConfig {
@@ -489,7 +489,7 @@ fn launch_overlay_rejects_expired_selection() {
         std::env::temp_dir(),
     );
     service
-        .apply_config(ApplyAgentAuthConfigRequest {
+        .apply_config(AgentAuthConfigInput {
             external_auth_scope: None,
             revision: 1,
             selections: vec![AgentAuthSelectionConfig {

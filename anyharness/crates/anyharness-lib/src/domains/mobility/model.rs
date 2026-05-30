@@ -1,3 +1,4 @@
+use crate::domains::agents::portability::AgentArtifactFileData;
 use crate::sessions::links::model::SessionLinkRecord;
 use crate::sessions::model::{
     PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentRecord, SessionEventRecord,
@@ -39,7 +40,7 @@ pub struct WorkspaceMobilitySessionBundleData {
     pub prompt_attachments: Vec<MobilityPromptAttachmentData>,
     pub events: Vec<SessionEventRecord>,
     pub raw_notifications: Vec<SessionRawNotificationRecord>,
-    pub agent_artifacts: Vec<MobilityFileData>,
+    pub agent_artifacts: Vec<AgentArtifactFileData>,
 }
 
 #[derive(Debug, Clone)]
