@@ -763,7 +763,7 @@ Recommended setup:
 5. Have a human sign in through the Web URL produced by that profile.
 6. Reuse that browser-authenticated profile for Web QA.
 7. For mobile-web QA, source the profile launch env and start the mobile web
-   app, for example `pnpm --dir mobile web:profile` with the profile's
+   app, for example `pnpm --dir apps/mobile web:profile` with the profile's
    `PROLIFERATE_MOBILE_WEB_PORT`.
 8. If native mobile auth is required, use the same profile API/Web endpoints
    and sign in through the simulator/device flow.

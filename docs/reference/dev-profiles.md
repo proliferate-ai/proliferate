@@ -132,7 +132,7 @@ reserved mobile web port:
 
 ```bash
 source ~/.proliferate-local/dev/profiles/<name>/launch.env
-pnpm --dir mobile web:profile
+pnpm --dir apps/mobile web:profile
 ```
 
 On macOS, profile dev also uses a generated Tauri runner so the unbundled debug
