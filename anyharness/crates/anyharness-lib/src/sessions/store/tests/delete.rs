@@ -5,17 +5,13 @@ use crate::sessions::model::{
 };
 
 #[test]
-fn delete_session_removes_dependent_rows() {
+fn delete_session_removes_session_owned_rows() {
     let db = Db::open_in_memory().expect("open db");
     seed_workspace(&db);
 
     let store = SessionStore::new(db.clone());
     let record = session_record();
     store.insert(&record).expect("insert session");
-    let mut child = session_record();
-    child.id = "session-child".to_string();
-    store.insert(&child).expect("insert child session");
-
     store
         .append_event(&SessionEventRecord {
             id: 0,
@@ -74,33 +70,6 @@ fn delete_session_removes_dependent_rows() {
             completed_at: None,
         })
         .expect("insert background work");
-    db.with_conn(|conn| {
-        conn.execute(
-            "INSERT INTO session_links (
-                id, relation, parent_session_id, child_session_id, workspace_relation,
-                created_at
-             ) VALUES ('link-1', 'subagent', 'session-1', 'session-child', 'same_workspace', ?1)",
-            ["2026-03-25T00:01:05Z"],
-        )?;
-        conn.execute(
-            "INSERT INTO session_link_completions (
-                completion_id, session_link_id, child_turn_id, child_last_event_seq,
-                outcome, created_at, updated_at
-             ) VALUES (
-                'completion-1', 'link-1', 'turn-child-1', 42,
-                'completed', ?1, ?1
-             )",
-            ["2026-03-25T00:01:06Z"],
-        )?;
-        conn.execute(
-            "INSERT INTO session_link_wake_schedules (session_link_id)
-             VALUES ('link-1')",
-            [],
-        )?;
-        Ok(())
-    })
-    .expect("insert subagent link and completion");
-
     assert_eq!(count_rows(&db, "session_events", "session-1"), 1);
     assert_eq!(count_rows(&db, "session_raw_notifications", "session-1"), 1);
     assert_eq!(
@@ -113,9 +82,6 @@ fn delete_session_removes_dependent_rows() {
     );
     assert_eq!(count_rows(&db, "session_pending_prompts", "session-1"), 1);
     assert_eq!(count_rows(&db, "session_background_work", "session-1"), 1);
-    assert_eq!(count_all_rows(&db, "session_links"), 1);
-    assert_eq!(count_all_rows(&db, "session_link_completions"), 1);
-    assert_eq!(count_all_rows(&db, "session_link_wake_schedules"), 1);
 
     store
         .delete_session("session-1")
@@ -137,7 +103,4 @@ fn delete_session_removes_dependent_rows() {
     );
     assert_eq!(count_rows(&db, "session_pending_prompts", "session-1"), 0);
     assert_eq!(count_rows(&db, "session_background_work", "session-1"), 0);
-    assert_eq!(count_all_rows(&db, "session_links"), 0);
-    assert_eq!(count_all_rows(&db, "session_link_completions"), 0);
-    assert_eq!(count_all_rows(&db, "session_link_wake_schedules"), 0);
 }

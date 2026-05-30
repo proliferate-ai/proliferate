@@ -18,7 +18,7 @@ use crate::domains::cowork::delegation::service::CoworkDelegationService;
 use crate::domains::cowork::mcp::auth::CoworkMcpAuth;
 use crate::domains::cowork::runtime::{CoworkRuntime, CoworkSessionHooks};
 use crate::domains::cowork::service::CoworkService;
-use crate::domains::cowork::store::CoworkStore;
+use crate::domains::cowork::store::{CoworkDeleteParticipant, CoworkStore};
 use crate::domains::mobility::service::MobilityService;
 use crate::domains::mobility::store::MobilityStore;
 use crate::domains::plans::runtime::PlanRuntime;
@@ -29,13 +29,14 @@ use crate::domains::reviews::hooks::ReviewSessionHooks;
 use crate::domains::reviews::mcp::auth::ReviewMcpAuth;
 use crate::domains::reviews::runtime::ReviewRuntime;
 use crate::domains::reviews::service::ReviewService;
-use crate::domains::reviews::store::ReviewStore;
+use crate::domains::reviews::store::{ReviewDeleteParticipant, ReviewStore};
 use crate::domains::runtime_config::service::{RuntimeConfigService, RuntimeConfigStore};
 use crate::domains::runtime_config::session_extension::RuntimeConfigSessionLaunchExtension;
 use crate::persistence::Db;
 use crate::repo_roots::service::RepoRootService;
 use crate::repo_roots::store::RepoRootStore;
 use crate::sessions::attachment_storage::PromptAttachmentStorage;
+use crate::sessions::deletion::SessionDeleteWorkflow;
 use crate::sessions::links::completions::LinkCompletionStore;
 use crate::sessions::links::service::SessionLinkService;
 use crate::sessions::links::store::SessionLinkStore;
@@ -55,6 +56,7 @@ use crate::terminals::TerminalService;
 use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::access_store::WorkspaceAccessStore;
 use crate::workspaces::checkout_gate::CheckoutDeletionGate;
+use crate::workspaces::deletion::WorkspaceDeleteWorkflow;
 use crate::workspaces::files_runtime::WorkspaceFilesRuntime;
 use crate::workspaces::inventory::WorktreeInventoryService;
 use crate::workspaces::operation_gate::WorkspaceOperationGate;
@@ -139,6 +141,18 @@ impl AppState {
         let auth_manager = AuthManager::new(load_runtime_target_id());
         let session_data_cipher =
             load_data_cipher_from_env().map_err(AppStateInitError::InvalidDataKey)?;
+        let session_delete_workflow = SessionDeleteWorkflow::with_participants(
+            db.clone(),
+            vec![
+                Arc::new(CoworkDeleteParticipant),
+                Arc::new(ReviewDeleteParticipant),
+            ],
+        );
+        let workspace_delete_workflow = WorkspaceDeleteWorkflow::with_participants(
+            db.clone(),
+            session_delete_workflow.clone(),
+            vec![Arc::new(CoworkDeleteParticipant)],
+        );
         let repo_root_service = Arc::new(RepoRootService::new(RepoRootStore::new(db.clone())));
         let workspace_service = Arc::new(WorkspaceService::new(
             WorkspaceStore::new(db.clone()),
@@ -147,6 +161,7 @@ impl AppState {
         let workspace_runtime = Arc::new(WorkspaceRuntime::new(
             (*workspace_service).clone(),
             WorkspaceStore::new(db.clone()),
+            workspace_delete_workflow.clone(),
             (*repo_root_service).clone(),
             runtime_home.clone(),
         ));
@@ -188,6 +203,7 @@ impl AppState {
         ));
         let session_service = Arc::new(SessionService::new(
             SessionStore::new(db.clone()),
+            session_delete_workflow.clone(),
             WorkspaceStore::new(db.clone()),
             DynamicModelRegistryStore::new(db.clone()),
             agent_auth_config_service.clone(),
@@ -236,6 +252,7 @@ impl AppState {
         ));
         let subagent_service = Arc::new(SubagentService::new(
             SessionStore::new(db.clone()),
+            session_delete_workflow.clone(),
             session_link_service.clone(),
             SubagentStore::new(db.clone()),
             workspace_runtime.clone(),
@@ -244,6 +261,7 @@ impl AppState {
         let review_service = Arc::new(ReviewService::new(
             ReviewStore::new(db.clone()),
             SessionStore::new(db.clone()),
+            session_delete_workflow.clone(),
             session_link_service.clone(),
             plan_service.clone(),
         ));
@@ -310,7 +328,7 @@ impl AppState {
         ));
         let workspace_purge_service = Arc::new(WorkspacePurgeService::new(
             workspace_runtime.clone(),
-            WorkspaceStore::new(db.clone()),
+            workspace_delete_workflow.clone(),
             SessionStore::new(db.clone()),
             PromptAttachmentStorage::new(runtime_home.clone()),
             workspace_operation_gate.clone(),
@@ -320,6 +338,8 @@ impl AppState {
         let workspace_retention_service = Arc::new(WorkspaceRetentionService::new(
             workspace_runtime.clone(),
             WorkspaceStore::new(db.clone()),
+            SessionStore::new(db.clone()),
+            TerminalStore::new(db.clone()),
             WorktreeRetentionPolicyStore::new(db.clone()),
             retire_preflight_checker.clone(),
             workspace_operation_gate.clone(),
@@ -488,80 +508,7 @@ pub fn ensure_runtime_home(path: &std::path::Path) -> std::io::Result<()> {
 }
 
 #[cfg(test)]
-pub(crate) mod test_support {
-    use std::ffi::OsString;
-    use std::sync::{Mutex, OnceLock};
-
-    use crate::sessions::mcp_bindings::crypto::DATA_KEY_ENV_VAR;
-
-    pub(crate) static ENV_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
-
-    pub(crate) struct BearerTokenEnvGuard {
-        previous: Option<OsString>,
-    }
-
-    impl Drop for BearerTokenEnvGuard {
-        fn drop(&mut self) {
-            match self.previous.as_ref() {
-                Some(value) => std::env::set_var("ANYHARNESS_BEARER_TOKEN", value),
-                None => std::env::remove_var("ANYHARNESS_BEARER_TOKEN"),
-            }
-        }
-    }
-
-    pub(crate) fn set_bearer_token_env(value: Option<&str>) -> BearerTokenEnvGuard {
-        let previous = std::env::var_os("ANYHARNESS_BEARER_TOKEN");
-        match value {
-            Some(token) => std::env::set_var("ANYHARNESS_BEARER_TOKEN", token),
-            None => std::env::remove_var("ANYHARNESS_BEARER_TOKEN"),
-        }
-        BearerTokenEnvGuard { previous }
-    }
-
-    pub(crate) struct DataKeyEnvGuard {
-        previous: Option<OsString>,
-    }
-
-    impl Drop for DataKeyEnvGuard {
-        fn drop(&mut self) {
-            match self.previous.as_ref() {
-                Some(value) => std::env::set_var(DATA_KEY_ENV_VAR, value),
-                None => std::env::remove_var(DATA_KEY_ENV_VAR),
-            }
-        }
-    }
-
-    pub(crate) fn set_data_key_env(value: Option<&str>) -> DataKeyEnvGuard {
-        let previous = std::env::var_os(DATA_KEY_ENV_VAR);
-        match value {
-            Some(key) => std::env::set_var(DATA_KEY_ENV_VAR, key),
-            None => std::env::remove_var(DATA_KEY_ENV_VAR),
-        }
-        DataKeyEnvGuard { previous }
-    }
-
-    pub(crate) struct ProliferateDevEnvGuard {
-        previous: Option<OsString>,
-    }
-
-    impl Drop for ProliferateDevEnvGuard {
-        fn drop(&mut self) {
-            match self.previous.as_ref() {
-                Some(value) => std::env::set_var("PROLIFERATE_DEV", value),
-                None => std::env::remove_var("PROLIFERATE_DEV"),
-            }
-        }
-    }
-
-    pub(crate) fn set_proliferate_dev_env(value: Option<&str>) -> ProliferateDevEnvGuard {
-        let previous = std::env::var_os("PROLIFERATE_DEV");
-        match value {
-            Some(flag) => std::env::set_var("PROLIFERATE_DEV", flag),
-            None => std::env::remove_var("PROLIFERATE_DEV"),
-        }
-        ProliferateDevEnvGuard { previous }
-    }
-}
+pub(crate) mod test_support;
 
 #[cfg(test)]
 mod tests;

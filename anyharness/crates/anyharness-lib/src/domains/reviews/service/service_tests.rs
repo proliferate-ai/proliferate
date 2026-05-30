@@ -4,6 +4,7 @@ use super::*;
 use crate::domains::plans::service::PlanService;
 use crate::domains::plans::store::PlanStore;
 use crate::persistence::Db;
+use crate::sessions::deletion::SessionDeleteWorkflow;
 use crate::sessions::links::store::SessionLinkStore;
 use crate::sessions::model::{SessionEventRecord, SessionMcpBindingPolicy, SessionRecord};
 
@@ -67,6 +68,7 @@ fn service_fixture() -> (ReviewService, SessionStore) {
     let service = ReviewService::new(
         ReviewStore::new(db.clone()),
         session_store.clone(),
+        SessionDeleteWorkflow::new(db.clone()),
         link_service,
         std::sync::Arc::new(PlanService::new(PlanStore::new(db))),
     );

@@ -6,6 +6,8 @@ use std::time::Duration;
 
 use anyharness_contract::v1::{WorkspaceRetireBlocker, WorktreeRetentionRowOutcome};
 
+use crate::sessions::store::SessionStore;
+use crate::terminals::store::TerminalStore;
 use crate::workspaces::checkout_gate::{CheckoutDeletionGate, CheckoutPathLockKey};
 use crate::workspaces::managed_root::canonical_managed_worktrees_root;
 use crate::workspaces::model::WorkspaceRecord;
@@ -27,6 +29,8 @@ pub const ANYHARNESS_DEFER_STARTUP_RETENTION_ENV: &str = "ANYHARNESS_DEFER_START
 pub struct WorkspaceRetentionService {
     workspace_runtime: Arc<WorkspaceRuntime>,
     workspace_store: WorkspaceStore,
+    session_store: SessionStore,
+    terminal_store: TerminalStore,
     policy_store: WorktreeRetentionPolicyStore,
     preflight_checker: Arc<RetirePreflightChecker>,
     operation_gate: Arc<WorkspaceOperationGate>,
@@ -64,6 +68,8 @@ impl WorkspaceRetentionService {
     pub fn new(
         workspace_runtime: Arc<WorkspaceRuntime>,
         workspace_store: WorkspaceStore,
+        session_store: SessionStore,
+        terminal_store: TerminalStore,
         policy_store: WorktreeRetentionPolicyStore,
         preflight_checker: Arc<RetirePreflightChecker>,
         operation_gate: Arc<WorkspaceOperationGate>,
@@ -75,6 +81,8 @@ impl WorkspaceRetentionService {
         Self {
             workspace_runtime,
             workspace_store,
+            session_store,
+            terminal_store,
             policy_store,
             preflight_checker,
             operation_gate,
@@ -137,10 +145,7 @@ impl WorkspaceRetentionService {
         let mut rows = Vec::new();
         let mut skipped_count = 0usize;
         let mut by_repo: BTreeMap<String, Vec<WorkspaceRecord>> = BTreeMap::new();
-        for workspace in self
-            .workspace_store
-            .list_standard_active_worktrees_by_activity()?
-        {
+        for workspace in self.list_retention_worktrees_by_activity()? {
             if excluded_workspace_id.as_deref() == Some(workspace.id.as_str()) {
                 continue;
             }
@@ -397,6 +402,16 @@ impl WorkspaceRetentionService {
             rows,
         })
     }
+
+    fn list_retention_worktrees_by_activity(&self) -> anyhow::Result<Vec<WorkspaceRecord>> {
+        let mut workspaces = self.workspace_store.list_standard_active_worktrees()?;
+        order_worktrees_by_activity(
+            &mut workspaces,
+            self.session_store.list_workspace_session_activity()?,
+            self.terminal_store.list_workspace_command_run_activity()?,
+        );
+        Ok(workspaces)
+    }
 }
 
 impl WorktreeRetentionRunResult {
@@ -457,6 +472,69 @@ fn display_safe_error(message: &str, error: &anyhow::Error) -> String {
     message.to_string()
 }
 
+fn order_worktrees_by_activity(
+    workspaces: &mut [WorkspaceRecord],
+    session_activity: Vec<(String, String)>,
+    terminal_activity: Vec<(String, String)>,
+) {
+    let session_activity = session_activity
+        .into_iter()
+        .collect::<BTreeMap<String, String>>();
+    let terminal_activity = terminal_activity
+        .into_iter()
+        .collect::<BTreeMap<String, String>>();
+    let activity_by_workspace = workspaces
+        .iter()
+        .map(|workspace| {
+            (
+                workspace.id.clone(),
+                max_activity_at(workspace, &session_activity, &terminal_activity),
+            )
+        })
+        .collect::<BTreeMap<String, String>>();
+
+    workspaces.sort_by(|a, b| {
+        a.repo_root_id
+            .cmp(&b.repo_root_id)
+            .then_with(|| {
+                activity_by_workspace
+                    .get(&b.id)
+                    .map(String::as_str)
+                    .unwrap_or("")
+                    .cmp(
+                        activity_by_workspace
+                            .get(&a.id)
+                            .map(String::as_str)
+                            .unwrap_or(""),
+                    )
+            })
+            .then_with(|| b.created_at.cmp(&a.created_at))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+}
+
+fn max_activity_at(
+    workspace: &WorkspaceRecord,
+    session_activity: &BTreeMap<String, String>,
+    terminal_activity: &BTreeMap<String, String>,
+) -> String {
+    let mut value = "";
+    for candidate in [
+        session_activity.get(&workspace.id).map(String::as_str),
+        terminal_activity.get(&workspace.id).map(String::as_str),
+        Some(workspace.updated_at.as_str()),
+        Some(workspace.created_at.as_str()),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if candidate > value {
+            value = candidate;
+        }
+    }
+    value.to_string()
+}
+
 fn should_spawn_startup_pass(enabled: bool, defer_startup_pass: bool) -> bool {
     enabled && !defer_startup_pass
 }
@@ -470,14 +548,5 @@ impl Drop for RunningGuard<'_> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::should_spawn_startup_pass;
-
-    #[test]
-    fn startup_deferral_is_startup_only_gate() {
-        assert!(should_spawn_startup_pass(true, false));
-        assert!(!should_spawn_startup_pass(true, true));
-        assert!(!should_spawn_startup_pass(false, false));
-        assert!(!should_spawn_startup_pass(false, true));
-    }
-}
+#[path = "retention_tests.rs"]
+mod tests;

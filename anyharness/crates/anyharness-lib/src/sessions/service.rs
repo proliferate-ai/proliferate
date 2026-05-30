@@ -7,6 +7,7 @@ use uuid::Uuid;
 use anyharness_contract::v1::AgentAuthExternalScope;
 
 use super::attachment_storage::PromptAttachmentStorage;
+use super::deletion::SessionDeleteWorkflow;
 use super::live_config::snapshot_from_record;
 use super::model::{
     PendingConfigChangeRecord, PendingPromptRecord, SessionEventRecord,
@@ -34,6 +35,7 @@ use crate::workspaces::env::read_materialized_session_env;
 use crate::workspaces::store::WorkspaceStore;
 pub struct SessionService {
     session_store: SessionStore,
+    delete_workflow: SessionDeleteWorkflow,
     attachment_storage: PromptAttachmentStorage,
     workspace_store: WorkspaceStore,
     dynamic_model_registry_store: DynamicModelRegistryStore,
@@ -78,6 +80,7 @@ pub enum UpdateSessionTitleError {
 impl SessionService {
     pub fn new(
         session_store: SessionStore,
+        delete_workflow: SessionDeleteWorkflow,
         workspace_store: WorkspaceStore,
         dynamic_model_registry_store: DynamicModelRegistryStore,
         agent_auth_config_service: Arc<AgentAuthConfigService>,
@@ -85,6 +88,7 @@ impl SessionService {
     ) -> Self {
         Self {
             session_store,
+            delete_workflow,
             attachment_storage: PromptAttachmentStorage::new(runtime_home.clone()),
             workspace_store,
             dynamic_model_registry_store,
@@ -451,7 +455,7 @@ impl SessionService {
     }
 
     pub fn delete_session(&self, session_id: &str) -> anyhow::Result<()> {
-        self.session_store.delete_session(session_id)?;
+        self.delete_workflow.delete_session(session_id)?;
         if let Err(error) = self.attachment_storage.delete_session_dir(session_id) {
             tracing::warn!(
                 session_id = %session_id,
