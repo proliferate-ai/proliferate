@@ -1,55 +1,29 @@
 use std::collections::BTreeMap;
 use std::fmt;
-use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use anyharness_contract::v1::{
     AgentAuthExternalScope, AgentAuthSelectionConfig, AgentAuthSelectionStatus,
 };
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Map, Value};
 
 use crate::sessions::mcp_bindings::crypto::{decrypt_bytes, encrypt_bytes, SessionDataCipher};
 
+mod codex_config;
+mod launch;
+mod scope;
+mod status;
 mod store;
+mod validation;
+
+use self::codex_config::write_codex_config;
+use self::launch::{reject_expired_selection, selection_required_error};
+use self::scope::{default_external_scope, scope_key, LOCAL_SCOPE_KEY};
+use self::status::{no_selection_kinds, status_response};
 use self::store::AgentAuthConfigRecord;
 pub use self::store::AgentAuthConfigStore;
-
-const LOCAL_SCOPE_KEY: &str = "local:default";
-const AGENT_AUTH_REQUIRED_AGENT_KINDS: &[&str] = &["claude", "codex", "opencode", "gemini"];
-const PROTECTED_ENV_KEYS: &[&str] = &[
-    "ANTHROPIC_AUTH_TOKEN",
-    "ANTHROPIC_API_KEY",
-    "ANTHROPIC_BASE_URL",
-    "ANTHROPIC_CUSTOM_HEADERS",
-    "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
-    "CLAUDE_CODE_USE_BEDROCK",
-    "CODEX_API_KEY",
-    "CODEX_HOME",
-    "CURSOR_API_KEY",
-    "GEMINI_API_KEY",
-    "GOOGLE_GEMINI_BASE_URL",
-    "GOOGLE_API_KEY",
-    "OPENAI_API_KEY",
-    "OPENAI_BASE_URL",
-];
-const CLAUDE_GATEWAY_PROTECTED_ENV: &[&str] = &[
-    "ANTHROPIC_AUTH_TOKEN",
-    "ANTHROPIC_BASE_URL",
-    "ANTHROPIC_CUSTOM_HEADERS",
-    "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
-];
-const CODEX_GATEWAY_PROTECTED_ENV: &[&str] = &["CODEX_API_KEY", "OPENAI_API_KEY", "CODEX_HOME"];
-const OPENCODE_GATEWAY_PROTECTED_ENV: &[&str] = &["OPENAI_API_KEY", "OPENAI_BASE_URL"];
-const GEMINI_GATEWAY_PROTECTED_ENV: &[&str] = &["GEMINI_API_KEY", "GOOGLE_GEMINI_BASE_URL"];
-const CLAUDE_SYNCED_PROTECTED_ENV: &[&str] = &[];
-const GEMINI_SYNCED_PROTECTED_ENV: &[&str] = &[
-    "GEMINI_API_KEY",
-    "GOOGLE_API_KEY",
-    "GOOGLE_GENAI_USE_VERTEXAI",
-];
+use self::validation::validate_config_input;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AgentAuthLaunchOverlay {
@@ -321,289 +295,6 @@ impl AgentAuthConfigService {
     fn codex_home_dir(&self) -> PathBuf {
         self.runtime_home.join("agent-auth").join("codex")
     }
-}
-
-fn validate_config_input(request: &AgentAuthConfigInput) -> anyhow::Result<()> {
-    if request.revision < 0 {
-        anyhow::bail!("agent auth config revision must be non-negative");
-    }
-    for selection in &request.selections {
-        if selection.agent_kind.trim().is_empty() {
-            anyhow::bail!("agent auth selection agentKind is required");
-        }
-        if let Some(expires_at) = selection.expires_at.as_deref() {
-            DateTime::parse_from_rfc3339(expires_at).map_err(|error| {
-                anyhow::anyhow!("agent auth selection expiresAt is invalid: {error}")
-            })?;
-        }
-        validate_env_map(&selection.protected_env)?;
-        validate_env_map(&selection.support_env)?;
-        validate_protected_env_allowlist(selection)?;
-        for key in selection.support_env.keys() {
-            if is_protected_env_key(key) {
-                anyhow::bail!("agent auth supportEnv cannot set protected key {key}");
-            }
-        }
-    }
-    Ok(())
-}
-
-fn validate_env_map(env: &BTreeMap<String, String>) -> anyhow::Result<()> {
-    for key in env.keys() {
-        validate_env_name(key)?;
-    }
-    Ok(())
-}
-
-fn validate_env_name(name: &str) -> anyhow::Result<()> {
-    let mut chars = name.chars();
-    let Some(first) = chars.next() else {
-        anyhow::bail!("empty environment variable name");
-    };
-    if !(first == '_' || first.is_ascii_alphabetic()) {
-        anyhow::bail!("environment variable name must start with a letter or underscore");
-    }
-    if !chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric()) {
-        anyhow::bail!("environment variable name contains unsupported characters");
-    }
-    Ok(())
-}
-
-fn validate_protected_env_allowlist(selection: &AgentAuthSelectionConfig) -> anyhow::Result<()> {
-    let allowed = match (
-        selection.agent_kind.as_str(),
-        selection.materialization_mode.as_str(),
-    ) {
-        ("claude", "gateway_env") => CLAUDE_GATEWAY_PROTECTED_ENV,
-        ("codex", "gateway_env") => CODEX_GATEWAY_PROTECTED_ENV,
-        ("opencode", "gateway_env") => OPENCODE_GATEWAY_PROTECTED_ENV,
-        ("gemini", "gateway_env") => GEMINI_GATEWAY_PROTECTED_ENV,
-        ("claude", "synced_files") => CLAUDE_SYNCED_PROTECTED_ENV,
-        ("gemini", "synced_files") => GEMINI_SYNCED_PROTECTED_ENV,
-        ("codex", "synced_files") | ("opencode", "synced_files") => &[],
-        _ => {
-            anyhow::bail!(
-                "agent auth protected env policy is unsupported for {}/{}",
-                selection.agent_kind,
-                selection.materialization_mode
-            );
-        }
-    };
-    for key in selection.protected_env.keys() {
-        if !allowed.contains(&key.as_str()) {
-            anyhow::bail!(
-                "agent auth protectedEnv key {} is not allowed for {}/{}",
-                key,
-                selection.agent_kind,
-                selection.materialization_mode
-            );
-        }
-    }
-    Ok(())
-}
-
-fn is_protected_env_key(key: &str) -> bool {
-    PROTECTED_ENV_KEYS.contains(&key)
-}
-
-fn status_response(
-    external_scope: Option<AgentAuthExternalScope>,
-    revision: i64,
-    config: &AgentAuthConfigInput,
-) -> AgentAuthConfigStatus {
-    AgentAuthConfigStatus {
-        external_auth_scope: external_scope,
-        revision: Some(revision),
-        status: "applied".to_string(),
-        selections: config.selections.iter().map(selection_status).collect(),
-    }
-}
-
-fn selection_status(selection: &AgentAuthSelectionConfig) -> AgentAuthSelectionStatus {
-    AgentAuthSelectionStatus {
-        agent_kind: selection.agent_kind.clone(),
-        materialization_mode: selection.materialization_mode.clone(),
-        credential_id: selection.credential_id.clone(),
-        credential_revision: selection.credential_revision,
-        status: selection.status.clone(),
-        credential_share_id: selection.credential_share_id.clone(),
-        expires_at: selection.expires_at.clone(),
-        protected_env_keys: selection.protected_env.keys().cloned().collect(),
-        support_env_keys: selection.support_env.keys().cloned().collect(),
-        protected_config_keys: selection.protected_config.keys().cloned().collect(),
-        support_config_keys: selection.support_config.keys().cloned().collect(),
-        synced_file_paths: selection.synced_file_paths.clone(),
-    }
-}
-
-fn no_selection_kinds(selections: &[AgentAuthSelectionConfig]) -> Vec<String> {
-    AGENT_AUTH_REQUIRED_AGENT_KINDS
-        .iter()
-        .filter(|kind| {
-            !selections.iter().any(|selection| {
-                selection.agent_kind == **kind
-                    && selection
-                        .status
-                        .as_deref()
-                        .map_or(true, |status| matches!(status, "active" | "ready"))
-            })
-        })
-        .map(|kind| (*kind).to_string())
-        .collect()
-}
-
-fn selection_required_error(
-    scope: Option<AgentAuthExternalScope>,
-    agent_kind: &str,
-    selection_status: &str,
-) -> AgentAuthLaunchOverlayError {
-    AgentAuthLaunchOverlayError::SelectionRequired(AgentAuthSelectionRequired {
-        detail: format!(
-            "Agent auth selection for {agent_kind} is required before launch ({selection_status})."
-        ),
-        resolution_scope: scope,
-        agent_kind: agent_kind.to_string(),
-        selection_status: selection_status.to_string(),
-    })
-}
-
-fn reject_expired_selection(selection: &AgentAuthSelectionConfig) -> anyhow::Result<()> {
-    let Some(expires_at) = selection.expires_at.as_deref() else {
-        return Ok(());
-    };
-    let expires_at = DateTime::parse_from_rfc3339(expires_at)
-        .map_err(|error| anyhow::anyhow!("agent auth selection expiresAt is invalid: {error}"))?
-        .with_timezone(&Utc);
-    if expires_at <= Utc::now() {
-        anyhow::bail!(
-            "agent auth selection for {} expired at {}",
-            selection.agent_kind,
-            expires_at.to_rfc3339()
-        );
-    }
-    Ok(())
-}
-
-fn default_external_scope() -> AgentAuthExternalScope {
-    AgentAuthExternalScope {
-        provider: "local".to_string(),
-        id: "default".to_string(),
-        target_id: None,
-    }
-}
-
-fn scope_key(scope: &AgentAuthExternalScope) -> String {
-    if scope.provider == "local" && scope.id == "default" {
-        return LOCAL_SCOPE_KEY.to_string();
-    }
-    let mut key = format!(
-        "{}:{}",
-        sanitize_scope_part(&scope.provider),
-        sanitize_scope_part(&scope.id),
-    );
-    if let Some(target_id) = scope.target_id.as_deref().filter(|value| !value.is_empty()) {
-        key.push_str(":target:");
-        key.push_str(&sanitize_scope_part(target_id));
-    }
-    key
-}
-
-fn sanitize_scope_part(value: &str) -> String {
-    value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
-                ch
-            } else {
-                '_'
-            }
-        })
-        .collect()
-}
-
-fn write_codex_config(
-    codex_home: &PathBuf,
-    config: &Value,
-    api_key: Option<&str>,
-) -> anyhow::Result<()> {
-    let object = config
-        .as_object()
-        .ok_or_else(|| anyhow::anyhow!("codex protectedConfig must be an object"))?;
-    let provider_id = string_value(object, "model_provider")
-        .or_else(|| string_value(object, "model_provider_id"))
-        .ok_or_else(|| anyhow::anyhow!("codex protectedConfig missing model_provider"))?;
-    let providers = object
-        .get("model_providers")
-        .and_then(Value::as_object)
-        .ok_or_else(|| anyhow::anyhow!("codex protectedConfig missing model_providers"))?;
-    let provider = providers
-        .get(provider_id)
-        .and_then(Value::as_object)
-        .ok_or_else(|| anyhow::anyhow!("codex protectedConfig missing selected provider"))?;
-    let name = string_value(provider, "name").unwrap_or("Proliferate Gateway");
-    let base_url = string_value(provider, "base_url")
-        .ok_or_else(|| anyhow::anyhow!("codex provider missing base_url"))?;
-    let env_key = string_value(provider, "env_key")
-        .ok_or_else(|| anyhow::anyhow!("codex provider missing env_key"))?;
-    let wire_api = string_value(provider, "wire_api").unwrap_or("responses");
-    let requires_openai_auth = provider
-        .get("requires_openai_auth")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-
-    let contents = format!(
-        "openai_base_url = {}\nenv_key = {}\n\nmodel_provider = {}\n\n[model_providers.{}]\nname = {}\nbase_url = {}\nenv_key = {}\nwire_api = {}\nrequires_openai_auth = {}\n",
-        toml_string(base_url),
-        toml_string(env_key),
-        toml_string(provider_id),
-        provider_id,
-        toml_string(name),
-        toml_string(base_url),
-        toml_string(env_key),
-        toml_string(wire_api),
-        requires_openai_auth,
-    );
-    fs::create_dir_all(codex_home)?;
-    let path = codex_home.join("config.toml");
-    fs::write(&path, contents)?;
-    set_private_file_permissions(&path)?;
-    if let Some(api_key) = api_key.map(str::trim).filter(|value| !value.is_empty()) {
-        write_codex_auth(codex_home, api_key)?;
-    }
-    Ok(())
-}
-
-fn write_codex_auth(codex_home: &PathBuf, api_key: &str) -> anyhow::Result<()> {
-    fs::create_dir_all(codex_home)?;
-    let path = codex_home.join("auth.json");
-    let contents = serde_json::to_vec_pretty(&json!({
-        "auth_mode": "apikey",
-        "OPENAI_API_KEY": api_key,
-    }))?;
-    fs::write(&path, contents)?;
-    set_private_file_permissions(&path)?;
-    Ok(())
-}
-
-fn string_value<'a>(object: &'a Map<String, Value>, key: &str) -> Option<&'a str> {
-    object.get(key).and_then(Value::as_str)
-}
-
-fn toml_string(value: &str) -> String {
-    serde_json::to_string(value).unwrap_or_else(|_| "\"\"".to_string())
-}
-
-#[cfg(unix)]
-fn set_private_file_permissions(path: &PathBuf) -> anyhow::Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-
-    fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
-    Ok(())
-}
-
-#[cfg(not(unix))]
-fn set_private_file_permissions(_path: &PathBuf) -> anyhow::Result<()> {
-    Ok(())
 }
 
 #[cfg(test)]
