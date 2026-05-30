@@ -72,22 +72,45 @@ jobs:
         working-directory: .
 
       - name: Build iOS app
+        id: build
         if: ${{ steps.switch.outputs.enabled == 'true' }}
-        run: >
-          pnpm dlx eas-cli@18.13.0 build
-          --platform ios
-          --profile "$EAS_BUILD_PROFILE"
-          --non-interactive
-          --wait
+        run: |
+          set -euo pipefail
+          pnpm dlx eas-cli@18.13.0 build \
+            --platform ios \
+            --profile "$EAS_BUILD_PROFILE" \
+            --non-interactive \
+            --wait \
+            --json \
+            | tee /tmp/eas-build.json
+          build_id="$(
+            node <<'NODE'
+          const fs = require("node:fs");
+          const raw = fs.readFileSync("/tmp/eas-build.json", "utf8").trim();
+          const builds = JSON.parse(raw);
+          const build = Array.isArray(builds)
+            ? builds.find((candidate) => candidate?.platform === "IOS") ?? builds[0]
+            : builds;
+          if (!build?.id) {
+            throw new Error("EAS build output did not include an iOS build id.");
+          }
+          console.log(build.id);
+          NODE
+          )"
+          echo "build_id=$build_id" >> "$GITHUB_OUTPUT"
 
-      - name: Submit latest iOS build
+      - name: Submit iOS build
         if: ${{ steps.switch.outputs.enabled == 'true' && env.EAS_SUBMIT_ENABLED == 'true' }}
-        run: >
-          pnpm dlx eas-cli@18.13.0 submit
-          --platform ios
-          --profile "$EAS_SUBMIT_PROFILE"
-          --latest
-          --non-interactive
+        run: |
+          set -euo pipefail
+          : "${BUILD_ID:?Build iOS app did not produce a build id.}"
+          pnpm dlx eas-cli@18.13.0 submit \
+            --platform ios \
+            --profile "$EAS_SUBMIT_PROFILE" \
+            --id "$BUILD_ID" \
+            --non-interactive
+        env:
+          BUILD_ID: ${{ steps.build.outputs.build_id }}
 
       - name: Summarize mobile deploy
         run: |
@@ -96,5 +119,6 @@ jobs:
             echo "- Environment: ${{ inputs.environment }}"
             echo "- Enabled: \`$MOBILE_DEPLOY_ENABLED\`"
             echo "- EAS build profile: \`$EAS_BUILD_PROFILE\`"
+            echo "- EAS build id: \`${{ steps.build.outputs.build_id }}\`"
             echo "- Submitted: \`$EAS_SUBMIT_ENABLED\`"
           } >> "$GITHUB_STEP_SUMMARY"
