@@ -227,6 +227,11 @@ pub enum ResolveInteractionError {
     Internal(anyhow::Error),
 }
 
+#[derive(Debug, Clone)]
+pub struct McpElicitationUrlReveal {
+    pub url: String,
+}
+
 #[derive(Debug)]
 pub(super) enum StartSessionError {
     WorkspaceNotFound,

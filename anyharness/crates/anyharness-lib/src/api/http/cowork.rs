@@ -1,7 +1,10 @@
 use anyharness_contract::v1::{
-    CoworkArtifactDetailResponse, CoworkArtifactManifestResponse, CoworkManagedWorkspacesResponse,
+    CoworkArtifactDetailResponse, CoworkArtifactManifestResponse,
+    CoworkArtifactSummary as ContractCoworkArtifactSummary,
+    CoworkArtifactType as ContractCoworkArtifactType, CoworkCodingCompletionSummary,
+    CoworkCodingSessionSummary, CoworkManagedWorkspaceSummary, CoworkManagedWorkspacesResponse,
     CoworkRoot, CoworkStatus, CoworkThread, CreateCoworkThreadRequest, CreateCoworkThreadResponse,
-    Workspace,
+    SessionStatus, Workspace,
 };
 use axum::{
     extract::{Path, State},
@@ -12,9 +15,14 @@ use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::workspaces_contract::workspace_to_contract_with_summary;
 use crate::app::AppState;
+use crate::domains::cowork::artifacts::{CoworkArtifactDetail, CoworkArtifactManifest};
 use crate::domains::cowork::manifest::CoworkArtifactError;
+use crate::domains::cowork::manifest::{CoworkArtifactSummary, CoworkArtifactType};
 use crate::domains::cowork::model::CoworkRootRecord;
-use crate::domains::cowork::runtime::{CoworkCreateThreadError, CoworkThreadSummary};
+use crate::domains::cowork::runtime::{
+    CoworkCodingCompletion, CoworkCodingSessionContext, CoworkCreateThreadError,
+    CoworkManagedWorkspaceContext, CoworkManagedWorkspacesContext, CoworkThreadSummary,
+};
 use crate::repo_roots::model::RepoRootRecord;
 use crate::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
 use crate::workspaces::model::WorkspaceRecord;
@@ -140,7 +148,7 @@ pub async fn get_cowork_manifest(
     })
     .await?
     .map_err(map_cowork_artifact_error)?;
-    Ok(Json(manifest))
+    Ok(Json(cowork_artifact_manifest_to_contract(manifest)))
 }
 
 #[utoipa::path(
@@ -168,7 +176,7 @@ pub async fn get_cowork_artifact(
     })
     .await?
     .map_err(map_cowork_artifact_error)?;
-    Ok(Json(artifact))
+    Ok(Json(cowork_artifact_detail_to_contract(artifact)))
 }
 
 #[utoipa::path(
@@ -185,7 +193,7 @@ pub async fn get_cowork_managed_workspaces(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
 ) -> Result<Json<CoworkManagedWorkspacesResponse>, ApiError> {
-    let response = state
+    let context = state
         .cowork_runtime
         .managed_workspaces_context(&session_id)
         .await
@@ -195,7 +203,7 @@ pub async fn get_cowork_managed_workspaces(
             }
             other => ApiError::internal(other.to_string()),
         })?;
-    Ok(Json(response))
+    Ok(Json(cowork_managed_workspaces_to_contract(context)))
 }
 
 fn map_create_cowork_thread_error(error: CoworkCreateThreadError) -> ApiError {
@@ -247,6 +255,135 @@ fn map_create_cowork_thread_error(error: CoworkCreateThreadError) -> ApiError {
             }
         },
         CoworkCreateThreadError::Internal(error) => ApiError::internal(error.to_string()),
+    }
+}
+
+fn cowork_artifact_manifest_to_contract(
+    manifest: CoworkArtifactManifest,
+) -> CoworkArtifactManifestResponse {
+    CoworkArtifactManifestResponse {
+        version: manifest.version,
+        artifacts: manifest
+            .artifacts
+            .into_iter()
+            .map(cowork_artifact_summary_to_contract)
+            .collect(),
+    }
+}
+
+fn cowork_artifact_detail_to_contract(
+    detail: CoworkArtifactDetail,
+) -> CoworkArtifactDetailResponse {
+    CoworkArtifactDetailResponse {
+        artifact: cowork_artifact_summary_to_contract(detail.artifact),
+        content: detail.content,
+    }
+}
+
+fn cowork_artifact_summary_to_contract(
+    artifact: CoworkArtifactSummary,
+) -> ContractCoworkArtifactSummary {
+    ContractCoworkArtifactSummary {
+        id: artifact.id,
+        path: artifact.path,
+        r#type: cowork_artifact_type_to_contract(artifact.r#type),
+        title: artifact.title,
+        description: artifact.description,
+        created_at: artifact.created_at,
+        updated_at: artifact.updated_at,
+        exists: artifact.exists,
+        size_bytes: artifact.size_bytes,
+        modified_at: artifact.modified_at,
+    }
+}
+
+fn cowork_artifact_type_to_contract(
+    artifact_type: CoworkArtifactType,
+) -> ContractCoworkArtifactType {
+    match artifact_type {
+        CoworkArtifactType::TextMarkdown => ContractCoworkArtifactType::TextMarkdown,
+        CoworkArtifactType::TextHtml => ContractCoworkArtifactType::TextHtml,
+        CoworkArtifactType::ImageSvgXml => ContractCoworkArtifactType::ImageSvgXml,
+        CoworkArtifactType::ApplicationVndProliferateReact => {
+            ContractCoworkArtifactType::ApplicationVndProliferateReact
+        }
+    }
+}
+
+fn cowork_managed_workspaces_to_contract(
+    context: CoworkManagedWorkspacesContext,
+) -> CoworkManagedWorkspacesResponse {
+    CoworkManagedWorkspacesResponse {
+        workspaces: context
+            .workspaces
+            .into_iter()
+            .map(cowork_managed_workspace_to_contract)
+            .collect(),
+    }
+}
+
+fn cowork_managed_workspace_to_contract(
+    workspace: CoworkManagedWorkspaceContext,
+) -> CoworkManagedWorkspaceSummary {
+    CoworkManagedWorkspaceSummary {
+        cowork_workspace_id: workspace.cowork_workspace_id,
+        ownership_id: workspace.ownership_id,
+        workspace_id: workspace.workspace_id,
+        source_workspace_id: workspace.source_workspace_id,
+        label: workspace.label,
+        created_at: workspace.created_at,
+        closed_at: workspace.closed_at,
+        sessions: workspace
+            .sessions
+            .into_iter()
+            .map(cowork_coding_session_to_contract)
+            .collect(),
+    }
+}
+
+fn cowork_coding_session_to_contract(
+    session: CoworkCodingSessionContext,
+) -> CoworkCodingSessionSummary {
+    CoworkCodingSessionSummary {
+        cowork_agent_id: session.cowork_agent_id,
+        session_link_id: session.session_link_id,
+        coding_session_id: session.coding_session_id,
+        title: session.title,
+        label: session.label,
+        status: session_status_to_contract(&session.status),
+        agent_kind: session.agent_kind,
+        model_id: session.model_id,
+        mode_id: session.mode_id,
+        wake_scheduled: session.wake_scheduled,
+        latest_completion: session.latest_completion.map(cowork_completion_to_contract),
+        link_created_at: session.link_created_at,
+        link_closed_at: session.link_closed_at,
+        session_created_at: session.session_created_at,
+    }
+}
+
+fn cowork_completion_to_contract(
+    completion: CoworkCodingCompletion,
+) -> CoworkCodingCompletionSummary {
+    CoworkCodingCompletionSummary {
+        completion_id: completion.completion_id,
+        child_turn_id: completion.child_turn_id,
+        child_last_event_seq: completion.child_last_event_seq,
+        outcome: completion.outcome,
+        parent_event_seq: completion.parent_event_seq,
+        parent_prompt_seq: completion.parent_prompt_seq,
+        created_at: completion.created_at,
+    }
+}
+
+fn session_status_to_contract(status: &str) -> SessionStatus {
+    match status {
+        "starting" => SessionStatus::Starting,
+        "idle" => SessionStatus::Idle,
+        "running" => SessionStatus::Running,
+        "completed" => SessionStatus::Completed,
+        "closed" => SessionStatus::Closed,
+        _ => SessionStatus::Errored,
     }
 }
 

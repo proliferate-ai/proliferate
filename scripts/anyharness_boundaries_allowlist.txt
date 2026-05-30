@@ -15,8 +15,3 @@ CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime
 CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/prompt.rs 2 transitional session prompt runtime still coordinates plan domain directly
 CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/service.rs 1 transitional session service still accepts mobility attachment domain data
 CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/workspaces/files_runtime.rs 1 transitional workspace files runtime still serves cowork artifact files directly
-DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/cowork/artifacts.rs 2 transitional cowork artifact domain still returns API contract responses
-DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1 transitional cowork runtime still returns API contract managed-workspace response
-DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/sessions/runtime/interactions.rs 1 transitional session runtime interactions still returns API contract elicitation response
-DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/sessions/subagents/service.rs 1 transitional subagent service still returns API contract subagents response
-DOMAIN_CONTRACT_REQUEST_RESPONSE anyharness/crates/anyharness-lib/src/workspaces/inventory.rs 1 transitional workspace inventory still returns API contract response

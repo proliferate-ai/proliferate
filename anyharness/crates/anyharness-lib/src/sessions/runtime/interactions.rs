@@ -1,4 +1,4 @@
-use anyharness_contract::v1::{InteractionKind, McpElicitationUrlRevealResponse};
+use anyharness_contract::v1::InteractionKind;
 
 use crate::live::sessions::{
     InteractionResolution, PermissionDecision, ResolveInteractionCommandError,
@@ -6,8 +6,8 @@ use crate::live::sessions::{
 };
 
 use super::{
-    InteractionPermissionDecision, InteractionResolutionRequest, ResolveInteractionError,
-    SessionRuntime,
+    InteractionPermissionDecision, InteractionResolutionRequest, McpElicitationUrlReveal,
+    ResolveInteractionError, SessionRuntime,
 };
 
 impl SessionRuntime {
@@ -147,7 +147,7 @@ impl SessionRuntime {
         &self,
         session_id: &str,
         request_id: &str,
-    ) -> Result<McpElicitationUrlRevealResponse, ResolveInteractionError> {
+    ) -> Result<McpElicitationUrlReveal, ResolveInteractionError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
             .map_err(|error| ResolveInteractionError::SessionNotLive(error.to_string()))?;
@@ -192,6 +192,6 @@ impl SessionRuntime {
                 }
             })?;
 
-        Ok(McpElicitationUrlRevealResponse { url })
+        Ok(McpElicitationUrlReveal { url })
     }
 }

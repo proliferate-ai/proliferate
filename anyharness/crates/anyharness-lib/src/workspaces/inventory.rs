@@ -2,16 +2,87 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyharness_contract::v1::{
-    WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
-    WorktreeInventoryAction, WorktreeInventoryResponse, WorktreeInventoryRow,
-    WorktreeInventoryState, WorktreeInventoryWorkspaceSummary,
-};
-
 use crate::sessions::store::SessionStore;
 use crate::workspaces::checkout_gate::{CheckoutDeletionGate, CheckoutPathLockKey};
 use crate::workspaces::managed_root::canonical_managed_worktrees_root;
 use crate::workspaces::store::WorkspaceStore;
+
+#[derive(Debug, Clone)]
+pub struct WorktreeInventory {
+    pub rows: Vec<WorktreeInventoryRow>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorktreeInventoryState {
+    Associated,
+    OrphanCheckout,
+    MissingCheckout,
+    Conflict,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorktreeInventoryAction {
+    PruneCheckout,
+    DeleteWorkspaceHistory,
+    RetryPurge,
+    DeleteOrphanCheckout,
+}
+
+#[derive(Debug, Clone)]
+pub struct WorktreeInventoryWorkspaceSummary {
+    pub id: String,
+    pub kind: WorkspaceKind,
+    pub lifecycle_state: WorkspaceLifecycleState,
+    pub cleanup_state: WorkspaceCleanupState,
+    pub cleanup_operation: Option<WorkspaceCleanupOperation>,
+    pub display_name: Option<String>,
+    pub branch: Option<String>,
+    pub session_count: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct WorktreeInventoryRow {
+    pub id: String,
+    pub state: WorktreeInventoryState,
+    pub path: String,
+    pub canonical_path: Option<String>,
+    pub managed: bool,
+    pub materialized: bool,
+    pub repo_root_id: Option<String>,
+    pub repo_root_name: Option<String>,
+    pub branch: Option<String>,
+    pub associated_workspaces: Vec<WorktreeInventoryWorkspaceSummary>,
+    pub total_session_count: usize,
+    pub cleanup_operation: Option<WorkspaceCleanupOperation>,
+    pub cleanup_state: Option<WorkspaceCleanupState>,
+    pub available_actions: Vec<WorktreeInventoryAction>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorkspaceKind {
+    Worktree,
+    Local,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorkspaceLifecycleState {
+    Active,
+    Retired,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorkspaceCleanupState {
+    None,
+    Pending,
+    Complete,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorkspaceCleanupOperation {
+    Retire,
+    Purge,
+}
 
 #[derive(Clone)]
 pub struct WorktreeInventoryService {
@@ -36,7 +107,7 @@ impl WorktreeInventoryService {
         }
     }
 
-    pub fn inventory(&self) -> anyhow::Result<WorktreeInventoryResponse> {
+    pub fn inventory(&self) -> anyhow::Result<WorktreeInventory> {
         let workspaces = self.workspace_store.list_all()?;
         let mut by_path: BTreeMap<String, Vec<_>> = BTreeMap::new();
         for workspace in workspaces
@@ -79,12 +150,10 @@ impl WorktreeInventoryService {
                         .unwrap_or(0);
                     WorktreeInventoryWorkspaceSummary {
                         id: workspace.id.clone(),
-                        kind: workspace_kind_to_contract(&workspace.kind),
-                        lifecycle_state: workspace_lifecycle_to_contract(
-                            &workspace.lifecycle_state,
-                        ),
-                        cleanup_state: workspace_cleanup_to_contract(&workspace.cleanup_state),
-                        cleanup_operation: workspace_cleanup_operation_to_contract(
+                        kind: workspace_kind(&workspace.kind),
+                        lifecycle_state: workspace_lifecycle(&workspace.lifecycle_state),
+                        cleanup_state: workspace_cleanup(&workspace.cleanup_state),
+                        cleanup_operation: workspace_cleanup_operation(
                             workspace.cleanup_operation.as_deref(),
                         ),
                         display_name: workspace.display_name.clone(),
@@ -122,14 +191,13 @@ impl WorktreeInventoryService {
                     .first()
                     .and_then(|workspace| workspace.current_branch.clone()),
                 cleanup_operation: associated.first().and_then(|workspace| {
-                    workspace_cleanup_operation_to_contract(workspace.cleanup_operation.as_deref())
+                    workspace_cleanup_operation(workspace.cleanup_operation.as_deref())
                 }),
                 cleanup_state: associated
                     .first()
-                    .map(|workspace| workspace_cleanup_to_contract(&workspace.cleanup_state)),
+                    .map(|workspace| workspace_cleanup(&workspace.cleanup_state)),
                 associated_workspaces: summaries,
                 total_session_count,
-                blockers: Vec::new(),
                 available_actions: actions,
             });
             known_paths.insert(path);
@@ -160,7 +228,6 @@ impl WorktreeInventoryService {
                     branch: None,
                     associated_workspaces: Vec::new(),
                     total_session_count: 0,
-                    blockers: Vec::new(),
                     cleanup_operation: None,
                     cleanup_state: None,
                     available_actions: vec![WorktreeInventoryAction::DeleteOrphanCheckout],
@@ -168,10 +235,10 @@ impl WorktreeInventoryService {
             }
         }
 
-        Ok(WorktreeInventoryResponse { rows })
+        Ok(WorktreeInventory { rows })
     }
 
-    pub fn prune_orphan(&self, path: &str) -> anyhow::Result<WorktreeInventoryResponse> {
+    pub fn prune_orphan(&self, path: &str) -> anyhow::Result<WorktreeInventory> {
         let canonical_root = canonical_managed_worktrees_root(&self.runtime_home)?;
         let canonical_path = std::fs::canonicalize(path)
             .map_err(|error| anyhow::anyhow!("canonicalizing orphan worktree: {error}"))?;
@@ -279,21 +346,21 @@ fn git_worktree_paths(worktree: &Path) -> anyhow::Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
-fn workspace_kind_to_contract(kind: &str) -> WorkspaceKind {
+fn workspace_kind(kind: &str) -> WorkspaceKind {
     match kind {
         "worktree" => WorkspaceKind::Worktree,
         _ => WorkspaceKind::Local,
     }
 }
 
-fn workspace_lifecycle_to_contract(state: &str) -> WorkspaceLifecycleState {
+fn workspace_lifecycle(state: &str) -> WorkspaceLifecycleState {
     match state {
         "retired" => WorkspaceLifecycleState::Retired,
         _ => WorkspaceLifecycleState::Active,
     }
 }
 
-fn workspace_cleanup_to_contract(state: &str) -> WorkspaceCleanupState {
+fn workspace_cleanup(state: &str) -> WorkspaceCleanupState {
     match state {
         "pending" => WorkspaceCleanupState::Pending,
         "complete" => WorkspaceCleanupState::Complete,
@@ -302,9 +369,7 @@ fn workspace_cleanup_to_contract(state: &str) -> WorkspaceCleanupState {
     }
 }
 
-fn workspace_cleanup_operation_to_contract(
-    operation: Option<&str>,
-) -> Option<WorkspaceCleanupOperation> {
+fn workspace_cleanup_operation(operation: Option<&str>) -> Option<WorkspaceCleanupOperation> {
     match operation {
         Some("retire") => Some(WorkspaceCleanupOperation::Retire),
         Some("purge") => Some(WorkspaceCleanupOperation::Purge),

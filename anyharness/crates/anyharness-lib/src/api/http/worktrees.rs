@@ -1,11 +1,23 @@
 use anyharness_contract::v1::{
     PruneOrphanWorktreeRequest, RunWorktreeRetentionResponse, UpdateWorktreeRetentionPolicyRequest,
-    WorktreeInventoryResponse, WorktreeRetentionPolicy, WorktreeRetentionRunRow,
+    WorkspaceCleanupOperation as ContractWorkspaceCleanupOperation,
+    WorkspaceCleanupState as ContractWorkspaceCleanupState, WorkspaceKind as ContractWorkspaceKind,
+    WorkspaceLifecycleState as ContractWorkspaceLifecycleState, WorkspaceRetireBlocker,
+    WorktreeInventoryAction as ContractWorktreeInventoryAction, WorktreeInventoryResponse,
+    WorktreeInventoryRow as ContractWorktreeInventoryRow,
+    WorktreeInventoryState as ContractWorktreeInventoryState,
+    WorktreeInventoryWorkspaceSummary as ContractWorktreeInventoryWorkspaceSummary,
+    WorktreeRetentionPolicy, WorktreeRetentionRunRow,
 };
 use axum::{extract::State, Json};
 
 use super::error::ApiError;
 use crate::app::AppState;
+use crate::workspaces::inventory::{
+    WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
+    WorktreeInventory, WorktreeInventoryAction, WorktreeInventoryRow, WorktreeInventoryState,
+    WorktreeInventoryWorkspaceSummary,
+};
 
 #[utoipa::path(
     get,
@@ -19,6 +31,7 @@ pub async fn get_worktree_inventory(
     state
         .worktree_inventory_service
         .inventory()
+        .map(worktree_inventory_to_contract)
         .map(Json)
         .map_err(|error| ApiError::internal(error.to_string()))
 }
@@ -38,6 +51,7 @@ pub async fn prune_orphan_worktree(
     tokio::task::spawn_blocking(move || service.prune_orphan(&request.path))
         .await
         .map_err(|error| ApiError::internal(format!("worktree prune task failed: {error}")))?
+        .map(worktree_inventory_to_contract)
         .map(Json)
         .map_err(|error| ApiError::bad_request(error.to_string(), "WORKTREE_PRUNE_FAILED"))
 }
@@ -134,5 +148,124 @@ fn run_result_to_contract(
                 message: row.message,
             })
             .collect(),
+    }
+}
+
+fn worktree_inventory_to_contract(inventory: WorktreeInventory) -> WorktreeInventoryResponse {
+    WorktreeInventoryResponse {
+        rows: inventory
+            .rows
+            .into_iter()
+            .map(worktree_inventory_row_to_contract)
+            .collect(),
+    }
+}
+
+fn worktree_inventory_row_to_contract(row: WorktreeInventoryRow) -> ContractWorktreeInventoryRow {
+    ContractWorktreeInventoryRow {
+        id: row.id,
+        state: worktree_inventory_state_to_contract(row.state),
+        path: row.path,
+        canonical_path: row.canonical_path,
+        managed: row.managed,
+        materialized: row.materialized,
+        repo_root_id: row.repo_root_id,
+        repo_root_name: row.repo_root_name,
+        branch: row.branch,
+        associated_workspaces: row
+            .associated_workspaces
+            .into_iter()
+            .map(worktree_inventory_workspace_to_contract)
+            .collect(),
+        total_session_count: row.total_session_count,
+        blockers: Vec::<WorkspaceRetireBlocker>::new(),
+        cleanup_operation: row
+            .cleanup_operation
+            .map(workspace_cleanup_operation_to_contract),
+        cleanup_state: row.cleanup_state.map(workspace_cleanup_state_to_contract),
+        available_actions: row
+            .available_actions
+            .into_iter()
+            .map(worktree_inventory_action_to_contract)
+            .collect(),
+    }
+}
+
+fn worktree_inventory_workspace_to_contract(
+    workspace: WorktreeInventoryWorkspaceSummary,
+) -> ContractWorktreeInventoryWorkspaceSummary {
+    ContractWorktreeInventoryWorkspaceSummary {
+        id: workspace.id,
+        kind: workspace_kind_to_contract(workspace.kind),
+        lifecycle_state: workspace_lifecycle_state_to_contract(workspace.lifecycle_state),
+        cleanup_state: workspace_cleanup_state_to_contract(workspace.cleanup_state),
+        cleanup_operation: workspace
+            .cleanup_operation
+            .map(workspace_cleanup_operation_to_contract),
+        display_name: workspace.display_name,
+        branch: workspace.branch,
+        session_count: workspace.session_count,
+    }
+}
+
+fn worktree_inventory_state_to_contract(
+    state: WorktreeInventoryState,
+) -> ContractWorktreeInventoryState {
+    match state {
+        WorktreeInventoryState::Associated => ContractWorktreeInventoryState::Associated,
+        WorktreeInventoryState::OrphanCheckout => ContractWorktreeInventoryState::OrphanCheckout,
+        WorktreeInventoryState::MissingCheckout => ContractWorktreeInventoryState::MissingCheckout,
+        WorktreeInventoryState::Conflict => ContractWorktreeInventoryState::Conflict,
+    }
+}
+
+fn worktree_inventory_action_to_contract(
+    action: WorktreeInventoryAction,
+) -> ContractWorktreeInventoryAction {
+    match action {
+        WorktreeInventoryAction::PruneCheckout => ContractWorktreeInventoryAction::PruneCheckout,
+        WorktreeInventoryAction::DeleteWorkspaceHistory => {
+            ContractWorktreeInventoryAction::DeleteWorkspaceHistory
+        }
+        WorktreeInventoryAction::RetryPurge => ContractWorktreeInventoryAction::RetryPurge,
+        WorktreeInventoryAction::DeleteOrphanCheckout => {
+            ContractWorktreeInventoryAction::DeleteOrphanCheckout
+        }
+    }
+}
+
+fn workspace_kind_to_contract(kind: WorkspaceKind) -> ContractWorkspaceKind {
+    match kind {
+        WorkspaceKind::Worktree => ContractWorkspaceKind::Worktree,
+        WorkspaceKind::Local => ContractWorkspaceKind::Local,
+    }
+}
+
+fn workspace_lifecycle_state_to_contract(
+    state: WorkspaceLifecycleState,
+) -> ContractWorkspaceLifecycleState {
+    match state {
+        WorkspaceLifecycleState::Active => ContractWorkspaceLifecycleState::Active,
+        WorkspaceLifecycleState::Retired => ContractWorkspaceLifecycleState::Retired,
+    }
+}
+
+fn workspace_cleanup_state_to_contract(
+    state: WorkspaceCleanupState,
+) -> ContractWorkspaceCleanupState {
+    match state {
+        WorkspaceCleanupState::None => ContractWorkspaceCleanupState::None,
+        WorkspaceCleanupState::Pending => ContractWorkspaceCleanupState::Pending,
+        WorkspaceCleanupState::Complete => ContractWorkspaceCleanupState::Complete,
+        WorkspaceCleanupState::Failed => ContractWorkspaceCleanupState::Failed,
+    }
+}
+
+fn workspace_cleanup_operation_to_contract(
+    operation: WorkspaceCleanupOperation,
+) -> ContractWorkspaceCleanupOperation {
+    match operation {
+        WorkspaceCleanupOperation::Retire => ContractWorkspaceCleanupOperation::Retire,
+        WorkspaceCleanupOperation::Purge => ContractWorkspaceCleanupOperation::Purge,
     }
 }
