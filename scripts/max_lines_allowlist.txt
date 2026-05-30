@@ -88,6 +88,7 @@ server/proliferate/server/cloud/workspaces/service.py
 server/proliferate/db/store/automations.py
 server/proliferate/server/cloud/events/service.py
 server/proliferate/server/cloud/mobility/service.py
+server/proliferate/server/cloud/mcp_oauth/service.py
 server/proliferate/server/cloud/slack/service.py
 server/proliferate/server/cloud/workspaces/models.py
 server/proliferate/auth/identity/service.py
