@@ -44,7 +44,6 @@ use crate::sessions::links::completions::LinkCompletionStore;
 use crate::sessions::links::service::SessionLinkService;
 use crate::sessions::links::store::SessionLinkStore;
 use crate::sessions::mcp_bindings::crypto::{load_data_cipher_from_env, DATA_KEY_ENV_VAR};
-use crate::sessions::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use crate::sessions::mcp_bindings::product_registry::ProductMcpEndpointRegistry;
 use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::service::SessionService;
@@ -288,16 +287,17 @@ impl AppState {
                 bearer_token.clone(),
                 skills_mcp_auth.clone(),
             ));
-        let product_mcp_launch_catalog = ProductMcpLaunchCatalog::new(
-            runtime_base_url.clone(),
-            bearer_token.clone(),
-            review_mcp_auth.clone(),
-            subagent_mcp_auth.clone(),
-            workspace_naming_mcp_auth.clone(),
-            cowork_mcp_auth.clone(),
-            subagent_service.clone(),
-            SessionStore::new(db.clone()),
-        );
+        let product_mcp_launch_catalog =
+            product_mcp::build_product_mcp_launch_catalog(product_mcp::LaunchCatalogDeps {
+                runtime_base_url: runtime_base_url.clone(),
+                bearer_token: bearer_token.clone(),
+                review_mcp_auth: review_mcp_auth.clone(),
+                subagent_mcp_auth: subagent_mcp_auth.clone(),
+                workspace_naming_mcp_auth: workspace_naming_mcp_auth.clone(),
+                cowork_mcp_auth: cowork_mcp_auth.clone(),
+                subagent_service: subagent_service.clone(),
+                session_store: SessionStore::new(db.clone()),
+            });
         let session_extensions: Vec<Arc<dyn crate::sessions::extensions::SessionExtension>> = vec![
             cowork_session_hooks.clone(),
             subagent_session_hooks.clone(),

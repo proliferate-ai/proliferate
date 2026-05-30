@@ -1,5 +1,3 @@
-use crate::domains::cowork::mcp as cowork_mcp;
-use crate::domains::reviews::mcp as reviews_mcp;
 use crate::integrations::mcp::product_server::{
     ProductMcpDefinition, PRODUCT_MCP_TOKEN_HEADER_NAME,
 };
@@ -9,53 +7,27 @@ use crate::sessions::mcp_bindings::model::{
 };
 use crate::sessions::mcp_bindings::selection::{product_mcp_prompt_extras, SelectedProductMcp};
 use crate::sessions::model::SessionRecord;
-use crate::sessions::subagents::mcp as subagents_mcp;
-use crate::sessions::workspace_naming::mcp as workspace_naming_mcp;
 use crate::workspaces::model::WorkspaceRecord;
 
 pub struct ProductMcpInjectionContext<'a> {
     pub runtime_base_url: &'a str,
     pub runtime_bearer_token: Option<&'a str>,
-    pub review_auth: &'a reviews_mcp::auth::ReviewMcpAuth,
-    pub subagent_auth: &'a subagents_mcp::auth::SubagentMcpAuth,
-    pub workspace_naming_auth: &'a workspace_naming_mcp::auth::WorkspaceNamingMcpAuth,
-    pub cowork_auth: &'a cowork_mcp::auth::CoworkMcpAuth,
     pub workspace: &'a WorkspaceRecord,
     pub session: &'a SessionRecord,
 }
 
 pub fn inject_product_mcps(
-    selected: &[SelectedProductMcp],
+    selected: &[SelectedProductMcp<'_>],
     ctx: ProductMcpInjectionContext<'_>,
 ) -> anyhow::Result<SessionLaunchExtras> {
     let mut extras = product_mcp_prompt_extras(selected);
     for product in selected {
-        extras.mcp_servers.push(match product {
-            SelectedProductMcp::Reviews => build_http_server(
-                &reviews_mcp::definition::DEFINITION,
-                &ctx,
-                ctx.review_auth
-                    .mint_capability_token(&ctx.workspace.id, &ctx.session.id)?,
-            ),
-            SelectedProductMcp::Subagents => build_http_server(
-                &subagents_mcp::definition::DEFINITION,
-                &ctx,
-                ctx.subagent_auth
-                    .mint_capability_token(&ctx.workspace.id, &ctx.session.id)?,
-            ),
-            SelectedProductMcp::WorkspaceNaming => build_http_server(
-                &workspace_naming_mcp::definition::DEFINITION,
-                &ctx,
-                ctx.workspace_naming_auth
-                    .mint_capability_token(&ctx.workspace.id, &ctx.session.id)?,
-            ),
-            SelectedProductMcp::Cowork => build_http_server(
-                &cowork_mcp::definition::DEFINITION,
-                &ctx,
-                ctx.cowork_auth
-                    .mint_capability_token(&ctx.workspace.id, &ctx.session.id)?,
-            ),
-        });
+        let registration = product.registration;
+        extras.mcp_servers.push(build_http_server(
+            registration.definition(),
+            &ctx,
+            registration.mint_capability_token(&ctx.workspace.id, &ctx.session.id)?,
+        ));
     }
     Ok(extras)
 }
@@ -91,23 +63,18 @@ fn build_http_server(
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::sync::Arc;
 
+    use crate::integrations::mcp::product_server::{ProductMcpPromptPolicy, ProductMcpVisibility};
     use crate::origin::OriginContext;
+    use crate::sessions::mcp_bindings::product_launch::{
+        ProductMcpLaunchRegistration, ProductMcpSelectionContext,
+    };
     use crate::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
     use crate::sessions::workspace_naming::mcp::auth::LEGACY_CAPABILITY_HEADER_NAME;
     use crate::workspaces::model::WorkspaceRecord;
 
     use super::*;
-
-    fn runtime_home(test_name: &str) -> PathBuf {
-        let path = std::env::temp_dir().join(format!(
-            "anyharness-product-mcp-injection-{test_name}-{}",
-            uuid::Uuid::new_v4()
-        ));
-        let _ = std::fs::remove_dir_all(&path);
-        path
-    }
 
     fn workspace(id: &str) -> WorkspaceRecord {
         WorkspaceRecord {
@@ -135,6 +102,28 @@ mod tests {
             created_at: "2026-01-01T00:00:00Z".to_string(),
             updated_at: "2026-01-01T00:00:00Z".to_string(),
         }
+    }
+
+    static TEST_DEFINITION: ProductMcpDefinition = ProductMcpDefinition {
+        id: "workspace_naming",
+        route_slug: "workspace_naming",
+        acp_server_name: "workspace_naming",
+        server_info_name: "proliferate-workspace-naming",
+        display_name: "Workspace naming",
+        description: "Name workspaces",
+        visibility: ProductMcpVisibility::Internal,
+        instructions: "Name the workspace",
+        unauthorized_code: "WORKSPACE_NAMING_UNAUTHORIZED",
+        request_invalid_code: "WORKSPACE_NAMING_INVALID",
+        prompt_policy: ProductMcpPromptPolicy::SystemAndFirstPrompt,
+    };
+
+    fn selected_registration(token: &'static str) -> ProductMcpLaunchRegistration {
+        ProductMcpLaunchRegistration::new(
+            &TEST_DEFINITION,
+            Arc::new(|_ctx: ProductMcpSelectionContext<'_>| Ok(true)),
+            Arc::new(move |_workspace_id: &str, _session_id: &str| Ok(token.to_string())),
+        )
     }
 
     fn session(id: &str, workspace_id: &str) -> SessionRecord {
@@ -170,24 +159,18 @@ mod tests {
 
     #[test]
     fn fresh_product_injection_uses_generic_route_and_product_token_header() {
-        let home = runtime_home("fresh");
-        let review_auth = reviews_mcp::auth::ReviewMcpAuth::new(home.clone());
-        let subagent_auth = subagents_mcp::auth::SubagentMcpAuth::new(home.clone());
-        let workspace_naming_auth =
-            workspace_naming_mcp::auth::WorkspaceNamingMcpAuth::new(home.clone());
-        let cowork_auth = cowork_mcp::auth::CoworkMcpAuth::new(home.clone());
         let workspace = workspace("workspace-1");
         let session = session("session-1", &workspace.id);
+        let registration = selected_registration("product-token");
+        let selected = [SelectedProductMcp {
+            registration: &registration,
+        }];
 
         let extras = inject_product_mcps(
-            &[SelectedProductMcp::WorkspaceNaming],
+            &selected,
             ProductMcpInjectionContext {
                 runtime_base_url: "http://127.0.0.1:4317",
                 runtime_bearer_token: Some("runtime-token"),
-                review_auth: &review_auth,
-                subagent_auth: &subagent_auth,
-                workspace_naming_auth: &workspace_naming_auth,
-                cowork_auth: &cowork_auth,
                 workspace: &workspace,
                 session: &session,
             },
@@ -217,7 +200,5 @@ mod tests {
             .headers
             .iter()
             .any(|header| header.name == LEGACY_CAPABILITY_HEADER_NAME));
-
-        let _ = std::fs::remove_dir_all(home);
     }
 }

@@ -1,115 +1,73 @@
-use crate::domains::cowork::mcp as cowork_mcp;
-use crate::domains::reviews::mcp as reviews_mcp;
 use crate::sessions::extensions::SessionLaunchExtras;
+use crate::sessions::mcp_bindings::product_launch::{
+    ProductMcpLaunchRegistration, ProductMcpSelectionContext,
+};
 use crate::sessions::model::SessionRecord;
-use crate::sessions::store::SessionStore;
-use crate::sessions::subagents::service::SubagentService;
-use crate::sessions::workspace_naming::{eligibility, mcp as workspace_naming_mcp};
 use crate::workspaces::model::WorkspaceRecord;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SelectedProductMcp {
-    Reviews,
-    Subagents,
-    WorkspaceNaming,
-    Cowork,
+pub struct SelectedProductMcp<'a> {
+    pub registration: &'a ProductMcpLaunchRegistration,
 }
 
-pub struct ProductMcpSelectionContext<'a> {
-    pub workspace: &'a WorkspaceRecord,
-    pub session: &'a SessionRecord,
-    pub subagent_service: &'a SubagentService,
-    pub session_store: &'a SessionStore,
-}
-
-pub fn select_product_mcps(
-    ctx: ProductMcpSelectionContext<'_>,
-) -> anyhow::Result<Vec<SelectedProductMcp>> {
+pub fn select_product_mcps<'a>(
+    workspace: &'a WorkspaceRecord,
+    session: &'a SessionRecord,
+    registrations: &'a [ProductMcpLaunchRegistration],
+) -> anyhow::Result<Vec<SelectedProductMcp<'a>>> {
     let mut selected = Vec::new();
-
-    // Reviews intentionally preload on standard sessions. A parent session can
-    // start unrelated and become a review parent later; without live MCP refresh,
-    // the review MCP must already be attached for that later parent tool surface.
-    // The endpoint resolves the current review role on each request, so unrelated
-    // sessions receive no review tools even though the server is attached.
-    if should_preload_reviews_mcp_until_live_refresh(ctx.workspace) {
-        selected.push(SelectedProductMcp::Reviews);
+    for registration in registrations {
+        if registration.should_attach(ProductMcpSelectionContext { workspace, session })? {
+            selected.push(SelectedProductMcp { registration });
+        }
     }
-
-    if ctx.workspace.surface == "standard"
-        && ctx.session.subagents_enabled
-        && ctx
-            .subagent_service
-            .find_subagent_parent(&ctx.session.id)?
-            .is_none()
-    {
-        selected.push(SelectedProductMcp::Subagents);
-    }
-
-    if eligibility::eligible_for_launch(ctx.session_store, ctx.workspace, ctx.session)? {
-        selected.push(SelectedProductMcp::WorkspaceNaming);
-    }
-
-    if should_attach_cowork_mcp(ctx.workspace) {
-        selected.push(SelectedProductMcp::Cowork);
-    }
-
     Ok(selected)
 }
 
-fn should_preload_reviews_mcp_until_live_refresh(workspace: &WorkspaceRecord) -> bool {
-    workspace.surface == "standard"
-}
-
-fn should_attach_cowork_mcp(workspace: &WorkspaceRecord) -> bool {
-    workspace.surface == "cowork" && !cowork_mcp::definition::launch_disabled()
-}
-
-pub fn product_mcp_prompt_extras(selected: &[SelectedProductMcp]) -> SessionLaunchExtras {
+pub fn product_mcp_prompt_extras(selected: &[SelectedProductMcp<'_>]) -> SessionLaunchExtras {
     let mut extras = SessionLaunchExtras::default();
     for product in selected {
-        match product {
-            SelectedProductMcp::Reviews => {
-                // The review MCP server is preloaded broadly so parent sessions
-                // can become review parents after launch. Do not also preload
-                // review-specific prompt text into unrelated sessions; review
-                // runtime prompts add role-specific instructions when review
-                // work actually starts.
-                extras
-                    .mcp_binding_summaries
-                    .push(reviews_mcp::definition::binding_summary());
-            }
-            SelectedProductMcp::Subagents => {
-                extras
-                    .mcp_binding_summaries
-                    .push(crate::sessions::subagents::mcp::definition::binding_summary());
-            }
-            SelectedProductMcp::WorkspaceNaming => {
-                let prompts = workspace_naming_mcp::definition::system_prompt_append();
-                extras.system_prompt_append.extend(prompts.clone());
-                extras.first_prompt_system_prompt_append.extend(prompts);
-                extras
-                    .mcp_binding_summaries
-                    .push(workspace_naming_mcp::definition::binding_summary());
-            }
-            SelectedProductMcp::Cowork => {
-                extras
-                    .system_prompt_append
-                    .extend(cowork_mcp::definition::system_prompt_append());
-                extras
-                    .mcp_binding_summaries
-                    .push(cowork_mcp::definition::binding_summary());
-            }
-        }
+        merge_launch_extras(&mut extras, product.registration.launch_extras());
     }
     extras
 }
 
+fn merge_launch_extras(target: &mut SessionLaunchExtras, source: &SessionLaunchExtras) {
+    target
+        .system_prompt_append
+        .extend(source.system_prompt_append.clone());
+    target
+        .first_prompt_system_prompt_append
+        .extend(source.first_prompt_system_prompt_append.clone());
+    target
+        .mcp_binding_summaries
+        .extend(source.mcp_binding_summaries.clone());
+}
+
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use crate::integrations::mcp::product_server::{
+        ProductMcpDefinition, ProductMcpPromptPolicy, ProductMcpVisibility,
+    };
     use crate::origin::OriginContext;
+    use crate::sessions::model::SessionMcpBindingPolicy;
 
     use super::*;
+
+    static TEST_DEFINITION: ProductMcpDefinition = ProductMcpDefinition {
+        id: "test",
+        route_slug: "test",
+        acp_server_name: "test",
+        server_info_name: "proliferate-test",
+        display_name: "Test",
+        description: "Test",
+        visibility: ProductMcpVisibility::Internal,
+        instructions: "Test",
+        unauthorized_code: "TEST_UNAUTHORIZED",
+        request_invalid_code: "TEST_INVALID",
+        prompt_policy: ProductMcpPromptPolicy::System,
+    };
 
     fn workspace(id: &str, surface: &str) -> WorkspaceRecord {
         WorkspaceRecord {
@@ -139,64 +97,101 @@ mod tests {
         }
     }
 
-    #[test]
-    fn reviews_mcp_broadly_attaches_to_standard_workspaces_only() {
-        assert!(should_preload_reviews_mcp_until_live_refresh(&workspace(
-            "standard-1",
-            "standard"
-        )));
-        assert!(!should_preload_reviews_mcp_until_live_refresh(&workspace(
-            "cowork-1", "cowork"
-        )));
+    fn session(id: &str, workspace_id: &str) -> SessionRecord {
+        SessionRecord {
+            id: id.to_string(),
+            workspace_id: workspace_id.to_string(),
+            agent_kind: "codex".to_string(),
+            native_session_id: None,
+            agent_auth_scope: None,
+            required_agent_auth_revision: None,
+            requested_model_id: None,
+            current_model_id: None,
+            requested_mode_id: None,
+            current_mode_id: None,
+            title: None,
+            thinking_level_id: None,
+            thinking_budget_tokens: None,
+            status: "idle".to_string(),
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+            last_prompt_at: None,
+            closed_at: None,
+            dismissed_at: None,
+            mcp_bindings_ciphertext: None,
+            mcp_binding_summaries_json: None,
+            mcp_binding_policy: SessionMcpBindingPolicy::InheritWorkspace,
+            system_prompt_append: None,
+            subagents_enabled: true,
+            action_capabilities_json: None,
+            origin: Some(OriginContext::human_desktop()),
+        }
+    }
+
+    fn registration(
+        should_attach: bool,
+        extras: SessionLaunchExtras,
+    ) -> ProductMcpLaunchRegistration {
+        ProductMcpLaunchRegistration::new(
+            &TEST_DEFINITION,
+            Arc::new(move |_ctx: ProductMcpSelectionContext<'_>| Ok(should_attach)),
+            Arc::new(|_workspace_id: &str, _session_id: &str| Ok("token".to_string())),
+        )
+        .with_system_prompt_append(extras.system_prompt_append)
+        .with_first_prompt_system_prompt_append(extras.first_prompt_system_prompt_append)
     }
 
     #[test]
-    fn cowork_mcp_attaches_to_cowork_workspaces_only() {
-        assert!(should_attach_cowork_mcp(&workspace("cowork-1", "cowork")));
-        assert!(!should_attach_cowork_mcp(&workspace(
-            "standard-1",
-            "standard"
-        )));
+    fn selection_uses_app_wired_product_capabilities() {
+        let workspace = workspace("workspace-1", "standard");
+        let session = session("session-1", &workspace.id);
+        let registrations = [registration(true, SessionLaunchExtras::default())];
+        let selected =
+            select_product_mcps(&workspace, &session, &registrations).expect("select product MCPs");
+
+        assert_eq!(selected.len(), 1);
     }
 
     #[test]
-    fn broad_reviews_selection_does_not_add_review_prompt_text() {
-        let extras = product_mcp_prompt_extras(&[SelectedProductMcp::Reviews]);
+    fn selection_skips_unavailable_app_wired_capabilities() {
+        let workspace = workspace("workspace-1", "standard");
+        let session = session("session-1", &workspace.id);
+        let registrations = [registration(false, SessionLaunchExtras::default())];
+        let selected =
+            select_product_mcps(&workspace, &session, &registrations).expect("select product MCPs");
 
-        assert!(extras.system_prompt_append.is_empty());
-        assert_eq!(extras.mcp_binding_summaries.len(), 1);
+        assert!(selected.is_empty());
     }
 
     #[test]
-    fn subagents_selection_adds_binding_summary_without_prompt_text() {
-        let extras = product_mcp_prompt_extras(&[SelectedProductMcp::Subagents]);
+    fn selected_product_extras_merge_in_launch_order() {
+        let workspace = workspace("workspace-1", "standard");
+        let session = session("session-1", &workspace.id);
+        let registrations = [
+            registration(
+                true,
+                SessionLaunchExtras {
+                    system_prompt_append: vec!["system-a".to_string()],
+                    first_prompt_system_prompt_append: Vec::new(),
+                    mcp_servers: Vec::new(),
+                    mcp_binding_summaries: Vec::new(),
+                },
+            ),
+            registration(
+                true,
+                SessionLaunchExtras {
+                    system_prompt_append: vec!["system-b".to_string()],
+                    first_prompt_system_prompt_append: vec!["first-b".to_string()],
+                    mcp_servers: Vec::new(),
+                    mcp_binding_summaries: Vec::new(),
+                },
+            ),
+        ];
+        let selected =
+            select_product_mcps(&workspace, &session, &registrations).expect("select product MCPs");
+        let extras = product_mcp_prompt_extras(&selected);
 
-        assert!(extras.system_prompt_append.is_empty());
-        assert_eq!(extras.mcp_binding_summaries.len(), 1);
-    }
-
-    #[test]
-    fn workspace_naming_selection_adds_prompt_text_and_binding_summary() {
-        let extras = product_mcp_prompt_extras(&[SelectedProductMcp::WorkspaceNaming]);
-
-        assert!(!extras.system_prompt_append.is_empty());
-        assert!(!extras.first_prompt_system_prompt_append.is_empty());
-        assert_eq!(extras.mcp_binding_summaries.len(), 1);
-        assert_eq!(
-            extras.mcp_binding_summaries[0].server_name,
-            workspace_naming_mcp::definition::ACP_SERVER_NAME
-        );
-    }
-
-    #[test]
-    fn cowork_selection_adds_prompt_text_and_binding_summary() {
-        let extras = product_mcp_prompt_extras(&[SelectedProductMcp::Cowork]);
-
-        assert!(!extras.system_prompt_append.is_empty());
-        assert_eq!(extras.mcp_binding_summaries.len(), 1);
-        assert_eq!(
-            extras.mcp_binding_summaries[0].server_name,
-            cowork_mcp::definition::ACP_SERVER_NAME
-        );
+        assert_eq!(extras.system_prompt_append, ["system-a", "system-b"]);
+        assert_eq!(extras.first_prompt_system_prompt_append, ["first-b"]);
     }
 }

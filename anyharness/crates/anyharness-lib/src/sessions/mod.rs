@@ -7,6 +7,7 @@ pub mod links;
 pub mod live_config;
 pub mod mcp_bindings;
 pub mod model;
+pub mod plan_references;
 pub mod prompt;
 pub mod replay;
 pub mod runtime;
