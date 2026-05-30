@@ -38,6 +38,7 @@ describe("ProductSidebar", () => {
                 subtitle: "proliferate-ai/proliferate",
                 active: false,
                 status: <span aria-label="running" />,
+                detail: <span aria-label="detail">D</span>,
                 trailingLabel: "Slack",
                 shortcutLabel: "⌥⌘1",
                 actions: [{ id: "more", label: "More" }],
@@ -82,6 +83,7 @@ describe("ProductSidebar", () => {
     expect(screen.getByText("Pablo")).toBeTruthy();
     expect(screen.getByText("⌘B").className).toContain("opacity-100");
     expect(screen.getByText("⌥⌘1").className).toContain("opacity-100");
+    expect(screen.getByText("Slack").parentElement?.className).toContain("ml-[5px]");
 
     fireEvent.click(screen.getByRole("button", { name: "Hide sidebar" }));
     expect(onAction).toHaveBeenCalledWith({ scope: "header", actionId: "toggle-sidebar" });
