@@ -30,7 +30,6 @@ export interface WorkspaceUiState {
   sessionLastInteracted: Record<string, string>;
   sessionLastViewedAt: Record<string, string>;
   dismissedSetupFailures: Record<string, boolean>;
-  finishSuggestionDismissalsByWorkspaceId: Record<string, string>;
   visibleChatSessionIdsByWorkspace: Record<string, string[]>;
   recentlyHiddenChatSessionIdsByWorkspace: Record<string, string[]>;
   collapsedChatGroupsByWorkspace: Record<string, string[]>;
@@ -121,8 +120,6 @@ export interface WorkspaceUiState {
   markSessionViewedAt: (sessionId: string, timestamp: string) => void;
   dismissSetupFailure: (workspaceId: string) => void;
   clearSetupFailureDismissal: (workspaceId: string) => void;
-  dismissFinishSuggestion: (workspaceId: string, readinessFingerprint: string) => void;
-  clearFinishSuggestionDismissal: (workspaceId: string) => void;
   setVisibleChatSessionIdsForWorkspace: (workspaceId: string, sessionIds: string[]) => void;
   rememberHiddenChatSessionForWorkspace: (workspaceId: string, sessionId: string) => void;
   clearHiddenChatSessionsForWorkspace: (workspaceId: string, sessionIds: string[]) => void;

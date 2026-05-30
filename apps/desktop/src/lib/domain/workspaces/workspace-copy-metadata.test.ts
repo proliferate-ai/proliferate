@@ -70,6 +70,7 @@ describe("workspaceCopyMetadataForLogicalWorkspace", () => {
         templateVersion: null,
         updatedAt: "2026-05-22T00:00:00Z",
         createdAt: "2026-05-22T00:00:00Z",
+        readyAt: "2026-05-22T00:00:00Z",
         postReadyPhase: "idle",
         postReadyFilesTotal: 0,
         postReadyFilesApplied: 0,

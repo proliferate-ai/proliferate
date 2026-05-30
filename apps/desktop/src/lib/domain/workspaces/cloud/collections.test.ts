@@ -74,6 +74,11 @@ function makeCloudWorkspace(overrides: Partial<CloudWorkspaceSummary> = {}): Clo
     actionBlockKind: overrides.actionBlockKind ?? null,
     createdAt: overrides.createdAt ?? "2026-04-06T09:00:00.000Z",
     updatedAt: overrides.updatedAt ?? "2026-04-06T09:00:00.000Z",
+    readyAt: "readyAt" in overrides
+      ? overrides.readyAt ?? null
+      : (overrides.status ?? "ready") === "ready" || (overrides.status ?? "ready") === "error"
+        ? "2026-04-06T09:00:00.000Z"
+        : null,
     postReadyPhase: overrides.postReadyPhase ?? "idle",
     postReadyFilesTotal: overrides.postReadyFilesTotal ?? 0,
     postReadyFilesApplied: overrides.postReadyFilesApplied ?? 0,

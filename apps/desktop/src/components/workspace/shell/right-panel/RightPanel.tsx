@@ -382,24 +382,6 @@ export const RightPanel = memo(function RightPanel({
     }
     return false;
   }, [activateTool, selectBrowser, selectTerminal, selectViewer]);
-  const focusRightPanelRoot = useCallback(() => {
-    rootRef.current?.focus({ preventScroll: true });
-  }, []);
-
-  useRightPanelShortcutRequests({
-    activeEntryKey: state.activeEntryKey,
-    entries: headerEntries,
-    isOpen,
-    onActivateEntry: activateRightPanelEntry,
-    onHandledRequest: focusRightPanelRoot,
-  });
-
-  const handleRootPointerDownCapture = useRightPanelRootFocus({
-    rootRef,
-    isOpen,
-    focusRequestToken,
-  });
-
   const handleCloseTerminal = useCallback(
     (terminalId: string) => {
       if (!workspaceId) {
@@ -534,6 +516,52 @@ export const RightPanel = memo(function RightPanel({
     updateState,
   ]);
 
+  const closeActiveRightPanelEntry = useCallback(() => {
+    const entry = parseRightPanelHeaderEntryKey(state.activeEntryKey);
+    if (!entry) {
+      return true;
+    }
+
+    if (entry.kind === "terminal") {
+      handleCloseTerminal(entry.terminalId);
+      return true;
+    }
+    if (entry.kind === "browser") {
+      handleCloseBrowser(entry.browserId);
+      return true;
+    }
+    if (entry.kind === "viewer") {
+      handleCloseViewer(entry.targetKey);
+      return true;
+    }
+
+    return true;
+  }, [
+    handleCloseBrowser,
+    handleCloseTerminal,
+    handleCloseViewer,
+    state.activeEntryKey,
+  ]);
+
+  const focusRightPanelRoot = useCallback(() => {
+    rootRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  useRightPanelShortcutRequests({
+    activeEntryKey: state.activeEntryKey,
+    entries: headerEntries,
+    isOpen,
+    onActivateEntry: activateRightPanelEntry,
+    onCloseActiveEntry: closeActiveRightPanelEntry,
+    onHandledRequest: focusRightPanelRoot,
+  });
+
+  const handleRootPointerDownCapture = useRightPanelRootFocus({
+    rootRef,
+    isOpen,
+    focusRequestToken,
+  });
+
   const handleUpdateBrowserUrl = useCallback((browserId: string, url: string) => {
     updateState((previous) =>
       updateBrowserTabUrlInRightPanelState(previous, browserId, url, isCloudWorkspaceSelected)
@@ -590,10 +618,8 @@ export const RightPanel = memo(function RightPanel({
       newTabMenuRequestToken={newTabMenuRequest.token}
       newTabMenuDefaultKind={newTabMenuRequest.defaultKind}
       nativeOverlaysHidden={nativeOverlaysHidden}
-      onActivateTool={activateTool}
+      onActivateEntry={activateRightPanelEntry}
       onSelectTerminal={selectTerminal}
-      onSelectBrowser={selectBrowser}
-      onSelectViewerTarget={selectViewer}
       onCloseTerminal={handleCloseTerminal}
       onCloseBrowser={handleCloseBrowser}
       onCloseViewerTarget={handleCloseViewer}

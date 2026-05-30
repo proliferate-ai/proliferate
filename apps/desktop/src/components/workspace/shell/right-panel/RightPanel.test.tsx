@@ -21,6 +21,7 @@ import {
   requestRightPanelNewTabMenu,
 } from "@/lib/infra/right-panel-new-tab-menu";
 import {
+  requestRightPanelCloseActiveTab,
   requestRightPanelRelativeTab,
   requestRightPanelTabByIndex,
 } from "@/lib/workflows/workspaces/right-panel-shortcut-requests";
@@ -402,6 +403,27 @@ describe("RightPanel viewer routing", () => {
 });
 
 describe("RightPanel tab shortcuts", () => {
+  it("activates right-panel entries from header pointer selection", async () => {
+    render(<RightPanelHarness isWorkspaceReady />);
+    const changesTab = screen.getByRole("tab", { name: "Changes" });
+
+    fireEvent.pointerDown(changesTab, {
+      button: 0,
+      pointerId: 1,
+      clientX: 12,
+      clientY: 12,
+    });
+    fireEvent.pointerUp(changesTab, {
+      button: 0,
+      pointerId: 1,
+      clientX: 12,
+      clientY: 12,
+    });
+
+    await waitFor(() => expect(screen.getByTestId("git-panel")).toBeTruthy());
+    expect(changesTab.getAttribute("aria-selected")).toBe("true");
+  });
+
   it("activates right-panel entries by option-number shortcut requests", async () => {
     const { container } = render(<RightPanelHarness isWorkspaceReady />);
     const root = container.querySelector("[data-right-panel-root='true']");
@@ -438,6 +460,47 @@ describe("RightPanel tab shortcuts", () => {
 
     expect(screen.getByRole("tab", { name: "Changes" }).getAttribute("aria-selected"))
       .toBe("true");
+  });
+
+  it("closes the active right-panel tab by routed close-tab shortcut requests", async () => {
+    render(
+      <RightPanelHarness
+        isWorkspaceReady
+        initialState={{
+          ...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE,
+          activeEntryKey: rightPanelBrowserHeaderKey("b1"),
+          headerOrder: [
+            ...DEFAULT_RIGHT_PANEL_WORKSPACE_STATE.headerOrder,
+            rightPanelBrowserHeaderKey("b1"),
+          ],
+          browserTabsById: {
+            b1: { id: "b1", url: "http://localhost:3000/" },
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("browser-panel").dataset.visible).toBe("true");
+
+    let handled = false;
+    act(() => {
+      handled = requestRightPanelCloseActiveTab();
+    });
+
+    expect(handled).toBe(true);
+    await waitFor(() => expect(screen.queryByTestId("browser-panel")).toBeNull());
+  });
+
+  it("consumes routed close-tab shortcut requests for non-closable tool tabs", async () => {
+    render(<RightPanelHarness isWorkspaceReady />);
+    let handled = false;
+
+    act(() => {
+      handled = requestRightPanelCloseActiveTab();
+    });
+
+    expect(handled).toBe(true);
+    expect(screen.getByTestId("scratch-panel")).toBeTruthy();
   });
 
   it("leaves routed shortcuts unhandled when the right panel is closed", async () => {

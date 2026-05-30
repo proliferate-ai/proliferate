@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   RIGHT_PANEL_SHORTCUT_EVENT,
+  requestRightPanelCloseActiveTab,
   requestRightPanelRelativeTab,
   requestRightPanelTabByIndex,
   rightPanelShortcutRequestFromEvent,
@@ -14,6 +15,7 @@ describe("right panel shortcut requests", () => {
   });
 
   it("reports unhandled requests when no right panel listener accepts them", () => {
+    expect(requestRightPanelCloseActiveTab()).toBe(false);
     expect(requestRightPanelRelativeTab(1)).toBe(false);
     expect(requestRightPanelTabByIndex(2)).toBe(false);
   });
@@ -34,6 +36,23 @@ describe("right panel shortcut requests", () => {
     expect(rightPanelShortcutRequestFromEvent(handler.mock.calls[0]![0])).toEqual({
       kind: "relative-tab",
       delta: -1,
+    });
+  });
+
+  it("parses close-active-tab requests", () => {
+    const handler = vi.fn((event: Event) => {
+      event.preventDefault();
+    });
+    window.addEventListener(RIGHT_PANEL_SHORTCUT_EVENT, handler);
+
+    try {
+      expect(requestRightPanelCloseActiveTab()).toBe(true);
+    } finally {
+      window.removeEventListener(RIGHT_PANEL_SHORTCUT_EVENT, handler);
+    }
+
+    expect(rightPanelShortcutRequestFromEvent(handler.mock.calls[0]![0])).toEqual({
+      kind: "close-active-tab",
     });
   });
 });

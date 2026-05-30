@@ -1,19 +1,13 @@
 // @vitest-environment jsdom
 
-import { act, isValidElement, type ReactNode } from "react";
-import { createRoot } from "react-dom/client";
+import { isValidElement, type ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import {
   Clock,
   Spinner,
 } from "@proliferate/ui/icons";
-import type {
-  SidebarDetailIndicator,
-  SidebarIndicatorAction,
-  SidebarStatusIndicator,
-} from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
+import type { SidebarStatusIndicator } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import {
-  SidebarDetailIndicatorsView,
   SidebarStatusGlyph,
 } from "./SidebarIndicators";
 
@@ -86,63 +80,3 @@ describe("SidebarStatusGlyph", () => {
     expect(countElementsByType(glyph, "span")).toBe(1);
   });
 });
-
-describe("SidebarDetailIndicatorsView", () => {
-  it("opens finish suggestion actions from the merge indicator", () => {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
-    const actions: SidebarIndicatorAction[] = [];
-    const indicator: SidebarDetailIndicator = {
-      kind: "finish_suggestion",
-      tooltip: "Ready to delete workspace",
-      workspaceId: "workspace-1",
-      logicalWorkspaceId: "path:/repo",
-      readinessFingerprint: "fingerprint-1",
-    };
-
-    act(() => {
-      root.render(
-        <SidebarDetailIndicatorsView
-          indicators={[indicator]}
-          onAction={(action) => actions.push(action)}
-        />,
-      );
-    });
-
-    const trigger = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Ready to delete workspace"]',
-    );
-    expect(trigger).not.toBeNull();
-
-    act(() => {
-      trigger?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    expect(findButtonByText("Delete workspace...")).not.toBeNull();
-    const keepActive = findButtonByText("Keep active");
-    expect(keepActive).not.toBeNull();
-
-    act(() => {
-      keepActive?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    expect(actions).toEqual([
-      {
-        kind: "keep_workspace_active",
-        workspaceId: "workspace-1",
-        readinessFingerprint: "fingerprint-1",
-      },
-    ]);
-
-    act(() => {
-      root.unmount();
-    });
-    container.remove();
-  });
-});
-
-function findButtonByText(text: string): HTMLButtonElement | null {
-  return Array.from(document.body.querySelectorAll<HTMLButtonElement>("button"))
-    .find((button) => button.textContent?.trim() === text) ?? null;
-}

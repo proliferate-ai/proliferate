@@ -17,7 +17,6 @@ import type {
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
 import { useWorkspaceMetadataSync } from "@/hooks/workspaces/lifecycle/use-workspace-metadata-sync";
-import { useWorkspaceFinishSuggestions } from "@/hooks/workspaces/derived/use-workspace-finish-suggestions";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useWorkspaceSidebarActivityStatesWithErrorAttention } from "@/hooks/workspaces/derived/use-workspace-sidebar-activities";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
@@ -87,7 +86,6 @@ export function useWorkspaceSidebarState({
   const { data: workspaceCollections } = useWorkspaces();
   const cleanupAttentionWorkspaces =
     workspaceCollections?.cleanupAttentionWorkspaces ?? EMPTY_WORKSPACES;
-  const finishSuggestionsByWorkspaceId = useWorkspaceFinishSuggestions(workspaceCollections);
   const { repoRoots } = useStandardRepoProjection();
   const { data: gitStatus } = useWorkspaceMetadataSync();
   const computeTargets = useComputeTargetOptions();
@@ -145,7 +143,6 @@ export function useWorkspaceSidebarState({
       activeSessionTitle,
       lastViewedAt,
       workspaceLastInteracted,
-      finishSuggestionsByWorkspaceId,
       targetAppearanceById: computeTargets.targetAppearanceById,
     })), [
     activeSessionTitle,
@@ -164,7 +161,6 @@ export function useWorkspaceSidebarState({
     showArchived,
     workspaceActivities,
     workspaceLastInteracted,
-    finishSuggestionsByWorkspaceId,
   ]);
   const emptyState = resolveSidebarEmptyState(logicalWorkspaces.length, groups.length);
 

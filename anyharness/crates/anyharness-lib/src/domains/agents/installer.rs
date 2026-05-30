@@ -4,12 +4,12 @@ use std::process::{Command, Stdio};
 
 use super::install_lock::AgentInstallLock;
 use super::model::*;
-use super::readiness::resolver::artifact_root;
+use super::readiness::resolver::{artifact_root, has_managed_registry_binary_for_names};
 use super::registry::built_in_registry;
 use super::seed;
 use crate::integrations::agent_cli::acp_registry::{self, ResolvedRegistryDistribution};
 use crate::integrations::agent_cli::executable::{
-    find_in_path, is_valid_executable, make_executable,
+    find_in_path, find_real_binary_in_path, is_valid_executable, make_executable,
 };
 use crate::integrations::agent_cli::launcher::{generate_launcher_script, LauncherError};
 use uuid::Uuid;
@@ -331,7 +331,13 @@ fn install_agent_process_artifact(
     let launcher_path_prefixes = launcher_path_prefixes(runtime_home, kind);
     let launcher_env = managed_launcher_env(kind);
 
-    if launcher_path.exists() && !options.reinstall {
+    if should_skip_existing_agent_process_install(
+        &spec.install,
+        kind,
+        runtime_home,
+        &launcher_path,
+        options.reinstall,
+    ) {
         return Ok(None);
     }
 
@@ -418,6 +424,47 @@ fn managed_launcher_env(kind: &AgentKind) -> HashMap<String, String> {
         env.insert("DISABLE_AUTOUPDATER".into(), "1".into());
     }
     env
+}
+
+fn should_skip_existing_agent_process_install(
+    install: &AgentProcessInstallSpec,
+    kind: &AgentKind,
+    runtime_home: &Path,
+    launcher_path: &Path,
+    reinstall: bool,
+) -> bool {
+    if reinstall || !launcher_path.exists() {
+        return false;
+    }
+
+    let AgentProcessInstallSpec::RegistryBacked { fallback, .. } = install else {
+        return true;
+    };
+    let AgentProcessFallback::BinaryHint {
+        candidate_binaries, ..
+    } = fallback
+    else {
+        return true;
+    };
+
+    if !launcher_uses_binary_hint(launcher_path, candidate_binaries) {
+        return true;
+    }
+
+    has_managed_registry_binary_for_names(runtime_home, kind, candidate_binaries)
+        || candidate_binaries
+            .iter()
+            .any(|binary| find_real_binary_in_path(binary).is_some())
+}
+
+fn launcher_uses_binary_hint(launcher_path: &Path, candidate_binaries: &[String]) -> bool {
+    let Ok(contents) = std::fs::read_to_string(launcher_path) else {
+        return false;
+    };
+    candidate_binaries.iter().any(|binary| {
+        contents.contains(&format!("exec \"{binary}\""))
+            || contents.contains(&format!("exec {binary}"))
+    })
 }
 
 fn install_from_registry(
@@ -1056,18 +1103,14 @@ fn install_agent_process_fallback(
             candidate_binaries,
             args,
         } => {
-            let bin = candidate_binaries.first().cloned().unwrap_or_default();
-            if bin.is_empty() {
+            let Some(bin) = candidate_binaries
+                .iter()
+                .find_map(|binary| find_real_binary_in_path(binary))
+            else {
                 return Err(InstallError::NotInstallable);
-            }
+            };
             std::fs::create_dir_all(managed_dir)?;
-            generate_launcher_script(
-                launcher_path,
-                &PathBuf::from(&bin),
-                args,
-                launcher_env,
-                path_prefixes,
-            )?;
+            generate_launcher_script(launcher_path, &bin, args, launcher_env, path_prefixes)?;
 
             Ok(Some(InstalledArtifactResult {
                 role: ArtifactRole::AgentProcess,
@@ -1288,6 +1331,84 @@ mod tests {
         )
         .join("claude")
         .exists());
+    }
+
+    #[test]
+    fn registry_backed_binary_hint_launcher_does_not_skip_without_backing_binary() {
+        let runtime_home = TempDirGuard::new("binary-hint-runtime").expect("runtime dir");
+        let missing_binary = format!("missing-cursor-agent-{}", Uuid::new_v4());
+        let launcher_path = artifact_root(
+            runtime_home.path(),
+            &AgentKind::Cursor,
+            &ArtifactRole::AgentProcess,
+        )
+        .join("cursor-launcher");
+        fs::create_dir_all(launcher_path.parent().expect("launcher parent"))
+            .expect("create launcher dir");
+        fs::write(
+            &launcher_path,
+            format!("#!/bin/sh\nset -e\nexec \"{missing_binary}\" acp \"$@\"\n"),
+        )
+        .expect("write launcher");
+        make_executable(&launcher_path).expect("make launcher executable");
+        let unrelated_registry_binary = artifact_root(
+            runtime_home.path(),
+            &AgentKind::Cursor,
+            &ArtifactRole::AgentProcess,
+        )
+        .join("registry_binary")
+        .join("node");
+        fs::create_dir_all(unrelated_registry_binary.parent().expect("binary parent"))
+            .expect("create registry binary dir");
+        fs::write(&unrelated_registry_binary, "#!/bin/sh\nexit 0\n")
+            .expect("write unrelated registry binary");
+        make_executable(&unrelated_registry_binary).expect("make unrelated binary executable");
+        let install = AgentProcessInstallSpec::RegistryBacked {
+            registry_id: "cursor".into(),
+            fallback: AgentProcessFallback::BinaryHint {
+                candidate_binaries: vec![missing_binary],
+                args: vec!["acp".into()],
+            },
+        };
+
+        assert!(!should_skip_existing_agent_process_install(
+            &install,
+            &AgentKind::Cursor,
+            runtime_home.path(),
+            &launcher_path,
+            false,
+        ));
+    }
+
+    #[test]
+    fn binary_hint_fallback_uses_real_binary_path() {
+        let managed_dir = TempDirGuard::new("binary-hint-managed").expect("managed dir");
+        let path_dir = TempDirGuard::new("binary-hint-path").expect("path dir");
+        let binary_path = path_dir.path().join("cursor-agent");
+        fs::write(&binary_path, "#!/bin/sh\nexit 0\n").expect("write path binary");
+        make_executable(&binary_path).expect("make path binary executable");
+        let _path_guard = PathEnvGuard::prepend(path_dir.path());
+        let launcher_path = managed_dir.path().join("cursor-launcher");
+
+        let result = install_agent_process_fallback(
+            &AgentProcessFallback::BinaryHint {
+                candidate_binaries: vec!["cursor-agent".into()],
+                args: vec!["acp".into()],
+            },
+            &AgentKind::Cursor,
+            managed_dir.path(),
+            &launcher_path,
+            &InstallOptions::default(),
+            &[],
+            &HashMap::new(),
+            None,
+        )
+        .expect("binary hint fallback install")
+        .expect("installed launcher");
+
+        assert_eq!(result.source, "binary_hint");
+        let launcher = fs::read_to_string(launcher_path).expect("read launcher");
+        assert!(launcher.contains(&format!("exec \"{}\" acp", binary_path.display())));
     }
 
     #[test]

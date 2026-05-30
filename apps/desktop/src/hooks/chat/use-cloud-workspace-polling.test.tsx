@@ -134,11 +134,96 @@ describe("useCloudWorkspacePolling", () => {
       { eventPrefix: "workspace.cloud_polling" },
     );
   });
+
+  it("marks the current awaiting cloud workspace as failed when polling returns error", async () => {
+    const workspaceId = "cloud:cloud-1";
+    const pendingEntry = {
+      ...buildSubmittingPendingWorkspaceEntry({
+        attemptId: "attempt-1",
+        selectedWorkspaceId: null,
+        source: "cloud-created",
+        displayName: "feature-branch",
+        repoLabel: "proliferate-ai/proliferate",
+        baseBranchName: "main",
+        request: {
+          kind: "select-existing" as const,
+          workspaceId,
+        },
+      }),
+      stage: "awaiting-cloud-ready" as const,
+      workspaceId,
+    };
+    useSessionSelectionStore.setState({
+      pendingWorkspaceEntry: pendingEntry,
+      selectedWorkspaceId: workspaceId,
+    });
+    mocks.refreshCloudWorkspace.mockResolvedValueOnce(cloudWorkspace({
+      status: "error",
+      lastError: "Provisioning failed",
+    }));
+
+    renderHook(() => useCloudWorkspacePolling());
+
+    await waitFor(() => {
+      expect(useSessionSelectionStore.getState().pendingWorkspaceEntry).toMatchObject({
+        stage: "failed",
+        workspaceId,
+        errorMessage: "Provisioning failed",
+        request: { kind: "select-existing", workspaceId },
+      });
+    });
+    expect(mocks.selectWorkspace).not.toHaveBeenCalled();
+    expect(mocks.materializePendingWorkspaceSessions).not.toHaveBeenCalled();
+  });
+
+  it("marks the current awaiting cloud workspace as failed when the cached cloud workspace is already error", async () => {
+    const workspaceId = "cloud:cloud-1";
+    const pendingEntry = {
+      ...buildSubmittingPendingWorkspaceEntry({
+        attemptId: "attempt-1",
+        selectedWorkspaceId: null,
+        source: "cloud-created",
+        displayName: "feature-branch",
+        repoLabel: "proliferate-ai/proliferate",
+        baseBranchName: "main",
+        request: {
+          kind: "select-existing" as const,
+          workspaceId,
+        },
+      }),
+      stage: "awaiting-cloud-ready" as const,
+      workspaceId,
+    };
+    mocks.workspaceCollections.cloudWorkspaces = [cloudWorkspace({
+      status: "error",
+      lastError: "Provisioning failed before poll",
+    })];
+    useSessionSelectionStore.setState({
+      pendingWorkspaceEntry: pendingEntry,
+      selectedWorkspaceId: workspaceId,
+    });
+
+    renderHook(() => useCloudWorkspacePolling());
+
+    await waitFor(() => {
+      expect(useSessionSelectionStore.getState().pendingWorkspaceEntry).toMatchObject({
+        stage: "failed",
+        workspaceId,
+        errorMessage: "Provisioning failed before poll",
+        request: { kind: "select-existing", workspaceId },
+      });
+    });
+    expect(mocks.refreshCloudWorkspace).not.toHaveBeenCalled();
+    expect(mocks.selectWorkspace).not.toHaveBeenCalled();
+    expect(mocks.materializePendingWorkspaceSessions).not.toHaveBeenCalled();
+  });
 });
 
-function cloudWorkspace(input: {
-  status: CloudWorkspaceSummary["status"];
-}): CloudWorkspaceSummary {
+function cloudWorkspace(
+  input: Partial<CloudWorkspaceSummary> & {
+    status: CloudWorkspaceSummary["status"];
+  },
+): CloudWorkspaceSummary {
   return {
     id: "cloud-1",
     displayName: "feature-branch",
@@ -152,11 +237,16 @@ function cloudWorkspace(input: {
     status: input.status,
     workspaceStatus: input.status,
     runtime: undefined,
-    statusDetail: null,
-    lastError: null,
+    statusDetail: input.statusDetail ?? null,
+    lastError: input.lastError ?? null,
     templateVersion: null,
     updatedAt: null,
     createdAt: null,
+    readyAt: "readyAt" in input
+      ? input.readyAt ?? null
+      : input.status === "ready"
+        ? "2026-04-14T00:00:00Z"
+        : null,
     actionBlockKind: null,
     actionBlockReason: null,
     postReadyPhase: "",

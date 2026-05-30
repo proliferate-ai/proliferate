@@ -216,12 +216,6 @@ describe("visibleSidebarShortcutTargetIds", () => {
       lastViewedAt: {
         "workspace-a": "2026-04-13T10:00:00.000Z",
       },
-      finishSuggestionsByWorkspaceId: {
-        "workspace-a-materialization": {
-          workspaceId: "workspace-a-materialization",
-          readinessFingerprint: "fingerprint-1",
-        },
-      },
     });
 
     const readTargets = (groups: typeof baseGroups) => visibleSidebarShortcutTargetIds({

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use super::installer::{self, InstallError, InstallOptions, InstalledArtifactResult};
 use super::model::*;
-use super::readiness::resolver::resolve_agent;
+use super::readiness::resolver::{managed_registry_binary_for_names, resolve_agent};
 use super::reconcile::execution::{AgentReconcileJobSnapshot, AgentReconcileService};
 use super::registry::built_in_registry;
 use super::seed::AgentSeedStore;
@@ -226,13 +226,64 @@ fn managed_login_command(
 ) -> Option<AgentLoginCommand> {
     let login = descriptor.auth.login.as_ref()?;
     let resolved = resolve_agent(descriptor, runtime_home);
-    let native = resolved.native.as_ref()?;
-    if native.source.as_deref() == Some("path") {
-        return None;
+    if let Some(native) = resolved.native.as_ref() {
+        if native.source.as_deref() != Some("path") {
+            if let Some(path) = native.path.as_ref() {
+                return Some(AgentLoginCommand {
+                    program: path.display().to_string(),
+                    args: login.command.args.clone(),
+                });
+            }
+        }
     }
-    let path = native.path.as_ref()?;
-    Some(AgentLoginCommand {
-        program: path.display().to_string(),
-        args: login.command.args.clone(),
-    })
+
+    if let Some(path) = managed_registry_binary_for_names(
+        runtime_home,
+        &descriptor.kind,
+        &[login.command.program.as_str()],
+    ) {
+        return Some(AgentLoginCommand {
+            program: path.display().to_string(),
+            args: login.command.args.clone(),
+        });
+    }
+
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domains::agents::readiness::resolver::artifact_root;
+    use crate::integrations::agent_cli::executable::make_executable;
+
+    fn make_temp_dir(prefix: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!("{prefix}-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&path).expect("create temp dir");
+        path
+    }
+
+    #[test]
+    fn managed_login_command_uses_registry_binary_for_agent_process_installs() {
+        let cursor = descriptor_for_kind("cursor").expect("cursor descriptor");
+        let runtime_home = make_temp_dir("anyharness-login-registry-binary-test");
+        let binary_path = artifact_root(
+            &runtime_home,
+            &AgentKind::Cursor,
+            &ArtifactRole::AgentProcess,
+        )
+        .join("registry_binary")
+        .join("cursor-agent");
+        std::fs::create_dir_all(binary_path.parent().expect("binary parent"))
+            .expect("create registry binary dir");
+        std::fs::write(&binary_path, "#!/bin/sh\nexit 0\n").expect("write binary");
+        make_executable(&binary_path).expect("make binary executable");
+
+        let command = managed_login_command(&cursor, &runtime_home).expect("managed login command");
+
+        assert_eq!(command.program, binary_path.display().to_string());
+        assert_eq!(command.args, vec!["login".to_string()]);
+
+        let _ = std::fs::remove_dir_all(runtime_home);
+    }
 }

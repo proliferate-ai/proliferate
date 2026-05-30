@@ -47,10 +47,8 @@ interface RightPanelFrameProps {
   newTabMenuRequestToken: number;
   newTabMenuDefaultKind: RightPanelNewTabMenuDefault;
   nativeOverlaysHidden: boolean;
-  onActivateTool: (tool: RightPanelTool) => void;
+  onActivateEntry: (entryKey: RightPanelHeaderEntryKey) => boolean;
   onSelectTerminal: (terminalId: string) => void;
-  onSelectBrowser: (browserId: string) => void;
-  onSelectViewerTarget: (targetKey: RightPanelHeaderEntryKey) => void;
   onCloseTerminal: (terminalId: string) => void;
   onCloseBrowser: (browserId: string) => void;
   onCloseViewerTarget: (targetKey: RightPanelHeaderEntryKey) => void;
@@ -94,10 +92,8 @@ export function RightPanelFrame({
   newTabMenuRequestToken,
   newTabMenuDefaultKind,
   nativeOverlaysHidden,
-  onActivateTool,
+  onActivateEntry,
   onSelectTerminal,
-  onSelectBrowser,
-  onSelectViewerTarget,
   onCloseTerminal,
   onCloseBrowser,
   onCloseViewerTarget,
@@ -128,10 +124,7 @@ export function RightPanelFrame({
         isWorkspaceReady={isWorkspaceReady}
         newTabMenuRequestToken={newTabMenuRequestToken}
         newTabMenuDefaultKind={newTabMenuDefaultKind}
-        onActivateTool={onActivateTool}
-        onSelectTerminal={onSelectTerminal}
-        onSelectBrowser={onSelectBrowser}
-        onSelectViewerTarget={onSelectViewerTarget}
+        onActivateEntry={onActivateEntry}
         onCloseTerminal={onCloseTerminal}
         onCloseBrowser={onCloseBrowser}
         onCloseViewerTarget={onCloseViewerTarget}

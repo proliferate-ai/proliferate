@@ -1,4 +1,5 @@
 import type { RepoRoot } from "@anyharness/sdk";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { repoRootGroupKey } from "@/lib/domain/workspaces/cloud/collections";
 import {
   buildPendingWorkspaceUiKey,
@@ -72,7 +73,7 @@ export function buildPendingSidebarProjection(args: {
     item: {
       id,
       localWorkspaceId: null,
-      cloudWorkspaceId: null,
+      cloudWorkspaceId: pendingSelectExistingCloudWorkspaceId(entry),
       name: entry.displayName,
       defaultName: entry.displayName,
       hasDisplayNameOverride: false,
@@ -106,9 +107,10 @@ function pendingSidebarVariant(entry: PendingWorkspaceEntry): SidebarWorkspaceVa
       return "worktree";
     case "cloud":
       return "cloud";
+    case "select-existing":
+      return pendingSelectExistingCloudWorkspaceId(entry) ? "cloud" : "local";
     case "local":
     case "cowork":
-    case "select-existing":
       return "local";
   }
 }
@@ -131,7 +133,58 @@ function pendingSidebarRepoKey(
     case "cowork":
       return entry.request.input.sourceWorkspaceId?.trim() || null;
     case "select-existing":
+      return pendingSelectExistingCloudWorkspaceId(entry)
+        ? pendingCloudRepoKeyFromLabel(entry) ?? (entry.request.workspaceId.trim() || null)
+        : entry.request.workspaceId.trim() || null;
+  }
+}
+
+function pendingCloudRepoKeyFromLabel(entry: PendingWorkspaceEntry): string | null {
+  const repoLabel = entry.repoLabel?.trim();
+  if (!repoLabel) {
+    return null;
+  }
+  const [owner, repoName, ...rest] = repoLabel.split("/");
+  if (!owner || !repoName || rest.length > 0) {
+    return null;
+  }
+  return `github:${owner}:${repoName}`;
+}
+
+function pendingSelectExistingCloudWorkspaceId(entry: PendingWorkspaceEntry): string | null {
+  if (entry.source !== "cloud-created" || entry.request.kind !== "select-existing") {
+    return null;
+  }
+  return parseCloudWorkspaceSyntheticId(entry.request.workspaceId);
+}
+
+function pendingCloudRepoKeyOrWorkspaceId(entry: PendingWorkspaceEntry): string | null {
+  if (entry.request.kind !== "select-existing" || !pendingSelectExistingCloudWorkspaceId(entry)) {
+    return null;
+  }
+  return pendingCloudRepoKeyFromLabel(entry) ?? (entry.request.workspaceId.trim() || null);
+}
+
+function pendingSelectExistingSourceRoot(entry: PendingWorkspaceEntry): string | null {
+  if (entry.request.kind !== "select-existing") {
+    return null;
+  }
+  const cloudSourceRoot = pendingCloudRepoKeyOrWorkspaceId(entry);
+  if (cloudSourceRoot) {
+    return cloudSourceRoot;
+  }
+  return null;
+}
+
+function pendingExistingWorkspaceKey(entry: PendingWorkspaceEntry): string | null {
+  switch (entry.request.kind) {
+    case "select-existing":
       return entry.request.workspaceId.trim() || null;
+    case "local":
+    case "worktree":
+    case "cloud":
+    case "cowork":
+      return null;
   }
 }
 
@@ -146,8 +199,9 @@ function pendingSidebarSourceRoot(entry: PendingWorkspaceEntry): string | null {
     case "cloud":
       return `${entry.request.input.gitProvider}:${entry.request.input.gitOwner}:${entry.request.input.gitRepoName}`;
     case "cowork":
-    case "select-existing":
       return null;
+    case "select-existing":
+      return pendingSelectExistingSourceRoot(entry) ?? pendingExistingWorkspaceKey(entry);
   }
 }
 

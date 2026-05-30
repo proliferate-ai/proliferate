@@ -8,9 +8,9 @@ import {
   Cloud,
   ExternalLink,
   GitBranch,
-  Globe,
   Loader2,
   Plus,
+  Smartphone,
   Sparkles,
   Users,
   Wrench,
@@ -861,7 +861,7 @@ function iconForComposerFooterControl(
     case "external":
       return ExternalLink;
     case "globe":
-      return Globe;
+      return Smartphone;
     case "sparkles":
       return Sparkles;
     case "users":

@@ -291,24 +291,6 @@ describe("workspace ui tab persistence", () => {
       .toHaveLength(50);
   });
 
-  it("stores and clears finish suggestion dismissals", () => {
-    useWorkspaceUiStore.setState({
-      ...WORKSPACE_UI_DEFAULTS,
-      _hydrated: true,
-    });
-
-    const store = useWorkspaceUiStore.getState();
-    store.dismissFinishSuggestion("w1", "fingerprint-1");
-    expect(
-      useWorkspaceUiStore.getState().finishSuggestionDismissalsByWorkspaceId.w1,
-    ).toBe("fingerprint-1");
-
-    store.clearFinishSuggestionDismissal("w1");
-    expect(
-      useWorkspaceUiStore.getState().finishSuggestionDismissalsByWorkspaceId.w1,
-    ).toBeUndefined();
-  });
-
   it("toggles collapsed chat groups per workspace", () => {
     useWorkspaceUiStore.setState({
       ...WORKSPACE_UI_DEFAULTS,

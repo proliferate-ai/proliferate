@@ -5,6 +5,7 @@ import {
 } from "@/lib/domain/workspaces/creation/pending-entry";
 import {
   buildGroups,
+  makeCloudLogicalWorkspace,
   makeLocalLogicalWorkspace,
   makeRepoRoot,
 } from "./sidebar-test-fixtures";
@@ -113,6 +114,56 @@ describe("pending sidebar projection", () => {
       defaultName: "papaya",
       active: true,
       variant: "worktree",
+      localWorkspaceId: null,
+      renameSupported: false,
+    });
+  });
+
+  it("keeps a cloud-created select-existing pending row cloud-shaped during handoff", () => {
+    const pendingWorkspaceEntry = {
+      ...buildSubmittingPendingWorkspaceEntry({
+        attemptId: "attempt-1",
+        selectedWorkspaceId: null,
+        source: "cloud-created",
+        displayName: "feature-branch",
+        repoLabel: "proliferate-ai/proliferate",
+        baseBranchName: "main",
+        request: {
+          kind: "select-existing" as const,
+          workspaceId: "cloud:cloud-1",
+        },
+      }),
+      stage: "awaiting-cloud-ready" as const,
+      workspaceId: "cloud:cloud-1",
+    };
+
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeCloudLogicalWorkspace({
+          id: "logical-cloud",
+          cloudWorkspaceId: "cloud-1",
+          repoKey: "github:proliferate-ai:proliferate",
+          repoName: "proliferate",
+          branch: "feature-branch",
+        }),
+      ],
+      pendingWorkspaceEntry,
+      selectedWorkspaceId: "cloud:cloud-1",
+      selectedLogicalWorkspaceId: null,
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.sourceRoot).toBe("github:proliferate-ai:proliferate");
+    expect(groups[0]?.items).toHaveLength(1);
+    expect(groups[0]?.allLogicalWorkspaceIds).toEqual([
+      buildPendingWorkspaceUiKey(pendingWorkspaceEntry),
+    ]);
+    expect(groups[0]?.items[0]).toMatchObject({
+      id: buildPendingWorkspaceUiKey(pendingWorkspaceEntry),
+      name: "feature-branch",
+      active: true,
+      variant: "cloud",
+      cloudWorkspaceId: "cloud-1",
       localWorkspaceId: null,
       renameSupported: false,
     });

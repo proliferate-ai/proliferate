@@ -3,8 +3,13 @@ import type { ShortcutDigit } from "@/lib/domain/shortcuts/matching";
 export const RIGHT_PANEL_SHORTCUT_EVENT = "proliferate:right-panel-shortcut";
 
 export type RightPanelShortcutRequest =
+  | { kind: "close-active-tab" }
   | { kind: "relative-tab"; delta: -1 | 1 }
   | { kind: "tab-by-index"; digit: ShortcutDigit };
+
+export function requestRightPanelCloseActiveTab(): boolean {
+  return dispatchRightPanelShortcutRequest({ kind: "close-active-tab" });
+}
 
 export function requestRightPanelRelativeTab(delta: -1 | 1): boolean {
   return dispatchRightPanelShortcutRequest({ kind: "relative-tab", delta });
@@ -22,6 +27,10 @@ export function rightPanelShortcutRequestFromEvent(
   }
 
   const detail = event.detail as Partial<RightPanelShortcutRequest> | undefined;
+  if (detail?.kind === "close-active-tab") {
+    return { kind: "close-active-tab" };
+  }
+
   if (detail?.kind === "relative-tab") {
     return detail.delta === -1 || detail.delta === 1
       ? { kind: "relative-tab", delta: detail.delta }

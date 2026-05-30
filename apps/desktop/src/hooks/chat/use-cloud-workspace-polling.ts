@@ -39,8 +39,19 @@ export function useCloudWorkspacePolling() {
   const cloudWorkspace = workspaceCollections?.cloudWorkspaces.find(
     (workspace) => workspace.id === cloudWorkspaceId,
   ) ?? null;
+  const selectedPendingCloudWorkspaceIsAwaiting = pendingWorkspaceEntry?.workspaceId === selectedWorkspaceId
+    && pendingWorkspaceEntry.stage === "awaiting-cloud-ready";
+  const shouldHandleCachedCloudWorkspaceFailure = Boolean(
+    cloudWorkspace
+    && cloudWorkspace.status === "error"
+    && selectedPendingCloudWorkspaceIsAwaiting,
+  );
   const shouldPollCloudWorkspace = Boolean(
-    cloudWorkspace && shouldPollCloudWorkspaceForUpdates(cloudWorkspace),
+    cloudWorkspace
+    && (
+      shouldPollCloudWorkspaceForUpdates(cloudWorkspace)
+      || shouldHandleCachedCloudWorkspaceFailure
+    ),
   );
 
   useEffect(() => {
@@ -65,6 +76,23 @@ export function useCloudWorkspacePolling() {
       pendingElapsedMs: pendingWorkspaceEntry ? elapsedSince(pendingWorkspaceEntry.createdAt) : null,
     });
 
+    if (shouldHandleCachedCloudWorkspaceFailure && cloudWorkspace && pendingWorkspaceEntry) {
+      setPendingWorkspaceEntry({
+        ...pendingWorkspaceEntry,
+        stage: "failed",
+        request: { kind: "select-existing", workspaceId: selectedWorkspaceId },
+        errorMessage: cloudWorkspace.lastError
+          ?? cloudWorkspace.statusDetail
+          ?? "Cloud workspace provisioning failed.",
+      });
+      logLatency("workspace.cloud_polling.failed", {
+        workspaceId: selectedWorkspaceId,
+        pendingAttemptId: pendingWorkspaceEntry.attemptId,
+        errorMessage: cloudWorkspace.lastError ?? cloudWorkspace.statusDetail ?? null,
+      });
+      return;
+    }
+
     const poll = async () => {
       let shouldScheduleNextPoll = true;
       const pollStartedAt = startLatencyTimer();
@@ -78,6 +106,31 @@ export function useCloudWorkspacePolling() {
           pendingElapsedMs: pendingWorkspaceEntry ? elapsedSince(pendingWorkspaceEntry.createdAt) : null,
         });
         if (cancelled) {
+          return;
+        }
+
+        if (workspace.status === "error") {
+          shouldScheduleNextPoll = false;
+          const pending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+          if (
+            pending
+            && pending.workspaceId === selectedWorkspaceId
+            && pending.stage === "awaiting-cloud-ready"
+          ) {
+            setPendingWorkspaceEntry({
+              ...pending,
+              stage: "failed",
+              request: { kind: "select-existing", workspaceId: selectedWorkspaceId },
+              errorMessage: workspace.lastError
+                ?? workspace.statusDetail
+                ?? "Cloud workspace provisioning failed.",
+            });
+          }
+          logLatency("workspace.cloud_polling.failed", {
+            workspaceId: selectedWorkspaceId,
+            pendingAttemptId: pending?.attemptId ?? null,
+            errorMessage: workspace.lastError ?? workspace.statusDetail ?? null,
+          });
           return;
         }
 
@@ -176,6 +229,7 @@ export function useCloudWorkspacePolling() {
       }
     };
   }, [
+    cloudWorkspace,
     cloudWorkspaceId,
     materializePendingWorkspaceSessions,
     pendingWorkspaceEntry,
@@ -184,6 +238,7 @@ export function useCloudWorkspacePolling() {
     selectedWorkspaceId,
     setPendingWorkspaceEntry,
     setWorkspaceArrivalEvent,
+    shouldHandleCachedCloudWorkspaceFailure,
     shouldPollCloudWorkspace,
   ]);
 }

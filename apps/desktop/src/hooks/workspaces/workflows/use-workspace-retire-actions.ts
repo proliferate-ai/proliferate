@@ -4,7 +4,6 @@ import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/us
 import { clearWorkspaceRuntimeState } from "@/hooks/workspaces/selection/clear-runtime-state";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import {
@@ -22,9 +21,6 @@ export function useWorkspaceRetireActions() {
   const setSelectedLogicalWorkspaceId = useSessionSelectionStore(
     (state) => state.setSelectedLogicalWorkspaceId,
   );
-  const clearFinishSuggestionDismissal = useWorkspaceUiStore(
-    (state) => state.clearFinishSuggestionDismissal,
-  );
 
   return {
     markDone: async (
@@ -34,7 +30,6 @@ export function useWorkspaceRetireActions() {
       const connection = { runtimeUrl };
       const result = await purgeWorkspace(connection, workspaceId);
       if (result.outcome === "deleted") {
-        clearFinishSuggestionDismissal(workspaceId);
         const selectedWorkspaceId = useSessionSelectionStore.getState().selectedWorkspaceId;
         const selectedLogicalWorkspaceId =
           useSessionSelectionStore.getState().selectedLogicalWorkspaceId;

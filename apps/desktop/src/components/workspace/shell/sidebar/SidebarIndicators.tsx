@@ -1,19 +1,15 @@
 import type { MouseEvent, ReactNode } from "react";
-import { useState } from "react";
 import {
   ArrowRight,
   CircleAlert,
   CircleUser,
   Clock,
-  GitMerge,
   Globe,
   BotMessageSquare,
   MessageSquare,
   Spinner,
 } from "@proliferate/ui/icons";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import type {
   SidebarDetailIndicator,
@@ -135,16 +131,6 @@ function SidebarDetailIndicatorView({
     );
   }
 
-  if (indicator.kind === "finish_suggestion") {
-    return (
-      <FinishSuggestionIndicator
-        indicator={indicator}
-        className={className}
-        onAction={onAction}
-      />
-    );
-  }
-
   if (indicator.kind === "cloud_access" || indicator.kind === "cloud_exposure") {
     const glyph = indicator.kind === "cloud_access"
       ? <CircleUser className="size-3" />
@@ -204,96 +190,6 @@ function detailToneClass(
   }
 }
 
-function FinishSuggestionIndicator({
-  indicator,
-  className,
-  onAction,
-}: {
-  indicator: Extract<SidebarDetailIndicator, { kind: "finish_suggestion" }>;
-  className: string;
-  onAction?: (action: SidebarIndicatorAction) => void;
-}) {
-  const [confirming, setConfirming] = useState(false);
-  const trigger = (
-    <IconButton
-      tone="sidebar"
-      size="sm"
-      title={indicator.tooltip}
-      onClick={(event: MouseEvent<HTMLButtonElement>) => {
-        event.stopPropagation();
-      }}
-      className={`!size-4 !px-0 hover:bg-transparent ${className}`}
-    >
-      <GitMerge className="size-3" />
-    </IconButton>
-  );
-
-  return (
-    <Tooltip content={indicator.tooltip} className="inline-flex shrink-0 items-center justify-center">
-      <PopoverButton
-        trigger={trigger}
-        stopPropagation
-        className={`w-64 ${POPOVER_SURFACE_CLASS}`}
-        onOpenChange={(isOpen) => {
-          if (!isOpen) setConfirming(false);
-        }}
-      >
-        {(close) => confirming ? (
-          <>
-            <div className="px-2.5 py-2 text-sm text-foreground">
-              <div className="font-medium">Delete workspace?</div>
-              <div className="mt-1 text-xs leading-4 text-muted-foreground">
-                This removes the local worktree, workspace record, chat history, and local agent
-                artifacts for this workspace. Commits, branches, and pull requests are not deleted.
-              </div>
-              <div className="mt-1 text-xs leading-4 text-muted-foreground">
-                This cannot be undone from Proliferate.
-              </div>
-            </div>
-            <PopoverMenuItem
-              label="Delete workspace"
-              variant="sidebar"
-              onClick={() => {
-                close();
-                onAction?.({
-                  kind: "mark_workspace_done",
-                  workspaceId: indicator.workspaceId,
-                  logicalWorkspaceId: indicator.logicalWorkspaceId,
-                });
-              }}
-            />
-            <PopoverMenuItem
-              label="Cancel"
-              variant="sidebar"
-              onClick={() => setConfirming(false)}
-            />
-          </>
-        ) : (
-          <>
-            <PopoverMenuItem
-              label="Delete workspace..."
-              variant="sidebar"
-              onClick={() => setConfirming(true)}
-            />
-            <PopoverMenuItem
-              label="Keep active"
-              variant="sidebar"
-              onClick={() => {
-                close();
-                onAction?.({
-                  kind: "keep_workspace_active",
-                  workspaceId: indicator.workspaceId,
-                  readinessFingerprint: indicator.readinessFingerprint,
-                });
-              }}
-            />
-          </>
-        )}
-      </PopoverButton>
-    </Tooltip>
-  );
-}
-
 function detailIndicatorKey(indicator: SidebarDetailIndicator): string {
   switch (indicator.kind) {
     case "materialization":
@@ -308,7 +204,5 @@ function detailIndicatorKey(indicator: SidebarDetailIndicator): string {
       return "automation";
     case "agent":
       return "agent";
-    case "finish_suggestion":
-      return `finish:${indicator.workspaceId}:${indicator.readinessFingerprint}`;
   }
 }

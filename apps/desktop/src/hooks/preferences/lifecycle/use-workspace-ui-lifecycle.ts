@@ -58,8 +58,6 @@ async function readWorkspaceUiState(): Promise<{
       showArchived: WORKSPACE_UI_DEFAULTS.showArchived,
       threadsCollapsed: WORKSPACE_UI_DEFAULTS.threadsCollapsed,
       dismissedSetupFailures: WORKSPACE_UI_DEFAULTS.dismissedSetupFailures,
-      finishSuggestionDismissalsByWorkspaceId:
-        WORKSPACE_UI_DEFAULTS.finishSuggestionDismissalsByWorkspaceId,
       visibleChatSessionIdsByWorkspace: WORKSPACE_UI_DEFAULTS.visibleChatSessionIdsByWorkspace,
       recentlyHiddenChatSessionIdsByWorkspace:
         WORKSPACE_UI_DEFAULTS.recentlyHiddenChatSessionIdsByWorkspace,

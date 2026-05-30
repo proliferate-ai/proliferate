@@ -5,7 +5,9 @@ use std::process::Command;
 use crate::domains::agents::credentials::{detect_credentials, detect_credentials_with_env};
 use crate::domains::agents::model::*;
 use crate::domains::agents::seed;
-use crate::integrations::agent_cli::executable::{find_in_path, is_valid_executable};
+use crate::integrations::agent_cli::executable::{
+    find_in_path, find_real_binary_in_path, is_valid_executable,
+};
 
 pub fn resolve_agent(descriptor: &AgentDescriptor, runtime_home: &Path) -> ResolvedAgent {
     resolve_agent_with_env(descriptor, runtime_home, &BTreeMap::new())
@@ -39,7 +41,7 @@ pub fn resolve_agent_with_env(
             agent_process = fallback_artifact;
             spawn = fallback_spawn;
         } else if !agent_process.installed {
-            if let Some(found) = find_in_path(&descriptor.launch.executable_name) {
+            if let Some(found) = resolve_agent_process_path_fallback(descriptor) {
                 agent_process = found_artifact(ArtifactRole::AgentProcess, found, "path");
             }
         }
@@ -145,6 +147,18 @@ fn resolve_agent_process_artifact(
             );
             for path in &managed_candidates {
                 if path.exists() {
+                    if let Some(message) =
+                        registry_backed_launcher_issue(&spec.install, kind, runtime_home, path)
+                    {
+                        return ResolvedArtifact {
+                            role: ArtifactRole::AgentProcess,
+                            installed: false,
+                            source: Some("managed".into()),
+                            version: None,
+                            path: Some(path.clone()),
+                            message: Some(message),
+                        };
+                    }
                     return found_artifact(ArtifactRole::AgentProcess, path.clone(), "managed");
                 }
             }
@@ -167,7 +181,7 @@ fn resolve_agent_process_artifact(
                 .file_name()
                 .and_then(|name| name.to_str())
             {
-                if let Some(found) = find_in_path(binary_name) {
+                if let Some(found) = find_real_binary_in_path(binary_name) {
                     return found_artifact(ArtifactRole::AgentProcess, found, "path");
                 }
             }
@@ -250,7 +264,7 @@ fn resolve_agent_process_fallback(
             args,
         } => {
             for binary in candidate_binaries {
-                if let Some(found) = find_in_path(binary) {
+                if let Some(found) = find_real_binary_in_path(binary) {
                     return Some((
                         found_artifact(ArtifactRole::AgentProcess, found.clone(), "path"),
                         Some(SpawnSpec {
@@ -281,7 +295,7 @@ fn resolve_agent_process_fallback(
             executable_relpath, ..
         } => {
             let binary_name = executable_relpath.file_name()?.to_str()?;
-            find_in_path(binary_name).map(|found| {
+            find_real_binary_in_path(binary_name).map(|found| {
                 (
                     found_artifact(ArtifactRole::AgentProcess, found, "path"),
                     None,
@@ -289,6 +303,23 @@ fn resolve_agent_process_fallback(
             })
         }
     }
+}
+
+fn resolve_agent_process_path_fallback(descriptor: &AgentDescriptor) -> Option<PathBuf> {
+    if uses_registry_binary_hint(&descriptor.agent_process.install) {
+        return None;
+    }
+    find_real_binary_in_path(&descriptor.launch.executable_name)
+}
+
+fn uses_registry_binary_hint(install: &AgentProcessInstallSpec) -> bool {
+    matches!(
+        install,
+        AgentProcessInstallSpec::RegistryBacked {
+            fallback: AgentProcessFallback::BinaryHint { .. },
+            ..
+        }
+    )
 }
 
 fn resolve_agent_process_override(kind: &AgentKind) -> Option<(SpawnSpec, ResolvedArtifact)> {
@@ -476,6 +507,95 @@ pub(crate) fn artifact_root(runtime_home: &Path, kind: &AgentKind, role: &Artifa
         })
 }
 
+pub(crate) fn managed_registry_binary_for_names(
+    runtime_home: &Path,
+    kind: &AgentKind,
+    expected_names: &[&str],
+) -> Option<PathBuf> {
+    let storage =
+        artifact_root(runtime_home, kind, &ArtifactRole::AgentProcess).join("registry_binary");
+    find_executable_by_name(&storage, expected_names)
+}
+
+pub(crate) fn has_managed_registry_binary_for_names(
+    runtime_home: &Path,
+    kind: &AgentKind,
+    expected_names: &[String],
+) -> bool {
+    let expected_names = expected_names
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    managed_registry_binary_for_names(runtime_home, kind, &expected_names).is_some()
+}
+
+fn registry_backed_launcher_issue(
+    install: &AgentProcessInstallSpec,
+    kind: &AgentKind,
+    runtime_home: &Path,
+    launcher_path: &Path,
+) -> Option<String> {
+    let AgentProcessInstallSpec::RegistryBacked { fallback, .. } = install else {
+        return None;
+    };
+    let AgentProcessFallback::BinaryHint {
+        candidate_binaries, ..
+    } = fallback
+    else {
+        return None;
+    };
+
+    if !launcher_uses_binary_hint(launcher_path, candidate_binaries) {
+        return None;
+    }
+
+    if has_managed_registry_binary_for_names(runtime_home, kind, candidate_binaries)
+        || candidate_binaries
+            .iter()
+            .any(|binary| find_real_binary_in_path(binary).is_some())
+    {
+        return None;
+    }
+
+    Some(format!(
+        "Managed launcher exists, but none of its backing binaries were found on PATH: {}.",
+        candidate_binaries.join(", ")
+    ))
+}
+
+fn launcher_uses_binary_hint(launcher_path: &Path, candidate_binaries: &[String]) -> bool {
+    let Ok(contents) = std::fs::read_to_string(launcher_path) else {
+        return false;
+    };
+    candidate_binaries.iter().any(|binary| {
+        contents.contains(&format!("exec \"{binary}\""))
+            || contents.contains(&format!("exec {binary}"))
+    })
+}
+
+fn find_executable_by_name(dir: &Path, expected_names: &[&str]) -> Option<PathBuf> {
+    for entry in std::fs::read_dir(dir).ok()?.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(found) = find_executable_by_name(&path, expected_names) {
+                return Some(found);
+            }
+            continue;
+        }
+        if !is_valid_executable(&path) {
+            continue;
+        }
+        if path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| expected_names.iter().any(|expected| expected == &name))
+        {
+            return Some(path);
+        }
+    }
+    None
+}
+
 fn detect_runtime_compatibility_issue(
     descriptor: &AgentDescriptor,
     agent_process: &ResolvedArtifact,
@@ -595,6 +715,37 @@ fn parse_node_version(raw: &str) -> Option<NodeVersion> {
 mod tests {
     use super::*;
     use crate::domains::agents::registry::built_in_registry;
+    use crate::integrations::agent_cli::executable::make_executable;
+
+    fn make_temp_dir(prefix: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!("{prefix}-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&path).expect("create temp dir");
+        path
+    }
+
+    struct PathEnvGuard {
+        original: Option<std::ffi::OsString>,
+    }
+
+    impl PathEnvGuard {
+        fn set(path: &Path) -> Self {
+            let original = std::env::var_os("PATH");
+            let paths = vec![path.to_path_buf()];
+            let joined = std::env::join_paths(paths).expect("join PATH");
+            std::env::set_var("PATH", joined);
+            Self { original }
+        }
+    }
+
+    impl Drop for PathEnvGuard {
+        fn drop(&mut self) {
+            if let Some(original) = &self.original {
+                std::env::set_var("PATH", original);
+            } else {
+                std::env::remove_var("PATH");
+            }
+        }
+    }
 
     #[test]
     fn parses_node_versions() {
@@ -633,6 +784,117 @@ mod tests {
                 PathBuf::from("/tmp/claude/node_modules/.bin/claude-agent-acp"),
             ]
         );
+    }
+
+    #[test]
+    fn managed_registry_binary_for_names_finds_registry_binary() {
+        let runtime_home = make_temp_dir("anyharness-registry-binary-test");
+        let binary_path = artifact_root(
+            &runtime_home,
+            &AgentKind::Cursor,
+            &ArtifactRole::AgentProcess,
+        )
+        .join("registry_binary")
+        .join("cursor-agent");
+        std::fs::create_dir_all(binary_path.parent().expect("binary parent"))
+            .expect("create registry binary dir");
+        std::fs::write(&binary_path, "#!/bin/sh\nexit 0\n").expect("write binary");
+        make_executable(&binary_path).expect("make binary executable");
+
+        assert_eq!(
+            managed_registry_binary_for_names(&runtime_home, &AgentKind::Cursor, &["cursor-agent"]),
+            Some(binary_path)
+        );
+
+        let _ = std::fs::remove_dir_all(runtime_home);
+    }
+
+    #[test]
+    fn registry_backed_binary_hint_launcher_requires_backing_binary() {
+        let registry = built_in_registry();
+        let cursor = registry
+            .into_iter()
+            .find(|descriptor| descriptor.kind == AgentKind::Cursor)
+            .expect("missing Cursor descriptor");
+        let runtime_home = make_temp_dir("anyharness-cursor-stale-launcher-test");
+        let missing_binary = format!("missing-cursor-agent-{}", uuid::Uuid::new_v4());
+        let launcher_path = artifact_root(
+            &runtime_home,
+            &AgentKind::Cursor,
+            &ArtifactRole::AgentProcess,
+        )
+        .join("cursor-launcher");
+        std::fs::create_dir_all(launcher_path.parent().expect("launcher parent"))
+            .expect("create launcher dir");
+        std::fs::write(
+            &launcher_path,
+            format!("#!/bin/sh\nset -e\nexec \"{missing_binary}\" acp \"$@\"\n"),
+        )
+        .expect("write launcher");
+        make_executable(&launcher_path).expect("make launcher executable");
+        let unrelated_registry_binary = artifact_root(
+            &runtime_home,
+            &AgentKind::Cursor,
+            &ArtifactRole::AgentProcess,
+        )
+        .join("registry_binary")
+        .join("node");
+        std::fs::create_dir_all(unrelated_registry_binary.parent().expect("binary parent"))
+            .expect("create registry binary dir");
+        std::fs::write(&unrelated_registry_binary, "#!/bin/sh\nexit 0\n")
+            .expect("write unrelated registry binary");
+        make_executable(&unrelated_registry_binary).expect("make unrelated binary executable");
+
+        let mut cursor = cursor;
+        cursor.agent_process.install = AgentProcessInstallSpec::RegistryBacked {
+            registry_id: "cursor".into(),
+            fallback: AgentProcessFallback::BinaryHint {
+                candidate_binaries: vec![missing_binary.clone()],
+                args: vec!["acp".into()],
+            },
+        };
+
+        let resolved = resolve_agent(&cursor, &runtime_home);
+
+        assert_eq!(resolved.status, ResolvedAgentStatus::InstallRequired);
+        assert!(!resolved.agent_process.installed);
+        assert!(resolved
+            .agent_process
+            .message
+            .as_deref()
+            .is_some_and(|message| message.contains(&missing_binary)));
+
+        let _ = std::fs::remove_dir_all(runtime_home);
+    }
+
+    #[test]
+    fn registry_backed_binary_hint_does_not_resolve_superset_wrapper_as_agent_process() {
+        let registry = built_in_registry();
+        let cursor = registry
+            .into_iter()
+            .find(|descriptor| descriptor.kind == AgentKind::Cursor)
+            .expect("missing Cursor descriptor");
+        let runtime_home = make_temp_dir("anyharness-cursor-wrapper-fallback-test");
+        let path_dir = make_temp_dir("anyharness-cursor-wrapper-path-test");
+        let wrapper_path = path_dir.join("cursor-agent");
+        std::fs::write(
+            &wrapper_path,
+            "#!/bin/sh\n# Superset agent-wrapper v3\nexec cursor-agent \"$@\"\n",
+        )
+        .expect("write wrapper");
+        make_executable(&wrapper_path).expect("make wrapper executable");
+        let _path_guard = PathEnvGuard::set(&path_dir);
+        let mut env = BTreeMap::new();
+        env.insert("CURSOR_API_KEY".to_string(), "test-token".to_string());
+
+        let resolved = resolve_agent_with_env(&cursor, &runtime_home, &env);
+
+        assert_eq!(resolved.status, ResolvedAgentStatus::InstallRequired);
+        assert!(!resolved.agent_process.installed);
+        assert_eq!(resolved.agent_process.path, None);
+
+        let _ = std::fs::remove_dir_all(runtime_home);
+        let _ = std::fs::remove_dir_all(path_dir);
     }
 
     #[test]

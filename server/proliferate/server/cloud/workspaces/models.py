@@ -41,6 +41,7 @@ class WorkspaceRecord(Protocol):
     anyharness_workspace_id: str | None
     worktree_path: str | None
     archived_at: datetime | None
+    ready_at: datetime | None
     cleanup_state: str
     cleanup_last_error: str | None
     materialized_slot_generation: int | None
@@ -364,6 +365,7 @@ class WorkspaceSummary(BaseModel):
     template_version: str | None = Field(serialization_alias="templateVersion")
     updated_at: str | None = Field(serialization_alias="updatedAt")
     created_at: str | None = Field(serialization_alias="createdAt")
+    ready_at: str | None = Field(serialization_alias="readyAt")
     action_block_kind: str | None = Field(default=None, serialization_alias="actionBlockKind")
     action_block_reason: str | None = Field(default=None, serialization_alias="actionBlockReason")
     post_ready_phase: str = Field(serialization_alias="postReadyPhase")
@@ -856,6 +858,7 @@ def workspace_summary_payload(
         template_version=workspace.template_version,
         updated_at=_to_iso(workspace.updated_at),
         created_at=_to_iso(workspace.created_at),
+        ready_at=_to_iso(workspace.ready_at),
         action_block_kind=action_block_kind,
         action_block_reason=action_block_reason,
         post_ready_phase=workspace.repo_post_ready_phase,

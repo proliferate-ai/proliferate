@@ -8,7 +8,6 @@ import { RightPanelNewTabMenu } from "@/components/workspace/shell/right-panel/R
 import { useRightPanelHeaderDrag } from "@/hooks/workspaces/ui/use-right-panel-header-drag";
 import {
   type RightPanelHeaderEntryKey,
-  type RightPanelTool,
 } from "@/lib/domain/workspaces/shell/right-panel-model";
 import type { RightPanelHeaderEntry } from "@/lib/domain/workspaces/shell/right-panel-header-entry";
 import type { RightPanelNewTabMenuDefault } from "@/lib/infra/right-panel-new-tab-menu";
@@ -25,10 +24,7 @@ interface RightPanelHeaderTabsProps {
   isWorkspaceReady: boolean;
   newTabMenuRequestToken: number;
   newTabMenuDefaultKind: RightPanelNewTabMenuDefault;
-  onActivateTool: (tool: RightPanelTool) => void;
-  onSelectTerminal: (terminalId: string) => void;
-  onSelectBrowser: (browserId: string) => void;
-  onSelectViewerTarget: (targetKey: RightPanelHeaderEntryKey) => void;
+  onActivateEntry: (entryKey: RightPanelHeaderEntryKey) => boolean;
   onCloseTerminal: (terminalId: string) => void;
   onCloseBrowser: (browserId: string) => void;
   onCloseViewerTarget: (targetKey: RightPanelHeaderEntryKey) => void;
@@ -52,10 +48,7 @@ export function RightPanelHeaderTabs({
   isWorkspaceReady,
   newTabMenuRequestToken,
   newTabMenuDefaultKind,
-  onActivateTool,
-  onSelectTerminal,
-  onSelectBrowser,
-  onSelectViewerTarget,
+  onActivateEntry,
   onCloseTerminal,
   onCloseBrowser,
   onCloseViewerTarget,
@@ -67,7 +60,10 @@ export function RightPanelHeaderTabs({
   onReorderHeaderEntry,
 }: RightPanelHeaderTabsProps) {
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false);
-  const drag = useRightPanelHeaderDrag({ onReorderHeaderEntry });
+  const drag = useRightPanelHeaderDrag({
+    onActivateHeaderEntry: onActivateEntry,
+    onReorderHeaderEntry,
+  });
   const shortcutRevealVisible = useShortcutRevealVisible();
 
   useEffect(() => {
@@ -108,10 +104,7 @@ export function RightPanelHeaderTabs({
                   isWorkspaceReady={isWorkspaceReady}
                   drag={drag}
                   shortcutRevealVisible={shortcutRevealVisible}
-                  onActivateTool={onActivateTool}
-                  onSelectTerminal={onSelectTerminal}
-                  onSelectBrowser={onSelectBrowser}
-                  onSelectViewerTarget={onSelectViewerTarget}
+                  onActivateEntry={onActivateEntry}
                   onCloseTerminal={onCloseTerminal}
                   onCloseBrowser={onCloseBrowser}
                   onCloseViewerTarget={onCloseViewerTarget}

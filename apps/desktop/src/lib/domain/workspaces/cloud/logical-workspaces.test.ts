@@ -64,6 +64,62 @@ function makeMobilityWorkspace(args: {
 }
 
 describe("logical workspaces", () => {
+  it("omits non-selected cloud workspaces that failed before readiness", () => {
+    const logicalWorkspaces = buildLogicalWorkspaces({
+      localWorkspaces: [],
+      repoRoots: [],
+      cloudWorkspaces: [
+        makeCloudWorkspace({
+          id: "cloud-failed",
+          branch: "failed-before-ready",
+          status: "error",
+          readyAt: null,
+        }),
+      ],
+      currentSelectionId: null,
+    });
+
+    expect(logicalWorkspaces).toHaveLength(0);
+  });
+
+  it("retains the selected cloud workspace that failed before readiness", () => {
+    const cloudWorkspace = makeCloudWorkspace({
+      id: "cloud-failed",
+      branch: "failed-before-ready",
+      status: "error",
+      readyAt: null,
+    });
+
+    const logicalWorkspaces = buildLogicalWorkspaces({
+      localWorkspaces: [],
+      repoRoots: [],
+      cloudWorkspaces: [cloudWorkspace],
+      currentSelectionId: cloudWorkspaceSyntheticId(cloudWorkspace.id),
+    });
+
+    expect(logicalWorkspaces).toHaveLength(1);
+    expect(logicalWorkspaces[0]?.cloudWorkspace?.id).toBe("cloud-failed");
+  });
+
+  it("keeps errored cloud workspaces that previously reached readiness", () => {
+    const logicalWorkspaces = buildLogicalWorkspaces({
+      localWorkspaces: [],
+      repoRoots: [],
+      cloudWorkspaces: [
+        makeCloudWorkspace({
+          id: "cloud-ready-error",
+          branch: "ready-before-error",
+          status: "error",
+          readyAt: "2026-04-13T10:00:00.000Z",
+        }),
+      ],
+      currentSelectionId: null,
+    });
+
+    expect(logicalWorkspaces).toHaveLength(1);
+    expect(logicalWorkspaces[0]?.cloudWorkspace?.id).toBe("cloud-ready-error");
+  });
+
   it("keeps mobility-only placeholders without throwing", () => {
     const logicalWorkspaces = buildLogicalWorkspaces({
       localWorkspaces: [],

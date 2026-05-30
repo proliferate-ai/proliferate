@@ -174,6 +174,7 @@ export interface CloudWorkspaceSummary {
   templateVersion: string | null;
   updatedAt: string | null;
   createdAt: string | null;
+  readyAt: string | null;
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
   postReadyPhase: string;

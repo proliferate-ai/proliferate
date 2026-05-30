@@ -9,6 +9,7 @@ import {
 import { useWorkspaceContentShortcuts } from "@/hooks/workspaces/ui/use-workspace-content-shortcuts";
 import { useContentSearchStore } from "@/stores/search/content-search-store";
 import {
+  requestRightPanelCloseActiveTab,
   requestRightPanelRelativeTab,
   requestRightPanelTabByIndex,
 } from "@/lib/workflows/workspaces/right-panel-shortcut-requests";
@@ -40,6 +41,7 @@ vi.mock("@/stores/sessions/session-selection-store", () => ({
 }));
 
 vi.mock("@/lib/workflows/workspaces/right-panel-shortcut-requests", () => ({
+  requestRightPanelCloseActiveTab: vi.fn(() => true),
   requestRightPanelRelativeTab: vi.fn(() => true),
   requestRightPanelTabByIndex: vi.fn(() => true),
 }));
@@ -85,6 +87,37 @@ describe("useWorkspaceContentShortcuts", () => {
     renderHook(() => useWorkspaceContentShortcuts(actions));
 
     expect(runShortcutHandler("workspace.close-active-tab", { source: "menu" })).toBe(true);
+    expect(actions.closeActiveWorkspaceTab).toHaveBeenCalledTimes(1);
+  });
+
+  it("routes close-tab shortcuts to the right panel when focus is in the right panel", () => {
+    const actions = createActions();
+    const zone = document.createElement("div");
+    zone.tabIndex = 0;
+    zone.setAttribute("data-focus-zone", "right-panel");
+    document.body.append(zone);
+    zone.focus();
+
+    renderHook(() => useWorkspaceContentShortcuts(actions));
+
+    expect(runShortcutHandler("workspace.close-active-tab", { source: "keyboard" })).toBe(true);
+    expect(requestRightPanelCloseActiveTab).toHaveBeenCalledTimes(1);
+    expect(actions.closeActiveWorkspaceTab).not.toHaveBeenCalled();
+  });
+
+  it("falls back to workspace tab close when a stale right-panel close request is unhandled", () => {
+    const actions = createActions();
+    const zone = document.createElement("div");
+    zone.tabIndex = 0;
+    zone.setAttribute("data-focus-zone", "right-panel");
+    document.body.append(zone);
+    zone.focus();
+    vi.mocked(requestRightPanelCloseActiveTab).mockReturnValueOnce(false);
+
+    renderHook(() => useWorkspaceContentShortcuts(actions));
+
+    expect(runShortcutHandler("workspace.close-active-tab", { source: "keyboard" })).toBe(true);
+    expect(requestRightPanelCloseActiveTab).toHaveBeenCalledTimes(1);
     expect(actions.closeActiveWorkspaceTab).toHaveBeenCalledTimes(1);
   });
 

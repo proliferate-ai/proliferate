@@ -45,8 +45,10 @@ export interface RightPanelHeaderDragController {
 }
 
 export function useRightPanelHeaderDrag({
+  onActivateHeaderEntry,
   onReorderHeaderEntry,
 }: {
+  onActivateHeaderEntry: (entryKey: RightPanelHeaderEntryKey) => boolean;
   onReorderHeaderEntry: (
     entryKey: RightPanelHeaderEntryKey,
     beforeEntryKey: RightPanelHeaderEntryKey | null,
@@ -119,7 +121,7 @@ export function useRightPanelHeaderDrag({
       beforeKey: null,
       isDragging: false,
     };
-    event.currentTarget.setPointerCapture(event.pointerId);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
   }, []);
 
   const handleHeaderPointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
@@ -155,20 +157,22 @@ export function useRightPanelHeaderDrag({
       event.preventDefault();
       onReorderHeaderEntry(session.key, session.beforeKey);
       suppressNextHeaderClick();
+    } else if (onActivateHeaderEntry(session.key)) {
+      suppressNextHeaderClick();
     }
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     headerDragSessionRef.current = null;
     setHeaderDragPreview(null);
-  }, [onReorderHeaderEntry, suppressNextHeaderClick]);
+  }, [onActivateHeaderEntry, onReorderHeaderEntry, suppressNextHeaderClick]);
 
   const cancelHeaderPointerDrag = useCallback((event: PointerEvent<HTMLDivElement>) => {
     const session = headerDragSessionRef.current;
     if (!session || session.pointerId !== event.pointerId) {
       return;
     }
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     headerDragSessionRef.current = null;

@@ -27,13 +27,13 @@ export interface AutomationSurfaceProps {
   maxWidthClassName?: string;
   onModeChange: (mode: AutomationSurfaceViewMode) => void;
   onIncludePausedChange: (includePaused: boolean) => void;
-  onNew: () => void;
+  onNew?: () => void;
   onRetry?: () => void;
   onAutomationSelect: (automationId: string) => void;
   onEdit?: (automationId: string) => void;
-  onPause: (automationId: string) => void;
-  onResume: (automationId: string) => void;
-  onRunNow: (automationId: string) => void;
+  onPause?: (automationId: string) => void;
+  onResume?: (automationId: string) => void;
+  onRunNow?: (automationId: string) => void;
 }
 
 export function AutomationSurface({
@@ -65,12 +65,12 @@ export function AutomationSurface({
     <ProductPageShell
       title="Automations"
       description={description}
-      actions={(
+      actions={onNew ? (
         <Button type="button" onClick={onNew}>
           <Plus className="size-4" aria-hidden />
           New automation
         </Button>
-      )}
+      ) : null}
       maxWidthClassName={maxWidthClassName}
       telemetryBlocked
     >
@@ -108,13 +108,15 @@ export function AutomationSurface({
       ) : itemCount === 0 ? (
         <EmptyState
           title="No automations yet"
-          description="Create a scheduled automation for a configured repo."
-          action={(
+          description={onNew
+            ? "Create a scheduled automation for a configured repo."
+            : "Automations created from supported clients appear here."}
+          action={onNew ? (
             <Button type="button" size="sm" variant="secondary" onClick={onNew}>
               <Plus size={13} aria-hidden />
               New automation
             </Button>
-          )}
+          ) : null}
         />
       ) : mode === "calendar" ? (
         <AutomationCalendarView

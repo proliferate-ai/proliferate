@@ -15,9 +15,9 @@ export interface AutomationInventoryListProps {
   actionsDisabled?: boolean;
   onAutomationSelect: (automationId: string) => void;
   onEdit?: (automationId: string) => void;
-  onPause: (automationId: string) => void;
-  onResume: (automationId: string) => void;
-  onRunNow: (automationId: string) => void;
+  onPause?: (automationId: string) => void;
+  onResume?: (automationId: string) => void;
+  onRunNow?: (automationId: string) => void;
 }
 
 export function AutomationInventoryList({
@@ -75,11 +75,13 @@ function AutomationInventoryRow({
   actionsDisabled: boolean;
   onAutomationSelect: (automationId: string) => void;
   onEdit?: (automationId: string) => void;
-  onPause: (automationId: string) => void;
-  onResume: (automationId: string) => void;
-  onRunNow: (automationId: string) => void;
+  onPause?: (automationId: string) => void;
+  onResume?: (automationId: string) => void;
+  onRunNow?: (automationId: string) => void;
 }) {
   const runNowReason = runNowDisabledReason(item);
+  const hasToggleAction = item.enabled ? Boolean(onPause) : Boolean(onResume);
+  const hasRowActions = Boolean(onRunNow || onEdit || hasToggleAction);
 
   return (
     <div role="listitem" className="group relative">
@@ -112,31 +114,40 @@ function AutomationInventoryRow({
         <MetadataCell className="hidden justify-end lg:flex" label={item.nextRunLabel} />
 
         <span className="relative flex min-w-0 items-center justify-end">
-          <span className="truncate text-right text-xs leading-4 text-muted-foreground transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">
+          <span
+            className={twMerge(
+              "truncate text-right text-xs leading-4 text-muted-foreground",
+              hasRowActions ? "transition-opacity group-hover:opacity-0 group-focus-within:opacity-0" : null,
+            )}
+          >
             {item.statusLabel}
           </span>
         </span>
       </Button>
-      <span className="absolute right-3 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-        <RowIconButton
-          label="Run automation now"
-          busy={busy === "run"}
-          disabled={actionsDisabled || (busy !== null && busy !== "run") || !item.enabled}
-          disabledReason={runNowReason}
-          onClick={() => onRunNow(item.id)}
-        >
-          <Zap className="size-3.5" aria-hidden />
-        </RowIconButton>
-        <AutomationActionMenu
-          item={item}
-          busy={busy}
-          actionsDisabled={actionsDisabled}
-          onEdit={onEdit}
-          onPause={onPause}
-          onResume={onResume}
-          onRunNow={onRunNow}
-        />
-      </span>
+      {hasRowActions ? (
+        <span className="absolute right-3 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          {onRunNow ? (
+            <RowIconButton
+              label="Run automation now"
+              busy={busy === "run"}
+              disabled={actionsDisabled || (busy !== null && busy !== "run") || !item.enabled}
+              disabledReason={runNowReason}
+              onClick={() => onRunNow(item.id)}
+            >
+              <Zap className="size-3.5" aria-hidden />
+            </RowIconButton>
+          ) : null}
+          <AutomationActionMenu
+            item={item}
+            busy={busy}
+            actionsDisabled={actionsDisabled}
+            onEdit={onEdit}
+            onPause={onPause}
+            onResume={onResume}
+            onRunNow={onRunNow}
+          />
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -154,13 +165,15 @@ function AutomationActionMenu({
   busy: "pause" | "resume" | "run" | null;
   actionsDisabled: boolean;
   onEdit?: (automationId: string) => void;
-  onPause: (automationId: string) => void;
-  onResume: (automationId: string) => void;
-  onRunNow: (automationId: string) => void;
+  onPause?: (automationId: string) => void;
+  onResume?: (automationId: string) => void;
+  onRunNow?: (automationId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement | null>(null);
   const runNowReason = runNowDisabledReason(item);
+  const toggleAction = item.enabled ? onPause : onResume;
+  const hasActions = Boolean(onRunNow || onEdit || toggleAction);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -180,6 +193,10 @@ function AutomationActionMenu({
     };
   }, [open]);
 
+  if (!hasActions) {
+    return null;
+  }
+
   const close = () => setOpen(false);
 
   return (
@@ -194,16 +211,18 @@ function AutomationActionMenu({
       </RowIconButton>
       {open ? (
         <span className="absolute right-0 top-full z-40 mt-2 w-44 rounded-[10px] border border-popover-ring bg-popover p-1 text-popover-foreground shadow-popover">
-          <MenuAction
-            label="Run now"
-            icon={<Zap className="size-3.5" aria-hidden />}
-            disabled={actionsDisabled || busy !== null || !item.enabled}
-            disabledReason={runNowReason}
-            onClick={() => {
-              onRunNow(item.id);
-              close();
-            }}
-          />
+          {onRunNow ? (
+            <MenuAction
+              label="Run now"
+              icon={<Zap className="size-3.5" aria-hidden />}
+              disabled={actionsDisabled || busy !== null || !item.enabled}
+              disabledReason={runNowReason}
+              onClick={() => {
+                onRunNow(item.id);
+                close();
+              }}
+            />
+          ) : null}
           {onEdit ? (
             <MenuAction
               label="Edit"
@@ -215,19 +234,17 @@ function AutomationActionMenu({
               }}
             />
           ) : null}
-          <MenuAction
-            label={item.enabled ? "Pause" : "Resume"}
-            icon={item.enabled ? <Pause className="size-3.5" aria-hidden /> : <Play className="size-3.5" aria-hidden />}
-            disabled={actionsDisabled || busy !== null}
-            onClick={() => {
-              if (item.enabled) {
-                onPause(item.id);
-              } else {
-                onResume(item.id);
-              }
-              close();
-            }}
-          />
+          {toggleAction ? (
+            <MenuAction
+              label={item.enabled ? "Pause" : "Resume"}
+              icon={item.enabled ? <Pause className="size-3.5" aria-hidden /> : <Play className="size-3.5" aria-hidden />}
+              disabled={actionsDisabled || busy !== null}
+              onClick={() => {
+                toggleAction(item.id);
+                close();
+              }}
+            />
+          ) : null}
         </span>
       ) : null}
     </span>

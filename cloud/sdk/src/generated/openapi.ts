@@ -8697,6 +8697,8 @@ export interface components {
             updatedAt: string | null;
             /** Createdat */
             createdAt: string | null;
+            /** Readyat */
+            readyAt: string | null;
             /** Actionblockkind */
             actionBlockKind?: string | null;
             /** Actionblockreason */
@@ -8932,6 +8934,8 @@ export interface components {
             updatedAt: string | null;
             /** Createdat */
             createdAt: string | null;
+            /** Readyat */
+            readyAt: string | null;
             /** Actionblockkind */
             actionBlockKind?: string | null;
             /** Actionblockreason */

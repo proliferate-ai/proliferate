@@ -150,12 +150,6 @@ export function migrateWorkspaceUiState(
     didMigrate = true;
   }
 
-  if (!isStringRecord(state.finishSuggestionDismissalsByWorkspaceId)) {
-    state.finishSuggestionDismissalsByWorkspaceId =
-      WORKSPACE_UI_DEFAULTS.finishSuggestionDismissalsByWorkspaceId;
-    didMigrate = true;
-  }
-
   const sanitizedRecentlyHiddenChatSessions = sanitizeSessionIdArrayRecord(
     state.recentlyHiddenChatSessionIdsByWorkspace,
   );
