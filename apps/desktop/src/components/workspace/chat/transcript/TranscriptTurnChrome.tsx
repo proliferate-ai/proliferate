@@ -68,7 +68,7 @@ export function resolvePendingPromptTrailingStatus(
   if (sessionViewState === "needs_input") {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <CircleQuestion className="size-3.5 shrink-0 text-warning-foreground" />
+        <CircleQuestion className="size-3.5 shrink-0 text-muted-foreground" />
         <span>Waiting for your input</span>
       </div>
     );
@@ -102,7 +102,7 @@ export function resolveTurnTrailingStatus(
   if (sessionViewState === "needs_input") {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <CircleQuestion className="size-3.5 shrink-0 text-warning-foreground" />
+        <CircleQuestion className="size-3.5 shrink-0 text-muted-foreground" />
         <span>Waiting for your input</span>
       </div>
     );

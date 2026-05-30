@@ -8,7 +8,6 @@ import {
   Hash,
   LifeBuoy,
   ListFilter,
-  LoaderCircle,
   PanelLeftClose,
   Plus,
   Settings,
@@ -107,18 +106,16 @@ export function WebSidebarController({
     () => buildNavItems(location.pathname, routeState),
     [location.pathname, routeState],
   );
+  const workspaceSectionLoading = (workspaces.isLoading || activeWorkspaceSnapshot.isLoading) &&
+    cloudWorkspaces.length === 0;
   const workspaceSectionMessage = useMemo(
     () => buildWorkspaceSectionMessage({
-      isLoading: (workspaces.isLoading || activeWorkspaceSnapshot.isLoading) &&
-        cloudWorkspaces.length === 0,
       hasError: Boolean(workspaces.error) && cloudWorkspaces.length === 0,
       hasWorkspaces: cloudWorkspaces.length > 0,
     }),
     [
-      activeWorkspaceSnapshot.isLoading,
       cloudWorkspaces.length,
       workspaces.error,
-      workspaces.isLoading,
     ],
   );
   const recentItems = useMemo(
@@ -309,6 +306,7 @@ export function WebSidebarController({
         workspaceGroups={workspaceGroups}
         workspaceSectionLabel="Recents"
         workspaceSectionActions={filterAction}
+        workspaceSectionPanel={workspaceSectionLoading ? <SidebarLoadingState /> : null}
         workspaceSectionMessage={workspaceSectionMessage}
         footerActions={[
           {
@@ -625,20 +623,32 @@ function FilterMenuOption({
   );
 }
 
+function SidebarLoadingState() {
+  return (
+    <div className="flex flex-col gap-1 py-1" aria-label="Loading cloud workspaces" role="status">
+      <SkeletonBlock className="h-7 w-full bg-sidebar-accent" />
+      <SkeletonBlock className="h-7 w-[82%] bg-sidebar-accent/80" />
+      <SkeletonBlock className="h-7 w-[68%] bg-sidebar-accent/70" />
+      <span className="sr-only">Loading cloud workspaces</span>
+    </div>
+  );
+}
+
+function SkeletonBlock({ className }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`block rounded-md bg-sidebar-accent motion-safe:animate-pulse ${className ?? ""}`}
+    />
+  );
+}
+
 function buildWorkspaceSectionMessage(input: {
-  isLoading: boolean;
   hasError: boolean;
   hasWorkspaces: boolean;
 }): SidebarSectionMessageView | null {
   if (input.hasWorkspaces) {
     return null;
-  }
-  if (input.isLoading) {
-    return {
-      title: "Loading cloud workspaces",
-      description: "Fetching exposed and claimed workspaces for this account.",
-      status: <LoaderCircle className="size-3.5 animate-spin" />,
-    };
   }
   if (input.hasError) {
     return {

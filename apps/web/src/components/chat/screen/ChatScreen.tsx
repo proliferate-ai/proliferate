@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
+  createTranscriptState,
+} from "@anyharness/sdk";
+import {
   desktopWorkspaceDeepLink,
   getCommandStatus,
   type CloudCommandResponse,
@@ -33,14 +36,21 @@ import {
 import type {
   CloudChatComposerFooterControlView,
 } from "@proliferate/product-ui/chat/CloudChatComposer";
+import type { ChatTranscriptState } from "@proliferate/product-ui/chat/transcript/ChatTranscriptState";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
+  buildCloudTranscriptState,
   buildCloudTranscriptView,
   cloudTranscriptHasAgentProgressAfterPrompt,
   cloudTranscriptHasUserPrompt,
   latestCloudTranscriptSeq,
   type CloudChatTranscriptRowView,
 } from "@proliferate/product-domain/chats/cloud/transcript-view";
+import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";
+import {
+  createPromptOutboxEntry,
+  type PromptOutboxEntry,
+} from "@proliferate/product-domain/sessions/intents/session-intent-model";
 import {
   buildCloudChatComposerControls,
   buildLaunchSessionConfigUpdates,
@@ -107,6 +117,13 @@ type PendingHomePromptDispatchRun = {
 };
 
 type OptimisticPrompt = WebCloudPromptIntent;
+
+type PlanDecisionPayload = {
+  workspaceId: string;
+  planId: string;
+  decision: "approve" | "reject";
+  expectedDecisionVersion: number;
+};
 
 const EMPTY_SESSION_EVENTS: CloudSessionEvent[] = [];
 const EMPTY_TRANSCRIPT_ITEMS: CloudTranscriptItem[] = [];
@@ -208,6 +225,14 @@ export function ChatScreen() {
   );
   const pendingConfigCommandIdsKey = pendingConfigCommandIds.join("\0");
   const sessionEvents = sessionEventsQuery.data?.events ?? EMPTY_SESSION_EVENTS;
+  const transcriptState = useMemo(
+    () => buildCloudTranscriptState({
+      sessionId: session?.sessionId ?? null,
+      events: sessionEvents,
+      fallbackItems: transcriptItems,
+    }),
+    [session?.sessionId, sessionEvents, transcriptItems],
+  );
   const transcriptView = useMemo(
     () => buildCloudTranscriptView({
       sessionId: session?.sessionId ?? null,
@@ -217,6 +242,66 @@ export function ChatScreen() {
     }),
     [pendingInteractions, session?.sessionId, sessionEvents, transcriptItems],
   );
+  const sharedOutboxEntries = useMemo(
+    () => buildCloudPromptOutboxEntries({
+      prompts: optimisticPrompts,
+      pendingHomePrompt,
+      workspaceId: workspace?.id ?? null,
+      sessionId: activeTranscriptSessionId,
+      pendingInteractions,
+      status: visiblePendingHomePromptStatus,
+    }),
+    [
+      activeTranscriptSessionId,
+      optimisticPrompts,
+      pendingHomePrompt,
+      pendingInteractions,
+      visiblePendingHomePromptStatus,
+      workspace?.id,
+    ],
+  );
+  const sharedTranscriptState = useMemo<ChatTranscriptState | null>(() => {
+    const syntheticSessionId = activeTranscriptSessionId
+      ?? session?.sessionId
+      ?? pendingSessionDraft?.id
+      ?? pendingHomePrompt?.id
+      ?? optimisticPrompts[0]?.id
+      ?? null;
+    const transcript = transcriptState.transcript
+      ?? (
+        syntheticSessionId && transcriptView.rows.length === 0 && sharedOutboxEntries.length > 0
+          ? createTranscriptState(`web-draft:${syntheticSessionId}`)
+          : null
+      );
+    if (!transcript) {
+      return null;
+    }
+    return {
+      activeSessionId: activeTranscriptSessionId
+        ?? session?.sessionId
+        ?? transcript.sessionMeta.sessionId,
+      selectedWorkspaceId: workspace?.id ?? null,
+      transcript,
+      sessionViewState: resolveCloudTranscriptSessionViewState({
+        status: session?.status ?? null,
+        pendingInteractions,
+        isStreaming: transcript.isStreaming,
+      }),
+      outboxEntries: sharedOutboxEntries,
+    };
+  }, [
+    activeTranscriptSessionId,
+    optimisticPrompts,
+    pendingHomePrompt,
+    pendingSessionDraft?.id,
+    pendingInteractions,
+    session?.sessionId,
+    session?.status,
+    transcriptState.transcript,
+    transcriptView.rows.length,
+    sharedOutboxEntries,
+    workspace?.id,
+  ]);
   const visibleTranscriptRows = useMemo(
     () => [
       ...transcriptView.rows,
@@ -252,6 +337,8 @@ export function ChatScreen() {
   const enqueuePrompt = useEnqueueCloudCommand<SendPromptPayload>();
   const enqueueStartSession = useEnqueueCloudCommand<StartSessionPayload>();
   const enqueueConfig = useEnqueueCloudCommand<UpdateSessionConfigPayload>();
+  const enqueuePlanDecision = useEnqueueCloudCommand<PlanDecisionPayload>();
+  const [activePlanDecisionKey, setActivePlanDecisionKey] = useState<string | null>(null);
   const claimWorkspace = useClaimCloudWorkspace();
   const observedPromptCommandId = pendingPromptCommandId ?? latestCommandId;
   const commandStatus = useCommandStatus(observedPromptCommandId);
@@ -1335,6 +1422,81 @@ export function ChatScreen() {
     }
   }
 
+  async function submitPlanDecision(
+    planId: string,
+    expectedDecisionVersion: number,
+    decision: "approve" | "reject",
+  ) {
+    if (!workspace || !session) {
+      return;
+    }
+    if (isUnclaimed) {
+      setPendingHomePromptStatus("Claim this shared workspace before approving plans.");
+      return;
+    }
+    const readiness = cloudCommandReadiness(workspace);
+    if (!readiness.commandable) {
+      setPendingHomePromptStatus(readiness.message ?? "This workspace cannot accept cloud commands right now.");
+      return;
+    }
+    const commandWorkspaceId = session.workspaceId ?? workspace.id;
+    const decisionKey = `${planId}:${expectedDecisionVersion}:${decision}`;
+    setActivePlanDecisionKey(decisionKey);
+    setPendingHomePromptStatus(decision === "approve" ? "Approving plan." : "Rejecting plan.");
+    try {
+      const commandWorkspace = await prepareManagedWorkspaceForCloudCommands({
+        client,
+        workspace,
+        agentKind: session.sourceAgentKind ?? resolvedLaunchSelection.agentKind,
+        modelId: sessionModelId,
+        idempotencyKey: `web:${workspace.id}:${session.sessionId}:plan:${planId}:${decision}:${expectedDecisionVersion}:target-config`,
+        setLatestCommandId,
+        onStatus: setPendingHomePromptStatus,
+        shouldContinue: () => mountedRef.current,
+      });
+      const command = await enqueuePlanDecision.mutateAsync({
+        idempotencyKey: `web:${workspace.id}:${session.sessionId}:plan:${planId}:${decision}:${expectedDecisionVersion}`,
+        targetId: session.targetId,
+        workspaceId: commandWorkspaceId,
+        cloudWorkspaceId: commandWorkspace.id,
+        sessionId: session.sessionId,
+        kind: "decide_plan",
+        source: "web",
+        observedEventSeq: session.lastEventSeq ?? null,
+        payload: {
+          workspaceId: commandWorkspaceId,
+          planId,
+          decision,
+          expectedDecisionVersion,
+        },
+      });
+      if (!mountedRef.current) {
+        return;
+      }
+      setLatestCommandId(command.commandId);
+      if (isRejectedCommandStatus(command.status)) {
+        throw new Error(
+          commandStatusFailureMessage(command, planDecisionFailureMessage(decision))
+            ?? planDecisionFailureMessage(decision),
+        );
+      }
+      setPendingHomePromptStatus(null);
+      void transcriptQuery.refetch();
+      void sessionEventsQuery.refetch();
+    } catch (error) {
+      if (!mountedRef.current) {
+        return;
+      }
+      setPendingHomePromptStatus(
+        error instanceof Error ? error.message : planDecisionFailureMessage(decision),
+      );
+    } finally {
+      if (mountedRef.current) {
+        setActivePlanDecisionKey(null);
+      }
+    }
+  }
+
   async function claimCurrentWorkspace() {
     if (!workspace || claimWorkspace.isPending) {
       return;
@@ -1401,7 +1563,7 @@ export function ChatScreen() {
   }
 
   if (workspaceQuery.isLoading && !snapshot) {
-    return <MissingState title="Loading workspace" />;
+    return <WorkspaceLoadingState />;
   }
 
   if (workspaceQuery.error || !workspace) {
@@ -1445,8 +1607,19 @@ export function ChatScreen() {
         ?? commandReadiness.message
         ?? commandabilityLabel
       : null);
-  const workspaceStatusNotice = commandMessage && !isUnclaimed
-    ? workspaceNoticeForCommandMessage(commandMessage)
+  const commandMessageShownInTranscript = visibleTranscriptRows.some((row) =>
+    isAssistantLoadingRow(row) && Boolean(loadingStatusText(row))
+  );
+  const footerCommandMessage =
+    commandMessageShownInTranscript || isPromptProgressStatus(commandMessage)
+      ? null
+      : commandMessage;
+  const workspaceStatusNotice = !isUnclaimed
+    ? workspaceNoticeForStatus({
+      workspace,
+      workspaceStatus,
+      message: commandMessage,
+    })
     : null;
   const headerDiagnosticsText = buildCloudChatHeaderDiagnosticsText({
     workspace,
@@ -1571,11 +1744,21 @@ export function ChatScreen() {
     <CloudChatSurface
       header={header}
       transcriptRows={visibleTranscriptRows}
+      transcriptState={sharedTranscriptState}
+      transcriptStatus={commandMessage}
+      transcriptPlanActions={{
+        approvePlan: (planId, expectedDecisionVersion) =>
+          void submitPlanDecision(planId, expectedDecisionVersion, "approve"),
+        rejectPlan: (planId, expectedDecisionVersion) =>
+          void submitPlanDecision(planId, expectedDecisionVersion, "reject"),
+        isApprovingPlan: activePlanDecisionKey?.endsWith(":approve") ?? false,
+        isRejectingPlan: activePlanDecisionKey?.endsWith(":reject") ?? false,
+      }}
       emptyTitle={emptyTitle}
       emptyDescription={
         !session ? `Send a message below to start the first session in ${workspaceTitle}.` : undefined
       }
-      commandMessage={null}
+      commandMessage={workspaceStatusNotice ? null : footerCommandMessage}
       composer={{
         value: draft,
         onChange: setDraft,
@@ -1612,6 +1795,75 @@ function MissingState({ title }: { title: string }) {
         </Button>
       </div>
     </div>
+  );
+}
+
+function WorkspaceLoadingState() {
+  return (
+    <div
+      className="flex h-full flex-col bg-background text-foreground"
+      role="status"
+      aria-live="polite"
+      aria-label="Loading workspace"
+    >
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
+        <WebSkeletonBlock className="size-8 rounded-md" />
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <WebSkeletonBlock className="h-3 w-36" />
+          <WebSkeletonBlock className="h-7 w-28 rounded-lg bg-muted/45" />
+        </div>
+        <WebSkeletonBlock className="hidden h-8 w-28 rounded-md bg-muted/45 sm:block" />
+      </header>
+
+      <div className="web-scrollbar min-h-0 flex-1 overflow-hidden">
+        <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-6 py-6">
+          <div className="mt-12 flex flex-col items-center text-center">
+            <div className="flex w-36 flex-col items-center gap-2" aria-hidden="true">
+              <WebSkeletonBlock className="h-2 w-24" />
+              <WebSkeletonBlock className="h-2 w-36 bg-muted/45" />
+            </div>
+            <p className="mt-4 text-chat font-medium leading-[var(--text-chat--line-height)] text-muted-foreground">
+              Loading workspace
+            </p>
+            <p className="mt-1 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground/80">
+              Fetching sessions and transcript.
+            </p>
+          </div>
+
+          <div className="mt-12 flex w-full flex-col gap-7" aria-hidden="true">
+            <div className="ml-auto flex w-[72%] max-w-lg flex-col items-end gap-2">
+              <WebSkeletonBlock className="h-3 w-full rounded-lg" />
+              <WebSkeletonBlock className="h-3 w-[64%] rounded-lg bg-muted/45" />
+            </div>
+            <div className="flex w-[78%] max-w-xl flex-col gap-2">
+              <WebSkeletonBlock className="h-3 w-full" />
+              <WebSkeletonBlock className="h-3 w-[86%] bg-muted/45" />
+              <WebSkeletonBlock className="h-3 w-[42%] bg-muted/45" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer className="relative z-20 shrink-0 border-t border-border/40 px-6 py-4">
+        <div className="mx-auto w-full max-w-3xl rounded-xl bg-foreground/5 p-3">
+          <WebSkeletonBlock className="h-3 w-48" />
+          <div className="mt-5 flex items-center justify-between gap-3">
+            <WebSkeletonBlock className="h-7 w-32 rounded-md bg-muted/45" />
+            <WebSkeletonBlock className="size-8 rounded-md bg-muted/45" />
+          </div>
+        </div>
+      </footer>
+      <span className="sr-only">Loading workspace</span>
+    </div>
+  );
+}
+
+function WebSkeletonBlock({ className }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`block rounded-md bg-muted/60 motion-safe:animate-pulse ${className ?? ""}`}
+    />
   );
 }
 
@@ -1692,6 +1944,31 @@ function cleanSessionTitle(title: string | null | undefined): string | null {
   return value;
 }
 
+function resolveCloudTranscriptSessionViewState(input: {
+  status: string | null;
+  pendingInteractions: readonly CloudPendingInteraction[];
+  isStreaming: boolean;
+}): SessionViewState {
+  if (input.pendingInteractions.some((interaction) => interaction.status === "pending")) {
+    return "needs_input";
+  }
+  if (input.status === "errored" || input.status === "failed") {
+    return "errored";
+  }
+  if (input.status === "closed") {
+    return "closed";
+  }
+  if (
+    input.isStreaming
+    || input.status === "starting"
+    || input.status === "running"
+    || input.status === "queued"
+  ) {
+    return "working";
+  }
+  return "idle";
+}
+
 function friendlyCommandStatusMessage(message: string | null | undefined): string | null {
   if (!message) {
     return null;
@@ -1712,28 +1989,55 @@ function isWorkspacePreparationStatus(message: string | null | undefined): boole
   return friendlyCommandStatusMessage(message)?.startsWith("Workspace accepted.") ?? false;
 }
 
-function workspaceNoticeForCommandMessage(
-  message: string,
-): Omit<CloudChatHeaderNoticeView, "action" | "diagnostics"> {
-  if (message.startsWith("Workspace accepted.")) {
-    return {
-      title: "Workspace accepted.",
-      description: "Preparing the selected runtime so this session can start.",
-      tone: "info",
-    };
-  }
-  if (message.startsWith("Cloud sandbox setup cannot reach")) {
+function workspaceNoticeForStatus(input: {
+  workspace: CloudWorkspaceSnapshot["workspace"];
+  workspaceStatus: string | null;
+  message: string | null;
+}): Omit<CloudChatHeaderNoticeView, "action" | "diagnostics"> | null {
+  const message = input.message?.trim() ?? null;
+  const normalizedWorkspaceStatus = input.workspaceStatus?.toLowerCase() ?? null;
+  const runtimeStatus = input.workspace.runtime?.status?.toLowerCase() ?? null;
+  const isProvisioning =
+    normalizedWorkspaceStatus === "pending"
+    || normalizedWorkspaceStatus === "materializing"
+    || normalizedWorkspaceStatus === "needs_rematerialization"
+    || normalizedWorkspaceStatus === "provisioning"
+    || runtimeStatus === "pending"
+    || runtimeStatus === "provisioning";
+  const isFailed =
+    normalizedWorkspaceStatus === "error"
+    || runtimeStatus === "error"
+    || runtimeStatus === "disabled";
+
+  if (message?.startsWith("Cloud sandbox setup cannot reach")) {
     return {
       title: "Workspace setup failed.",
       description: message,
       tone: "destructive",
     };
   }
-  return {
-    title: "Workspace is not ready yet",
-    description: message,
-    tone: "warning",
-  };
+  if (isFailed) {
+    return {
+      title: "Workspace setup needs attention.",
+      description: message ?? workspaceFailureStatusMessage(input.workspace) ?? "The runtime is not ready.",
+      tone: "destructive",
+    };
+  }
+  if (message?.startsWith("Workspace accepted.")) {
+    return {
+      title: "Preparing workspace.",
+      description: message.replace(/^Workspace accepted\.\s*/u, "") || "Preparing the selected runtime so this session can start.",
+      tone: "warning",
+    };
+  }
+  if (isProvisioning) {
+    return {
+      title: "Starting workspace.",
+      description: message ?? "Preparing the cloud runtime so this session can start.",
+      tone: "warning",
+    };
+  }
+  return null;
 }
 
 function commandStatusMessageForNotice(
@@ -1763,6 +2067,27 @@ function commandStatusMessageForNotice(
     default:
       return null;
   }
+}
+
+function isPromptProgressStatus(message: string | null): boolean {
+  return /^(approving|preparing|rejecting|starting|sending|waiting|queued|loading|using selected cloud agent credential|workspace is provisioning|cloud runtime is picking up|command delivered)/i
+    .test(message ?? "");
+}
+
+function isAssistantLoadingRow(row: CloudChatTranscriptRowView): boolean {
+  return row.kind === "assistant"
+    && Boolean(row.streaming)
+    && (
+      !row.body?.trim()
+      || row.id.includes(":assistant-waiting")
+      || row.id.includes(":pending-assistant")
+    );
+}
+
+function loadingStatusText(row: CloudChatTranscriptRowView): string | null {
+  const value = row.detail ?? row.body ?? row.status ?? null;
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
 }
 
 function commandStatusFailureMessage(
@@ -1944,6 +2269,165 @@ function mergeSessionProjections(
     merged.set(session.sessionId, session);
   }
   return [...merged.values()];
+}
+
+function buildCloudPromptOutboxEntries(input: {
+  prompts: readonly OptimisticPrompt[];
+  pendingHomePrompt: PendingHomePrompt | null;
+  workspaceId: string | null;
+  sessionId: string | null;
+  pendingInteractions: readonly CloudPendingInteraction[];
+  status: string | null;
+}): PromptOutboxEntry[] {
+  if (!input.workspaceId) {
+    return [];
+  }
+  const entries: PromptOutboxEntry[] = [];
+  for (const prompt of input.prompts) {
+    if (prompt.workspaceId !== input.workspaceId) {
+      continue;
+    }
+    if (input.sessionId) {
+      if (prompt.sessionId !== input.sessionId) {
+        continue;
+      }
+    } else if (prompt.sessionId !== null) {
+      continue;
+    }
+    if (pendingInteractionMatchesOptimisticPrompt(prompt, input.pendingInteractions)) {
+      continue;
+    }
+    entries.push(optimisticPromptToOutboxEntry(prompt, input.workspaceId, input.sessionId, input.status));
+  }
+
+  for (const interaction of input.pendingInteractions) {
+    if (
+      interaction.kind !== "send_prompt"
+      || (interaction.status !== "pending" && interaction.status !== "failed")
+    ) {
+      continue;
+    }
+    const text = pendingInteractionPromptText(interaction);
+    if (!text) {
+      continue;
+    }
+    if (entries.some((entry) =>
+      entry.clientPromptId === interaction.requestId
+      || textMatches(entry.text, text)
+    )) {
+      continue;
+    }
+    entries.push(pendingInteractionToOutboxEntry(
+      interaction,
+      text,
+      input.workspaceId,
+      input.sessionId ?? `pending:${interaction.requestId}`,
+    ));
+  }
+
+  if (input.pendingHomePrompt && !input.sessionId) {
+    const duplicate = entries.some((entry) => textMatches(entry.text, input.pendingHomePrompt!.text));
+    if (!duplicate) {
+      entries.push(pendingHomePromptToOutboxEntry(
+        input.pendingHomePrompt,
+        input.workspaceId,
+        input.status,
+      ));
+    }
+  }
+  return entries;
+}
+
+function optimisticPromptToOutboxEntry(
+  prompt: OptimisticPrompt,
+  workspaceId: string,
+  sessionId: string | null,
+  statusText: string | null,
+): PromptOutboxEntry {
+  const createdAt = new Date(prompt.createdAt).toISOString();
+  const failed = prompt.status === "failed";
+  const entry = createPromptOutboxEntry({
+    clientPromptId: prompt.id,
+    clientSessionId: sessionId ?? prompt.id,
+    materializedSessionId: prompt.sessionId,
+    workspaceId,
+    text: prompt.text,
+    blocks: [{ type: "text", text: prompt.text }],
+    now: createdAt,
+    placement: "transcript",
+  });
+  return {
+    ...entry,
+    status: failed ? "failed" : prompt.status === "sending" ? "dispatching" : "accepted",
+    deliveryState: failed
+      ? "failed_before_dispatch"
+      : prompt.status === "sending"
+        ? "dispatching"
+        : "accepted_running",
+    errorMessage: failed ? prompt.errorMessage ?? statusText ?? "Prompt could not be sent." : null,
+    updatedAt: createdAt,
+    dispatchedAt: prompt.status === "sending" ? createdAt : entry.dispatchedAt,
+    acceptedAt: prompt.status === "queued" ? createdAt : entry.acceptedAt,
+  };
+}
+
+function pendingInteractionToOutboxEntry(
+  interaction: CloudPendingInteraction,
+  text: string,
+  workspaceId: string,
+  sessionId: string,
+): PromptOutboxEntry {
+  const requestedAt = interaction.requestedAt ?? new Date().toISOString();
+  const failed = interaction.status === "failed";
+  const entry = createPromptOutboxEntry({
+    clientPromptId: interaction.requestId,
+    clientSessionId: sessionId,
+    materializedSessionId: sessionId.startsWith("pending:") ? null : sessionId,
+    workspaceId,
+    text,
+    blocks: [{ type: "text", text }],
+    now: requestedAt,
+    placement: "transcript",
+  });
+  return {
+    ...entry,
+    status: failed ? "failed" : "accepted",
+    deliveryState: failed ? "failed_before_dispatch" : "accepted_running",
+    errorMessage: failed ? interaction.description ?? "Prompt could not be sent." : null,
+    queuedSeq: interaction.requestedSeq,
+    updatedAt: requestedAt,
+    acceptedAt: failed ? null : requestedAt,
+  };
+}
+
+function pendingHomePromptToOutboxEntry(
+  prompt: PendingHomePrompt,
+  workspaceId: string,
+  statusText: string | null,
+): PromptOutboxEntry {
+  const createdAt = new Date(prompt.createdAt).toISOString();
+  const preparationStatus = isWorkspacePreparationStatus(statusText ?? prompt.errorMessage);
+  const failed = !preparationStatus
+    && (prompt.status === "failed" || isFailureStatusText(statusText));
+  const entry = createPromptOutboxEntry({
+    clientPromptId: prompt.id,
+    clientSessionId: prompt.id,
+    materializedSessionId: null,
+    workspaceId,
+    text: prompt.text,
+    blocks: [{ type: "text", text: prompt.text }],
+    now: createdAt,
+    placement: "transcript",
+  });
+  return {
+    ...entry,
+    status: failed ? "failed" : preparationStatus ? "preparing" : "queued",
+    deliveryState: failed ? "failed_before_dispatch" : preparationStatus ? "preparing" : "waiting_for_session",
+    errorMessage: failed
+      ? friendlyCommandStatusMessage(prompt.errorMessage) ?? statusText ?? "Prompt could not be sent."
+      : null,
+    updatedAt: createdAt,
+  };
 }
 
 function buildOptimisticPromptRows(input: {
@@ -2148,6 +2632,19 @@ function pendingInteractionCommandId(interaction: CloudPendingInteraction): stri
   return typeof commandId === "string" && commandId.trim() ? commandId.trim() : null;
 }
 
+function pendingInteractionPromptText(interaction: CloudPendingInteraction): string | null {
+  const payload = interaction.payload;
+  if (!payload) {
+    return null;
+  }
+  const text = readString(payload.text)
+    ?? readString(payload.prompt)
+    ?? readString(payload.message)
+    ?? readString(payload.content);
+  const trimmed = text?.trim();
+  return trimmed ? trimmed : null;
+}
+
 function pendingInteractionMatchesOptimisticPrompt(
   prompt: OptimisticPrompt,
   pendingInteractions: readonly CloudPendingInteraction[],
@@ -2202,6 +2699,10 @@ function normalizePromptText(value: string | null | undefined): string {
   return (value ?? "").trim().replace(/\s+/g, " ");
 }
 
+function readString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
 function isRejectedCommandStatus(status: CloudCommandStatus): boolean {
   return status === "rejected"
     || status === "expired"
@@ -2241,6 +2742,12 @@ function promptCommandFailureMessage(status: CloudCommandStatus): string {
     default:
       return "Prompt was rejected by the cloud runtime.";
   }
+}
+
+function planDecisionFailureMessage(decision: "approve" | "reject"): string {
+  return decision === "approve"
+    ? "Plan could not be approved."
+    : "Plan could not be rejected.";
 }
 
 function workspaceStatusLabel(status: string | null): string {

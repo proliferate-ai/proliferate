@@ -35,7 +35,7 @@ describe("buildCloudTranscriptState", () => {
     }));
   });
 
-  it("reports projection fallback when retained events lack envelopes", () => {
+  it("synthesizes TranscriptState from projection when retained events lack envelopes", () => {
     const state = buildCloudTranscriptState({
       sessionId: "session-1",
       events: [
@@ -62,14 +62,18 @@ describe("buildCloudTranscriptState", () => {
     });
 
     expect(state.source).toBe("projection");
-    expect(state.transcript).toBeNull();
+    expect(state.transcript?.sessionMeta.sessionId).toBe("session-1");
+    expect(state.transcript?.itemsById["item-1"]).toEqual(expect.objectContaining({
+      kind: "assistant_prose",
+      text: "projection-only assistant",
+    }));
     expect(state.envelopeCount).toBe(0);
     expect(state.missingEnvelopeCount).toBe(1);
     expect(state.latestProjectedSeq).toBe(2);
     expect(state.fallbackReason).toBe("missing_envelopes");
   });
 
-  it("keeps projection when projected items are ahead of event-backed rows", () => {
+  it("uses synthetic projection state when projected items are ahead of event-backed rows", () => {
     const state = buildCloudTranscriptState({
       sessionId: "session-1",
       events: [
@@ -98,7 +102,11 @@ describe("buildCloudTranscriptState", () => {
     });
 
     expect(state.source).toBe("projection");
-    expect(state.transcript).toBeNull();
+    expect(state.transcript?.turnOrder).toEqual(["turn-1"]);
+    expect(state.transcript?.itemsById["item-2"]).toEqual(expect.objectContaining({
+      kind: "assistant_prose",
+      text: "projection is newer",
+    }));
     expect(state.envelopeCount).toBe(1);
     expect(state.missingEnvelopeCount).toBe(0);
     expect(state.latestEnvelopeSeq).toBe(1);
@@ -143,9 +151,6 @@ describe("buildCloudTranscriptView", () => {
       expect.objectContaining({
         body: "hello from projection",
         kind: "user",
-        title: null,
-        detail: null,
-        status: null,
       }),
     ]);
   });
@@ -193,11 +198,10 @@ describe("buildCloudTranscriptView", () => {
 
     expect(view.rows).toEqual([
       expect.objectContaining({
-        id: "projection:tool-1",
         kind: "tool",
         title: "Command",
         detail: command,
-        status: null,
+        status: "completed",
         sourceToolCallId: "tool-1",
       }),
     ]);
@@ -422,16 +426,10 @@ describe("buildCloudTranscriptView", () => {
       expect.objectContaining({
         body: "rendered from event",
         kind: "user",
-        title: null,
-        detail: null,
-        status: null,
       }),
       expect.objectContaining({
         body: "projection-only assistant",
         kind: "assistant",
-        title: null,
-        detail: null,
-        status: null,
       }),
     ]);
   });
@@ -545,12 +543,10 @@ describe("buildCloudTranscriptView", () => {
 
     expect(view.rows).toEqual([
       expect.objectContaining({
-        id: "projection:old-user",
         body: "repeatable prompt",
         kind: "user",
       }),
       expect.objectContaining({
-        id: "projection:old-assistant",
         body: "old response",
         kind: "assistant",
       }),
@@ -606,7 +602,6 @@ describe("buildCloudTranscriptView", () => {
 
     expect(view.rows).toEqual([
       expect.objectContaining({
-        id: "projection:tool-1",
         kind: "tool",
         title: "Tool call",
         detail: "npm test",
@@ -686,12 +681,10 @@ describe("buildCloudTranscriptView", () => {
 
     expect(view.rows).toEqual([
       expect.objectContaining({
-        id: "projection:tool-1",
         kind: "tool",
         status: "Interrupted",
       }),
       expect.objectContaining({
-        id: "projection:assistant-1",
         kind: "assistant",
       }),
     ]);

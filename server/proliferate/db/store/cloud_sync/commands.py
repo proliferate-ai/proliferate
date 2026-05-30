@@ -44,6 +44,7 @@ WORKSPACE_LIFECYCLE_GUARDED_COMMAND_KINDS: frozenset[str] = frozenset(
     (
         CloudCommandKind.start_session.value,
         CloudCommandKind.send_prompt.value,
+        CloudCommandKind.decide_plan.value,
         CloudCommandKind.resolve_interaction.value,
         CloudCommandKind.update_session_config.value,
         CloudCommandKind.cancel_turn.value,

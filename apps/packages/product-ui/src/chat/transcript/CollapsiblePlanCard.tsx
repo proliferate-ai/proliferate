@@ -1,0 +1,164 @@
+import { useState, type ReactNode } from "react";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { Check, ChevronDown, Copy } from "@proliferate/ui/icons";
+import { PlanMarkdownBody } from "./PlanMarkdownBody";
+
+interface CollapsiblePlanCardProps {
+  title: string;
+  content: string;
+  subtitle?: ReactNode;
+  footer?: ReactNode;
+  emptyContent: string;
+  copyLabel: string;
+  collapseLabel: string;
+  expandLabel: string;
+  initialExpanded?: boolean;
+  density?: "default" | "compact";
+  collapsedPreview?: boolean;
+  markdownPresentation?: "default" | "proposal";
+}
+
+const COLLAPSED_MAX_HEIGHT = "min(20rem,45vh)";
+const COLLAPSED_FADE =
+  "linear-gradient(to bottom, black 0, black calc(100% - 5rem), transparent 100%)";
+
+export function CollapsiblePlanCard({
+  title,
+  content,
+  subtitle,
+  footer,
+  emptyContent,
+  copyLabel,
+  collapseLabel,
+  expandLabel,
+  initialExpanded = true,
+  density = "default",
+  collapsedPreview = true,
+  markdownPresentation = "default",
+}: CollapsiblePlanCardProps) {
+  const [expanded, setExpanded] = useState(initialExpanded);
+  const [copied, setCopied] = useState(false);
+  const hasContent = content.length > 0;
+  const renderedContent = stripDuplicatePlanHeading(content, title);
+  const compact = density === "compact";
+  const shellClassName = compact
+    ? "relative overflow-clip rounded-md border border-border/70 bg-card/85 text-left shadow-sm"
+    : "relative overflow-clip rounded-lg bg-foreground/5 text-left";
+  const headerClassName = compact
+    ? "relative flex items-center justify-between gap-3 border-b border-border/40 px-2.5 py-1.5"
+    : "relative flex items-center justify-between gap-3 px-4 py-3";
+  const titleClassName = compact
+    ? "truncate text-sm font-semibold leading-tight text-foreground"
+    : "truncate text-base font-semibold leading-tight text-foreground";
+
+  const handleCopy = () => {
+    if (!content) return;
+    void navigator.clipboard.writeText(content).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  };
+
+  return (
+    <div data-telemetry-mask className={shellClassName}>
+      <div className={headerClassName}>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className={titleClassName}>
+            {title.trim() || "Plan"}
+          </span>
+          {subtitle}
+        </div>
+        {hasContent && (
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              data-chat-transcript-ignore
+              onClick={handleCopy}
+              aria-label={copyLabel}
+              className="size-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              data-chat-transcript-ignore
+              onClick={() => setExpanded((value) => !value)}
+              aria-label={expanded ? collapseLabel : expandLabel}
+              className="size-7 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <ChevronDown
+                className={`size-3.5 transition-transform ${expanded ? "" : "-rotate-90"}`}
+              />
+            </Button>
+          </div>
+        )}
+      </div>
+      {!hasContent ? (
+        <div className="px-4 py-3 text-sm text-muted-foreground">
+          {emptyContent}
+        </div>
+      ) : expanded ? (
+        <div className={compact ? "px-3 py-2" : "px-4 py-3"}>
+          <PlanMarkdownBody content={renderedContent} presentation={markdownPresentation} />
+        </div>
+      ) : !collapsedPreview ? null : (
+        <div className="relative">
+          <div
+            className={compact ? "overflow-hidden px-3 py-2" : "overflow-hidden px-4 py-3"}
+            style={{
+              maxHeight: COLLAPSED_MAX_HEIGHT,
+              maskImage: COLLAPSED_FADE,
+              WebkitMaskImage: COLLAPSED_FADE,
+            }}
+          >
+            <PlanMarkdownBody content={renderedContent} presentation={markdownPresentation} />
+          </div>
+          <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+            <Button
+              type="button"
+              variant="inverted"
+              size="pill"
+              data-chat-transcript-ignore
+              onClick={() => setExpanded(true)}
+              className="pointer-events-auto px-3 py-0.5 text-sm"
+            >
+              Expand plan
+            </Button>
+          </div>
+        </div>
+      )}
+      {footer}
+    </div>
+  );
+}
+
+function stripDuplicatePlanHeading(content: string, title: string): string {
+  const lines = content.split(/\r?\n/);
+  const firstContentIndex = lines.findIndex((line) => line.trim().length > 0);
+  if (firstContentIndex < 0) {
+    return content;
+  }
+
+  const firstLine = lines[firstContentIndex]?.trim() ?? "";
+  const heading = /^(?:#{1,3}\s+)(.+?)(?:\s+#*)?$/.exec(firstLine)?.[1]?.trim();
+  if (!heading) {
+    return content;
+  }
+
+  if (normalizeHeading(heading) !== normalizeHeading(title.trim() || "Plan")) {
+    return content;
+  }
+
+  return [
+    ...lines.slice(0, firstContentIndex),
+    ...lines.slice(firstContentIndex + 1),
+  ].join("\n").replace(/^\s*\n/, "");
+}
+
+function normalizeHeading(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}

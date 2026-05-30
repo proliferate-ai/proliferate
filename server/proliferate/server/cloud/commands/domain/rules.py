@@ -110,6 +110,7 @@ def validate_command_shape(
         kind
         in {
             CloudCommandKind.send_prompt.value,
+            CloudCommandKind.decide_plan.value,
             CloudCommandKind.resolve_interaction.value,
             CloudCommandKind.update_session_config.value,
             CloudCommandKind.cancel_turn.value,

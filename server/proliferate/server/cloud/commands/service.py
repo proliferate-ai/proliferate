@@ -52,6 +52,7 @@ _CLIENT_COMMAND_QUEUE_EXPIRATION = timedelta(minutes=4)
 _CLIENT_EXPIRABLE_QUEUED_COMMAND_KINDS = {
     CloudCommandKind.start_session.value,
     CloudCommandKind.send_prompt.value,
+    CloudCommandKind.decide_plan.value,
     CloudCommandKind.update_session_config.value,
 }
 _CLIENT_EXPIRABLE_QUEUED_COMMAND_SOURCES = {
@@ -91,6 +92,7 @@ def _str_or_none(value: object) -> str | None:
 
 _PROJECTED_SESSION_COMMAND_KINDS = {
     CloudCommandKind.send_prompt.value,
+    CloudCommandKind.decide_plan.value,
     CloudCommandKind.resolve_interaction.value,
     CloudCommandKind.update_session_config.value,
     CloudCommandKind.cancel_turn.value,

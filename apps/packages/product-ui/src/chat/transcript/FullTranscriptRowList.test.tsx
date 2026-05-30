@@ -6,10 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 import { FullTranscriptRowList } from "./FullTranscriptRowList";
 
-vi.mock("@/lib/infra/measurement/debug-latency", () => ({
-  logLatency: vi.fn(),
-}));
-
 const ROWS: TranscriptVirtualRow[] = [
   {
     kind: "pending_prompt",

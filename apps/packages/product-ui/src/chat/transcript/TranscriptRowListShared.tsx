@@ -1,12 +1,13 @@
 import type { ReactNode, RefObject } from "react";
 import { Spinner } from "@proliferate/ui/icons";
 import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
 
 export const TRANSCRIPT_TOP_PADDING_PX = 16;
 export const STICKY_BOTTOM_THRESHOLD_PX = 96;
 export const HISTORY_PREFETCH_TOP_THRESHOLD_PX = 480;
 export const HISTORY_LOADING_ROW_KEY = "history-loader";
+export const DEFAULT_CHAT_COLUMN_CLASSNAME = "mx-auto w-full max-w-3xl";
+export const DEFAULT_CHAT_SURFACE_GUTTER_CLASSNAME = "px-4";
 
 const ESTIMATED_TURN_HEIGHT_PX = 360;
 const ESTIMATED_HISTORY_LOADING_ROW_HEIGHT_PX = 32;
@@ -25,6 +26,8 @@ export interface TranscriptRowListBaseProps {
   onLoadOlderHistory: () => void;
   onScrollSample: () => void;
   renderRow: (row: TranscriptVirtualRow, rowIndex: number) => ReactNode;
+  columnClassName?: string;
+  gutterClassName?: string;
 }
 
 export interface HistoryPrependScrollAnchor {
@@ -96,28 +99,6 @@ export function logHistoryPrefetchDecisionOnce(
     return;
   }
   lastSignatureRef.current = signature;
-
-  logLatency("session.history.older_chunk.prefetch_decision", {
-    component: input.component,
-    trigger: input.trigger,
-    reason: input.reason,
-    sessionId: input.sessionId,
-    workspaceId: input.workspaceId,
-    cursor: input.cursor,
-    lastRequestedCursor: input.lastRequestedCursor,
-    hasOlderHistory: input.hasOlderHistory,
-    isLoadingOlderHistory: input.isLoadingOlderHistory,
-    pendingAnchorCursor: input.pendingAnchor?.cursor ?? null,
-    pendingAnchorRowCount: input.pendingAnchor?.rowCount ?? null,
-    rowCount: input.rowCount,
-    renderableRowCount: input.renderableRowCount,
-    virtualItemCount: input.virtualItemCount,
-    scrollTop: Math.round(input.viewport.scrollTop),
-    clientHeight: input.viewport.clientHeight,
-    scrollHeight: input.viewport.scrollHeight,
-    totalContentHeight: input.totalContentHeight,
-    thresholdPx: HISTORY_PREFETCH_TOP_THRESHOLD_PX,
-  });
 }
 
 export function buildRenderableRows(

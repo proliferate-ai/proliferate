@@ -2,17 +2,15 @@ import type { RefObject } from "react";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import {
-  CHAT_COLUMN_CLASSNAME,
-  CHAT_SURFACE_GUTTER_CLASSNAME,
-} from "@/config/chat-layout";
-import {
+  DEFAULT_CHAT_COLUMN_CLASSNAME,
+  DEFAULT_CHAT_SURFACE_GUTTER_CLASSNAME,
   TranscriptHistoryLoadingRow,
   type TranscriptRenderableRow,
   type TranscriptRowListBaseProps,
-} from "@/components/workspace/chat/transcript/TranscriptRowListShared";
+} from "./TranscriptRowListShared";
 import {
   MemoizedVirtualTranscriptRow,
-} from "@/components/workspace/chat/transcript/VirtualTranscriptRow";
+} from "./VirtualTranscriptRow";
 import type { TranscriptVirtualizationMode } from "@proliferate/product-domain/chats/transcript/transcript-virtualization-config";
 
 export function VirtualTranscriptViewport({
@@ -26,8 +24,12 @@ export function VirtualTranscriptViewport({
   topSpacerHeight,
   virtualItems,
   virtualizationMode,
+  columnClassName = DEFAULT_CHAT_COLUMN_CLASSNAME,
+  gutterClassName = DEFAULT_CHAT_SURFACE_GUTTER_CLASSNAME,
 }: {
   bottomSpacerHeight: number;
+  columnClassName?: string;
+  gutterClassName?: string;
   measureElement: (element: Element | null) => void;
   onViewportScroll: (viewport: HTMLDivElement) => void;
   renderableRows: readonly TranscriptRenderableRow[];
@@ -45,7 +47,7 @@ export function VirtualTranscriptViewport({
       onViewportScroll={onViewportScroll}
     >
       <div
-        className={`${CHAT_SURFACE_GUTTER_CLASSNAME} min-h-full`}
+        className={`${gutterClassName} min-h-full`}
         data-transcript-virtualization-mode="virtual"
         data-transcript-virtualization-setting={virtualizationMode}
       >
@@ -53,7 +55,7 @@ export function VirtualTranscriptViewport({
           ref={selectionRootRef}
           data-chat-transcript-root="true"
           tabIndex={-1}
-          className={`${CHAT_COLUMN_CLASSNAME} select-none outline-none`}
+          className={`${columnClassName} select-none outline-none`}
         >
           {topSpacerHeight > 0 && (
             <div aria-hidden="true" style={{ height: topSpacerHeight }} />

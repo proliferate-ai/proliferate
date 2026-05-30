@@ -1246,6 +1246,16 @@ async fn dispatch_anyharness(
         AnyHarnessCommand::SendPrompt { session_id, body } => {
             anyharness.send_prompt(session_id, body).await
         }
+        AnyHarnessCommand::DecidePlan {
+            workspace_id,
+            plan_id,
+            decision,
+            expected_decision_version,
+        } => {
+            anyharness
+                .decide_plan(workspace_id, plan_id, decision, *expected_decision_version)
+                .await
+        }
         AnyHarnessCommand::ResolveInteraction {
             session_id,
             request_id,
@@ -1482,6 +1492,7 @@ fn register_session_for_sync(
         | AnyHarnessCommand::UpdateNormalizedSessionConfig { session_id, .. }
         | AnyHarnessCommand::CancelTurn { session_id }
         | AnyHarnessCommand::CloseSession { session_id } => Some(session_id.clone()),
+        AnyHarnessCommand::DecidePlan { .. } => command.session_id.clone(),
     };
     let Some(session_id) = session_id else {
         return Ok(());

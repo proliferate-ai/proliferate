@@ -17,6 +17,12 @@ pub enum AnyHarnessCommand {
         session_id: String,
         body: Value,
     },
+    DecidePlan {
+        workspace_id: String,
+        plan_id: String,
+        decision: PlanDecision,
+        expected_decision_version: i64,
+    },
     ResolveInteraction {
         session_id: String,
         request_id: String,
@@ -45,6 +51,12 @@ pub struct CommandMappingError {
     pub message: String,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum PlanDecision {
+    Approve,
+    Reject,
+}
+
 impl CommandMappingError {
     fn new(code: &'static str, message: impl Into<String>) -> Self {
         Self {
@@ -68,6 +80,16 @@ pub fn map_cloud_command(
             session_id: require_session_id(command)?,
             body: prompt_body(command)?,
         }),
+        "decide_plan" => {
+            let (workspace_id, plan_id, decision, expected_decision_version) =
+                plan_decision_body(command)?;
+            Ok(AnyHarnessCommand::DecidePlan {
+                workspace_id,
+                plan_id,
+                decision,
+                expected_decision_version,
+            })
+        }
         "resolve_interaction" => {
             let (request_id, body) = interaction_resolution_body(&command.payload)?;
             Ok(AnyHarnessCommand::ResolveInteraction {
@@ -369,6 +391,64 @@ fn interaction_resolution_body(payload: &Value) -> Result<(String, Value), Comma
     Ok((request_id, Value::Object(body)))
 }
 
+fn plan_decision_body(
+    command: &CloudCommandEnvelope,
+) -> Result<(String, String, PlanDecision, i64), CommandMappingError> {
+    let Some(object) = command.payload.as_object() else {
+        return Err(CommandMappingError::new(
+            "invalid_plan_decision_payload",
+            "decide_plan payload must be a JSON object.",
+        ));
+    };
+    let workspace_id = string_field(object, "workspaceId", "workspace_id")
+        .or_else(|| {
+            command
+                .workspace_id
+                .clone()
+                .filter(|value| !value.trim().is_empty())
+        })
+        .ok_or_else(|| {
+            CommandMappingError::new(
+                "missing_workspace_id",
+                "decide_plan payload must contain workspaceId.",
+            )
+        })?;
+    let plan_id = string_field(object, "planId", "plan_id").ok_or_else(|| {
+        CommandMappingError::new(
+            "missing_plan_id",
+            "decide_plan payload must contain planId.",
+        )
+    })?;
+    let decision = match string_field(object, "decision", "decision").as_deref() {
+        Some("approve") | Some("approved") => PlanDecision::Approve,
+        Some("reject") | Some("rejected") => PlanDecision::Reject,
+        Some(value) => {
+            return Err(CommandMappingError::new(
+                "invalid_plan_decision",
+                format!("Unsupported plan decision: {value}."),
+            ));
+        }
+        None => {
+            return Err(CommandMappingError::new(
+                "missing_plan_decision",
+                "decide_plan payload must contain decision.",
+            ));
+        }
+    };
+    let expected_decision_version = integer_field(
+        object,
+        "expectedDecisionVersion",
+        "expected_decision_version",
+    )
+    .ok_or_else(|| {
+        CommandMappingError::new(
+            "missing_expected_decision_version",
+            "decide_plan payload must contain expectedDecisionVersion.",
+        )
+    })?;
+    Ok((workspace_id, plan_id, decision, expected_decision_version))
+}
+
 enum ConfigCommandBody {
     Raw(Value),
     Normalized { control_id: String, value: String },
@@ -512,7 +592,7 @@ mod tests {
 
     use crate::cloud_client::commands::CloudCommandEnvelope;
 
-    use super::{map_cloud_command, AnyHarnessCommand};
+    use super::{map_cloud_command, AnyHarnessCommand, PlanDecision};
 
     #[test]
     fn maps_existing_path_workspace_materialization() {
@@ -797,6 +877,32 @@ mod tests {
             Some("target-1")
         );
         assert!(body.get("blocks").is_some());
+    }
+
+    #[test]
+    fn maps_decide_plan_payload() {
+        let mut command = test_command(json!({
+            "workspaceId": "workspace-1",
+            "planId": "plan-1",
+            "decision": "approve",
+            "expectedDecisionVersion": 3
+        }));
+        command.kind = "decide_plan".to_string();
+        command.session_id = Some("session-1".to_string());
+
+        let mapped = map_cloud_command(&command).expect("mapped");
+        let AnyHarnessCommand::DecidePlan {
+            workspace_id,
+            plan_id,
+            decision,
+            expected_decision_version,
+        } = mapped else {
+            panic!("expected decide plan");
+        };
+        assert_eq!(workspace_id, "workspace-1");
+        assert_eq!(plan_id, "plan-1");
+        assert_eq!(decision, PlanDecision::Approve);
+        assert_eq!(expected_decision_version, 3);
     }
 
     fn test_command(payload: serde_json::Value) -> CloudCommandEnvelope {

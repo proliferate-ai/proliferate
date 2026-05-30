@@ -4,15 +4,13 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  type RefObject,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   shouldStickToVirtualBottom,
 } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 import type { TranscriptVirtualizationMode } from "@proliferate/product-domain/chats/transcript/transcript-virtualization-config";
-import { useTranscriptVirtualizerBlankFallback } from "@/hooks/chat/ui/use-transcript-virtualizer-blank-fallback";
-import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
-import { measureDebugComputation } from "@/lib/infra/measurement/debug-measurement";
 import {
   buildRenderableRows,
   estimateRenderableRowHeight,
@@ -26,7 +24,7 @@ import {
   type HistoryPrependScrollAnchor,
   type TranscriptRenderableRow,
   type TranscriptRowListBaseProps,
-} from "@/components/workspace/chat/transcript/TranscriptRowListShared";
+} from "./TranscriptRowListShared";
 import { VirtualTranscriptViewport } from "./VirtualTranscriptViewport";
 
 const VIRTUALIZER_OVERSCAN = 8;
@@ -57,6 +55,8 @@ export function VirtualizedTranscriptRowList({
   onLoadOlderHistory,
   onScrollSample,
   renderRow,
+  columnClassName,
+  gutterClassName,
   onFallback,
   virtualizationMode,
 }: VirtualizedTranscriptRowListProps) {
@@ -68,12 +68,7 @@ export function VirtualizedTranscriptRowList({
   const lastPrefetchDecisionLogRef = useRef<string | null>(null);
   const lastBlankReportSignatureRef = useRef<string | null>(null);
   const renderableRows = useMemo(
-    () => measureDebugComputation({
-      category: "transcript_virtualization.derive",
-      label: "renderable_rows",
-      keys: ["rows", "isLoadingOlderHistory"],
-      count: (nextRows) => nextRows.length,
-    }, () => buildRenderableRows(rows, isLoadingOlderHistory)),
+    () => buildRenderableRows(rows, isLoadingOlderHistory),
     [isLoadingOlderHistory, rows],
   );
   const estimatedInitialBottomOffset =
@@ -325,34 +320,104 @@ export function VirtualizedTranscriptRowList({
 
   useTranscriptVirtualizerBlankFallback({
     activeSessionId,
-    bottomSpacerHeight,
     firstVirtualItem,
     lastVirtualItem,
     lastBlankReportSignatureRef,
     onFallback,
-    renderableRowCount: renderableRows.length,
     rowCount: rows.length,
     scrollRef,
-    selectedWorkspaceId,
-    topSpacerHeight,
-    totalContentHeight,
-    virtualItemCount: virtualItems.length,
   });
 
   return (
-    <DebugProfiler id="transcript-virtualized-viewport">
-      <VirtualTranscriptViewport
-        bottomSpacerHeight={bottomSpacerHeight}
-        measureElement={virtualizer.measureElement}
-        onViewportScroll={handleViewportScroll}
-        renderableRows={renderableRows}
-        renderRow={renderRow}
-        scrollRef={scrollRef}
-        selectionRootRef={selectionRootRef}
-        topSpacerHeight={topSpacerHeight}
-        virtualItems={virtualItems}
-        virtualizationMode={virtualizationMode}
-      />
-    </DebugProfiler>
+    <VirtualTranscriptViewport
+      bottomSpacerHeight={bottomSpacerHeight}
+      columnClassName={columnClassName}
+      gutterClassName={gutterClassName}
+      measureElement={virtualizer.measureElement}
+      onViewportScroll={handleViewportScroll}
+      renderableRows={renderableRows}
+      renderRow={renderRow}
+      scrollRef={scrollRef}
+      selectionRootRef={selectionRootRef}
+      topSpacerHeight={topSpacerHeight}
+      virtualItems={virtualItems}
+      virtualizationMode={virtualizationMode}
+    />
   );
+}
+
+const BLANK_VIEWPORT_MIN_SCROLLABLE_PX = 32;
+
+function useTranscriptVirtualizerBlankFallback({
+  activeSessionId,
+  firstVirtualItem,
+  lastVirtualItem,
+  lastBlankReportSignatureRef,
+  onFallback,
+  rowCount,
+  scrollRef,
+}: {
+  activeSessionId: string;
+  firstVirtualItem: { index: number } | null;
+  lastVirtualItem: { index: number } | null;
+  lastBlankReportSignatureRef: RefObject<string | null>;
+  onFallback: (reason: string) => void;
+  rowCount: number;
+  scrollRef: RefObject<HTMLDivElement | null>;
+}): void {
+  useEffect(() => {
+    if (rowCount === 0) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const viewport = scrollRef.current;
+      if (!viewport) {
+        return;
+      }
+
+      const scrollableDistance = viewport.scrollHeight - viewport.clientHeight;
+      if (scrollableDistance < BLANK_VIEWPORT_MIN_SCROLLABLE_PX) {
+        return;
+      }
+
+      const viewportRect = viewport.getBoundingClientRect();
+      const rowElements = Array.from(
+        viewport.querySelectorAll<HTMLElement>("[data-transcript-virtual-row='true']"),
+      );
+      const visibleRowCount = rowElements.filter((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.bottom > viewportRect.top + 1 && rect.top < viewportRect.bottom - 1;
+      }).length;
+
+      if (visibleRowCount > 0) {
+        return;
+      }
+
+      const signature = [
+        activeSessionId,
+        rowCount,
+        Math.round(viewport.scrollTop),
+        firstVirtualItem?.index ?? null,
+        lastVirtualItem?.index ?? null,
+      ].join(":");
+      if (lastBlankReportSignatureRef.current === signature) {
+        return;
+      }
+      lastBlankReportSignatureRef.current = signature;
+      onFallback("blank_viewport");
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [
+    activeSessionId,
+    firstVirtualItem,
+    lastBlankReportSignatureRef,
+    lastVirtualItem,
+    onFallback,
+    rowCount,
+    scrollRef,
+  ]);
 }

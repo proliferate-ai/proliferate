@@ -5,6 +5,7 @@ export type CloudCommandKind =
   | "materialize_workspace"
   | "materialize_environment"
   | "send_prompt"
+  | "decide_plan"
   | "resolve_interaction"
   | "update_session_config"
   | "cancel_turn"
