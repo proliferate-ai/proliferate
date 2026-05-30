@@ -3,7 +3,9 @@ use uuid::Uuid;
 
 use super::model::{CoworkManagedWorkspaceRecord, CoworkRootRecord, CoworkThreadRecord};
 use crate::persistence::Db;
+use crate::sessions::deletion::SessionDeleteParticipant;
 use crate::sessions::links::model::SessionLinkRecord;
+use crate::workspaces::deletion::WorkspaceDeleteParticipant;
 
 #[derive(Clone)]
 pub struct CoworkStore {
@@ -296,6 +298,28 @@ pub(crate) fn delete_cowork_rows_for_workspace_in_tx(
         [workspace_id],
     )?;
     Ok(())
+}
+
+pub struct CoworkDeleteParticipant;
+
+impl SessionDeleteParticipant for CoworkDeleteParticipant {
+    fn delete_session_rows_in_tx(
+        &self,
+        conn: &rusqlite::Connection,
+        session_id: &str,
+    ) -> rusqlite::Result<()> {
+        delete_cowork_rows_for_session_in_tx(conn, session_id)
+    }
+}
+
+impl WorkspaceDeleteParticipant for CoworkDeleteParticipant {
+    fn delete_workspace_rows_in_tx(
+        &self,
+        conn: &rusqlite::Connection,
+        workspace_id: &str,
+    ) -> rusqlite::Result<()> {
+        delete_cowork_rows_for_workspace_in_tx(conn, workspace_id)
+    }
 }
 
 fn map_root_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<CoworkRootRecord> {

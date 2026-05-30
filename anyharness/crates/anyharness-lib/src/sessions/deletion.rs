@@ -1,38 +1,63 @@
+use std::sync::Arc;
+
 use crate::persistence::Db;
+
+pub trait SessionDeleteParticipant: Send + Sync {
+    fn delete_session_rows_in_tx(
+        &self,
+        conn: &rusqlite::Connection,
+        session_id: &str,
+    ) -> rusqlite::Result<()>;
+}
 
 #[derive(Clone)]
 pub struct SessionDeleteWorkflow {
     db: Db,
+    participants: Vec<Arc<dyn SessionDeleteParticipant>>,
 }
 
 impl SessionDeleteWorkflow {
     pub fn new(db: Db) -> Self {
-        Self { db }
+        Self {
+            db,
+            participants: Vec::new(),
+        }
+    }
+
+    pub fn with_participants(db: Db, participants: Vec<Arc<dyn SessionDeleteParticipant>>) -> Self {
+        Self { db, participants }
     }
 
     pub fn delete_session(&self, session_id: &str) -> anyhow::Result<()> {
         self.db
-            .with_tx(|conn| delete_session_graph_in_tx(conn, session_id))
+            .with_tx(|conn| self.delete_session_graph_in_tx(conn, session_id))
     }
-}
 
-pub(crate) fn delete_session_graph_in_tx(
-    conn: &rusqlite::Connection,
-    session_id: &str,
-) -> rusqlite::Result<()> {
-    crate::domains::cowork::store::delete_cowork_rows_for_session_in_tx(conn, session_id)?;
-    crate::domains::reviews::store::delete_review_rows_for_session_in_tx(conn, session_id)?;
-    crate::sessions::links::store::delete_session_link_rows_for_session_in_tx(conn, session_id)?;
-    crate::sessions::store::sessions::delete_session_rows_in_tx(conn, session_id)?;
-    Ok(())
+    pub(crate) fn delete_session_graph_in_tx(
+        &self,
+        conn: &rusqlite::Connection,
+        session_id: &str,
+    ) -> rusqlite::Result<()> {
+        for participant in &self.participants {
+            participant.delete_session_rows_in_tx(conn, session_id)?;
+        }
+        crate::sessions::links::store::delete_session_link_rows_for_session_in_tx(
+            conn, session_id,
+        )?;
+        crate::sessions::store::sessions::delete_session_rows_in_tx(conn, session_id)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::SessionDeleteWorkflow;
+    use crate::domains::cowork::store::CoworkDeleteParticipant;
+    use crate::domains::reviews::store::ReviewDeleteParticipant;
     use crate::persistence::Db;
     use crate::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
     use crate::sessions::store::SessionStore;
+    use std::sync::Arc;
 
     #[test]
     fn delete_session_removes_cross_domain_dependents() {
@@ -47,7 +72,7 @@ mod tests {
             .expect("insert child session");
         seed_cross_domain_dependents(&db);
 
-        SessionDeleteWorkflow::new(db.clone())
+        test_delete_workflow(db.clone())
             .delete_session("session-1")
             .expect("delete session graph");
 
@@ -62,6 +87,16 @@ mod tests {
         assert_eq!(count_all(&db, "session_link_wake_schedules"), 0);
         assert_eq!(count_all(&db, "session_link_completions"), 0);
         assert_eq!(count_all(&db, "session_links"), 0);
+    }
+
+    fn test_delete_workflow(db: Db) -> SessionDeleteWorkflow {
+        SessionDeleteWorkflow::with_participants(
+            db,
+            vec![
+                Arc::new(CoworkDeleteParticipant),
+                Arc::new(ReviewDeleteParticipant),
+            ],
+        )
     }
 
     fn seed_workspace_and_repo(db: &Db) {

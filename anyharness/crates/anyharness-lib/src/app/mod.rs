@@ -17,7 +17,7 @@ use crate::domains::cowork::mcp::{
 };
 use crate::domains::cowork::runtime::{CoworkRuntime, CoworkSessionHooks};
 use crate::domains::cowork::service::CoworkService;
-use crate::domains::cowork::store::CoworkStore;
+use crate::domains::cowork::store::{CoworkDeleteParticipant, CoworkStore};
 use crate::domains::mobility::service::MobilityService;
 use crate::domains::mobility::store::MobilityStore;
 use crate::domains::plans::runtime::PlanRuntime;
@@ -30,7 +30,7 @@ use crate::domains::reviews::mcp::{
 };
 use crate::domains::reviews::runtime::ReviewRuntime;
 use crate::domains::reviews::service::ReviewService;
-use crate::domains::reviews::store::ReviewStore;
+use crate::domains::reviews::store::{ReviewDeleteParticipant, ReviewStore};
 use crate::domains::runtime_config::service::{RuntimeConfigService, RuntimeConfigStore};
 use crate::domains::runtime_config::session_extension::RuntimeConfigSessionLaunchExtension;
 use crate::persistence::Db;
@@ -143,6 +143,18 @@ impl AppState {
         let auth_manager = AuthManager::new(load_runtime_target_id());
         let session_data_cipher =
             load_data_cipher_from_env().map_err(AppStateInitError::InvalidDataKey)?;
+        let session_delete_workflow = SessionDeleteWorkflow::with_participants(
+            db.clone(),
+            vec![
+                Arc::new(CoworkDeleteParticipant),
+                Arc::new(ReviewDeleteParticipant),
+            ],
+        );
+        let workspace_delete_workflow = WorkspaceDeleteWorkflow::with_participants(
+            db.clone(),
+            session_delete_workflow.clone(),
+            vec![Arc::new(CoworkDeleteParticipant)],
+        );
         let repo_root_service = Arc::new(RepoRootService::new(RepoRootStore::new(db.clone())));
         let workspace_service = Arc::new(WorkspaceService::new(
             WorkspaceStore::new(db.clone()),
@@ -151,7 +163,7 @@ impl AppState {
         let workspace_runtime = Arc::new(WorkspaceRuntime::new(
             (*workspace_service).clone(),
             WorkspaceStore::new(db.clone()),
-            WorkspaceDeleteWorkflow::new(db.clone()),
+            workspace_delete_workflow.clone(),
             (*repo_root_service).clone(),
             runtime_home.clone(),
         ));
@@ -188,7 +200,7 @@ impl AppState {
         ));
         let session_service = Arc::new(SessionService::new(
             SessionStore::new(db.clone()),
-            SessionDeleteWorkflow::new(db.clone()),
+            session_delete_workflow.clone(),
             WorkspaceStore::new(db.clone()),
             DynamicModelRegistryStore::new(db.clone()),
             agent_auth_config_service.clone(),
@@ -231,7 +243,7 @@ impl AppState {
         ));
         let subagent_service = Arc::new(SubagentService::new(
             SessionStore::new(db.clone()),
-            SessionDeleteWorkflow::new(db.clone()),
+            session_delete_workflow.clone(),
             session_link_service.clone(),
             SubagentStore::new(db.clone()),
             workspace_runtime.clone(),
@@ -240,7 +252,7 @@ impl AppState {
         let review_service = Arc::new(ReviewService::new(
             ReviewStore::new(db.clone()),
             SessionStore::new(db.clone()),
-            SessionDeleteWorkflow::new(db.clone()),
+            session_delete_workflow.clone(),
             session_link_service.clone(),
             plan_service.clone(),
         ));
@@ -307,7 +319,7 @@ impl AppState {
         ));
         let workspace_purge_service = Arc::new(WorkspacePurgeService::new(
             workspace_runtime.clone(),
-            WorkspaceDeleteWorkflow::new(db.clone()),
+            workspace_delete_workflow.clone(),
             SessionStore::new(db.clone()),
             PromptAttachmentStorage::new(runtime_home.clone()),
             workspace_operation_gate.clone(),

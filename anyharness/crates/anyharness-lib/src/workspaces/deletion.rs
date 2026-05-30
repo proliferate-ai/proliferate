@@ -1,18 +1,47 @@
+use std::sync::Arc;
+
 use crate::persistence::Db;
+use crate::sessions::deletion::SessionDeleteWorkflow;
+
+pub trait WorkspaceDeleteParticipant: Send + Sync {
+    fn delete_workspace_rows_in_tx(
+        &self,
+        conn: &rusqlite::Connection,
+        workspace_id: &str,
+    ) -> rusqlite::Result<()>;
+}
 
 #[derive(Clone)]
 pub struct WorkspaceDeleteWorkflow {
     db: Db,
+    session_delete_workflow: SessionDeleteWorkflow,
+    participants: Vec<Arc<dyn WorkspaceDeleteParticipant>>,
 }
 
 impl WorkspaceDeleteWorkflow {
-    pub fn new(db: Db) -> Self {
-        Self { db }
+    pub fn new(db: Db, session_delete_workflow: SessionDeleteWorkflow) -> Self {
+        Self {
+            db,
+            session_delete_workflow,
+            participants: Vec::new(),
+        }
+    }
+
+    pub fn with_participants(
+        db: Db,
+        session_delete_workflow: SessionDeleteWorkflow,
+        participants: Vec<Arc<dyn WorkspaceDeleteParticipant>>,
+    ) -> Self {
+        Self {
+            db,
+            session_delete_workflow,
+            participants,
+        }
     }
 
     pub fn delete_workspace_record(&self, workspace_id: &str) -> anyhow::Result<()> {
         self.db.with_tx(|conn| {
-            delete_workspace_scoped_graph_rows_in_tx(conn, workspace_id)?;
+            self.delete_workspace_scoped_graph_rows_in_tx(conn, workspace_id)?;
             crate::workspaces::store::delete_workspace_row_in_tx(conn, workspace_id)?;
             Ok(())
         })
@@ -26,29 +55,35 @@ impl WorkspaceDeleteWorkflow {
                     workspace_id,
                 )?;
             for session_id in session_ids {
-                crate::sessions::deletion::delete_session_graph_in_tx(conn, &session_id)?;
+                self.session_delete_workflow
+                    .delete_session_graph_in_tx(conn, &session_id)?;
             }
-            delete_workspace_scoped_graph_rows_in_tx(conn, workspace_id)?;
+            self.delete_workspace_scoped_graph_rows_in_tx(conn, workspace_id)?;
             crate::workspaces::store::delete_workspace_row_in_tx(conn, workspace_id)?;
             Ok(())
         })
     }
-}
 
-fn delete_workspace_scoped_graph_rows_in_tx(
-    conn: &rusqlite::Connection,
-    workspace_id: &str,
-) -> rusqlite::Result<()> {
-    crate::workspaces::access_store::delete_workspace_access_modes_in_tx(conn, workspace_id)?;
-    crate::domains::cowork::store::delete_cowork_rows_for_workspace_in_tx(conn, workspace_id)?;
-    crate::terminals::store::delete_workspace_terminal_rows_in_tx(conn, workspace_id)?;
-    Ok(())
+    fn delete_workspace_scoped_graph_rows_in_tx(
+        &self,
+        conn: &rusqlite::Connection,
+        workspace_id: &str,
+    ) -> rusqlite::Result<()> {
+        crate::workspaces::access_store::delete_workspace_access_modes_in_tx(conn, workspace_id)?;
+        for participant in &self.participants {
+            participant.delete_workspace_rows_in_tx(conn, workspace_id)?;
+        }
+        crate::terminals::store::delete_workspace_terminal_rows_in_tx(conn, workspace_id)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::WorkspaceDeleteWorkflow;
+    use crate::domains::cowork::store::CoworkDeleteParticipant;
     use crate::persistence::Db;
+    use crate::sessions::deletion::SessionDeleteWorkflow;
     use crate::sessions::model::{SessionEventRecord, SessionMcpBindingPolicy, SessionRecord};
     use crate::sessions::store::SessionStore;
     use crate::terminals::model::{
@@ -56,6 +91,7 @@ mod tests {
         TerminalPurpose,
     };
     use crate::terminals::store::TerminalStore;
+    use std::sync::Arc;
 
     #[test]
     fn purge_workspace_deletes_sessions_and_workspace_scoped_dependents() {
@@ -86,7 +122,7 @@ mod tests {
             .expect("set setup run");
         seed_workspace_scoped_dependents(&db);
 
-        WorkspaceDeleteWorkflow::new(db.clone())
+        test_delete_workflow(db.clone())
             .purge_workspace_with_sessions("workspace-1")
             .expect("purge workspace");
 
@@ -97,6 +133,14 @@ mod tests {
         assert_eq!(count_all(&db, "cowork_threads"), 0);
         assert_eq!(count_all(&db, "workspace_setup_state"), 0);
         assert_eq!(count_all(&db, "terminal_command_runs"), 0);
+    }
+
+    fn test_delete_workflow(db: Db) -> WorkspaceDeleteWorkflow {
+        WorkspaceDeleteWorkflow::with_participants(
+            db.clone(),
+            SessionDeleteWorkflow::new(db),
+            vec![Arc::new(CoworkDeleteParticipant)],
+        )
     }
 
     fn seed_workspace_and_repo(db: &Db) {

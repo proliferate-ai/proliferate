@@ -7,6 +7,7 @@ use super::store_rows::{
     insert_assignment, insert_round, insert_run, map_assignment, map_round, map_run,
 };
 use crate::persistence::Db;
+use crate::sessions::deletion::SessionDeleteParticipant;
 
 #[derive(Clone)]
 pub struct ReviewStore {
@@ -660,4 +661,16 @@ pub(crate) fn delete_review_rows_for_session_in_tx(
         [session_id],
     )?;
     Ok(())
+}
+
+pub struct ReviewDeleteParticipant;
+
+impl SessionDeleteParticipant for ReviewDeleteParticipant {
+    fn delete_session_rows_in_tx(
+        &self,
+        conn: &rusqlite::Connection,
+        session_id: &str,
+    ) -> rusqlite::Result<()> {
+        delete_review_rows_for_session_in_tx(conn, session_id)
+    }
 }
