@@ -21,6 +21,28 @@ on:
           - all
           - macos
         default: all
+  workflow_call:
+    inputs:
+      git_sha:
+        description: "Commit SHA to package. Defaults to the caller ref."
+        required: false
+        type: string
+      version:
+        description: "Desktop version to release. Required for non-tag reusable releases."
+        required: false
+        type: string
+      dry_run:
+        description: "Dry run (skip GitHub release creation and updater publish)"
+        type: boolean
+        default: false
+      publish_updater:
+        description: "Publish updater/download assets to S3 and CloudFront"
+        type: boolean
+        default: false
+      target_os:
+        description: "Target OS"
+        type: string
+        default: all
 
 permissions:
   contents: write
@@ -64,8 +86,10 @@ jobs:
       - name: Decide whether to build this matrix entry
         id: filter
         shell: bash
+        env:
+          TARGET_OS: ${{ inputs.target_os || 'all' }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && [[ "${{ inputs.target_os }}" != "all" ]] && [[ "${{ inputs.target_os }}" != "${{ matrix.runner_os }}" ]]; then
+          if [[ "${{ github.event_name }}" != "push" ]] && [[ "$TARGET_OS" != "all" ]] && [[ "$TARGET_OS" != "${{ matrix.runner_os }}" ]]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -83,17 +107,29 @@ jobs:
       - name: Checkout
         if: steps.filter.outputs.skip != 'true'
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_sha || github.ref }}
 
       - name: Validate version consistency
-        if: steps.filter.outputs.skip != 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run))
+        if: steps.filter.outputs.skip != 'true' && (github.event_name == 'push' || (github.event_name != 'push' && !inputs.dry_run))
         shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version || '' }}
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#desktop-v}"
+          if [[ "${GITHUB_REF_NAME:-}" == desktop-v* ]]; then
+            RELEASE_VERSION="${GITHUB_REF_NAME#desktop-v}"
+          else
+            RELEASE_VERSION="$INPUT_VERSION"
+          fi
+          if [[ -z "$RELEASE_VERSION" ]]; then
+            echo "::error::A desktop version input is required for non-tag releases."
+            exit 1
+          fi
           PKG_VERSION=$(node -p "require('./apps/desktop/package.json').version")
           TAURI_VERSION=$(node -p "JSON.parse(require('fs').readFileSync('./apps/desktop/src-tauri/tauri.conf.json','utf8')).version")
           CARGO_VERSION=$(grep '^version' apps/desktop/src-tauri/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
-          if [[ "$TAG_VERSION" != "$PKG_VERSION" ]] || [[ "$TAG_VERSION" != "$TAURI_VERSION" ]] || [[ "$TAG_VERSION" != "$CARGO_VERSION" ]]; then
-            echo "::error::Version mismatch: tag=$TAG_VERSION pkg=$PKG_VERSION tauri=$TAURI_VERSION cargo=$CARGO_VERSION"
+          if [[ "$RELEASE_VERSION" != "$PKG_VERSION" ]] || [[ "$RELEASE_VERSION" != "$TAURI_VERSION" ]] || [[ "$RELEASE_VERSION" != "$CARGO_VERSION" ]]; then
+            echo "::error::Version mismatch: release=$RELEASE_VERSION pkg=$PKG_VERSION tauri=$TAURI_VERSION cargo=$CARGO_VERSION"
             exit 1
           fi
 
@@ -106,10 +142,14 @@ jobs:
       - name: Resolve release metadata
         if: steps.filter.outputs.skip != 'true'
         shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version || '' }}
         run: |
           package_version=$(node -p "require('./apps/desktop/package.json').version")
           if [[ "${GITHUB_REF_NAME:-}" == desktop-v* ]]; then
             release_version="${GITHUB_REF_NAME#desktop-v}"
+          elif [[ -n "$INPUT_VERSION" ]]; then
+            release_version="$INPUT_VERSION"
           else
             safe_ref=$(printf '%s' "${GITHUB_REF_NAME:-$GITHUB_SHA}" | sed 's/[^A-Za-z0-9._-]/-/g')
             release_version="${package_version}-${safe_ref}-${GITHUB_SHA::12}"
@@ -448,7 +488,7 @@ jobs:
   create-release:
     needs: build-desktop
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
+    if: github.event_name == 'push' || (github.event_name != 'push' && !inputs.dry_run)
     steps:
       - name: Validate release ref
         if: github.event_name == 'workflow_dispatch'
@@ -472,10 +512,11 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Proliferate Desktop ${{ github.ref_name }}
+          name: Proliferate Desktop ${{ startsWith(github.ref_name, 'desktop-v') && github.ref_name || format('desktop-v{0}', inputs.version) }}
           draft: true
           generate_release_notes: true
+          target_commitish: ${{ inputs.git_sha || github.sha }}
+          tag_name: ${{ startsWith(github.ref_name, 'desktop-v') && github.ref_name || format('desktop-v{0}', inputs.version) }}
           files: all-artifacts/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -483,13 +524,15 @@ jobs:
   publish-updater:
     needs: [build-desktop, create-release]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run && inputs.publish_updater)
+    if: github.event_name == 'push' || (github.event_name != 'push' && !inputs.dry_run && inputs.publish_updater)
     permissions:
       id-token: write
       contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_sha || github.ref }}
 
       - name: Setup Node 22
         uses: actions/setup-node@v4
@@ -513,17 +556,31 @@ jobs:
           aws-region: us-east-1
 
       - name: Generate updater manifest
+        env:
+          INPUT_VERSION: ${{ inputs.version || '' }}
         run: |
+          version="$INPUT_VERSION"
+          if [[ "${GITHUB_REF_NAME:-}" == desktop-v* ]]; then
+            version="${GITHUB_REF_NAME#desktop-v}"
+          fi
+          : "${version:?Missing desktop release version.}"
           node scripts/generate-updater-manifest.mjs \
-            --version "${GITHUB_REF_NAME#desktop-v}" \
+            --version "$version" \
             --artifacts-dir all-artifacts \
             --base-url "${{ vars.DESKTOP_DOWNLOADS_BASE_URL }}/desktop/stable" \
             --output latest.json
 
       - name: Generate installer manifest
+        env:
+          INPUT_VERSION: ${{ inputs.version || '' }}
         run: |
+          version="$INPUT_VERSION"
+          if [[ "${GITHUB_REF_NAME:-}" == desktop-v* ]]; then
+            version="${GITHUB_REF_NAME#desktop-v}"
+          fi
+          : "${version:?Missing desktop release version.}"
           node scripts/generate-desktop-installer-manifest.mjs \
-            --version "${GITHUB_REF_NAME#desktop-v}" \
+            --version "$version" \
             --artifacts-dir all-artifacts \
             --base-url "${{ vars.DESKTOP_DOWNLOADS_BASE_URL }}/desktop/stable" \
             --output installers.json

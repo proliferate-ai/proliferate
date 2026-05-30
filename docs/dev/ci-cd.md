@@ -15,7 +15,7 @@ publishing, or the desktop in-app update flow.
   _deploy-workers.yml        # reusable hosted worker lane, gated until workers are enabled
   _deploy-web.yml            # reusable Vercel deploy/alias/smoke lane
   _deploy-mobile.yml         # reusable EAS/TestFlight lane, gated until app identity is ready
-  _deploy-desktop.yml        # reusable desktop release dispatch lane, gated until beta/stable channel split
+  _deploy-desktop.yml        # reusable desktop release lane, gated until beta/stable channel split
   cloud-tests.yml            # real-provider cloud lifecycle + cloud-backed runtime suites
   cloud-live-webhook.yml     # manual/nightly live E2B webhook delivery smoke
   release-cloud-template.yml # public E2B cloud template build + publish + staging promote
@@ -53,14 +53,14 @@ vercel.json                  # web app deploy config (Vercel project proliferate
 
 - Treat workflows, release scripts, infra, and updater config as one delivery
   surface. Do not update one without checking the others.
-- Desktop releases ship off the `desktop-v*` tag line. Runtime releases ship off
-  the `runtime-v*` tag line.
+- Desktop releases create/use the `desktop-v*` tag line. Runtime releases ship
+  off the `runtime-v*` tag line.
 - Cloud template releases are manually dispatched. They publish immutable
   `sha-*` tags, then move rolling `staging` and `production` tags separately.
 - Desktop versioning must stay consistent across
   `apps/desktop/package.json`, `apps/desktop/src-tauri/tauri.conf.json`, and
   `apps/desktop/src-tauri/Cargo.toml`. The desktop release workflow enforces this on
-  tagged releases.
+  tagged and production-promoted releases.
 - Do not change updater endpoints, publish paths, or signing behavior in only
   one place. Keep these aligned:
   - `.github/workflows/release-desktop.yml`
@@ -238,18 +238,21 @@ Flow:
    - `apps/desktop/src-tauri/tauri.conf.json`
    - `apps/desktop/src-tauri/Cargo.toml`
 2. Commit and merge the version bump to `main`.
-3. From updated `main`, create and push a tag like `desktop-v0.1.0`. The
-   workflow triggers automatically.
-4. Treat pushing the `desktop-v*` tag as the shipping action. The tag-push
-   workflow publishes updater/download assets after the build succeeds, even
-   though the GitHub Release remains a draft.
+3. Preferred production path: run `promote-production.yml` for the merged SHA.
+   When the desktop surface is enabled and `DESKTOP_DEPLOY_ENABLED=true` for
+   the target environment, the promote workflow derives `desktop-v<VERSION>`
+   from the promoted SHA and calls `release-desktop.yml` directly.
+4. Low-level/manual path: from updated `main`, create and push a tag like
+   `desktop-v0.1.0`. The tag-push workflow still triggers automatically and
+   publishes updater/download assets after the build succeeds.
 5. After the workflow succeeds, manually review the draft GitHub Release:
    - add a short highlights section at the top
    - clean up generated release notes if needed
    - publish the GitHub Release as the human-facing release page
-6. If you must trigger manually, use `--ref desktop-v<VERSION>` — **never
-   trigger on `main`**, because the updater manifest version is derived from
-   `GITHUB_REF_NAME` and resolves to `"main"` instead of valid semver.
+6. If you must trigger the desktop workflow manually, use
+   `--ref desktop-v<VERSION>` for non-dry-run releases. Reusable calls from
+   production promote pass `git_sha` and `version` explicitly, so they do not
+   depend on `GITHUB_REF_NAME`.
 7. The workflow:
    - validates version consistency on tag pushes
    - builds the AnyHarness sidecar for each desktop target
@@ -314,11 +317,17 @@ Note:
 - `dry_run: true` exercises the build matrix but skips `create-release` and
   `publish-updater`.
 - Manual non-dry-run desktop releases must run from a `desktop-v*` tag ref.
+  Production promote is the exception: it calls the reusable desktop workflow
+  with an explicit promoted SHA and version, after `_deploy-desktop.yml`
+  validates that the version matches package/Tauri/Cargo metadata.
 - Manual runs default `publish_updater` to false. Use this to test draft
   GitHub release creation and generated notes without uploading updater assets
   to S3 or invalidating CloudFront.
 - Real `desktop-v*` tag pushes still publish updater and download assets
   automatically after the draft GitHub release is created.
+- `_deploy-desktop.yml` refuses to publish a desktop version if the derived
+  `desktop-v<VERSION>` tag already exists at a different SHA. Bump the desktop
+  version before publishing a new desktop build from a new commit.
 - Publishing the GitHub Release does not make the updater live. The updater is
   made live by the tag-push workflow's S3/CloudFront publish step. The GitHub
   Release is the public release-notes and artifact archive surface.
@@ -500,7 +509,9 @@ Trigger model:
 4. Production is promoted manually through `Promote Production` and should be
    protected by the GitHub `production` environment.
 5. Tags are release artifacts or channel pointers, not the primary hosted deploy
-   trigger.
+   trigger. Desktop still produces `desktop-v*` release tags, but production
+   promote owns deriving and invoking that desktop release from the promoted
+   SHA.
 
 Deploy graph:
 
@@ -524,8 +535,9 @@ Deploy graph:
    - server deploys ECR/ECS, runs Alembic, and smokes health
    - web deploys through Vercel, aliases the environment URL, and smokes it
    - mobile uses EAS build/submit when `MOBILE_DEPLOY_ENABLED=true`
-   - desktop dispatches the desktop release workflow when
-     `DESKTOP_DEPLOY_ENABLED=true`
+   - desktop calls the reusable desktop release workflow when
+     `DESKTOP_DEPLOY_ENABLED=true`; the desktop version is derived from the
+     promoted SHA, and no static `DESKTOP_RELEASE_REF` is used
    - workers are intentionally gated until the hosted worker ECS command/service
      is canonical
 4. Upload a deploy summary artifact.
@@ -571,8 +583,6 @@ EAS_SUBMIT_ENABLED
 
 # desktop, when enabled
 DESKTOP_DEPLOY_ENABLED
-DESKTOP_RELEASE_WORKFLOW
-DESKTOP_RELEASE_REF
 ```
 
 For staging, the canonical values are expected to point at staging resources
@@ -630,11 +640,12 @@ DESKTOP_CHANNEL=beta
 
 The production GitHub environment currently exists as `Production`; the
 workflow input still uses `production`, which GitHub resolves to that existing
-environment. Production should keep `MOBILE_DEPLOY_ENABLED=false`,
-`WORKERS_DEPLOY_ENABLED=false`, and `DESKTOP_DEPLOY_ENABLED=false` until those
-lanes are explicitly ready. Keep `VERCEL_TOKEN` as an environment secret, and
-keep E2B API credentials as repo or environment secrets; do not document secret
-values here.
+environment. Production should keep `MOBILE_DEPLOY_ENABLED=false` and
+`WORKERS_DEPLOY_ENABLED=false` until those lanes are explicitly ready.
+`DESKTOP_DEPLOY_ENABLED=true` enables production promote to publish the desktop
+updater for SHAs that include a desktop version bump. Keep `VERCEL_TOKEN` as an
+environment secret, and keep E2B API credentials as repo or environment
+secrets; do not document secret values here.
 
 ## 5. Source of Truth
 
