@@ -1,6 +1,8 @@
-import { getProliferateClient } from "./core.js";
+import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import type { CloudMcpCatalogResponse } from "../types/index.js";
 
-export async function getCloudMcpCatalog(): Promise<CloudMcpCatalogResponse> {
-  return (await getProliferateClient().GET("/v1/cloud/mcp/catalog")).data!;
+export async function getCloudMcpCatalog(
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<CloudMcpCatalogResponse> {
+  return (await client.GET("/v1/cloud/mcp/catalog")).data!;
 }

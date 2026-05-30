@@ -1,24 +1,70 @@
-import { SlidersHorizontal } from "lucide-react";
+import { useMemo } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
-import { ProductPageShell } from "@proliferate/product-ui/layout/ProductPageShell";
-import { PluginAccessList } from "@proliferate/product-ui/plugins/PluginAccessList";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { plugins } from "../../../lib/fixtures/web-fixtures";
+import {
+  CloudPluginsSurface,
+  type PluginOAuthCompletionState,
+} from "@proliferate/product-surfaces/plugins/CloudPluginsSurface";
+
+import { routes } from "../../../config/routes";
+
+const LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "::1"]);
 
 export function PluginsScreen() {
-  return (
-    <ProductPageShell
-      title="Shared sandbox access"
-      description="Plugins and MCPs available to cloud workspaces, automations, and Slack."
-      actions={
-        <Button variant="secondary" size="md">
-          <SlidersHorizontal size={15} />
-          Configure
-        </Button>
-      }
-      telemetryBlocked
-    >
-      <PluginAccessList items={plugins} />
-    </ProductPageShell>
+  const location = useLocation();
+  const navigate = useNavigate();
+  const completion = useMemo(
+    () => pluginCompletionFromSearch(location.search),
+    [location.search],
   );
+
+  return (
+    <CloudPluginsSurface
+      surface="web"
+      completion={completion}
+      onCompletionHandled={() => {
+        navigate(routes.plugins, { replace: true });
+      }}
+      prepareOAuthHandoff={() => {
+        const popup = window.open("about:blank", "_blank");
+        if (!popup) {
+          return null;
+        }
+        popup.opener = null;
+        return {
+          open(url) {
+            popup.location.href = url;
+          },
+          close() {
+            popup.close();
+          },
+        };
+      }}
+      onOpenUrl={(url) => {
+        window.open(url, "_blank", "noopener,noreferrer") ?? window.location.assign(url);
+      }}
+      onOpenDesktop={() => {
+        window.location.assign(`${desktopDeepLinkScheme()}://plugins`);
+      }}
+    />
+  );
+}
+
+function pluginCompletionFromSearch(search: string): PluginOAuthCompletionState | null {
+  const params = new URLSearchParams(search);
+  if (params.get("source") !== "mcp_oauth_callback") {
+    return null;
+  }
+  return {
+    source: "mcp_oauth_callback",
+    status: params.get("status"),
+    flowId: params.get("flowId"),
+    failureCode: params.get("failureCode"),
+  };
+}
+
+function desktopDeepLinkScheme(): "proliferate" | "proliferate-local" {
+  return LOCALHOST_NAMES.has(window.location.hostname)
+    ? "proliferate-local"
+    : "proliferate";
 }

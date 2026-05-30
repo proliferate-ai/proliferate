@@ -12,6 +12,7 @@ import { BillingReturnHandoffPage } from "./pages/BillingReturnHandoffPage";
 import { ChatPage } from "./pages/ChatPage";
 import { DesktopHandoffPage } from "./pages/DesktopHandoffPage";
 import { HomePage } from "./pages/HomePage";
+import { PluginConnectCompletePage } from "./pages/PluginConnectCompletePage";
 import { PluginsPage } from "./pages/PluginsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SettingsModalPage } from "./pages/SettingsModalPage";
@@ -35,6 +36,7 @@ export function App() {
         <Route path="auth/error" element={<AuthErrorPage />} />
         <Route path="connect-github" element={<ConnectGitHubScreen />} />
         <Route path="settings/cloud" element={<BillingReturnHandoffPage />} />
+        <Route path="plugins/connect/complete" element={<PluginConnectCompletePage />} />
         <Route
           element={
             <AuthGate>

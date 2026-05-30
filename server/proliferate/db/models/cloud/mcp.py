@@ -135,11 +135,22 @@ class CloudMcpConnectionAuth(Base):
 
 class CloudMcpOAuthFlow(Base):
     __tablename__ = "cloud_mcp_oauth_flow"
+    __table_args__ = (
+        CheckConstraint(
+            "callback_surface IN ('desktop', 'web')",
+            name="ck_cloud_mcp_oauth_flow_callback_surface",
+        ),
+        CheckConstraint(
+            "final_surface IN ('desktop', 'web')",
+            name="ck_cloud_mcp_oauth_flow_final_surface",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    connection_db_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("cloud_mcp_connection.id", ondelete="CASCADE"),
+    connection_db_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_mcp_connection.id", ondelete="SET NULL"),
         index=True,
+        nullable=True,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(index=True)
     state_hash: Mapped[str] = mapped_column(String(128), index=True)
@@ -151,6 +162,9 @@ class CloudMcpOAuthFlow(Base):
     requested_scopes: Mapped[str] = mapped_column(Text, default="[]")
     redirect_uri: Mapped[str] = mapped_column(Text)
     authorization_url: Mapped[str] = mapped_column(Text)
+    callback_surface: Mapped[str] = mapped_column(String(32), default="desktop")
+    final_surface: Mapped[str] = mapped_column(String(32), default="desktop")
+    return_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(32))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -57,7 +57,7 @@ class CloudMcpConnectionRecord:
 @dataclass(frozen=True)
 class CloudMcpOAuthFlowRecord:
     id: UUID
-    connection_db_id: UUID
+    connection_db_id: UUID | None
     user_id: UUID
     state_hash: str
     code_verifier_ciphertext: str
@@ -68,6 +68,9 @@ class CloudMcpOAuthFlowRecord:
     requested_scopes: str
     redirect_uri: str
     authorization_url: str
+    callback_surface: str
+    final_surface: str
+    return_path: str | None
     status: str
     expires_at: datetime
     used_at: datetime | None

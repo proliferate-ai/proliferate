@@ -418,6 +418,8 @@ export type PutCloudMcpSecretAuthRequest =
   components["schemas"]["PutCloudMcpSecretAuthRequest"];
 export type CloudMcpOAuthFlowStatusResponse =
   components["schemas"]["CloudMcpOAuthFlowStatusResponse"];
+export type StartCloudMcpOAuthFlowRequest =
+  components["schemas"]["StartCloudMcpOAuthFlowRequest"];
 export type StartCloudMcpOAuthFlowResponse =
   components["schemas"]["StartCloudMcpOAuthFlowResponse"];
 export type CloudPluginConfiguredItem =

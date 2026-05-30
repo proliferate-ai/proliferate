@@ -1,7 +1,6 @@
 import {
   getProliferateClient,
   setProliferateClient,
-  setProliferateClientFactory,
   type ProliferateCloudClient,
 } from "@proliferate/cloud-sdk";
 import {
@@ -36,14 +35,10 @@ export function CloudClientProvider({
   }, [client, clientFactory]);
 
   useEffect(() => {
-    if (client) {
-      setProliferateClient(client);
-      return;
+    if (resolvedClient) {
+      setProliferateClient(resolvedClient);
     }
-    if (clientFactory) {
-      setProliferateClientFactory(clientFactory);
-    }
-  }, [client, clientFactory]);
+  }, [resolvedClient]);
 
   return (
     <CloudClientContext.Provider value={resolvedClient}>
@@ -55,4 +50,3 @@ export function CloudClientProvider({
 export function useCloudClient(): ProliferateCloudClient {
   return useContext(CloudClientContext) ?? getProliferateClient();
 }
-

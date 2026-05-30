@@ -121,50 +121,6 @@ export const automations: AutomationSummary[] = [
   },
 ];
 
-export interface PluginSummary {
-  id: string;
-  name: string;
-  kind: "MCP" | "Skill" | "Plugin";
-  visibility: "team public" | "personal";
-  enabled: boolean;
-  description: string;
-}
-
-export const plugins: PluginSummary[] = [
-  {
-    id: "github",
-    name: "GitHub",
-    kind: "MCP",
-    visibility: "team public",
-    enabled: true,
-    description: "Repository, issue, and pull request context for shared sandboxes.",
-  },
-  {
-    id: "linear",
-    name: "Linear",
-    kind: "MCP",
-    visibility: "team public",
-    enabled: true,
-    description: "Team issue tracking surfaced to cloud sessions.",
-  },
-  {
-    id: "release-writing",
-    name: "Release writing",
-    kind: "Skill",
-    visibility: "personal",
-    enabled: true,
-    description: "Reusable instructions for changelog and launch copy tasks.",
-  },
-  {
-    id: "sentry",
-    name: "Sentry",
-    kind: "MCP",
-    visibility: "personal",
-    enabled: false,
-    description: "Error context for incident and regression work.",
-  },
-];
-
 export function workspaceForChat(chat: ProductChat): ProductWorkspace | undefined {
   return workspaces.find((workspace) => workspace.id === chat.workspaceId);
 }

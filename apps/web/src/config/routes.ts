@@ -5,6 +5,7 @@ export const routes = {
   automations: "/automations",
   automation: (automationId: string) => `/automations/${automationId}`,
   plugins: "/plugins",
+  pluginConnectComplete: "/plugins/connect/complete",
   support: "/support",
   settings: "/settings",
   settingsSection: (sectionId: string) => `/settings/${sectionId}`,

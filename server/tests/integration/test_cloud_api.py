@@ -19,7 +19,11 @@ from proliferate.constants.organizations import (
     ORGANIZATION_STATUS_ACTIVE,
 )
 from proliferate.db.models.auth import OAuthAccount
-from proliferate.db.models.cloud.mcp import CloudMcpConnection, CloudMcpConnectionAuth
+from proliferate.db.models.cloud.mcp import (
+    CloudMcpConnection,
+    CloudMcpConnectionAuth,
+    CloudMcpOAuthFlow,
+)
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
@@ -40,7 +44,12 @@ from proliferate.integrations.github import (
     GitHubRepositorySummary,
     GitHubRepoBranches,
 )
-from proliferate.integrations.mcp_oauth import TokenResponse
+from proliferate.integrations.mcp_oauth import (
+    AuthorizationServerMetadata,
+    ProtectedResourceMetadata,
+    RegisteredOAuthClient,
+    TokenResponse,
+)
 from proliferate.integrations.sandbox.base import ProviderSandboxState
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repo_config import service as repo_config_service
@@ -226,6 +235,49 @@ def _disable_workspace_provision(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+def _stub_mcp_oauth_start(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _discover_protected_resource_metadata(_server_url: str) -> ProtectedResourceMetadata:
+        return ProtectedResourceMetadata(
+            authorization_servers=("https://accounts.example.com",),
+            resource="https://linear.example.com/mcp",
+            challenged_scope="issues:read",
+        )
+
+    async def _discover_authorization_server_metadata(
+        _issuer: str,
+    ) -> AuthorizationServerMetadata:
+        return AuthorizationServerMetadata(
+            issuer="https://accounts.example.com",
+            authorization_endpoint="https://accounts.example.com/authorize",
+            token_endpoint="https://accounts.example.com/token",
+            registration_endpoint="https://accounts.example.com/register",
+            token_endpoint_auth_methods_supported=("none",),
+        )
+
+    async def _register_client(*_args: object, **_kwargs: object) -> RegisteredOAuthClient:
+        return RegisteredOAuthClient(
+            client_id="client-id",
+            client_secret=None,
+            client_secret_expires_at=None,
+            token_endpoint_auth_method=None,
+            registration_client_uri=None,
+            registration_access_token=None,
+        )
+
+    monkeypatch.setattr(
+        "proliferate.server.cloud.mcp_oauth.service.discover_protected_resource_metadata",
+        _discover_protected_resource_metadata,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.mcp_oauth.service.discover_authorization_server_metadata",
+        _discover_authorization_server_metadata,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.cloud.mcp_oauth.service.register_client",
+        _register_client,
+    )
+
+
 async def _configure_repo(
     client: AsyncClient,
     headers: dict[str, str],
@@ -337,6 +389,85 @@ class TestCloudWorktreeRetentionPolicy:
 
 
 class TestCloudMcpConnections:
+    @pytest.mark.asyncio
+    async def test_oauth_start_persists_web_return_target(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.com")
+        _stub_mcp_oauth_start(monkeypatch)
+        session = await _register_and_login(client, "cloud-mcp-oauth-start-web@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        created = await client.post(
+            "/v1/cloud/mcp/connections",
+            headers=headers,
+            json={"catalogEntryId": "linear", "enabled": True},
+        )
+        assert created.status_code == 200
+
+        started = await client.post(
+            f"/v1/cloud/mcp/connections/{created.json()['connectionId']}/oauth/start",
+            headers=headers,
+            json={
+                "callbackSurface": "web",
+                "finalSurface": "desktop",
+                "returnPath": "/plugins/connect/complete",
+            },
+        )
+
+        assert started.status_code == 200
+        assert started.json()["status"] == "active"
+        assert started.json()["authorizationUrl"].startswith(
+            "https://accounts.example.com/authorize?"
+        )
+        flows = (await db_session.execute(select(CloudMcpOAuthFlow))).scalars().all()
+        assert len(flows) == 1
+        assert flows[0].callback_surface == "web"
+        assert flows[0].final_surface == "desktop"
+        assert flows[0].return_path == "/plugins/connect/complete"
+
+    @pytest.mark.asyncio
+    async def test_oauth_start_rejects_invalid_return_target(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.com")
+        _stub_mcp_oauth_start(monkeypatch)
+        session = await _register_and_login(client, "cloud-mcp-oauth-start-invalid@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        created = await client.post(
+            "/v1/cloud/mcp/connections",
+            headers=headers,
+            json={"catalogEntryId": "linear", "enabled": True},
+        )
+        assert created.status_code == 200
+
+        unsafe_path = await client.post(
+            f"/v1/cloud/mcp/connections/{created.json()['connectionId']}/oauth/start",
+            headers=headers,
+            json={
+                "callbackSurface": "web",
+                "finalSurface": "web",
+                "returnPath": "https://evil.example.com/plugins/connect/complete",
+            },
+        )
+        unsupported_surface = await client.post(
+            f"/v1/cloud/mcp/connections/{created.json()['connectionId']}/oauth/start",
+            headers=headers,
+            json={
+                "callbackSurface": "mobile",
+                "finalSurface": "web",
+                "returnPath": "/plugins/connect/complete",
+            },
+        )
+
+        assert unsafe_path.status_code == 400
+        assert unsafe_path.json()["detail"]["code"] == "invalid_payload"
+        assert unsupported_surface.status_code == 422
+
     @pytest.mark.asyncio
     async def test_oauth_flow_status_not_found_uses_product_error_handler(
         self,
@@ -656,6 +787,12 @@ class TestCloudMcpConnections:
         assert auths[0].payload_ciphertext is not None
         payload = decrypt_json(auths[0].payload_ciphertext)
         assert payload["redirectUri"] == redirect_uri
+        plugins = await client.get("/v1/cloud/plugins", headers=headers)
+        assert plugins.status_code == 200
+        assert any(
+            item["pluginId"] == "supabase" and item["enabled"]
+            for item in plugins.json()["plugins"]
+        )
 
     @pytest.mark.asyncio
     async def test_oauth_callback_failure_uses_safe_handoff_page(
@@ -673,6 +810,118 @@ class TestCloudMcpConnections:
         assert "Open Proliferate" in response.text
         assert "access_denied" not in response.text
         assert "proliferate://plugins?source=mcp_oauth_callback&amp;status=failed" in response.text
+
+    @pytest.mark.asyncio
+    async def test_oauth_callback_provider_error_uses_stored_web_return_target(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.com")
+        session = await _register_and_login(client, "cloud-mcp-oauth-web-return@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        created = await client.post(
+            "/v1/cloud/mcp/connections",
+            headers=headers,
+            json={"catalogEntryId": "linear", "enabled": True},
+        )
+        assert created.status_code == 200
+        records = await _list_mcp_connections(db_session, session["user_id"])
+        assert len(records) == 1
+
+        state = "oauth-web-return-state"
+        flow = await create_oauth_flow_canceling_existing(
+            db_session,
+            connection_db_id=records[0].id,
+            user_id=uuid.UUID(session["user_id"]),
+            state_hash=hashlib.sha256(state.encode("utf-8")).hexdigest(),
+            code_verifier_ciphertext=encrypt_text("verifier"),
+            issuer="https://accounts.example.com",
+            resource="https://linear.example.com/mcp",
+            client_id="client-id",
+            token_endpoint="https://accounts.example.com/token",
+            requested_scopes="[]",
+            redirect_uri="https://api.example.com/v1/cloud/mcp/oauth/callback",
+            authorization_url="https://accounts.example.com/authorize",
+            callback_surface="web",
+            final_surface="desktop",
+            return_path="/plugins/connect/complete",
+            expires_at=datetime(2099, 1, 1, tzinfo=UTC),
+        )
+        await db_session.commit()
+
+        response = await client.get(
+            "/v1/cloud/mcp/oauth/callback",
+            params={"state": state, "error": "access_denied"},
+        )
+
+        assert response.status_code == 303
+        assert response.headers["location"] == (
+            "https://app.example.com/plugins/connect/complete?"
+            f"source=mcp_oauth_callback&flowId={flow.id}&status=failed&"
+            "finalSurface=desktop&failureCode=access_denied"
+        )
+        assert "access_denied" not in response.text
+
+    @pytest.mark.asyncio
+    async def test_oauth_callback_after_connection_delete_preserves_web_return_target(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "frontend_base_url", "https://app.example.com")
+        session = await _register_and_login(client, "cloud-mcp-oauth-deleted-return@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        created = await client.post(
+            "/v1/cloud/mcp/connections",
+            headers=headers,
+            json={"catalogEntryId": "linear", "enabled": True},
+        )
+        assert created.status_code == 200
+        records = await _list_mcp_connections(db_session, session["user_id"])
+        assert len(records) == 1
+
+        state = "oauth-deleted-web-return-state"
+        flow = await create_oauth_flow_canceling_existing(
+            db_session,
+            connection_db_id=records[0].id,
+            user_id=uuid.UUID(session["user_id"]),
+            state_hash=hashlib.sha256(state.encode("utf-8")).hexdigest(),
+            code_verifier_ciphertext=encrypt_text("verifier"),
+            issuer="https://accounts.example.com",
+            resource="https://linear.example.com/mcp",
+            client_id="client-id",
+            token_endpoint="https://accounts.example.com/token",
+            requested_scopes="[]",
+            redirect_uri="https://api.example.com/v1/cloud/mcp/oauth/callback",
+            authorization_url="https://accounts.example.com/authorize",
+            callback_surface="web",
+            final_surface="desktop",
+            return_path="/plugins/connect/complete",
+            expires_at=datetime(2099, 1, 1, tzinfo=UTC),
+        )
+        await db_session.commit()
+
+        deleted = await client.delete(
+            f"/v1/cloud/mcp/connections/{records[0].connection_id}",
+            headers=headers,
+        )
+        assert deleted.status_code == 200
+
+        response = await client.get(
+            "/v1/cloud/mcp/oauth/callback",
+            params={"state": state, "code": "auth-code"},
+        )
+
+        assert response.status_code == 303
+        assert response.headers["location"] == (
+            "https://app.example.com/plugins/connect/complete?"
+            f"source=mcp_oauth_callback&flowId={flow.id}&status=cancelled&"
+            "finalSurface=desktop&failureCode=connection_deleted"
+        )
+        assert "connection_deleted" not in response.text
 
 
 class TestCloudRepoConfig:

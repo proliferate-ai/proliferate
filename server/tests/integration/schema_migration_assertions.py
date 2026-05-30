@@ -470,6 +470,38 @@ async def assert_current_schema(
         "uq_cloud_mcp_connection_organization_connection_id",
     } <= mcp_connection_indexes
 
+    mcp_oauth_flow_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"] for column in inspect(sync_conn).get_columns("cloud_mcp_oauth_flow")
+        }
+    )
+    assert {"callback_surface", "final_surface", "return_path"} <= mcp_oauth_flow_columns
+    mcp_oauth_flow_column_info = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"]: column
+            for column in inspect(sync_conn).get_columns("cloud_mcp_oauth_flow")
+        }
+    )
+    assert mcp_oauth_flow_column_info["connection_db_id"]["nullable"] is True
+    mcp_oauth_flow_checks = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_check_constraints("cloud_mcp_oauth_flow")
+        }
+    )
+    assert {
+        "ck_cloud_mcp_oauth_flow_callback_surface",
+        "ck_cloud_mcp_oauth_flow_final_surface",
+    } <= mcp_oauth_flow_checks
+    mcp_oauth_flow_foreign_keys = await conn.run_sync(
+        lambda sync_conn: inspect(sync_conn).get_foreign_keys("cloud_mcp_oauth_flow")
+    )
+    assert any(
+        foreign_key["name"] == "fk_cloud_mcp_oauth_flow_connection_db_id"
+        and foreign_key["options"].get("ondelete") == "SET NULL"
+        for foreign_key in mcp_oauth_flow_foreign_keys
+    )
+
     skill_checks = await conn.run_sync(
         lambda sync_conn: {
             constraint["name"]

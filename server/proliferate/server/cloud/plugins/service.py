@@ -67,6 +67,28 @@ async def install_plugin(
     return plugin
 
 
+async def ensure_plugin_installed_for_catalog_entry(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    catalog_entry_id: str,
+) -> CloudPluginConfiguredItemSnapshot | None:
+    package = _plugin_package_for_catalog_entry(catalog_entry_id)
+    if package is None:
+        return None
+    existing = next(
+        (
+            item
+            for item in await list_plugins_for_user(db, user_id)
+            if item.plugin_id == package.id
+        ),
+        None,
+    )
+    if existing is not None:
+        return existing
+    return await install_plugin(db, user_id=user_id, plugin_id=package.id)
+
+
 async def patch_configured_plugin(
     db: AsyncSession,
     *,
@@ -144,6 +166,17 @@ def _plugin_package_or_raise(plugin_id: str) -> PluginPackage:
     if package is None:
         raise CloudApiError("plugin_not_found", "Plugin package was not found.", status_code=404)
     return package
+
+
+def _plugin_package_for_catalog_entry(catalog_entry_id: str) -> PluginPackage | None:
+    entries = tuple(
+        entry for entry in build_connector_catalog() if catalog_entry_is_configured(entry)
+    )
+    packages = plugin_packages_for_catalog_entries(list(entries))
+    return next(
+        (package for package in packages if package.catalog_entry_id == catalog_entry_id),
+        None,
+    )
 
 
 async def _authorized_public_org_id(

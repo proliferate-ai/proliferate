@@ -4746,6 +4746,10 @@ export interface components {
             expiresAt: string;
             /** Failurecode */
             failureCode?: string | null;
+            /** Callbacksurface */
+            callbackSurface: string;
+            /** Finalsurface */
+            finalSurface: string;
         };
         /** CloudPendingInteractionResponse */
         CloudPendingInteractionResponse: {
@@ -7328,6 +7332,15 @@ export interface components {
              * Format: date-time
              */
             expiresAt: string;
+        };
+        /** StartCloudMcpOAuthFlowRequest */
+        StartCloudMcpOAuthFlowRequest: {
+            /** Callbacksurface */
+            callbackSurface?: ("desktop" | "web") | null;
+            /** Finalsurface */
+            finalSurface?: ("desktop" | "web") | null;
+            /** Returnpath */
+            returnPath?: string | null;
         };
         /** StartCloudMcpOAuthFlowResponse */
         StartCloudMcpOAuthFlowResponse: {
@@ -12652,7 +12665,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StartCloudMcpOAuthFlowRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -12757,6 +12774,13 @@ export interface operations {
                 content: {
                     "text/html": string;
                 };
+            };
+            /** @description Redirect to web OAuth completion */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

@@ -27,7 +27,9 @@ from proliferate.db.store.cloud_mcp.oauth_flows import (
     claim_active_oauth_flow_by_state_hash,
     complete_oauth_flow,
     create_oauth_flow_canceling_existing,
+    expire_oauth_flow,
     fail_oauth_flow,
+    get_oauth_flow_by_state_hash,
     get_oauth_flow_for_user,
 )
 from proliferate.db.store.cloud_mcp.types import (
@@ -58,7 +60,10 @@ from proliferate.server.cloud.mcp_catalog.domain.types import (
     CatalogEntry,
 )
 from proliferate.server.cloud.mcp_oauth.domain.flow_rules import (
+    OAuthReturnTarget,
+    OAuthReturnTargetError,
     build_oauth_auth_payload,
+    normalize_oauth_return_target,
     oauth_flow_is_expired,
     oauth_redirect_uri,
     oauth_requested_scopes_json,
@@ -72,6 +77,7 @@ from proliferate.server.cloud.mcp_oauth.domain.static_client_rules import (
 from proliferate.server.cloud.mcp_oauth.static_clients import (
     get_static_oauth_client_config,
 )
+from proliferate.server.cloud.plugins.service import ensure_plugin_installed_for_catalog_entry
 from proliferate.utils.crypto import decrypt_text, encrypt_json, encrypt_text
 
 
@@ -85,6 +91,11 @@ class CloudMcpOAuthFlowStatus:
 class CloudMcpOAuthCallbackResult:
     ok: bool
     status: str
+    flow_id: UUID | None
+    failure_code: str | None
+    callback_surface: str
+    final_surface: str
+    return_path: str | None
 
 
 def _cloud_mcp_enabled_or_raise() -> None:
@@ -97,6 +108,44 @@ def _redirect_uri() -> str:
         configured_callback_base_url=settings.cloud_mcp_oauth_callback_base_url,
         api_base_url=settings.api_base_url,
         fallback_callback_base_url=settings.cloud_mcp_oauth_callback_fallback_base_url,
+    )
+
+
+def _oauth_return_target_or_raise(
+    *,
+    callback_surface: str | None,
+    final_surface: str | None,
+    return_path: str | None,
+) -> OAuthReturnTarget:
+    try:
+        return normalize_oauth_return_target(
+            callback_surface=callback_surface,
+            final_surface=final_surface,
+            return_path=return_path,
+            frontend_base_url=settings.frontend_base_url,
+        )
+    except OAuthReturnTargetError as exc:
+        raise CloudApiError("invalid_payload", str(exc), status_code=400) from exc
+
+
+def _callback_result(
+    flow: CloudMcpOAuthFlowRecord | None,
+    *,
+    ok: bool,
+    status: str,
+    failure_code: str | None = None,
+) -> CloudMcpOAuthCallbackResult:
+    resolved_failure_code = failure_code
+    if resolved_failure_code is None and flow is not None:
+        resolved_failure_code = flow.failure_code
+    return CloudMcpOAuthCallbackResult(
+        ok=ok,
+        status=status,
+        flow_id=flow.id if flow is not None else None,
+        failure_code=resolved_failure_code,
+        callback_surface=flow.callback_surface if flow is not None else "desktop",
+        final_surface=flow.final_surface if flow is not None else "desktop",
+        return_path=flow.return_path if flow is not None else None,
     )
 
 
@@ -227,8 +276,16 @@ async def start_cloud_mcp_oauth_flow(
     db: AsyncSession,
     *,
     connection: CloudMcpConnectionRecord,
+    callback_surface: str | None = None,
+    final_surface: str | None = None,
+    return_path: str | None = None,
 ) -> CloudMcpOAuthFlowRecord:
     _cloud_mcp_enabled_or_raise()
+    return_target = _oauth_return_target_or_raise(
+        callback_surface=callback_surface,
+        final_surface=final_surface,
+        return_path=return_path,
+    )
     entry = get_catalog_entry(connection.catalog_entry_id)
     if entry is None or entry.auth_kind != "oauth":
         raise CloudApiError(
@@ -297,6 +354,9 @@ async def start_cloud_mcp_oauth_flow(
         requested_scopes=oauth_requested_scopes_json(protected.challenged_scope),
         redirect_uri=redirect_uri,
         authorization_url=authorization_url,
+        callback_surface=return_target.callback_surface,
+        final_surface=return_target.final_surface,
+        return_path=return_target.return_path,
         expires_at=datetime.now(UTC) + CLOUD_MCP_OAUTH_FLOW_TTL,
     )
     return flow
@@ -316,8 +376,12 @@ async def get_cloud_mcp_oauth_flow_status(
         expires_at=flow.expires_at,
         now=datetime.now(UTC),
     ):
-        status = await fail_oauth_flow(db, flow_id=flow.id, failure_code="expired") or flow
-        connection = await get_user_connection_by_db_id(db, flow.user_id, flow.connection_db_id)
+        status = await expire_oauth_flow(db, flow_id=flow.id) or flow
+        connection = (
+            await get_user_connection_by_db_id(db, flow.user_id, flow.connection_db_id)
+            if flow.connection_db_id is not None
+            else None
+        )
         if connection is not None:
             await _record_oauth_connection_event(
                 db,
@@ -347,16 +411,51 @@ async def complete_cloud_mcp_oauth_callback(
     db: AsyncSession,
     *,
     state: str,
-    code: str,
+    code: str | None,
+    provider_error: str | None = None,
 ) -> CloudMcpOAuthCallbackResult:
     _cloud_mcp_enabled_or_raise()
     hashed = oauth_state_hash(state)
     flow = await claim_active_oauth_flow_by_state_hash(db, hashed)
     if flow is None:
-        return CloudMcpOAuthCallbackResult(ok=False, status="failed")
-    connection = await get_user_connection_by_db_id(db, flow.user_id, flow.connection_db_id)
+        stored_flow = await get_oauth_flow_by_state_hash(db, hashed)
+        return _callback_result(
+            stored_flow,
+            ok=False,
+            status=stored_flow.status if stored_flow is not None else "failed",
+            failure_code=stored_flow.failure_code if stored_flow is not None else "invalid_state",
+        )
+    connection = (
+        await get_user_connection_by_db_id(db, flow.user_id, flow.connection_db_id)
+        if flow.connection_db_id is not None
+        else None
+    )
+    if provider_error:
+        failure_code = "access_denied" if provider_error == "access_denied" else "provider_error"
+        failed = await fail_oauth_flow(db, flow_id=flow.id, failure_code=failure_code) or flow
+        if connection is not None:
+            await _record_oauth_connection_event(
+                db,
+                connection,
+                event_type="auth_failed",
+                failure_code=failure_code,
+            )
+        return _callback_result(failed, ok=False, status=failed.status)
+    if not code:
+        failed = (
+            await fail_oauth_flow(db, flow_id=flow.id, failure_code="invalid_callback")
+            or flow
+        )
+        if connection is not None:
+            await _record_oauth_connection_event(
+                db,
+                connection,
+                event_type="auth_failed",
+                failure_code="invalid_callback",
+            )
+        return _callback_result(failed, ok=False, status="failed")
     if oauth_flow_is_expired(expires_at=flow.expires_at, now=datetime.now(UTC)):
-        await fail_oauth_flow(db, flow_id=flow.id, failure_code="expired")
+        expired = await expire_oauth_flow(db, flow_id=flow.id) or flow
         if connection is not None:
             await _record_oauth_connection_event(
                 db,
@@ -364,9 +463,9 @@ async def complete_cloud_mcp_oauth_callback(
                 event_type="auth_failed",
                 failure_code="expired",
             )
-        return CloudMcpOAuthCallbackResult(ok=False, status="expired")
+        return _callback_result(expired, ok=False, status="expired")
     if not flow.token_endpoint or not flow.resource:
-        await fail_oauth_flow(db, flow_id=flow.id, failure_code="invalid_flow")
+        failed = await fail_oauth_flow(db, flow_id=flow.id, failure_code="invalid_flow") or flow
         if connection is not None:
             await _record_oauth_connection_event(
                 db,
@@ -374,10 +473,13 @@ async def complete_cloud_mcp_oauth_callback(
                 event_type="auth_failed",
                 failure_code="invalid_flow",
             )
-        return CloudMcpOAuthCallbackResult(ok=False, status="failed")
+        return _callback_result(failed, ok=False, status="failed")
     if connection is None:
-        await fail_oauth_flow(db, flow_id=flow.id, failure_code="invalid_flow")
-        return CloudMcpOAuthCallbackResult(ok=False, status="failed")
+        failed = (
+            await fail_oauth_flow(db, flow_id=flow.id, failure_code="connection_deleted")
+            or flow
+        )
+        return _callback_result(failed, ok=False, status="failed")
     oauth_client = await get_oauth_client(
         db,
         issuer=flow.issuer or "",
@@ -411,19 +513,19 @@ async def complete_cloud_mcp_oauth_callback(
                 redirect_uri=flow.redirect_uri,
                 catalog_entry_id=connection.catalog_entry_id if connection else "",
             )
-        await fail_oauth_flow(db, flow_id=flow.id, failure_code=exc.code)
+        failed = await fail_oauth_flow(db, flow_id=flow.id, failure_code=exc.code) or flow
         await _record_oauth_connection_event(
             db,
             connection,
             event_type="auth_failed",
             failure_code=exc.code,
         )
-        return CloudMcpOAuthCallbackResult(ok=False, status="failed")
+        return _callback_result(failed, ok=False, status="failed")
 
     was_ready = connection.auth is not None and connection.auth.auth_status == "ready"
     await upsert_connection_auth(
         db,
-        connection_db_id=flow.connection_db_id,
+        connection_db_id=connection.id,
         auth_kind="oauth",
         auth_status="ready",
         payload_ciphertext=encrypt_json(
@@ -442,7 +544,12 @@ async def complete_cloud_mcp_oauth_callback(
         payload_format="oauth-bundle-v1",
         token_expires_at=token.expires_at,
     )
-    await complete_oauth_flow(db, flow_id=flow.id)
+    completed = await complete_oauth_flow(db, flow_id=flow.id) or flow
+    await ensure_plugin_installed_for_catalog_entry(
+        db,
+        user_id=connection.user_id,
+        catalog_entry_id=connection.catalog_entry_id,
+    )
     await _record_oauth_connection_event(
         db,
         connection,
@@ -476,7 +583,7 @@ async def complete_cloud_mcp_oauth_callback(
             actor_user_id=connection.user_id,
             reason="mcp_oauth_completed",
         )
-    return CloudMcpOAuthCallbackResult(ok=True, status="completed")
+    return _callback_result(completed, ok=True, status="completed")
 
 
 async def _record_oauth_connection_event(

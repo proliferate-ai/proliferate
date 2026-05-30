@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi.responses import HTMLResponse
 
 from proliferate.constants.auth import (
@@ -9,10 +11,17 @@ from proliferate.constants.auth import (
 from proliferate.utils.redirect_callback_pages import make_redirect_callback_response
 
 
-def make_mcp_oauth_callback_page(*, ok: bool) -> HTMLResponse:
-    status = "completed" if ok else "failed"
-    deep_link_url = (
-        f"{DESKTOP_REDIRECT_SCHEME}://plugins?source=mcp_oauth_callback&status={status}"
+def make_mcp_oauth_callback_page(
+    *,
+    ok: bool,
+    status: str,
+    flow_id: UUID | None = None,
+    failure_code: str | None = None,
+) -> HTMLResponse:
+    deep_link_url = _mcp_oauth_desktop_deep_link(
+        status=status,
+        flow_id=flow_id,
+        failure_code=failure_code,
     )
     title = "Authorization done" if ok else "Authorization failed"
     message = (
@@ -42,3 +51,17 @@ def make_mcp_oauth_callback_page(*, ok: bool) -> HTMLResponse:
         fallback_message=fallback_message if DESKTOP_DEEP_LINK_LAUNCH_ENABLED else None,
         variant="handoff" if ok else "default",
     )
+
+
+def _mcp_oauth_desktop_deep_link(
+    *,
+    status: str,
+    flow_id: UUID | None,
+    failure_code: str | None,
+) -> str:
+    url = f"{DESKTOP_REDIRECT_SCHEME}://plugins?source=mcp_oauth_callback&status={status}"
+    if flow_id is not None:
+        url += f"&flowId={flow_id}"
+    if failure_code:
+        url += f"&failureCode={failure_code}"
+    return url

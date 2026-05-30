@@ -25,6 +25,9 @@ def _record(flow: CloudMcpOAuthFlow) -> CloudMcpOAuthFlowRecord:
         requested_scopes=flow.requested_scopes,
         redirect_uri=flow.redirect_uri,
         authorization_url=flow.authorization_url,
+        callback_surface=flow.callback_surface,
+        final_surface=flow.final_surface,
+        return_path=flow.return_path,
         status=flow.status,
         expires_at=flow.expires_at,
         used_at=flow.used_at,
@@ -49,6 +52,9 @@ async def create_oauth_flow_canceling_existing(
     requested_scopes: str,
     redirect_uri: str,
     authorization_url: str,
+    callback_surface: str = "desktop",
+    final_surface: str = "desktop",
+    return_path: str | None = None,
     expires_at: datetime,
 ) -> CloudMcpOAuthFlowRecord:
     now = utcnow()
@@ -69,6 +75,7 @@ async def create_oauth_flow_canceling_existing(
     for flow in active:
         flow.status = "cancelled"
         flow.cancelled_at = now
+        flow.failure_code = "superseded"
         flow.updated_at = now
     created = CloudMcpOAuthFlow(
         connection_db_id=connection_db_id,
@@ -82,6 +89,9 @@ async def create_oauth_flow_canceling_existing(
         requested_scopes=requested_scopes,
         redirect_uri=redirect_uri,
         authorization_url=authorization_url,
+        callback_surface=callback_surface,
+        final_surface=final_surface,
+        return_path=return_path,
         status="active",
         expires_at=expires_at,
         created_at=now,
@@ -110,6 +120,21 @@ async def get_oauth_flow_for_user(
     return _record(flow) if flow is not None else None
 
 
+async def get_oauth_flow_by_state_hash(
+    db: AsyncSession,
+    state_hash: str,
+) -> CloudMcpOAuthFlowRecord | None:
+    flow = (
+        await db.execute(
+            select(CloudMcpOAuthFlow)
+            .where(CloudMcpOAuthFlow.state_hash == state_hash)
+            .order_by(CloudMcpOAuthFlow.updated_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return _record(flow) if flow is not None else None
+
+
 async def cancel_oauth_flow_for_user(
     db: AsyncSession,
     *,
@@ -131,6 +156,7 @@ async def cancel_oauth_flow_for_user(
     if flow.status == "active":
         flow.status = "cancelled"
         flow.cancelled_at = utcnow()
+        flow.failure_code = "user_cancelled"
         flow.updated_at = flow.cancelled_at
         await db.flush()
         await db.refresh(flow)
@@ -176,6 +202,61 @@ async def complete_oauth_flow(
     if flow.status in {"active", "exchanging"}:
         flow.status = "completed"
         flow.used_at = now
+        flow.updated_at = now
+        await db.flush()
+        await db.refresh(flow)
+    return _record(flow)
+
+
+async def cancel_active_oauth_flows_for_connection(
+    db: AsyncSession,
+    *,
+    connection_db_id: UUID,
+    failure_code: str,
+) -> tuple[CloudMcpOAuthFlowRecord, ...]:
+    now = utcnow()
+    flows = list(
+        (
+            await db.execute(
+                select(CloudMcpOAuthFlow)
+                .where(
+                    CloudMcpOAuthFlow.connection_db_id == connection_db_id,
+                    CloudMcpOAuthFlow.status.in_(("active", "exchanging")),
+                )
+                .with_for_update()
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for flow in flows:
+        flow.status = "cancelled"
+        flow.cancelled_at = now
+        flow.failure_code = failure_code
+        flow.updated_at = now
+    if flows:
+        await db.flush()
+        for flow in flows:
+            await db.refresh(flow)
+    return tuple(_record(flow) for flow in flows)
+
+
+async def expire_oauth_flow(
+    db: AsyncSession,
+    *,
+    flow_id: UUID,
+) -> CloudMcpOAuthFlowRecord | None:
+    flow = (
+        await db.execute(
+            select(CloudMcpOAuthFlow).where(CloudMcpOAuthFlow.id == flow_id).with_for_update()
+        )
+    ).scalar_one_or_none()
+    if flow is None:
+        return None
+    now = utcnow()
+    if flow.status in {"active", "exchanging"}:
+        flow.status = "expired"
+        flow.failure_code = "expired"
         flow.updated_at = now
         await db.flush()
         await db.refresh(flow)
