@@ -244,5 +244,5 @@ cargo test --workspace
 ```
 
 For release/deploy changes, read
-[`docs/ci-cd/README.md`](../ci-cd/README.md) and run the workflow/helper checks
+[`ci-cd.md`](ci-cd.md) and run the workflow/helper checks
 documented there.

@@ -2,19 +2,22 @@
 
 Status: authoritative for day-to-day local development process.
 
-Use this folder for operating procedures: running the product locally.
-Architecture and ownership rules stay in the area docs under `docs/frontend`,
-`docs/server`, `docs/anyharness`, `docs/proliferate-worker`, `docs/desktop`,
-and `docs/ci-cd`.
+Use this folder for operating procedures: running the product locally,
+preparing PRs, and deploying to staging or production. Architecture and
+ownership rules stay in the area docs under `docs/frontend`, `docs/server`,
+`docs/anyharness`, `docs/proliferate-worker`, and `docs/desktop`.
 
 ## Read Order
 
 - [running-locally.md](running-locally.md)
   - full local stack, dev profiles, local Stripe, web, desktop, and mobile
     testing
+- [ci-cd.md](ci-cd.md)
+  - CI, PR metadata, staging deploys, production promotion, desktop releases,
+    runtime releases, E2B template releases, and deployment infra
 
 PR title, label, release-note, and checklist rules live in
-[`docs/ci-cd/README.md`](../ci-cd/README.md) and
+[`ci-cd.md`](ci-cd.md) and
 [`../../.github/pull_request_template.md`](../../.github/pull_request_template.md).
 
 ## Operating Rules
