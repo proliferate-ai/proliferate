@@ -76,6 +76,7 @@ server/proliferate/server/billing/service.py
 server/proliferate/server/billing/stripe_webhooks.py
 server/proliferate/db/store/cloud_workspaces.py
 server/proliferate/server/cloud/commands/service.py
+server/proliferate/server/cloud/commands/domain/rules.py
 server/proliferate/server/cloud/worker/service.py
 server/proliferate/server/cloud/runtime/bootstrap.py
 server/proliferate/server/cloud/runtime_config/domain/resolver.py
