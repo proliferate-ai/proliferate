@@ -519,6 +519,8 @@ Deploy graph:
    - E2B builds immutable `sha-*` tags for staging, then moves the rolling
      `staging` tag after smoke
    - production E2B promotes the already-built `sha-*` tag to `production`
+     when staging success is required; if staging is explicitly bypassed, it
+     builds and smokes the immutable `sha-*` tag before promotion
    - server deploys ECR/ECS, runs Alembic, and smokes health
    - web deploys through Vercel, aliases the environment URL, and smokes it
    - mobile uses EAS build/submit when `MOBILE_DEPLOY_ENABLED=true`
