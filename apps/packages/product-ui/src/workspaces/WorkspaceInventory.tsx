@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Cloud,
   ExternalLink,
-  Globe2,
   HelpCircle,
   Monitor,
   Smartphone,
@@ -382,7 +381,7 @@ function SourceGlyph({
       case "cloud_sandbox":
         return <Cloud className={iconClass} aria-hidden />;
       case "web":
-        return <Globe2 className={iconClass} aria-hidden />;
+        return <Smartphone className={iconClass} aria-hidden />;
       case "mobile":
         return <Smartphone className={iconClass} aria-hidden />;
       case "personal_automation":

@@ -23,8 +23,9 @@ import { WORKSPACE_SIDEBAR_DEFAULT_WIDTH } from "@/lib/domain/preferences/worksp
  * v9: drop transient projected chat session ids from persisted workspace UI
  *     state; materialized last-viewed session ids own restart restore.
  * v10: add session-scoped activity/read timestamps for chat tab unread dots.
+ * v11: drop retired finish-suggestion sidebar dismissal state.
  */
-export const WORKSPACE_UI_MIGRATION_VERSION = 10;
+export const WORKSPACE_UI_MIGRATION_VERSION = 11;
 
 export interface PersistedWorkspaceUiState {
   migrationVersion?: number;
@@ -47,7 +48,6 @@ export interface PersistedWorkspaceUiState {
   sessionLastInteracted: Record<string, string>;
   sessionLastViewedAt: Record<string, string>;
   dismissedSetupFailures: Record<string, boolean>;
-  finishSuggestionDismissalsByWorkspaceId: Record<string, string>;
   visibleChatSessionIdsByWorkspace: Record<string, string[]>;
   recentlyHiddenChatSessionIdsByWorkspace: Record<string, string[]>;
   collapsedChatGroupsByWorkspace: Record<string, string[]>;
@@ -80,7 +80,6 @@ export const WORKSPACE_UI_DEFAULTS: PersistedWorkspaceUiState = {
   sessionLastInteracted: {},
   sessionLastViewedAt: {},
   dismissedSetupFailures: {},
-  finishSuggestionDismissalsByWorkspaceId: {},
   visibleChatSessionIdsByWorkspace: {},
   recentlyHiddenChatSessionIdsByWorkspace: {},
   collapsedChatGroupsByWorkspace: {},

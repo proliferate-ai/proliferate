@@ -48,6 +48,7 @@ export interface SidebarWorkspaceGroupView {
   label: string;
   count: number;
   collapsed: boolean;
+  headerHidden?: boolean;
   icon?: ReactNode;
   expandedIcon?: ReactNode;
   hoverIcon?: ReactNode;
@@ -225,15 +226,12 @@ export const SidebarActionButton = forwardRef<HTMLButtonElement, SidebarActionBu
         title={title}
         onClick={onClick}
         disabled={disabled}
-        className={`size-6 rounded-md border border-transparent transition-all ${
-          active ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""
-        } ${
-          isAlwaysVisible ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-        } ${
-          variant === "section"
+        className={`size-6 rounded-md border border-transparent transition-all ${active ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""
+          } ${isAlwaysVisible ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+          } ${variant === "section"
             ? "opacity-75 hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
             : ""
-        } ${className}`}
+          } ${className}`}
       >
         {children}
       </IconButton>
@@ -385,9 +383,8 @@ export function ProductSidebarNavRow({
       ) : item.shortcutLabel ? (
         <ShortcutBadge
           label={item.shortcutLabel}
-          className={`shrink-0 text-sidebar-muted-foreground opacity-0 transition-opacity ${
-            shortcutRevealVisible ? "opacity-100" : "group-hover:opacity-100 group-focus-within:opacity-100"
-          }`}
+          className={`shrink-0 text-sidebar-muted-foreground opacity-0 transition-opacity ${shortcutRevealVisible ? "opacity-100" : "group-hover:opacity-100 group-focus-within:opacity-100"
+            }`}
         />
       ) : null}
     </SidebarRowSurface>
@@ -476,16 +473,14 @@ function ProductSidebarSectionMessage({
     <div className="mx-2 rounded-lg border border-sidebar-border/75 px-3 py-2 text-sidebar-muted-foreground">
       <div className="flex items-start gap-2">
         {message.status ? (
-          <span className={`mt-0.5 shrink-0 ${
-            message.tone === "danger" ? "text-destructive" : "text-sidebar-muted-foreground"
-          }`}>
+          <span className={`mt-0.5 shrink-0 ${message.tone === "danger" ? "text-destructive" : "text-sidebar-muted-foreground"
+            }`}>
             {message.status}
           </span>
         ) : null}
         <div className="min-w-0">
-          <p className={`text-sm leading-4 ${
-            message.tone === "danger" ? "text-destructive" : "text-sidebar-foreground"
-          }`}>
+          <p className={`text-sm leading-4 ${message.tone === "danger" ? "text-destructive" : "text-sidebar-foreground"
+            }`}>
             {message.title}
           </p>
           {message.description ? (
@@ -534,29 +529,32 @@ function WorkspaceGroup({
   shortcutRevealVisible: boolean;
 }) {
   const groupAction = group.actions[0];
+  const shouldShowHeader = !group.headerHidden;
 
   return (
     <div className="w-full min-w-0">
-      <ProductSidebarRepoGroupHeader
-        label={group.label}
-        count={group.count}
-        collapsed={group.collapsed}
-        icon={group.icon}
-        expandedIcon={group.expandedIcon}
-        hoverIcon={group.hoverIcon}
-        onToggleCollapsed={() => onGroupToggle(group.id)}
-        action={groupAction ? (
-          <SidebarActionIconButton
-            action={groupAction}
-            scope="workspace-group"
-            itemId={group.id}
-            onAction={onAction}
-            alwaysVisible
-          />
-        ) : null}
-      />
+      {shouldShowHeader ? (
+        <ProductSidebarRepoGroupHeader
+          label={group.label}
+          count={group.count}
+          collapsed={group.collapsed}
+          icon={group.icon}
+          expandedIcon={group.expandedIcon}
+          hoverIcon={group.hoverIcon}
+          onToggleCollapsed={() => onGroupToggle(group.id)}
+          action={groupAction ? (
+            <SidebarActionIconButton
+              action={groupAction}
+              scope="workspace-group"
+              itemId={group.id}
+              onAction={onAction}
+              alwaysVisible
+            />
+          ) : null}
+        />
+      ) : null}
 
-      {!group.collapsed ? (
+      {(!group.collapsed || !shouldShowHeader) ? (
         <div className="flex w-full min-w-0 flex-col gap-px">
           {group.rows.map((row) => (
             <WorkspaceRow
@@ -628,9 +626,8 @@ export function ProductSidebarRepoGroupHeader({
         </span>
 
         <div className="relative ml-auto size-6 shrink-0">
-          <span className={`absolute inset-0 flex items-center justify-center font-mono text-[0.625rem] text-sidebar-muted-foreground transition-opacity ${
-            hasAction ? "group-hover/folder-row:opacity-0" : ""
-          }`}>
+          <span className={`absolute inset-0 flex items-center justify-center font-mono text-[0.625rem] text-sidebar-muted-foreground transition-opacity ${hasAction ? "group-hover/folder-row:opacity-0" : ""
+            }`}>
             {count}
           </span>
           {hasAction ? (
@@ -732,9 +729,8 @@ export function ProductSidebarWorkspaceRow({
         </div>
 
         <div className="ml-1.5 flex min-w-0 flex-1 items-center gap-2 pl-0.5">
-          <div className={`flex min-w-0 flex-1 self-stretch ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} text-base leading-5 ${
-            archived ? "text-sidebar-muted-foreground/60" : "text-sidebar-foreground"
-          }`}>
+          <div className={`flex min-w-0 flex-1 self-stretch ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} text-base leading-5 ${archived ? "text-sidebar-muted-foreground/60" : "text-sidebar-foreground"
+            }`}>
             <span
               className={`${hasSubtitle ? "max-w-full" : "min-w-0 flex-1"} truncate select-none`}
               draggable={false}
@@ -748,33 +744,30 @@ export function ProductSidebarWorkspaceRow({
             ) : null}
           </div>
           {detail ? (
-            <div className={`flex min-w-[24px] shrink-0 items-center justify-end gap-1.5 text-sidebar-muted-foreground ${
-              shortcutLabel ? "mr-2" : ""
-            }`}>
+            <div className={`flex min-w-[24px] shrink-0 items-center justify-end gap-1.5 text-sidebar-muted-foreground`}>
               {detail}
             </div>
           ) : null}
         </div>
 
         {(trailingLabel || shortcutLabel || hoverAction) ? (
-          <div className={`grid h-5 min-w-[26px] shrink-0 items-center justify-items-end ${
-            detail ? "ml-[5px]" : "ml-1.5"
-          }`}>
+          <div className={`grid h-5 min-w-[26px] shrink-0 items-center justify-items-end ${detail ? "ml-[5px]" : "ml-1.5"
+            }`}>
+
             {trailingLabel ? (
-              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-sm leading-4 tabular-nums text-sidebar-muted-foreground transition-opacity duration-150 ${
-                shortcutLabel && shortcutRevealVisible
+              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-sm leading-4 tabular-nums text-sidebar-muted-foreground transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
                   ? "opacity-0"
                   : "group-hover:opacity-0 group-focus-within:opacity-0"
-              }`}>
+                }`}>
                 {trailingLabel}
               </div>
             ) : null}
+
             {shortcutLabel ? (
               <ShortcutBadge
                 label={shortcutLabel}
-                className={`col-start-1 row-start-1 h-fit min-w-[30px] shrink-0 text-sidebar-muted-foreground opacity-0 transition-opacity duration-150 ${
-                  shortcutRevealVisible ? "opacity-100" : ""
-                }`}
+                className={`col-start-1 row-start-1 h-fit !w-0 shrink-0 text-sidebar-muted-foreground opacity-0 transition-opacity duration-150 ${shortcutRevealVisible ? "opacity-100" : ""
+                  }`}
               />
             ) : null}
           </div>
@@ -1002,9 +995,8 @@ function SidebarActionIconButton({
         event.stopPropagation();
         onAction({ scope, itemId, actionId: action.id });
       }}
-      className={`${
-        action.destructive ? "text-destructive hover:text-destructive" : ""
-      } ${alwaysVisible ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"}`}
+      className={`${action.destructive ? "text-destructive hover:text-destructive" : ""
+        } ${alwaysVisible ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"}`}
     >
       {action.icon ?? <span className="text-[10px] leading-none">...</span>}
     </SidebarActionButton>
@@ -1014,9 +1006,8 @@ function SidebarActionIconButton({
 function ChevronGlyph({ collapsed }: { collapsed: boolean }) {
   return (
     <span
-      className={`block size-1.5 border-b border-r border-current transition-transform ${
-        collapsed ? "-rotate-45" : "rotate-45"
-      }`}
+      className={`block size-1.5 border-b border-r border-current transition-transform ${collapsed ? "-rotate-45" : "rotate-45"
+        }`}
       aria-hidden="true"
     />
   );

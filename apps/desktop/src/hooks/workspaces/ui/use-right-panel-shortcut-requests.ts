@@ -15,12 +15,14 @@ export function useRightPanelShortcutRequests({
   entries,
   isOpen,
   onActivateEntry,
+  onCloseActiveEntry,
   onHandledRequest,
 }: {
   activeEntryKey: RightPanelHeaderEntryKey;
   entries: readonly RightPanelHeaderEntry[];
   isOpen: boolean;
   onActivateEntry: (entryKey: RightPanelHeaderEntryKey) => boolean;
+  onCloseActiveEntry: () => boolean;
   onHandledRequest?: () => void;
 }): void {
   useEffect(() => {
@@ -31,6 +33,14 @@ export function useRightPanelShortcutRequests({
 
       const request = rightPanelShortcutRequestFromEvent(event);
       if (!request) {
+        return;
+      }
+
+      if (request.kind === "close-active-tab") {
+        if (onCloseActiveEntry()) {
+          onHandledRequest?.();
+          event.preventDefault();
+        }
         return;
       }
 
@@ -60,6 +70,7 @@ export function useRightPanelShortcutRequests({
     entries,
     isOpen,
     onActivateEntry,
+    onCloseActiveEntry,
     onHandledRequest,
   ]);
 }

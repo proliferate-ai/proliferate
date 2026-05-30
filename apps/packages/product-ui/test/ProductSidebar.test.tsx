@@ -97,4 +97,39 @@ describe("ProductSidebar", () => {
     fireEvent.click(screen.getByText("Claimable Slack thread"));
     expect(onChatSelect).toHaveBeenCalledWith("claim-1");
   });
+
+  it("can render workspace rows without a group header", () => {
+    render(
+      <ProductSidebar
+        navItems={[]}
+        workspaceSectionLabel="Recents"
+        workspaceGroups={[
+          {
+            id: "recents",
+            label: "Recent work",
+            count: 1,
+            collapsed: false,
+            headerHidden: true,
+            actions: [],
+            rows: [
+              {
+                id: "chat-1",
+                label: "Recent chat",
+                active: false,
+                actions: [],
+              },
+            ],
+          },
+        ]}
+        onNavSelect={vi.fn()}
+        onWorkspaceSelect={vi.fn()}
+        onGroupToggle={vi.fn()}
+        onAction={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Recents")).toBeTruthy();
+    expect(screen.getByText("Recent chat")).toBeTruthy();
+    expect(screen.queryByText("Recent work")).toBeNull();
+  });
 });

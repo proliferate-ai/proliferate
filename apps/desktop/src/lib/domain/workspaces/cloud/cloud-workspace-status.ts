@@ -43,6 +43,14 @@ export function isCloudWorkspacePostReadyPending(
   return workspace.status === "ready" && isPostReadyPending(workspace.postReadyPhase);
 }
 
+export function isCloudWorkspaceFailedBeforeReady(
+  workspace: CloudWorkspaceSummary,
+): boolean {
+  return workspace.status === "error"
+    && workspace.readyAt == null
+    && workspace.productLifecycle !== "archived";
+}
+
 export function shouldPollCloudWorkspaceForUpdates(
   workspace: CloudWorkspaceSummary,
 ): boolean {

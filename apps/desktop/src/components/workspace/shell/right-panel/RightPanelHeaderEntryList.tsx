@@ -11,7 +11,6 @@ import {
 } from "@/lib/domain/workspaces/shell/right-panel-header-entry";
 import type {
   RightPanelHeaderEntryKey,
-  RightPanelTool,
 } from "@/lib/domain/workspaces/shell/right-panel-model";
 import {
   viewerTargetEditablePath,
@@ -31,10 +30,7 @@ interface RightPanelHeaderEntryListProps {
   isWorkspaceReady: boolean;
   drag: RightPanelHeaderDragController;
   shortcutRevealVisible: boolean;
-  onActivateTool: (tool: RightPanelTool) => void;
-  onSelectTerminal: (terminalId: string) => void;
-  onSelectBrowser: (browserId: string) => void;
-  onSelectViewerTarget: (targetKey: RightPanelHeaderEntryKey) => void;
+  onActivateEntry: (entryKey: RightPanelHeaderEntryKey) => boolean;
   onCloseTerminal: (terminalId: string) => void;
   onCloseBrowser: (browserId: string) => void;
   onCloseViewerTarget: (targetKey: RightPanelHeaderEntryKey) => void;
@@ -50,10 +46,7 @@ export function RightPanelHeaderEntryList({
   isWorkspaceReady,
   drag,
   shortcutRevealVisible,
-  onActivateTool,
-  onSelectTerminal,
-  onSelectBrowser,
-  onSelectViewerTarget,
+  onActivateEntry,
   onCloseTerminal,
   onCloseBrowser,
   onCloseViewerTarget,
@@ -83,7 +76,9 @@ export function RightPanelHeaderEntryList({
                 isActive={activeEntryKey === entry.key}
                 isDragging={drag.draggedHeaderKey === entry.key}
                 shouldSuppressClick={drag.shouldSuppressHeaderClick}
-                onSelect={() => onActivateTool(entry.tool)}
+                onSelect={() => {
+                  onActivateEntry(entry.key);
+                }}
               />
             </RightPanelHeaderEntryDropZone>
           );
@@ -116,7 +111,9 @@ export function RightPanelHeaderEntryList({
                   ? getShortcutDisplayLabel(SHORTCUTS.openTerminal)
                   : null}
                 shortcutRevealVisible={shortcutRevealVisible}
-                onSelect={() => onSelectTerminal(entry.terminalId)}
+                onSelect={() => {
+                  onActivateEntry(entry.key);
+                }}
                 onClose={() => onCloseTerminal(entry.terminalId)}
                 onRename={(title) => onRenameTerminal(entry.terminalId, title)}
               />
@@ -148,7 +145,9 @@ export function RightPanelHeaderEntryList({
                 isDiff={tabModes[targetKey] === "diff" || entry.target.kind === "fileDiff"}
                 isDragging={drag.draggedHeaderKey === entry.key}
                 shouldSuppressClick={drag.shouldSuppressHeaderClick}
-                onSelect={() => onSelectViewerTarget(targetKey)}
+                onSelect={() => {
+                  onActivateEntry(entry.key);
+                }}
                 onClose={() => onCloseViewerTarget(targetKey)}
               />
             </RightPanelHeaderEntryDropZone>
@@ -174,7 +173,9 @@ export function RightPanelHeaderEntryList({
               isActive={activeEntryKey === entry.key}
               isDragging={drag.draggedHeaderKey === entry.key}
               shouldSuppressClick={drag.shouldSuppressHeaderClick}
-              onSelect={() => onSelectBrowser(entry.tab.id)}
+              onSelect={() => {
+                onActivateEntry(entry.key);
+              }}
               onClose={() => onCloseBrowser(entry.tab.id)}
             />
           </RightPanelHeaderEntryDropZone>

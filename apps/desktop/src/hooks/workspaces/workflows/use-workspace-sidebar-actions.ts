@@ -14,7 +14,6 @@ import {
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
 import { useWorkspaceRetireActions } from "@/hooks/workspaces/workflows/use-workspace-retire-actions";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 
 export function useWorkspaceSidebarActions() {
@@ -37,7 +36,6 @@ export function useWorkspaceSidebarActions() {
   const { addRepoFromPicker } = useAddRepo();
   const showToast = useToastStore((state) => state.show);
   const { markDone, retryCleanup } = useWorkspaceRetireActions();
-  const dismissFinishSuggestion = useWorkspaceUiStore((state) => state.dismissFinishSuggestion);
 
   const handleAddRepo = useCallback(() => {
     void addRepoFromPicker();
@@ -90,29 +88,10 @@ export function useWorkspaceSidebarActions() {
         });
         return;
       }
-      case "mark_workspace_done":
-        void markDone(action.workspaceId, {
-          logicalWorkspaceId: action.logicalWorkspaceId ?? null,
-        }).then((result) => {
-          if (result.outcome === "blocked") {
-            showToast(workspaceRetireBlockedMessage(result));
-          } else if (result.outcome === "cleanup_failed") {
-            showToast("Workspace delete started, but cleanup needs attention.");
-          }
-        }).catch((error) => {
-          const message = error instanceof Error ? error.message : String(error);
-          showToast(`Failed to delete workspace: ${message}`);
-        });
-        return;
-      case "keep_workspace_active":
-        dismissFinishSuggestion(action.workspaceId, action.readinessFingerprint);
-        return;
     }
   }, [
-    dismissFinishSuggestion,
     goToTopLevelRoute,
     handleSelectWorkspace,
-    markDone,
     mobility.selectedLogicalWorkspaceId,
     mobility.selectionLocked,
     navigateToWorkspaceShell,

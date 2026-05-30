@@ -101,7 +101,6 @@ export function buildSidebarGroupStates(args: {
   activeSessionTitle: string | null;
   lastViewedAt: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
-  finishSuggestionsByWorkspaceId?: Record<string, { workspaceId: string; readinessFingerprint: string }>;
   targetAppearanceById?: Record<string, ComputeTargetAppearance>;
 }): SidebarGroupState[] {
   const visibleWorkspaceTypes = new Set(resolveSidebarWorkspaceTypes(args.workspaceTypes));
@@ -216,9 +215,6 @@ export function buildSidebarGroupStates(args: {
             detailIndicators: detailIndicatorsForWorkspace(
               entry,
               variant,
-              preferredLocalWorkspace
-                ? args.finishSuggestionsByWorkspaceId?.[preferredLocalWorkspace.id] ?? null
-                : null,
               targetAppearance,
             ),
             cloudStatus: preferredCloudWorkspace

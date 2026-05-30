@@ -9,7 +9,6 @@ import {
   LifeBuoy,
   ListFilter,
   LoaderCircle,
-  MessageSquare,
   PanelLeftClose,
   Plus,
   Settings,
@@ -371,11 +370,10 @@ function buildRecentWorkspaceGroups(input: {
 }): SidebarWorkspaceGroupView[] {
   return [{
     id: "recents",
-    label: "Recent work",
+    label: "Recents",
     count: input.items.length,
     collapsed: false,
-    icon: <MessageSquare className="size-4" />,
-    expandedIcon: <MessageSquare className="size-4" />,
+    headerHidden: true,
     rows: input.items.map((item) => ({
       id: item.id,
       label: recentRowTitle(item),

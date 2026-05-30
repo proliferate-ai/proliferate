@@ -60,6 +60,11 @@ function cloudWorkspaceFixture(
     templateVersion: null,
     createdAt: "2026-04-14T00:00:00Z",
     updatedAt: "2026-04-14T00:01:00Z",
+    readyAt: "readyAt" in overrides
+      ? overrides.readyAt ?? null
+      : overrides.status === "ready"
+        ? "2026-04-14T00:00:00Z"
+        : null,
     repo: {
       provider: "github",
       owner: "proliferate-ai",

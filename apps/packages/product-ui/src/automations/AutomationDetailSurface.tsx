@@ -12,6 +12,7 @@ import { AutomationRunsList } from "./AutomationRunsList";
 export interface AutomationDetailSurfaceProps {
   automation: AutomationInventoryItemView | null;
   runs: readonly AutomationRunInventoryItemView[];
+  summary?: AutomationDetailSummaryView | null;
   loadingAutomation?: boolean;
   loadingRuns?: boolean;
   notFound?: boolean;
@@ -26,9 +27,17 @@ export interface AutomationDetailSurfaceProps {
   onRunSelect?: (runId: string) => void;
 }
 
+export interface AutomationDetailSummaryView {
+  prompt?: string | null;
+  configName?: string | null;
+  agentLabel?: string | null;
+  modelLabel?: string | null;
+}
+
 export function AutomationDetailSurface({
   automation,
   runs,
+  summary = null,
   loadingAutomation = false,
   loadingRuns = false,
   notFound = false,
@@ -88,21 +97,78 @@ export function AutomationDetailSurface({
             Loading automation
           </div>
         ) : (
-          <section className="min-w-0">
-            <div className="mt-1 flex h-9 w-full items-center gap-2 rounded-[10px] bg-foreground/[0.042] px-3">
-              <span className="text-sm font-medium leading-5 text-foreground">Run history</span>
-              <span className="text-sm tabular-nums text-muted-foreground">{runs.length}</span>
-            </div>
-            <AutomationRunsList
-              runs={runs}
-              loading={loadingRuns}
-              onRunSelect={onRunSelect}
-            />
-          </section>
+          <>
+            <AutomationSummaryPanel summary={summary} />
+            <section className="min-w-0">
+              <div className="mt-1 flex h-9 w-full items-center gap-2 rounded-[10px] bg-foreground/[0.042] px-3">
+                <span className="text-sm font-medium leading-5 text-foreground">Run history</span>
+                <span className="text-sm tabular-nums text-muted-foreground">{runs.length}</span>
+              </div>
+              <AutomationRunsList
+                runs={runs}
+                loading={loadingRuns}
+                onRunSelect={onRunSelect}
+              />
+            </section>
+          </>
         )}
       </div>
     </ProductPageShell>
   );
+}
+
+function AutomationSummaryPanel({
+  summary,
+}: {
+  summary: AutomationDetailSummaryView | null;
+}) {
+  const prompt = cleanSummaryValue(summary?.prompt);
+  const details = [
+    { label: "Run config", value: cleanSummaryValue(summary?.configName) },
+    { label: "Agent", value: cleanSummaryValue(summary?.agentLabel) },
+    { label: "Model", value: cleanSummaryValue(summary?.modelLabel) },
+  ].filter((item): item is { label: string; value: string } => item.value !== null);
+
+  if (!prompt && details.length === 0) {
+    return null;
+  }
+
+  return (
+    <section
+      aria-label="Automation summary"
+      className="mb-4 rounded-[10px] bg-foreground/[0.035] px-3 py-3"
+    >
+      {prompt ? (
+        <div className="min-w-0">
+          <p className="text-[11px] font-medium uppercase leading-4 tracking-normal text-muted-foreground">
+            Prompt
+          </p>
+          <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-5 text-foreground">
+            {prompt}
+          </p>
+        </div>
+      ) : null}
+      {details.length > 0 ? (
+        <dl className={`grid gap-3 ${prompt ? "mt-3 border-t border-border/60 pt-3" : ""} sm:grid-cols-3`}>
+          {details.map((item) => (
+            <div key={item.label} className="min-w-0">
+              <dt className="text-[11px] font-medium uppercase leading-4 tracking-normal text-muted-foreground">
+                {item.label}
+              </dt>
+              <dd className="mt-0.5 truncate text-sm leading-5 text-foreground" title={item.value}>
+                {item.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+    </section>
+  );
+}
+
+function cleanSummaryValue(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
 }
 
 function AutomationDetailDescription({

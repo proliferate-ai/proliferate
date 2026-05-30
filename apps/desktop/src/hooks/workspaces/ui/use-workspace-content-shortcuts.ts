@@ -2,6 +2,7 @@ import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-han
 import { getFocusZone, isRightPanelFocusZone } from "@/lib/domain/focus-zone";
 import { useContentSearchStore } from "@/stores/search/content-search-store";
 import {
+  requestRightPanelCloseActiveTab,
   requestRightPanelRelativeTab,
   requestRightPanelTabByIndex,
 } from "@/lib/workflows/workspaces/right-panel-shortcut-requests";
@@ -76,6 +77,13 @@ export function useWorkspaceContentShortcuts(
   }, { enabled });
 
   useShortcutHandler("workspace.close-active-tab", () => {
+    if (isRightPanelFocusZone(getFocusZone())) {
+      const handled = requestRightPanelCloseActiveTab();
+      if (handled) {
+        return true;
+      }
+    }
+
     return closeActiveWorkspaceTab() !== "noop";
   }, { enabled });
 

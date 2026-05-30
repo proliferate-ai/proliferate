@@ -8,6 +8,7 @@ import {
   useAutomationRuns,
   useAutomations,
 } from "@/hooks/access/cloud/automations/use-automations";
+import { useAgentRunConfig } from "@/hooks/access/cloud/agent-run-configs/use-agent-run-configs";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useCloudWorkspaceActions } from "@/hooks/cloud/workflows/use-cloud-workspace-actions";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
@@ -120,6 +121,10 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     selectedId !== null && selectedFromList === null,
   );
   const selectedAutomation = selectedFromList ?? selectedDetail ?? null;
+  const selectedAgentRunConfig = useAgentRunConfig(
+    selectedAutomation?.cloudAgentRunConfigId ?? null,
+    isDetailView && selectedAutomation !== null,
+  );
   const { data: runsData, isLoading: runsLoading } = useAutomationRuns(
     selectedId,
     isDetailView,
@@ -154,6 +159,24 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     }),
     [pendingCloudWorkspaceId, runRecords],
   );
+  const selectedAutomationSummary = useMemo(() => {
+    if (!selectedAutomation) {
+      return null;
+    }
+    const resolvedRunConfig = selectedAgentRunConfig.data?.resolved;
+    return {
+      prompt: selectedAutomation.prompt,
+      configName: resolvedRunConfig?.configName ?? selectedAgentRunConfig.data?.name ?? null,
+      agentLabel: formatAgentKind(resolvedRunConfig?.agentKind ?? selectedAgentRunConfig.data?.agentKind),
+      modelLabel: resolvedRunConfig?.modelId ?? selectedAgentRunConfig.data?.modelId ?? null,
+    };
+  }, [
+    selectedAgentRunConfig.data?.agentKind,
+    selectedAgentRunConfig.data?.modelId,
+    selectedAgentRunConfig.data?.name,
+    selectedAgentRunConfig.data?.resolved,
+    selectedAutomation,
+  ]);
   const runById = useMemo(
     () => new Map(runRecords.map((run) => [run.id, run])),
     [runRecords],
@@ -305,6 +328,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
           <AutomationDetailSurface
             automation={selectedAutomationItem}
             runs={runItems}
+            summary={selectedAutomationSummary}
             loadingAutomation={selectedDetailLoading}
             loadingRuns={selectedDetailLoading || runsLoading}
             notFound={selectedDetailError}
@@ -393,4 +417,16 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
       )}
     </>
   );
+}
+
+function formatAgentKind(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed
+    .split(/[-_\s]+/u)
+    .filter(Boolean)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
 }

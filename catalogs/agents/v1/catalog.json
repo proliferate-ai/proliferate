@@ -1241,7 +1241,7 @@
         "agentProcess": {
           "install": {
             "kind": "registry_backed",
-            "registryId": "cursor-acp",
+            "registryId": "cursor",
             "fallback": {
               "kind": "binary_hint",
               "candidateBinaries": [

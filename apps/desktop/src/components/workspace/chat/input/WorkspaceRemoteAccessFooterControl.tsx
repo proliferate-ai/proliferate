@@ -1,4 +1,4 @@
-import { Globe, Spinner } from "@proliferate/ui/icons";
+import { Smartphone, Spinner } from "@proliferate/ui/icons";
 import { useWorkspaceRemoteAccessActions } from "@/hooks/workspaces/remote-access/use-workspace-remote-access-actions";
 import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
 
@@ -8,7 +8,7 @@ export function WorkspaceRemoteAccessFooterControl() {
 
   return (
     <ComposerControlButton
-      icon={isPending ? <Spinner className="size-3.5" /> : <Globe className="size-3.5" />}
+      icon={isPending ? <Spinner className="size-3.5" /> : <Smartphone className="size-3.5" />}
       label={isPending ? "Updating access" : label}
       tone={isEnabled ? "info" : "neutral"}
       active={isEnabled}

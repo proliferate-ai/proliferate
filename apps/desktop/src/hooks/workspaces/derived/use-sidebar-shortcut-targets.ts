@@ -16,7 +16,6 @@ import { useWorkspaceSidebarShowMoreStore } from "@/stores/workspaces/workspace-
 const EMPTY_WORKSPACE_ACTIVITIES = {};
 const EMPTY_PENDING_PROMPT_COUNTS = {};
 const EMPTY_LAST_VIEWED_AT = {};
-const EMPTY_FINISH_SUGGESTIONS = {};
 
 export function useSidebarShortcutTargets(): string[] {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
@@ -74,7 +73,6 @@ export function useSidebarShortcutTargets(): string[] {
     activeSessionTitle: null,
     lastViewedAt: EMPTY_LAST_VIEWED_AT,
     workspaceLastInteracted,
-    finishSuggestionsByWorkspaceId: EMPTY_FINISH_SUGGESTIONS,
   }), [
     archivedSet,
     hiddenRepoRootSet,

@@ -3,7 +3,9 @@ import type {
   CloudMobilityWorkspaceSummary,
   CloudWorkspaceSummary,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
+import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { cloudWorkspaceUsesCloudRuntime } from "@/lib/domain/workspaces/cloud/cloud-runtime-kind";
+import { isCloudWorkspaceFailedBeforeReady } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import {
   humanizeBranchName,
   workspaceCurrentBranchName,
@@ -118,6 +120,15 @@ function buildLogicalWorkspaceIdForCloudWorkspace(workspace: CloudWorkspaceSumma
     workspace.repo.name,
     cloudBranchKey(workspace),
   );
+}
+
+function cloudWorkspaceMatchesSelection(
+  workspace: CloudWorkspaceSummary,
+  logicalId: string,
+  currentSelectionId: string | null | undefined,
+): boolean {
+  return currentSelectionId === logicalId
+    || currentSelectionId === cloudWorkspaceSyntheticId(workspace.id);
 }
 
 function localDefaultDisplayName(workspace: Workspace): string {
@@ -275,6 +286,13 @@ export function buildLogicalWorkspaces(args: {
 
   for (const workspace of args.cloudWorkspaces) {
     const logicalId = buildLogicalWorkspaceIdForCloudWorkspace(workspace);
+    if (
+      isCloudWorkspaceFailedBeforeReady(workspace)
+      && !cloudWorkspaceMatchesSelection(workspace, logicalId, args.currentSelectionId)
+    ) {
+      continue;
+    }
+
     const current = byId.get(logicalId);
     if (!current) {
       byId.set(logicalId, {

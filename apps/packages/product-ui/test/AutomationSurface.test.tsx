@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AutomationRunsList } from "../src/automations/AutomationRunsList";
+import { AutomationDetailSurface } from "../src/automations/AutomationDetailSurface";
 import { AutomationSurface } from "../src/automations/AutomationSurface";
 import type {
   AutomationCalendarDayView,
@@ -91,6 +92,24 @@ describe("AutomationSurface", () => {
     });
     fireEvent.click(runButton);
     expect(onRunNow).not.toHaveBeenCalled();
+  });
+
+  it("hides create and row actions when callbacks are omitted", () => {
+    render(
+      <AutomationSurface
+        mode="list"
+        groups={automationGroups()}
+        calendarDays={calendarDays()}
+        includePaused={false}
+        onModeChange={vi.fn()}
+        onIncludePausedChange={vi.fn()}
+        onAutomationSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /New automation/u })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Run automation now" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Automation actions" })).toBeNull();
   });
 
   it("renders calendar days and scheduled occurrences", () => {
@@ -186,6 +205,47 @@ describe("AutomationRunsList", () => {
     );
 
     expect(screen.getByRole("listitem", { name: /Opening/u })).toBeTruthy();
+  });
+});
+
+describe("AutomationDetailSurface", () => {
+  beforeEach(() => {
+    vi.stubGlobal("IntersectionObserver", class {
+      observe() {}
+      disconnect() {}
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("renders a compact automation summary above run history", () => {
+    render(
+      <AutomationDetailSurface
+        automation={automationGroups()[0].items[0]}
+        runs={[]}
+        summary={{
+          prompt: "Check recent failures and open a concise fix plan.",
+          configName: "Nightly Codex",
+          agentLabel: "Codex",
+          modelLabel: "gpt-5",
+        }}
+        onBack={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Prompt")).toBeTruthy();
+    expect(screen.getByText("Check recent failures and open a concise fix plan.")).toBeTruthy();
+    expect(screen.getByText("Nightly Codex")).toBeTruthy();
+    expect(screen.getByText("Codex")).toBeTruthy();
+    expect(screen.getByText("gpt-5")).toBeTruthy();
+    expect(
+      screen.getByText("Check recent failures and open a concise fix plan.")
+        .compareDocumentPosition(screen.getByText("Run history"))
+      & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });
 

@@ -144,6 +144,7 @@ describe("buildMobilityFooterContext", () => {
           templateVersion: "v1",
           createdAt: "2026-04-14T00:00:00Z",
           updatedAt: "2026-04-14T00:00:00Z",
+          readyAt: "2026-04-14T00:00:00Z",
           repo: {
             provider: "github",
             owner: "openai",
@@ -216,6 +217,7 @@ describe("buildMobilityFooterContext", () => {
           templateVersion: "v1",
           createdAt: "2026-04-14T00:00:00Z",
           updatedAt: "2026-04-14T00:00:00Z",
+          readyAt: "2026-04-14T00:00:00Z",
           repo: {
             provider: "github",
             owner: "openai",

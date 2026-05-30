@@ -81,6 +81,31 @@ export function useCloudWorkspacePolling() {
           return;
         }
 
+        if (workspace.status === "error") {
+          shouldScheduleNextPoll = false;
+          const pending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+          if (
+            pending
+            && pending.workspaceId === selectedWorkspaceId
+            && pending.stage === "awaiting-cloud-ready"
+          ) {
+            setPendingWorkspaceEntry({
+              ...pending,
+              stage: "failed",
+              request: { kind: "select-existing", workspaceId: selectedWorkspaceId },
+              errorMessage: workspace.lastError
+                ?? workspace.statusDetail
+                ?? "Cloud workspace provisioning failed.",
+            });
+          }
+          logLatency("workspace.cloud_polling.failed", {
+            workspaceId: selectedWorkspaceId,
+            pendingAttemptId: pending?.attemptId ?? null,
+            errorMessage: workspace.lastError ?? workspace.statusDetail ?? null,
+          });
+          return;
+        }
+
         if (workspace.status === "ready" && !isCloudWorkspacePostReadyPending(workspace)) {
           shouldScheduleNextPoll = false;
           const pending = useSessionSelectionStore.getState().pendingWorkspaceEntry;

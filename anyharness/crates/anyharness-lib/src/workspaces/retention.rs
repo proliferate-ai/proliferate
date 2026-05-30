@@ -6,8 +6,8 @@ use std::time::Duration;
 
 use anyharness_contract::v1::{WorkspaceRetireBlocker, WorktreeRetentionRowOutcome};
 
-use crate::sessions::store::SessionStore;
 use crate::domains::terminals::store::TerminalStore;
+use crate::sessions::store::SessionStore;
 use crate::workspaces::checkout_gate::{CheckoutDeletionGate, CheckoutPathLockKey};
 use crate::workspaces::managed_root::canonical_managed_worktrees_root;
 use crate::workspaces::model::WorkspaceRecord;

@@ -5,7 +5,10 @@ import {
   descriptionForStartBlockReason,
   type CloudWorkspaceStatusScreenModel,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-status-presentation";
-import { shouldShowCloudWorkspaceStatusScreen } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
+import {
+  isCloudWorkspaceFailedBeforeReady,
+  shouldShowCloudWorkspaceStatusScreen,
+} from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
 import { CLOUD_STATUS_COMPACT_COPY } from "@/copy/cloud/cloud-status-copy";
 import type {
   CloudWorkspaceStatus,
@@ -39,6 +42,11 @@ function makeCloudWorkspace(
     templateVersion: null,
     createdAt: "2026-04-14T00:00:00Z",
     updatedAt: "2026-04-14T00:00:00Z",
+    readyAt: "readyAt" in overrides
+      ? overrides.readyAt ?? null
+      : overrides.status === "ready"
+        ? "2026-04-14T00:00:00Z"
+        : null,
     repo: {
       provider: "github",
       owner: "openai",
@@ -185,6 +193,30 @@ describe("shouldShowCloudWorkspaceStatusScreen", () => {
       makeCloudWorkspace({ status: "ready" });
 
     expect(shouldShowCloudWorkspaceStatusScreen(workspace)).toBe(false);
+  });
+});
+
+describe("isCloudWorkspaceFailedBeforeReady", () => {
+  it("matches active errored cloud workspaces that never became ready", () => {
+    expect(isCloudWorkspaceFailedBeforeReady(makeCloudWorkspace({
+      status: "error",
+      readyAt: null,
+    }))).toBe(true);
+  });
+
+  it("does not match errored cloud workspaces that already reached readiness", () => {
+    expect(isCloudWorkspaceFailedBeforeReady(makeCloudWorkspace({
+      status: "error",
+      readyAt: "2026-04-14T00:00:00Z",
+    }))).toBe(false);
+  });
+
+  it("does not match archived errored cloud workspaces", () => {
+    expect(isCloudWorkspaceFailedBeforeReady(makeCloudWorkspace({
+      productLifecycle: "archived",
+      status: "error",
+      readyAt: null,
+    }))).toBe(false);
   });
 });
 

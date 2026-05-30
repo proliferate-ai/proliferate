@@ -4,8 +4,6 @@ type WorkspaceUiDismissalActions = Pick<
   WorkspaceUiState,
   | "dismissSetupFailure"
   | "clearSetupFailureDismissal"
-  | "dismissFinishSuggestion"
-  | "clearFinishSuggestionDismissal"
 >;
 
 export function createWorkspaceUiDismissalActions(
@@ -26,21 +24,6 @@ export function createWorkspaceUiDismissalActions(
       const current = { ...get().dismissedSetupFailures };
       delete current[workspaceId];
       set({ dismissedSetupFailures: current });
-    },
-
-    dismissFinishSuggestion: (workspaceId, readinessFingerprint) => {
-      set({
-        finishSuggestionDismissalsByWorkspaceId: {
-          ...get().finishSuggestionDismissalsByWorkspaceId,
-          [workspaceId]: readinessFingerprint,
-        },
-      });
-    },
-
-    clearFinishSuggestionDismissal: (workspaceId) => {
-      const current = { ...get().finishSuggestionDismissalsByWorkspaceId };
-      delete current[workspaceId];
-      set({ finishSuggestionDismissalsByWorkspaceId: current });
     },
   };
 }

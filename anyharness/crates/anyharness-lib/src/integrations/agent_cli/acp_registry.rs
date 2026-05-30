@@ -210,9 +210,12 @@ pub fn install_binary_archive(
     cmd: &str,
     dest_dir: &Path,
 ) -> Result<PathBuf, String> {
-    std::fs::create_dir_all(dest_dir).map_err(|e| e.to_string())?;
+    let parent = dest_dir
+        .parent()
+        .ok_or_else(|| format!("destination has no parent: {}", dest_dir.display()))?;
+    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
 
-    let staging = dest_dir.join("_registry_staging");
+    let staging = parent.join(format!("_registry_staging_{}", uuid::Uuid::new_v4()));
     let _ = std::fs::remove_dir_all(&staging);
     std::fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
 
@@ -251,18 +254,21 @@ pub fn install_binary_archive(
         })?
     };
 
-    let final_path = dest_dir.join(
-        found
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or(normalized),
-    );
-    std::fs::rename(&found, &final_path).map_err(|e| {
+    let relative_cmd = found
+        .strip_prefix(&staging)
+        .map_err(|e| {
+            let _ = std::fs::remove_dir_all(&staging);
+            e.to_string()
+        })?
+        .to_path_buf();
+
+    let _ = std::fs::remove_dir_all(dest_dir);
+    std::fs::rename(&staging, dest_dir).map_err(|e| {
         let _ = std::fs::remove_dir_all(&staging);
         e.to_string()
     })?;
-    let _ = std::fs::remove_dir_all(&staging);
 
+    let final_path = dest_dir.join(relative_cmd);
     make_executable(&final_path).map_err(|e| e.to_string())?;
 
     Ok(final_path)
@@ -311,6 +317,8 @@ fn split_package_version(package: &str) -> Option<(&str, &str)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::integrations::agent_cli::executable::make_executable;
+    use std::process::Command;
 
     #[test]
     fn applies_version_override_to_scoped_and_unscoped_packages() {
@@ -344,5 +352,51 @@ mod tests {
             Some("1.0.0".to_string())
         );
         assert_eq!(extract_package_version("plain-tool"), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn binary_archive_install_preserves_extracted_sibling_files() {
+        let root = std::env::temp_dir().join(format!(
+            "anyharness-registry-archive-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let source_dir = root.join("source").join("dist-package");
+        std::fs::create_dir_all(&source_dir).expect("create source dir");
+        let command_path = source_dir.join("cursor-agent");
+        std::fs::write(
+            &command_path,
+            "#!/bin/sh\nexec \"$(dirname \"$0\")/node\" \"$@\"\n",
+        )
+        .expect("write command");
+        make_executable(&command_path).expect("make command executable");
+        std::fs::write(source_dir.join("node"), "#!/bin/sh\nexit 0\n").expect("write sibling");
+
+        let archive_path = root.join("cursor.tar.gz");
+        let output = Command::new("tar")
+            .arg("czf")
+            .arg(&archive_path)
+            .arg("-C")
+            .arg(root.join("source"))
+            .arg("dist-package")
+            .output()
+            .expect("create tar archive");
+        assert!(output.status.success());
+
+        let dest_dir = root.join("registry_binary");
+        let installed = install_binary_archive(
+            &format!("file://{}", archive_path.display()),
+            "./dist-package/cursor-agent",
+            &dest_dir,
+        )
+        .expect("install archive");
+
+        assert_eq!(
+            installed,
+            dest_dir.join("dist-package").join("cursor-agent")
+        );
+        assert!(dest_dir.join("dist-package").join("node").is_file());
+
+        let _ = std::fs::remove_dir_all(root);
     }
 }

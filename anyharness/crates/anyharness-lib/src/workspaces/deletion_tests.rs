@@ -1,14 +1,14 @@
 use super::WorkspaceDeleteWorkflow;
 use crate::domains::cowork::store::CoworkDeleteParticipant;
 use crate::domains::reviews::store::ReviewDeleteParticipant;
-use crate::persistence::Db;
-use crate::sessions::deletion::SessionDeleteWorkflow;
-use crate::sessions::model::{SessionEventRecord, SessionMcpBindingPolicy, SessionRecord};
-use crate::sessions::store::SessionStore;
 use crate::domains::terminals::model::{
     TerminalCommandOutputMode, TerminalCommandRunRecord, TerminalCommandRunStatus, TerminalPurpose,
 };
 use crate::domains::terminals::store::TerminalStore;
+use crate::persistence::Db;
+use crate::sessions::deletion::SessionDeleteWorkflow;
+use crate::sessions::model::{SessionEventRecord, SessionMcpBindingPolicy, SessionRecord};
+use crate::sessions::store::SessionStore;
 use std::sync::Arc;
 
 #[test]

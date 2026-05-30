@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 
@@ -48,6 +49,20 @@ def test_workspace_summary_uses_legacy_origin_when_origin_json_is_missing() -> N
     assert payload.origin is not None
     assert payload.origin.model_dump() == {"kind": "human", "entrypoint": "desktop"}
     assert payload.creator_context is None
+
+
+def test_workspace_summary_projects_ready_at() -> None:
+    pending_payload = workspace_summary_payload(_workspace(origin_json=None))
+
+    assert pending_payload.ready_at is None
+    assert pending_payload.model_dump(by_alias=True)["readyAt"] is None
+
+    ready_workspace = _workspace(origin_json=None)
+    ready_workspace.ready_at = datetime(2026, 5, 30, 7, 30, 45, tzinfo=UTC)
+    ready_payload = workspace_summary_payload(ready_workspace)
+
+    assert ready_payload.ready_at == "2026-05-30T07:30:45+00:00"
+    assert ready_payload.model_dump(by_alias=True)["readyAt"] == "2026-05-30T07:30:45+00:00"
 
 
 def test_workspace_summary_projects_creator_context_when_present() -> None:

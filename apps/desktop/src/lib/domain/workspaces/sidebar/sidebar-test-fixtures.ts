@@ -280,10 +280,6 @@ export function buildGroups(args: {
   pendingPromptCounts?: Record<string, number>;
   lastViewedAt?: Record<string, string>;
   workspaceLastInteracted?: Record<string, string>;
-  finishSuggestionsByWorkspaceId?: Record<
-    string,
-    { workspaceId: string; readinessFingerprint: string }
-  >;
 }) {
   return buildSidebarGroupStates({
     repoRoots: args.repoRoots ?? [],
@@ -301,6 +297,5 @@ export function buildGroups(args: {
     activeSessionTitle: null,
     lastViewedAt: args.lastViewedAt ?? {},
     workspaceLastInteracted: args.workspaceLastInteracted ?? {},
-    finishSuggestionsByWorkspaceId: args.finishSuggestionsByWorkspaceId,
   });
 }
