@@ -15,8 +15,15 @@ ALLOWLIST_PATH = REPO_ROOT / "scripts" / "anyharness_boundaries_allowlist.txt"
 HTTP_TRANSPORT_ROOTS = {"axum", "headers", "http", "http_body", "tower", "utoipa"}
 PRODUCT_DOMAIN_ROOTS = {"domains", "repo_roots", "sessions", "workspaces"}
 LIVE_RUNTIME_ROOTS = {"acp", "live", "terminals"}
+PRODUCT_SURFACE_DOMAINS = {"cowork", "mobility", "plans", "plugins", "reviews"}
 DOMAIN_PATH_PREFIXES = (
     "anyharness/crates/anyharness-lib/src/domains/",
+    "anyharness/crates/anyharness-lib/src/repo_roots/",
+    "anyharness/crates/anyharness-lib/src/sessions/",
+    "anyharness/crates/anyharness-lib/src/terminals/",
+    "anyharness/crates/anyharness-lib/src/workspaces/",
+)
+CORE_DOMAIN_PATH_PREFIXES = (
     "anyharness/crates/anyharness-lib/src/repo_roots/",
     "anyharness/crates/anyharness-lib/src/sessions/",
     "anyharness/crates/anyharness-lib/src/terminals/",
@@ -25,6 +32,14 @@ DOMAIN_PATH_PREFIXES = (
 LIVE_SESSIONS_PREFIX = "anyharness/crates/anyharness-lib/src/live/sessions/"
 LIVE_SESSIONS_ACTOR_PREFIX = "anyharness/crates/anyharness-lib/src/live/sessions/actor/"
 LIVE_SESSIONS_HANDLE = "anyharness/crates/anyharness-lib/src/live/sessions/handle.rs"
+LIVE_SESSIONS_PRIVATE_MODULES = {
+    "actor",
+    "background_work",
+    "connection",
+    "event_sink",
+    "interactions",
+    "replay",
+}
 SESSION_EVENT_SINK_PREFIXES = (
     "anyharness/crates/anyharness-lib/src/acp/event_sink/",
     "anyharness/crates/anyharness-lib/src/live/sessions/event_sink/",
@@ -126,10 +141,26 @@ def is_domain_path(relative_path: str) -> bool:
     return any(is_under(relative_path, prefix) for prefix in DOMAIN_PATH_PREFIXES)
 
 
+def is_core_domain_path(relative_path: str) -> bool:
+    return any(is_under(relative_path, prefix) for prefix in CORE_DOMAIN_PATH_PREFIXES)
+
+
+def is_product_surface_domain_import(import_path: ImportPath) -> bool:
+    return (
+        len(import_path.parts) >= 3
+        and import_path.parts[0] == "crate"
+        and import_path.parts[1] == "domains"
+        and import_path.parts[2] in PRODUCT_SURFACE_DOMAINS
+    )
+
+
 def is_live_session_private_import(import_path: ImportPath) -> bool:
     return (
-        import_path.starts_with_crate("live", "sessions", "actor")
-        or import_path.starts_with_crate("live", "sessions", "connection")
+        len(import_path.parts) >= 4
+        and import_path.parts[0] == "crate"
+        and import_path.parts[1] == "live"
+        and import_path.parts[2] == "sessions"
+        and import_path.parts[3] in LIVE_SESSIONS_PRIVATE_MODULES
     )
 
 
@@ -339,7 +370,7 @@ def check_api_import(
 ) -> None:
     add_if(
         violations,
-        import_path.starts_with_crate("acp") or import_path.starts_with_crate("live"),
+        import_path.crate_root in LIVE_RUNTIME_ROOTS,
         "API_LIVE_RUNTIME_IMPORT",
         path,
         import_path.crate_root_line,
@@ -359,6 +390,21 @@ def check_domains_import(
         path,
         import_path.crate_root_line,
         "domains/** must not import api/**",
+    )
+
+
+def check_core_domain_import(
+    violations: list[Violation],
+    path: Path,
+    import_path: ImportPath,
+) -> None:
+    add_if(
+        violations,
+        is_product_surface_domain_import(import_path),
+        "CORE_DOMAIN_PRODUCT_IMPORT",
+        path,
+        import_path.crate_root_line,
+        "core domains must not directly import product surface domains",
     )
 
 
@@ -604,6 +650,7 @@ def check_file(path: Path) -> list[Violation]:
     violations: list[Violation] = []
     in_api = is_under(rel, "anyharness/crates/anyharness-lib/src/api/")
     in_domains = is_under(rel, "anyharness/crates/anyharness-lib/src/domains/")
+    in_core_domain = is_core_domain_path(rel)
     in_adapters = is_under(rel, "anyharness/crates/anyharness-lib/src/adapters/")
     in_integrations = is_under(rel, "anyharness/crates/anyharness-lib/src/integrations/")
     in_session_store = is_under(rel, "anyharness/crates/anyharness-lib/src/sessions/store/")
@@ -618,6 +665,8 @@ def check_file(path: Path) -> list[Violation]:
                 check_api_import(violations, path, import_path)
             if in_domains:
                 check_domains_import(violations, path, import_path)
+            if in_core_domain:
+                check_core_domain_import(violations, path, import_path)
             if in_adapters:
                 check_adapters_import(violations, path, import_path)
             if in_integrations:

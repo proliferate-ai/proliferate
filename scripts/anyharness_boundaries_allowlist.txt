@@ -7,8 +7,20 @@
 # count, update this file in the same PR.
 
 API_LIVE_RUNTIME_IMPORT anyharness/crates/anyharness-lib/src/api/http/sessions.rs 1 transitional permission decision type still lives under live ACP runtime
+API_LIVE_RUNTIME_IMPORT anyharness/crates/anyharness-lib/src/api/http/terminals.rs 9 transitional terminal model/service types still live under top-level terminals
+API_LIVE_RUNTIME_IMPORT anyharness/crates/anyharness-lib/src/api/http/workspaces_contract.rs 2 transitional workspace contract mapper still reads terminal model types from top-level terminals
+API_LIVE_RUNTIME_IMPORT anyharness/crates/anyharness-lib/src/api/ws/terminals.rs 2 transitional terminal websocket still reads terminal runtime helpers from top-level terminals
 SESSION_STORE_LIVE_IMPORT anyharness/crates/anyharness-lib/src/sessions/store/events.rs 1 transitional session event sanitizer still lives under ACP runtime
 SESSION_STORE_LIVE_IMPORT anyharness/crates/anyharness-lib/src/sessions/store/notifications.rs 1 transitional raw notification sanitizer still lives under ACP runtime
+CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/mcp_bindings/injection.rs 2 transitional session MCP injection still imports product MCP modules
+CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/mcp_bindings/product_catalog.rs 2 transitional session MCP catalog still imports product MCP auth modules
+CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/mcp_bindings/selection.rs 2 transitional session MCP selection still imports product MCP modules
+CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/prompt.rs 2 transitional session prompt projection still imports plan types
+CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/mod.rs 1 transitional session runtime still owns plan service wiring
+CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/plans.rs 2 transitional session runtime still coordinates plan domain directly
+CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/prompt.rs 2 transitional session prompt runtime still coordinates plan domain directly
+CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/service.rs 1 transitional session service still accepts mobility attachment domain data
+CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/workspaces/files_runtime.rs 1 transitional workspace files runtime still serves cowork artifact files directly
 LIVE_SESSION_PRIVATE_IMPORT anyharness/crates/anyharness-lib/src/acp/manager.rs 9 transitional AcpManager still constructs live session actors
 LIVE_SESSION_PRIVATE_IMPORT anyharness/crates/anyharness-lib/src/acp/replay_actor.rs 7 transitional replay actor still lives under acp
 LIVE_SESSION_PRIVATE_IMPORT anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1 transitional cowork wake path still constructs actor commands
