@@ -23,6 +23,7 @@ export function SidebarNavRow({
   shortcutLabel,
   shortcutRevealVisible,
   onPress,
+  className = "",
   ...props
 }: SidebarNavRowProps) {
   return (
@@ -31,7 +32,7 @@ export function SidebarNavRow({
       active={active}
       disabled={disabled}
       onPress={onPress}
-      className="h-[30px] gap-2 px-2 py-1 text-sm leading-4 focus-visible:outline-offset-[-2px]"
+      className={`h-[30px] gap-2 px-2 py-1 text-sm leading-4 focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
       <div className="flex size-5 shrink-0 items-center justify-center">
