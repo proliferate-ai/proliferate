@@ -15,8 +15,45 @@ ALLOWLIST_PATH = REPO_ROOT / "scripts" / "anyharness_boundaries_allowlist.txt"
 HTTP_TRANSPORT_ROOTS = {"axum", "headers", "http", "http_body", "tower", "utoipa"}
 PRODUCT_DOMAIN_ROOTS = {"domains", "repo_roots", "sessions", "workspaces"}
 LIVE_RUNTIME_ROOTS = {"acp", "live", "terminals"}
+PRODUCT_SURFACE_DOMAINS = {"cowork", "mobility", "plans", "plugins", "reviews"}
+DOMAIN_PATH_PREFIXES = (
+    "anyharness/crates/anyharness-lib/src/domains/",
+    "anyharness/crates/anyharness-lib/src/repo_roots/",
+    "anyharness/crates/anyharness-lib/src/sessions/",
+    "anyharness/crates/anyharness-lib/src/terminals/",
+    "anyharness/crates/anyharness-lib/src/workspaces/",
+)
+CORE_DOMAIN_PATH_PREFIXES = (
+    "anyharness/crates/anyharness-lib/src/repo_roots/",
+    "anyharness/crates/anyharness-lib/src/sessions/",
+    "anyharness/crates/anyharness-lib/src/terminals/",
+    "anyharness/crates/anyharness-lib/src/workspaces/",
+)
+LIVE_SESSIONS_PREFIX = "anyharness/crates/anyharness-lib/src/live/sessions/"
+LIVE_SESSIONS_ACTOR_PREFIX = "anyharness/crates/anyharness-lib/src/live/sessions/actor/"
+LIVE_SESSIONS_HANDLE = "anyharness/crates/anyharness-lib/src/live/sessions/handle.rs"
+LIVE_SESSIONS_PRIVATE_MODULES = {
+    "actor",
+    "background_work",
+    "connection",
+    "event_sink",
+    "interactions",
+    "replay",
+}
+SESSION_EVENT_SINK_PREFIXES = (
+    "anyharness/crates/anyharness-lib/src/acp/event_sink/",
+    "anyharness/crates/anyharness-lib/src/live/sessions/event_sink/",
+)
 TOKEN_RE = re.compile(r"r#[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*|::|[{}(),;*]")
 USE_START_RE = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+")
+SESSION_COMMAND_USE_RE = re.compile(
+    r"(?:\bSessionCommand|crate::live::sessions::actor::command::SessionCommand)\s*::"
+)
+COMMAND_TX_ACCESS_RE = re.compile(r"\.command_tx\b")
+CONTRACT_REQUEST_RESPONSE_RE = re.compile(
+    r"\b(?:(?:anyharness_contract::)?v1(?:::[A-Za-z_][A-Za-z0-9_]*)*)::"
+    r"([A-Z][A-Za-z0-9_]*(?:Request|Response))\b"
+)
 
 
 @dataclass(frozen=True)
@@ -78,6 +115,15 @@ class ImportPath:
     def starts_with_crate(self, *prefix: str) -> bool:
         return self.parts[: len(prefix) + 1] == ("crate", *prefix)
 
+    def starts_with(self, *prefix: str) -> bool:
+        return self.parts[: len(prefix)] == prefix
+
+    @property
+    def leaf(self) -> str | None:
+        if not self.parts:
+            return None
+        return self.parts[-1]
+
 
 def strip_line_comment(line: str) -> str:
     return line.split("//", 1)[0]
@@ -89,6 +135,69 @@ def relative(path: Path) -> str:
 
 def is_under(relative_path: str, prefix: str) -> bool:
     return relative_path.startswith(prefix)
+
+
+def is_domain_path(relative_path: str) -> bool:
+    return any(is_under(relative_path, prefix) for prefix in DOMAIN_PATH_PREFIXES)
+
+
+def is_core_domain_path(relative_path: str) -> bool:
+    return any(is_under(relative_path, prefix) for prefix in CORE_DOMAIN_PATH_PREFIXES)
+
+
+def is_product_surface_domain_import(import_path: ImportPath) -> bool:
+    return (
+        len(import_path.parts) >= 3
+        and import_path.parts[0] == "crate"
+        and import_path.parts[1] == "domains"
+        and import_path.parts[2] in PRODUCT_SURFACE_DOMAINS
+    )
+
+
+def is_live_session_private_import(import_path: ImportPath) -> bool:
+    return (
+        len(import_path.parts) >= 4
+        and import_path.parts[0] == "crate"
+        and import_path.parts[1] == "live"
+        and import_path.parts[2] == "sessions"
+        and import_path.parts[3] in LIVE_SESSIONS_PRIVATE_MODULES
+    )
+
+
+def is_session_command_import(import_path: ImportPath) -> bool:
+    return (
+        import_path.starts_with_crate("live", "sessions", "actor", "command")
+        and import_path.leaf == "SessionCommand"
+    )
+
+
+def is_contract_request_response_import(import_path: ImportPath) -> bool:
+    return (
+        import_path.starts_with("anyharness_contract", "v1")
+        and import_path.leaf is not None
+        and (import_path.leaf.endswith("Request") or import_path.leaf.endswith("Response"))
+    )
+
+
+def in_api_or_app(relative_path: str) -> bool:
+    return (
+        is_under(relative_path, "anyharness/crates/anyharness-lib/src/api/")
+        or is_under(relative_path, "anyharness/crates/anyharness-lib/src/app/")
+    )
+
+
+def in_live_sessions(relative_path: str) -> bool:
+    return is_under(relative_path, LIVE_SESSIONS_PREFIX)
+
+
+def in_command_tx_allowed_path(relative_path: str) -> bool:
+    return relative_path == LIVE_SESSIONS_HANDLE or is_under(
+        relative_path, LIVE_SESSIONS_ACTOR_PREFIX
+    )
+
+
+def in_session_event_sink(relative_path: str) -> bool:
+    return any(is_under(relative_path, prefix) for prefix in SESSION_EVENT_SINK_PREFIXES)
 
 
 def should_skip(path: Path) -> bool:
@@ -261,7 +370,7 @@ def check_api_import(
 ) -> None:
     add_if(
         violations,
-        import_path.starts_with_crate("acp") or import_path.starts_with_crate("live"),
+        import_path.crate_root in LIVE_RUNTIME_ROOTS,
         "API_LIVE_RUNTIME_IMPORT",
         path,
         import_path.crate_root_line,
@@ -281,6 +390,21 @@ def check_domains_import(
         path,
         import_path.crate_root_line,
         "domains/** must not import api/**",
+    )
+
+
+def check_core_domain_import(
+    violations: list[Violation],
+    path: Path,
+    import_path: ImportPath,
+) -> None:
+    add_if(
+        violations,
+        is_product_surface_domain_import(import_path),
+        "CORE_DOMAIN_PRODUCT_IMPORT",
+        path,
+        import_path.crate_root_line,
+        "core domains must not directly import product surface domains",
     )
 
 
@@ -374,7 +498,7 @@ def check_event_sink_import(
         "EVENT_SINK_API_IMPORT",
         path,
         import_path.crate_root_line,
-        "acp/event_sink/** must not import api/**",
+        "session event sink code must not import api/**",
     )
     add_if(
         violations,
@@ -382,7 +506,7 @@ def check_event_sink_import(
         "EVENT_SINK_HTTP_TRANSPORT_IMPORT",
         path,
         import_path.lines[0] if import_path.lines else 1,
-        "acp/event_sink/** must not import HTTP transport crates",
+        "session event sink code must not import HTTP transport crates",
     )
 
 
@@ -418,15 +542,119 @@ def check_persistence_import(
     )
 
 
+def check_live_session_private_import(
+    violations: list[Violation],
+    path: Path,
+    import_path: ImportPath,
+) -> None:
+    rel = relative(path)
+    add_if(
+        violations,
+        not in_live_sessions(rel) and is_live_session_private_import(import_path),
+        "LIVE_SESSION_PRIVATE_IMPORT",
+        path,
+        import_path.crate_root_line,
+        "live session actor/connection internals must stay inside live/sessions/**",
+    )
+    add_if(
+        violations,
+        not in_live_sessions(rel) and is_session_command_import(import_path),
+        "SESSION_COMMAND_IMPORT",
+        path,
+        import_path.lines[-1] if import_path.lines else import_path.crate_root_line,
+        "SessionCommand is a private actor command and must not be imported outside live/sessions/**",
+    )
+
+
+def check_app_state_import(
+    violations: list[Violation],
+    path: Path,
+    import_path: ImportPath,
+) -> None:
+    rel = relative(path)
+    add_if(
+        violations,
+        not in_api_or_app(rel)
+        and import_path.starts_with_crate("app")
+        and import_path.leaf == "AppState",
+        "APP_STATE_IMPORT",
+        path,
+        import_path.lines[-1] if import_path.lines else import_path.crate_root_line,
+        "AppState must stay at the API/app/test-support boundary",
+    )
+
+
+def check_domain_contract_import(
+    violations: list[Violation],
+    path: Path,
+    import_path: ImportPath,
+) -> None:
+    rel = relative(path)
+    add_if(
+        violations,
+        is_domain_path(rel) and is_contract_request_response_import(import_path),
+        "DOMAIN_CONTRACT_REQUEST_RESPONSE",
+        path,
+        import_path.lines[-1] if import_path.lines else 1,
+        "domain code must not use contract request/response types below the API mapper boundary",
+    )
+
+
+def check_line_patterns(violations: list[Violation], path: Path) -> None:
+    rel = relative(path)
+    allow_session_private = in_live_sessions(rel)
+    allow_command_tx = in_command_tx_allowed_path(rel)
+    allow_app_state = in_api_or_app(rel)
+    check_contract_types = is_domain_path(rel)
+
+    for lineno, raw_line in enumerate(path.read_text().splitlines(), start=1):
+        line = strip_line_comment(raw_line)
+        is_use_line = line.lstrip().startswith("use ")
+        add_if(
+            violations,
+            not allow_session_private and SESSION_COMMAND_USE_RE.search(line) is not None,
+            "SESSION_COMMAND_USE",
+            path,
+            lineno,
+            "SessionCommand construction/use must stay behind the live session handle",
+        )
+        add_if(
+            violations,
+            not allow_command_tx and COMMAND_TX_ACCESS_RE.search(line) is not None,
+            "LIVE_SESSION_COMMAND_TX_ACCESS",
+            path,
+            lineno,
+            "LiveSessionHandle.command_tx must not be accessed outside the live session boundary",
+        )
+        add_if(
+            violations,
+            not allow_app_state and not is_use_line and "crate::app::AppState" in line,
+            "APP_STATE_IMPORT",
+            path,
+            lineno,
+            "AppState must stay at the API/app/test-support boundary",
+        )
+        if check_contract_types and not is_use_line:
+            add_if(
+                violations,
+                CONTRACT_REQUEST_RESPONSE_RE.search(line) is not None,
+                "DOMAIN_CONTRACT_REQUEST_RESPONSE",
+                path,
+                lineno,
+                "domain code must not use contract request/response types below the API mapper boundary",
+            )
+
+
 def check_file(path: Path) -> list[Violation]:
     rel = relative(path)
     violations: list[Violation] = []
     in_api = is_under(rel, "anyharness/crates/anyharness-lib/src/api/")
     in_domains = is_under(rel, "anyharness/crates/anyharness-lib/src/domains/")
+    in_core_domain = is_core_domain_path(rel)
     in_adapters = is_under(rel, "anyharness/crates/anyharness-lib/src/adapters/")
     in_integrations = is_under(rel, "anyharness/crates/anyharness-lib/src/integrations/")
     in_session_store = is_under(rel, "anyharness/crates/anyharness-lib/src/sessions/store/")
-    in_event_sink = is_under(rel, "anyharness/crates/anyharness-lib/src/acp/event_sink/")
+    in_event_sink = in_session_event_sink(rel)
     in_persistence = is_under(rel, "anyharness/crates/anyharness-lib/src/persistence/")
 
     for start_line, lines in iter_use_statements(path):
@@ -437,6 +665,8 @@ def check_file(path: Path) -> list[Violation]:
                 check_api_import(violations, path, import_path)
             if in_domains:
                 check_domains_import(violations, path, import_path)
+            if in_core_domain:
+                check_core_domain_import(violations, path, import_path)
             if in_adapters:
                 check_adapters_import(violations, path, import_path)
             if in_integrations:
@@ -447,7 +677,11 @@ def check_file(path: Path) -> list[Violation]:
                 check_event_sink_import(violations, path, import_path)
             if in_persistence:
                 check_persistence_import(violations, path, import_path)
+            check_live_session_private_import(violations, path, import_path)
+            check_app_state_import(violations, path, import_path)
+            check_domain_contract_import(violations, path, import_path)
 
+    check_line_patterns(violations, path)
     return violations
 
 
