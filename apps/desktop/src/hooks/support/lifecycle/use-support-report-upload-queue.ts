@@ -14,7 +14,10 @@ import type {
   SupportReportUploadRequest,
   SupportReportUploadResponse,
 } from "@proliferate/cloud-sdk/types";
-import { collectSupportDiagnostics } from "@/lib/access/tauri/diagnostics";
+import {
+  collectSupportDiagnostics,
+  logRendererEvent,
+} from "@/lib/access/tauri/diagnostics";
 import {
   deleteStagedSupportReportAttachment,
   listenSupportReportJobs,
@@ -22,6 +25,12 @@ import {
 } from "@/lib/access/tauri/support";
 import { createSessionDebugClient } from "@/lib/access/anyharness/debug-client";
 import type { SupportReportJob } from "@/lib/domain/support/report-types";
+import {
+  describeSupportReportUploadFailure,
+  shouldShowSupportReportUploadFailureToast,
+  type SupportReportUploadFailure,
+  type SupportReportUploadFailureKind,
+} from "@/lib/domain/support/report-upload-failure";
 import {
   buildSupportReportPackage,
   type SupportReportUploadDependencies,
@@ -39,6 +48,9 @@ interface PersistedSupportReportJob {
   attemptCount: number;
   nextAttemptAt?: string | null;
   lastError?: string | null;
+  lastFailureKind?: SupportReportUploadFailureKind | null;
+  lastFailureToastAt?: string | null;
+  lastFailureToastKind?: SupportReportUploadFailureKind | null;
 }
 
 export function useSupportReportUploadQueue(): void {
@@ -120,9 +132,30 @@ async function drainSupportReportQueue(
       removePersistedJob(entry.job.jobId);
       showToast("Thanks. Report sent.", "info");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Report upload failed.";
-      markPersistedJobFailed(entry.job.jobId, message);
-      showToast("Report could not be sent. We'll retry in the background.");
+      const attemptCount = entry.attemptCount + 1;
+      const failure = describeSupportReportUploadFailure(error, attemptCount);
+      void logRendererEvent({
+        source: "support_report_upload",
+        message: `failed.${failure.kind}`,
+      });
+      if (!failure.retryable) {
+        removePersistedJob(entry.job.jobId);
+        await deleteSupportReportJobAttachments(entry.job);
+        showToast(failure.toastMessage);
+        continue;
+      }
+
+      const nowMs = Date.now();
+      const shouldToast = shouldShowSupportReportUploadFailureToast({
+        failure,
+        lastToastAt: entry.lastFailureToastAt,
+        lastToastKind: entry.lastFailureToastKind,
+        nowMs,
+      });
+      markPersistedJobFailed(entry.job.jobId, failure, new Date(nowMs), shouldToast);
+      if (shouldToast) {
+        showToast(failure.toastMessage);
+      }
     }
   }
 }
@@ -202,11 +235,7 @@ async function uploadSupportReport(
     },
   };
   await completeSupportReportUpload(upload.reportId, completeRequest);
-  await Promise.all(job.attachments.map(async (attachment) => {
-    if (attachment.stagedPath) {
-      await deleteStagedSupportReportAttachment(attachment.stagedPath).catch(() => {});
-    }
-  }));
+  await deleteSupportReportJobAttachments(job);
 }
 
 async function putPresignedObject(
@@ -297,17 +326,31 @@ function removePersistedJob(jobId: string): void {
   writePersistedJobs(readPersistedJobs().filter((entry) => entry.job.jobId !== jobId));
 }
 
-function markPersistedJobFailed(jobId: string, message: string): void {
+function markPersistedJobFailed(
+  jobId: string,
+  failure: SupportReportUploadFailure,
+  failedAt: Date,
+  markedToastShown: boolean,
+): void {
   writePersistedJobs(readPersistedJobs().map((entry) => {
     if (entry.job.jobId !== jobId) {
       return entry;
     }
-    const attemptCount = entry.attemptCount + 1;
+    const attemptCount = Math.max(entry.attemptCount + 1, 1);
     return {
       ...entry,
       attemptCount,
-      lastError: message,
-      nextAttemptAt: new Date(Date.now() + retryDelayMs(attemptCount)).toISOString(),
+      lastError: failure.message,
+      lastFailureKind: failure.kind,
+      lastFailureToastAt: markedToastShown
+        ? failedAt.toISOString()
+        : entry.lastFailureToastAt ?? null,
+      lastFailureToastKind: markedToastShown
+        ? failure.kind
+        : entry.lastFailureToastKind ?? null,
+      nextAttemptAt: failure.retryDelayMs == null
+        ? null
+        : new Date(failedAt.getTime() + failure.retryDelayMs).toISOString(),
     };
   }));
 }
@@ -330,16 +373,6 @@ function scheduleNextRetry(
   retryTimerRef.current = window.setTimeout(processQueue, Math.max(1000, next - Date.now()));
 }
 
-function retryDelayMs(attemptCount: number): number {
-  if (attemptCount <= 1) {
-    return 30_000;
-  }
-  if (attemptCount === 2) {
-    return 5 * 60_000;
-  }
-  return 30 * 60_000;
-}
-
 function readPersistedJobs(): PersistedSupportReportJob[] {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -355,4 +388,12 @@ function readPersistedJobs(): PersistedSupportReportJob[] {
 
 function writePersistedJobs(jobs: PersistedSupportReportJob[]): void {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs.slice(-10)));
+}
+
+async function deleteSupportReportJobAttachments(job: SupportReportJob): Promise<void> {
+  await Promise.all(job.attachments.map(async (attachment) => {
+    if (attachment.stagedPath) {
+      await deleteStagedSupportReportAttachment(attachment.stagedPath).catch(() => {});
+    }
+  }));
 }
