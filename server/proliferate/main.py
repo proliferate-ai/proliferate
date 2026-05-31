@@ -13,6 +13,7 @@ import proliferate.db.models.anonymous_telemetry  # noqa: F401
 import proliferate.db.models.automations  # noqa: F401
 import proliferate.db.models.cloud  # noqa: F401
 import proliferate.db.models.organizations  # noqa: F401
+import proliferate.db.models.support  # noqa: F401
 from proliferate.auth.api import router as auth_viewer_router
 from proliferate.auth.desktop.api import router as desktop_router
 from proliferate.auth.identity.api import router as identity_auth_router

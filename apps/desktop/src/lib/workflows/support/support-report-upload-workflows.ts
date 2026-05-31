@@ -1,7 +1,10 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import type { SupportDiagnosticsBundle } from "@/lib/access/tauri/diagnostics";
 import { sanitizeSupportUploadPayload } from "@/lib/domain/support/report-upload-sanitizer";
-import type { SupportReportJob } from "@/lib/domain/support/report-types";
+import type {
+  SupportReportJob,
+  SupportReportServerCorrelation,
+} from "@/lib/domain/support/report-types";
 import type {
   SessionDebugClient,
   SessionDebugResolvedWorkspace,
@@ -39,12 +42,14 @@ interface SupportReportPackageSession {
 }
 
 export interface SupportReportPackage {
-  schemaVersion: 1;
+  schemaVersion: 2;
   generatedAt: string;
+  correlation?: SupportReportServerCorrelation;
   report: {
     jobId: string;
     createdAt: string;
-    message: string;
+    messagePresent: boolean;
+    messageLength: number;
     scope: SupportReportJob["scope"];
     context: SupportReportJob["snapshot"]["context"];
     openedAt: string;
@@ -65,6 +70,7 @@ export async function buildSupportReportPackage<
 >(
   job: SupportReportJob,
   dependencies: SupportReportUploadDependencies<Connection>,
+  serverCorrelation?: SupportReportServerCorrelation,
 ): Promise<SupportReportPackage> {
   const collectionErrors: string[] = [];
   const runtimeDiagnostics = await dependencies.collectDiagnostics().catch((error) => {
@@ -79,12 +85,14 @@ export async function buildSupportReportPackage<
     ));
 
   return sanitizeSupportUploadPayload({
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: dependencies.now().toISOString(),
+    correlation: serverCorrelation,
     report: {
       jobId: job.jobId,
       createdAt: job.createdAt,
-      message: job.message,
+      messagePresent: job.message.trim().length > 0,
+      messageLength: job.message.trim().length,
       scope: job.scope,
       context: job.snapshot.context,
       openedAt: job.snapshot.openedAt,

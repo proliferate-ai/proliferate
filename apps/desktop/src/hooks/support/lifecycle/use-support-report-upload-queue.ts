@@ -7,12 +7,16 @@ import { useEffect, useMemo, useRef } from "react";
 import type { MutableRefObject } from "react";
 import {
   completeSupportReportUpload,
-  createSupportReportUpload,
+  createSupportReport,
+  createSupportReportUploadTargets,
 } from "@proliferate/cloud-sdk/client/support";
 import type {
   SupportReportCompleteRequest,
-  SupportReportUploadRequest,
+  SupportReportCreateRequest,
+  SupportReportCreateResponse,
+  SupportReportUploadFile,
   SupportReportUploadResponse,
+  SupportReportUploadTargetsRequest,
 } from "@proliferate/cloud-sdk/types";
 import {
   collectSupportDiagnostics,
@@ -24,7 +28,12 @@ import {
   readStagedSupportReportAttachment,
 } from "@/lib/access/tauri/support";
 import { createSessionDebugClient } from "@/lib/access/anyharness/debug-client";
-import type { SupportReportJob } from "@/lib/domain/support/report-types";
+import type {
+  SupportReportJob,
+  SupportReportServerCorrelation,
+  SupportReportWorkspaceOption,
+} from "@/lib/domain/support/report-types";
+import { trackProductEvent } from "@/lib/integrations/telemetry/client";
 import {
   describeSupportReportUploadFailure,
   shouldShowSupportReportUploadFailureToast,
@@ -165,12 +174,6 @@ async function uploadSupportReport(
   dependencies: SupportReportUploadDependencies<AnyHarnessResolvedConnection>,
 ): Promise<void> {
   validateAttachmentSizes(job);
-  const reportPackage = await buildSupportReportPackage(job, dependencies);
-  const diagnosticsBlob = jsonBlob(reportPackage);
-  if (diagnosticsBlob.size > DIAGNOSTICS_MAX_BYTES) {
-    throw new Error("Diagnostics are too large to upload.");
-  }
-  const diagnosticsSha256 = await sha256Hex(await diagnosticsBlob.arrayBuffer());
   const attachmentBlobs = await Promise.all(job.attachments.map(async (attachment) => ({
     attachment,
     blob: await loadAttachmentBlob(attachment),
@@ -179,25 +182,25 @@ async function uploadSupportReport(
     sha256Hex(await blob.arrayBuffer())
   ));
 
-  const uploadRequest: SupportReportUploadRequest = {
-    message: job.message,
-    context: job.snapshot.context,
-    scope: job.scope,
+  const report = await createSupportReport(buildCreateReportRequest(job, attachmentBlobs.length));
+  const serverCorrelation = toLocalServerCorrelation(report);
+  const reportPackage = await buildSupportReportPackage(job, dependencies, serverCorrelation);
+  const diagnosticsBlob = jsonBlob(reportPackage);
+  if (diagnosticsBlob.size > DIAGNOSTICS_MAX_BYTES) {
+    throw new Error("Diagnostics are too large to upload.");
+  }
+  const diagnosticsSha256 = await sha256Hex(await diagnosticsBlob.arrayBuffer());
+
+  const uploadRequest: SupportReportUploadTargetsRequest = {
     diagnostics: {
       contentType: "application/json",
       sizeBytes: diagnosticsBlob.size,
       sha256: diagnosticsSha256,
     },
-    attachments: attachmentBlobs.map(({ attachment, blob }, index) => ({
-      clientFileId: attachment.clientFileId,
-      fileName: attachment.fileName,
-      contentType: attachment.contentType || "application/octet-stream",
-      sizeBytes: blob.size,
-      sha256: attachmentHashes[index] ?? "",
-    })),
+    attachments: attachmentUploadFiles(attachmentBlobs, attachmentHashes),
   };
 
-  const upload = await createSupportReportUpload(uploadRequest);
+  const upload = await createSupportReportUploadTargets(report.reportId, uploadRequest);
   if (!upload.diagnostics) {
     throw new Error("Cloud did not return a diagnostics upload URL.");
   }
@@ -227,15 +230,134 @@ async function uploadSupportReport(
     },
     attachments: completedAttachments,
     packageManifest: {
-      schemaVersion: 1,
+      schemaVersion: 2,
       jobId: job.jobId,
+      reportId: report.reportId,
       generatedAt: reportPackage.generatedAt,
       diagnosticsBytes: diagnosticsBlob.size,
       attachmentCount: completedAttachments.length,
+      cloudDiagnosticsStatus: report.cloudDiagnosticsStatus,
     },
   };
   await completeSupportReportUpload(upload.reportId, completeRequest);
+  trackSupportReportSubmitted(job, serverCorrelation, completedAttachments.length);
   await deleteSupportReportJobAttachments(job);
+}
+
+function buildCreateReportRequest(
+  job: SupportReportJob,
+  attachmentCount: number,
+): SupportReportCreateRequest {
+  return {
+    clientJobId: job.jobId,
+    message: job.message,
+    sourceSurface: "desktop",
+    context: job.snapshot.context,
+    scope: job.scope,
+    workspaceRefs: workspaceRefsForJob(job),
+    expectedClientUploads: {
+      diagnostics: true,
+      attachmentCount,
+    },
+  };
+}
+
+function workspaceRefsForJob(
+  job: SupportReportJob,
+): NonNullable<SupportReportCreateRequest["workspaceRefs"]> {
+  const selectedIds = workspaceIdsForJob(job);
+  const byId = new Map(job.snapshot.workspaceOptions.map((workspace) => [workspace.id, workspace]));
+  return selectedIds.map((workspaceId) => workspaceRefFromOption(
+    byId.get(workspaceId) ?? fallbackWorkspaceOption(workspaceId),
+  ));
+}
+
+function workspaceRefFromOption(
+  workspace: SupportReportWorkspaceOption,
+): NonNullable<SupportReportCreateRequest["workspaceRefs"]>[number] {
+  return {
+    id: workspace.id,
+    location: workspace.location,
+    cloudWorkspaceId: workspace.cloudWorkspaceId ?? undefined,
+    cloudTargetId: workspace.cloudTargetId ?? undefined,
+    sandboxProfileId: workspace.sandboxProfileId ?? undefined,
+    anyharnessWorkspaceId: workspace.anyharnessWorkspaceId ?? undefined,
+    exposureId: workspace.exposureId ?? undefined,
+    materializationId: workspace.materializationId ?? undefined,
+    sessionIds: workspace.sessionIds ?? [],
+    status: workspace.status ?? undefined,
+    visibility: workspace.visibility ?? undefined,
+    sandboxType: workspace.sandboxType ?? undefined,
+  };
+}
+
+function fallbackWorkspaceOption(workspaceId: string): SupportReportWorkspaceOption {
+  const isCloud = workspaceId.startsWith("cloud:");
+  return {
+    id: workspaceId,
+    label: workspaceId,
+    location: isCloud ? "cloud" : "local",
+    cloudWorkspaceId: isCloud ? workspaceId.slice("cloud:".length) : null,
+  };
+}
+
+function workspaceIdsForJob(job: SupportReportJob): string[] {
+  if (job.scope.kind === "app_only") {
+    return [];
+  }
+  if (job.scope.workspaceIds.length > 0) {
+    return job.scope.workspaceIds;
+  }
+  return job.snapshot.defaultWorkspaceId ? [job.snapshot.defaultWorkspaceId] : [];
+}
+
+function attachmentUploadFiles(
+  attachmentBlobs: Array<{
+    attachment: SupportReportJob["attachments"][number];
+    blob: Blob;
+  }>,
+  attachmentHashes: string[],
+): SupportReportUploadFile[] {
+  return attachmentBlobs.map(({ attachment, blob }, index) => ({
+    clientFileId: attachment.clientFileId,
+    fileName: attachment.fileName,
+    contentType: attachment.contentType || "application/octet-stream",
+    sizeBytes: blob.size,
+    sha256: attachmentHashes[index] ?? "",
+  }));
+}
+
+function toLocalServerCorrelation(
+  response: SupportReportCreateResponse,
+): SupportReportServerCorrelation {
+  return {
+    reportId: response.serverCorrelation.reportId,
+    requestId: response.serverCorrelation.requestId ?? null,
+    ownerUserId: response.serverCorrelation.ownerUserId,
+    primaryOrganizationId: response.serverCorrelation.primaryOrganizationId ?? null,
+    primaryTenantId: response.serverCorrelation.primaryTenantId,
+    tenantIds: response.serverCorrelation.tenantIds ?? [],
+    cloudWorkspaceIds: response.serverCorrelation.cloudWorkspaceIds ?? [],
+    cloudTargetIds: response.serverCorrelation.cloudTargetIds ?? [],
+    anyharnessWorkspaceIds: response.serverCorrelation.anyharnessWorkspaceIds ?? [],
+    sessionIds: response.serverCorrelation.sessionIds ?? [],
+  };
+}
+
+function trackSupportReportSubmitted(
+  job: SupportReportJob,
+  correlation: SupportReportServerCorrelation,
+  attachmentCount: number,
+): void {
+  const workspaceIds = workspaceIdsForJob(job);
+  trackProductEvent("support_report_submitted", {
+    source_surface: "desktop",
+    scope_kind: job.scope.kind,
+    diagnostics_included: true,
+    attachment_count: attachmentCount,
+    workspace_count: workspaceIds.length,
+    cloud_workspace_count: correlation.cloudWorkspaceIds.length,
+  });
 }
 
 async function putPresignedObject(

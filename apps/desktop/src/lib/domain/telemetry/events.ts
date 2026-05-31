@@ -7,6 +7,10 @@ export type DesktopTelemetryRoute =
   | "settings"
   | "unknown";
 export type DesktopWorkspaceKind = "cloud" | "local";
+export type SupportReportScopeKind =
+  | "most_recent_workspace"
+  | "choose_workspace"
+  | "app_only";
 export type RuntimeConnectionTelemetryState = "connecting" | "failed" | "healthy";
 export type RuntimeInputSyncTelemetryTrigger =
   | "preference_enabled"
@@ -200,6 +204,14 @@ export interface DesktopProductEventMap {
   };
   screen_viewed: {
     route: DesktopTelemetryRoute;
+  };
+  support_report_submitted: {
+    source_surface: "desktop";
+    scope_kind: SupportReportScopeKind;
+    diagnostics_included: boolean;
+    attachment_count: number;
+    workspace_count: number;
+    cloud_workspace_count: number;
   };
   workspace_created: {
     creation_kind: WorkspaceCreationKind;

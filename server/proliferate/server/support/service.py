@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime
-from pathlib import PurePosixPath
-from uuid import uuid4
+from uuid import UUID, uuid4
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
+from proliferate.db.store import support_diagnostics as diagnostics_store
+from proliferate.db.store import support_reports
 from proliferate.integrations.aws import (
     AwsIntegrationError,
     get_json_object,
@@ -13,173 +15,307 @@ from proliferate.integrations.aws import (
     presign_put_object,
     put_json_object,
 )
-from proliferate.integrations.slack.errors import SlackWebhookError
-from proliferate.integrations.slack.messages import (
-    SlackMessageField,
-    build_mrkdwn_message_blocks,
+from proliferate.middleware.request_context import (
+    get_request_id,
+    set_resource_tenant_context,
+    set_support_report_context,
 )
-from proliferate.integrations.slack.webhooks import post_incoming_webhook
-from proliferate.middleware.request_context import get_request_id
-from proliferate.server.support.domain.message import (
-    build_support_message_plan,
-    build_support_report_plan,
-    normalize_support_message,
+from proliferate.server.support.domain.report_records import (
+    cloud_workspace_ids_from_refs,
+    expected_manifest_keys,
+    expected_upload_keys,
+    now_iso,
+    object_manifest_from_targets,
+    safe_file_name,
+    support_context_record,
+    support_request_record,
+    tenant_context_for_report,
+    workspace_refs_for_create,
 )
 from proliferate.server.support.errors import (
-    SupportDeliveryFailed,
-    SupportMessageEmpty,
     SupportReportStorageUnavailable,
     SupportReportUploadInvalid,
-    SupportUnavailable,
 )
 from proliferate.server.support.models import (
     SupportReportAttachmentUploadTarget,
     SupportReportCompleteRequest,
     SupportReportCompleteResponse,
+    SupportReportCreateRequest,
+    SupportReportCreateResponse,
     SupportReportUploadRequest,
     SupportReportUploadResponse,
     SupportReportUploadTarget,
+    SupportReportUploadTargetsRequest,
+    support_report_correlation_record,
+    support_report_create_response,
+)
+from proliferate.server.support.notifications import (
+    notify_support_report,
 )
 
-logger = logging.getLogger(__name__)
 
-
-async def send_support_message(
+async def create_support_report(
     *,
+    db: AsyncSession,
+    sender_user_id: UUID,
     sender_email: str,
     sender_display_name: str | None,
-    message: str,
-    context: dict[str, object] | None = None,
-) -> None:
-    webhook_url = settings.support_slack_webhook_url.strip()
-    if not webhook_url:
-        raise SupportUnavailable()
-
-    cleaned_message = normalize_support_message(message)
-    if not cleaned_message:
-        raise SupportMessageEmpty()
-
-    plan = build_support_message_plan(
-        sender_name=sender_display_name or sender_email,
-        sender_email=sender_email,
-        message=cleaned_message,
-        context=context,
-        request_id=get_request_id(),
+    body: SupportReportCreateRequest,
+) -> SupportReportCreateResponse:
+    _validate_report_scope(body.scope)
+    _support_report_bucket()
+    workspace_refs = workspace_refs_for_create(body)
+    authorized_cloud_refs = await _authorized_cloud_refs(
+        db,
+        sender_user_id=sender_user_id,
+        workspace_refs=workspace_refs,
     )
-    blocks = build_mrkdwn_message_blocks(
-        title="*New support message*",
-        body=plan.message,
-        fields=tuple(SlackMessageField(field.label, field.value) for field in plan.fields),
+    tenant_context = tenant_context_for_report(
+        sender_user_id=sender_user_id,
+        authorized_cloud_refs=authorized_cloud_refs,
     )
 
-    try:
-        await post_incoming_webhook(
-            webhook_url=webhook_url,
-            text=plan.fallback_text,
-            blocks=blocks,
+    existing = await support_reports.get_report_by_owner_client_job(
+        db,
+        owner_user_id=sender_user_id,
+        client_job_id=body.client_job_id,
+    )
+    if existing and existing.request_object_written_at is not None:
+        _install_report_correlation(existing)
+        return support_report_create_response(existing)
+
+    report = existing
+    if report is None:
+        report_id = uuid4().hex
+        report = await support_reports.create_report(
+            db,
+            report_id=report_id,
+            client_job_id=body.client_job_id,
+            owner_user_id=sender_user_id,
+            primary_organization_id=tenant_context.primary_organization_id,
+            primary_tenant_id=tenant_context.primary_tenant_id,
+            tenant_ids=tenant_context.tenant_ids,
+            s3_bucket=_support_report_bucket(),
+            s3_prefix=_report_prefix(report_id),
+            source_surface=body.source_surface,
+            source_context=support_context_record(body.context),
+            workspace_refs=workspace_refs,
+            telemetry_refs=(
+                body.telemetry_refs.model_dump(by_alias=True, exclude_none=True)
+                if body.telemetry_refs
+                else {}
+            ),
+            request_id=get_request_id(),
+            cloud_diagnostics_status="pending" if authorized_cloud_refs else "not_applicable",
         )
-    except SlackWebhookError as exc:
-        raise SupportDeliveryFailed() from exc
+
+    _install_report_correlation(report)
+    request_record = support_request_record(
+        report=report,
+        sender_email=sender_email,
+        sender_display_name=sender_display_name,
+        message=body.message,
+        scope=body.scope.model_dump(by_alias=True),
+        correlation=support_report_correlation_record(report),
+    )
+    try:
+        await put_json_object(
+            bucket=report.s3_bucket,
+            key=f"{report.s3_prefix}/request.json",
+            value=request_record,
+            region_name=_support_report_region(),
+        )
+    except AwsIntegrationError as exc:
+        raise SupportReportStorageUnavailable() from exc
+
+    report = await support_reports.mark_request_object_written(db, report_id=report.id)
+    return support_report_create_response(report)
+
+
+async def create_support_report_upload_targets(
+    *,
+    db: AsyncSession,
+    sender_user_id: UUID,
+    report_id: str,
+    body: SupportReportUploadTargetsRequest,
+) -> SupportReportUploadResponse:
+    report = await support_reports.get_report_by_id(db, report_id)
+    if report is None or report.owner_user_id != sender_user_id:
+        raise SupportReportUploadInvalid("Unknown support report upload.")
+    if report.status not in {"created", "uploading"}:
+        raise SupportReportUploadInvalid("Support report upload is already completed.")
+
+    _install_report_correlation(report)
+    _validate_upload_target_request(body)
+    targets = await _create_upload_targets_for_report(report=report, body=body)
+    manifest = object_manifest_from_targets(
+        diagnostics=body.diagnostics,
+        attachments=body.attachments,
+        targets=targets,
+    )
+    await support_reports.update_report_upload_manifest(
+        db,
+        report_id=report.id,
+        object_manifest=manifest,
+    )
+    return targets
 
 
 async def create_support_report_upload(
     *,
+    db: AsyncSession,
+    sender_user_id: UUID,
     sender_email: str,
     sender_display_name: str | None,
     body: SupportReportUploadRequest,
 ) -> SupportReportUploadResponse:
     _validate_report_upload_request(body)
-    bucket = _support_report_bucket()
-    region = _support_report_region()
-
-    report_id = uuid4().hex
-    prefix = _report_prefix(report_id)
-    request_id = get_request_id()
-    expires_seconds = settings.support_report_upload_url_expires_seconds
-
-    diagnostics_target: SupportReportUploadTarget | None = None
-    if body.diagnostics is not None:
-        diagnostics_key = f"{prefix}/diagnostics.json"
-        diagnostics_target = await _presign_target(
-            bucket=bucket,
-            key=diagnostics_key,
-            content_type=body.diagnostics.content_type,
-            max_size_bytes=settings.support_report_diagnostics_max_bytes,
-            expires_seconds=expires_seconds,
-            region_name=region,
-        )
-
-    attachment_targets: list[SupportReportAttachmentUploadTarget] = []
-    for attachment in body.attachments:
-        attachment_key = (
-            f"{prefix}/attachments/{attachment.client_file_id}/"
-            f"{_safe_file_name(attachment.file_name)}"
-        )
-        target = await _presign_target(
-            bucket=bucket,
-            key=attachment_key,
-            content_type=attachment.content_type,
-            max_size_bytes=settings.support_report_attachment_max_bytes,
-            expires_seconds=expires_seconds,
-            region_name=region,
-        )
-        attachment_targets.append(
-            SupportReportAttachmentUploadTarget(
-                clientFileId=attachment.client_file_id,
-                objectKey=target.object_key,
-                putUrl=target.put_url,
-                contentType=target.content_type,
-                maxSizeBytes=target.max_size_bytes,
-                expiresInSeconds=target.expires_in_seconds,
-                headers=target.headers,
-            )
-        )
-
-    context_record = (
-        body.context.model_dump(by_alias=True, exclude_none=True) if body.context else None
+    create_response = await create_support_report(
+        db=db,
+        sender_user_id=sender_user_id,
+        sender_email=sender_email,
+        sender_display_name=sender_display_name,
+        body=SupportReportCreateRequest(
+            clientJobId=uuid4().hex,
+            message=body.message,
+            sourceSurface="desktop",
+            context=body.context,
+            scope=body.scope,
+            workspaceRefs=[],
+            expectedClientUploads={
+                "diagnostics": body.diagnostics is not None,
+                "attachmentCount": len(body.attachments),
+            },
+        ),
     )
-    diagnostics_record = (
-        diagnostics_target.model_dump(by_alias=True) if diagnostics_target else None
-    )
-    record = {
-        "schemaVersion": 1,
-        "status": "initiated",
-        "reportId": report_id,
-        "requestId": request_id,
-        "createdAt": _now_iso(),
-        "sender": {
-            "email": sender_email,
-            "displayName": sender_display_name,
-        },
-        "message": body.message.strip(),
-        "context": context_record,
-        "scope": body.scope.model_dump(by_alias=True),
-        "diagnostics": body.diagnostics.model_dump(by_alias=True) if body.diagnostics else None,
-        "attachments": [attachment.model_dump(by_alias=True) for attachment in body.attachments],
-        "objects": {
-            "diagnostics": diagnostics_record,
-            "attachments": [target.model_dump(by_alias=True) for target in attachment_targets],
-        },
-    }
-
-    try:
-        await put_json_object(
-            bucket=bucket,
-            key=f"{prefix}/request.json",
-            value=record,
-            region_name=region,
-        )
-    except AwsIntegrationError as exc:
-        raise SupportReportStorageUnavailable() from exc
-
-    return SupportReportUploadResponse(
-        reportId=report_id,
-        diagnostics=diagnostics_target,
-        attachments=attachment_targets,
+    return await create_support_report_upload_targets(
+        db=db,
+        sender_user_id=sender_user_id,
+        report_id=create_response.report_id,
+        body=SupportReportUploadTargetsRequest(
+            diagnostics=body.diagnostics,
+            attachments=body.attachments,
+        ),
     )
 
 
 async def complete_support_report_upload(
+    *,
+    db: AsyncSession,
+    sender_user_id: UUID,
+    sender_email: str,
+    sender_display_name: str | None,
+    report_id: str,
+    body: SupportReportCompleteRequest,
+) -> SupportReportCompleteResponse:
+    report = await support_reports.get_report_by_id(db, report_id)
+    if report is not None:
+        return await _complete_db_backed_report(
+            db=db,
+            report=report,
+            sender_user_id=sender_user_id,
+            sender_email=sender_email,
+            sender_display_name=sender_display_name,
+            body=body,
+        )
+
+    return await _complete_legacy_report(
+        sender_email=sender_email,
+        sender_display_name=sender_display_name,
+        report_id=report_id,
+        body=body,
+    )
+
+
+async def _complete_db_backed_report(
+    *,
+    db: AsyncSession,
+    report: support_reports.SupportReportSnapshot,
+    sender_user_id: UUID,
+    sender_email: str,
+    sender_display_name: str | None,
+    body: SupportReportCompleteRequest,
+) -> SupportReportCompleteResponse:
+    if report.owner_user_id != sender_user_id:
+        raise SupportReportUploadInvalid("Support report upload belongs to another user.")
+    if report.status == "completed":
+        return SupportReportCompleteResponse(reportId=report.id)
+
+    _install_report_correlation(report)
+    expected_keys = expected_manifest_keys(report.object_manifest)
+    completed_keys = [
+        *([body.diagnostics.object_key] if body.diagnostics else []),
+        *[attachment.object_key for attachment in body.attachments],
+    ]
+    unexpected = sorted(set(completed_keys).difference(expected_keys))
+    if unexpected:
+        raise SupportReportUploadInvalid("Support report completion included unknown objects.")
+
+    if body.diagnostics is not None:
+        await _verify_completed_object(
+            bucket=report.s3_bucket,
+            region_name=_support_report_region(),
+            prefix=report.s3_prefix,
+            object_key=body.diagnostics.object_key,
+            expected_size=body.diagnostics.size_bytes,
+        )
+    for attachment in body.attachments:
+        await _verify_completed_object(
+            bucket=report.s3_bucket,
+            region_name=_support_report_region(),
+            prefix=report.s3_prefix,
+            object_key=attachment.object_key,
+            expected_size=attachment.size_bytes,
+        )
+
+    complete_record = {
+        "schemaVersion": 2,
+        "status": "completed",
+        "reportId": report.id,
+        "requestId": get_request_id(),
+        "completedAt": now_iso(),
+        "sender": {
+            "email": sender_email,
+            "displayName": sender_display_name,
+        },
+        "diagnostics": body.diagnostics.model_dump(by_alias=True) if body.diagnostics else None,
+        "attachments": [item.model_dump(by_alias=True) for item in body.attachments],
+        "packageManifest": body.package_manifest,
+        "cloudDiagnosticsStatus": report.cloud_diagnostics_status,
+    }
+    try:
+        await put_json_object(
+            bucket=report.s3_bucket,
+            key=f"{report.s3_prefix}/complete.json",
+            value=complete_record,
+            region_name=_support_report_region(),
+        )
+    except AwsIntegrationError as exc:
+        raise SupportReportStorageUnavailable() from exc
+
+    completed_report, should_notify = await support_reports.mark_report_completed(
+        db,
+        report_id=report.id,
+        complete_request_id=get_request_id(),
+        object_manifest={**report.object_manifest, "completed": complete_record},
+    )
+    if should_notify:
+        await notify_support_report(
+            sender_email=sender_email,
+            sender_display_name=sender_display_name,
+            report_id=completed_report.id,
+            s3_prefix=completed_report.s3_prefix,
+            message="Support report submitted.",
+            context=completed_report.source_context,
+            diagnostics_included=body.diagnostics is not None,
+            attachment_count=len(body.attachments),
+            correlation=support_report_correlation_record(completed_report),
+        )
+        await support_reports.mark_report_slack_notified(db, report_id=completed_report.id)
+    return SupportReportCompleteResponse(reportId=report.id)
+
+
+async def _complete_legacy_report(
     *,
     sender_email: str,
     sender_display_name: str | None,
@@ -203,7 +339,7 @@ async def complete_support_report_upload(
     if isinstance(sender_record, dict) and sender_record.get("email") != sender_email:
         raise SupportReportUploadInvalid("Support report upload belongs to another user.")
 
-    expected_keys = _expected_upload_keys(request_record)
+    expected_keys = expected_upload_keys(request_record)
     completed_keys = [
         *([body.diagnostics.object_key] if body.diagnostics else []),
         *[attachment.object_key for attachment in body.attachments],
@@ -234,7 +370,7 @@ async def complete_support_report_upload(
         "status": "completed",
         "reportId": report_id,
         "requestId": get_request_id(),
-        "completedAt": _now_iso(),
+        "completedAt": now_iso(),
         "sender": {
             "email": sender_email,
             "displayName": sender_display_name,
@@ -255,7 +391,7 @@ async def complete_support_report_upload(
         raise SupportReportStorageUnavailable() from exc
 
     context_record = request_record.get("context")
-    await _notify_support_report(
+    await notify_support_report(
         sender_email=sender_email,
         sender_display_name=sender_display_name,
         report_id=report_id,
@@ -264,14 +400,30 @@ async def complete_support_report_upload(
         context=context_record if isinstance(context_record, dict) else None,
         diagnostics_included=body.diagnostics is not None,
         attachment_count=len(body.attachments),
+        correlation=None,
     )
 
     return SupportReportCompleteResponse(reportId=report_id)
 
 
-def _validate_report_upload_request(body: SupportReportUploadRequest) -> None:
-    if body.scope.kind == "choose_workspace" and not body.scope.workspace_ids:
+def _validate_report_scope(scope: object) -> None:
+    kind = getattr(scope, "kind", None)
+    workspace_ids = getattr(scope, "workspace_ids", [])
+    if kind == "choose_workspace" and not workspace_ids:
         raise SupportReportUploadInvalid("Choose at least one workspace.")
+
+
+def _validate_report_upload_request(body: SupportReportUploadRequest) -> None:
+    _validate_report_scope(body.scope)
+    _validate_upload_target_request(
+        SupportReportUploadTargetsRequest(
+            diagnostics=body.diagnostics,
+            attachments=body.attachments,
+        )
+    )
+
+
+def _validate_upload_target_request(body: SupportReportUploadTargetsRequest) -> None:
     if (
         body.diagnostics
         and body.diagnostics.size_bytes > settings.support_report_diagnostics_max_bytes
@@ -291,47 +443,80 @@ def _validate_report_upload_request(body: SupportReportUploadRequest) -> None:
         raise SupportReportUploadInvalid("Attachments are too large.")
 
 
-async def _notify_support_report(
+async def _create_upload_targets_for_report(
     *,
-    sender_email: str,
-    sender_display_name: str | None,
-    report_id: str,
-    s3_prefix: str,
-    message: str,
-    context: dict[str, object] | None,
-    diagnostics_included: bool,
-    attachment_count: int,
-) -> None:
-    webhook_url = settings.support_slack_webhook_url.strip()
-    if not webhook_url:
-        return
+    report: support_reports.SupportReportSnapshot,
+    body: SupportReportUploadTargetsRequest,
+) -> SupportReportUploadResponse:
+    expires_seconds = settings.support_report_upload_url_expires_seconds
+    region = _support_report_region()
 
-    plan = build_support_report_plan(
-        sender_name=sender_display_name or sender_email,
-        sender_email=sender_email,
-        message=normalize_support_message(message) or "Support report submitted.",
-        report_id=report_id,
-        s3_prefix=s3_prefix,
-        diagnostics_included=diagnostics_included,
-        attachment_count=attachment_count,
-        context=context,
-        request_id=get_request_id(),
-    )
-    blocks = build_mrkdwn_message_blocks(
-        title="*New support report*",
-        body=plan.message,
-        fields=tuple(SlackMessageField(field.label, field.value) for field in plan.fields),
-    )
-
-    try:
-        await post_incoming_webhook(
-            webhook_url=webhook_url,
-            text=plan.fallback_text,
-            blocks=blocks,
+    diagnostics_target: SupportReportUploadTarget | None = None
+    if body.diagnostics is not None:
+        diagnostics_target = await _presign_target(
+            bucket=report.s3_bucket,
+            key=f"{report.s3_prefix}/diagnostics.json",
+            content_type=body.diagnostics.content_type,
+            max_size_bytes=settings.support_report_diagnostics_max_bytes,
+            expires_seconds=expires_seconds,
+            region_name=region,
         )
-    except SlackWebhookError as exc:
-        logger.warning("Support report Slack notification failed: %s", exc)
-        return
+
+    attachment_targets: list[SupportReportAttachmentUploadTarget] = []
+    for attachment in body.attachments:
+        target = await _presign_target(
+            bucket=report.s3_bucket,
+            key=(
+                f"{report.s3_prefix}/attachments/{attachment.client_file_id}/"
+                f"{safe_file_name(attachment.file_name)}"
+            ),
+            content_type=attachment.content_type,
+            max_size_bytes=settings.support_report_attachment_max_bytes,
+            expires_seconds=expires_seconds,
+            region_name=region,
+        )
+        attachment_targets.append(
+            SupportReportAttachmentUploadTarget(
+                clientFileId=attachment.client_file_id,
+                objectKey=target.object_key,
+                putUrl=target.put_url,
+                contentType=target.content_type,
+                maxSizeBytes=target.max_size_bytes,
+                expiresInSeconds=target.expires_in_seconds,
+                headers=target.headers,
+            )
+        )
+
+    return SupportReportUploadResponse(
+        reportId=report.id,
+        diagnostics=diagnostics_target,
+        attachments=attachment_targets,
+    )
+
+
+async def _authorized_cloud_refs(
+    db: AsyncSession,
+    *,
+    sender_user_id: UUID,
+    workspace_refs: tuple[dict[str, object], ...],
+) -> tuple[diagnostics_store.AuthorizedCloudWorkspaceSnapshot, ...]:
+    workspace_ids = cloud_workspace_ids_from_refs(workspace_refs)
+    return await diagnostics_store.list_authorized_cloud_workspaces(
+        db,
+        user_id=sender_user_id,
+        workspace_ids=workspace_ids,
+        limit=5,
+    )
+
+
+def _install_report_correlation(report: support_reports.SupportReportSnapshot) -> None:
+    set_support_report_context(report.id)
+    set_resource_tenant_context(
+        organization_id=str(report.primary_organization_id)
+        if report.primary_organization_id
+        else None,
+        tenant_id=report.primary_tenant_id,
+    )
 
 
 async def _presign_target(
@@ -405,29 +590,3 @@ def _report_prefix(report_id: str) -> str:
         raise SupportReportUploadInvalid("Invalid support report ID.")
     day = datetime.now(UTC).strftime("%Y/%m/%d")
     return "/".join(part for part in [cleaned_prefix, day, report_id] if part)
-
-
-def _safe_file_name(file_name: str) -> str:
-    name = PurePosixPath(file_name).name.strip()
-    return name or "attachment"
-
-
-def _expected_upload_keys(request_record: dict[str, object]) -> set[str]:
-    objects = request_record.get("objects")
-    if not isinstance(objects, dict):
-        return set()
-
-    keys: set[str] = set()
-    diagnostics = objects.get("diagnostics")
-    if isinstance(diagnostics, dict) and isinstance(diagnostics.get("objectKey"), str):
-        keys.add(str(diagnostics["objectKey"]))
-    attachments = objects.get("attachments")
-    if isinstance(attachments, list):
-        for item in attachments:
-            if isinstance(item, dict) and isinstance(item.get("objectKey"), str):
-                keys.add(str(item["objectKey"]))
-    return keys
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()

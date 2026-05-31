@@ -44,6 +44,7 @@ const DESKTOP_POSTHOG_EVENT_ALLOWLIST = new Set<keyof DesktopProductEventMap>([
   "chat_prompt_submitted",
   "workspace_created",
   "cloud_workspace_created",
+  "support_report_submitted",
 ]);
 
 export function isVendorPostHogEventAllowed(

@@ -453,10 +453,22 @@ export type SupportReportCompleteRequest =
   components["schemas"]["SupportReportCompleteRequest"];
 export type SupportReportCompleteResponse =
   components["schemas"]["SupportReportCompleteResponse"];
+export type SupportReportCreateRequest =
+  components["schemas"]["SupportReportCreateRequest"];
+export type SupportReportCreateResponse =
+  components["schemas"]["SupportReportCreateResponse"];
+export type SupportReportServerCorrelation =
+  components["schemas"]["SupportReportServerCorrelation"];
+export type SupportReportUploadFile =
+  components["schemas"]["SupportReportUploadFile"];
 export type SupportReportUploadRequest =
   components["schemas"]["SupportReportUploadRequest"];
 export type SupportReportUploadResponse =
   components["schemas"]["SupportReportUploadResponse"];
+export type SupportReportUploadTargetsRequest =
+  components["schemas"]["SupportReportUploadTargetsRequest"];
+export type SupportReportWorkspaceReference =
+  components["schemas"]["SupportReportWorkspaceReference"];
 export type CloudMobilityRepoRef = components["schemas"]["MobilityRepoRef"];
 export type CloudMobilityHandoffSummary = components["schemas"]["MobilityHandoffSummary"];
 export type CloudMobilityWorkspaceSummary = components["schemas"]["MobilityWorkspaceSummary"];
