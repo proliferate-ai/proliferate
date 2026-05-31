@@ -23,6 +23,7 @@ from proliferate.server.catalogs.service import read_agent_catalog
 from proliferate.server.cloud.agent_run_config.domain.resolve import (
     AgentRunConfigIssue,
     ResolvedAgentRunConfig,
+    canonical_model_id_for_config,
     resolve_runtime_values,
     validate_config_values,
 )
@@ -207,14 +208,21 @@ async def create_agent_run_config(
     name = _clean_required_text(body.name, field_name="name")
     agent_kind = _clean_required_text(body.agent_kind, field_name="agentKind", max_length=32)
     model_id = _clean_required_text(body.model_id, field_name="modelId")
+    catalog = read_agent_catalog().catalog
     _raise_issue(
         validate_config_values(
-            read_agent_catalog().catalog,
+            catalog,
             agent_kind=agent_kind,
             model_id=model_id,
             control_values=body.control_values,
         )
     )
+    canonical_model_id = canonical_model_id_for_config(
+        catalog,
+        agent_kind=agent_kind,
+        model_id=model_id,
+    )
+    assert canonical_model_id is not None
     return await config_store.create_config(
         db,
         owner_scope=owner_scope,
@@ -223,7 +231,7 @@ async def create_agent_run_config(
         created_by_user_id=user.id,
         name=name,
         agent_kind=agent_kind,
-        model_id=model_id,
+        model_id=canonical_model_id,
         control_values_json=body.control_values,
         usable_in_personal_sandboxes=body.usable_in_personal_sandboxes,
         usable_in_shared_sandboxes=body.usable_in_shared_sandboxes,
@@ -264,19 +272,30 @@ async def update_agent_run_config(
     control_values = (
         body.control_values if body.control_values is not None else existing.control_values_json
     )
+    catalog = read_agent_catalog().catalog
     _raise_issue(
         validate_config_values(
-            read_agent_catalog().catalog,
+            catalog,
             agent_kind=existing.agent_kind,
             model_id=model_id,
             control_values=control_values,
         )
     )
+    canonical_model_id = canonical_model_id_for_config(
+        catalog,
+        agent_kind=existing.agent_kind,
+        model_id=model_id,
+    )
+    assert canonical_model_id is not None
     updated = await config_store.update_config(
         db,
         config_id=config_id,
         name=name,
-        model_id=model_id if body.model_id is not None else None,
+        model_id=(
+            canonical_model_id
+            if body.model_id is not None or canonical_model_id != existing.model_id
+            else None
+        ),
         control_values_json=body.control_values,
         usable_in_personal_sandboxes=body.usable_in_personal_sandboxes,
         usable_in_shared_sandboxes=body.usable_in_shared_sandboxes,

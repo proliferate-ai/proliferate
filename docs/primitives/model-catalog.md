@@ -410,6 +410,10 @@ Rules:
 - `liveId` is what launch passes to the harness.
 - `displayName` is what UI shows.
 - `aliases` are for resolution and migration, not for rendering.
+- Server/cloud run-config validation and automation snapshot creation must
+  accept aliases and store or emit the canonical catalog model id. When a
+  model id is renamed or removed, add a replacement alias or an explicit
+  backfill mapping in the migration that can encounter the old id.
 - Unknown live models are allowed. They should be marked `source = live` and
   usually have `defaultOptIn = false` unless product policy decides otherwise.
 - Provider refresh output should leave `defaultOptIn` absent/null unless the
@@ -634,7 +638,7 @@ parse:
 
 example:
   gpt-5.3-codex - Codex 5.3
-  composer-2-fast - Composer 2 Fast
+  composer-2.5-fast - Composer 2.5 Fast
 ```
 
 Cursor model IDs from live discovery should be preferred over older catalog ids

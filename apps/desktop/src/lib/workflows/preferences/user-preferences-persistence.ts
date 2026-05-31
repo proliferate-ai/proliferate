@@ -16,10 +16,15 @@ import {
 import { isValidWorktreeAutoDeleteLimit } from "@/lib/domain/preferences/user/worktree-auto-delete";
 import {
   buildPersistedUserPreferencesRecord,
+  hasAppliedModelVisibilityDefaultsReset,
+  markModelVisibilityDefaultsReset,
   WORKTREE_AUTO_DELETE_LIMIT_ADOPTION_PENDING_KEY,
   type PersistedUserPreferencesMetadata,
 } from "@/lib/domain/preferences/persisted-metadata";
 import { readPersistedValue, persistValue } from "@/lib/infra/persistence/preferences-persistence";
+import {
+  resetFrontierModelVisibilityOverrides,
+} from "@/lib/domain/preferences/user/session-defaults";
 
 const USER_PREFERENCES_KEY = "user_preferences";
 const LEGACY_THEME_KEY = "proliferate-theme";
@@ -108,6 +113,7 @@ async function readPersistedUserPreferences(): Promise<{
   shouldPersist: boolean;
   persistedMetadata: PersistedUserPreferencesMetadata;
   deferWorktreeAutoDeleteLimitPersist: boolean;
+  resetModelVisibilityDefaults: boolean;
 }> {
   const persisted = await readPersistedValue<Record<string, unknown>>(USER_PREFERENCES_KEY);
   if (persisted && typeof persisted === "object" && !Array.isArray(persisted)) {
@@ -123,6 +129,9 @@ async function readPersistedUserPreferences(): Promise<{
       shouldPersist: hasDeprecatedUserPreferenceKeys(persisted),
       persistedMetadata,
       deferWorktreeAutoDeleteLimitPersist: needsWorktreeAdoption,
+      resetModelVisibilityDefaults: !hasAppliedModelVisibilityDefaultsReset(
+        persistedMetadata,
+      ),
     };
   }
 
@@ -131,20 +140,40 @@ async function readPersistedUserPreferences(): Promise<{
     shouldPersist: false,
     persistedMetadata: {},
     deferWorktreeAutoDeleteLimitPersist: false,
+    resetModelVisibilityDefaults: false,
   };
 }
 
 export async function loadUserPreferences(): Promise<LoadedUserPreferences> {
   const persisted = await readPersistedUserPreferences();
-  const migrated = migrateUserPreferences(persisted.preferences);
+  let migrated = migrateUserPreferences(persisted.preferences);
+  let persistedMetadata = persisted.persistedMetadata;
+  let shouldPersist = (
+    persisted.deferWorktreeAutoDeleteLimitPersist
+    || migrated.changed
+    || persisted.shouldPersist
+  );
+
+  if (persisted.resetModelVisibilityDefaults) {
+    const reset = resetFrontierModelVisibilityOverrides(
+      migrated.preferences.chatModelVisibilityOverridesByAgentKind,
+    );
+    migrated = {
+      preferences: {
+        ...migrated.preferences,
+        chatModelVisibilityOverridesByAgentKind:
+          reset.chatModelVisibilityOverridesByAgentKind,
+      },
+      changed: migrated.changed || reset.changed,
+    };
+    persistedMetadata = markModelVisibilityDefaultsReset(persistedMetadata);
+    shouldPersist = true;
+  }
 
   return {
     preferences: migrated.preferences,
-    persistedMetadata: persisted.persistedMetadata,
-    shouldPersist:
-      persisted.deferWorktreeAutoDeleteLimitPersist
-      || migrated.changed
-      || persisted.shouldPersist,
+    persistedMetadata,
+    shouldPersist,
   };
 }
 

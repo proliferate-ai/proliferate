@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -10,10 +11,17 @@ from proliferate.constants.automations import (
     CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION,
     CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_SYSTEM,
 )
+from proliferate.db.store.cloud_agent_run_config.configs import CloudAgentRunConfigRecord
+from proliferate.server.catalogs.service import read_agent_catalog
 from proliferate.server.cloud.agent_run_config.domain.resolve import (
+    ResolvedAgentRunConfig,
+    canonical_model_id_for_config,
+    resolve_runtime_values,
     validate_config_execution_scope,
+    validate_config_values,
 )
 from proliferate.server.cloud.agent_run_config import service
+from proliferate.server.cloud.agent_run_config.models import AgentRunConfigCreateRequest
 from proliferate.server.cloud.errors import CloudApiError
 
 
@@ -30,6 +38,97 @@ def _config(**overrides: object) -> SimpleNamespace:
     }
     values.update(overrides)
     return SimpleNamespace(**values)
+
+
+def _run_config_record(**overrides: object) -> CloudAgentRunConfigRecord:
+    now = datetime.now(UTC)
+    values = {
+        "id": uuid.uuid4(),
+        "owner_scope": CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL,
+        "owner_user_id": uuid.uuid4(),
+        "organization_id": None,
+        "created_by_user_id": uuid.uuid4(),
+        "name": "Legacy config",
+        "agent_kind": "cursor",
+        "model_id": "composer-2-fast",
+        "control_values_json": {},
+        "usable_in_personal_sandboxes": True,
+        "usable_in_shared_sandboxes": False,
+        "seed_key": None,
+        "system_default_rank": None,
+        "status": "active",
+        "created_at": now,
+        "updated_at": now,
+        "archived_at": None,
+    }
+    values.update(overrides)
+    return CloudAgentRunConfigRecord(**values)  # type: ignore[arg-type]
+
+
+def test_model_aliases_validate_and_resolve_to_canonical_catalog_ids() -> None:
+    catalog = read_agent_catalog().catalog
+    cases = [
+        ("cursor", "composer-2-fast", "composer-2.5-fast"),
+        ("cursor", "composer-2", "composer-2.5"),
+        ("cursor", "gpt-5.3-codex-spark-preview-low", "gpt-5.3-codex-low"),
+        ("cursor", "gpt-5.3-codex-spark-preview", "gpt-5.3-codex"),
+        ("cursor", "gpt-5.3-codex-spark-preview-high", "gpt-5.3-codex-high"),
+        ("cursor", "gpt-5.3-codex-spark-preview-xhigh", "gpt-5.3-codex-xhigh"),
+        ("opencode", "opencode/minimax-m2.5-free", "opencode/mimo-v2.5-free"),
+        (
+            "opencode",
+            "opencode/ring-2.6-1t-free",
+            "opencode/nemotron-3-super-free",
+        ),
+    ]
+
+    for agent_kind, legacy_model_id, canonical_model_id in cases:
+        assert validate_config_values(
+            catalog,
+            agent_kind=agent_kind,
+            model_id=legacy_model_id,
+            control_values={},
+        ) is None
+        assert canonical_model_id_for_config(
+            catalog,
+            agent_kind=agent_kind,
+            model_id=legacy_model_id,
+        ) == canonical_model_id
+
+        resolved = resolve_runtime_values(
+            catalog,
+            _run_config_record(agent_kind=agent_kind, model_id=legacy_model_id),
+        )
+
+        assert isinstance(resolved, ResolvedAgentRunConfig)
+        assert resolved.model_id == canonical_model_id
+
+
+@pytest.mark.asyncio
+async def test_create_agent_run_config_stores_canonical_model_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    async def fake_create_config(*args: object, **kwargs: object) -> SimpleNamespace:
+        captured.update(kwargs)
+        return SimpleNamespace(**kwargs, id=uuid.uuid4())
+
+    monkeypatch.setattr(service.config_store, "create_config", fake_create_config)
+
+    await service.create_agent_run_config(
+        None,  # type: ignore[arg-type]
+        SimpleNamespace(id=uuid.uuid4()),  # type: ignore[arg-type]
+        AgentRunConfigCreateRequest(
+            ownerScope=CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL,
+            name="Cursor legacy",
+            agentKind="cursor",
+            modelId="composer-2-fast",
+            controlValues={},
+        ),
+    )
+
+    assert captured["model_id"] == "composer-2.5-fast"
 
 
 @pytest.mark.asyncio

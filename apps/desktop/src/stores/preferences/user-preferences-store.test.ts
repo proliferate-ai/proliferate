@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { THEME_PRESETS } from "@/config/theme";
 import {
   clearWorktreeAutoDeleteLimitAdoption,
+  hasAppliedModelVisibilityDefaultsReset,
   hasPendingWorktreeAutoDeleteLimitAdoption,
   selectPersistedUserPreferencesSlice,
 } from "@/lib/domain/preferences/persisted-metadata";
@@ -197,14 +198,16 @@ describe("user preference migration", () => {
     expect(persisted.onboardingPrimaryGoalId).toBeUndefined();
   });
 
-  it("does not rewrite records only because they contain unrelated unknown keys", async () => {
+  it("preserves unrelated unknown keys while marking model visibility defaults reset", async () => {
     storeMocks.values.set("user_preferences", {
       ...USER_PREFERENCE_DEFAULTS,
       futurePreference: true,
     } as unknown as UserPreferences);
 
     await bootstrapUserPreferencesForTest();
-    expect(storeMocks.set).not.toHaveBeenCalled();
+    const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    expect(persisted.futurePreference).toBe(true);
+    expect(hasAppliedModelVisibilityDefaultsReset(persisted)).toBe(true);
   });
 
   it("preserves unrelated unknown keys when hydration rewrites known preferences", async () => {
@@ -231,6 +234,59 @@ describe("user preference migration", () => {
     const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
     expect(persisted.branchPrefixType).toBe(PERSISTED_RECORD_BACKFILL.branchPrefixType);
     expect(persisted.futurePreference).toBe(true);
+  });
+
+  it("resets existing frontier-agent visibility overrides once", async () => {
+    storeMocks.values.set("user_preferences", {
+      ...USER_PREFERENCE_DEFAULTS,
+      chatModelVisibilityOverridesByAgentKind: {
+        claude: {
+          "us.anthropic.claude-opus-4-8[1m]": false,
+        },
+        cursor: {
+          "composer-2-fast": true,
+          "gpt-5.5-extra-high": false,
+        },
+        gemini: {
+          "auto-gemini-2.5": true,
+        },
+        opencode: {
+          "opencode/ring-2.6-1t-free": true,
+        },
+      },
+    } as unknown as UserPreferences);
+
+    await bootstrapUserPreferencesForTest();
+
+    const preferences = useUserPreferencesStore.getState();
+    expect(preferences.chatModelVisibilityOverridesByAgentKind).toEqual({
+      claude: {
+        "us.anthropic.claude-opus-4-8[1m]": false,
+      },
+    });
+    const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    expect(hasAppliedModelVisibilityDefaultsReset(persisted)).toBe(true);
+  });
+
+  it("preserves frontier-agent visibility overrides after the reset marker exists", async () => {
+    storeMocks.values.set("user_preferences", {
+      ...USER_PREFERENCE_DEFAULTS,
+      modelVisibilityDefaults20260531Reset: true,
+      chatModelVisibilityOverridesByAgentKind: {
+        cursor: {
+          "gpt-5.5-extra-high": false,
+        },
+      },
+    } as unknown as UserPreferences);
+
+    await bootstrapUserPreferencesForTest();
+
+    const preferences = useUserPreferencesStore.getState();
+    expect(preferences.chatModelVisibilityOverridesByAgentKind).toEqual({
+      cursor: {
+        "gpt-5.5-extra-high": false,
+      },
+    });
   });
 
   it("migrates old unified scalar model preferences into the primary harness map", async () => {

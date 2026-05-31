@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { migrateUserPreferences } from "@/lib/domain/preferences/user/migration";
 import { USER_PREFERENCE_DEFAULTS } from "@/lib/domain/preferences/user/model";
+import { normalizeDefaultChatModelId } from "@/lib/domain/preferences/user/session-defaults";
 import {
   WORKTREE_AUTO_DELETE_LIMIT_DEFAULT,
 } from "@/lib/domain/preferences/user/worktree-auto-delete";
@@ -65,6 +66,40 @@ describe("user preference migration", () => {
         reasoning: "medium",
       },
     });
+  });
+
+  it("moves legacy Cursor Composer defaults to the current frontier Composer model", () => {
+    const result = migrateUserPreferences({
+      defaultChatModelIdByAgentKind: {
+        cursor: " composer-2-fast ",
+      },
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.defaultChatModelIdByAgentKind).toEqual({
+      cursor: "composer-2.5-fast",
+    });
+  });
+
+  it("normalizes renamed dynamic-agent model ids", () => {
+    expect(normalizeDefaultChatModelId("cursor", "composer-2[fast=true]")).toBe(
+      "composer-2.5-fast",
+    );
+    expect(normalizeDefaultChatModelId("cursor", "composer-2")).toBe("composer-2.5");
+    expect(normalizeDefaultChatModelId("cursor", "gpt-5.3-codex-spark-preview-low"))
+      .toBe("gpt-5.3-codex-low");
+    expect(normalizeDefaultChatModelId("cursor", "gpt-5.3-codex-spark-preview"))
+      .toBe("gpt-5.3-codex");
+    expect(normalizeDefaultChatModelId("cursor", "gpt-5.3-codex-spark-preview-high"))
+      .toBe("gpt-5.3-codex-high");
+    expect(normalizeDefaultChatModelId("cursor", "gpt-5.3-codex-spark-preview-xhigh"))
+      .toBe("gpt-5.3-codex-xhigh");
+    expect(normalizeDefaultChatModelId("opencode", "opencode/minimax-m2.5-free"))
+      .toBe("opencode/mimo-v2.5-free");
+    expect(normalizeDefaultChatModelId("opencode", "opencode/ring-2.6-1t-free"))
+      .toBe("opencode/nemotron-3-super-free");
+    expect(normalizeDefaultChatModelId("gemini", "auto-gemini-2.5"))
+      .toBe("auto-gemini-3");
   });
 
   it("moves misstored Codex plan defaults into live collaboration controls", () => {
