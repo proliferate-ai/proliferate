@@ -5,6 +5,7 @@ mod background_work;
 mod events;
 mod links;
 mod live_config;
+mod mobility;
 mod notifications;
 mod pending_prompts;
 pub(crate) mod persisted_payloads;

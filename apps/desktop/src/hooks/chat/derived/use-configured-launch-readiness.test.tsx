@@ -7,15 +7,10 @@ import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configure
 
 const mocks = vi.hoisted(() => ({
   useChatLaunchCatalog: vi.fn(),
-  useAgentCatalog: vi.fn(),
 }));
 
 vi.mock("@/hooks/chat/derived/use-chat-launch-catalog", () => ({
   useChatLaunchCatalog: mocks.useChatLaunchCatalog,
-}));
-
-vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
-  useAgentCatalog: mocks.useAgentCatalog,
 }));
 
 describe("useConfiguredLaunchReadiness", () => {
@@ -33,9 +28,6 @@ describe("useConfiguredLaunchReadiness", () => {
       isLoading: false,
       launchAgents: [],
       defaultLaunchSelection: null,
-    });
-    mocks.useAgentCatalog.mockReturnValue({
-      agentsByKind: new Map(),
     });
   });
 
@@ -87,47 +79,27 @@ describe("useConfiguredLaunchReadiness", () => {
     });
   });
 
-  it("blocks configured pre-session launch when the target agent is not ready", () => {
+  it("blocks configured pre-session launch when the configured target agent is unavailable", () => {
     mocks.useChatLaunchCatalog.mockReturnValue({
       data: {},
       error: null,
       targetReadinessError: null,
       isLoading: false,
-      launchAgents: [{
-        kind: "opencode",
-        displayName: "OpenCode",
-        defaultModelId: "opencode/custom-model",
-        dynamicModels: true,
-        modelDisplayPolicy: {
-          defaultVisibleModelIds: [],
-          allowUserVisibleModelSelection: true,
-          moreModelsSource: "lastKnownLiveSnapshot",
-        },
-        models: [],
-      }],
-      defaultLaunchSelection: { kind: "claude", modelId: "sonnet" },
-    });
-    mocks.useAgentCatalog.mockReturnValue({
-      agentsByKind: new Map([
-        ["opencode", {
-          kind: "opencode",
-          displayName: "OpenCode",
-          readiness: "login_required",
-        }],
-      ]),
+      launchAgents: [],
+      defaultLaunchSelection: null,
     });
 
     const { result } = renderHook(() => useConfiguredLaunchReadiness());
 
     expect(result.current).toMatchObject({
       selection: null,
-      disabledReason: "OpenCode is login required.",
+      disabledReason: "opencode isn't available on this target.",
       status: "unavailable",
       isReady: false,
     });
   });
 
-  it("blocks configured pre-session launch when target readiness is missing", () => {
+  it("allows cloud-ready target agents even when local readiness would be missing", () => {
     mocks.useChatLaunchCatalog.mockReturnValue({
       data: {},
       error: null,
@@ -143,21 +115,26 @@ describe("useConfiguredLaunchReadiness", () => {
           allowUserVisibleModelSelection: true,
           moreModelsSource: "lastKnownLiveSnapshot",
         },
-        models: [],
+        models: [{
+          id: "opencode/custom-model",
+          displayName: "Custom Model",
+          aliases: [],
+          status: "active",
+          isDefault: true,
+          tags: [],
+          launchRemediation: null,
+        }],
+        launchControls: [],
       }],
-      defaultLaunchSelection: { kind: "claude", modelId: "sonnet" },
-    });
-    mocks.useAgentCatalog.mockReturnValue({
-      agentsByKind: new Map(),
+      defaultLaunchSelection: { kind: "opencode", modelId: "opencode/custom-model" },
     });
 
     const { result } = renderHook(() => useConfiguredLaunchReadiness());
 
     expect(result.current).toMatchObject({
-      selection: null,
-      disabledReason: "opencode isn't supported by this runtime yet.",
-      status: "unavailable",
-      isReady: false,
+      selection: { kind: "opencode", modelId: "opencode/custom-model" },
+      status: "ready",
+      isReady: true,
     });
   });
 
@@ -191,10 +168,6 @@ describe("useConfiguredLaunchReadiness", () => {
       }],
       defaultLaunchSelection: { kind: "codex", modelId: "gpt-5.4" },
     });
-    mocks.useAgentCatalog.mockReturnValue({
-      agentsByKind: new Map(),
-    });
-
     const { result } = renderHook(() => useConfiguredLaunchReadiness());
 
     expect(result.current).toMatchObject({

@@ -103,7 +103,7 @@ export function AgentDefaultsPane() {
     <section className="space-y-5">
       <SettingsPageHeader
         title="Agent Defaults"
-        description="Configure default harness launch behavior. Local install and sign-in repair lives here; shared credentials live in Agent Authentication."
+        description="Configure default harness launch behavior. Local installs and sign-in repair live here; shared credentials live in Agent Authentication."
       />
 
       <AgentDefaultsSection title="Default harness">

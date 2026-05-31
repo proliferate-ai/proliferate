@@ -704,8 +704,8 @@ async def test_cleanup_completion_executes_anyharness_item_before_projection_cle
 
     async def _execute_server_cleanup_item(*_args, **kwargs):
         cleanup_item_id = kwargs["cleanup_item_id"]
-        if cleanup_item_id != anyharness_item.id:
-            assert statuses[anyharness_item.id] == "completed"
+        assert cleanup_item_id != anyharness_item.id
+        assert statuses[anyharness_item.id] == "completed"
         executed_server_items.append(str(cleanup_item_id))
         statuses[cleanup_item_id] = "completed"
 
@@ -769,14 +769,13 @@ async def test_cleanup_completion_executes_anyharness_item_before_projection_cle
         terminal_server_item.id: "completed",
     }
     assert executed_server_items == [
-        str(anyharness_item.id),
         str(server_item.id),
         str(terminal_server_item.id),
     ]
 
 
 @pytest.mark.asyncio
-async def test_execute_cleanup_item_destroys_anyharness_workspace(
+async def test_server_cleanup_skips_desktop_owned_anyharness_workspace(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     handoff = _handoff()
@@ -784,75 +783,20 @@ async def test_execute_cleanup_item_destroys_anyharness_workspace(
         handoff_op_id=handoff.id,
         item_kind="anyharness_workspace",
     )
-    target_id = uuid4()
-    item = CloudWorkspaceMoveCleanupItemValue(
-        id=item.id,
-        handoff_op_id=item.handoff_op_id,
-        item_kind=item.item_kind,
-        target_id=target_id,
-        anyharness_workspace_id="ah-workspace-1",
-        object_id=item.object_id,
-        status=item.status,
-        attempt_count=item.attempt_count,
-        next_attempt_at=item.next_attempt_at,
-        error_code=item.error_code,
-        error_message=item.error_message,
-        started_at=item.started_at,
-        completed_at=item.completed_at,
-        created_at=item.created_at,
-        updated_at=item.updated_at,
-    )
-    destroyed: list[tuple[str, str, str]] = []
     statuses: list[str] = []
-    failed_update_errors: list[str | None] = []
 
     async def _get_cleanup_item(*_args, **_kwargs):
         return item
 
-    async def _list_cleanup_items(*_args, **_kwargs):
-        return [item]
-
     async def _update_cleanup_item_status(*_args, **kwargs):
         statuses.append(kwargs["status"])
-        if kwargs["status"] == "failed":
-            failed_update_errors.append(kwargs.get("error_message"))
         return item
 
-    async def _load_runtime_access(*_args, **kwargs):
-        assert kwargs["target_id"] == target_id
-        return SimpleNamespace(
-            anyharness_base_url="https://runtime.example",
-            runtime_token_ciphertext="ciphertext",
-        )
-
-    async def _destroy_runtime_mobility_source(runtime_url, access_token, *, anyharness_workspace_id):
-        destroyed.append((runtime_url, access_token, anyharness_workspace_id))
-
-    async def _all_cleanup_items_completed(*_args, **_kwargs):
-        return False
-
     monkeypatch.setattr(cleanup_executor, "get_cleanup_item_for_handoff", _get_cleanup_item)
-    monkeypatch.setattr(cleanup_executor, "list_cleanup_items_for_handoff", _list_cleanup_items)
     monkeypatch.setattr(
         cleanup_executor,
         "update_cleanup_item_status",
         _update_cleanup_item_status,
-    )
-    monkeypatch.setattr(
-        cleanup_executor.targets_store,
-        "load_active_runtime_access_for_target",
-        _load_runtime_access,
-    )
-    monkeypatch.setattr(cleanup_executor, "decrypt_text", lambda value: f"plain:{value}")
-    monkeypatch.setattr(
-        cleanup_executor,
-        "destroy_runtime_mobility_source",
-        _destroy_runtime_mobility_source,
-    )
-    monkeypatch.setattr(
-        cleanup_executor,
-        "all_cleanup_items_completed",
-        _all_cleanup_items_completed,
     )
 
     await cleanup_executor.execute_server_cleanup_item(
@@ -861,7 +805,4 @@ async def test_execute_cleanup_item_destroys_anyharness_workspace(
         cleanup_item_id=item.id,
     )
 
-    assert statuses == ["in_progress", "completed"], failed_update_errors
-    assert destroyed == [
-        ("https://runtime.example", "plain:ciphertext", "ah-workspace-1")
-    ]
+    assert statuses == []

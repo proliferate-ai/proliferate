@@ -322,7 +322,7 @@ impl AgentLoginPty {
             .try_wait()
             .ok()
             .flatten()
-            .map(|status| if status.success() { 0 } else { 1 });
+            .and_then(|status| i32::try_from(status.exit_code()).ok());
         self.record.status = AgentLoginTerminalStatus::Exited;
         self.record.exit_code = code;
         self.record.updated_at = chrono::Utc::now().to_rfc3339();

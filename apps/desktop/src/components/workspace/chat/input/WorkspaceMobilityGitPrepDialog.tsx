@@ -47,14 +47,19 @@ export function WorkspaceMobilityGitPrepDialog({
     { files: 0, additions: 0, deletions: 0 },
   );
   const shouldScrollChangedFiles = stats.files > 6;
+  const hasDirtyChanges = viewState.hasStagedChanges || viewState.hasUnstagedChanges;
+  const title = hasDirtyChanges ? "Prepare branch for move" : "Push branch for move";
+  const description = hasDirtyChanges
+    ? "Commit and push these changes so the destination can check out the exact code."
+    : "Push this branch so the destination can check out the exact code.";
 
   return (
     <ModalShell
       open={open}
       onClose={onCancel}
       disableClose={isSubmitting}
-      title="Prepare branch for move"
-      description="Commit and push these changes so the destination can check out the exact code."
+      title={title}
+      description={description}
       sizeClassName="max-h-[88vh] max-w-xl"
       bodyClassName="min-h-0 px-0 pb-0 pt-0"
       footer={(

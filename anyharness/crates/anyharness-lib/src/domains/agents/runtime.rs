@@ -200,6 +200,33 @@ impl AgentRuntime {
             .login
             .as_ref()
             .ok_or_else(|| AgentRuntimeError::LoginNotSupported(kind.to_string()))?;
+        let command = AgentLoginCommand {
+            program: login.command.program.clone(),
+            args: login.command.args.clone(),
+        };
+
+        Ok(AgentLoginStart {
+            kind: descriptor.kind.as_str().to_string(),
+            label: login.label.clone(),
+            command_display: display_command(&command),
+            command,
+            cwd: login_cwd(&self.runtime_home),
+            env: Vec::new(),
+            reuses_user_state: login.reuses_user_state,
+            message: login.message.clone(),
+        })
+    }
+
+    pub async fn start_login_terminal(
+        &self,
+        kind: &str,
+    ) -> Result<AgentLoginStart, AgentRuntimeError> {
+        let descriptor = descriptor_for_kind(kind)?;
+        let login = descriptor
+            .auth
+            .login
+            .as_ref()
+            .ok_or_else(|| AgentRuntimeError::LoginNotSupported(kind.to_string()))?;
         let resolved = resolve_login_command(&descriptor, &self.runtime_home)?;
 
         Ok(AgentLoginStart {

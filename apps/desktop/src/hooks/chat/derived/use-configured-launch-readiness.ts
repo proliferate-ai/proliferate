@@ -1,7 +1,5 @@
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { AGENT_READINESS_LABELS } from "@/lib/domain/agents/readiness-presentation";
-import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { resolveConfiguredLaunchSelection } from "@/lib/domain/chat/composer/preference-resolvers";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-selection";
@@ -17,7 +15,6 @@ export function useConfiguredLaunchReadiness(
     chatModelVisibilityOverridesByAgentKind: state.chatModelVisibilityOverridesByAgentKind,
   })));
   const launchCatalog = useChatLaunchCatalog({ activeSelection });
-  const { agentsByKind } = useAgentCatalog();
   const hasLaunchReadinessError = Boolean(launchCatalog.error);
   const launchReadinessErrorReason = launchCatalog.targetReadinessError
     ? "Couldn't load target agent readiness. Retry once AnyHarness is reachable."
@@ -72,39 +69,34 @@ export function useConfiguredLaunchReadiness(
     preferredResolution.selection?.kind,
   ]);
 
-  const configuredAgent = preferences.defaultChatAgentKind
-    ? agentsByKind.get(preferences.defaultChatAgentKind) ?? null
+  const configuredLaunchAgent = preferences.defaultChatAgentKind
+    ? launchCatalog.launchAgents.find((agent) =>
+      agent.kind === preferences.defaultChatAgentKind
+      && agent.models.length > 0
+    ) ?? null
     : null;
 
   const isConfiguredAgentMissing =
     !hasLaunchReadinessError
     && !launchCatalog.isLoading
     && Boolean(preferences.defaultChatAgentKind)
-    && configuredAgent === null;
-  const isConfiguredAgentNotReady =
-    !hasLaunchReadinessError
-    && !launchCatalog.isLoading
-    && Boolean(preferences.defaultChatAgentKind)
-    && configuredAgent !== null
-    && configuredAgent.readiness !== "ready";
+    && configuredLaunchAgent === null;
   const hasReadyFallback = Boolean(effectiveSelection)
     && (
       effectiveSelection?.kind !== preferences.defaultChatAgentKind
-      || (!isConfiguredAgentMissing && !isConfiguredAgentNotReady)
+      || !isConfiguredAgentMissing
     );
   const effectiveStatus = hasReadyFallback
     ? "ready"
-    : isConfiguredAgentMissing || isConfiguredAgentNotReady
+    : isConfiguredAgentMissing
       ? "unavailable"
       : preferredResolution.status;
-  const disabledReason = isConfiguredAgentNotReady
-    ? `${configuredAgent.displayName} is ${AGENT_READINESS_LABELS[configuredAgent.readiness].toLowerCase()}.`
-    : isConfiguredAgentMissing
-      ? `${preferences.defaultChatAgentKind} isn't supported by this runtime yet.`
+  const disabledReason = isConfiguredAgentMissing
+    ? `${preferences.defaultChatAgentKind} isn't available on this target.`
     : preferredResolution.reason;
   const isBlockedByReadiness =
     !hasReadyFallback
-    && (isConfiguredAgentMissing || isConfiguredAgentNotReady);
+    && isConfiguredAgentMissing;
 
   return {
     configuredKind: (effectiveSelection?.kind ?? preferences.defaultChatAgentKind) || null,

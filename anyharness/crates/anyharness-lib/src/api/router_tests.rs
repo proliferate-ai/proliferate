@@ -355,6 +355,21 @@ async fn scoped_direct_attach_jwt_filters_workspaces_and_honors_revocation() {
         .expect("expected response");
     assert_eq!(worker_only_response.status(), StatusCode::FORBIDDEN);
 
+    let target_global_auth_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/agents/gemini/login/terminal")
+                .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from("{}"))
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+    assert_eq!(target_global_auth_response.status(), StatusCode::FORBIDDEN);
+
     let revoke_response = app
         .clone()
         .oneshot(

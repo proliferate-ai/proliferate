@@ -227,7 +227,7 @@ pub async fn start_agent_login_terminal(
 ) -> Result<Json<StartAgentLoginTerminalResponse>, ProblemResponse> {
     let login = state
         .agent_runtime
-        .start_login(&kind)
+        .start_login_terminal(&kind)
         .await
         .map_err(agent_runtime_error_to_problem)?;
     let terminal = state

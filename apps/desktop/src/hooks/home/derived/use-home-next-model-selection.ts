@@ -49,9 +49,9 @@ export function useHomeNextModelSelection({
   const modelRegistries = useMemo(
     () => mergeRuntimeLaunchOptionsIntoDesktopLaunchModelRegistries(
       modelRegistriesQuery.data ?? EMPTY_MODEL_REGISTRIES,
-      runtimeLaunchOptions.data?.agents ?? null,
+      isCloudLaunchTarget ? null : runtimeLaunchOptions.data?.agents ?? null,
     ),
-    [modelRegistriesQuery.data, runtimeLaunchOptions.data?.agents],
+    [isCloudLaunchTarget, modelRegistriesQuery.data, runtimeLaunchOptions.data?.agents],
   );
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultChatAgentKind: state.defaultChatAgentKind,
@@ -122,13 +122,13 @@ export function useHomeNextModelSelection({
   const isLoading =
     agentsLoading
     || modelRegistriesQuery.isLoading
-    || runtimeLaunchOptions.isLoading
+    || (!isCloudLaunchTarget && runtimeLaunchOptions.isLoading)
     || (isCloudLaunchTarget && cloudTargetsQuery.isLoading)
     || (isCloudLaunchTarget && cloudAgentSelectionsQuery.isLoading);
   const hasLoadError =
     agentsError
     || modelRegistriesQuery.isError
-    || runtimeLaunchOptions.isError
+    || (!isCloudLaunchTarget && runtimeLaunchOptions.isError)
     || (isCloudLaunchTarget && cloudTargetsQuery.isError)
     || (isCloudLaunchTarget && cloudAgentSelectionsQuery.isError);
   const hasLaunchableModel =
@@ -147,7 +147,9 @@ export function useHomeNextModelSelection({
     effectiveModelSelection,
     selectedModel,
     isLoading,
-    error: agentsQueryError ?? modelRegistriesQuery.error ?? runtimeLaunchOptions.error,
+    error: agentsQueryError
+      ?? modelRegistriesQuery.error
+      ?? (isCloudLaunchTarget ? null : runtimeLaunchOptions.error),
     modelAvailabilityState,
   };
 }

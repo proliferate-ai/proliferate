@@ -469,11 +469,17 @@ impl WorkspaceRuntime {
         requested_base_sha: &str,
     ) -> anyhow::Result<Option<WorkspaceRecord>> {
         let requested_head = format!("{requested_base_sha}^{{commit}}");
+        let base_dir = self
+            .runtime_home
+            .join("mobility")
+            .join("destinations")
+            .join(repo_root_id);
         for workspace in self.store.list_active_by_repo_root_id(repo_root_id)? {
             if workspace.kind != "worktree"
                 || workspace.surface != "standard"
                 || workspace.current_branch.as_deref() != Some(requested_branch)
                 || !Path::new(&workspace.path).exists()
+                || !Path::new(&workspace.path).starts_with(&base_dir)
             {
                 continue;
             }

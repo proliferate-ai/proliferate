@@ -80,8 +80,17 @@ function connectTerminalStream(
   const ws = new WebSocket(url);
   ws.binaryType = "arraybuffer";
   let lastSeq = options.afterSeq ?? 0;
+  let pendingResize: { cols: number; rows: number } | null = null;
+
+  function sendResizeFrame(cols: number, rows: number) {
+    ws.send(JSON.stringify({ type: "resize", cols, rows }));
+  }
 
   ws.addEventListener("open", () => {
+    if (pendingResize) {
+      sendResizeFrame(pendingResize.cols, pendingResize.rows);
+      pendingResize = null;
+    }
     options.onOpen?.();
   });
 
@@ -125,8 +134,11 @@ function connectTerminalStream(
       }
     },
     sendResize(cols: number, rows: number) {
-      if (ws.readyState !== WebSocket.OPEN) return;
-      ws.send(JSON.stringify({ type: "resize", cols, rows }));
+      if (ws.readyState !== WebSocket.OPEN) {
+        pendingResize = { cols, rows };
+        return;
+      }
+      sendResizeFrame(cols, rows);
     },
     close() {
       ws.close();

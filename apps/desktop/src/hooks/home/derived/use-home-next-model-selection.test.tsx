@@ -378,4 +378,51 @@ describe("useHomeNextModelSelection", () => {
       modelId: "default-model",
     });
   });
+
+  it("ignores local runtime-refreshed models for cloud launches", () => {
+    selectionMocks.modelRegistriesQuery.data = [
+      registryWithModels("cursor", [
+        {
+          id: "cloud-safe-model",
+          displayName: "Cloud Safe",
+          isDefault: true,
+          status: "active",
+        },
+      ], "cloud-safe-model"),
+    ];
+    selectionMocks.runtimeLaunchOptions.data = {
+      agents: [{
+        kind: "cursor",
+        displayName: "Cursor",
+        defaultModelId: "local-only-model",
+        models: [{
+          id: "local-only-model",
+          displayName: "Local Only",
+          isDefault: true,
+          defaultOptIn: true,
+        }],
+      }],
+    };
+    selectionMocks.cloudTargetsQuery.data = [cloudTarget()];
+    selectionMocks.sandboxSelectionsQuery.data = [selection("cursor")];
+    useUserPreferencesStore.setState({
+      defaultChatAgentKind: "cursor",
+      defaultChatModelIdByAgentKind: {
+        cursor: "local-only-model",
+      },
+      chatModelVisibilityOverridesByAgentKind: {},
+    });
+
+    const { result } = renderHook(() => useHomeNextModelSelection({
+      modelSelectionOverride: null,
+      repoLaunchKind: "cloud",
+    }));
+
+    expect(result.current.modelGroups[0]?.models.map((model) => model.modelId))
+      .toEqual(["cloud-safe-model"]);
+    expect(result.current.effectiveModelSelection).toEqual({
+      kind: "cursor",
+      modelId: "cloud-safe-model",
+    });
+  });
 });

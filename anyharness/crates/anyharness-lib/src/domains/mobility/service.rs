@@ -7,8 +7,8 @@ use anyhow::Context;
 
 use crate::adapters::git::executor::run_git_ok;
 use crate::domains::agents::portability::{
-    collect_agent_artifacts, delete_session_agent_artifacts, validate_session_agent_artifacts,
-    AgentArtifactFileData,
+    collect_agent_artifacts, delete_session_agent_artifacts, install_session_agent_artifacts,
+    validate_session_agent_artifacts, AgentArtifactFileData,
 };
 use crate::domains::mobility::model::{
     DestroyedWorkspaceSourceSummary, ImportedWorkspaceArchiveSummary, MobilityBlocker,
@@ -583,7 +583,7 @@ impl MobilityService {
         }
 
         let mut imported_session_ids = Vec::new();
-        let imported_agent_artifact_count = 0usize;
+        let mut imported_agent_artifact_count = 0usize;
         let mut relocated_session_count = 0usize;
         for bundle in &archive.sessions {
             let mut session = bundle.session.clone();
@@ -598,6 +598,9 @@ impl MobilityService {
             session.mcp_binding_summaries_json = None;
             session.mcp_binding_policy =
                 crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace;
+            install_session_agent_artifacts(&session, &workspace_path, &bundle.agent_artifacts)
+                .map_err(|error| MobilityError::Invalid(error.to_string()))?;
+            imported_agent_artifact_count += bundle.agent_artifacts.len();
             if relocated_session_ids.contains(&session.id) {
                 self.session_runtime
                     .forget_live_session_for_mobility_blocking(&session.id);
@@ -958,9 +961,8 @@ fn classify_existing_archive_session_for_relocation(
     let matches_archive_source_id =
         archive_source_workspace_id == Some(existing_session_workspace_id);
     let matches_archive_source_path = existing_workspace_path == archive_source_workspace_path;
-    let remote_owned_leftover = existing_workspace_mode == WorkspaceAccessMode::RemoteOwned;
 
-    if !matches_archive_source_id && !matches_archive_source_path && !remote_owned_leftover {
+    if !matches_archive_source_id && !matches_archive_source_path {
         return Ok(false);
     }
 
@@ -981,7 +983,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn relocation_allows_remote_owned_leftover_from_previous_cloud_side() {
+    fn relocation_ignores_unrelated_remote_owned_duplicate() {
         let should_relocate = classify_existing_archive_session_for_relocation(
             "new-cloud-workspace",
             Some("local-source-workspace"),
@@ -990,9 +992,9 @@ mod tests {
             "/cloud/old-source",
             WorkspaceAccessMode::RemoteOwned,
         )
-        .expect("remote-owned leftovers should be classified");
+        .expect("unrelated remote-owned leftovers should not error");
 
-        assert!(should_relocate);
+        assert!(!should_relocate);
     }
 
     #[test]

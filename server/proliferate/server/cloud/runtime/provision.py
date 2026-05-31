@@ -116,13 +116,13 @@ from proliferate.server.cloud.runtime.repo_config_apply import (
     WorkspaceRuntimeAccess,
     apply_workspace_repo_config_after_provision,
 )
-from proliferate.server.cloud.runtime.wake import run_managed_slot_wake_job
 from proliferate.server.cloud.runtime.sandbox_exec import (
     assert_command_succeeded,
     collect_runtime_debug_report,
     run_sandbox_command_logged,
 )
 from proliferate.server.cloud.runtime.target_registration import ensure_runtime_target_enrollment
+from proliferate.server.cloud.runtime.wake import run_managed_slot_wake_job
 from proliferate.server.cloud.runtime.worktree_policy_sync import (
     sync_cloud_worktree_policy_to_runtime,
 )

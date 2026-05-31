@@ -67,8 +67,8 @@ from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_workspaces import (
     CloudRepoLimitExceededError,
-    archive_cloud_workspace_record_by_id,
     archive_cloud_workspace_record,
+    archive_cloud_workspace_record_by_id,
     create_cloud_workspace_for_user,
     create_direct_target_cloud_workspace,
     delete_cloud_workspace_records_for_workspace,

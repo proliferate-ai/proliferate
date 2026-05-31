@@ -138,7 +138,8 @@ async def ensure_requested_base_sha_available(
         label="sync_requested_base_sha",
         command=(
             f"git -C {quoted_workdir} fetch origin {quoted_branch} "
-            f"&& test \"$(git -C {quoted_workdir} rev-parse --verify {quoted_remote_branch_ref})\" = {quoted_requested_base_sha} "
+            f'&& test "$(git -C {quoted_workdir} rev-parse --verify '
+            f'{quoted_remote_branch_ref})" = {quoted_requested_base_sha} '
             f"&& git -C {quoted_workdir} rev-parse --verify {quoted_ref}"
         ),
         runtime_context=runtime_context,

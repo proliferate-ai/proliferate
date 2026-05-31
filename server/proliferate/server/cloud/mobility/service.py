@@ -68,6 +68,7 @@ from proliferate.server.cloud.mobility.domain.lifecycle import (
     HANDOFF_PHASE_DESTINATION_READY,
     HANDOFF_PHASE_HANDOFF_FAILED,
     HANDOFF_PHASE_INSTALL_SUCCEEDED,
+    HANDOFF_PHASE_REPAIR_REQUIRED,
     HANDOFF_PHASE_SOURCE_FROZEN,
     HANDOFF_PHASE_START_REQUESTED,
     LIFECYCLE_CLEANUP_FAILED,
@@ -112,6 +113,7 @@ _WORKER_PROGRESS_PHASES = frozenset(
         HANDOFF_PHASE_CLEANUP_PENDING,
     }
 )
+DESKTOP_CLEANUP_ITEM_KINDS = frozenset({"anyharness_workspace"})
 
 
 def _mobility_blocker(
@@ -974,6 +976,12 @@ async def start_cloud_workspace_handoff_cleanup_item(
     )
     if item is None:
         raise CloudApiError("cleanup_item_not_found", "Cleanup item not found.", status_code=404)
+    if item.item_kind not in DESKTOP_CLEANUP_ITEM_KINDS:
+        raise CloudApiError(
+            "cleanup_item_server_owned",
+            "This cleanup item is completed by the server.",
+            status_code=409,
+        )
     return await update_cleanup_item_status(db, cleanup_item=item, status="in_progress")
 
 
@@ -1004,6 +1012,12 @@ async def complete_cloud_workspace_handoff_cleanup_item(
     )
     if item is None:
         raise CloudApiError("cleanup_item_not_found", "Cleanup item not found.", status_code=404)
+    if item.item_kind not in DESKTOP_CLEANUP_ITEM_KINDS:
+        raise CloudApiError(
+            "cleanup_item_server_owned",
+            "This cleanup item is completed by the server.",
+            status_code=409,
+        )
     value = await update_cleanup_item_status(db, cleanup_item=item, status="completed")
     if await all_cleanup_items_completed(db, handoff_op_id=handoff_op_id):
         with suppress(CloudApiError, ValueError):
@@ -1045,6 +1059,12 @@ async def fail_cloud_workspace_handoff_cleanup_item(
     )
     if item is None:
         raise CloudApiError("cleanup_item_not_found", "Cleanup item not found.", status_code=404)
+    if item.item_kind not in DESKTOP_CLEANUP_ITEM_KINDS:
+        raise CloudApiError(
+            "cleanup_item_server_owned",
+            "This cleanup item is completed by the server.",
+            status_code=409,
+        )
     value = await update_cleanup_item_status(
         db,
         cleanup_item=item,
@@ -1090,6 +1110,14 @@ async def repair_cloud_workspace_handoff(
         mobility_workspace_id=mobility_workspace_id,
         handoff_op_id=handoff_op_id,
     )
+    handoff = await get_cloud_workspace_handoff_op(
+        db,
+        user_id=user_id,
+        handoff_op_id=handoff_op_id,
+        lock=True,
+    )
+    if handoff is None or handoff.mobility_workspace_id != mobility_workspace_id:
+        raise CloudApiError("handoff_not_found", "Mobility handoff not found.", status_code=404)
     if action == "mark_complete":
         if not await all_cleanup_items_completed(db, handoff_op_id=handoff_op_id):
             raise CloudApiError(
@@ -1102,6 +1130,23 @@ async def repair_cloud_workspace_handoff(
             user_id=user_id,
             mobility_workspace_id=mobility_workspace_id,
             handoff_op_id=handoff_op_id,
+        )
+    if handoff.canonical_side != CANONICAL_SIDE_DESTINATION or handoff.finalized_at is None:
+        raise CloudApiError(
+            "handoff_not_finalized",
+            "Cleanup can only resume after cutover is committed.",
+            status_code=409,
+        )
+    if handoff.phase not in {
+        HANDOFF_PHASE_CUTOVER_COMMITTED,
+        HANDOFF_PHASE_CLEANUP_PENDING,
+        HANDOFF_PHASE_CLEANUP_FAILED,
+        HANDOFF_PHASE_REPAIR_REQUIRED,
+    }:
+        raise CloudApiError(
+            "invalid_handoff_phase",
+            "Cleanup can only resume from a finalized cleanup phase.",
+            status_code=409,
         )
     return await update_cloud_workspace_handoff_phase_for_user(
         db,
