@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from alembic import command
@@ -34,6 +35,9 @@ TEST_DATABASE_URL = (
     f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@"
     f"{POSTGRES_HOST}:{POSTGRES_PORT}/{TEST_DATABASE_NAME}"
 )
+TRUNCATE_LOCK_TIMEOUT_MS = 5_000
+TRUNCATE_MAX_ATTEMPTS = 3
+TRUNCATE_RETRY_BASE_SLEEP_SECONDS = 0.25
 
 
 def make_database_url(database_name: str) -> str:
@@ -94,8 +98,22 @@ async def truncate_all_tables(engine: AsyncEngine) -> None:
         return
 
     quoted_table_names = ", ".join(_quote_identifier(table_name) for table_name in table_names)
-    async with engine.begin() as conn:
-        await conn.execute(text(f"TRUNCATE TABLE {quoted_table_names} RESTART IDENTITY CASCADE"))
+    truncate_sql = f"TRUNCATE TABLE {quoted_table_names} RESTART IDENTITY CASCADE"
+    for attempt in range(TRUNCATE_MAX_ATTEMPTS):
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text(f"SET LOCAL lock_timeout = {TRUNCATE_LOCK_TIMEOUT_MS}"))
+                await conn.execute(text(truncate_sql))
+            return
+        except DBAPIError as error:
+            if attempt == TRUNCATE_MAX_ATTEMPTS - 1 or not _is_retryable_truncate_error(error):
+                raise
+            await asyncio.sleep(TRUNCATE_RETRY_BASE_SLEEP_SECONDS * (attempt + 1))
+
+
+def _is_retryable_truncate_error(error: DBAPIError) -> bool:
+    message = str(error.orig or error).lower()
+    return "deadlock detected" in message or "lock timeout" in message
 
 
 @asynccontextmanager
