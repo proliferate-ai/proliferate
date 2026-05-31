@@ -723,6 +723,7 @@ VERCEL_SCOPE
 
 # mobile, when enabled
 MOBILE_DEPLOY_ENABLED
+APP_VARIANT
 EXPO_TOKEN
 EAS_BUILD_PROFILE
 EAS_SUBMIT_PROFILE
@@ -777,8 +778,9 @@ VERCEL_TARGET=staging
 VERCEL_ORG_ID=team_Ic8IL7bOkRza1fHw7ROqLHSI
 VERCEL_PROJECT_ID=prj_IfWCLHwRUgqyCQPUDXmsgxMnECIm
 VERCEL_SCOPE=getonyx
-MOBILE_DEPLOY_ENABLED=false
-EAS_BUILD_PROFILE=staging
+MOBILE_DEPLOY_ENABLED=true
+APP_VARIANT=staging
+EAS_BUILD_PROFILE=staging-testflight
 EAS_SUBMIT_PROFILE=staging
 EAS_SUBMIT_ENABLED=true
 WORKERS_DEPLOY_ENABLED=false
@@ -806,6 +808,9 @@ Mobile/TestFlight operational notes:
 - The mobile workflow captures the build id from `Build iOS app` and submits
   that exact build id. Do not change this back to `eas submit --latest`; that
   can race with a newer staging or manual iOS build and submit the wrong IPA.
+- The submit step must use the same app identity as the build step. For staging
+  this means `APP_VARIANT=staging` so `app.config.ts` resolves
+  `ai.proliferate.mobile.staging` during both build and submit.
 - TestFlight is updated only after `Submit iOS build` succeeds. If EAS
   reports a finished IPA and then `Something went wrong when submitting your
   app to Apple App Store Connect`, the build did not reach TestFlight.
@@ -821,9 +826,10 @@ Known failure signatures and what they mean:
   not updated. The failure is in EAS Submit/App Store Connect after the IPA
   exists, not in the repository build.
 - `EAS_UPLOAD_TO_ASC_VERSION_DUPLICATE`: App Store Connect has already seen the
-  app version/build number pair. Production uses EAS remote build numbers with
-  `autoIncrement=true`; check that the submitted build is the production build
-  and that the workflow used the captured build id, not `--latest`.
+  app version/build number pair. Production and staging TestFlight profiles use
+  EAS remote build numbers with `autoIncrement=true`; check that the submitted
+  build is using the intended profile and that the workflow used the captured
+  build id, not `--latest`.
 - First response: open the Expo submission URL from the job log and check the
   detailed submission error. If the EAS UI does not show a specific app metadata
   or credential error, retry submit for the already-built IPA before changing

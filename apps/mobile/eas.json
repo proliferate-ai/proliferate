@@ -41,6 +41,7 @@
       }
     },
     "staging-testflight": {
+      "autoIncrement": true,
       "env": {
         "APP_VARIANT": "staging",
         "EXPO_PUBLIC_PROLIFERATE_API_BASE_URL": "https://staging-app.proliferate.com/api",
