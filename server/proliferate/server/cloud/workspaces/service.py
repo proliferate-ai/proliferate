@@ -2362,7 +2362,7 @@ async def _revoke_claim_tokens_for_workspace(
     *,
     reason: str,
 ) -> None:
-    async with db_engine.async_session_factory() as db:
+    async with db_engine.async_session_factory() as db, db.begin():
         claim = await claims_store.get_claim_for_workspace(db, workspace.id)
         if claim is None:
             return
@@ -2371,7 +2371,6 @@ async def _revoke_claim_tokens_for_workspace(
             claim_id=claim.id,
             reason=reason,
         )
-        await db.commit()
 
 
 # ---------------------------------------------------------------------------
