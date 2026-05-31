@@ -17,7 +17,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_ROLE_OWNER,
     ORGANIZATION_STATUS_ACTIVE,
 )
-from proliferate.db.models.auth import AuthIdentity, OAuthAccount, User
+from proliferate.db.models.auth import AuthIdentity, OAuthAccount, ProviderGrant, User
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.cloud_agent_auth import store
 from proliferate.db.store.cloud_sandboxes import ensure_profile_slot
@@ -62,14 +62,24 @@ async def _create_user_and_get_tokens(
             account_email=email,
         )
     )
+    identity = AuthIdentity(
+        user_id=user.id,
+        provider="github",
+        provider_subject=f"github-{user.id}",
+        email=email,
+        email_verified=True,
+        display_name="Agent Auth Tester",
+    )
+    db_session.add(identity)
+    await db_session.flush()
     db_session.add(
-        AuthIdentity(
+        ProviderGrant(
             user_id=user.id,
+            auth_identity_id=identity.id,
             provider="github",
-            provider_subject=f"github-{user.id}",
-            email=email,
-            email_verified=True,
-            display_name="Agent Auth Tester",
+            access_token_ciphertext=encrypt_text("github-access-token"),
+            scopes_json='["repo","user","user:email"]',
+            status="ready",
         )
     )
     await db_session.commit()
