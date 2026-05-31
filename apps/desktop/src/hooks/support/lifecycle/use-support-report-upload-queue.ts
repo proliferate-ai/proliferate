@@ -91,6 +91,7 @@ export function useSupportReportUploadQueue(): void {
 
   useEffect(() => {
     let disposed = false;
+    let unlistenJobs: (() => void) | null = null;
 
     const processQueue = () => {
       if (disposed || processingRef.current) {
@@ -107,7 +108,13 @@ export function useSupportReportUploadQueue(): void {
     };
 
     void listenSupportReportJobs((job) => {
-      persistSupportReportJob(job);
+      if (disposed) {
+        return;
+      }
+      const queued = persistSupportReportJob(job);
+      if (!queued) {
+        return;
+      }
       showToast("Sending report...", "info");
       processQueue();
     }).then((unlisten) => {
@@ -115,11 +122,13 @@ export function useSupportReportUploadQueue(): void {
         unlisten();
         return;
       }
+      unlistenJobs = unlisten;
       processQueue();
     });
 
     return () => {
       disposed = true;
+      unlistenJobs?.();
       if (retryTimerRef.current != null) {
         window.clearTimeout(retryTimerRef.current);
       }
@@ -432,10 +441,10 @@ async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
     .join("");
 }
 
-function persistSupportReportJob(job: SupportReportJob): void {
+function persistSupportReportJob(job: SupportReportJob): boolean {
   const current = readPersistedJobs();
   if (current.some((entry) => entry.job.jobId === job.jobId)) {
-    return;
+    return false;
   }
   writePersistedJobs([
     ...current,
@@ -446,6 +455,7 @@ function persistSupportReportJob(job: SupportReportJob): void {
       lastError: null,
     },
   ]);
+  return true;
 }
 
 function removePersistedJob(jobId: string): void {
