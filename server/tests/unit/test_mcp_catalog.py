@@ -12,6 +12,7 @@ from proliferate.server.cloud.mcp_catalog.domain.availability import catalog_ent
 from proliferate.server.cloud.mcp_catalog.domain.rendering import (
     parse_settings,
     render_http_launch,
+    render_oauth_resource_url,
     validate_settings,
 )
 from proliferate.server.cloud.mcp_catalog.domain.types import (
@@ -30,9 +31,12 @@ from proliferate.server.cloud.plugins.catalog.first_party import (
 )
 
 
-def test_posthog_url_variant_and_optional_templates() -> None:
+def test_posthog_oauth_url_variant_and_optional_templates() -> None:
     entry = get_catalog_entry("posthog")
     assert entry is not None
+    assert entry.version == 2
+    assert entry.auth_kind == "oauth"
+    assert entry.oauth_client_mode == "dcr"
 
     settings = validate_settings(
         entry,
@@ -46,14 +50,17 @@ def test_posthog_url_variant_and_optional_templates() -> None:
     launch = render_http_launch(
         entry,
         settings,
-        secrets={"apiKey": "phx-example"},
+        secrets={"accessToken": "oauth-token"},
     )
 
     assert launch.url == "https://mcp-eu.posthog.com/mcp?features=flags"
     assert {header.name: header.value for header in launch.headers} == {
-        "Authorization": "Bearer phx-example",
+        "Authorization": "Bearer oauth-token",
         "x-posthog-organization-id": "org_123",
     }
+    assert render_oauth_resource_url(entry, settings) == (
+        "https://mcp-eu.posthog.com/mcp?features=flags"
+    )
 
 
 def test_supabase_legacy_kind_is_dropped_and_boolean_false_renders() -> None:
@@ -73,6 +80,10 @@ def test_supabase_legacy_kind_is_dropped_and_boolean_false_renders() -> None:
 def test_removed_connectors_are_not_in_catalog() -> None:
     catalog_ids = {entry.id for entry in CONNECTOR_CATALOG}
 
+    assert "github" not in catalog_ids
+    assert "filesystem" not in catalog_ids
+    assert "playwright" not in catalog_ids
+    assert "huggingface" not in catalog_ids
     assert "google_calendar" not in catalog_ids
     assert "brave_search" not in catalog_ids
     assert "openweather" not in catalog_ids
@@ -85,24 +96,25 @@ def test_removed_connectors_are_not_in_catalog() -> None:
 def test_hosted_expansion_connectors_are_in_catalog() -> None:
     catalog_ids = [entry.id for entry in CONNECTOR_CATALOG]
 
-    assert catalog_ids.count("github") == 1
     for connector_id in {
+        "sentry",
+        "axiom",
         "cloudflare_docs",
         "gitlab",
         "render",
         "neon",
-        "huggingface",
     }:
         assert connector_id in catalog_ids
 
     expected_icon_ids = {
         "exa": "exa",
         "posthog": "posthog",
+        "sentry": "sentry",
+        "axiom": "axiom",
         "cloudflare_docs": "cloudflare",
         "gitlab": "gitlab",
         "render": "render",
         "neon": "neon",
-        "huggingface": "huggingface",
     }
     for connector_id, icon_id in expected_icon_ids.items():
         entry = get_catalog_entry(connector_id)
@@ -116,14 +128,14 @@ def test_hosted_expansion_connectors_are_in_catalog() -> None:
     assert cloudflare_docs.secret_fields == ()
     assert cloudflare_docs.display_url == "https://docs.mcp.cloudflare.com/mcp"
 
-    for connector_id in ("gitlab",):
+    for connector_id in ("posthog", "sentry", "axiom", "gitlab"):
         entry = get_catalog_entry(connector_id)
         assert entry is not None
         assert entry.transport == "http"
         assert entry.auth_kind == "oauth"
         assert entry.oauth_client_mode == "dcr"
 
-    for connector_id in ("render", "neon", "huggingface"):
+    for connector_id in ("render", "neon"):
         entry = get_catalog_entry(connector_id)
         assert entry is not None
         assert entry.transport == "http"
@@ -198,13 +210,13 @@ def test_static_oauth_catalog_entries_are_hidden_until_enabled_and_configured(
 
 def test_catalog_entry_availability_policy_for_static_oauth() -> None:
     slack = get_catalog_entry("slack")
-    github = get_catalog_entry("github")
+    context7 = get_catalog_entry("context7")
     assert slack is not None
-    assert github is not None
+    assert context7 is not None
 
     assert not catalog_entry_is_available(slack, has_static_oauth_client_config=False)
     assert catalog_entry_is_available(slack, has_static_oauth_client_config=True)
-    assert catalog_entry_is_available(github, has_static_oauth_client_config=False)
+    assert catalog_entry_is_available(context7, has_static_oauth_client_config=False)
 
 
 def test_catalog_entry_invariants() -> None:
@@ -224,6 +236,13 @@ def test_catalog_entry_invariants() -> None:
                 assert not any("{secret." in value for value in values)
         if entry.auth_kind == "oauth":
             assert entry.oauth_client_mode in {"dcr", "static"}
+            assert entry.http is not None
+            assert any(
+                template.name == "Authorization"
+                and template.value == "Bearer {secret.accessToken}"
+                and template.optional
+                for template in entry.http.headers
+            )
         else:
             assert entry.oauth_client_mode is None
         if entry.oauth_client_mode is not None:
@@ -254,17 +273,13 @@ def test_cloud_catalog_includes_separate_plugin_packages() -> None:
     assert set(packages_by_catalog_entry_id) == set(entries_by_id)
     assert packages_by_catalog_entry_id["context7"].skills == []
 
-    github_package = packages_by_catalog_entry_id["github"]
-    assert github_package.id == "github"
-    assert [skill.id for skill in github_package.skills] == [
-        "triage",
-        "address-comments",
-        "fix-ci",
-    ]
-    assert all(skill.provenance.source_sha256 for skill in github_package.skills)
-    assert all(skill.provenance.adapted_sha256 for skill in github_package.skills)
-    assert all(skill.provenance.review_status == "reviewed" for skill in github_package.skills)
-    assert all(skill.required_mcp_server_refs == ["github"] for skill in github_package.skills)
+    render_package = packages_by_catalog_entry_id["render"]
+    assert render_package.id == "render"
+    assert [skill.id for skill in render_package.skills] == ["debug", "monitor"]
+    assert all(skill.provenance.source_sha256 for skill in render_package.skills)
+    assert all(skill.provenance.adapted_sha256 for skill in render_package.skills)
+    assert all(skill.provenance.review_status == "reviewed" for skill in render_package.skills)
+    assert all(skill.required_mcp_server_refs == ["render"] for skill in render_package.skills)
 
 
 def test_first_party_plugin_skill_provenance_is_reviewed_and_pinned() -> None:
@@ -299,7 +314,7 @@ def test_first_party_plugin_skill_files_are_tracked() -> None:
 
 
 def test_plugin_package_version_changes_with_full_package_payload() -> None:
-    entry = get_catalog_entry("github")
+    entry = get_catalog_entry("render")
     assert entry is not None
     package = first_party_package_for_catalog_entry(entry)
     base = replace(package, version="")

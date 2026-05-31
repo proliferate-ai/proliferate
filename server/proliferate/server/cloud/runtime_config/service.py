@@ -51,6 +51,7 @@ from proliferate.server.cloud.runtime_config.domain.resolver import (
     resolve_runtime_config,
 )
 from proliferate.server.cloud.runtime_config.models import (
+    DesktopRuntimeConfigApplyResponse,
     RuntimeConfigArtifactRefModel,
     RuntimeConfigArtifactResponse,
     RuntimeConfigCredentialValueModel,
@@ -158,6 +159,83 @@ async def get_profile_runtime_config_status(
         current_revision=runtime_config_revision_model(revision) if revision else None,
         manifest=parse_json_dict(revision.manifest_json) if revision else None,
         warnings=parse_json_dict(revision.warnings_json) if revision else None,
+    )
+
+
+async def desktop_runtime_config_apply_request(
+    db: AsyncSession,
+    *,
+    profile: sandbox_profile_store.SandboxProfileSnapshot,
+    target_id: UUID | None,
+    actor_user_id: UUID,
+) -> DesktopRuntimeConfigApplyResponse:
+    if profile.owner_scope != "personal" or profile.owner_user_id != actor_user_id:
+        raise CloudApiError(
+            "runtime_config_desktop_profile_unsupported",
+            "Desktop runtime config can only be materialized for the signed-in "
+            "user's personal profile.",
+            status_code=403,
+        )
+
+    resolved_target_id = target_id or profile.primary_target_id
+    if resolved_target_id is None:
+        raise CloudApiError(
+            "runtime_config_target_missing",
+            "Sandbox profile does not have a primary target.",
+            status_code=409,
+        )
+    target = await targets_store.get_target_by_id(db, resolved_target_id)
+    if (
+        target is None
+        or target.sandbox_profile_id != profile.id
+        or target.archived_at is not None
+    ):
+        raise CloudApiError(
+            "runtime_config_target_not_found",
+            "Runtime config target was not found for this sandbox profile.",
+            status_code=404,
+        )
+
+    _current, revision = await revision_store.get_current(
+        db,
+        sandbox_profile_id=profile.id,
+    )
+    if revision is None:
+        await refresh_profile_runtime_config(
+            db,
+            sandbox_profile_id=profile.id,
+            actor_user_id=actor_user_id,
+            reason="desktop_local_session",
+        )
+        _current, revision = await revision_store.get_current(
+            db,
+            sandbox_profile_id=profile.id,
+        )
+    if revision is None:
+        raise CloudApiError(
+            "runtime_config_revision_missing",
+            "Runtime config revision was not created.",
+            status_code=500,
+        )
+
+    apply_request = await runtime_config_apply_request_for_revision(
+        db,
+        revision_id=revision.id,
+        target_id=resolved_target_id,
+        source="desktop",
+    )
+    revision_payload = apply_request.get("revision")
+    if not isinstance(revision_payload, dict):
+        raise CloudApiError(
+            "runtime_config_apply_request_invalid",
+            "Runtime config apply request is invalid.",
+            status_code=500,
+        )
+    return DesktopRuntimeConfigApplyResponse(
+        apply_request=apply_request,
+        expected_runtime_config_revision=_revision_expectation_from_apply_revision(
+            revision_payload
+        ),
     )
 
 
@@ -295,6 +373,7 @@ async def runtime_config_apply_request_for_revision(
     *,
     revision_id: UUID,
     target_id: UUID,
+    source: str = "worker",
 ) -> dict[str, object]:
     fragment = await runtime_config_fragment_for_revision(db, revision_id=revision_id)
     fragment = fragment.model_copy(update={"target_id": str(target_id)})
@@ -359,7 +438,28 @@ async def runtime_config_apply_request_for_revision(
         "manifest": fragment.manifest,
         "artifactPayloads": artifact_payloads,
         "credentialValues": credential_values,
-        "source": "worker",
+        "source": source,
+    }
+
+
+def _revision_expectation_from_apply_revision(
+    revision: dict[str, object],
+) -> dict[str, object]:
+    revision_id = revision.get("id")
+    content_hash = revision.get("contentHash")
+    if not isinstance(revision_id, str) or not isinstance(content_hash, str):
+        raise CloudApiError(
+            "runtime_config_apply_request_invalid",
+            "Runtime config apply request revision is invalid.",
+            status_code=500,
+        )
+    sequence = revision.get("sequence")
+    external_scope = revision.get("externalScope")
+    return {
+        "revisionId": revision_id,
+        "sequence": sequence if isinstance(sequence, int) else None,
+        "contentHash": content_hash,
+        "externalScope": external_scope if isinstance(external_scope, dict) else None,
     }
 
 

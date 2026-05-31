@@ -69,43 +69,6 @@ def _skill(
 
 
 _FIRST_PARTY_SKILLS_BY_CATALOG_ENTRY_ID: dict[str, tuple[PluginSkill, ...]] = {
-    "github": (
-        _skill(
-            catalog_entry_id="github",
-            id="triage",
-            display_name="GitHub triage",
-            description=(
-                "Inspect repositories, issues, pull requests, and checks before taking action."
-            ),
-            relative_path="github/triage.md",
-            source_path="plugins/github/skills/github/SKILL.md",
-            source_sha256="81dbdd90934fe86a79ddc4790fd211e5fca866302a74090ad153395f56f2bd42",
-            source_license="MIT",
-            notes="Router rewritten to exclude Codex publish/yeet flows.",
-        ),
-        _skill(
-            catalog_entry_id="github",
-            id="address-comments",
-            display_name="Address PR comments",
-            description=(
-                "Review unresolved PR feedback and plan changes against the current branch."
-            ),
-            relative_path="github/address-comments.md",
-            source_path="plugins/github/skills/gh-address-comments/SKILL.md",
-            source_sha256="c1ebc337357402f7faabafe712e0c463981a65f736453efe52abd305bcb74769",
-            source_license="MIT",
-        ),
-        _skill(
-            catalog_entry_id="github",
-            id="fix-ci",
-            display_name="Fix GitHub CI",
-            description="Inspect failing GitHub Actions checks and isolate likely fixes.",
-            relative_path="github/fix-ci.md",
-            source_path="plugins/github/skills/gh-fix-ci/SKILL.md",
-            source_sha256="7621a3560d788fb221d25f9753233fe0c393c5cfe63167c88b11f027c277b1f8",
-            source_license="MIT",
-        ),
-    ),
     "linear": (
         _skill(
             catalog_entry_id="linear",
@@ -241,28 +204,6 @@ _FIRST_PARTY_SKILLS_BY_CATALOG_ENTRY_ID: dict[str, tuple[PluginSkill, ...]] = {
             relative_path="render/monitor.md",
             source_path="plugins/render/skills/render-monitor/SKILL.md",
             source_sha256="b8ca61fb72d95bde1ce438939b14310a4b6cebebddcc2e74cdc6ae9cd93a0f8f",
-            source_license="MIT",
-        ),
-    ),
-    "huggingface": (
-        _skill(
-            catalog_entry_id="huggingface",
-            id="datasets",
-            display_name="Hugging Face datasets",
-            description="Inspect Hugging Face dataset metadata, splits, rows, and viewer results.",
-            relative_path="huggingface/datasets.md",
-            source_path="plugins/hugging-face/skills/datasets/SKILL.md",
-            source_sha256="5af74f3e042313efadf02e85c316a2576bdc0b0ff92c43c3ba5dcb6e2dae1ded",
-            source_license="MIT",
-        ),
-        _skill(
-            catalog_entry_id="huggingface",
-            id="papers",
-            display_name="Hugging Face papers",
-            description="Look up, summarize, and cross-reference Hugging Face paper pages.",
-            relative_path="huggingface/papers.md",
-            source_path="plugins/hugging-face/skills/papers/SKILL.md",
-            source_sha256="985c2d5c7261aba2b157811cde0c2b30134663694a4ab701280de28f941eb3b2",
             source_license="MIT",
         ),
     ),

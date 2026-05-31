@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from proliferate.server.cloud.mcp_catalog.domain.builders import bearer_header, secret_field
+from proliferate.server.cloud.mcp_catalog.domain.builders import (
+    bearer_header,
+    oauth_bearer_header,
+    secret_field,
+)
 from proliferate.server.cloud.mcp_catalog.domain.types import (
     CatalogEntry,
     HeaderTemplate,
@@ -54,6 +58,7 @@ HOSTED_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         http=HttpLaunchTemplate(
             url=StaticUrl("https://gitlab.com/api/v4/mcp"),
             display_url="https://gitlab.com/api/v4/mcp",
+            headers=(oauth_bearer_header(),),
         ),
         server_name_base="gitlab",
         icon_id="gitlab",
@@ -137,46 +142,6 @@ HOSTED_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
             "List Neon projects and branches",
             "Inspect database/schema context",
             "Run read-only Neon MCP tools",
-        ),
-    ),
-    CatalogEntry(
-        id="huggingface",
-        version=1,
-        name="Hugging Face",
-        one_liner="Search models, datasets, Spaces, and Hub metadata.",
-        description=(
-            "Use Hugging Face to search and inspect models, datasets, Spaces, model "
-            "cards, and Hub metadata through Hugging Face's hosted MCP server."
-        ),
-        docs_url="https://huggingface.co/docs/hub/en/hf-mcp-server",
-        availability="universal",
-        cloud_secret_sync=True,
-        transport="http",
-        auth_kind="secret",
-        http=HttpLaunchTemplate(
-            url=StaticUrl("https://huggingface.co/mcp"),
-            display_url="https://huggingface.co/mcp",
-            headers=(bearer_header("hf_token"),),
-        ),
-        server_name_base="huggingface",
-        icon_id="huggingface",
-        secret_fields=(
-            secret_field(
-                "hf_token",
-                "Access token",
-                "hf_...",
-                "Use a fine-grained Hugging Face access token with read permissions.",
-                (
-                    "Open Hugging Face access tokens, create or copy a fine-grained "
-                    "read token, and paste it here."
-                ),
-                "hf_",
-            ),
-        ),
-        capabilities=(
-            "Search models and datasets",
-            "Inspect model cards and Space metadata",
-            "Retrieve Hub context for implementation research",
         ),
     ),
 )

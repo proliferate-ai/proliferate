@@ -100,18 +100,27 @@ def test_auth_state_resolves_missing_auth_and_unknown_statuses() -> None:
     assert resolve_connection_auth_state(
         entry_auth_kind="none",
         has_auth=False,
+        stored_auth_kind=None,
         stored_auth_status=None,
     ) == ConnectionAuthState(auth_kind="none", auth_status="ready")
     assert resolve_connection_auth_state(
         entry_auth_kind="oauth",
         has_auth=False,
+        stored_auth_kind=None,
         stored_auth_status=None,
     ) == ConnectionAuthState(auth_kind="oauth", auth_status="needs_reconnect")
     assert resolve_connection_auth_state(
         entry_auth_kind="oauth",
         has_auth=True,
+        stored_auth_kind="oauth",
         stored_auth_status="unexpected",
     ) == ConnectionAuthState(auth_kind="oauth", auth_status="error")
+    assert resolve_connection_auth_state(
+        entry_auth_kind="oauth",
+        has_auth=True,
+        stored_auth_kind="secret",
+        stored_auth_status="ready",
+    ) == ConnectionAuthState(auth_kind="oauth", auth_status="needs_reconnect")
 
 
 def test_oauth_resource_change_policy_only_blocks_ready_oauth() -> None:

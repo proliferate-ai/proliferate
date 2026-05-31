@@ -119,12 +119,15 @@ def resolve_connection_auth_state(
     *,
     entry_auth_kind: str | None,
     has_auth: bool,
+    stored_auth_kind: str | None,
     stored_auth_status: str | None,
 ) -> ConnectionAuthState:
     auth_kind = _connection_auth_kind(entry_auth_kind)
     if not has_auth:
         auth_status: CloudMcpAuthStatus = "ready" if auth_kind == "none" else "needs_reconnect"
         return ConnectionAuthState(auth_kind, auth_status)
+    if _connection_auth_kind(stored_auth_kind) != auth_kind:
+        return ConnectionAuthState(auth_kind, "needs_reconnect")
     return ConnectionAuthState(auth_kind, _connection_auth_status(stored_auth_status))
 
 

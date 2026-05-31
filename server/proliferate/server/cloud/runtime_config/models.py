@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -34,6 +35,21 @@ class RuntimeConfigStatusResponse(BaseModel):
     )
     manifest: dict[str, object] | None = None
     warnings: dict[str, object] | None = None
+
+
+class DesktopRuntimeConfigApplyRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    target_id: UUID | None = Field(default=None, alias="targetId")
+
+
+class DesktopRuntimeConfigApplyResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    apply_request: dict[str, object] = Field(alias="applyRequest")
+    expected_runtime_config_revision: dict[str, object] = Field(
+        alias="expectedRuntimeConfigRevision",
+    )
 
 
 class RuntimeConfigArtifactRefModel(BaseModel):

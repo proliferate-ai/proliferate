@@ -4,6 +4,7 @@ from proliferate.config import settings
 from proliferate.constants.mcp_catalog import GOOGLE_WORKSPACE_MCP_PACKAGE
 from proliferate.server.cloud.mcp_catalog.domain.builders import (
     bearer_header,
+    oauth_bearer_header,
     secret_field,
     secret_query,
     setting_option,
@@ -23,50 +24,6 @@ from proliferate.server.cloud.mcp_catalog.domain.types import (
 )
 
 BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
-    CatalogEntry(
-        id="github",
-        version=1,
-        name="GitHub",
-        one_liner="Search repositories, issues, pull requests, and code on GitHub.",
-        description=(
-            "Use GitHub to inspect repositories, review pull requests, follow issues, "
-            "and pull in docs without leaving Proliferate."
-        ),
-        docs_url=(
-            "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/"
-            "managing-your-personal-access-tokens"
-        ),
-        availability="universal",
-        cloud_secret_sync=True,
-        transport="http",
-        auth_kind="secret",
-        http=HttpLaunchTemplate(
-            url=StaticUrl("https://api.githubcopilot.com/mcp/"),
-            display_url="https://api.githubcopilot.com/mcp/",
-            headers=(bearer_header("personal_access_token"),),
-        ),
-        server_name_base="github",
-        icon_id="github",
-        secret_fields=(
-            secret_field(
-                "personal_access_token",
-                "Personal access token",
-                "github_pat_...",
-                "Use a fine-grained personal access token.",
-                (
-                    "Open GitHub Settings, create a fine-grained personal access token, "
-                    "copy it, and paste it here."
-                ),
-                "github_pat_",
-            ),
-        ),
-        capabilities=(
-            "Search code across repositories you can access",
-            "Read pull requests, reviews, and discussions",
-            "Browse issues, labels, and milestones",
-            "Pull in README and doc content from repos",
-        ),
-    ),
     CatalogEntry(
         id="context7",
         version=1,
@@ -179,17 +136,18 @@ BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
     ),
     CatalogEntry(
         id="posthog",
-        version=1,
+        version=2,
         name="PostHog",
         one_liner="Inspect PostHog product analytics, flags, and event context.",
         description=(
             "Use PostHog to query product analytics, feature flags, events, and "
-            "observability context through a selected PostHog region."
+            "observability context through PostHog's hosted OAuth MCP server."
         ),
         docs_url="https://posthog.com/docs/model-context-protocol",
         availability="universal",
         transport="http",
-        auth_kind="secret",
+        auth_kind="oauth",
+        oauth_client_mode="dcr",
         http=HttpLaunchTemplate(
             url=UrlBySetting(
                 setting_id="region",
@@ -200,7 +158,7 @@ BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
             ),
             display_url="https://mcp.posthog.com/mcp",
             headers=(
-                bearer_header("apiKey"),
+                oauth_bearer_header(),
                 HeaderTemplate(
                     "x-posthog-organization-id",
                     "{settings.organizationId}",
@@ -215,16 +173,6 @@ BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         ),
         server_name_base="posthog",
         icon_id="posthog",
-        secret_fields=(
-            secret_field(
-                "apiKey",
-                "Project API key",
-                "phx_...",
-                "Create or copy a project API key from your PostHog settings.",
-                "Open PostHog project settings, copy a project API key, and paste it here.",
-                "phx_",
-            ),
-        ),
         settings_fields=(
             CatalogSettingField(
                 id="region",
@@ -274,6 +222,60 @@ BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
             "Bring PostHog observability into debugging sessions",
         ),
     ),
+    CatalogEntry(
+        id="sentry",
+        version=1,
+        name="Sentry",
+        one_liner="Investigate Sentry issues, stack traces, projects, and releases.",
+        description=(
+            "Use Sentry to inspect issues, events, stack traces, projects, releases, "
+            "and team context through Sentry's hosted OAuth MCP server."
+        ),
+        docs_url="https://mcp.sentry.dev/",
+        availability="universal",
+        transport="http",
+        auth_kind="oauth",
+        oauth_client_mode="dcr",
+        http=HttpLaunchTemplate(
+            url=StaticUrl("https://mcp.sentry.dev/mcp"),
+            display_url="https://mcp.sentry.dev/mcp",
+            headers=(oauth_bearer_header(),),
+        ),
+        server_name_base="sentry",
+        icon_id="sentry",
+        capabilities=(
+            "Inspect Sentry issues and events",
+            "Pull stack traces and project context into debugging sessions",
+            "Review release, organization, and team metadata you authorize",
+        ),
+    ),
+    CatalogEntry(
+        id="axiom",
+        version=1,
+        name="Axiom",
+        one_liner="Query Axiom logs, traces, datasets, and monitor context.",
+        description=(
+            "Use Axiom to query datasets, analyze traces, inspect logs, and review "
+            "monitor context through Axiom's hosted OAuth MCP server."
+        ),
+        docs_url="https://mcp.axiom.co/",
+        availability="universal",
+        transport="http",
+        auth_kind="oauth",
+        oauth_client_mode="dcr",
+        http=HttpLaunchTemplate(
+            url=StaticUrl("https://mcp.axiom.co/mcp"),
+            display_url="https://mcp.axiom.co/mcp",
+            headers=(oauth_bearer_header(),),
+        ),
+        server_name_base="axiom",
+        icon_id="axiom",
+        capabilities=(
+            "Query Axiom datasets and logs",
+            "Analyze traces and observability context",
+            "Inspect monitor and alert data you authorize",
+        ),
+    ),
     *HOSTED_CONNECTOR_CATALOG,
     CatalogEntry(
         id="linear",
@@ -289,6 +291,7 @@ BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         http=HttpLaunchTemplate(
             url=StaticUrl("https://mcp.linear.app/mcp"),
             display_url="https://mcp.linear.app/mcp",
+            headers=(oauth_bearer_header(),),
         ),
         server_name_base="linear",
         icon_id="linear",
@@ -315,6 +318,7 @@ BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         http=HttpLaunchTemplate(
             url=StaticUrl("https://mcp.slack.com/mcp"),
             display_url="https://mcp.slack.com/mcp",
+            headers=(oauth_bearer_header(),),
         ),
         server_name_base="slack",
         icon_id="slack",
@@ -342,6 +346,7 @@ BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         http=HttpLaunchTemplate(
             url=StaticUrl("https://mcp.supabase.com/mcp"),
             display_url="https://mcp.supabase.com/mcp",
+            headers=(oauth_bearer_header(),),
             query=(
                 QueryTemplate("project_ref", "{settings.projectRef}"),
                 QueryTemplate("read_only", "{settings.readOnly}"),
@@ -393,6 +398,7 @@ BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
         http=HttpLaunchTemplate(
             url=StaticUrl("https://mcp.notion.com/mcp"),
             display_url="https://mcp.notion.com/mcp",
+            headers=(oauth_bearer_header(),),
         ),
         server_name_base="notion",
         icon_id="notion",
@@ -400,51 +406,6 @@ BASE_CONNECTOR_CATALOG: tuple[CatalogEntry, ...] = (
             "Search authorized pages and databases",
             "Read and update selected records",
             "Navigate the workspaces you grant access to",
-        ),
-    ),
-    CatalogEntry(
-        id="filesystem",
-        version=1,
-        name="Filesystem",
-        one_liner="Read and write files inside the current workspace.",
-        description=(
-            "Use the Filesystem server when Proliferate should inspect or edit files "
-            "directly through MCP against the active workspace path."
-        ),
-        docs_url="https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem",
-        availability="local_only",
-        transport="stdio",
-        auth_kind="none",
-        command="mcp-server-filesystem",
-        args=(ArgTemplate(kind="workspace_path"),),
-        server_name_base="filesystem",
-        icon_id="filesystem",
-        capabilities=(
-            "Read files inside the active workspace",
-            "Create new files in the workspace",
-            "Make targeted edits without leaving the session",
-        ),
-    ),
-    CatalogEntry(
-        id="playwright",
-        version=1,
-        name="Playwright",
-        one_liner="Drive and inspect the browser with Playwright tools.",
-        description=(
-            "Use Playwright when Proliferate needs browser automation, DOM inspection, "
-            "and page interaction over MCP."
-        ),
-        docs_url="https://github.com/microsoft/playwright-mcp",
-        availability="local_only",
-        transport="stdio",
-        auth_kind="none",
-        command="playwright-mcp",
-        server_name_base="playwright",
-        icon_id="playwright",
-        capabilities=(
-            "Launch a headless browser session",
-            "Click, type, and navigate pages",
-            "Capture DOM state and page snapshots",
         ),
     ),
 )

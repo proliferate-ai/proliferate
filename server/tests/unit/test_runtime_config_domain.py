@@ -127,6 +127,8 @@ def _mcp(
     public_organization_id: str | None = None,
     auth_status: str | None = "ready",
     server_name: str = "github",
+    catalog_entry_id: str = "github",
+    auth_kind: str = "secret",
 ) -> McpConnectionSnapshot:
     return McpConnectionSnapshot(
         id=id,
@@ -134,7 +136,7 @@ def _mcp(
         owner_user_id=owner_user_id,
         organization_id=None,
         connection_id=id,
-        catalog_entry_id="github",
+        catalog_entry_id=catalog_entry_id,
         catalog_entry_version=1,
         server_name=server_name,
         enabled=True,
@@ -143,7 +145,7 @@ def _mcp(
         public_status="public" if public_organization_id else "private",
         settings_json="{}",
         config_version=1,
-        auth_kind="secret",
+        auth_kind=auth_kind,
         auth_status=auth_status,
         auth_version=1,
     )
@@ -200,14 +202,16 @@ def _input(
     mcps: tuple[McpConnectionSnapshot, ...] = (),
     skills: tuple[SkillConfiguredItemSnapshot, ...] = (),
     plugins: tuple[PluginConfiguredItemSnapshot, ...] = (),
+    catalog: tuple[CatalogEntry, ...] | None = None,
+    plugin_packages: tuple[PluginPackage, ...] | None = None,
 ) -> ResolverInput:
     return ResolverInput(
         sandbox_profile=profile or _profile(),
         mcp_connections=mcps,
         skill_configured_items=skills,
         plugin_configured_items=plugins,
-        catalog=(_entry(),),
-        plugin_packages=(_plugin_package(),),
+        catalog=catalog if catalog is not None else (_entry(),),
+        plugin_packages=plugin_packages if plugin_packages is not None else (_plugin_package(),),
     )
 
 
@@ -405,6 +409,75 @@ def test_manifest_hash_is_stable_and_redacts_secret_values() -> None:
             "transport": "http",
             "outcome": "applied",
             "reason": None,
+        }
+    ]
+
+
+def test_oauth_manifest_materializes_access_token_header() -> None:
+    entry = CatalogEntry(
+        id="sentry",
+        version=1,
+        name="Sentry",
+        one_liner="one line",
+        description="description",
+        docs_url="https://mcp.sentry.dev/",
+        availability="universal",
+        transport="http",
+        auth_kind="oauth",
+        oauth_client_mode="dcr",
+        server_name_base="sentry",
+        icon_id="globe",
+        capabilities=(),
+        http=HttpLaunchTemplate(
+            url=StaticUrl("https://mcp.sentry.dev/mcp"),
+            display_url="https://mcp.sentry.dev/mcp",
+            headers=(
+                HeaderTemplate(
+                    name="Authorization",
+                    value="Bearer {secret.accessToken}",
+                    optional=True,
+                ),
+            ),
+        ),
+    )
+    plan = resolve_runtime_config(
+        _input(
+            mcps=(
+                _mcp(
+                    id="mcp-oauth",
+                    catalog_entry_id="sentry",
+                    auth_kind="oauth",
+                    server_name="sentry",
+                ),
+            ),
+            catalog=(entry,),
+            plugin_packages=(),
+        )
+    )
+
+    compiled = compile_runtime_config_manifest(plan, sandbox_profile_id="profile-1")
+    server = compiled.manifest["mcpServers"][0]
+
+    assert server["launch"]["headers"] == [
+        {
+            "name": "Authorization",
+            "value": {
+                "kind": "template",
+                "parts": [
+                    {"kind": "literal", "value": "Bearer "},
+                    {"kind": "credential", "credentialRef": "mcp:mcp-oauth:accessToken"},
+                ],
+            },
+        }
+    ]
+    assert server["credentialRefs"] == [
+        {
+            "credentialRef": "mcp:mcp-oauth:accessToken",
+            "usedIn": "mcp_launch_header",
+            "mcpServerId": "mcp:mcp-oauth",
+            "fieldName": "accessToken",
+            "authKind": "oauth",
+            "authVersion": 1,
         }
     ]
 

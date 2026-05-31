@@ -2435,6 +2435,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/runtime-config/desktop-apply-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Desktop Runtime Config Apply Request Endpoint */
+        post: operations["desktop_runtime_config_apply_request_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__runtime_config_desktop_apply_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/worker/agent-auth-configs/{sandbox_profile_id}/materialization": {
         parameters: {
             query?: never;
@@ -5699,6 +5716,22 @@ export interface components {
         /** CurrentTeamCheckoutResponse */
         CurrentTeamCheckoutResponse: {
             intent?: components["schemas"]["TeamCheckoutIntentResponse"] | null;
+        };
+        /** DesktopRuntimeConfigApplyRequest */
+        DesktopRuntimeConfigApplyRequest: {
+            /** Targetid */
+            targetId?: string | null;
+        };
+        /** DesktopRuntimeConfigApplyResponse */
+        DesktopRuntimeConfigApplyResponse: {
+            /** Applyrequest */
+            applyRequest: {
+                [key: string]: unknown;
+            };
+            /** Expectedruntimeconfigrevision */
+            expectedRuntimeConfigRevision: {
+                [key: string]: unknown;
+            };
         };
         /** DirectAccessTokenRequest */
         DirectAccessTokenRequest: {
@@ -14118,6 +14151,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RuntimeConfigStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    desktop_runtime_config_apply_request_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__runtime_config_desktop_apply_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandbox_profile_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopRuntimeConfigApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopRuntimeConfigApplyResponse"];
                 };
             };
             /** @description Validation Error */
