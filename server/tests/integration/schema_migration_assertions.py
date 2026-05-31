@@ -58,6 +58,7 @@ async def assert_current_schema(
         "organization",
         "organization_invitation",
         "organization_membership",
+        "password_login_attempt",
         "usage_segment",
         "user",
         "webhook_event_receipt",
@@ -332,7 +333,32 @@ async def assert_current_schema(
     user_columns = await conn.run_sync(
         lambda sync_conn: {column["name"] for column in inspect(sync_conn).get_columns("user")}
     )
-    assert {"github_login", "avatar_url"} <= user_columns
+    assert {"github_login", "avatar_url", "password_set_at"} <= user_columns
+
+    password_login_attempt_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"]
+            for column in inspect(sync_conn).get_columns("password_login_attempt")
+        }
+    )
+    assert {
+        "id",
+        "bucket_kind",
+        "bucket_key",
+        "failure_count",
+        "window_started_at",
+        "blocked_until",
+        "last_attempt_at",
+        "created_at",
+        "updated_at",
+    } <= password_login_attempt_columns
+    password_login_attempt_uniques = await conn.run_sync(
+        lambda sync_conn: {
+            constraint["name"]
+            for constraint in inspect(sync_conn).get_unique_constraints("password_login_attempt")
+        }
+    )
+    assert "uq_password_login_attempt_bucket" in password_login_attempt_uniques
 
     auth_identity_columns = await conn.run_sync(
         lambda sync_conn: {

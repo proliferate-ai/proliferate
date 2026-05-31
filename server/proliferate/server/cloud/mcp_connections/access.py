@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.db.store.cloud_mcp.connections import get_user_connection
@@ -19,7 +19,7 @@ from proliferate.server.cloud.mcp_connections.domain.connection_rules import (
 
 async def mcp_connection_user_can_manage(
     connection_id: str,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpConnectionRecord:
     try:

@@ -131,6 +131,24 @@ The development access-token field exists only in Vite dev mode. Prefer normal
 OAuth when testing auth, onboarding, GitHub linking, teams, billing, or product
 readiness.
 
+## Email/Password Test Accounts
+
+Email/password login is for provisioned accounts; public signup is not exposed.
+To create or update a local account password, run:
+
+```bash
+read -r -s PROLIFERATE_REVIEWER_PASSWORD
+uv --directory server run python scripts/provision_password_auth_user.py \
+  --email reviewer@example.com \
+  --password-env PROLIFERATE_REVIEWER_PASSWORD \
+  --display-name 'Reviewer'
+```
+
+The account can sign in on Web and Mobile immediately. It still needs a linked
+GitHub identity before cloud workspaces and automations are product-ready.
+Desktop keeps GitHub as the primary sign-in path, but an authenticated user can
+add or change an email/password credential from Account settings.
+
 ## Desktop
 
 The desktop app starts automatically at the end of `make dev PROFILE=<name>`.

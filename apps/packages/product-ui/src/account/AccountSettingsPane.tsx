@@ -5,6 +5,15 @@ import { Button } from "@proliferate/ui/primitives/Button";
 
 import { SettingsCard } from "../settings/SettingsCard";
 import { SettingsCardRow } from "../settings/SettingsCardRow";
+import {
+  AccountPasswordCredentialCard,
+  type AccountPasswordCredentialView,
+} from "./AccountPasswordCredentialCard";
+
+export type {
+  AccountPasswordCredentialSubmit,
+  AccountPasswordCredentialView,
+} from "./AccountPasswordCredentialCard";
 
 export type AccountProviderKind = "github" | "google" | "apple";
 
@@ -46,6 +55,7 @@ export interface AccountSettingsPaneProps {
   accessDescription?: ReactNode;
   providersTitle?: string;
   providersDescription?: ReactNode;
+  passwordCredential?: AccountPasswordCredentialView;
   error?: ReactNode;
 }
 
@@ -61,6 +71,7 @@ export function AccountSettingsPane({
   accessDescription = "Sign in and link providers so web, mobile, and desktop resolve to the same Proliferate account.",
   providersTitle = "Connected providers",
   providersDescription = "GitHub is required for repository access. Add Google and Apple identities to sign in across devices without creating a separate account.",
+  passwordCredential,
   error,
 }: AccountSettingsPaneProps) {
   return (
@@ -115,6 +126,10 @@ export function AccountSettingsPane({
           </div>
         </div>
       </SettingsCard>
+
+      {passwordCredential ? (
+        <AccountPasswordCredentialCard credential={passwordCredential} />
+      ) : null}
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
     </div>

@@ -18,6 +18,7 @@ interface AuthStartPanelProps {
   subtitle: ReactNode;
   footer: ReactNode;
   providers: AuthProviderActionView[];
+  credentialForm?: ReactNode;
   note?: ReactNode;
   error?: ReactNode;
   devAccess?: ReactNode;
@@ -29,12 +30,15 @@ export function AuthStartPanel({
   subtitle,
   footer,
   providers,
+  credentialForm,
   note,
   error,
   devAccess,
 }: AuthStartPanelProps) {
   return (
     <AuthLayout mark={mark} title={title} subtitle={subtitle} footer={footer}>
+      {credentialForm}
+      {credentialForm ? <AuthDivider /> : null}
       {providers.map((provider) => (
         <AuthProviderButton
           key={provider.id}
@@ -49,11 +53,24 @@ export function AuthStartPanel({
       ))}
       {note ? <p className="mt-2 text-center text-xs leading-5 text-muted-foreground">{note}</p> : null}
       {error ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm leading-5 text-destructive">
+        <div
+          className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm leading-5 text-destructive"
+          role="alert"
+        >
           {error}
         </div>
       ) : null}
       {devAccess}
     </AuthLayout>
+  );
+}
+
+function AuthDivider() {
+  return (
+    <div className="flex items-center gap-3" aria-hidden="true">
+      <div className="h-px flex-1 bg-border-light" />
+      <span className="text-[11px] uppercase tracking-wide text-faint">or</span>
+      <div className="h-px flex-1 bg-border-light" />
+    </div>
   );
 }

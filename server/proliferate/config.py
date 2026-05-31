@@ -48,6 +48,8 @@ class Settings(BaseSettings):
 
     # Auth
     jwt_secret: str = "CHANGE-ME-IN-PRODUCTION"
+    password_auth_enabled: bool = True
+    password_auth_trusted_proxy_hosts: str = ""
 
     # GitHub OAuth
     github_oauth_client_id: str = ""

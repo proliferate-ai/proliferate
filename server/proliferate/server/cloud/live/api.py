@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.db.store.cloud_sync import targets as targets_store
@@ -36,7 +36,7 @@ router = APIRouter(tags=["cloud-live"])
 async def get_workspace_snapshot_endpoint(
     workspace_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> CloudWorkspaceSnapshotResponse:
     try:
         workspace = await get_cloud_workspace_detail(db, user.id, workspace_id)

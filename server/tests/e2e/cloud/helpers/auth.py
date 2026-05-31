@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.models import UserCreate
 from proliferate.auth.users import UserManager
+from proliferate.db.models.auth import OAuthAccount
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 from tests.e2e.cloud.helpers.shared import AuthSession, CloudE2ETestError
 
@@ -29,6 +30,15 @@ async def create_user_and_login(
                 email=f"{email_prefix}-{uuid.uuid4().hex[:8]}@example.com",
                 password=uuid.uuid4().hex + uuid.uuid4().hex,
                 display_name="Cloud E2E",
+            )
+        )
+        db_session.add(
+            OAuthAccount(
+                user_id=user.id,
+                oauth_name="github",
+                access_token="github-access-token",
+                account_id=f"github-{user.id}",
+                account_email=user.email,
             )
         )
         await db_session.commit()

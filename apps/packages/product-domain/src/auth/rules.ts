@@ -1,4 +1,4 @@
-import type { AuthGateState, AuthProvider, ProductViewer } from "./model";
+import type { AuthGateState, AuthMethod, AuthProvider, ProductViewer } from "./model";
 
 export function deriveAuthGateState(viewer: ProductViewer | null): AuthGateState {
   if (!viewer) {
@@ -14,6 +14,10 @@ export function deriveAuthGateState(viewer: ProductViewer | null): AuthGateState
 
 export function providerRequiresGitHubGate(provider: AuthProvider): boolean {
   return provider === "apple" || provider === "google";
+}
+
+export function authMethodRequiresGitHubGate(method: AuthMethod): boolean {
+  return method === "password" || providerRequiresGitHubGate(method);
 }
 
 export function isProductViewer(viewer: ProductViewer): boolean {

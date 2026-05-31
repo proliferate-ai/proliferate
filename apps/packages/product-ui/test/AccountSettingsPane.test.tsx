@@ -100,4 +100,45 @@ describe("AccountSettingsPane", () => {
     expect(screen.getByText("Apple")).toBeTruthy();
     expect(screen.getAllByText("Not connected").length).toBeGreaterThan(0);
   });
+
+  it("keeps email password separate from linked providers", async () => {
+    const setPassword = vi.fn();
+
+    render(
+      <AccountSettingsPane
+        displayName="Pablo"
+        email="pablo@example.com"
+        profileSummary="Ready."
+        githubLabel="@pablo"
+        providers={[
+          {
+            provider: "github",
+            label: "GitHub",
+            accountLabel: "@pablo",
+            connected: true,
+            primary: true,
+          },
+        ]}
+        passwordCredential={{
+          enabled: false,
+          onSubmit: setPassword,
+        }}
+        actions={{}}
+      />,
+    );
+
+    expect(screen.getByText("Email/password")).toBeTruthy();
+    expect(screen.getByText("Not set")).toBeTruthy();
+    fireEvent.click(screen.getByText("Set password"));
+    fireEvent.change(screen.getByLabelText("New password"), {
+      target: { value: "correct horse battery" },
+    });
+    fireEvent.change(screen.getByLabelText("Confirm new password"), {
+      target: { value: "correct horse battery" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Set password" }));
+
+    expect(setPassword).toHaveBeenCalledWith({ newPassword: "correct horse battery" });
+    expect(screen.queryByText("Apple")).toBeNull();
+  });
 });

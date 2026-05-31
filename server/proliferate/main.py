@@ -14,10 +14,9 @@ import proliferate.db.models.automations  # noqa: F401
 import proliferate.db.models.cloud  # noqa: F401
 import proliferate.db.models.organizations  # noqa: F401
 from proliferate.auth.api import router as auth_viewer_router
-from proliferate.auth.dependencies import fastapi_users
 from proliferate.auth.desktop.api import router as desktop_router
 from proliferate.auth.identity.api import router as identity_auth_router
-from proliferate.auth.models import UserRead, UserUpdate
+from proliferate.auth.profile_api import router as user_profile_router
 from proliferate.config import get_cors_allow_origins, settings
 from proliferate.constants.app import APP_NAME
 from proliferate.db import engine as db_engine
@@ -178,11 +177,7 @@ def create_app() -> FastAPI:
     app.add_exception_handler(ProliferateError, _proliferate_error_handler)
 
     # ── Auth: users/me (read-only profile) ──
-    app.include_router(
-        fastapi_users.get_users_router(UserRead, UserUpdate),
-        prefix=f"{api_prefix}/users",
-        tags=["users"],
-    )
+    app.include_router(user_profile_router, prefix=api_prefix)
 
     # ── Auth: Desktop PKCE flow ──
     app.include_router(desktop_router, prefix=f"{api_prefix}/auth", tags=["auth"])

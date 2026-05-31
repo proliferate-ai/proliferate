@@ -61,6 +61,7 @@ export function MobileShell() {
     accessToken,
     user,
     signInWithProvider,
+    signInWithPassword,
     connectGitHub,
     signOut,
     loadingAction,
@@ -291,6 +292,7 @@ export function MobileShell() {
         <StatusBar style="light" />
         <MobileAuthScreen
           onProvider={(provider) => void signInWithProvider(provider)}
+          onPassword={(email, password) => void signInWithPassword(email, password)}
           loadingAction={loadingAction}
           error={error}
         />

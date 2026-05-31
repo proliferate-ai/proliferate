@@ -32,7 +32,7 @@ async def _create_user_and_get_tokens(
     display_name: str = "Organization Tester",
 ) -> dict[str, str]:
     from proliferate.db import engine as engine_module
-    from proliferate.db.models.auth import User
+    from proliferate.db.models.auth import OAuthAccount, User
 
     async with engine_module.async_session_factory() as session:
         user = User(
@@ -45,6 +45,16 @@ async def _create_user_and_get_tokens(
             avatar_url="https://example.com/avatar.png",
         )
         session.add(user)
+        await session.flush()
+        session.add(
+            OAuthAccount(
+                user_id=user.id,
+                oauth_name="github",
+                access_token="github-access-token",
+                account_id=f"github-{user.id}",
+                account_email=email,
+            )
+        )
         await session.commit()
         user_id = str(user.id)
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.constants.cloud import DEFAULT_WORKTREE_POLICY_UPDATED_AT
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
@@ -40,7 +40,7 @@ def _worktree_policy_response(
 )
 async def get_cloud_worktree_retention_policy_endpoint(
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> CloudWorktreeRetentionPolicyResponse:
     return _worktree_policy_response(await get_worktree_retention_policy(db, user.id))
 
@@ -52,7 +52,7 @@ async def get_cloud_worktree_retention_policy_endpoint(
 async def put_cloud_worktree_retention_policy_endpoint(
     body: CloudWorktreeRetentionPolicyRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> CloudWorktreeRetentionPolicyResponse:
     return _worktree_policy_response(
         await set_worktree_retention_policy(

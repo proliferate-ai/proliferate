@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
@@ -39,7 +39,7 @@ async def list_sessions_endpoint(
     workspace_id: str | None = Query(default=None, alias="workspaceId"),
     limit: int = Query(default=100, ge=1, le=200),
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> list[CloudSessionProjectionResponse]:
     try:
         return await list_session_summaries(
@@ -59,7 +59,7 @@ async def get_session_snapshot_endpoint(
     session_id: str,
     target_id: UUID = Query(alias="targetId"),
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> CloudSessionSnapshotResponse:
     try:
         resolved_target_id = await ensure_visible_session_target(
@@ -82,7 +82,7 @@ async def get_session_snapshot_alias_endpoint(
     session_id: str,
     target_id: UUID = Query(alias="targetId"),
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> CloudSessionSnapshotResponse:
     try:
         resolved_target_id = await ensure_visible_session_target(
@@ -105,7 +105,7 @@ async def get_transcript_snapshot_endpoint(
     session_id: str,
     target_id: UUID = Query(alias="targetId"),
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> CloudTranscriptSnapshotResponse:
     try:
         resolved_target_id = await ensure_visible_session_target(
@@ -130,7 +130,7 @@ async def list_session_events_endpoint(
     after_seq: int = Query(default=0, alias="afterSeq"),
     limit: int = Query(default=100, ge=1, le=200),
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> CloudSessionEventsResponse:
     try:
         resolved_target_id = await ensure_visible_session_target(

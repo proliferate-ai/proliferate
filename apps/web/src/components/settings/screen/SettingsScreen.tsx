@@ -2,13 +2,14 @@ import { CircleUserRound, CreditCard, GitBranch, LifeBuoy, UsersRound } from "lu
 import { useState, type FormEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
-import type { AuthProviderName } from "@proliferate/cloud-sdk";
+import { setPasswordCredential, type AuthProviderName } from "@proliferate/cloud-sdk";
 import {
   normalizeCloudSettingsSectionId,
   WEB_CLOUD_SETTINGS_SECTIONS,
   type CloudSettingsIconToken,
 } from "@proliferate/product-domain/settings/cloud-settings";
 import type {
+  AccountPasswordCredentialSubmit,
   AccountProviderView,
   AccountSettingsPaneProps,
 } from "@proliferate/product-ui/account/AccountSettingsPane";
@@ -72,6 +73,17 @@ export function SettingsScreen() {
     }
   }
 
+  async function setPassword(input: AccountPasswordCredentialSubmit) {
+    if (!token) {
+      throw new Error("Sign in before changing password.");
+    }
+    await setPasswordCredential({
+      currentPassword: input.currentPassword,
+      newPassword: input.newPassword,
+    });
+    await viewer.refetch();
+  }
+
   return (
     <div className="h-full" data-telemetry-block>
       <SettingsShell
@@ -101,6 +113,7 @@ export function SettingsScreen() {
               connectGitHub: () => void startProvider("github", "required_github_link"),
               connectGoogle: () => void startProvider("google"),
               connectApple: () => void startProvider("apple"),
+              setPassword,
               signOut: () => void signOut(),
             })}
           />
@@ -350,6 +363,7 @@ function buildAccountSettingsProps({
   connectGitHub,
   connectGoogle,
   connectApple,
+  setPassword,
   signOut,
 }: {
   viewer: ReturnType<typeof useAuthViewer>["data"];
@@ -358,6 +372,7 @@ function buildAccountSettingsProps({
   connectGitHub: () => void;
   connectGoogle: () => void;
   connectApple: () => void;
+  setPassword: (input: AccountPasswordCredentialSubmit) => void | Promise<void>;
   signOut: () => void;
 }): AccountSettingsPaneProps {
   const user = viewer?.user;
@@ -378,6 +393,13 @@ function buildAccountSettingsProps({
       : "GitHub is required before cloud workspaces and automations can run end to end.",
     githubLabel,
     providers: buildProviderViews(linkedProviders, providerAvailability, Boolean(viewer?.githubConnected)),
+    passwordCredential: {
+      enabled: viewer?.passwordCredential.enabled ?? false,
+      setAt: viewer?.passwordCredential.setAt ?? null,
+      loading: !viewer,
+      disabled: !viewer,
+      onSubmit: setPassword,
+    },
     actions: {
       connectGitHub: viewer?.githubConnected
         ? undefined

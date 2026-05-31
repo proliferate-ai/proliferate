@@ -5,8 +5,18 @@ export const AUTH_PROVIDER_ORDER = ["github", "apple", "google"] as const satisf
 export const AUTH_SIGN_IN_COPY = {
   title: "Let's help you get your life's work done.",
   subtitle: "Sign in to run cloud workspaces, automations, and coding agents across devices.",
-  note: "GitHub is required for cloud workspaces and automations. You can link it after signing in with Apple or Google.",
+  note: "GitHub is required for cloud workspaces and automations. You can link it after signing in with email, Apple, or Google.",
   footer: "By continuing you agree to the Proliferate Terms and Privacy Policy.",
+} as const;
+
+export const AUTH_PASSWORD_COPY = {
+  sectionLabel: "Email",
+  emailLabel: "Email",
+  emailPlaceholder: "you@example.com",
+  passwordLabel: "Password",
+  passwordPlaceholder: "Password",
+  submitLabel: "Continue with email",
+  busyLabel: "Signing in",
 } as const;
 
 export const AUTH_REQUIRED_GITHUB_COPY = {

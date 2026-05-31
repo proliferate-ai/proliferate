@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
@@ -38,7 +38,7 @@ worker_router = APIRouter(prefix="/worker/runtime-configs", tags=["cloud-worker-
 async def get_runtime_config_status_endpoint(
     sandbox_profile_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> RuntimeConfigStatusResponse:
     try:
         await get_profile(db, user=user, sandbox_profile_id=sandbox_profile_id)
@@ -57,7 +57,7 @@ async def refresh_runtime_config_endpoint(
     sandbox_profile_id: UUID,
     body: RefreshRuntimeConfigRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> RuntimeConfigStatusResponse:
     try:
         await get_profile(db, user=user, sandbox_profile_id=sandbox_profile_id)

@@ -7,7 +7,16 @@ from fastapi_users_db_sqlalchemy import (
     SQLAlchemyBaseOAuthAccountTableUUID,
     SQLAlchemyBaseUserTableUUID,
 )
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from proliferate.db.models.base import Base, utcnow
@@ -21,6 +30,10 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     github_login: Mapped[str | None] = mapped_column(String(255), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    password_set_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     oauth_accounts: Mapped[list[OAuthAccount]] = relationship("OAuthAccount", lazy="selectin")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -146,3 +159,27 @@ class AuthChallenge(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PasswordLoginAttempt(Base):
+    """Per-bucket password login throttling state."""
+
+    __tablename__ = "password_login_attempt"
+    __table_args__ = (
+        UniqueConstraint("bucket_kind", "bucket_key", name="uq_password_login_attempt_bucket"),
+        Index("ix_password_login_attempt_blocked_until", "blocked_until"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    bucket_kind: Mapped[str] = mapped_column(String(32))
+    bucket_key: Mapped[str] = mapped_column(String(128))
+    failure_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    window_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    blocked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
