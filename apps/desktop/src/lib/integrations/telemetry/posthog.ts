@@ -79,3 +79,20 @@ export function resetDesktopPostHogUser(): void {
   if (!posthogInitialized) return;
   posthog.reset(true);
 }
+
+export function getDesktopPostHogSupportRefs(): {
+  posthogDistinctId?: string;
+  posthogSessionId?: string;
+} {
+  if (!posthogInitialized) {
+    return {};
+  }
+  const client = posthog as unknown as {
+    get_distinct_id?: () => string | undefined;
+    get_session_id?: () => string | undefined;
+  };
+  return {
+    posthogDistinctId: client.get_distinct_id?.(),
+    posthogSessionId: client.get_session_id?.(),
+  };
+}

@@ -8,12 +8,16 @@ import {
 import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 import { workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
+import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import type {
   SupportReportWindowSnapshot,
   SupportReportWorkspaceOption,
 } from "@/lib/domain/support/report-types";
 import type { SupportMessageContext } from "@/lib/domain/support/types";
+
+const MAX_LOCAL_SESSION_REFS_PER_WORKSPACE = 12;
 
 interface UseSupportReportSnapshotOptions {
   source: SupportMessageContext["source"];
@@ -25,6 +29,18 @@ export function useSupportReportSnapshot({
   const location = useLocation();
   const { data: workspaceCollections } = useWorkspaces();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
+  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
+  const sessionIdsByWorkspaceId = useSessionDirectoryStore((state) =>
+    state.sessionIdsByWorkspaceId
+  );
+  const lastViewedSessionByWorkspace = useWorkspaceUiStore((state) =>
+    state.lastViewedSessionByWorkspace
+  );
+  const visibleChatSessionIdsByWorkspace = useWorkspaceUiStore((state) =>
+    state.visibleChatSessionIdsByWorkspace
+  );
+  const sessionLastInteracted = useWorkspaceUiStore((state) => state.sessionLastInteracted);
+  const sessionLastViewedAt = useWorkspaceUiStore((state) => state.sessionLastViewedAt);
 
   return useMemo(() => {
     const pathname = `${location.pathname}${location.search}`;
@@ -36,6 +52,14 @@ export function useSupportReportSnapshot({
       branch: workspaceCurrentBranchName(workspace),
       status: workspace.lifecycleState,
       updatedAt: workspace.updatedAt,
+      sessionIds: sessionIdsForWorkspace({
+        activeSessionId,
+        directorySessionIds: sessionIdsByWorkspaceId[workspace.id] ?? [],
+        lastViewedSessionId: lastViewedSessionByWorkspace[workspace.id],
+        visibleSessionIds: visibleChatSessionIdsByWorkspace[workspace.id] ?? [],
+        sessionLastInteracted,
+        sessionLastViewedAt,
+      }),
     }));
     const cloudOptions = (workspaceCollections?.cloudWorkspaces ?? []).map(cloudWorkspaceOption);
     const workspaceOptions = [...localOptions, ...cloudOptions]
@@ -60,9 +84,53 @@ export function useSupportReportSnapshot({
     location.pathname,
     location.search,
     selectedWorkspaceId,
+    activeSessionId,
+    lastViewedSessionByWorkspace,
     source,
+    sessionIdsByWorkspaceId,
+    sessionLastInteracted,
+    sessionLastViewedAt,
+    visibleChatSessionIdsByWorkspace,
     workspaceCollections,
   ]);
+}
+
+function sessionIdsForWorkspace({
+  activeSessionId,
+  directorySessionIds,
+  lastViewedSessionId,
+  visibleSessionIds,
+  sessionLastInteracted,
+  sessionLastViewedAt,
+}: {
+  activeSessionId: string | null;
+  directorySessionIds: readonly string[];
+  lastViewedSessionId: string | undefined;
+  visibleSessionIds: readonly string[];
+  sessionLastInteracted: Record<string, string>;
+  sessionLastViewedAt: Record<string, string>;
+}): string[] {
+  const directorySet = new Set(directorySessionIds);
+  const recentDirectorySessionIds = [...directorySessionIds].sort((a, b) =>
+    sessionRecencyMs(b, sessionLastInteracted, sessionLastViewedAt)
+      - sessionRecencyMs(a, sessionLastInteracted, sessionLastViewedAt)
+  );
+  const ordered = [
+    activeSessionId && directorySet.has(activeSessionId) ? activeSessionId : null,
+    lastViewedSessionId && directorySet.has(lastViewedSessionId) ? lastViewedSessionId : null,
+    ...visibleSessionIds.filter((sessionId) => directorySet.has(sessionId)),
+    ...recentDirectorySessionIds,
+  ].filter((sessionId): sessionId is string => !!sessionId);
+
+  return [...new Set(ordered)].slice(0, MAX_LOCAL_SESSION_REFS_PER_WORKSPACE);
+}
+
+function sessionRecencyMs(
+  sessionId: string,
+  sessionLastInteracted: Record<string, string>,
+  sessionLastViewedAt: Record<string, string>,
+): number {
+  return Math.max(dateMs(sessionLastInteracted[sessionId]), dateMs(sessionLastViewedAt[sessionId]));
 }
 
 function cloudWorkspaceOption(

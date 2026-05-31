@@ -26,6 +26,8 @@ const InstrumentedRoutes = (() => {
 })();
 
 let sentryInitialized = false;
+const RECENT_SENTRY_EVENT_ID_LIMIT = 20;
+const recentSentryEventIds: string[] = [];
 
 function buildTracePropagationTargets(apiBaseUrl: string): Array<string | RegExp> {
   const targets: Array<string | RegExp> = [
@@ -172,8 +174,22 @@ export function captureDesktopSentryException(
       }
     }
 
-    Sentry.captureException(normalized);
+    rememberSentryEventId(Sentry.captureException(normalized));
   });
+}
+
+export function getRecentDesktopSentryEventIds(): string[] {
+  return [...recentSentryEventIds];
+}
+
+function rememberSentryEventId(eventId: string | undefined): void {
+  if (!eventId) {
+    return;
+  }
+  recentSentryEventIds.push(eventId);
+  if (recentSentryEventIds.length > RECENT_SENTRY_EVENT_ID_LIMIT) {
+    recentSentryEventIds.splice(0, recentSentryEventIds.length - RECENT_SENTRY_EVENT_ID_LIMIT);
+  }
 }
 
 export { InstrumentedRoutes };

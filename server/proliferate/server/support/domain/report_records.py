@@ -11,6 +11,7 @@ from uuid import UUID
 from proliferate.server.support.models import (
     SupportReportCreateRequest,
     SupportReportUploadResponse,
+    SupportReportWorkspaceScope,
 )
 
 
@@ -30,8 +31,13 @@ class SupportReportLike(Protocol):
 
 
 class AuthorizedCloudRefLike(Protocol):
+    id: UUID
     organization_id: UUID | None
     owner_user_id: UUID | None
+    target_id: UUID | None
+    sandbox_profile_id: UUID | None
+    anyharness_workspace_id: str | None
+    status: str
 
 
 @dataclass(frozen=True)
@@ -53,6 +59,38 @@ def workspace_refs_for_create(
     return tuple(refs)
 
 
+def trusted_workspace_refs_for_report(
+    workspace_refs: tuple[dict[str, object], ...],
+    authorized_cloud_refs: tuple[AuthorizedCloudRefLike, ...],
+) -> tuple[dict[str, object], ...]:
+    authorized_by_id = {ref.id: ref for ref in authorized_cloud_refs}
+    trusted_refs: list[dict[str, object]] = []
+    for ref in workspace_refs:
+        cloud_workspace_id = _cloud_workspace_id_from_ref(ref)
+        if cloud_workspace_id is not None:
+            authorized = authorized_by_id.get(cloud_workspace_id)
+            trusted_refs.append(
+                _trusted_cloud_workspace_ref(authorized)
+                if authorized is not None
+                else _unverified_cloud_workspace_ref()
+            )
+            continue
+        trusted_refs.append(_trusted_local_workspace_ref(ref))
+    return tuple(trusted_refs)
+
+
+def support_scope_record(
+    scope: SupportReportWorkspaceScope,
+    workspace_refs: tuple[dict[str, object], ...],
+) -> dict[str, object]:
+    record = scope.model_dump(by_alias=True)
+    if record.get("kind") != "app_only":
+        record["workspaceIds"] = [
+            str(ref["id"]) for ref in workspace_refs if isinstance(ref.get("id"), str)
+        ]
+    return record
+
+
 def workspace_ref_from_id(workspace_id: str) -> dict[str, object]:
     if workspace_id.startswith("cloud:"):
         return {
@@ -71,16 +109,9 @@ def cloud_workspace_ids_from_refs(
 ) -> tuple[UUID, ...]:
     ids: list[UUID] = []
     for ref in workspace_refs:
-        raw = ref.get("cloudWorkspaceId")
-        if not raw and isinstance(ref.get("id"), str):
-            raw_id = str(ref["id"])
-            raw = raw_id.removeprefix("cloud:") if raw_id.startswith("cloud:") else None
-        if not raw:
-            continue
-        try:
-            ids.append(UUID(str(raw)))
-        except ValueError:
-            continue
+        cloud_workspace_id = _cloud_workspace_id_from_ref(ref)
+        if cloud_workspace_id is not None:
+            ids.append(cloud_workspace_id)
     return tuple(dict.fromkeys(ids))
 
 
@@ -121,6 +152,55 @@ def support_context_record(context: object | None) -> dict[str, object]:
     pathname = record.get("pathname")
     if isinstance(pathname, str):
         record["pathname"] = sanitize_pathname(pathname)
+    return record
+
+
+def _cloud_workspace_id_from_ref(ref: dict[str, object]) -> UUID | None:
+    raw = ref.get("cloudWorkspaceId")
+    if not raw and isinstance(ref.get("id"), str):
+        raw_id = str(ref["id"])
+        raw = raw_id.removeprefix("cloud:") if raw_id.startswith("cloud:") else None
+    if not raw:
+        return None
+    try:
+        return UUID(str(raw))
+    except ValueError:
+        return None
+
+
+def _trusted_cloud_workspace_ref(ref: AuthorizedCloudRefLike) -> dict[str, object]:
+    record: dict[str, object] = {
+        "id": f"cloud:{ref.id}",
+        "location": "cloud",
+        "cloudWorkspaceId": str(ref.id),
+        "status": ref.status,
+    }
+    if ref.target_id is not None:
+        record["cloudTargetId"] = str(ref.target_id)
+    if ref.sandbox_profile_id is not None:
+        record["sandboxProfileId"] = str(ref.sandbox_profile_id)
+    if ref.anyharness_workspace_id:
+        record["anyharnessWorkspaceId"] = ref.anyharness_workspace_id
+    return record
+
+
+def _unverified_cloud_workspace_ref() -> dict[str, object]:
+    return {
+        "id": "cloud:[unverified]",
+        "location": "cloud",
+        "status": "unverified",
+    }
+
+
+def _trusted_local_workspace_ref(ref: dict[str, object]) -> dict[str, object]:
+    record: dict[str, object] = {
+        "id": str(ref.get("id") or "local:[unknown]"),
+        "location": "local",
+    }
+    for key in ("anyharnessWorkspaceId", "sessionIds", "status"):
+        value = ref.get(key)
+        if value:
+            record[key] = value
     return record
 
 

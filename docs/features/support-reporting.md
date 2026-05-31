@@ -64,6 +64,10 @@ workspace IDs only. The package includes recent sessions, session summaries,
 recent normalized events, live config snapshots, and raw notification metadata
 with notification bodies redacted. Collection enforces global caps and does not
 include full workspace history by default.
+Desktop applies the same session-debug sanitizer used by manual exports before
+uploading support diagnostics, so prompt bodies, message text, raw tool input,
+raw tool output, and raw live-config prompt/config content are represented by
+shape/length placeholders rather than copied verbatim.
 
 Desktop uploads `diagnostics.json` with `schemaVersion: 2`. The package has a
 top-level `correlation` object supplied by Cloud and does not duplicate the
@@ -72,11 +76,15 @@ so investigators know whether the private `request.json` contains user-written
 context.
 
 Cloud workspace diagnostics are server-written. When a report references
-authorized cloud workspaces, Cloud writes `cloud-diagnostics.json` under the
-same support S3 prefix. The cloud diagnostics file is an allowlisted metadata
-snapshot: workspace, target, runtime access, sandbox, command, session,
-event-ingest, setup-run, and transcript item metadata. It does not copy prompt
-bodies, transcript bodies, raw command payloads, tool output, provider tokens,
+authorized cloud workspaces, Cloud writes `cloud-diagnostics.json` after the
+support report database row and `request.json` have been committed. Cloud
+workspace references in the case file are server-derived from the database; if
+the client sends an unknown or unauthorized cloud workspace ID, the persisted
+reference is marked `cloud:[unverified]` and is excluded from server
+correlation IDs. The cloud diagnostics file is an allowlisted metadata snapshot:
+workspace, target, runtime access, sandbox, command, session, event-ingest,
+setup-run, and transcript item metadata. It does not copy prompt bodies,
+transcript bodies, raw command payloads, tool output, provider tokens,
 ciphertexts, cookies, signed URLs, or attachment contents. It also does not
 wake stopped sandboxes or create runtime sessions just to collect diagnostics.
 
@@ -107,10 +115,14 @@ refs, and server-derived correlation IDs. It must not contain presigned URLs.
 `POST /v1/support/reports/{reportId}/upload-targets` validates diagnostics and
 attachment metadata for the report owner, persists the expected object manifest,
 and returns short-lived presigned `PUT` targets. Clients may call it again to
-refresh expired URLs while the report is still uploadable.
+refresh expired URLs while the report is still uploadable, but the object
+manifest is immutable once written. A retry with different diagnostics or
+attachment metadata is rejected so completion cannot be pointed at a different
+payload than the original upload intent.
 
 `POST /v1/support/reports/{reportId}/complete` verifies uploaded object keys are
-inside the stored report prefix, verifies object sizes with S3 metadata, writes
+inside the stored report prefix, requires every object in the stored manifest to
+be present exactly once, verifies object sizes with S3 metadata, writes
 `complete.json`, marks the report completed, and posts the internal Slack
 notification once. Slack failure is logged server-side and does not fail an
 otherwise completed report.
@@ -143,7 +155,10 @@ The server writes these IDs into the support report response, `request.json`,
 context/tags where safe. Desktop also emits the low-cardinality
 `support_report_submitted` product event through the typed telemetry path so
 PostHog can be used as a replay/session pivot when hosted-product telemetry is
-enabled.
+enabled. When hosted-product telemetry is enabled, `request.json` may also
+include the current PostHog distinct/session IDs and recent Desktop Sentry event
+IDs so an investigator can jump from the support report to replay and exception
+contexts without relying on user-entered text.
 
 Cloud logging records request, user, tenant, support report, cloud workspace,
 target, sandbox, session, interaction, command, worker, and slot-generation

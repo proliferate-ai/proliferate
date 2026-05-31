@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -11,11 +12,11 @@ from proliferate.db.store import support_reports
 from proliferate.integrations.aws import (
     AwsIntegrationError,
     get_json_object,
-    head_object,
-    presign_put_object,
     put_json_object,
 )
+from proliferate.integrations.sentry import set_server_sentry_correlation_context
 from proliferate.middleware.request_context import (
+    get_correlation_context,
     get_request_id,
     set_resource_tenant_context,
     set_support_report_context,
@@ -29,7 +30,9 @@ from proliferate.server.support.domain.report_records import (
     safe_file_name,
     support_context_record,
     support_request_record,
+    support_scope_record,
     tenant_context_for_report,
+    trusted_workspace_refs_for_report,
     workspace_refs_for_create,
 )
 from proliferate.server.support.errors import (
@@ -44,7 +47,6 @@ from proliferate.server.support.models import (
     SupportReportCreateResponse,
     SupportReportUploadRequest,
     SupportReportUploadResponse,
-    SupportReportUploadTarget,
     SupportReportUploadTargetsRequest,
     support_report_correlation_record,
     support_report_create_response,
@@ -52,6 +54,12 @@ from proliferate.server.support.models import (
 from proliferate.server.support.notifications import (
     notify_support_report,
 )
+from proliferate.server.support.storage import (
+    presign_support_upload_target,
+    verify_completed_support_object,
+)
+
+logger = logging.getLogger(__name__)
 
 
 async def create_support_report(
@@ -69,6 +77,10 @@ async def create_support_report(
         db,
         sender_user_id=sender_user_id,
         workspace_refs=workspace_refs,
+    )
+    trusted_workspace_refs = trusted_workspace_refs_for_report(
+        workspace_refs,
+        authorized_cloud_refs,
     )
     tenant_context = tenant_context_for_report(
         sender_user_id=sender_user_id,
@@ -99,7 +111,7 @@ async def create_support_report(
             s3_prefix=_report_prefix(report_id),
             source_surface=body.source_surface,
             source_context=support_context_record(body.context),
-            workspace_refs=workspace_refs,
+            workspace_refs=trusted_workspace_refs,
             telemetry_refs=(
                 body.telemetry_refs.model_dump(by_alias=True, exclude_none=True)
                 if body.telemetry_refs
@@ -115,7 +127,7 @@ async def create_support_report(
         sender_email=sender_email,
         sender_display_name=sender_display_name,
         message=body.message,
-        scope=body.scope.model_dump(by_alias=True),
+        scope=support_scope_record(body.scope, report.workspace_refs),
         correlation=support_report_correlation_record(report),
     )
     try:
@@ -129,6 +141,15 @@ async def create_support_report(
         raise SupportReportStorageUnavailable() from exc
 
     report = await support_reports.mark_request_object_written(db, report_id=report.id)
+    logger.info(
+        "Support report created.",
+        extra={
+            "support_report_id": report.id,
+            "support_report_status": report.status,
+            "support_report_source_surface": report.source_surface,
+            "support_report_cloud_diagnostics_status": report.cloud_diagnostics_status,
+        },
+    )
     return support_report_create_response(report)
 
 
@@ -153,10 +174,23 @@ async def create_support_report_upload_targets(
         attachments=body.attachments,
         targets=targets,
     )
+    existing_manifest = report.object_manifest
+    if existing_manifest.get("schemaVersion") == 1 and existing_manifest != manifest:
+        raise SupportReportUploadInvalid(
+            "Support report upload targets already exist for different objects."
+        )
     await support_reports.update_report_upload_manifest(
         db,
         report_id=report.id,
         object_manifest=manifest,
+    )
+    logger.info(
+        "Support report upload targets issued.",
+        extra={
+            "support_report_id": report.id,
+            "support_report_attachment_count": len(body.attachments),
+            "support_report_diagnostics_expected": body.diagnostics is not None,
+        },
     )
     return targets
 
@@ -243,6 +277,8 @@ async def _complete_db_backed_report(
 
     _install_report_correlation(report)
     expected_keys = expected_manifest_keys(report.object_manifest)
+    if report.object_manifest.get("schemaVersion") != 1:
+        raise SupportReportUploadInvalid("Support report upload targets have not been created.")
     completed_keys = [
         *([body.diagnostics.object_key] if body.diagnostics else []),
         *[attachment.object_key for attachment in body.attachments],
@@ -250,9 +286,12 @@ async def _complete_db_backed_report(
     unexpected = sorted(set(completed_keys).difference(expected_keys))
     if unexpected:
         raise SupportReportUploadInvalid("Support report completion included unknown objects.")
+    missing = sorted(expected_keys.difference(completed_keys))
+    if missing:
+        raise SupportReportUploadInvalid("Support report completion is missing expected objects.")
 
     if body.diagnostics is not None:
-        await _verify_completed_object(
+        await verify_completed_support_object(
             bucket=report.s3_bucket,
             region_name=_support_report_region(),
             prefix=report.s3_prefix,
@@ -260,7 +299,7 @@ async def _complete_db_backed_report(
             expected_size=body.diagnostics.size_bytes,
         )
     for attachment in body.attachments:
-        await _verify_completed_object(
+        await verify_completed_support_object(
             bucket=report.s3_bucket,
             region_name=_support_report_region(),
             prefix=report.s3_prefix,
@@ -298,6 +337,15 @@ async def _complete_db_backed_report(
         report_id=report.id,
         complete_request_id=get_request_id(),
         object_manifest={**report.object_manifest, "completed": complete_record},
+    )
+    logger.info(
+        "Support report completed.",
+        extra={
+            "support_report_id": completed_report.id,
+            "support_report_attachment_count": len(body.attachments),
+            "support_report_diagnostics_included": body.diagnostics is not None,
+            "support_report_cloud_diagnostics_status": completed_report.cloud_diagnostics_status,
+        },
     )
     if should_notify:
         await notify_support_report(
@@ -349,7 +397,7 @@ async def _complete_legacy_report(
         raise SupportReportUploadInvalid("Support report completion included unknown objects.")
 
     if body.diagnostics is not None:
-        await _verify_completed_object(
+        await verify_completed_support_object(
             bucket=bucket,
             region_name=region,
             prefix=prefix,
@@ -357,7 +405,7 @@ async def _complete_legacy_report(
             expected_size=body.diagnostics.size_bytes,
         )
     for attachment in body.attachments:
-        await _verify_completed_object(
+        await verify_completed_support_object(
             bucket=bucket,
             region_name=region,
             prefix=prefix,
@@ -451,9 +499,9 @@ async def _create_upload_targets_for_report(
     expires_seconds = settings.support_report_upload_url_expires_seconds
     region = _support_report_region()
 
-    diagnostics_target: SupportReportUploadTarget | None = None
+    diagnostics_target = None
     if body.diagnostics is not None:
-        diagnostics_target = await _presign_target(
+        diagnostics_target = await presign_support_upload_target(
             bucket=report.s3_bucket,
             key=f"{report.s3_prefix}/diagnostics.json",
             content_type=body.diagnostics.content_type,
@@ -464,7 +512,7 @@ async def _create_upload_targets_for_report(
 
     attachment_targets: list[SupportReportAttachmentUploadTarget] = []
     for attachment in body.attachments:
-        target = await _presign_target(
+        target = await presign_support_upload_target(
             bucket=report.s3_bucket,
             key=(
                 f"{report.s3_prefix}/attachments/{attachment.client_file_id}/"
@@ -517,59 +565,7 @@ def _install_report_correlation(report: support_reports.SupportReportSnapshot) -
         else None,
         tenant_id=report.primary_tenant_id,
     )
-
-
-async def _presign_target(
-    *,
-    bucket: str,
-    key: str,
-    content_type: str,
-    max_size_bytes: int,
-    expires_seconds: int,
-    region_name: str | None,
-) -> SupportReportUploadTarget:
-    try:
-        url = await presign_put_object(
-            bucket=bucket,
-            key=key,
-            content_type=content_type,
-            expires_seconds=expires_seconds,
-            region_name=region_name,
-        )
-    except AwsIntegrationError as exc:
-        raise SupportReportStorageUnavailable() from exc
-    return SupportReportUploadTarget(
-        objectKey=key,
-        putUrl=url,
-        contentType=content_type,
-        maxSizeBytes=max_size_bytes,
-        expiresInSeconds=expires_seconds,
-        headers={"x-amz-server-side-encryption": "AES256"},
-    )
-
-
-async def _verify_completed_object(
-    *,
-    bucket: str,
-    region_name: str | None,
-    prefix: str,
-    object_key: str,
-    expected_size: int,
-) -> None:
-    if not object_key.startswith(f"{prefix}/"):
-        raise SupportReportUploadInvalid("Support report object key is outside report prefix.")
-    try:
-        metadata = await head_object(
-            bucket=bucket,
-            key=object_key,
-            region_name=region_name,
-        )
-    except AwsIntegrationError as exc:
-        raise SupportReportUploadInvalid("Support report object upload is missing.") from exc
-
-    content_length = metadata.get("ContentLength")
-    if isinstance(content_length, int) and content_length != expected_size:
-        raise SupportReportUploadInvalid("Support report object size did not match.")
+    set_server_sentry_correlation_context(get_correlation_context())
 
 
 def _support_report_bucket() -> str:
