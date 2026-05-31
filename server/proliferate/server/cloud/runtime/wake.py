@@ -33,6 +33,20 @@ _WAKE_BLOCKED_ERROR_CODE = "sandbox_wake_blocked"
 _WAKE_BLOCKED_FALLBACK_MESSAGE = "Sandbox wake is blocked by billing."
 
 
+async def cancel_managed_slot_wake_tasks() -> None:
+    """Cancel outstanding in-process wake attempts during shutdown or test cleanup."""
+
+    tasks = tuple(_wake_tasks.values())
+    if not tasks:
+        return
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+    for key, task in tuple(_wake_tasks.items()):
+        if task in tasks:
+            _wake_tasks.pop(key, None)
+
+
 def kick_off_managed_slot_wake(target_id: UUID, command_id: UUID | None = None) -> None:
     """Schedule a managed slot wake attempt without waiting for provider work."""
 
@@ -69,11 +83,15 @@ async def run_managed_slot_wake_job(target_id: UUID, command_id: UUID | None = N
         profile = await load_sandbox_profile_by_id(db, target.sandbox_profile_id)
         if profile is None:
             return
-        authorization = await authorize_sandbox_start_for_billing_subject(
-            actor_user_id=target.created_by_user_id,
-            billing_subject_id=profile.billing_subject_id,
-        )
-        if not authorization.allowed:
+        actor_user_id = target.created_by_user_id
+        billing_subject_id = profile.billing_subject_id
+
+    authorization = await authorize_sandbox_start_for_billing_subject(
+        actor_user_id=actor_user_id,
+        billing_subject_id=billing_subject_id,
+    )
+    if not authorization.allowed:
+        async with db_engine.async_session_factory() as db:
             message = (
                 authorization.message
                 or authorization.start_block_reason
@@ -81,7 +99,7 @@ async def run_managed_slot_wake_job(target_id: UUID, command_id: UUID | None = N
             )
             commands = await commands_store.mark_queued_commands_failed_delivery_for_target(
                 db,
-                target_id=target.id,
+                target_id=target_id,
                 command_kinds=WAKE_REQUIRED_CLOUD_COMMAND_KINDS,
                 error_code=_WAKE_BLOCKED_ERROR_CODE,
                 error_message=message,
@@ -95,13 +113,12 @@ async def run_managed_slot_wake_job(target_id: UUID, command_id: UUID | None = N
                 "Blocked managed slot wake because billing denied sandbox start",
                 extra={
                     "target_id": str(target_id),
-                    "billing_subject_id": str(profile.billing_subject_id),
+                    "billing_subject_id": str(billing_subject_id),
                     "reason": authorization.start_block_reason,
                     "failed_command_count": len(commands),
                 },
             )
             return
-        await db.commit()
 
     resumed = await _resume_target_runtime_environment(target_id, command_id=command_id)
     if resumed:

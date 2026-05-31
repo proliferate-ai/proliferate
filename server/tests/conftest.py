@@ -18,6 +18,12 @@ from tests.postgres import (
 )
 
 
+async def _cancel_test_background_tasks() -> None:
+    from proliferate.server.cloud.runtime.wake import cancel_managed_slot_wake_tasks
+
+    await cancel_managed_slot_wake_tasks()
+
+
 @pytest.fixture(scope="session")
 def event_loop():  # type: ignore[no-untyped-def]
     loop = asyncio.new_event_loop()
@@ -42,8 +48,10 @@ async def test_engine(migrated_test_database):  # type: ignore[no-untyped-def]
 
 @pytest_asyncio.fixture(autouse=True)
 async def reset_test_database(test_engine) -> AsyncGenerator[None, None]:  # type: ignore[no-untyped-def]
+    await _cancel_test_background_tasks()
     await truncate_all_tables(test_engine)
     yield
+    await _cancel_test_background_tasks()
     await truncate_all_tables(test_engine)
 
 
