@@ -28,7 +28,7 @@ migration exception and state the canonical owner/rule directly.
 
 | Folder | Owns | Start here |
 | --- | --- | --- |
-| `docs/structures/` | Folder decomposition, dependency direction, ownership rules, and code maps for each major system. | `docs/structures/frontend/README.md`, `docs/structures/anyharness/README.md`, `docs/structures/proliferate-worker/README.md`, `docs/structures/server/README.md`, `docs/structures/desktop-native/README.md`, `docs/structures/sdk/README.md` |
+| `docs/structures/` | Folder decomposition, dependency direction, ownership rules, and code maps for each major system. | `docs/structures/frontend/README.md`, `docs/structures/anyharness/README.md`, `docs/structures/proliferate-worker/README.md`, `docs/structures/proliferate-supervisor/README.md`, `docs/structures/server/README.md`, `docs/structures/desktop-native/README.md`, `docs/structures/sdk/README.md` |
 | `docs/primitives/` | Reusable product/runtime concepts: sandbox provisioning, workspace lifecycle, MCP/skills, agent auth, cloud commands, claiming, billing, model catalog, and related low-level contracts. | Read the primitive that owns the tables, command contracts, or runtime behavior you are changing. |
 | `docs/features/` | Product workflows and surfaces built from primitives: onboarding, automations, Slack, dispatch, chat surfaces, workspace files, product MCPs, and settings/admin IA. | Read the feature spec for the user-facing workflow being changed, plus any primitive it depends on. |
 | `docs/dev/` | How to run, verify, release, deploy, observe, and operate the repo. | `docs/dev/README.md`, `docs/dev/running-locally.md`, `docs/dev/ci-cd.md`, `docs/dev/reference/env-vars.yaml` |
@@ -41,7 +41,8 @@ migration exception and state the canonical owner/rule directly.
 | Frontend apps and shared packages | `docs/structures/frontend/README.md`; focused guides under `docs/structures/frontend/guides/`; shared package rules in `docs/structures/frontend/packages/README.md`; feature specs under `docs/features/` |
 | Desktop native / Tauri | `docs/structures/desktop-native/README.md`; sidecar and agent seed specs under `docs/structures/desktop-native/specs/` |
 | AnyHarness runtime | `docs/structures/anyharness/README.md`; guides under `docs/structures/anyharness/guides/`; contract in `docs/structures/anyharness/contract.md`; active runtime specs under `docs/structures/anyharness/specs/` |
-| Proliferate Worker | `docs/structures/proliferate-worker/README.md` |
+| Proliferate Worker | `docs/structures/proliferate-worker/README.md`; focused guides under `docs/structures/proliferate-worker/guides/` |
+| Proliferate Supervisor | `docs/structures/proliferate-supervisor/README.md` |
 | Server | `docs/structures/server/README.md`; focused guides under `docs/structures/server/guides/` |
 | AnyHarness SDKs | `docs/structures/sdk/README.md` |
 | Cloud provisioning, commands, auth, MCPs, billing, claiming | `docs/primitives/` |
