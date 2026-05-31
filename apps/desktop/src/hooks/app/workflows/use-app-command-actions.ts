@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import type { Workspace } from "@anyharness/sdk";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
@@ -11,6 +11,8 @@ import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry
 import { useAddRepo } from "@/hooks/workspaces/workflows/use-add-repo";
 import { useWorkspaceCopyActions } from "@/hooks/workspaces/workflows/use-workspace-copy-actions";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
+import { useHomeNextTargetSelectionSnapshot } from "@/hooks/home/ui/use-home-next-target-selection-state";
+import { useHomeNextRepositorySelection } from "@/hooks/home/derived/use-home-next-repository-selection";
 import { APP_ROUTES } from "@/config/app-routes";
 import { requestSupportDialog } from "@/lib/infra/support/support-dialog-request";
 import { buildCloudRepoSettingsHref, buildSettingsHref } from "@/lib/domain/settings/navigation";
@@ -18,14 +20,15 @@ import {
   buildConfiguredCloudRepoKeys,
   resolveCloudRepoActionState,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
-import { getCloudRepoTargetForSelectedWorkspace, getRepoForSelectedWorkspace } from "@/lib/domain/workspaces/cloud/selected-repo-target";
 import {
-  sidebarRepoGroupKeyForCloudTarget,
-  sidebarRepoGroupKeyForWorkspace,
-} from "@/lib/domain/workspaces/sidebar/sidebar-group-key";
+  buildRepositoryNewWorkspaceCommandScope,
+  buildSelectedWorkspaceNewWorkspaceCommandScope,
+  resolveNewWorkspaceCommandTarget,
+} from "@/lib/domain/workspaces/creation/new-workspace-command";
 import { workspaceCopyMetadataForLogicalWorkspace } from "@/lib/domain/workspaces/workspace-copy-metadata";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { useNewWorkspaceCommandScopeStore } from "@/stores/workspaces/new-workspace-command-scope-store";
 import {
   failLatencyFlow,
   startLatencyFlow,
@@ -59,11 +62,20 @@ export interface AppCommandActions {
 // The hook wires existing workspace/cloud workflows into one command surface.
 export function useAppCommandActions(): AppCommandActions {
   const navigate = useNavigate();
+  const location = useLocation();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const showToast = useToastStore((state) => state.show);
-  const { goToTopLevelRoute } = useWorkspaceNavigationWorkflow();
+  const { goToTopLevelRoute, navigateToWorkspaceShell } = useWorkspaceNavigationWorkflow();
   const { selectedLogicalWorkspace } = useSelectedLogicalWorkspace();
   const { copyWorkspaceLocation, copyBranchName } = useWorkspaceCopyActions();
+  const homeTargetSelection = useHomeNextTargetSelectionSnapshot();
+  const homeRepositorySelection = useHomeNextRepositorySelection({
+    destination: homeTargetSelection.destination,
+    repositorySelection: homeTargetSelection.repositorySelection,
+    repoLaunchKind: homeTargetSelection.repoLaunchKind,
+    baseBranchOverride: homeTargetSelection.baseBranchOverride,
+  });
+  const activeNewWorkspaceScope = useNewWorkspaceCommandScopeStore((state) => state.activeScope);
   const { cloudActive } = useCloudAvailabilityState();
   const { data: billingPlan } = useCloudBilling();
   const {
@@ -101,25 +113,49 @@ export function useAppCommandActions(): AppCommandActions {
     && isCloudRepoConfigsPending
     && !cloudRepoConfigs;
   const cloudWorkspaceBlocked = billingPlan?.billingMode === "enforce" && billingPlan.startBlocked;
-  const selectedRepoContext = useMemo(
-    () => getRepoForSelectedWorkspace(selectedWorkspaceId, workspaces),
-    [selectedWorkspaceId, workspaces],
-  );
-  const selectedCloudTarget = useMemo(
-    () => getCloudRepoTargetForSelectedWorkspace(
+  const homeNewWorkspaceScope = useMemo(() => {
+    if (
+      location.pathname !== APP_ROUTES.home
+      || homeTargetSelection.destination !== "repository"
+    ) {
+      return null;
+    }
+
+    return buildRepositoryNewWorkspaceCommandScope(
+      homeRepositorySelection.selectedRepository,
+      homeRepositorySelection.selectedBranchName,
+      "home",
+    );
+  }, [
+    homeTargetSelection.destination,
+    homeRepositorySelection.selectedBranchName,
+    homeRepositorySelection.selectedRepository,
+    location.pathname,
+  ]);
+  const selectedNewWorkspaceScope = useMemo(
+    () => buildSelectedWorkspaceNewWorkspaceCommandScope({
       selectedWorkspaceId,
       workspaces,
       cloudWorkspaces,
-    ),
-    [cloudWorkspaces, selectedWorkspaceId, workspaces],
+      repoRoots,
+    }),
+    [cloudWorkspaces, repoRoots, selectedWorkspaceId, workspaces],
   );
-  const cloudRepoAction = useMemo(
+  const newWorkspaceCommandScope =
+    activeNewWorkspaceScope
+    ?? homeNewWorkspaceScope
+    ?? selectedNewWorkspaceScope;
+  const commandCloudRepoAction = useMemo(
     () => resolveCloudRepoActionState({
-      repoTarget: selectedCloudTarget,
+      repoTarget: newWorkspaceCommandScope?.cloudRepoTarget ?? null,
       configuredRepoKeys: configuredCloudRepoKeys,
       isInitialConfigLoad: cloudRepoConfigsInitialLoading,
     }),
-    [cloudRepoConfigsInitialLoading, configuredCloudRepoKeys, selectedCloudTarget],
+    [
+      cloudRepoConfigsInitialLoading,
+      configuredCloudRepoKeys,
+      newWorkspaceCommandScope?.cloudRepoTarget,
+    ],
   );
   const selectedWorkspaceCopyMetadata = useMemo(
     () => workspaceCopyMetadataForLogicalWorkspace(selectedLogicalWorkspace),
@@ -157,111 +193,123 @@ export function useAppCommandActions(): AppCommandActions {
     void addRepoFromPicker();
   }, [addRepoFromPicker, addRepositoryDisabledReason]);
 
-  const sourceRoot = selectedRepoContext?.repoWs.sourceRepoRootPath?.trim() ?? "";
-  const newLocalDisabledReason = isCreatingLocalWorkspace
-    ? "Action already in progress."
-    : selectedRepoContext?.repoWs && sourceRoot
-      ? null
-      : "Select a repository workspace first.";
-  const newLocalWorkspace = useCallback(() => {
-    if (newLocalDisabledReason || !selectedRepoContext?.repoWs || !sourceRoot) {
+  const showDisabledShortcutToast = useCallback((
+    invocation: AppCommandInvocation,
+    reason: string,
+  ) => {
+    if (invocation === "shortcut") {
+      showToast(reason);
+    }
+  }, [showToast]);
+  const newLocalCommandTarget = useMemo(() => resolveNewWorkspaceCommandTarget({
+    commandKind: "local",
+    scope: newWorkspaceCommandScope,
+    busyReason: isCreatingLocalWorkspace ? "Action already in progress." : null,
+  }), [isCreatingLocalWorkspace, newWorkspaceCommandScope]);
+  const newLocalDisabledReason = newLocalCommandTarget.disabledReason;
+  const newLocalWorkspace = useCallback((invocation: AppCommandInvocation) => {
+    if (newLocalCommandTarget.disabledReason !== null) {
+      showDisabledShortcutToast(invocation, newLocalCommandTarget.disabledReason);
       return;
     }
 
-    void createLocalWorkspaceAndEnter(sourceRoot, {
-      repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(selectedRepoContext.repoWs, repoRoots),
+    navigateToWorkspaceShell();
+    void createLocalWorkspaceAndEnter(newLocalCommandTarget.sourceRoot, {
+      repoGroupKeyToExpand: newLocalCommandTarget.repoGroupKeyToExpand,
     }).catch((error) => {
       showToast(error instanceof Error ? error.message : "Failed to create workspace.");
     });
   }, [
     createLocalWorkspaceAndEnter,
-    newLocalDisabledReason,
-    repoRoots,
-    selectedRepoContext?.repoWs,
+    navigateToWorkspaceShell,
+    newLocalCommandTarget,
+    showDisabledShortcutToast,
     showToast,
-    sourceRoot,
   ]);
 
-  const repoRootId = selectedRepoContext?.repoWs.repoRootId?.trim() ?? "";
-  const newWorktreeDisabledReason = isCreatingWorktreeWorkspace
-    ? "Action already in progress."
-    : selectedRepoContext?.repoWs && repoRootId
-      ? null
-      : "Select a repository workspace first.";
+  const newWorktreeCommandTarget = useMemo(() => resolveNewWorkspaceCommandTarget({
+    commandKind: "worktree",
+    scope: newWorkspaceCommandScope,
+    busyReason: isCreatingWorktreeWorkspace ? "Action already in progress." : null,
+  }), [isCreatingWorktreeWorkspace, newWorkspaceCommandScope]);
+  const newWorktreeDisabledReason = newWorktreeCommandTarget.disabledReason;
   const newWorktreeWorkspace = useCallback((invocation: AppCommandInvocation) => {
-    if (newWorktreeDisabledReason || !selectedRepoContext?.repoWs || !repoRootId) {
+    if (newWorktreeCommandTarget.disabledReason !== null) {
+      showDisabledShortcutToast(invocation, newWorktreeCommandTarget.disabledReason);
       return;
     }
 
+    navigateToWorkspaceShell();
     const latencyFlowId = startLatencyFlow({
       flowKind: "worktree_enter",
       source: invocation,
-      targetWorkspaceId: repoRootId,
+      targetWorkspaceId: newWorktreeCommandTarget.repoRootId,
     });
     void createWorktreeAndEnter({
-      repoRootId,
-      sourceWorkspaceId: selectedRepoContext.repoWs.id,
+      repoRootId: newWorktreeCommandTarget.repoRootId,
+      sourceWorkspaceId: newWorktreeCommandTarget.sourceWorkspaceId,
+      baseBranch: newWorktreeCommandTarget.baseBranch ?? undefined,
     }, {
       latencyFlowId,
-      repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(selectedRepoContext.repoWs, repoRoots),
+      repoGroupKeyToExpand: newWorktreeCommandTarget.repoGroupKeyToExpand,
     }).catch((error) => {
       failLatencyFlow(latencyFlowId, "worktree_enter_failed");
       showToast(error instanceof Error ? error.message : "Failed to create worktree.");
     });
   }, [
     createWorktreeAndEnter,
-    newWorktreeDisabledReason,
-    repoRootId,
-    repoRoots,
-    selectedRepoContext?.repoWs,
+    navigateToWorkspaceShell,
+    newWorktreeCommandTarget,
+    showDisabledShortcutToast,
     showToast,
   ]);
 
-  const newCloudDisabledReason = (() => {
-    if (isCreatingCloudWorkspace) {
-      return "Action already in progress.";
-    }
-    if (!cloudActive) {
-      return "Cloud workspaces are unavailable.";
-    }
-    if (cloudWorkspaceBlocked) {
-      return "Cloud workspaces are blocked by billing.";
-    }
-    if (!selectedCloudTarget || cloudRepoAction.kind === "hidden") {
-      return "Select a repository workspace first.";
-    }
-    if (cloudRepoAction.kind === "loading") {
-      return "Cloud repository settings are loading.";
-    }
-    return null;
-  })();
+  const cloudUnavailableReason = !cloudActive
+    ? "Cloud workspaces are unavailable."
+    : cloudWorkspaceBlocked
+      ? "Cloud workspaces are blocked by billing."
+      : null;
+  const newCloudCommandTarget = useMemo(() => resolveNewWorkspaceCommandTarget({
+    commandKind: "cloud",
+    scope: newWorkspaceCommandScope,
+    busyReason: isCreatingCloudWorkspace ? "Action already in progress." : null,
+    cloudUnavailableReason,
+    cloudRepoAction: commandCloudRepoAction,
+  }), [
+    cloudUnavailableReason,
+    commandCloudRepoAction,
+    isCreatingCloudWorkspace,
+    newWorkspaceCommandScope,
+  ]);
+  const newCloudDisabledReason = newCloudCommandTarget.disabledReason;
   const newCloudWorkspace = useCallback((invocation: AppCommandInvocation) => {
-    if (newCloudDisabledReason || !selectedCloudTarget) {
+    if (newCloudCommandTarget.disabledReason !== null) {
+      showDisabledShortcutToast(invocation, newCloudCommandTarget.disabledReason);
       return;
     }
-    if (cloudRepoAction.kind === "configure") {
-      navigate(buildCloudRepoSettingsHref(selectedCloudTarget.gitOwner, selectedCloudTarget.gitRepoName));
-      return;
-    }
-    if (cloudRepoAction.kind !== "create") {
+    if (newCloudCommandTarget.cloudActionKind === "configure") {
+      navigate(buildCloudRepoSettingsHref(
+        newCloudCommandTarget.target.gitOwner,
+        newCloudCommandTarget.target.gitRepoName,
+      ));
       return;
     }
 
+    navigateToWorkspaceShell();
     const latencyFlowId = startLatencyFlow({
       flowKind: "cloud_workspace_create",
       source: invocation,
     });
-    void createCloudWorkspaceAndEnter(selectedCloudTarget, {
+    void createCloudWorkspaceAndEnter(newCloudCommandTarget.target, {
       latencyFlowId,
-      repoGroupKeyToExpand: sidebarRepoGroupKeyForCloudTarget(selectedCloudTarget, repoRoots),
+      repoGroupKeyToExpand: newCloudCommandTarget.repoGroupKeyToExpand,
     });
   }, [
-    cloudRepoAction.kind,
     createCloudWorkspaceAndEnter,
     navigate,
-    newCloudDisabledReason,
-    repoRoots,
-    selectedCloudTarget,
+    navigateToWorkspaceShell,
+    newCloudCommandTarget,
+    showDisabledShortcutToast,
   ]);
   const copyWorkspacePathAction = useCallback(() => {
     void copyWorkspaceLocation(selectedWorkspaceCopyMetadata.workspaceLocation);

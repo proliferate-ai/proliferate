@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import type {
   HomeNextDestination,
   HomeNextRepoLaunchKind,
@@ -24,6 +24,10 @@ const DEFAULT_HOME_NEXT_TARGET_SELECTION: HomeNextTargetSelectionState = {
   selectedSshTargetId: null,
   baseBranchOverride: null,
 };
+const homeNextTargetSelectionListeners = new Set<() => void>();
+let cachedHomeNextTargetSelectionRaw: string | null | undefined;
+let cachedHomeNextTargetSelection = DEFAULT_HOME_NEXT_TARGET_SELECTION;
+let hasHomeNextTargetSelectionMemoryOverride = false;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -89,45 +93,85 @@ function getLocalStorage(): Storage | null {
 }
 
 function readPersistedTargetSelection(): HomeNextTargetSelectionState {
-  const storage = getLocalStorage();
-  if (!storage) {
-    return DEFAULT_HOME_NEXT_TARGET_SELECTION;
+  if (hasHomeNextTargetSelectionMemoryOverride) {
+    return cachedHomeNextTargetSelection;
   }
 
+  const storage = getLocalStorage();
+  if (!storage) {
+    return cachedHomeNextTargetSelection;
+  }
+
+  let raw: string | null = null;
   try {
-    const raw = storage.getItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY);
-    if (!raw) {
-      return DEFAULT_HOME_NEXT_TARGET_SELECTION;
+    raw = storage.getItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY);
+    if (raw === cachedHomeNextTargetSelectionRaw) {
+      return cachedHomeNextTargetSelection;
     }
-    return normalizeHomeNextTargetSelectionState(JSON.parse(raw));
+    cachedHomeNextTargetSelectionRaw = raw;
+    if (!raw) {
+      cachedHomeNextTargetSelection = DEFAULT_HOME_NEXT_TARGET_SELECTION;
+      return cachedHomeNextTargetSelection;
+    }
+    cachedHomeNextTargetSelection = normalizeHomeNextTargetSelectionState(JSON.parse(raw));
+    return cachedHomeNextTargetSelection;
   } catch {
-    return DEFAULT_HOME_NEXT_TARGET_SELECTION;
+    cachedHomeNextTargetSelectionRaw = raw;
+    cachedHomeNextTargetSelection = DEFAULT_HOME_NEXT_TARGET_SELECTION;
+    return cachedHomeNextTargetSelection;
   }
 }
 
 function persistTargetSelection(selection: HomeNextTargetSelectionState): void {
-  const storage = getLocalStorage();
-  if (!storage) return;
+  const raw = JSON.stringify(selection);
+  cachedHomeNextTargetSelectionRaw = raw;
+  cachedHomeNextTargetSelection = selection;
 
-  try {
-    storage.setItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, JSON.stringify(selection));
-  } catch {
-    // Local storage can be unavailable in restricted browser contexts.
+  const storage = getLocalStorage();
+  if (storage) {
+    try {
+      storage.setItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY, raw);
+      hasHomeNextTargetSelectionMemoryOverride = false;
+    } catch {
+      hasHomeNextTargetSelectionMemoryOverride = true;
+    }
+  } else {
+    hasHomeNextTargetSelectionMemoryOverride = true;
+  }
+
+  for (const listener of homeNextTargetSelectionListeners) {
+    listener();
   }
 }
 
+export function readHomeNextTargetSelectionState(): HomeNextTargetSelectionState {
+  return readPersistedTargetSelection();
+}
+
+export function subscribeHomeNextTargetSelectionState(listener: () => void): () => void {
+  homeNextTargetSelectionListeners.add(listener);
+  return () => {
+    homeNextTargetSelectionListeners.delete(listener);
+  };
+}
+
+export function useHomeNextTargetSelectionSnapshot(): HomeNextTargetSelectionState {
+  return useSyncExternalStore(
+    subscribeHomeNextTargetSelectionState,
+    readHomeNextTargetSelectionState,
+    () => DEFAULT_HOME_NEXT_TARGET_SELECTION,
+  );
+}
+
 export function useHomeNextTargetSelectionState() {
-  const [targetSelection, setTargetSelection] = useState(readPersistedTargetSelection);
+  const targetSelection = useHomeNextTargetSelectionSnapshot();
 
   const patchTargetSelection = useCallback((patch: HomeNextTargetSelectionPatch) => {
-    setTargetSelection((current) => {
-      const next = normalizeHomeNextTargetSelectionState({
-        ...current,
-        ...patch,
-      });
-      persistTargetSelection(next);
-      return next;
+    const next = normalizeHomeNextTargetSelectionState({
+      ...readHomeNextTargetSelectionState(),
+      ...patch,
     });
+    persistTargetSelection(next);
   }, []);
 
   return {

@@ -211,6 +211,52 @@ describe("resolveKeyboardShortcut", () => {
     } as KeyboardEvent)).toBeNull();
   });
 
+  it("resolves new workspace shortcuts by physical KeyN on mac", () => {
+    vi.stubGlobal("navigator", {
+      platform: "MacIntel",
+      userAgent: "Mac OS X",
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "Dead",
+      code: "KeyN",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.new-worktree",
+      shortcut: expect.objectContaining({ id: "workspace.new-worktree" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "N",
+      code: "KeyN",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.new-local",
+      shortcut: expect.objectContaining({ id: "workspace.new-local" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "Unexpected",
+      code: "KeyN",
+      metaKey: true,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: false,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.new-cloud",
+      shortcut: expect.objectContaining({ id: "workspace.new-cloud" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+  });
+
   it("resolves command-option workspace and tab shortcuts on mac", () => {
     vi.stubGlobal("navigator", {
       platform: "MacIntel",

@@ -20,6 +20,7 @@ Use this map to decide whether this spec applies and where to look first.
 | Path | Owns |
 | --- | --- |
 | `apps/desktop/src/lib/domain/workspaces/creation/pending-entry.ts` | Pending workspace model and path helpers. |
+| `apps/desktop/src/lib/domain/workspaces/creation/new-workspace-command.ts` | Shared target resolution for new workspace commands and shortcuts. |
 | `apps/desktop/src/lib/domain/workspaces/selection/optimistic-session-shell.ts` | Fast-open session candidate and placeholder rules. |
 | `apps/desktop/src/hooks/workspaces/selection/run-workspace-selection.ts` | Existing workspace selection and first active-session projection. |
 | `apps/desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts` | Session-list bootstrap and optimistic session validation. |
@@ -284,6 +285,12 @@ summary and stream replace it as soon as AnyHarness session data is available.
 ## 7. Begin Flow
 
 All workspace creation entrypoints should converge on this shape:
+
+Keyboard shortcuts and command-palette entries must resolve the same repository
+target as the visible UI. If a sidebar repo create menu is open, use that repo.
+If Home is showing a repository target, use Home's selected repository and
+branch. Otherwise fall back to the selected workspace. Create commands should
+enter the workspace shell before dispatching the async create work.
 
 1. Resolve deterministic display and request data before shell entry.
    For worktrees this includes `workspaceName`, `branchName`, `baseBranch`,

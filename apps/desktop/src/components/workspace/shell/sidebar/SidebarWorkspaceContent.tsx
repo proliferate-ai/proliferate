@@ -7,6 +7,7 @@ import {
   type SidebarEmptyState,
   type SidebarGroupState,
 } from "@/lib/domain/workspaces/sidebar/sidebar-model";
+import { buildSidebarNewWorkspaceCommandScope } from "@/lib/domain/workspaces/creation/new-workspace-command";
 import { visibleSidebarGroupItems } from "@/lib/domain/workspaces/sidebar/sidebar-visible-items";
 import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { SkeletonBlock } from "@/components/feedback/Skeleton";
@@ -142,6 +143,12 @@ export function SidebarWorkspaceContent({
     const cloudRepoTarget = group.cloudRepoTarget;
     const hasArchivedHiddenItems =
       group.items.length === 0 && group.allLogicalWorkspaceIds.length > 0;
+    const newWorkspaceCommandScope = buildSidebarNewWorkspaceCommandScope({
+      sourceRoot: group.sourceRoot,
+      localSourceRoot: group.localSourceRoot,
+      repoRootId: group.repoRootId,
+      cloudRepoTarget: group.cloudRepoTarget,
+    });
 
     return (
       <RepoGroup
@@ -152,6 +159,7 @@ export function SidebarWorkspaceContent({
         onToggleCollapsed={() => onToggleRepoCollapsed(group.sourceRoot)}
         onNewWorkspace={() => onCreateWorktreeWorkspace(group.repoRootId, group.sourceRoot)}
         onNewLocalWorkspace={() => onCreateLocalWorkspace(group.localSourceRoot, group.sourceRoot)}
+        newWorkspaceCommandScope={newWorkspaceCommandScope}
         cloudWorkspaceEnabled={cloudWorkspaceEnabled && cloudRepoAction.kind !== "loading"}
         cloudWorkspaceTooltip={
           cloudRepoAction.kind === "loading"
