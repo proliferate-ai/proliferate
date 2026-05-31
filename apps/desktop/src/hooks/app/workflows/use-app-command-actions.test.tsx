@@ -15,6 +15,7 @@ const hookMocks = vi.hoisted(() => ({
   createWorktreeAndEnter: vi.fn(() => Promise.resolve()),
   goToTopLevelRoute: vi.fn(),
   navigateToWorkspaceShell: vi.fn(),
+  openExternal: vi.fn(() => Promise.resolve()),
   showToast: vi.fn(),
   selectedWorkspaceId: null as string | null,
   selectedLogicalWorkspace: null as unknown,
@@ -54,6 +55,12 @@ vi.mock("@/hooks/access/cloud/use-cloud-repo-configs", () => ({
   useCloudRepoConfigs: () => ({
     data: { configs: [{ gitOwner: "proliferate-ai", gitRepoName: "repo-b", configured: true }] },
     isPending: false,
+  }),
+}));
+
+vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
+  useTauriShellActions: () => ({
+    openExternal: hookMocks.openExternal,
   }),
 }));
 
@@ -153,6 +160,7 @@ describe("useAppCommandActions", () => {
     hookMocks.createWorktreeAndEnter.mockClear();
     hookMocks.goToTopLevelRoute.mockClear();
     hookMocks.navigateToWorkspaceShell.mockClear();
+    hookMocks.openExternal.mockClear();
     hookMocks.showToast.mockClear();
     hookMocks.selectedWorkspaceId = null;
     hookMocks.activeNewWorkspaceScope = null;
@@ -180,5 +188,16 @@ describe("useAppCommandActions", () => {
       latencyFlowId: "latency-flow-1",
       repoGroupKeyToExpand: "/repo-b",
     }));
+  });
+
+  it("opens the web app with the configured base URL", () => {
+    const { result } = renderHook(() => useAppCommandActions(), { wrapper });
+
+    act(() => {
+      result.current.openWebApp.execute("shortcut");
+    });
+
+    expect(hookMocks.openExternal).toHaveBeenCalledWith("https://web.proliferate.com");
+    expect(hookMocks.showToast).toHaveBeenCalledWith("Opening web app...", "info");
   });
 });

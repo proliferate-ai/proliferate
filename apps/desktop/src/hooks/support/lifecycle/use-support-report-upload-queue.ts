@@ -107,8 +107,10 @@ export function useSupportReportUploadQueue(): void {
     };
 
     void listenSupportReportJobs((job) => {
-      persistSupportReportJob(job);
-      showToast("Sending report...", "info");
+      const queuedNewJob = persistSupportReportJob(job);
+      if (queuedNewJob) {
+        showToast("Sending report...", "info");
+      }
       processQueue();
     }).then((unlisten) => {
       if (disposed) {
@@ -432,10 +434,10 @@ async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
     .join("");
 }
 
-function persistSupportReportJob(job: SupportReportJob): void {
+function persistSupportReportJob(job: SupportReportJob): boolean {
   const current = readPersistedJobs();
   if (current.some((entry) => entry.job.jobId === job.jobId)) {
-    return;
+    return false;
   }
   writePersistedJobs([
     ...current,
@@ -446,6 +448,7 @@ function persistSupportReportJob(job: SupportReportJob): void {
       lastError: null,
     },
   ]);
+  return true;
 }
 
 function removePersistedJob(jobId: string): void {

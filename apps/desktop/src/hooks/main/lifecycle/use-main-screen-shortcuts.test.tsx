@@ -40,7 +40,9 @@ describe("useMainScreenShortcuts", () => {
     renderHook(() => useMainScreenShortcuts({
       canOpenCommandPalette: false,
       onOpenCommandPalette: vi.fn(),
+      onOpenWorkspaceInWeb: vi.fn(),
       onOpenTerminal: vi.fn(),
+      onSyncWorkspaceToWeb: vi.fn(),
       onToggleLeftSidebar,
       onToggleRightPanel,
     }));
@@ -55,12 +57,16 @@ describe("useMainScreenShortcuts", () => {
   it("registers workspace-scoped shortcuts when a workspace is selected", () => {
     harnessState.selectedWorkspaceId = "workspace-1";
     const onOpenTerminal = vi.fn(() => true);
+    const onOpenWorkspaceInWeb = vi.fn();
+    const onSyncWorkspaceToWeb = vi.fn();
     const onToggleRightPanel = vi.fn();
 
     renderHook(() => useMainScreenShortcuts({
       canOpenCommandPalette: true,
       onOpenCommandPalette: vi.fn(),
+      onOpenWorkspaceInWeb,
       onOpenTerminal,
+      onSyncWorkspaceToWeb,
       onToggleLeftSidebar: vi.fn(),
       onToggleRightPanel,
     }));
@@ -70,6 +76,12 @@ describe("useMainScreenShortcuts", () => {
 
     expect(runShortcutHandler("workspace.toggle-right-panel", { source: "keyboard" })).toBe(true);
     expect(onToggleRightPanel).toHaveBeenCalledTimes(1);
+
+    expect(runShortcutHandler("workspace.open-in-web", { source: "keyboard" })).toBe(true);
+    expect(onOpenWorkspaceInWeb).toHaveBeenCalledTimes(1);
+
+    expect(runShortcutHandler("workspace.sync-to-web", { source: "keyboard" })).toBe(true);
+    expect(onSyncWorkspaceToWeb).toHaveBeenCalledTimes(1);
   });
 
   it("disables workspace shortcuts when the workspace surface is hidden", () => {
@@ -80,7 +92,9 @@ describe("useMainScreenShortcuts", () => {
       enabled: false,
       canOpenCommandPalette: true,
       onOpenCommandPalette: vi.fn(),
+      onOpenWorkspaceInWeb: vi.fn(),
       onOpenTerminal: vi.fn(() => true),
+      onSyncWorkspaceToWeb: vi.fn(),
       onToggleLeftSidebar,
       onToggleRightPanel: vi.fn(),
     }));

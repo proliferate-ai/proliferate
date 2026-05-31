@@ -125,6 +125,19 @@ describe("resolveKeyboardShortcut", () => {
     });
 
     expect(resolveKeyboardShortcut({
+      key: "w",
+      code: "KeyW",
+      metaKey: true,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: false,
+    } as KeyboardEvent)).toEqual({
+      id: "app.open-web",
+      shortcut: expect.objectContaining({ id: "app.open-web" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
       key: "s",
       code: "KeyS",
       metaKey: true,
@@ -374,6 +387,32 @@ describe("resolveKeyboardShortcut", () => {
       }),
       trigger: expect.objectContaining({ source: "keyboard" }),
     });
+
+    expect(resolveKeyboardShortcut({
+      key: "w",
+      code: "KeyW",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.open-in-web",
+      shortcut: expect.objectContaining({ id: "workspace.open-in-web" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "s",
+      code: "KeyS",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: true,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.sync-to-web",
+      shortcut: expect.objectContaining({ id: "workspace.sync-to-web" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
   });
 
   it("resolves directional chat and terminal shortcuts on mac", () => {
@@ -485,6 +524,47 @@ describe("resolveKeyboardShortcut", () => {
     } as KeyboardEvent)).toEqual({
       id: "workspace.open-terminal",
       shortcut: expect.objectContaining({ id: "workspace.open-terminal" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+  });
+
+  it("resolves web shortcuts with non-mac bindings", () => {
+    expect(resolveKeyboardShortcut({
+      key: "w",
+      code: "KeyW",
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: true,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.open-in-web",
+      shortcut: expect.objectContaining({ id: "workspace.open-in-web" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "s",
+      code: "KeyS",
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      altKey: true,
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.sync-to-web",
+      shortcut: expect.objectContaining({ id: "workspace.sync-to-web" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
+
+    expect(resolveKeyboardShortcut({
+      key: "W",
+      code: "KeyW",
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: true,
+      altKey: true,
+    } as KeyboardEvent)).toEqual({
+      id: "app.open-web",
+      shortcut: expect.objectContaining({ id: "app.open-web" }),
       trigger: expect.objectContaining({ source: "keyboard" }),
     });
   });

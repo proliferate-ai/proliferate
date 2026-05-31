@@ -149,6 +149,14 @@ describe("useAppShortcuts", () => {
     expect(runShortcutHandler("workspace.copy-branch", { source: "keyboard" })).toBe(true);
     expect(actions.copyBranchName.execute).toHaveBeenCalledWith("shortcut");
   });
+
+  it("routes the broad web shortcut through app command actions", () => {
+    const actions = commandActions();
+    renderHook(() => useAppShortcuts(actions));
+
+    expect(runShortcutHandler("app.open-web", { source: "keyboard" })).toBe(true);
+    expect(actions.openWebApp.execute).toHaveBeenCalledWith("shortcut");
+  });
 });
 
 function commandActions(): AppCommandActions {
@@ -162,6 +170,7 @@ function commandActions(): AppCommandActions {
     goHome: action(),
     goPlugins: action(),
     goAutomations: action(),
+    openWebApp: action(),
     openSupport: action(),
     addRepository: action(),
     newLocalWorkspace: action(),

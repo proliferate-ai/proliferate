@@ -44,6 +44,10 @@ export function useAppShortcuts(actions: AppCommandActions): void {
     actions.goAutomations.execute("shortcut");
   });
 
+  useShortcutHandler("app.open-web", () => {
+    actions.openWebApp.execute("shortcut");
+  });
+
   useShortcutHandler("app.open-support", () => {
     actions.openSupport.execute("shortcut");
   });

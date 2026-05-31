@@ -30,6 +30,8 @@ import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useNativeOverlayOpen } from "@proliferate/ui/overlays/overlay-presence";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
 import { useRunWorkspaceCommand } from "@/hooks/workspaces/workflows/use-run-workspace-command";
+import { useWorkspaceOpenInWebActions } from "@/hooks/workspaces/remote-access/use-workspace-open-in-web-actions";
+import { useWorkspaceRemoteAccessActions } from "@/hooks/workspaces/remote-access/use-workspace-remote-access-actions";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import { useWorkspaceActivityAcknowledgement } from "@/hooks/workspaces/lifecycle/use-workspace-activity-acknowledgement";
 import { resolveStandardWorkspaceChromeClasses } from "@/lib/domain/preferences/workspace-chrome";
@@ -118,11 +120,15 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
     isRuntimeReady: hasRuntimeReadyWorkspace,
     openTerminalPanel: actions.openTerminalPanel,
   });
+  const workspaceWebActions = useWorkspaceOpenInWebActions();
+  const workspaceRemoteAccessActions = useWorkspaceRemoteAccessActions();
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const runtimeBlockedReason = getWorkspaceRuntimeBlockReason(selectedWorkspaceId);
   const shellActions = useMemo(() => ({
     openTerminalPanel: actions.openTerminalPanel,
-  }), [actions.openTerminalPanel]);
+    workspaceWebActions,
+    workspaceRemoteAccessActions,
+  }), [actions.openTerminalPanel, workspaceRemoteAccessActions, workspaceWebActions]);
   const repoSettingsHref = useMemo(() => {
     const cloudOwner = selectedCloudWorkspace?.repo?.owner?.trim() ?? "";
     const cloudName = selectedCloudWorkspace?.repo?.name?.trim() ?? "";
@@ -164,7 +170,9 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
     enabled: visible,
     canOpenCommandPalette: hasWorkspaceShell,
     onOpenCommandPalette: actions.handleCommandPaletteOpen,
+    onOpenWorkspaceInWeb: workspaceWebActions.openCurrentWorkspaceInWeb,
     onOpenTerminal: actions.openTerminalPanel,
+    onSyncWorkspaceToWeb: workspaceRemoteAccessActions.syncToWeb,
     onToggleLeftSidebar: actions.onToggleSidebar,
     onToggleRightPanel: actions.toggleRightPanel,
   });
@@ -322,6 +330,8 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                             canOpenRepositorySettings={canOpenRepositorySettings}
                             repositorySettingsDisabledReason={repositorySettingsDisabledReason}
                             runCommand={runCommand}
+                            workspaceWebActions={workspaceWebActions}
+                            workspaceRemoteAccessActions={workspaceRemoteAccessActions}
                             openTerminalPanel={actions.openTerminalPanel}
                             onToggleLeftSidebar={actions.onToggleSidebar}
                             onToggleRightPanel={actions.toggleRightPanel}

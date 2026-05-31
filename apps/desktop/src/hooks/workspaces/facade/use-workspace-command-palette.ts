@@ -26,6 +26,16 @@ interface RunCommandState {
   isLaunching: boolean;
 }
 
+interface WorkspaceWebActionState {
+  openCurrentWorkspaceInWeb: () => void;
+  disabledReason: string | null;
+}
+
+interface WorkspaceRemoteAccessActionState {
+  syncToWeb: () => void;
+  syncToWebDisabledReason: string | null;
+}
+
 interface UseWorkspaceCommandPaletteArgs {
   open: boolean;
   query: string;
@@ -37,6 +47,8 @@ interface UseWorkspaceCommandPaletteArgs {
   canOpenRepositorySettings: boolean;
   repositorySettingsDisabledReason: string | null;
   runCommand: RunCommandState;
+  workspaceWebActions: WorkspaceWebActionState;
+  workspaceRemoteAccessActions: WorkspaceRemoteAccessActionState;
   openTerminalPanel: () => boolean;
   onToggleLeftSidebar: () => void;
   onToggleRightPanel: () => void;
@@ -55,6 +67,8 @@ export function useWorkspaceCommandPalette({
   canOpenRepositorySettings,
   repositorySettingsDisabledReason,
   runCommand,
+  workspaceWebActions,
+  workspaceRemoteAccessActions,
   openTerminalPanel,
   onToggleLeftSidebar,
   onToggleRightPanel,
@@ -162,6 +176,26 @@ export function useWorkspaceCommandPalette({
       shortcut: getShortcutDisplayLabel(SHORTCUTS.toggleRightPanel),
       disabledReason: hasWorkspaceShell ? null : "Workspace is still opening.",
       execute: onToggleRightPanel,
+    },
+    {
+      id: "workspace.open-in-web",
+      value: commandPaletteCommandValue("workspace.open-in-web"),
+      group: "workspace",
+      label: "Open Current Workspace in Web",
+      icon: "arrow-right",
+      shortcut: getShortcutDisplayLabel(SHORTCUTS.openWorkspaceInWeb),
+      disabledReason: workspaceWebActions.disabledReason,
+      execute: workspaceWebActions.openCurrentWorkspaceInWeb,
+    },
+    {
+      id: "workspace.sync-to-web",
+      value: commandPaletteCommandValue("workspace.sync-to-web"),
+      group: "workspace",
+      label: "Sync Current Workspace to Web",
+      icon: "cloud-plus",
+      shortcut: getShortcutDisplayLabel(SHORTCUTS.syncWorkspaceToWeb),
+      disabledReason: workspaceRemoteAccessActions.syncToWebDisabledReason,
+      execute: workspaceRemoteAccessActions.syncToWeb,
     },
     {
       id: "workspace.run-command",
@@ -312,6 +346,16 @@ export function useWorkspaceCommandPalette({
       execute: () => appActions.goAutomations.execute("palette"),
     },
     {
+      id: "app.open-web",
+      value: commandPaletteCommandValue("app.open-web"),
+      group: "app",
+      label: "Open Web App",
+      icon: "arrow-right",
+      shortcut: getShortcutDisplayLabel(SHORTCUTS.openWebApp),
+      disabledReason: appActions.openWebApp.disabledReason,
+      execute: () => appActions.openWebApp.execute("palette"),
+    },
+    {
       id: "app.open-support",
       value: commandPaletteCommandValue("app.open-support"),
       group: "app",
@@ -384,6 +428,10 @@ export function useWorkspaceCommandPalette({
     runCommand.isLaunching,
     runCommand.onRun,
     selectedWorkspaceId,
+    workspaceRemoteAccessActions.syncToWeb,
+    workspaceRemoteAccessActions.syncToWebDisabledReason,
+    workspaceWebActions.disabledReason,
+    workspaceWebActions.openCurrentWorkspaceInWeb,
   ]);
 
   const visibleCommandEntries = useMemo(
