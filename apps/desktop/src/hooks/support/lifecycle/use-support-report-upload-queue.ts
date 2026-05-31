@@ -91,6 +91,7 @@ export function useSupportReportUploadQueue(): void {
 
   useEffect(() => {
     let disposed = false;
+    let unlistenJobs: (() => void) | null = null;
 
     const processQueue = () => {
       if (disposed || processingRef.current) {
@@ -107,21 +108,27 @@ export function useSupportReportUploadQueue(): void {
     };
 
     void listenSupportReportJobs((job) => {
-      const queuedNewJob = persistSupportReportJob(job);
-      if (queuedNewJob) {
-        showToast("Sending report...", "info");
+      if (disposed) {
+        return;
       }
+      const queued = persistSupportReportJob(job);
+      if (!queued) {
+        return;
+      }
+      showToast("Sending report...", "info");
       processQueue();
     }).then((unlisten) => {
       if (disposed) {
         unlisten();
         return;
       }
+      unlistenJobs = unlisten;
       processQueue();
     });
 
     return () => {
       disposed = true;
+      unlistenJobs?.();
       if (retryTimerRef.current != null) {
         window.clearTimeout(retryTimerRef.current);
       }
