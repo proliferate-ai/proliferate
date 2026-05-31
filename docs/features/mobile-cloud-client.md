@@ -62,7 +62,7 @@ Mobile already has a real Expo app scaffold:
 - `apps/mobile/src/App.tsx` wires safe area, auth, telemetry, cloud query, and shell
   providers.
 - `MobileAuthProvider` stores access/refresh tokens in SecureStore and supports
-  Apple, Google, and GitHub OAuth through mobile PKCE flows.
+  email/password plus Apple, Google, and GitHub OAuth through mobile PKCE flows.
 - `MobileCloudProvider` wires `@proliferate/cloud-sdk-react` with the mobile
   bearer-token client.
 - `MobileShell` owns a drawer, top bar, auth gate, GitHub-required gate, basic
@@ -138,7 +138,7 @@ script, or both.
 Start state: no SecureStore session, app freshly installed.
 
 - [ ] Open Mobile and see the signed-out auth screen.
-- [ ] Sign in with Apple or Google.
+- [ ] Sign in with email/password, Apple, or Google.
 - [ ] If GitHub is not linked, enter the GitHub-required screen.
 - [ ] Link GitHub and return to the app through the mobile callback URL.
 - [ ] Land in the authenticated shell with Home, Workspaces, Sessions,

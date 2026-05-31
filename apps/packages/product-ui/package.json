@@ -19,6 +19,10 @@
       "types": "./dist/account/AccountSettingsPane.d.ts",
       "import": "./dist/account/AccountSettingsPane.js"
     },
+    "./account/AccountPasswordCredentialCard": {
+      "types": "./dist/account/AccountPasswordCredentialCard.d.ts",
+      "import": "./dist/account/AccountPasswordCredentialCard.js"
+    },
     "./auth/AuthLayout": {
       "types": "./dist/auth/AuthLayout.d.ts",
       "import": "./dist/auth/AuthLayout.js"
@@ -34,6 +38,10 @@
     "./auth/AuthStartPanel": {
       "types": "./dist/auth/AuthStartPanel.d.ts",
       "import": "./dist/auth/AuthStartPanel.js"
+    },
+    "./auth/PasswordCredentialForm": {
+      "types": "./dist/auth/PasswordCredentialForm.d.ts",
+      "import": "./dist/auth/PasswordCredentialForm.js"
     },
     "./auth/ConnectGitHubRequiredPanel": {
       "types": "./dist/auth/ConnectGitHubRequiredPanel.d.ts",

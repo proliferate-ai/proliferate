@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
@@ -37,7 +37,7 @@ worker_router = APIRouter(prefix="/worker/target-configs", tags=["cloud-worker-t
 async def list_target_configs_endpoint(
     target_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> list[CloudTargetConfigResponse]:
     try:
         configs = await list_target_configs(db, target_id=target_id, user_id=user.id)
@@ -51,7 +51,7 @@ async def get_target_config_endpoint(
     target_id: UUID,
     config_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> CloudTargetConfigResponse:
     try:
         config = await get_target_config(
@@ -73,7 +73,7 @@ async def materialize_target_config_endpoint(
     target_id: UUID,
     body: MaterializeTargetConfigRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> MaterializeTargetConfigResponse:
     try:
         return await materialize_target_config(db, target_id=target_id, user=user, body=body)

@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
@@ -51,7 +51,7 @@ router = APIRouter(prefix="/mobility", tags=["cloud-mobility"])
 
 @router.get("/workspaces", response_model=list[MobilityWorkspaceSummary])
 async def list_mobility_workspaces_endpoint(
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> list[MobilityWorkspaceSummary]:
     values = await list_cloud_workspace_mobility_for_user(user.id)
     return [mobility_workspace_summary_payload(value) for value in values]
@@ -60,7 +60,7 @@ async def list_mobility_workspaces_endpoint(
 @router.post("/workspaces/ensure", response_model=MobilityWorkspaceDetail)
 async def ensure_mobility_workspace_endpoint(
     body: EnsureMobilityWorkspaceRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> MobilityWorkspaceDetail:
     try:
         value = await ensure_cloud_workspace_mobility(
@@ -80,7 +80,7 @@ async def ensure_mobility_workspace_endpoint(
 @router.get("/workspaces/{mobility_workspace_id}", response_model=MobilityWorkspaceDetail)
 async def get_mobility_workspace_endpoint(
     mobility_workspace_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> MobilityWorkspaceDetail:
     try:
@@ -101,7 +101,7 @@ async def get_mobility_workspace_endpoint(
 async def preflight_mobility_handoff_endpoint(
     mobility_workspace_id: UUID,
     body: WorkspaceMobilityPreflightRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> WorkspaceMobilityPreflightResponse:
     try:
         return await preflight_cloud_workspace_handoff(
@@ -122,7 +122,7 @@ async def preflight_mobility_handoff_endpoint(
 async def start_mobility_handoff_endpoint(
     mobility_workspace_id: UUID,
     body: StartWorkspaceMobilityHandoffRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> MobilityHandoffSummary:
     try:
         value = await start_cloud_workspace_handoff(
@@ -145,7 +145,7 @@ async def start_mobility_handoff_endpoint(
 async def heartbeat_mobility_handoff_endpoint(
     mobility_workspace_id: UUID,
     handoff_op_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> MobilityHandoffSummary:
     try:
@@ -168,7 +168,7 @@ async def update_mobility_handoff_phase_endpoint(
     mobility_workspace_id: UUID,
     handoff_op_id: UUID,
     body: UpdateWorkspaceMobilityHandoffPhaseRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> MobilityHandoffSummary:
     try:
@@ -194,7 +194,7 @@ async def finalize_mobility_handoff_endpoint(
     mobility_workspace_id: UUID,
     handoff_op_id: UUID,
     body: FinalizeWorkspaceMobilityHandoffRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> MobilityHandoffSummary:
     try:
@@ -217,7 +217,7 @@ async def finalize_mobility_handoff_endpoint(
 async def cleanup_mobility_handoff_endpoint(
     mobility_workspace_id: UUID,
     handoff_op_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> MobilityHandoffSummary:
     try:
@@ -239,7 +239,7 @@ async def cleanup_mobility_handoff_endpoint(
 async def list_mobility_handoff_cleanup_items_endpoint(
     mobility_workspace_id: UUID,
     handoff_op_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> list[MobilityCleanupItemSummary]:
     try:
@@ -262,7 +262,7 @@ async def start_mobility_handoff_cleanup_item_endpoint(
     mobility_workspace_id: UUID,
     handoff_op_id: UUID,
     cleanup_item_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> MobilityCleanupItemSummary:
     try:
@@ -286,7 +286,7 @@ async def complete_mobility_handoff_cleanup_item_endpoint(
     mobility_workspace_id: UUID,
     handoff_op_id: UUID,
     cleanup_item_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> MobilityCleanupItemSummary:
     try:
@@ -311,7 +311,7 @@ async def fail_mobility_handoff_cleanup_item_endpoint(
     handoff_op_id: UUID,
     cleanup_item_id: UUID,
     body: FailMobilityCleanupItemRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> MobilityCleanupItemSummary:
     try:
@@ -337,7 +337,7 @@ async def repair_mobility_handoff_endpoint(
     mobility_workspace_id: UUID,
     handoff_op_id: UUID,
     body: RepairWorkspaceMobilityHandoffRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> MobilityHandoffSummary:
     try:
@@ -362,7 +362,7 @@ async def fail_mobility_handoff_endpoint(
     mobility_workspace_id: UUID,
     handoff_op_id: UUID,
     body: FailWorkspaceMobilityHandoffRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> MobilityHandoffSummary:
     try:

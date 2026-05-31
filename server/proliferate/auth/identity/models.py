@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from proliferate.auth.identity.types import AuthProviderName
 from proliferate.auth.models import UserRead
+from proliferate.constants.auth import PASSWORD_EMAIL_MAX_LENGTH, PASSWORD_MAX_LENGTH
 
 AuthPurposeName = Literal["login", "link", "required_github_link"]
 
@@ -86,6 +87,34 @@ class AuthRefreshRequest(BaseModel):
         serialization_alias="grantType",
         validation_alias="grantType",
     )
+
+
+class PasswordLoginRequest(BaseModel):
+    email: str = Field(max_length=PASSWORD_EMAIL_MAX_LENGTH)
+    password: str = Field(max_length=PASSWORD_MAX_LENGTH)
+
+
+class PasswordSetRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    current_password: str | None = Field(
+        default=None,
+        max_length=PASSWORD_MAX_LENGTH,
+        serialization_alias="currentPassword",
+        validation_alias="currentPassword",
+    )
+    new_password: str = Field(
+        max_length=PASSWORD_MAX_LENGTH,
+        serialization_alias="newPassword",
+        validation_alias="newPassword",
+    )
+
+
+class PasswordCredentialResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    enabled: bool
+    set_at: str | None = Field(default=None, serialization_alias="setAt")
 
 
 class AccountReadinessResponse(BaseModel):

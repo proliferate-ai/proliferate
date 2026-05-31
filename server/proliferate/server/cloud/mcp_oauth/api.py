@@ -6,7 +6,7 @@ from fastapi import APIRouter, Body, Depends, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.config import settings
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
@@ -54,7 +54,7 @@ async def start_cloud_mcp_oauth_flow_endpoint(
 @router.get("/oauth/flows/{flow_id}", response_model=CloudMcpOAuthFlowStatusResponse)
 async def get_cloud_mcp_oauth_flow_endpoint(
     flow_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpOAuthFlowStatusResponse:
     status = await get_cloud_mcp_oauth_flow_status(db, user_id=user.id, flow_id=flow_id)
@@ -67,7 +67,7 @@ async def get_cloud_mcp_oauth_flow_endpoint(
 @router.post("/oauth/flows/{flow_id}/cancel", response_model=CloudMcpOAuthFlowStatusResponse)
 async def cancel_cloud_mcp_oauth_flow_endpoint(
     flow_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpOAuthFlowStatusResponse:
     status = await cancel_cloud_mcp_oauth_flow(db, user_id=user.id, flow_id=flow_id)

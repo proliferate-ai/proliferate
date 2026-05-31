@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from ipaddress import ip_address, ip_network
 from typing import Annotated
 
 from fastapi import (
@@ -25,6 +26,9 @@ from proliferate.auth.identity.models import (
     AuthRefreshRequest,
     AuthSessionResponse,
     AuthTokenRequest,
+    PasswordCredentialResponse,
+    PasswordLoginRequest,
+    PasswordSetRequest,
     StartAuthRequest,
     StartAuthResponse,
 )
@@ -34,6 +38,7 @@ from proliferate.auth.identity.service import (
     WEB_CSRF_HEADER,
     WEB_REFRESH_COOKIE,
     auth_session_response,
+    authenticate_password_login,
     complete_apple_mobile_login,
     complete_apple_web_callback,
     complete_oauth_provider_callback,
@@ -41,6 +46,7 @@ from proliferate.auth.identity.service import (
     exchange_auth_code,
     hash_secret,
     refresh_auth_session,
+    set_password_credential,
     start_provider_auth,
 )
 from proliferate.auth.identity.types import AuthProviderName
@@ -50,6 +56,41 @@ from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 
 router = APIRouter(tags=["auth"])
+
+
+def _request_client_ip(request: Request) -> str | None:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded and _request_from_trusted_proxy(request):
+        return forwarded.split(",", 1)[0].strip() or None
+    return request.client.host if request.client is not None else None
+
+
+def _request_from_trusted_proxy(request: Request) -> bool:
+    host = request.client.host if request.client is not None else None
+    if host in {"127.0.0.1", "::1", "localhost"}:
+        return True
+    if not host:
+        return False
+    try:
+        remote_ip = ip_address(host)
+    except ValueError:
+        return host in _trusted_proxy_entries()
+    for entry in _trusted_proxy_entries():
+        try:
+            if remote_ip in ip_network(entry, strict=False):
+                return True
+        except ValueError:
+            if host == entry:
+                return True
+    return False
+
+
+def _trusted_proxy_entries() -> set[str]:
+    return {
+        entry.strip()
+        for entry in settings.password_auth_trusted_proxy_hosts.split(",")
+        if entry.strip()
+    }
 
 
 @router.post("/github/link/start", response_model=StartAuthResponse)
@@ -243,6 +284,64 @@ async def apple_mobile_complete(
     )
     await db.commit()
     return auth_session_response(session, include_refresh_token=True)
+
+
+@router.post("/web/password/login", response_model=AuthSessionResponse)
+async def web_password_login(
+    body: PasswordLoginRequest,
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_async_session),
+) -> AuthSessionResponse:
+    try:
+        session = await authenticate_password_login(
+            db,
+            email=body.email,
+            password=body.password,
+            client_ip=_request_client_ip(request),
+        )
+    except HTTPException:
+        await db.commit()
+        raise
+    await db.commit()
+    _set_web_session_cookies(response, session.refresh_token)
+    return auth_session_response(session, include_refresh_token=False)
+
+
+@router.post("/mobile/password/login", response_model=AuthSessionResponse)
+async def mobile_password_login(
+    body: PasswordLoginRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_async_session),
+) -> AuthSessionResponse:
+    try:
+        session = await authenticate_password_login(
+            db,
+            email=body.email,
+            password=body.password,
+            client_ip=_request_client_ip(request),
+        )
+    except HTTPException:
+        await db.commit()
+        raise
+    await db.commit()
+    return auth_session_response(session, include_refresh_token=True)
+
+
+@router.put("/password", response_model=PasswordCredentialResponse)
+async def set_password(
+    body: PasswordSetRequest,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_limited_user),
+) -> PasswordCredentialResponse:
+    credential = await set_password_credential(
+        db,
+        user=user,
+        current_password=body.current_password,
+        new_password=body.new_password,
+    )
+    await db.commit()
+    return credential
 
 
 @router.post("/web/token", response_model=AuthSessionResponse)

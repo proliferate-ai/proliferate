@@ -24,6 +24,7 @@ async def get_auth_viewer(
         onboarding_state,
         linked_providers,
         provider_availability,
+        password_credential,
     ) = await auth_viewer_payload(db, user=user)
     return AuthViewerResponse(
         user=UserRead.model_validate(user),
@@ -31,4 +32,5 @@ async def get_auth_viewer(
         onboarding_state=onboarding_state,
         linked_providers=linked_providers,
         provider_availability=provider_availability,
+        password_credential=password_credential,
     )

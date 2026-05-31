@@ -9,7 +9,7 @@ from uuid import UUID
 from fastapi import Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.db import engine as db_engine
 from proliferate.db.models.auth import User
 from proliferate.db.store.cloud_sync import targets as targets_store
@@ -29,7 +29,7 @@ class LiveSessionStreamAccess:
 async def session_stream_user_can_read(
     session_id: str,
     target_id: UUID = Query(alias="targetId"),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> LiveSessionStreamAccess:
     async def read(db: AsyncSession) -> LiveSessionStreamAccess:
         resolved_target_id = await ensure_visible_session_target(
@@ -48,7 +48,7 @@ async def session_stream_user_can_read(
 
 async def workspace_stream_user_can_read(
     workspace_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> WorkspaceDetail:
     async def read(db: AsyncSession) -> WorkspaceDetail:
         return await get_cloud_workspace_detail(db, user.id, workspace_id)
@@ -58,7 +58,7 @@ async def workspace_stream_user_can_read(
 
 async def target_stream_user_can_read(
     target_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> targets_store.CloudTargetSnapshot:
     async def read(db: AsyncSession) -> targets_store.CloudTargetSnapshot:
         return await get_target_detail(db, target_id=target_id, user_id=user.id)

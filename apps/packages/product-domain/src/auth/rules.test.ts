@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { deriveAuthGateState, providerRequiresGitHubGate } from "./rules";
+import {
+  authMethodRequiresGitHubGate,
+  deriveAuthGateState,
+  providerRequiresGitHubGate,
+} from "./rules";
 import type { ProductViewer } from "./model";
 
 const baseViewer: ProductViewer = {
@@ -9,6 +13,7 @@ const baseViewer: ProductViewer = {
   githubConnected: true,
   onboardingState: "active",
   linkedProviders: [{ provider: "github", connected: true }],
+  passwordCredential: { enabled: false, setAt: null },
 };
 
 describe("auth rules", () => {
@@ -43,5 +48,10 @@ describe("auth rules", () => {
     expect(providerRequiresGitHubGate("github")).toBe(false);
     expect(providerRequiresGitHubGate("google")).toBe(true);
     expect(providerRequiresGitHubGate("apple")).toBe(true);
+  });
+
+  it("models password as a sign-in method rather than a linked provider", () => {
+    expect(authMethodRequiresGitHubGate("password")).toBe(true);
+    expect(authMethodRequiresGitHubGate("github")).toBe(false);
   });
 });

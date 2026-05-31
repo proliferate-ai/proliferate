@@ -11,6 +11,7 @@ from proliferate.auth.identity import (
 )
 from proliferate.auth.models import (
     AuthLinkedProvider,
+    AuthPasswordCredential,
     AuthProviderAvailability,
     AuthViewerResponse,
     UserRead,
@@ -31,6 +32,10 @@ def auth_viewer_payload(user: User) -> AuthViewerResponse:
         provider_availability=[
             _provider_availability_payload(provider) for provider in AUTH_PROVIDERS
         ],
+        password_credential=AuthPasswordCredential(
+            enabled=user.password_set_at is not None,
+            set_at=user.password_set_at.isoformat() if user.password_set_at else None,
+        ),
     )
 
 

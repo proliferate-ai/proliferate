@@ -113,6 +113,18 @@
   description: JWT signing and OAuth state signing
   tags: [local-dev, self-hosted, production]
 
+- name: PASSWORD_AUTH_ENABLED
+  secret: false
+  default: "true"
+  description: Enables product-owned email/password login for password-provisioned accounts
+  tags: [local-dev, self-hosted, production]
+
+- name: PASSWORD_AUTH_TRUSTED_PROXY_HOSTS
+  secret: false
+  default: ""
+  description: Comma-separated proxy IPs or CIDRs allowed to supply x-forwarded-for for password login throttling
+  tags: [self-hosted, production]
+
 - name: MOBILE_REDIRECT_URI
   secret: false
   default: "proliferate://auth/callback"

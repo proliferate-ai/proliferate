@@ -2,8 +2,10 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AccountSettingsPane,
+  type AccountPasswordCredentialSubmit,
   type AccountProviderView,
 } from "@proliferate/product-ui/account/AccountSettingsPane";
+import { setPasswordCredential } from "@proliferate/cloud-sdk";
 import { ExternalLink, Link2, RefreshCw } from "@proliferate/ui/icons";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
@@ -117,6 +119,14 @@ export function AccountPane() {
     }
   }
 
+  async function handleSetPassword(input: AccountPasswordCredentialSubmit) {
+    await setPasswordCredential({
+      currentPassword: input.currentPassword,
+      newPassword: input.newPassword,
+    });
+    await authViewer.refetch();
+  }
+
   return (
     <section className="space-y-6">
       <SettingsPageHeader
@@ -157,6 +167,15 @@ export function AccountPane() {
           googleAvailable: googleAvailability?.enabled !== false,
           showProviders: isAuthenticated && !devAuthBypassed,
         })}
+        passwordCredential={isAuthenticated && !devAuthBypassed
+          ? {
+              enabled: authViewer.data?.passwordCredential.enabled ?? false,
+              setAt: authViewer.data?.passwordCredential.setAt ?? null,
+              loading: authViewer.isLoading && !authViewer.data,
+              disabled: !cloudSignInAvailable || authViewer.isLoading,
+              onSubmit: handleSetPassword,
+            }
+          : undefined}
         actions={{
           signIn: !devAuthBypassed && !isAuthenticated && !localMode && !signInUnavailable && !cloudSignInChecking
             ? {

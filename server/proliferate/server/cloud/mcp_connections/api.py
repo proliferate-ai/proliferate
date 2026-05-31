@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.mcp_connections.access import McpConnectionManageDependency
@@ -44,7 +44,7 @@ def _connection_response(
 
 @router.get("/mcp/connections", response_model=CloudMcpConnectionsResponse)
 async def list_cloud_mcp_connections_endpoint(
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpConnectionsResponse:
     return CloudMcpConnectionsResponse(
@@ -58,7 +58,7 @@ async def list_cloud_mcp_connections_endpoint(
 @router.post("/mcp/connections", response_model=CloudMcpConnectionResponse)
 async def create_cloud_mcp_connection_endpoint(
     body: CreateCloudMcpConnectionRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpConnectionResponse:
     return _connection_response(await create_cloud_mcp_connection(db, user.id, body))
@@ -68,7 +68,7 @@ async def create_cloud_mcp_connection_endpoint(
 async def patch_cloud_mcp_connection_endpoint(
     body: PatchCloudMcpConnectionRequest,
     connection: McpConnectionManageDependency,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpConnectionResponse:
     return _connection_response(
@@ -88,7 +88,7 @@ async def patch_cloud_mcp_connection_endpoint(
 async def publicize_cloud_mcp_connection_endpoint(
     body: PublicizeCloudMcpConnectionRequest,
     connection: McpConnectionManageDependency,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpConnectionResponse:
     return _connection_response(
@@ -107,7 +107,7 @@ async def publicize_cloud_mcp_connection_endpoint(
 )
 async def unpublicize_cloud_mcp_connection_endpoint(
     connection: McpConnectionManageDependency,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudMcpConnectionResponse:
     return _connection_response(

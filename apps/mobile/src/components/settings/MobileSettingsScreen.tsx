@@ -80,11 +80,12 @@ export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScree
       ? "Linked"
       : "Required";
   const githubNeedsAttention = !githubChecking && (viewer.isError || !githubConnected);
-  const githubIconColor = githubChecking
-    ? colors.faint
-    : githubConnected && !viewer.isError
-      ? colors.success
-      : colors.warning;
+  const passwordEnabled = Boolean(viewer.data?.passwordCredential.enabled);
+  const passwordStateLabel = viewer.isLoading && !viewer.data
+    ? "Checking"
+    : passwordEnabled
+      ? "Enabled"
+      : "Not set";
   const configuredRepos = (repoConfigs.data?.configs ?? []).filter((repo) => repo.configured);
   const organizationRows = organizations.data?.organizations ?? [];
   const sectionLabels = mobileSectionLabels();
@@ -109,6 +110,12 @@ export function MobileSettingsScreen({ account, onSignOut }: MobileSettingsScree
           title="GitHub"
           value={githubStateLabel}
           valueTone={githubNeedsAttention ? "warning" : githubConnected ? "success" : "muted"}
+        />
+        <SettingsRow
+          icon="lock"
+          title="Email/password"
+          value={passwordStateLabel}
+          valueTone={passwordEnabled ? "success" : "muted"}
         />
         <SettingsRow
           icon="shield"

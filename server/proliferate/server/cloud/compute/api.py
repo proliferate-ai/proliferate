@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.compute.models import (
@@ -34,7 +34,7 @@ async def set_target_desired_versions_endpoint(
     target_id: UUID,
     body: SetDesiredVersionsRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> SetDesiredVersionsResponse:
     try:
         return await set_desired_versions(db, target_id=target_id, user=user, body=body)
@@ -49,7 +49,7 @@ async def set_target_desired_versions_endpoint(
 async def safe_stop_check_endpoint(
     target_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> SafeStopCheckResponse:
     try:
         return await check_safe_stop(db, target_id=target_id, user=user)
@@ -64,7 +64,7 @@ async def safe_stop_check_endpoint(
 async def revoke_workers_endpoint(
     target_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> RevokeWorkersResponse:
     try:
         return await revoke_workers_for_target(db, target_id=target_id, user=user)

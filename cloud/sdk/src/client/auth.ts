@@ -11,6 +11,9 @@ import type {
   AuthSessionResponse,
   AuthSurface,
   AuthTokenRequest,
+  PasswordCredentialResponse,
+  PasswordLoginRequest,
+  PasswordSetRequest,
   StartAuthRequest,
   StartAuthResponse,
 } from "../types/auth.js";
@@ -93,6 +96,54 @@ export async function completeAppleMobileAuth(
   });
 }
 
+export async function loginWebWithPassword(
+  body: PasswordLoginRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+  options: AuthRequestOptions = {},
+): Promise<AuthSessionResponse> {
+  return authRequestJson<AuthSessionResponse>(client, "/auth/web/password/login", {
+    method: "POST",
+    body,
+    accessToken: options.accessToken,
+    credentials: "include",
+    signal: options.signal,
+  });
+}
+
+export async function loginMobileWithPassword(
+  body: PasswordLoginRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+  options: AuthRequestOptions = {},
+): Promise<AuthSessionResponse> {
+  return authRequestJson<AuthSessionResponse>(client, "/auth/mobile/password/login", {
+    method: "POST",
+    body,
+    accessToken: options.accessToken,
+    signal: options.signal,
+  });
+}
+
+export async function setPasswordCredential(
+  body: PasswordSetRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+  options: AuthRequestOptions = {},
+): Promise<PasswordCredentialResponse> {
+  if (!options.accessToken) {
+    return client.requestJson<PasswordCredentialResponse>({
+      method: "PUT",
+      path: "/auth/password",
+      body,
+      signal: options.signal,
+    });
+  }
+  return authRequestJson<PasswordCredentialResponse>(client, "/auth/password", {
+    method: "PUT",
+    body,
+    accessToken: options.accessToken,
+    signal: options.signal,
+  });
+}
+
 export async function bootstrapWebSession(
   client: ProliferateCloudClient = getProliferateClient(),
   options: AuthRequestOptions = {},
@@ -144,7 +195,7 @@ export async function refreshMobileSession(
 }
 
 interface AuthRequestJsonOptions {
-  method: "POST";
+  method: "POST" | "PUT";
   body?: unknown;
   accessToken?: string | null;
   csrfToken?: string | null;

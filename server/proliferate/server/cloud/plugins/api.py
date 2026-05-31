@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
@@ -28,7 +28,7 @@ router = APIRouter(prefix="/plugins", tags=["cloud-plugins"])
 
 @router.get("", response_model=PluginConfiguredItemsResponse)
 async def list_configured_plugins_endpoint(
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> PluginConfiguredItemsResponse:
     return PluginConfiguredItemsResponse(
@@ -42,7 +42,7 @@ async def list_configured_plugins_endpoint(
 @router.post("/{plugin_id}/install", response_model=PluginConfiguredItemResponse)
 async def install_plugin_endpoint(
     plugin_id: str,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> PluginConfiguredItemResponse:
     try:
@@ -57,7 +57,7 @@ async def install_plugin_endpoint(
 async def patch_configured_plugin_endpoint(
     item_id: UUID,
     body: PatchPluginConfiguredItemRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> PluginConfiguredItemResponse:
     try:
@@ -71,7 +71,7 @@ async def patch_configured_plugin_endpoint(
 @router.delete("/{item_id}", response_model=OkResponse)
 async def uninstall_plugin_endpoint(
     item_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> OkResponse:
     try:

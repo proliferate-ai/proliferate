@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import time
+from datetime import UTC, datetime
 from unittest.mock import Mock
 from urllib.parse import parse_qs, urlparse
 from uuid import UUID
@@ -19,6 +20,7 @@ from proliferate.auth.identity import providers as identity_providers
 from proliferate.auth.identity.service import WEB_CSRF_COOKIE
 from proliferate.auth.oauth import github_oauth_client
 from proliferate.auth.oauth import google_oauth_client
+from proliferate.auth.passwords import hash_password
 from proliferate.config import settings
 from proliferate.constants.auth import DESKTOP_GITHUB_CSRF_COOKIE, REFRESH_TOKEN_LIFETIME_SECONDS
 from proliferate.db.models.auth import AuthIdentity, ProviderGrant, User
@@ -52,6 +54,30 @@ async def _create_user_via_manager(
             is_superuser=False,
             is_verified=True,
             display_name=display_name or "Desktop Tester",
+        )
+        session.add(user)
+        await session.commit()
+    return str(user.id)
+
+
+async def _create_password_user(
+    email: str,
+    password: str,
+    *,
+    display_name: str | None = None,
+    is_active: bool = True,
+) -> str:
+    from proliferate.db import engine as engine_module
+
+    async with engine_module.async_session_factory() as session:
+        user = User(
+            email=email,
+            hashed_password=hash_password(password),
+            password_set_at=datetime.now(UTC),
+            is_active=is_active,
+            is_superuser=False,
+            is_verified=True,
+            display_name=display_name or "Password Tester",
         )
         session.add(user)
         await session.commit()
@@ -205,6 +231,233 @@ class TestEmailPasswordRoutesRemoved:
     async def test_protected_endpoint_without_token(self, client: AsyncClient) -> None:
         resp = await client.get("/v1/cloud/workspaces")
         assert resp.status_code == 401
+
+
+class TestPasswordAuthFlow:
+    password = "correct horse battery"
+
+    @pytest.mark.asyncio
+    async def test_web_password_login_sets_cookie_session_and_keeps_github_gate(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "password_auth_enabled", True)
+        await _create_password_user("web-password@example.com", self.password)
+
+        response = await client.post(
+            "/auth/web/password/login",
+            json={"email": "web-password@example.com", "password": self.password},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["refreshToken"] is None
+        assert payload["readiness"]["productReady"] is False
+        assert "proliferate_web_refresh" in response.headers["set-cookie"]
+
+        bootstrap = await client.post("/auth/web/session/bootstrap")
+        assert bootstrap.status_code == 200
+        assert bootstrap.json()["readiness"]["productReady"] is False
+
+        protected = await client.get(
+            "/v1/cloud/workspaces",
+            headers={"Authorization": f"Bearer {payload['accessToken']}"},
+        )
+        assert protected.status_code == 403
+        assert protected.json()["detail"]["code"] == "github_link_required"
+
+        sandbox_profile = await client.post(
+            "/v1/cloud/sandbox-profiles/personal",
+            headers={"Authorization": f"Bearer {payload['accessToken']}"},
+        )
+        assert sandbox_profile.status_code == 403
+        assert sandbox_profile.json()["detail"]["code"] == "github_link_required"
+
+        ai_magic = await client.post(
+            "/v1/ai_magic/session-titles/generate",
+            headers={"Authorization": f"Bearer {payload['accessToken']}"},
+            json={"promptText": "make a title"},
+        )
+        assert ai_magic.status_code == 403
+        assert ai_magic.json()["detail"]["code"] == "github_link_required"
+
+    @pytest.mark.asyncio
+    async def test_mobile_password_login_returns_refresh_token_for_ready_user(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "password_auth_enabled", True)
+        user_id = await _create_password_user("mobile-password@example.com", self.password)
+        await _link_ready_github_identity(
+            user_id,
+            subject="mobile-password-github",
+            email="mobile-password@example.com",
+        )
+
+        response = await client.post(
+            "/auth/mobile/password/login",
+            json={"email": "mobile-password@example.com", "password": self.password},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["refreshToken"]
+        assert payload["readiness"]["productReady"] is True
+
+        refresh = await client.post(
+            "/auth/mobile/session/refresh",
+            json={
+                "refreshToken": payload["refreshToken"],
+                "grantType": "refresh_token",
+            },
+        )
+        assert refresh.status_code == 200
+        assert refresh.json()["readiness"]["productReady"] is True
+
+    @pytest.mark.asyncio
+    async def test_password_login_rejects_bad_unknown_and_oauth_only_users(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "password_auth_enabled", True)
+        await _create_password_user("bad-password@example.com", self.password)
+        await _create_user_via_manager("oauth-only-password@example.com")
+
+        for email, password in (
+            ("bad-password@example.com", "wrong password here"),
+            ("missing-password@example.com", self.password),
+            ("oauth-only-password@example.com", self.password),
+        ):
+            response = await client.post(
+                "/auth/mobile/password/login",
+                json={"email": email, "password": password},
+            )
+            assert response.status_code == 401
+            assert response.json()["detail"] == "Email or password is incorrect."
+
+    @pytest.mark.asyncio
+    async def test_authenticated_user_can_set_and_change_password(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "password_auth_enabled", True)
+        user_id = await _create_user_via_manager("set-password@example.com")
+        access_token = await _access_token_for_user(
+            client,
+            user_id=user_id,
+            state="set-password-state",
+        )
+
+        set_response = await client.put(
+            "/auth/password",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"newPassword": self.password},
+        )
+        assert set_response.status_code == 200
+        assert set_response.json()["enabled"] is True
+
+        login = await client.post(
+            "/auth/mobile/password/login",
+            json={"email": "set-password@example.com", "password": self.password},
+        )
+        assert login.status_code == 200
+
+        missing_current = await client.put(
+            "/auth/password",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"newPassword": "another correct horse"},
+        )
+        assert missing_current.status_code == 400
+
+        change_response = await client.put(
+            "/auth/password",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={
+                "currentPassword": self.password,
+                "newPassword": "another correct horse",
+            },
+        )
+        assert change_response.status_code == 200
+
+        old_login = await client.post(
+            "/auth/mobile/password/login",
+            json={"email": "set-password@example.com", "password": self.password},
+        )
+        assert old_login.status_code == 401
+        new_login = await client.post(
+            "/auth/mobile/password/login",
+            json={"email": "set-password@example.com", "password": "another correct horse"},
+        )
+        assert new_login.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_users_me_is_read_only_for_password_changes(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "password_auth_enabled", True)
+        await _create_password_user("users-me-password@example.com", self.password)
+        login = await client.post(
+            "/auth/mobile/password/login",
+            json={"email": "users-me-password@example.com", "password": self.password},
+        )
+        assert login.status_code == 200
+        token = login.json()["accessToken"]
+
+        profile = await client.get(
+            "/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert profile.status_code == 200
+        assert profile.json()["email"] == "users-me-password@example.com"
+
+        bypass = await client.patch(
+            "/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"password": "short"},
+        )
+        assert bypass.status_code == 405
+
+    @pytest.mark.asyncio
+    async def test_password_login_throttles_repeated_failures(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "password_auth_enabled", True)
+        await _create_password_user("throttle-password@example.com", self.password)
+
+        for _ in range(5):
+            response = await client.post(
+                "/auth/mobile/password/login",
+                json={"email": "throttle-password@example.com", "password": "wrong password"},
+            )
+            assert response.status_code == 401
+
+        response = await client.post(
+            "/auth/mobile/password/login",
+            json={"email": "throttle-password@example.com", "password": "wrong password"},
+        )
+        assert response.status_code == 429
+        assert response.json()["detail"] == "Too many attempts. Wait a moment, then try again."
+
+    @pytest.mark.asyncio
+    async def test_password_routes_can_be_disabled(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "password_auth_enabled", False)
+        response = await client.post(
+            "/auth/mobile/password/login",
+            json={"email": "disabled@example.com", "password": self.password},
+        )
+        assert response.status_code == 404
 
 
 class TestDesktopPKCEFlow:

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   AUTH_PROVIDER_ORDER,
+  AUTH_PASSWORD_COPY,
   AUTH_REQUIRED_GITHUB_COPY,
   AUTH_SIGN_IN_COPY,
   authProviderPresentation,
@@ -11,6 +12,7 @@ import {
 
 import { AuthStartPanel } from "../src/auth/AuthStartPanel";
 import { ConnectGitHubRequiredPanel } from "../src/auth/ConnectGitHubRequiredPanel";
+import { PasswordCredentialForm } from "../src/auth/PasswordCredentialForm";
 import { RedirectCallbackScreen } from "../src/auth/RedirectCallbackScreen";
 
 describe("auth product panels", () => {
@@ -53,6 +55,33 @@ describe("auth product panels", () => {
       "Continue with Google",
     ]);
     expect(providerButtons[0].className).toContain("bg-foreground");
+  });
+
+  it("renders the email credential form slot", () => {
+    const submit = vi.fn();
+
+    render(
+      <AuthStartPanel
+        title={AUTH_SIGN_IN_COPY.title}
+        subtitle={AUTH_SIGN_IN_COPY.subtitle}
+        footer={AUTH_SIGN_IN_COPY.footer}
+        credentialForm={(
+          <PasswordCredentialForm
+            email="reviewer@example.com"
+            password="password"
+            onEmailChange={() => undefined}
+            onPasswordChange={() => undefined}
+            onSubmit={submit}
+          />
+        )}
+        providers={[]}
+      />,
+    );
+
+    expect(screen.getByLabelText(AUTH_PASSWORD_COPY.emailLabel)).toBeTruthy();
+    expect(screen.getByLabelText(AUTH_PASSWORD_COPY.passwordLabel)).toBeTruthy();
+    screen.getByRole("button", { name: AUTH_PASSWORD_COPY.submitLabel }).click();
+    expect(submit).toHaveBeenCalledTimes(1);
   });
 
   it("renders the required GitHub linking panel with shared copy", () => {

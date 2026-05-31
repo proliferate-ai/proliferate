@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import OwnerSelection
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.billing.models import (
@@ -45,7 +45,7 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 
 @router.get("/plan", response_model=PlanInfo)
 async def get_plan(
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> PlanInfo:
     try:
@@ -61,7 +61,7 @@ async def get_plan(
 async def get_cloud_plan_endpoint(
     owner_scope: Literal["personal", "organization"] = Query("personal", alias="ownerScope"),
     organization_id: UUID | None = Query(default=None, alias="organizationId"),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CloudPlanInfo:
     try:
@@ -83,7 +83,7 @@ async def get_cloud_plan_endpoint(
 async def get_overview(
     owner_scope: Literal["personal", "organization"] = Query("personal", alias="ownerScope"),
     organization_id: UUID | None = Query(default=None, alias="organizationId"),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> BillingOverview:
     try:
@@ -104,7 +104,7 @@ async def get_overview(
 @router.post("/cloud-checkout", response_model=BillingUrlResponse)
 async def create_cloud_checkout(
     request: BillingOwnerSelection | None = None,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session, use_cache=False),
 ) -> BillingUrlResponse:
     try:
@@ -124,7 +124,7 @@ async def create_cloud_checkout(
 @router.post("/team-checkout", response_model=TeamCheckoutResponse)
 async def create_team_checkout(
     request: TeamCheckoutRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session, use_cache=False),
 ) -> TeamCheckoutResponse:
     try:
@@ -144,7 +144,7 @@ async def create_team_checkout(
 
 @router.get("/team-checkout/current", response_model=CurrentTeamCheckoutResponse)
 async def get_current_team_checkout_endpoint(
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session, use_cache=False),
 ) -> CurrentTeamCheckoutResponse:
     try:
@@ -162,7 +162,7 @@ async def get_current_team_checkout_endpoint(
 )
 async def cancel_current_team_checkout_endpoint(
     intent_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session, use_cache=False),
 ) -> CurrentTeamCheckoutResponse:
     try:
@@ -177,7 +177,7 @@ async def cancel_current_team_checkout_endpoint(
 @router.post("/customer-portal", response_model=BillingUrlResponse)
 async def create_customer_portal(
     request: BillingOwnerSelection | None = None,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session, use_cache=False),
 ) -> BillingUrlResponse:
     try:
@@ -197,7 +197,7 @@ async def create_customer_portal(
 @router.post("/refill-checkout", response_model=BillingUrlResponse)
 async def create_refill_checkout(
     request: BillingOwnerSelection | None = None,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session, use_cache=False),
 ) -> BillingUrlResponse:
     try:
@@ -217,7 +217,7 @@ async def create_refill_checkout(
 @router.post("/overage-settings", response_model=OverageSettingsResponse)
 async def update_overage_settings_endpoint(
     request: OverageSettingsRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> OverageSettingsResponse:
     try:

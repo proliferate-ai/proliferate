@@ -24,10 +24,6 @@ class UserCreate(schemas.BaseUserCreate):
     display_name: str | None = None
 
 
-class UserUpdate(schemas.BaseUserUpdate):
-    display_name: str | None = None
-
-
 AuthProviderName = Literal["github", "google", "apple"]
 AuthOnboardingState = Literal["needs_github", "active"]
 
@@ -49,6 +45,13 @@ class AuthProviderAvailability(BaseModel):
     reason: str | None = None
 
 
+class AuthPasswordCredential(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    enabled: bool
+    set_at: str | None = Field(default=None, serialization_alias="setAt")
+
+
 class AuthViewerResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -59,3 +62,4 @@ class AuthViewerResponse(BaseModel):
     provider_availability: list[AuthProviderAvailability] = Field(
         serialization_alias="providerAvailability"
     )
+    password_credential: AuthPasswordCredential = Field(serialization_alias="passwordCredential")

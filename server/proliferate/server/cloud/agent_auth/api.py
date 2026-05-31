@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.constants.cloud import CloudAgentKind
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
@@ -68,7 +68,7 @@ worker_router = APIRouter(
 async def list_agent_auth_credentials_endpoint(
     organization_id: UUID | None = Query(default=None, alias="organizationId"),
     agent_kind: str | None = Query(default=None, alias="agentKind"),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> list[AgentAuthCredentialResponse]:
     return [
@@ -88,7 +88,7 @@ async def list_agent_auth_credentials_endpoint(
 @router.post("/agent-auth/credentials/gateway")
 async def create_gateway_credential_endpoint(
     body: CreateGatewayCredentialRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> CreateGatewayCredentialResponse:
     result = await create_gateway_credential(db, actor_user_id=user.id, body=body)
@@ -106,7 +106,7 @@ async def create_gateway_credential_endpoint(
 async def sync_synced_agent_auth_credential_endpoint(
     agent_kind: CloudAgentKind,
     body: SyncSyncedCredentialRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> SyncSyncedCredentialResponse:
     result = await sync_synced_credential_for_user(
@@ -128,7 +128,7 @@ async def sync_synced_agent_auth_credential_endpoint(
 )
 async def ensure_free_managed_credits_endpoint(
     body: EnsureFreeManagedCreditsRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> EnsureFreeManagedCreditsResponse:
     result = await ensure_free_managed_credits_for_user(
@@ -172,7 +172,7 @@ async def ensure_free_managed_credits_endpoint(
 async def ensure_managed_credits_endpoint(
     organization_id: UUID,
     body: EnsureManagedCreditsRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> EnsureManagedCreditsResponse:
     result = await ensure_managed_credits_for_organization(
@@ -191,7 +191,7 @@ async def ensure_managed_credits_endpoint(
 @router.delete("/agent-auth/credentials/{credential_id}")
 async def revoke_agent_auth_credential_endpoint(
     credential_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> AgentAuthMutationResponse:
     await revoke_credential(db, actor_user_id=user.id, credential_id=credential_id)
@@ -202,7 +202,7 @@ async def revoke_agent_auth_credential_endpoint(
 async def share_agent_auth_credential_endpoint(
     credential_id: UUID,
     body: ShareCredentialRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> AgentAuthCredentialShareResponse:
     share = await share_personal_credential_with_organization(
@@ -217,7 +217,7 @@ async def share_agent_auth_credential_endpoint(
 @router.delete("/agent-auth/credential-shares/{share_id}")
 async def revoke_agent_auth_credential_share_endpoint(
     share_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> AgentAuthCredentialShareResponse:
     share = await revoke_credential_share(db, actor_user_id=user.id, share_id=share_id)
@@ -230,7 +230,7 @@ async def revoke_agent_auth_credential_share_endpoint(
 )
 async def list_agent_auth_selections_endpoint(
     sandbox_profile_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> list[SandboxAgentAuthSelectionResponse]:
     return [
@@ -248,7 +248,7 @@ async def select_agent_auth_credential_endpoint(
     sandbox_profile_id: UUID,
     agent_kind: CloudAgentKind,
     body: SelectAgentAuthCredentialRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> SandboxAgentAuthSelectionResponse:
     selection = await select_credential_for_profile(
@@ -269,7 +269,7 @@ async def select_agent_auth_credential_endpoint(
 )
 async def list_agent_auth_target_states_endpoint(
     sandbox_profile_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> list[SandboxProfileAgentAuthTargetStateResponse]:
     return [

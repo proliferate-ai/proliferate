@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
@@ -29,7 +29,7 @@ router = APIRouter(prefix="/skills", tags=["cloud-skills"])
 
 @router.get("", response_model=SkillConfiguredItemsResponse)
 async def list_configured_skills_endpoint(
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> SkillConfiguredItemsResponse:
     return SkillConfiguredItemsResponse(
@@ -43,7 +43,7 @@ async def list_configured_skills_endpoint(
 @router.post("", response_model=SkillConfiguredItemResponse)
 async def create_configured_skill_endpoint(
     body: CreateSkillConfiguredItemRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> SkillConfiguredItemResponse:
     try:
@@ -58,7 +58,7 @@ async def create_configured_skill_endpoint(
 async def patch_configured_skill_endpoint(
     item_id: UUID,
     body: PatchSkillConfiguredItemRequest,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> SkillConfiguredItemResponse:
     try:
@@ -72,7 +72,7 @@ async def patch_configured_skill_endpoint(
 @router.delete("/{item_id}", response_model=OkResponse)
 async def delete_configured_skill_endpoint(
     item_id: UUID,
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> OkResponse:
     try:

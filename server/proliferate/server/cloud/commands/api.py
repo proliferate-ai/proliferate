@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud._logging import log_cloud_event
@@ -29,7 +29,7 @@ router = APIRouter(prefix="/commands", tags=["cloud-commands"])
 async def enqueue_command_endpoint(
     body: CreateCloudCommandRequest,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> CloudCommandResponse:
     try:
         command = await enqueue_command_and_commit(db, user=user, body=body)
@@ -53,7 +53,7 @@ async def enqueue_command_endpoint(
 async def get_command_status_endpoint(
     command_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> CloudCommandResponse:
     try:
         command = await get_command_status(db, command_id=command_id, user_id=user.id)

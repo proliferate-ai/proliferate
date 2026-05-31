@@ -9,6 +9,7 @@ import {
 import { Linking, Platform } from "react-native";
 
 import {
+  loginMobileWithPassword,
   refreshMobileSession,
   type AuthProviderName,
   type AuthSessionResponse,
@@ -34,7 +35,7 @@ const SIGNED_OUT_KEY = "proliferate.mobile.signedOutAt";
 const DEV_REFRESH_TOKEN_PARAM = "proliferateDevRefreshToken";
 
 export type MobileAuthState = "bootstrapping" | "signed_out" | "needs_github" | "active";
-export type MobileAuthAction = AuthProviderName | "github_link" | null;
+export type MobileAuthAction = AuthProviderName | "github_link" | "password" | null;
 
 interface MobileAuthContextValue {
   authState: MobileAuthState;
@@ -43,6 +44,7 @@ interface MobileAuthContextValue {
   loadingAction: MobileAuthAction;
   error: string | null;
   signInWithProvider: (provider: AuthProviderName) => Promise<void>;
+  signInWithPassword: (email: string, password: string) => Promise<void>;
   connectGitHub: () => Promise<void>;
   signOut: () => Promise<void>;
   clearError: () => void;
@@ -138,6 +140,28 @@ export function MobileAuthProvider({ children }: { children: ReactNode }) {
             provider === "apple"
               ? await runMobileAppleFlow({})
               : await runMobileOAuthFlow({ provider });
+          await applySession(session, setAccessToken, setUser, setAuthState);
+        } catch (authError) {
+          setError(errorMessage(authError));
+        } finally {
+          setLoadingAction(null);
+        }
+      },
+      async signInWithPassword(email, password) {
+        if (loadingAction) {
+          return;
+        }
+        setError(null);
+        setLoadingAction("password");
+        try {
+          const client = createMobileCloudClient(mobileEnv.apiBaseUrl, null);
+          const session = await loginMobileWithPassword(
+            {
+              email: email.trim(),
+              password,
+            },
+            client,
+          );
           await applySession(session, setAccessToken, setUser, setAuthState);
         } catch (authError) {
           setError(errorMessage(authError));

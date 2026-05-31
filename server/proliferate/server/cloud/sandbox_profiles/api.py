@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
@@ -33,7 +33,7 @@ router = APIRouter(tags=["cloud-sandbox-profiles"])
 @router.post("/sandbox-profiles/personal", response_model=SandboxProfileResponse)
 async def ensure_personal_sandbox_profile_endpoint(
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> SandboxProfileResponse:
     try:
         profile = await ensure_personal(db, user=user)
@@ -49,7 +49,7 @@ async def ensure_personal_sandbox_profile_endpoint(
 async def ensure_organization_sandbox_profile_endpoint(
     organization_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> SandboxProfileResponse:
     try:
         profile = await ensure_organization(db, user=user, organization_id=organization_id)
@@ -62,7 +62,7 @@ async def ensure_organization_sandbox_profile_endpoint(
 async def get_sandbox_profile_endpoint(
     sandbox_profile_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> SandboxProfileResponse:
     try:
         profile = await get_profile(db, user=user, sandbox_profile_id=sandbox_profile_id)
@@ -78,7 +78,7 @@ async def get_sandbox_profile_endpoint(
 async def get_sandbox_profile_target_state_endpoint(
     sandbox_profile_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> SandboxProfileTargetStateResponse:
     try:
         state = await get_target_state(db, user=user, sandbox_profile_id=sandbox_profile_id)
@@ -100,7 +100,7 @@ async def get_sandbox_profile_target_state_endpoint(
 async def enable_sandbox_profile_cloud_endpoint(
     sandbox_profile_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_active_user),
+    user: User = Depends(current_product_user),
 ) -> SandboxProfileTargetStateResponse:
     try:
         state = await enable_cloud(db, user=user, sandbox_profile_id=sandbox_profile_id)
