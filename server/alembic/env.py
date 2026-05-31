@@ -12,6 +12,7 @@ import proliferate.db.models.analytics  # noqa: F401
 import proliferate.db.models.automations  # noqa: F401
 import proliferate.db.models.cloud  # noqa: F401
 import proliferate.db.models.organizations  # noqa: F401
+import proliferate.db.models.support  # noqa: F401
 from alembic import context
 from proliferate.config import settings
 from proliferate.db.models.base import Base

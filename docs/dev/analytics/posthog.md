@@ -79,6 +79,7 @@ Server/cloud API PostHog is not configured.
     - `chat_prompt_submitted`
     - `workspace_created`
     - `cloud_workspace_created`
+    - `support_report_submitted`
   - failure behavior:
     - non-allowlisted product events are intentionally dropped before PostHog
     - allowed payloads are scrubbed before capture
@@ -196,6 +197,7 @@ No server PostHog env vars exist in the current implementation.
   - `chat_prompt_submitted`
   - `workspace_created`
   - `cloud_workspace_created`
+  - `support_report_submitted`
 - Exact web/mobile events currently captured:
   - `web_page_viewed`
   - `mobile_screen_viewed`

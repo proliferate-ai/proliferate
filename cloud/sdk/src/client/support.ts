@@ -4,8 +4,11 @@ import type {
   SupportMessageContext,
   SupportReportCompleteRequest,
   SupportReportCompleteResponse,
+  SupportReportCreateRequest,
+  SupportReportCreateResponse,
   SupportReportUploadRequest,
   SupportReportUploadResponse,
+  SupportReportUploadTargetsRequest,
 } from "../types/index.js";
 
 export type {
@@ -13,8 +16,11 @@ export type {
   SupportMessageContext,
   SupportReportCompleteRequest,
   SupportReportCompleteResponse,
+  SupportReportCreateRequest,
+  SupportReportCreateResponse,
   SupportReportUploadRequest,
   SupportReportUploadResponse,
+  SupportReportUploadTargetsRequest,
 };
 
 export async function sendSupportMessage(
@@ -29,6 +35,30 @@ export async function createSupportReportUpload(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<SupportReportUploadResponse> {
   const response = await client.POST("/v1/support/report-uploads", { body: input });
+  return response.data as SupportReportUploadResponse;
+}
+
+export async function createSupportReport(
+  input: SupportReportCreateRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<SupportReportCreateResponse> {
+  const response = await client.POST("/v1/support/reports", { body: input });
+  return response.data as SupportReportCreateResponse;
+}
+
+export async function createSupportReportUploadTargets(
+  reportId: string,
+  input: SupportReportUploadTargetsRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<SupportReportUploadResponse> {
+  const response = await client.POST("/v1/support/reports/{report_id}/upload-targets", {
+    params: {
+      path: {
+        report_id: reportId,
+      },
+    },
+    body: input,
+  });
   return response.data as SupportReportUploadResponse;
 }
 

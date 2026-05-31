@@ -1,21 +1,29 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_active_user
+from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
+from proliferate.server.support.diagnostics import collect_cloud_diagnostics_for_report
 from proliferate.server.support.models import (
     SupportMessageRequest,
     SupportMessageResponse,
     SupportReportCompleteRequest,
     SupportReportCompleteResponse,
+    SupportReportCreateRequest,
+    SupportReportCreateResponse,
     SupportReportUploadRequest,
     SupportReportUploadResponse,
+    SupportReportUploadTargetsRequest,
 )
+from proliferate.server.support.notifications import send_support_message_notification
 from proliferate.server.support.service import (
     complete_support_report_upload,
+    create_support_report,
     create_support_report_upload,
-    send_support_message,
+    create_support_report_upload_targets,
 )
 
 router = APIRouter(prefix="/support", tags=["support"])
@@ -26,7 +34,7 @@ async def send_support_message_endpoint(
     body: SupportMessageRequest,
     user: User = Depends(current_active_user),
 ) -> SupportMessageResponse:
-    await send_support_message(
+    await send_support_message_notification(
         sender_email=user.email,
         sender_display_name=user.display_name,
         message=body.message,
@@ -40,10 +48,47 @@ async def send_support_message_endpoint(
 async def create_support_report_upload_endpoint(
     body: SupportReportUploadRequest,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> SupportReportUploadResponse:
     return await create_support_report_upload(
+        db=db,
+        sender_user_id=user.id,
         sender_email=user.email,
         sender_display_name=user.display_name,
+        body=body,
+    )
+
+
+@router.post("/reports", response_model=SupportReportCreateResponse)
+async def create_support_report_endpoint(
+    body: SupportReportCreateRequest,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> SupportReportCreateResponse:
+    response = await create_support_report(
+        db=db,
+        sender_user_id=user.id,
+        sender_email=user.email,
+        sender_display_name=user.display_name,
+        body=body,
+    )
+    if response.cloud_diagnostics_status == "pending":
+        background_tasks.add_task(collect_cloud_diagnostics_for_report, response.report_id)
+    return response
+
+
+@router.post("/reports/{report_id}/upload-targets", response_model=SupportReportUploadResponse)
+async def create_support_report_upload_targets_endpoint(
+    report_id: str,
+    body: SupportReportUploadTargetsRequest,
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> SupportReportUploadResponse:
+    return await create_support_report_upload_targets(
+        db=db,
+        sender_user_id=user.id,
+        report_id=report_id,
         body=body,
     )
 
@@ -53,8 +98,11 @@ async def complete_support_report_upload_endpoint(
     report_id: str,
     body: SupportReportCompleteRequest,
     user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> SupportReportCompleteResponse:
     return await complete_support_report_upload(
+        db=db,
+        sender_user_id=user.id,
         sender_email=user.email,
         sender_display_name=user.display_name,
         report_id=report_id,

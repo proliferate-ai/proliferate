@@ -1,7 +1,13 @@
+import json
+from uuid import UUID
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
+from proliferate.db.store.billing import ensure_personal_billing_subject
 from proliferate.integrations.slack.errors import SlackWebhookError
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
@@ -33,7 +39,45 @@ async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]
         user_id=user_id,
         state_prefix="support-state",
     )
-    return {"access_token": str(token_data["access_token"])}
+    return {"access_token": str(token_data["access_token"]), "user_id": user_id}
+
+
+async def _seed_personal_cloud_workspace(
+    db_session: AsyncSession,
+    *,
+    user_id: str,
+    suffix: str,
+) -> CloudWorkspace:
+    user_uuid = UUID(user_id)
+    billing_subject = await ensure_personal_billing_subject(db_session, user_uuid)
+    workspace = CloudWorkspace(
+        user_id=user_uuid,
+        owner_scope="personal",
+        owner_user_id=user_uuid,
+        organization_id=None,
+        created_by_user_id=user_uuid,
+        billing_subject_id=billing_subject.id,
+        display_name=f"Support Workspace {suffix}",
+        git_provider="github",
+        git_owner="acme",
+        git_repo_name=f"repo-{suffix}",
+        normalized_repo_key=f"github/acme/repo-{suffix}",
+        git_branch="main",
+        git_base_branch="main",
+        origin="manual_web",
+        status="ready",
+        status_detail="Ready",
+        template_version="v1",
+        runtime_generation=0,
+        anyharness_workspace_id=f"workspace-{suffix}",
+        repo_post_ready_phase="idle",
+        repo_post_ready_files_total=0,
+        repo_post_ready_files_applied=0,
+        cleanup_state="none",
+    )
+    db_session.add(workspace)
+    await db_session.commit()
+    return workspace
 
 
 class TestSupportApi:
@@ -64,7 +108,7 @@ class TestSupportApi:
             captured["blocks"] = blocks or []
 
         monkeypatch.setattr(
-            "proliferate.server.support.service.post_incoming_webhook",
+            "proliferate.server.support.notifications.post_incoming_webhook",
             fake_post_incoming_webhook,
         )
 
@@ -163,7 +207,7 @@ class TestSupportApi:
             raise SlackWebhookError("boom")
 
         monkeypatch.setattr(
-            "proliferate.server.support.service.post_incoming_webhook",
+            "proliferate.server.support.notifications.post_incoming_webhook",
             fake_post_incoming_webhook,
         )
 
@@ -260,6 +304,170 @@ class TestSupportApi:
         assert records[0]["message"] == "The app got stuck."
 
     @pytest.mark.asyncio
+    async def test_support_report_create_is_idempotent_and_splits_upload_targets(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        session = await _register_and_login(client, "support-report-create@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        monkeypatch.setattr(settings, "support_report_s3_bucket", "support-bucket")
+        monkeypatch.setattr(settings, "support_report_s3_region", "us-west-2")
+
+        records: list[dict[str, object]] = []
+
+        async def fake_put_json_object(
+            *,
+            bucket: str,
+            key: str,
+            value: dict[str, object],
+            region_name: str | None = None,
+        ) -> None:
+            assert bucket == "support-bucket"
+            assert region_name == "us-west-2"
+            assert key.endswith("/request.json")
+            records.append(value)
+
+        async def fake_presign_put_object(
+            *,
+            bucket: str,
+            key: str,
+            content_type: str,
+            expires_seconds: int,
+            region_name: str | None = None,
+        ) -> str:
+            assert bucket == "support-bucket"
+            assert content_type
+            assert expires_seconds > 0
+            assert region_name == "us-west-2"
+            return f"https://s3.test/{key}"
+
+        monkeypatch.setattr(
+            "proliferate.server.support.service.put_json_object",
+            fake_put_json_object,
+        )
+        monkeypatch.setattr(
+            "proliferate.server.support.service.presign_put_object",
+            fake_presign_put_object,
+        )
+
+        create_body = {
+            "clientJobId": "support-job-1",
+            "message": "The app got stuck.",
+            "sourceSurface": "desktop",
+            "context": {"source": "sidebar", "pathname": "/workspace/cloud:abc?secret=nope"},
+            "scope": {"kind": "app_only", "workspaceIds": []},
+            "workspaceRefs": [],
+            "expectedClientUploads": {"diagnostics": True, "attachmentCount": 1},
+        }
+        first = await client.post("/v1/support/reports", headers=headers, json=create_body)
+        second = await client.post("/v1/support/reports", headers=headers, json=create_body)
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert first.json()["reportId"] == second.json()["reportId"]
+        assert first.json()["serverCorrelation"]["ownerUserId"] == session["user_id"]
+        assert first.json()["serverCorrelation"]["primaryTenantId"] == f"user:{session['user_id']}"
+        assert len(records) == 1
+        assert records[0]["schemaVersion"] == 2
+        assert "putUrl" not in json.dumps(records[0])
+        context_record = records[0]["context"]
+        assert isinstance(context_record, dict)
+        assert context_record["pathname"] == "/workspace/{id}"
+
+        upload_targets = await client.post(
+            f"/v1/support/reports/{first.json()['reportId']}/upload-targets",
+            headers=headers,
+            json={
+                "diagnostics": {
+                    "contentType": "application/json",
+                    "sizeBytes": 512,
+                    "sha256": "abc123",
+                },
+                "attachments": [
+                    {
+                        "clientFileId": "file-1",
+                        "fileName": "screen.png",
+                        "contentType": "image/png",
+                        "sizeBytes": 100,
+                        "sha256": "def456",
+                    }
+                ],
+            },
+        )
+
+        assert upload_targets.status_code == 200
+        payload = upload_targets.json()
+        assert payload["reportId"] == first.json()["reportId"]
+        assert payload["diagnostics"]["putUrl"].startswith("https://s3.test/")
+        assert payload["attachments"][0]["clientFileId"] == "file-1"
+
+    @pytest.mark.asyncio
+    async def test_support_report_create_includes_authorized_cloud_workspace_correlation(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        session = await _register_and_login(client, "support-report-cloud@example.com")
+        workspace = await _seed_personal_cloud_workspace(
+            db_session,
+            user_id=session["user_id"],
+            suffix="support",
+        )
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        monkeypatch.setattr(settings, "support_report_s3_bucket", "support-bucket")
+
+        async def fake_put_json_object(
+            *,
+            bucket: str,
+            key: str,
+            value: dict[str, object],
+            region_name: str | None = None,
+        ) -> None:
+            assert bucket == "support-bucket"
+            assert key.endswith("/request.json")
+
+        async def fake_collect_cloud_diagnostics_for_report(report_id: str) -> None:
+            assert report_id
+
+        monkeypatch.setattr(
+            "proliferate.server.support.service.put_json_object",
+            fake_put_json_object,
+        )
+        monkeypatch.setattr(
+            "proliferate.server.support.api.collect_cloud_diagnostics_for_report",
+            fake_collect_cloud_diagnostics_for_report,
+        )
+
+        response = await client.post(
+            "/v1/support/reports",
+            headers=headers,
+            json={
+                "clientJobId": "support-job-cloud",
+                "message": "Cloud workspace failed.",
+                "sourceSurface": "desktop",
+                "scope": {
+                    "kind": "choose_workspace",
+                    "workspaceIds": [f"cloud:{workspace.id}"],
+                },
+                "workspaceRefs": [
+                    {
+                        "id": f"cloud:{workspace.id}",
+                        "location": "cloud",
+                        "cloudWorkspaceId": str(workspace.id),
+                        "anyharnessWorkspaceId": workspace.anyharness_workspace_id,
+                    }
+                ],
+            },
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["cloudDiagnosticsStatus"] == "pending"
+        assert payload["serverCorrelation"]["cloudWorkspaceIds"] == [str(workspace.id)]
+
+    @pytest.mark.asyncio
     async def test_support_report_upload_returns_503_when_storage_unconfigured(
         self,
         client: AsyncClient,
@@ -354,19 +562,14 @@ class TestSupportApi:
             slack_messages.append({"webhook_url": webhook_url, "text": text, "blocks": blocks})
 
         monkeypatch.setattr(
-            "proliferate.server.support.service.get_json_object",
-            fake_get_json_object,
+            "proliferate.server.support.service.get_json_object", fake_get_json_object
+        )
+        monkeypatch.setattr("proliferate.server.support.service.head_object", fake_head_object)
+        monkeypatch.setattr(
+            "proliferate.server.support.service.put_json_object", fake_put_json_object
         )
         monkeypatch.setattr(
-            "proliferate.server.support.service.head_object",
-            fake_head_object,
-        )
-        monkeypatch.setattr(
-            "proliferate.server.support.service.put_json_object",
-            fake_put_json_object,
-        )
-        monkeypatch.setattr(
-            "proliferate.server.support.service.post_incoming_webhook",
+            "proliferate.server.support.notifications.post_incoming_webhook",
             fake_post_incoming_webhook,
         )
 

@@ -69,6 +69,12 @@ function cloudWorkspaceOption(
   workspace: CloudWorkspaceSummary,
 ): SupportReportWorkspaceOption {
   const branch = workspace.repo.branch || workspace.repo.baseBranch || null;
+  const materialization = workspace.primaryMaterialization;
+  const targetId = workspace.targetId
+    ?? workspace.executionTarget?.targetId
+    ?? materialization?.targetId
+    ?? workspace.directTargetContext?.targetId
+    ?? null;
   return {
     id: cloudWorkspaceSyntheticId(workspace.id),
     label: workspace.displayName?.trim()
@@ -78,6 +84,15 @@ function cloudWorkspaceOption(
     branch,
     status: workspace.status,
     updatedAt: workspace.updatedAt ?? workspace.readyAt ?? workspace.createdAt ?? null,
+    cloudWorkspaceId: workspace.id,
+    cloudTargetId: targetId,
+    anyharnessWorkspaceId: materialization?.anyharnessWorkspaceId
+      ?? workspace.directTargetContext?.anyharnessWorkspaceId
+      ?? null,
+    exposureId: workspace.cloudAccess?.exposureId ?? null,
+    materializationId: workspace.selectedMaterializationId ?? materialization?.id ?? null,
+    visibility: workspace.visibility,
+    sandboxType: workspace.sandboxType ?? null,
   };
 }
 

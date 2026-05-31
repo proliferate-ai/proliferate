@@ -133,6 +133,33 @@ def set_server_sentry_tag(key: str, value: str) -> None:
     sentry_sdk.set_tag(key, value)
 
 
+def set_server_sentry_correlation_context(context: dict[str, str]) -> None:
+    if not settings.sentry_dsn or sentry_sdk is None or not is_vendor_telemetry_enabled():
+        return
+
+    allowed_keys = {
+        "request_id",
+        "user_id",
+        "organization_id",
+        "tenant_id",
+        "support_report_id",
+        "cloud_workspace_id",
+        "cloud_target_id",
+        "sandbox_profile_id",
+        "cloud_sandbox_id",
+        "external_sandbox_id",
+        "anyharness_workspace_id",
+        "session_id",
+        "interaction_id",
+        "command_id",
+        "worker_id",
+        "slot_generation",
+    }
+    for key, value in context.items():
+        if key in allowed_keys:
+            sentry_sdk.set_tag(key, value)
+
+
 def capture_server_sentry_exception(
     error: Any,
     *,

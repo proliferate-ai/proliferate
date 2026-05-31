@@ -56,6 +56,20 @@ as `id` only. Do not send email, display name, prompt text, transcript content,
 terminal output, repo names, raw file paths, request bodies, cookies, auth
 headers, or environment values.
 
+## Support Correlation
+
+Server requests install a scrubbed correlation context for Sentry. The context
+may include request ID, authenticated user ID, tenant ID, organization ID,
+support report ID, cloud workspace ID, cloud target ID, sandbox IDs,
+AnyHarness workspace ID, session ID, interaction ID, command ID, worker ID, and
+slot generation when those values are known.
+
+`tenant_id`, `support_report_id`, and normalized cloud/runtime IDs are allowed
+as diagnostic tags for support flows even though they can be high-cardinality.
+Do not add free-form messages, raw URLs, prompts, transcript bodies, command
+payloads, provider responses, auth headers, cookies, tokens, or file contents
+to tags or context.
+
 ## Alerts
 
 Slack notifications should be configured in Sentry alert rules, not custom app

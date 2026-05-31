@@ -2894,6 +2894,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/support/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Support Report Endpoint */
+        post: operations["create_support_report_endpoint_v1_support_reports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/support/reports/{report_id}/upload-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Support Report Upload Targets Endpoint */
+        post: operations["create_support_report_upload_targets_endpoint_v1_support_reports__report_id__upload_targets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/support/reports/{report_id}/complete": {
         parameters: {
             query?: never;
@@ -7589,6 +7623,40 @@ export interface components {
             /** Sizebytes */
             sizeBytes: number;
         };
+        /** SupportReportCreateRequest */
+        SupportReportCreateRequest: {
+            /** Clientjobid */
+            clientJobId: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /**
+             * Sourcesurface
+             * @default desktop
+             * @enum {string}
+             */
+            sourceSurface: "desktop" | "web" | "mobile" | "cloud_api";
+            context?: components["schemas"]["SupportMessageContext"] | null;
+            scope: components["schemas"]["SupportReportWorkspaceScope"];
+            /** Workspacerefs */
+            workspaceRefs?: components["schemas"]["SupportReportWorkspaceReference"][];
+            telemetryRefs?: components["schemas"]["SupportReportTelemetryReferences"] | null;
+            expectedClientUploads?: components["schemas"]["SupportReportExpectedClientUploads"];
+        };
+        /** SupportReportCreateResponse */
+        SupportReportCreateResponse: {
+            /** Reportid */
+            reportId: string;
+            /** Clientjobid */
+            clientJobId: string;
+            /** Status */
+            status: string;
+            serverCorrelation: components["schemas"]["SupportReportServerCorrelation"];
+            /** Clouddiagnosticsstatus */
+            cloudDiagnosticsStatus: string;
+        };
         /** SupportReportDiagnosticsUpload */
         SupportReportDiagnosticsUpload: {
             /**
@@ -7600,6 +7668,51 @@ export interface components {
             sizeBytes: number;
             /** Sha256 */
             sha256: string;
+        };
+        /** SupportReportExpectedClientUploads */
+        SupportReportExpectedClientUploads: {
+            /**
+             * Diagnostics
+             * @default true
+             */
+            diagnostics: boolean;
+            /**
+             * Attachmentcount
+             * @default 0
+             */
+            attachmentCount: number;
+        };
+        /** SupportReportServerCorrelation */
+        SupportReportServerCorrelation: {
+            /** Reportid */
+            reportId: string;
+            /** Requestid */
+            requestId?: string | null;
+            /** Owneruserid */
+            ownerUserId: string;
+            /** Primaryorganizationid */
+            primaryOrganizationId?: string | null;
+            /** Primarytenantid */
+            primaryTenantId: string;
+            /** Tenantids */
+            tenantIds?: string[];
+            /** Cloudworkspaceids */
+            cloudWorkspaceIds?: string[];
+            /** Cloudtargetids */
+            cloudTargetIds?: string[];
+            /** Anyharnessworkspaceids */
+            anyharnessWorkspaceIds?: string[];
+            /** Sessionids */
+            sessionIds?: string[];
+        };
+        /** SupportReportTelemetryReferences */
+        SupportReportTelemetryReferences: {
+            /** Posthogdistinctid */
+            posthogDistinctId?: string | null;
+            /** Posthogsessionid */
+            posthogSessionId?: string | null;
+            /** Sentryeventids */
+            sentryEventIds?: string[];
         };
         /** SupportReportUploadFile */
         SupportReportUploadFile: {
@@ -7654,6 +7767,42 @@ export interface components {
             headers?: {
                 [key: string]: string;
             };
+        };
+        /** SupportReportUploadTargetsRequest */
+        SupportReportUploadTargetsRequest: {
+            diagnostics?: components["schemas"]["SupportReportDiagnosticsUpload"] | null;
+            /** Attachments */
+            attachments?: components["schemas"]["SupportReportUploadFile"][];
+        };
+        /** SupportReportWorkspaceReference */
+        SupportReportWorkspaceReference: {
+            /** Id */
+            id: string;
+            /**
+             * Location
+             * @enum {string}
+             */
+            location: "local" | "cloud";
+            /** Cloudworkspaceid */
+            cloudWorkspaceId?: string | null;
+            /** Cloudtargetid */
+            cloudTargetId?: string | null;
+            /** Sandboxprofileid */
+            sandboxProfileId?: string | null;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId?: string | null;
+            /** Exposureid */
+            exposureId?: string | null;
+            /** Materializationid */
+            materializationId?: string | null;
+            /** Sessionids */
+            sessionIds?: string[];
+            /** Status */
+            status?: string | null;
+            /** Visibility */
+            visibility?: string | null;
+            /** Sandboxtype */
+            sandboxType?: string | null;
         };
         /** SupportReportWorkspaceScope */
         SupportReportWorkspaceScope: {
@@ -15261,6 +15410,74 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SupportReportUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportReportUploadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_support_report_endpoint_v1_support_reports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportReportCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportReportCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_support_report_upload_targets_endpoint_v1_support_reports__report_id__upload_targets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportReportUploadTargetsRequest"];
             };
         };
         responses: {

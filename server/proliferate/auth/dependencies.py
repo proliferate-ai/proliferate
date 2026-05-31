@@ -13,6 +13,7 @@ from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.errors import PermissionDenied
 from proliferate.integrations.sentry import set_server_sentry_user
+from proliferate.middleware.request_context import set_authenticated_user_context
 
 fastapi_users = FastAPIUsers[User, uuid.UUID](
     get_user_manager,
@@ -26,6 +27,7 @@ _optional_current_active_user = fastapi_users.current_user(active=True, optional
 async def current_active_user(
     user: User = Depends(_current_active_user),
 ) -> User:
+    set_authenticated_user_context(str(user.id))
     set_server_sentry_user(user_id=str(user.id))
     return user
 
@@ -53,5 +55,6 @@ async def optional_current_active_user(
     user: User | None = Depends(_optional_current_active_user),
 ) -> User | None:
     if user is not None:
+        set_authenticated_user_context(str(user.id))
         set_server_sentry_user(user_id=str(user.id))
     return user

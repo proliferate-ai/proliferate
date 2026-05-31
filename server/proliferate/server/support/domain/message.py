@@ -64,9 +64,11 @@ def build_support_report_plan(
     diagnostics_included: bool,
     attachment_count: int,
     context: Mapping[str, object] | None = None,
+    correlation: Mapping[str, object] | None = None,
     request_id: str | None = None,
 ) -> SupportMessagePlan:
     payload_context = context or {}
+    payload_correlation = correlation or {}
     fields = [
         SupportMessageField("Report ID", report_id),
         SupportMessageField("From", sender_name),
@@ -84,6 +86,10 @@ def build_support_report_plan(
         location=payload_context.get("workspace_location"),
     )
     _append_context_field(fields, "Workspace ID", payload_context.get("workspace_id"))
+    _append_context_field(fields, "Tenant", payload_correlation.get("primaryTenantId"))
+    _append_context_field(fields, "User ID", payload_correlation.get("ownerUserId"))
+    _append_list_field(fields, "Cloud workspaces", payload_correlation.get("cloudWorkspaceIds"))
+    _append_list_field(fields, "Cloud targets", payload_correlation.get("cloudTargetIds"))
     _append_context_field(fields, "Request ID", request_id)
 
     return SupportMessagePlan(
@@ -115,3 +121,16 @@ def _append_workspace_field(
         fields.append(SupportMessageField("Workspace", workspace_value))
     elif location:
         fields.append(SupportMessageField("Workspace", str(location)))
+
+
+def _append_list_field(
+    fields: list[SupportMessageField],
+    label: str,
+    value: object | None,
+) -> None:
+    if not isinstance(value, list) or not value:
+        return
+    rendered = ", ".join(str(item) for item in value[:5])
+    if len(value) > 5:
+        rendered = f"{rendered}, +{len(value) - 5} more"
+    fields.append(SupportMessageField(label, rendered))
