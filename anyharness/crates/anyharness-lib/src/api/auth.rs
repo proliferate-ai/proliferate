@@ -255,7 +255,7 @@ pub fn user_route_allowed(
         {
             require_workspace_permission(claim, workspace_id, Permission::Read)
         }
-        ["workspaces", workspace_id, "git", "rename-branch" | "stage" | "unstage" | "commit"]
+        ["workspaces", workspace_id, "git", "rename-branch" | "stage" | "unstage" | "revert-patches" | "commit"]
             if method == Method::POST =>
         {
             require_workspace_permission(claim, workspace_id, Permission::Write)

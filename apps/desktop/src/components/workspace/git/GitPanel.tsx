@@ -1,25 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  useRevertGitPatchesMutation,
   useStageGitPathsMutation,
   useUnstageGitPathsMutation,
 } from "@anyharness/sdk-react";
-import {
-  GitReviewEmptyState,
-  GitReviewEmptyStateAction,
-} from "./GitReviewEmptyState";
 import { GitPanelHeader } from "./GitPanelHeader";
 import { GitReviewFileRow } from "./GitReviewFileRow";
 import { GitReviewFileTree } from "./GitReviewFileTree";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { CheckCircleFilled, ChevronRight, GitBranchIcon, RefreshCw } from "@proliferate/ui/icons";
+import {
+  formatGitPanelUndoError,
+  GitLastTurnUndoAction,
+  GitReviewDiffPolicyNotice,
+  GitReviewNoChangesState,
+  GitReviewSectionHeader,
+} from "./GitPanelReviewChrome";
 import { PaneSideOverlay } from "@/components/workspace/pane/PaneSideOverlay";
 import { useDiffReviewMeasurement } from "@/hooks/workspaces/files/use-diff-review-measurement";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
 import { useWorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-workspace-file-context";
 import { useGitPanelState } from "@/hooks/workspaces/derived/use-git-panel-state";
 import {
-  gitPanelEmptyDescription,
-  gitPanelEmptyMessage,
   type GitPanelMode,
   type GitPanelReviewScope,
   type GitPanelSection,
@@ -28,7 +28,6 @@ import {
   GIT_DIFF_FETCH_CONCURRENCY_LIMIT,
   resolveDiffDisplayPolicy,
   summarizeDiffDisplayPolicies,
-  type DiffDisplayPolicySummary,
 } from "@/lib/domain/workspaces/changes/diff-display-policy";
 import {
   buildGitReviewFileEntries,
@@ -36,8 +35,13 @@ import {
   type GitReviewFileEntry,
 } from "@/lib/domain/workspaces/changes/git-review-entries";
 import { useGitPanelUiStore } from "@/stores/editor/git-panel-ui-store";
+import { useToastStore } from "@/stores/toast/toast-store";
 
 const EMPTY_COLLAPSED_FILE_KEYS = new Set<string>();
+const EMPTY_LAST_TURN_REVERT_PATCHES = {
+  entries: [],
+  blockedReason: null,
+};
 
 export function GitPanel() {
   const diffReviewMeasurement = useDiffReviewMeasurement();
@@ -70,6 +74,7 @@ function GitPanelContent({
   const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(new Set());
   const [fileCollapseTouched, setFileCollapseTouched] = useState(false);
   const [settledDiffFetchKeys, setSettledDiffFetchKeys] = useState<Set<string>>(new Set());
+  const [undoneTurnIds, setUndoneTurnIds] = useState<ReadonlySet<string>>(() => new Set());
   const fileContext = useWorkspaceFileContext();
   const modeRequest = useGitPanelUiStore((state) =>
     fileContext.materializedWorkspaceId
@@ -87,6 +92,8 @@ function GitPanelContent({
     runtimeBlockedReason,
     isLoading,
     errorMessage,
+    lastTurn,
+    lastTurnRevertPatches,
     refetch,
   } = useGitPanelState(changesFilter, {
     baseRefOverride: selectedBaseRef,
@@ -95,6 +102,11 @@ function GitPanelContent({
   });
   const stageMutation = useStageGitPathsMutation({ workspaceId: activeWorkspaceId });
   const unstageMutation = useUnstageGitPathsMutation({ workspaceId: activeWorkspaceId });
+  const revertPatchesMutation = useRevertGitPatchesMutation({ workspaceId: activeWorkspaceId });
+  const showToast = useToastStore((state) => state.show);
+  const effectiveLastTurnRevertPatches =
+    lastTurnRevertPatches ?? EMPTY_LAST_TURN_REVERT_PATCHES;
+  const lastTurnUndoCompleted = Boolean(lastTurn?.turnId && undoneTurnIds.has(lastTurn.turnId));
   const reviewEntries = useMemo(
     () => buildGitReviewFileEntries(sections),
     [sections],
@@ -266,6 +278,56 @@ function GitPanelContent({
     });
   }, [effectiveCollapsedFiles]);
 
+  const lastTurnUndoDisabledReason = changesFilter === "last_turn"
+    ? lastTurnUndoCompleted
+      ? "Undo has already been applied for this turn."
+      : effectiveLastTurnRevertPatches.blockedReason
+      ?? (!activeWorkspaceId ? "Undo is unavailable until a workspace is selected." : null)
+      ?? (effectiveLastTurnRevertPatches.entries.length === 0
+        ? "Undo is unavailable because this turn has no complete file patches."
+        : null)
+    : null;
+  const handleUndoLastTurn = useCallback(() => {
+    if (
+      changesFilter !== "last_turn"
+      || lastTurnUndoDisabledReason
+      || effectiveLastTurnRevertPatches.entries.length === 0
+    ) {
+      return;
+    }
+    const fileCount = new Set(effectiveLastTurnRevertPatches.entries.map((entry) => entry.path)).size;
+    const confirmed = typeof window === "undefined"
+      || window.confirm(`Undo file changes from the last turn? This will reverse ${fileCount} file${fileCount === 1 ? "" : "s"} as one operation.`);
+    if (!confirmed) {
+      return;
+    }
+    void revertPatchesMutation.mutateAsync({
+      sourceLabel: "last turn",
+      entries: effectiveLastTurnRevertPatches.entries,
+    }).then(() => {
+      if (lastTurn?.turnId) {
+        setUndoneTurnIds((current) => {
+          if (current.has(lastTurn.turnId)) {
+            return current;
+          }
+          const next = new Set(current);
+          next.add(lastTurn.turnId);
+          return next;
+        });
+      }
+      showToast("Undid last turn file changes.", "info");
+    }).catch((error) => {
+      showToast(formatGitPanelUndoError(error));
+    });
+  }, [
+    changesFilter,
+    effectiveLastTurnRevertPatches.entries,
+    lastTurn?.turnId,
+    lastTurnUndoDisabledReason,
+    revertPatchesMutation,
+    showToast,
+  ]);
+
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       <GitPanelHeader
@@ -327,6 +389,14 @@ function GitPanelContent({
 
             {!isLoading && !errorMessage && !runtimeBlockedReason && hasReviewEntries && (
               <div className="flex flex-col gap-1.5">
+                {changesFilter === "last_turn" && (
+                  <GitLastTurnUndoAction
+                    fileCount={new Set(effectiveLastTurnRevertPatches.entries.map((entry) => entry.path)).size}
+                    disabledReason={lastTurnUndoDisabledReason}
+                    busy={revertPatchesMutation.isPending}
+                    onUndo={handleUndoLastTurn}
+                  />
+                )}
                 {diffPolicySummary.total > 0 && (
                   <GitReviewDiffPolicyNotice summary={diffPolicySummary} />
                 )}
@@ -402,77 +472,6 @@ function summarizeGitPanelSectionStats(sections: readonly GitPanelSection[]): {
       return stats;
     },
     { additions: 0, deletions: 0 },
-  );
-}
-
-function GitReviewDiffPolicyNotice({ summary }: { summary: DiffDisplayPolicySummary }) {
-  const hiddenLabel = `${summary.total} large/generated diff${summary.total === 1 ? "" : "s"}`;
-  const tooLargeLabel = summary.tooLargeInline > 0
-    ? `${summary.tooLargeInline} too large to render inline`
-    : null;
-  return (
-    <div className="rounded-md border border-sidebar-border/70 bg-sidebar-accent/35 px-2.5 py-2 text-xs leading-5 text-sidebar-muted-foreground">
-      <span>
-        {hiddenLabel} collapsed to keep review responsive.
-      </span>
-      {tooLargeLabel && (
-        <span> {tooLargeLabel}; open the file to inspect those changes.</span>
-      )}
-    </div>
-  );
-}
-
-function GitReviewNoChangesState({
-  mode,
-  baseRef,
-  onRefresh,
-}: {
-  mode: GitPanelMode;
-  baseRef: string | null;
-  onRefresh: () => void;
-}) {
-  const Icon = mode === "branch" ? GitBranchIcon : CheckCircleFilled;
-  return (
-    <GitReviewEmptyState
-      icon={<Icon className="size-4" />}
-      title={gitPanelEmptyMessage(mode)}
-      description={gitPanelEmptyDescription(mode, baseRef)}
-      action={
-        <GitReviewEmptyStateAction onClick={onRefresh}>
-          <RefreshCw className="size-3" />
-          Refresh
-        </GitReviewEmptyStateAction>
-      }
-    />
-  );
-}
-
-function GitReviewSectionHeader({
-  section,
-  collapsed,
-  onToggle,
-}: {
-  section: GitPanelSection;
-  collapsed: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="unstyled"
-      aria-expanded={!collapsed}
-      onClick={onToggle}
-      className="flex h-7 w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[10px] font-medium uppercase tracking-wide text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-    >
-      <ChevronRight
-        className={`size-3 shrink-0 transition-transform ${collapsed ? "" : "rotate-90"}`}
-      />
-      <span className="min-w-0 flex-1 truncate">
-        {section.label}
-      </span>
-      <span className="tabular-nums">{section.files.length}</span>
-    </Button>
   );
 }
 

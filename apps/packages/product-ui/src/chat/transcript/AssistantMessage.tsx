@@ -5,8 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { MarkdownBody } from "./MarkdownBody";
 
 const STREAM_FLUSH_MS = 32;
 const MIN_STREAM_STEP = 20;
@@ -150,20 +149,6 @@ function AssistantMessageContent({
         </div>
       )}
     </>
-  );
-}
-
-function MarkdownBody({
-  content,
-  className,
-}: {
-  content: string;
-  className: string;
-}) {
-  return (
-    <div className={`prose prose-invert max-w-none prose-p:my-3 prose-pre:my-3 prose-headings:mb-2 prose-headings:mt-4 prose-code:before:content-none prose-code:after:content-none ${className}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-    </div>
   );
 }
 

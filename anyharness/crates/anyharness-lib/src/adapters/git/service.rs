@@ -6,11 +6,14 @@ use super::diff;
 use super::executor::{
     resolve_git_repo_root, run_git, run_git_ok, run_git_with_timeout, TimedGitOutput,
 };
+use super::operation::detect_operation;
 use super::parse_status::parse_porcelain_v2;
+use super::revert_patches;
 use super::types::{
     CommitError, GitActionAvailability, GitBranch, GitBranchDiffFilesResult, GitChangedFile,
-    GitDiffError, GitDiffResult, GitDiffScope, GitFileStatus, GitIncludedState, GitOperation,
-    GitStatusSnapshot, GitStatusSummary, PushError,
+    GitDiffError, GitDiffResult, GitDiffScope, GitFileStatus, GitIncludedState,
+    GitRevertPatchEntry, GitRevertPatchesError, GitRevertPatchesResult, GitStatusSnapshot,
+    GitStatusSummary, PushError,
 };
 
 pub struct GitService;
@@ -330,6 +333,13 @@ impl GitService {
         Ok(())
     }
 
+    pub fn revert_patches(
+        workspace_path: &Path,
+        entries: &[GitRevertPatchEntry],
+    ) -> Result<GitRevertPatchesResult, GitRevertPatchesError> {
+        revert_patches::revert_patches(workspace_path, entries)
+    }
+
     pub fn commit_staged(
         workspace_path: &Path,
         summary: &str,
@@ -476,37 +486,6 @@ impl GitService {
         let (oid, _) =
             Self::commit_staged(&repo_root_path, summary, None).map_err(anyhow::Error::from)?;
         Ok(Some(oid))
-    }
-}
-
-fn detect_operation(repo_root: &Path) -> GitOperation {
-    let git_dir = repo_root.join(".git");
-    let git_path = if git_dir.is_dir() {
-        git_dir
-    } else if git_dir.is_file() {
-        if let Ok(content) = std::fs::read_to_string(&git_dir) {
-            if let Some(rest) = content.strip_prefix("gitdir: ") {
-                PathBuf::from(rest.trim())
-            } else {
-                return GitOperation::None;
-            }
-        } else {
-            return GitOperation::None;
-        }
-    } else {
-        return GitOperation::None;
-    };
-
-    if git_path.join("MERGE_HEAD").exists() {
-        GitOperation::Merge
-    } else if git_path.join("rebase-merge").exists() || git_path.join("rebase-apply").exists() {
-        GitOperation::Rebase
-    } else if git_path.join("CHERRY_PICK_HEAD").exists() {
-        GitOperation::CherryPick
-    } else if git_path.join("REVERT_HEAD").exists() {
-        GitOperation::Revert
-    } else {
-        GitOperation::None
     }
 }
 

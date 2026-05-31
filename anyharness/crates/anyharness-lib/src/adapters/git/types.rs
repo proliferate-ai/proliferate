@@ -35,6 +35,14 @@ pub enum GitDiffScope {
     BaseWorktree,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GitRevertPatchOperation {
+    Create,
+    Edit,
+    Delete,
+    Move,
+}
+
 #[derive(Debug, Clone)]
 pub struct GitChangedFile {
     pub path: String,
@@ -129,6 +137,22 @@ pub struct GitBranch {
     pub upstream: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct GitRevertPatchEntry {
+    pub path: String,
+    pub old_path: Option<String>,
+    pub operation: GitRevertPatchOperation,
+    pub patch: String,
+    pub patch_truncated: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct GitRevertPatchesResult {
+    pub reverted_paths: Vec<String>,
+    pub head_oid_before: String,
+    pub head_oid_after: String,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum CommitError {
     #[error("nothing staged to commit")]
@@ -160,6 +184,30 @@ pub enum GitDiffError {
     #[error("git diff merge base not found")]
     MergeBaseNotFound,
     #[error("git diff failed: {message}")]
+    GitFailed { message: String },
+    #[error(transparent)]
+    Internal(#[from] anyhow::Error),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum GitRevertPatchesError {
+    #[error("nothing to undo")]
+    NothingToRevert,
+    #[error("cannot undo because a patch is missing for {path}")]
+    MissingPatch { path: String },
+    #[error("cannot undo because a patch was truncated for {path}")]
+    TruncatedPatch { path: String },
+    #[error("cannot undo unsafe path {path}")]
+    UnsafePath { path: String },
+    #[error("cannot undo because {path} has partially staged changes")]
+    PartialStaging { path: String },
+    #[error("cannot undo because {path} has staged changes")]
+    StagedChanges { path: String },
+    #[error("cannot undo while git is resolving an operation")]
+    ConflictedOperation,
+    #[error("cannot undo patch for {path}: {message}")]
+    PatchRejected { path: String, message: String },
+    #[error("git undo failed: {message}")]
     GitFailed { message: String },
     #[error(transparent)]
     Internal(#[from] anyhow::Error),

@@ -21,12 +21,29 @@ describe("shortcut registry", () => {
     expect(getShortcutHandler("app.open-settings")).toBeNull();
   });
 
-  it("throws on duplicate registrations in dev", () => {
-    registerShortcutHandler("app.open-settings", () => {});
+  it("uses the latest duplicate registration and restores the previous handler on cleanup", () => {
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const firstHandler = vi.fn();
+    const secondHandler = vi.fn();
 
-    expect(() => {
-      registerShortcutHandler("app.open-settings", () => {});
-    }).toThrowError("Duplicate shortcut handler registration for app.open-settings");
+    const cleanupA = registerShortcutHandler("app.open-settings", firstHandler);
+    const cleanupB = registerShortcutHandler("app.open-settings", secondHandler);
+
+    expect(consoleWarn).toHaveBeenCalledWith(
+      "Duplicate shortcut handler registration for app.open-settings; using latest handler",
+    );
+
+    expect(runShortcutHandler("app.open-settings", { source: "keyboard" })).toBe(true);
+    expect(firstHandler).not.toHaveBeenCalled();
+    expect(secondHandler).toHaveBeenCalledWith({ source: "keyboard" });
+
+    cleanupB();
+
+    expect(runShortcutHandler("app.open-settings", { source: "menu" })).toBe(true);
+    expect(firstHandler).toHaveBeenCalledWith({ source: "menu" });
+
+    cleanupA();
+    consoleWarn.mockRestore();
   });
 
   it("throws on unknown shortcut ids in dev", () => {

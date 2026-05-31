@@ -1,6 +1,5 @@
 import { twMerge } from "tailwind-merge";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { MarkdownBody } from "./MarkdownBody";
 
 interface PlanMarkdownBodyProps {
   content: string;
@@ -17,15 +16,14 @@ export function PlanMarkdownBody({
   const renderedContent = proposal ? annotatePlanSectionHeadings(content) : content;
 
   return (
-    <div
+    <MarkdownBody
+      content={renderedContent}
       className={twMerge(
-        "select-text prose prose-invert max-w-none prose-p:my-3 prose-pre:my-3 prose-headings:mb-2 prose-headings:mt-4 prose-code:before:content-none prose-code:after:content-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+        "select-text [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
         proposal ? PROPOSED_PLAN_MARKDOWN_CLASSNAME : "",
         className,
       )}
-    >
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{renderedContent}</ReactMarkdown>
-    </div>
+    />
   );
 }
 

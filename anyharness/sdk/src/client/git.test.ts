@@ -191,4 +191,44 @@ describe("GitClient diff URLs", () => {
       "/v1/workspaces/workspace%2F1/git/diff/base-worktree-files?baseRef=origin%2Fmain",
     ]);
   });
+
+  it("posts revert patch requests to the undo endpoint", async () => {
+    const calls: Array<{ path: string; body: unknown }> = [];
+    const transport = {
+      post: async (path: string, body: unknown) => {
+        calls.push({ path, body });
+        return {
+          revertedPaths: ["README.md"],
+          headOidBefore: "head",
+          headOidAfter: "head",
+        };
+      },
+    } as unknown as AnyHarnessTransport;
+    const client = new GitClient(transport);
+
+    await client.revertPatches("workspace/1", {
+      sourceLabel: "last turn",
+      entries: [{
+        path: "README.md",
+        oldPath: null,
+        operation: "edit",
+        patch: "@@ -1 +1 @@\n-old\n+new",
+        patchTruncated: false,
+      }],
+    });
+
+    expect(calls).toEqual([{
+      path: "/v1/workspaces/workspace%2F1/git/revert-patches",
+      body: {
+        sourceLabel: "last turn",
+        entries: [{
+          path: "README.md",
+          oldPath: null,
+          operation: "edit",
+          patch: "@@ -1 +1 @@\n-old\n+new",
+          patchTruncated: false,
+        }],
+      },
+    }]);
+  });
 });
