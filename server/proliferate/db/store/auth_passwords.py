@@ -33,9 +33,7 @@ class PasswordLoginBlock:
 
 
 async def get_user_by_normalized_email(db: AsyncSession, email: str) -> User | None:
-    result = await db.execute(
-        select(User).where(func.lower(User.email) == email).limit(1)
-    )
+    result = await db.execute(select(User).where(func.lower(User.email) == email).limit(1))
     return result.scalar_one_or_none()
 
 
