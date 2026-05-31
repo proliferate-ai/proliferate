@@ -111,6 +111,13 @@ class Settings(BaseSettings):
     cloud_billing_mode: str = "off"
     pro_billing_enabled: bool = False
     support_slack_webhook_url: str = ""
+    support_report_s3_bucket: str = ""
+    support_report_s3_prefix: str = "support/reports"
+    support_report_s3_region: str = ""
+    support_report_upload_url_expires_seconds: int = 900
+    support_report_diagnostics_max_bytes: int = 25 * 1024 * 1024
+    support_report_attachment_max_bytes: int = 25 * 1024 * 1024
+    support_report_total_attachment_max_bytes: int = 100 * 1024 * 1024
     signups_slack_webhook_url: str = ""
     billing_positive_slack_webhook_url: str = ""
     billing_negative_slack_webhook_url: str = ""

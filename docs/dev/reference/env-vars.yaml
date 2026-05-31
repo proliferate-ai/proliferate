@@ -776,8 +776,50 @@
 - name: SUPPORT_SLACK_WEBHOOK_URL
   secret: true
   default: ""
-  description: Slack incoming webhook for support messages (Proliferate Cloud only)
+  description: Slack incoming webhook for support messages and completed support report notifications (Proliferate Cloud only)
   tags: [production]
+
+- name: SUPPORT_REPORT_S3_BUCKET
+  secret: false
+  default: ""
+  description: Private S3 bucket used for support report diagnostics and attachments; leave blank to disable support report uploads
+  tags: [local-dev, self-hosted, production]
+
+- name: SUPPORT_REPORT_S3_PREFIX
+  secret: false
+  default: "support/reports"
+  description: S3 key prefix for support report request, diagnostics, attachment, and completion objects
+  tags: [local-dev, self-hosted, production]
+
+- name: SUPPORT_REPORT_S3_REGION
+  secret: false
+  default: ""
+  description: Optional AWS region override for support report S3 clients and presigned URLs
+  tags: [local-dev, self-hosted, production]
+
+- name: SUPPORT_REPORT_UPLOAD_URL_EXPIRES_SECONDS
+  secret: false
+  default: "900"
+  description: Lifetime in seconds for support report presigned PUT URLs
+  tags: [local-dev, self-hosted, production]
+
+- name: SUPPORT_REPORT_DIAGNOSTICS_MAX_BYTES
+  secret: false
+  default: "26214400"
+  description: Maximum uncompressed diagnostics package size accepted for a support report
+  tags: [local-dev, self-hosted, production]
+
+- name: SUPPORT_REPORT_ATTACHMENT_MAX_BYTES
+  secret: false
+  default: "26214400"
+  description: Maximum size of a single support report attachment
+  tags: [local-dev, self-hosted, production]
+
+- name: SUPPORT_REPORT_TOTAL_ATTACHMENT_MAX_BYTES
+  secret: false
+  default: "104857600"
+  description: Maximum combined size of all support report attachments
+  tags: [local-dev, self-hosted, production]
 
 - name: SIGNUPS_SLACK_WEBHOOK_URL
   secret: true

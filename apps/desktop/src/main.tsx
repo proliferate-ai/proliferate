@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
+import { SupportReportWindow } from "./components/support/SupportReportWindow";
 import "./lib/access/cloud/client";
 import { bootstrapProliferateApiConfig } from "./lib/infra/proliferate-api";
 import { initializeAnonymousTelemetry } from "./lib/integrations/telemetry/anonymous";
@@ -29,6 +30,9 @@ const IS_TAURI_DESKTOP =
   typeof window !== "undefined"
   && "__TAURI_INTERNALS__" in (window as unknown as Record<string, unknown>);
 const API_CONFIG_STARTUP_BUDGET_MS = 1500;
+const IS_SUPPORT_WINDOW =
+  typeof window !== "undefined"
+  && new URLSearchParams(window.location.search).get("support") === "1";
 
 document.documentElement.dataset.proliferateClient = "desktop";
 
@@ -99,16 +103,21 @@ if (!import.meta.env.DEV) {
 
 function renderApp() {
   recordRendererStartupEvent("render.start");
+  const content = IS_SUPPORT_WINDOW ? (
+    <SupportReportWindow />
+  ) : (
+    <BrowserRouter>
+      <AppProviders>
+        <App />
+      </AppProviders>
+    </BrowserRouter>
+  );
   ReactDOM.createRoot(
     document.getElementById("root") as HTMLElement,
     getDesktopTelemetryRootHandlers(),
   ).render(
     <React.StrictMode>
-      <BrowserRouter>
-        <AppProviders>
-          <App />
-        </AppProviders>
-      </BrowserRouter>
+      {content}
     </React.StrictMode>,
   );
   recordRendererStartupEvent("render.scheduled");

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import {
+  collectSupportDiagnostics,
   exportDebugBundle,
   isTauriDesktop,
   logRendererDiagnostic,
@@ -9,15 +10,18 @@ import {
 import type {
   RendererDiagnosticPayload,
   RendererEventPayload,
+  SupportDiagnosticsBundle,
 } from "@/lib/access/tauri/diagnostics";
 
 export type {
   RendererDiagnosticPayload,
   RendererEventPayload,
+  SupportDiagnosticsBundle,
 };
 
 export function useTauriDiagnosticsActions() {
   return useMemo(() => ({
+    collectSupportDiagnostics,
     exportDebugBundle,
     isTauriDesktop,
     logRendererDiagnostic,

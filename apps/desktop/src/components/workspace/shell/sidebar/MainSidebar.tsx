@@ -1,7 +1,6 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
-import { SupportDialog } from "@/components/support/SupportDialog";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { SidebarFooter } from "./SidebarFooter";
@@ -30,7 +29,7 @@ import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useSidebarShortcutTargets } from "@/hooks/workspaces/derived/use-sidebar-shortcut-targets";
-import { useSidebarSupportContext } from "@/hooks/support/derived/use-sidebar-support-context";
+import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "@/hooks/workspaces/use-workspace-display-name-actions";
@@ -47,7 +46,6 @@ import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-i
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import { buildShortcutRangeLabelById } from "@/lib/domain/shortcuts/presentation";
 import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
-import { subscribeSupportDialogRequest } from "@/lib/infra/support/support-dialog-request";
 import { useShortcutRevealVisible } from "@/providers/ShortcutRevealProvider";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -61,7 +59,7 @@ export const MainSidebar = memo(function MainSidebar() {
   useDebugRenderCount("workspace-sidebar");
   useSessionActivityReconciler();
   const actions = useWorkspaceSidebarActions();
-  const supportContext = useSidebarSupportContext();
+  const handleOpenSupport = useOpenSupportReportWindow({ source: "sidebar" });
   const shortcutRevealVisible = useShortcutRevealVisible();
   const sidebarShortcutTargetIds = useSidebarShortcutTargets();
   const {
@@ -73,8 +71,7 @@ export const MainSidebar = memo(function MainSidebar() {
     data: cloudRepoConfigs,
     isPending: isCloudRepoConfigsPending,
   } = useCloudRepoConfigs(cloudActive);
-  const [supportOpen, setSupportOpen] = useState(false);
-  useEffect(() => subscribeSupportDialogRequest(() => setSupportOpen(true)), []);
+  const showToast = useToastStore((state) => state.show);
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const {
     workspaceTypes,
@@ -93,7 +90,6 @@ export const MainSidebar = memo(function MainSidebar() {
   } = useWorkspaceSidebarState({ showArchived: false });
   const navigate = useNavigate();
   const location = useLocation();
-  const showToast = useToastStore((state) => state.show);
   const [archiveConfirmation, setArchiveConfirmation] =
     useState<ArchiveConfirmationState | null>(null);
   const {
@@ -273,12 +269,6 @@ export const MainSidebar = memo(function MainSidebar() {
           <SidebarFooter />
         </DebugProfiler>
       )}>
-      {supportOpen && (
-        <SupportDialog
-          onClose={() => setSupportOpen(false)}
-          context={supportContext}
-        />
-      )}
       <ProductSidebarBody>
         <DebugProfiler id="workspace-sidebar-primary-nav">
           <SidebarPrimaryNavigation
@@ -286,12 +276,12 @@ export const MainSidebar = memo(function MainSidebar() {
             pluginsActive={isOnPlugins}
             automationsActive={isOnAutomations}
             workspacesActive={isOnWorkspaces}
-            supportActive={supportOpen}
+            supportActive={false}
             onGoHome={actions.handleGoHome}
             onGoPlugins={actions.handleGoPlugins}
             onGoAutomations={actions.handleGoAutomations}
             onGoWorkspaces={handleGoWorkspaces}
-            onOpenSupport={() => setSupportOpen(true)}
+            onOpenSupport={handleOpenSupport}
             shortcutRevealVisible={shortcutRevealVisible}
             shortcutLabels={primaryNavShortcutLabels}
           />
