@@ -16,11 +16,10 @@ use super::resolver;
 use super::service::WorkspaceService;
 use super::store::WorkspaceStore;
 use super::types::{
-    CreateWorktreeResult, ProjectSetupDetectionResult, ResolveRepoRootError,
-    SetWorkspaceDisplayNameError,
+    CreateWorktreeResult, PreparedWorkspaceMobilityDestination, ProjectSetupDetectionResult,
+    ResolveRepoRootError, SetWorkspaceDisplayNameError,
 };
 use crate::adapters::git::service::GitService;
-use crate::domains::mobility::model::PreparedWorkspaceMobilityDestination;
 use crate::origin::OriginContext;
 use crate::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
 use crate::repo_roots::service::RepoRootService;

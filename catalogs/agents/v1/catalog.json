@@ -356,13 +356,6 @@
             "valueSource": "inline",
             "values": [
               {
-                "value": "auto",
-                "label": "Auto",
-                "description": "Use a model classifier to approve/deny permission prompts.",
-                "isDefault": false,
-                "status": "active"
-              },
-              {
                 "value": "default",
                 "label": "Default",
                 "description": "Standard behavior, prompts for dangerous operations",

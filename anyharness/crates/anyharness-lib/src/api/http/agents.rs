@@ -13,6 +13,13 @@ use axum::{
 
 use crate::app::AppState;
 use crate::domains::agents::installer::{InstallError, InstalledArtifactResult};
+use crate::domains::agents::login_terminal::{
+    close_agent_login_terminal as close_agent_login_terminal_session,
+    get_agent_login_terminal as get_agent_login_terminal_session,
+    start_agent_login_terminal_session,
+    AgentLoginTerminalRecord as InternalAgentLoginTerminalRecord,
+    AgentLoginTerminalStatus as InternalAgentLoginTerminalStatus,
+};
 use crate::domains::agents::model::*;
 use crate::domains::agents::reconcile::execution::{
     AgentReconcileJobSnapshot, AgentReconcileJobStatus,
@@ -22,10 +29,6 @@ use crate::domains::agents::reconcile::{
 };
 use crate::domains::agents::runtime::{
     AgentInstallRequest as DomainInstallAgentRequest, AgentRuntimeError,
-};
-use crate::live::terminals::{
-    AgentLoginTerminalRecord as InternalAgentLoginTerminalRecord,
-    AgentLoginTerminalStatus as InternalAgentLoginTerminalStatus, StartAgentLoginTerminalOptions,
 };
 
 type ProblemResponse = (StatusCode, Json<ProblemDetails>);
@@ -77,6 +80,18 @@ fn agent_runtime_error_to_problem(error: AgentRuntimeError) -> ProblemResponse {
                 "Agent {kind} supports login, but no managed or PATH login command was found."
             )),
             Some("LOGIN_COMMAND_NOT_FOUND"),
+        ),
+        AgentRuntimeError::LoginTerminalNotFound(error) => problem(
+            404,
+            "Agent login terminal not found",
+            Some(error),
+            Some("AGENT_LOGIN_TERMINAL_NOT_FOUND"),
+        ),
+        AgentRuntimeError::LoginTerminalFailed(error) => problem(
+            500,
+            "Login terminal failed",
+            Some(error),
+            Some("LOGIN_TERMINAL_FAILED"),
         ),
         AgentRuntimeError::InstallTaskFailed(error) => problem(
             500,
@@ -225,38 +240,18 @@ pub async fn start_agent_login_terminal(
     Path(kind): Path<String>,
     Json(_req): Json<StartAgentLoginRequest>,
 ) -> Result<Json<StartAgentLoginTerminalResponse>, ProblemResponse> {
-    let login = state
-        .agent_runtime
-        .start_login_terminal(&kind)
-        .await
-        .map_err(agent_runtime_error_to_problem)?;
-    let terminal = state
-        .agent_login_terminal_service
-        .start_terminal(StartAgentLoginTerminalOptions {
-            kind: login.kind.clone(),
-            title: login.label.clone(),
-            program: login.command.program,
-            args: login.command.args,
-            cwd: login.cwd,
-            env: login.env,
-            command_display: login.command_display,
-            cols: 120,
-            rows: 24,
-        })
-        .await
-        .map_err(|error| {
-            problem(
-                500,
-                "Login terminal failed",
-                Some(error.to_string()),
-                Some("LOGIN_TERMINAL_FAILED"),
-            )
-        })?;
+    let login = start_agent_login_terminal_session(
+        &state.agent_runtime,
+        &kind,
+        &state.agent_login_terminal_service,
+    )
+    .await
+    .map_err(agent_runtime_error_to_problem)?;
     Ok(Json(StartAgentLoginTerminalResponse {
         kind: login.kind,
         label: login.label,
         message: login.message,
-        agent_login_terminal: agent_login_terminal_to_contract(terminal),
+        agent_login_terminal: agent_login_terminal_to_contract(login.terminal),
     }))
 }
 
@@ -274,18 +269,10 @@ pub async fn get_agent_login_terminal(
     State(state): State<AppState>,
     Path(terminal_id): Path<String>,
 ) -> Result<Json<AgentLoginTerminalRecord>, ProblemResponse> {
-    let terminal = state
-        .agent_login_terminal_service
-        .get_terminal(&terminal_id)
-        .await
-        .ok_or_else(|| {
-            problem(
-                404,
-                "Agent login terminal not found",
-                Some(format!("Agent login terminal not found: {terminal_id}")),
-                Some("AGENT_LOGIN_TERMINAL_NOT_FOUND"),
-            )
-        })?;
+    let terminal =
+        get_agent_login_terminal_session(&terminal_id, &state.agent_login_terminal_service)
+            .await
+            .map_err(agent_runtime_error_to_problem)?;
     Ok(Json(agent_login_terminal_to_contract(terminal)))
 }
 
@@ -303,18 +290,9 @@ pub async fn close_agent_login_terminal(
     State(state): State<AppState>,
     Path(terminal_id): Path<String>,
 ) -> Result<StatusCode, ProblemResponse> {
-    state
-        .agent_login_terminal_service
-        .close_terminal(&terminal_id)
+    close_agent_login_terminal_session(&terminal_id, &state.agent_login_terminal_service)
         .await
-        .map_err(|error| {
-            problem(
-                404,
-                "Agent login terminal not found",
-                Some(error.to_string()),
-                Some("AGENT_LOGIN_TERMINAL_NOT_FOUND"),
-            )
-        })?;
+        .map_err(agent_runtime_error_to_problem)?;
     Ok(StatusCode::NO_CONTENT)
 }
 

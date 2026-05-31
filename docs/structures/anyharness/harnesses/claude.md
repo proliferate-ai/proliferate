@@ -65,6 +65,18 @@ These fields are normalized into typed permission context in the AnyHarness
 contract. Stable UI behavior must use the typed contract fields, not raw ACP
 metadata or raw tool input/output blobs.
 
+## Permission Mode Launch Guard
+
+The managed `claude-agent-acp` adapter validates
+`permissions.defaultMode` from Claude settings before creating a session. The
+current managed adapter accepts `default`, `acceptEdits`, `plan`, `dontAsk`,
+and `bypassPermissions`; it does not accept `auto`.
+
+AnyHarness must not advertise `auto` as a Claude create-session mode until the
+managed adapter supports it. Gateway-backed Claude launches set a
+runtime-owned `CLAUDE_CONFIG_DIR` so hosted sessions do not inherit a user's
+global Claude settings default that the adapter cannot start with.
+
 ## Restart Semantics
 
 Pending interactions are live broker state. Durable events and session

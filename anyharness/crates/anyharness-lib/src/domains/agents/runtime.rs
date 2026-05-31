@@ -81,6 +81,10 @@ pub enum AgentRuntimeError {
     LoginNotSupported(String),
     #[error("Login command for agent {0} was not found")]
     LoginCommandNotFound(String),
+    #[error("Agent login terminal not found: {0}")]
+    LoginTerminalNotFound(String),
+    #[error("Agent login terminal failed: {0}")]
+    LoginTerminalFailed(String),
     #[error("Agent install task failed: {0}")]
     InstallTaskFailed(tokio::task::JoinError),
     #[error(transparent)]

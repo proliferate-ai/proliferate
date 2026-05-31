@@ -3,6 +3,7 @@ pub mod catalog;
 pub mod credentials;
 pub mod install_lock;
 pub mod installer;
+pub mod login_terminal;
 pub mod model;
 pub mod model_registry;
 pub mod portability;

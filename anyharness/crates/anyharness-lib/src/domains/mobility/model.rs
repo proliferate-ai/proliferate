@@ -79,12 +79,6 @@ pub struct DestroyedWorkspaceSourceSummary {
 }
 
 #[derive(Debug, Clone)]
-pub struct PreparedWorkspaceMobilityDestination {
-    pub workspace: crate::workspaces::model::WorkspaceRecord,
-    pub created: bool,
-}
-
-#[derive(Debug, Clone)]
 pub struct MobilityBlocker {
     pub code: String,
     pub message: String,

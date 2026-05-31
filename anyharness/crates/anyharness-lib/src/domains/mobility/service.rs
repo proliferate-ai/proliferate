@@ -12,8 +12,8 @@ use crate::domains::agents::portability::{
 };
 use crate::domains::mobility::model::{
     DestroyedWorkspaceSourceSummary, ImportedWorkspaceArchiveSummary, MobilityBlocker,
-    MobilityFileData, MobilitySessionCandidate, PreparedWorkspaceMobilityDestination,
-    WorkspaceMobilityArchiveData, WorkspaceMobilityExportOptions, WorkspaceMobilityPreflightResult,
+    MobilityFileData, MobilitySessionCandidate, WorkspaceMobilityArchiveData,
+    WorkspaceMobilityExportOptions, WorkspaceMobilityPreflightResult,
     WorkspaceMobilitySessionBundleData, MAX_MOBILITY_ARCHIVE_BODY_BYTES, MAX_MOBILITY_FILE_BYTES,
 };
 use crate::domains::mobility::store::MobilityStore;
@@ -29,6 +29,7 @@ use crate::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord
 use crate::workspaces::model::WorkspaceRecord;
 use crate::workspaces::runtime::WorkspaceRuntime;
 use crate::workspaces::service::WorkspaceService;
+use crate::workspaces::types::PreparedWorkspaceMobilityDestination;
 use crate::{
     adapters::files::safety::resolve_safe_path,
     adapters::git::{types::GitOperation, GitService},
