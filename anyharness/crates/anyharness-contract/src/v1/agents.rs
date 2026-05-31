@@ -219,6 +219,40 @@ pub struct LoginCommand {
     pub args: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentLoginTerminalStatus {
+    Starting,
+    Running,
+    Exited,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentLoginTerminalRecord {
+    pub id: String,
+    pub kind: String,
+    pub title: String,
+    pub status: AgentLoginTerminalStatus,
+    pub cwd: String,
+    pub command_display: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct StartAgentLoginTerminalResponse {
+    pub kind: String,
+    pub label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    pub agent_login_terminal: AgentLoginTerminalRecord,
+}
+
 // --- Reconcile ---
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

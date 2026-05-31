@@ -9,6 +9,7 @@ from proliferate.server.cloud.runtime import git_operations
 from proliferate.server.cloud.runtime.git_operations import (
     configure_git_identity,
     clone_repository,
+    ensure_requested_base_sha_available,
     translate_clone_failure,
 )
 
@@ -95,3 +96,82 @@ async def test_configure_git_identity_sets_repo_local_name_and_email(
     assert "git -C /home/user/workspace config user.name" in command
     assert "Cloud Tester" in command
     assert "git -C /home/user/workspace config user.email cloud@example.com" in command
+
+
+@pytest.mark.asyncio
+async def test_ensure_requested_base_sha_fetches_branch_head_and_verifies_commit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    async def fake_run_sandbox_command_logged(*args, **kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(exit_code=0, stdout="abc123\n", stderr="")
+
+    monkeypatch.setattr(
+        git_operations,
+        "run_sandbox_command_logged",
+        fake_run_sandbox_command_logged,
+    )
+
+    provider = SimpleNamespace()
+    runtime_context = SimpleNamespace(runtime_workdir="/home/user/workspace")
+    ctx = SimpleNamespace(
+        workspace_id=uuid.uuid4(),
+        git_branch="feature/cloud",
+        requested_base_sha="a" * 40,
+    )
+
+    await ensure_requested_base_sha_available(
+        provider,
+        object(),
+        ctx=ctx,
+        runtime_context=runtime_context,
+    )
+
+    assert len(calls) == 1
+    call = calls[0]
+    assert call["label"] == "sync_requested_base_sha"
+    command = str(call["command"])
+    assert (
+        "git -C /home/user/workspace fetch origin "
+        "refs/heads/feature/cloud:refs/remotes/origin/feature/cloud"
+    ) in command
+    assert (
+        'test "$(git -C /home/user/workspace rev-parse --verify '
+        'refs/remotes/origin/feature/cloud)" = '
+    ) in command
+    assert "git -C /home/user/workspace rev-parse --verify" in command
+    assert f"{'a' * 40}^{{commit}}" in command
+
+
+@pytest.mark.asyncio
+async def test_ensure_requested_base_sha_raises_actionable_sync_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_run_sandbox_command_logged(*args, **kwargs):
+        return SimpleNamespace(exit_code=128, stdout="", stderr="fatal: couldn't find remote ref")
+
+    monkeypatch.setattr(
+        git_operations,
+        "run_sandbox_command_logged",
+        fake_run_sandbox_command_logged,
+    )
+
+    provider = SimpleNamespace()
+    runtime_context = SimpleNamespace(runtime_workdir="/home/user/workspace")
+    ctx = SimpleNamespace(
+        workspace_id=uuid.uuid4(),
+        git_branch="feature/missing",
+        requested_base_sha="abc123",
+    )
+
+    with pytest.raises(RuntimeError) as exc_info:
+        await ensure_requested_base_sha_available(
+            provider,
+            object(),
+            ctx=ctx,
+            runtime_context=runtime_context,
+        )
+
+    assert "Git branch sync failed: fatal: couldn't find remote ref" in str(exc_info.value)

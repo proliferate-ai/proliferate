@@ -134,6 +134,79 @@
         }
       }
     },
+    "/v1/agents/login-terminals/{terminal_id}": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "get_agent_login_terminal",
+        "parameters": [
+          {
+            "name": "terminal_id",
+            "in": "path",
+            "description": "Agent login terminal ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent login terminal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentLoginTerminalRecord"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent login terminal not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "close_agent_login_terminal",
+        "parameters": [
+          {
+            "name": "terminal_id",
+            "in": "path",
+            "description": "Agent login terminal ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Agent login terminal closed"
+          },
+          "404": {
+            "description": "Agent login terminal not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/agents/reconcile": {
       "get": {
         "tags": [
@@ -344,6 +417,77 @@
           },
           "404": {
             "description": "Agent not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents/{kind}/login/terminal": {
+      "post": {
+        "tags": [
+          "agents"
+        ],
+        "operationId": "start_agent_login_terminal",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Agent kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartAgentLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Agent login terminal started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartAgentLoginTerminalResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Login not supported",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Login command not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -5955,6 +6099,61 @@
           }
         }
       },
+      "AgentLoginTerminalRecord": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "status",
+          "cwd",
+          "commandDisplay",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "commandDisplay": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "exitCode": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AgentLoginTerminalStatus"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "AgentLoginTerminalStatus": {
+        "type": "string",
+        "enum": [
+          "starting",
+          "running",
+          "exited",
+          "failed"
+        ]
+      },
       "AgentModelRegistryModel": {
         "type": "object",
         "required": [
@@ -8331,6 +8530,27 @@
             "items": {
               "type": "string"
             }
+          },
+          "expectedBaseCommitSha": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expectedBranchName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expectedHandoffOpId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requireCleanGitState": {
+            "type": "boolean"
           }
         }
       },
@@ -11216,9 +11436,13 @@
       "PrepareRepoRootMobilityDestinationResponse": {
         "type": "object",
         "required": [
-          "workspace"
+          "workspace",
+          "created"
         ],
         "properties": {
+          "created": {
+            "type": "boolean"
+          },
           "workspace": {
             "$ref": "#/components/schemas/Workspace"
           }
@@ -15337,6 +15561,31 @@
           }
         }
       },
+      "StartAgentLoginTerminalResponse": {
+        "type": "object",
+        "required": [
+          "kind",
+          "label",
+          "agentLoginTerminal"
+        ],
+        "properties": {
+          "agentLoginTerminal": {
+            "$ref": "#/components/schemas/AgentLoginTerminalRecord"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "StartCodeReviewRequest": {
         "type": "object",
         "required": [
@@ -16582,6 +16831,12 @@
             "items": {
               "$ref": "#/components/schemas/WorkspaceMobilitySessionBundle"
             }
+          },
+          "sourceWorkspaceId": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "sourceWorkspacePath": {
             "type": "string"

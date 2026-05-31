@@ -9,7 +9,10 @@ import {
   resolveRuntimeTargetForWorkspace,
 } from "@/lib/access/anyharness/runtime-target";
 import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
-import { findCompatibleExistingSession } from "@/lib/domain/sessions/creation/compatible-session";
+import {
+  findCompatibleExistingSession,
+  shouldProbeCompatibleRuntimeSessions,
+} from "@/lib/domain/sessions/creation/compatible-session";
 import {
   formatSessionCreateFailureMessage,
   toSessionCreateFailureDisplayError,
@@ -91,7 +94,7 @@ import {
 import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 import { useCloudAgentCatalogCache } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { buildDesktopLaunchModelRegistries } from "@/lib/domain/agents/cloud-launch-catalog";
-import { startCloudSessionCommand } from "@/lib/access/cloud/session-commands";
+import { startCloudSessionCommandResult } from "@/lib/access/cloud/session-commands";
 
 interface CreateSessionWithResolvedConfigOptions {
   text: string;
@@ -164,8 +167,12 @@ async function ensureRuntimeReadyForSessions(): Promise<string> {
 }
 
 async function resolveDesktopRuntimeUrlForWorkspace(workspaceId: string): Promise<string> {
-  if (parseTargetWorkspaceSyntheticId(workspaceId)) {
-    return useHarnessConnectionStore.getState().runtimeUrl;
+  if (parseTargetWorkspaceSyntheticId(workspaceId) || parseCloudWorkspaceSyntheticId(workspaceId)) {
+    const runtimeUrl = useHarnessConnectionStore.getState().runtimeUrl.trim();
+    if (!runtimeUrl) {
+      throw new Error("AnyHarness runtime URL is not available yet.");
+    }
+    return runtimeUrl;
   }
   return ensureRuntimeReadyForSessions();
 }
@@ -378,7 +385,10 @@ export function useSessionCreationActions() {
         ...targetConnection,
         anyharnessWorkspaceId: target.anyharnessWorkspaceId,
       };
-      if (options.preferExistingCompatibleSession) {
+      if (shouldProbeCompatibleRuntimeSessions({
+        preferExistingCompatibleSession: options.preferExistingCompatibleSession,
+        runtimeLocation: target.location,
+      })) {
         const existingSession = await listWorkspaceSessions(
           workspaceConnection,
           requestOptions,
@@ -430,7 +440,7 @@ export function useSessionCreationActions() {
         if (!target.cloudWorkspaceId || !target.targetId) {
           throw new Error("Cloud workspace is missing command routing metadata.");
         }
-        const materializedSessionId = await startCloudSessionCommand({
+        const startResult = await startCloudSessionCommandResult({
           idempotencyKey: `desktop:start-session:${target.cloudWorkspaceId}:${pendingSessionId}`,
           targetId: target.targetId,
           cloudWorkspaceId: target.cloudWorkspaceId,
@@ -440,7 +450,8 @@ export function useSessionCreationActions() {
           modeId: resolvedModeId ?? null,
           subagentsEnabled,
         });
-        session = await getSession(targetConnection, materializedSessionId, requestOptions);
+        session = startResult.session
+          ?? await getSession(targetConnection, startResult.sessionId, requestOptions);
       } else {
         assertDirectSessionCreateRuntimeConfigStamped(target);
         session = await createSession(targetConnection, {

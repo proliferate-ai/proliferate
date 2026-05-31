@@ -117,4 +117,30 @@ describe("WorkspaceMobilityLocationPopover", () => {
     expect(screen.getByText("Move this workspace from cloud back to your local machine.")).toBeTruthy();
     expect(screen.queryByText("Move target")).toBeNull();
   });
+
+  it("locks navigation and cancel while the primary action is pending", () => {
+    render(
+      <WorkspaceMobilityLocationPopover
+        destinationOptions={DESTINATIONS}
+        selectedDestinationId="cloud_workspace"
+        prompt={makePrompt({
+          variant: "blocked",
+          headline: "Push branch before moving",
+          body: "This branch has unpublished commits.",
+          actionLabel: "Push and move",
+          primaryActionKind: "push_commits",
+        })}
+        snapshot={null}
+        isActionPending
+        onClose={vi.fn()}
+        onSelectDestination={vi.fn()}
+        onBackToDestinations={vi.fn()}
+        onPrimaryAction={vi.fn()}
+      />,
+    );
+
+    expect((screen.getByRole("button", { name: "Cloud workspace" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Push and move" }) as HTMLButtonElement).disabled).toBe(true);
+  });
 });

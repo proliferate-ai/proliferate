@@ -99,6 +99,7 @@ export function makeCloudWorkspace(args: {
   repoName?: string;
   branch?: string;
   displayName?: string | null;
+  productLifecycle?: SidebarCloudWorkspaceSummary["productLifecycle"];
   origin?: SidebarCloudWorkspaceSummary["origin"];
   creatorContext?: SidebarCloudWorkspaceSummary["creatorContext"];
   directTargetContext?: SidebarCloudWorkspaceSummary["directTargetContext"];
@@ -113,6 +114,7 @@ export function makeCloudWorkspace(args: {
     repoName = "proliferate",
     branch = "main",
     displayName = null,
+    productLifecycle,
     origin = null,
     creatorContext = null,
     directTargetContext = null,
@@ -138,6 +140,7 @@ export function makeCloudWorkspace(args: {
     },
     status,
     workspaceStatus: status,
+    productLifecycle,
     runtime: {
       environmentId: null,
       status: "running",

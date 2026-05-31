@@ -8,6 +8,7 @@ import secrets
 import shlex
 import time
 from dataclasses import dataclass, field
+from datetime import timedelta
 from pathlib import PurePosixPath
 from urllib.parse import urlparse
 from uuid import UUID
@@ -18,7 +19,11 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE,
     USAGE_SEGMENT_OPENED_BY_PROVISION,
 )
-from proliferate.constants.cloud import CloudTargetStatus, CloudWorkspaceStatus
+from proliferate.constants.cloud import (
+    CLOUD_TARGET_HEARTBEAT_STALE_SECONDS,
+    CloudTargetStatus,
+    CloudWorkspaceStatus,
+)
 from proliferate.constants.cloud import (
     WorkspaceStatus as LegacyWorkspaceStatus,
 )
@@ -97,6 +102,7 @@ from proliferate.server.cloud.runtime.git_operations import (
     checkout_cloud_branch,
     clone_repository,
     configure_git_identity,
+    ensure_requested_base_sha_available,
     resolve_runtime_root_head_sha,
 )
 from proliferate.server.cloud.runtime.models import (
@@ -116,6 +122,7 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
     run_sandbox_command_logged,
 )
 from proliferate.server.cloud.runtime.target_registration import ensure_runtime_target_enrollment
+from proliferate.server.cloud.runtime.wake import run_managed_slot_wake_job
 from proliferate.server.cloud.runtime.worktree_policy_sync import (
     sync_cloud_worktree_policy_to_runtime,
 )
@@ -911,6 +918,41 @@ async def _launch_supervised_runtime_bundle(
     return enrollment.target_id
 
 
+def _target_has_current_worker(target: targets_store.CloudTargetSnapshot | None) -> bool:
+    if (
+        target is None
+        or target.status != CloudTargetStatus.online.value
+        or target.status_record is None
+        or target.status_record.worker_id is None
+        or target.status_record.last_heartbeat_at is None
+        or target.current_versions is None
+        or not target.current_versions.anyharness_version
+        or not target.current_versions.worker_version
+        or not target.current_versions.supervisor_version
+    ):
+        return False
+
+    stale_before = utcnow() - timedelta(seconds=CLOUD_TARGET_HEARTBEAT_STALE_SECONDS)
+    return target.status_record.last_heartbeat_at > stale_before
+
+
+async def _wake_reused_runtime_if_worker_stale(
+    ctx: CloudProvisionInput,
+) -> bool:
+    async with db_engine.async_session_factory() as db:
+        target = await targets_store.get_target_by_id(db, ctx.target_id)
+    if _target_has_current_worker(target):
+        return False
+
+    await _set_workspace_status(
+        ctx.workspace_id,
+        CloudWorkspaceStatus.materializing,
+        detail="Restarting cloud runtime worker",
+    )
+    await run_managed_slot_wake_job(ctx.target_id, command_id=None)
+    return True
+
+
 async def _wait_for_worker_target_online(
     target_id: UUID,
     *,
@@ -920,6 +962,7 @@ async def _wait_for_worker_target_online(
 ) -> None:
     last_status = "missing"
     last_detail: str | None = None
+    last_heartbeat_at = None
     last_anyharness_version: str | None = None
     last_worker_version: str | None = None
     last_supervisor_version: str | None = None
@@ -929,6 +972,9 @@ async def _wait_for_worker_target_online(
         if target is not None:
             last_status = target.status
             last_detail = target.status_record.status_detail if target.status_record else None
+            last_heartbeat_at = (
+                target.status_record.last_heartbeat_at if target.status_record else None
+            )
             if target.current_versions is not None:
                 last_anyharness_version = target.current_versions.anyharness_version
                 last_worker_version = target.current_versions.worker_version
@@ -937,14 +983,7 @@ async def _wait_for_worker_target_online(
                 last_anyharness_version = None
                 last_worker_version = None
                 last_supervisor_version = None
-            if (
-                target.status == CloudTargetStatus.online.value
-                and target.status_record is not None
-                and target.status_record.worker_id is not None
-                and last_anyharness_version
-                and last_worker_version
-                and last_supervisor_version
-            ):
+            if _target_has_current_worker(target):
                 return
         await asyncio.sleep(delay_seconds)
 
@@ -952,6 +991,7 @@ async def _wait_for_worker_target_online(
         "Proliferate Worker did not report an online AnyHarness runtime "
         f"for target {target_id}; last_status={last_status}; "
         f"last_detail={last_detail or '<none>'}; "
+        f"last_heartbeat_at={last_heartbeat_at.isoformat() if last_heartbeat_at else '<none>'}; "
         f"last_anyharness_version={last_anyharness_version or '<none>'}; "
         f"last_worker_version={last_worker_version or '<none>'}; "
         f"last_supervisor_version={last_supervisor_version or '<none>'}."
@@ -1314,6 +1354,12 @@ async def _prepare_workspace_in_runtime(
         CloudWorkspaceStatus.materializing,
         detail="Resolving workspace",
     )
+    await ensure_requested_base_sha_available(
+        provider,
+        connected.sandbox,
+        ctx=ctx,
+        runtime_context=connected.runtime_context,
+    )
     tracker.begin(
         ProvisionStep.resolve_remote_workspace,
         runtime_url=connected.endpoint.runtime_url,
@@ -1500,7 +1546,9 @@ async def provision_workspace(
                 detail="Waiting for Proliferate Worker enrollment",
             )
             tracker.begin(ProvisionStep.start_worker_process, target_id=str(ctx.target_id))
+            worker_wake_ran = False
             try:
+                worker_wake_ran = await _wake_reused_runtime_if_worker_stale(ctx)
                 await _wait_for_worker_target_online(ctx.target_id, workspace_id=ctx.workspace_id)
             except Exception:
                 await _log_runtime_diagnostics(
@@ -1510,7 +1558,11 @@ async def provision_workspace(
                     workspace_id=ctx.workspace_id,
                 )
                 raise
-            tracker.complete(target_id=str(ctx.target_id), reused_runtime=True)
+            tracker.complete(
+                target_id=str(ctx.target_id),
+                reused_runtime=True,
+                worker_wake_ran=worker_wake_ran,
+            )
             await _request_agent_auth_refresh_and_wait(
                 tracker,
                 ctx,

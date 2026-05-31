@@ -5,7 +5,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cloudWorkspaceConnectionKey } from "@/hooks/access/cloud/query-keys";
+import {
+  cloudMobilityWorkspacesKey,
+  cloudWorkspaceConnectionKey,
+} from "@/hooks/access/cloud/query-keys";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/cache/query-keys";
 import { useWorkspaceMobilityCache } from "./use-workspace-mobility-cache";
 
@@ -92,6 +95,33 @@ describe("useWorkspaceMobilityCache", () => {
 
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: workspaceCollectionsScopeKey(runtimeUrl),
+    });
+  });
+
+  it("refreshes workspace and mobility collections before destination selection", async () => {
+    const queryClient = makeQueryClient();
+    const runtimeUrl = "http://runtime.test";
+    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
+    const refetchQueries = vi.spyOn(queryClient, "refetchQueries");
+    const { result } = renderMobilityCache(queryClient, runtimeUrl);
+
+    await act(async () => {
+      await result.current.refreshWorkspaceCollections();
+    });
+
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: workspaceCollectionsScopeKey(runtimeUrl),
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: cloudMobilityWorkspacesKey(),
+    });
+    expect(refetchQueries).toHaveBeenCalledWith({
+      queryKey: workspaceCollectionsScopeKey(runtimeUrl),
+      type: "active",
+    });
+    expect(refetchQueries).toHaveBeenCalledWith({
+      queryKey: cloudMobilityWorkspacesKey(),
+      type: "active",
     });
   });
 });

@@ -6,6 +6,7 @@ import type {
 import { updateCloudWorkspaceHandoffPhase } from "@proliferate/cloud-sdk/client/mobility";
 import { applyCloudMobilityHandoffSummary } from "./mobility-cache";
 import { cloudMobilityWorkspaceKey, cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
+import { retryCloudWorkspaceRequest } from "@/lib/access/cloud/workspace-connection-retry";
 
 export function useUpdateCloudWorkspaceHandoffPhase() {
   const queryClient = useQueryClient();
@@ -20,7 +21,10 @@ export function useUpdateCloudWorkspaceHandoffPhase() {
     }
   >({
     mutationFn: ({ mobilityWorkspaceId, handoffOpId, input }) =>
-      updateCloudWorkspaceHandoffPhase(mobilityWorkspaceId, handoffOpId, input),
+      retryCloudWorkspaceRequest(
+        () => updateCloudWorkspaceHandoffPhase(mobilityWorkspaceId, handoffOpId, input),
+        "Failed to update workspace move progress.",
+      ),
     onSuccess: async (handoff, variables) => {
       applyCloudMobilityHandoffSummary(
         queryClient,
@@ -34,7 +38,7 @@ export function useUpdateCloudWorkspaceHandoffPhase() {
         queryClient.invalidateQueries({
           queryKey: cloudMobilityWorkspacesKey(),
         }),
-      ]);
+      ]).catch(() => undefined);
     },
   });
 }

@@ -1,8 +1,9 @@
 use anyharness_contract::v1::{
-    AgentCredentialState, AgentInstallState, AgentReadinessState, AgentSummary, ArtifactStatus,
-    InstallAgentRequest, InstallAgentResponse, LoginCommand, ProblemDetails, ReconcileAgentResult,
-    ReconcileAgentsRequest, ReconcileAgentsResponse, ReconcileJobStatus, ReconcileOutcome,
-    StartAgentLoginRequest, StartAgentLoginResponse,
+    AgentCredentialState, AgentInstallState, AgentLoginTerminalRecord, AgentLoginTerminalStatus,
+    AgentReadinessState, AgentSummary, ArtifactStatus, InstallAgentRequest, InstallAgentResponse,
+    LoginCommand, ProblemDetails, ReconcileAgentResult, ReconcileAgentsRequest,
+    ReconcileAgentsResponse, ReconcileJobStatus, ReconcileOutcome, StartAgentLoginRequest,
+    StartAgentLoginResponse, StartAgentLoginTerminalResponse,
 };
 use axum::{
     extract::{Path, State},
@@ -12,6 +13,13 @@ use axum::{
 
 use crate::app::AppState;
 use crate::domains::agents::installer::{InstallError, InstalledArtifactResult};
+use crate::domains::agents::login_terminal::{
+    close_agent_login_terminal as close_agent_login_terminal_session,
+    get_agent_login_terminal as get_agent_login_terminal_session,
+    start_agent_login_terminal_session,
+    AgentLoginTerminalRecord as InternalAgentLoginTerminalRecord,
+    AgentLoginTerminalStatus as InternalAgentLoginTerminalStatus,
+};
 use crate::domains::agents::model::*;
 use crate::domains::agents::reconcile::execution::{
     AgentReconcileJobSnapshot, AgentReconcileJobStatus,
@@ -64,6 +72,26 @@ fn agent_runtime_error_to_problem(error: AgentRuntimeError) -> ProblemResponse {
             "Login not supported",
             Some(format!("Agent {kind} does not support native login")),
             Some("LOGIN_NOT_SUPPORTED"),
+        ),
+        AgentRuntimeError::LoginCommandNotFound(kind) => problem(
+            409,
+            "Login command not found",
+            Some(format!(
+                "Agent {kind} supports login, but no managed or PATH login command was found."
+            )),
+            Some("LOGIN_COMMAND_NOT_FOUND"),
+        ),
+        AgentRuntimeError::LoginTerminalNotFound(error) => problem(
+            404,
+            "Agent login terminal not found",
+            Some(error),
+            Some("AGENT_LOGIN_TERMINAL_NOT_FOUND"),
+        ),
+        AgentRuntimeError::LoginTerminalFailed(error) => problem(
+            500,
+            "Login terminal failed",
+            Some(error),
+            Some("LOGIN_TERMINAL_FAILED"),
         ),
         AgentRuntimeError::InstallTaskFailed(error) => problem(
             500,
@@ -195,6 +223,80 @@ pub async fn start_agent_login(
 }
 
 #[utoipa::path(
+    post,
+    path = "/v1/agents/{kind}/login/terminal",
+    params(("kind" = String, Path, description = "Agent kind identifier")),
+    request_body = StartAgentLoginRequest,
+    responses(
+        (status = 200, description = "Agent login terminal started", body = StartAgentLoginTerminalResponse),
+        (status = 400, description = "Login not supported", body = ProblemDetails),
+        (status = 404, description = "Agent not found", body = ProblemDetails),
+        (status = 409, description = "Login command not found", body = ProblemDetails),
+    ),
+    tag = "agents"
+)]
+pub async fn start_agent_login_terminal(
+    State(state): State<AppState>,
+    Path(kind): Path<String>,
+    Json(_req): Json<StartAgentLoginRequest>,
+) -> Result<Json<StartAgentLoginTerminalResponse>, ProblemResponse> {
+    let login = start_agent_login_terminal_session(
+        &state.agent_runtime,
+        &kind,
+        &state.agent_login_terminal_service,
+    )
+    .await
+    .map_err(agent_runtime_error_to_problem)?;
+    Ok(Json(StartAgentLoginTerminalResponse {
+        kind: login.kind,
+        label: login.label,
+        message: login.message,
+        agent_login_terminal: agent_login_terminal_to_contract(login.terminal),
+    }))
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/agents/login-terminals/{terminal_id}",
+    params(("terminal_id" = String, Path, description = "Agent login terminal ID")),
+    responses(
+        (status = 200, description = "Agent login terminal", body = AgentLoginTerminalRecord),
+        (status = 404, description = "Agent login terminal not found", body = ProblemDetails),
+    ),
+    tag = "agents"
+)]
+pub async fn get_agent_login_terminal(
+    State(state): State<AppState>,
+    Path(terminal_id): Path<String>,
+) -> Result<Json<AgentLoginTerminalRecord>, ProblemResponse> {
+    let terminal =
+        get_agent_login_terminal_session(&terminal_id, &state.agent_login_terminal_service)
+            .await
+            .map_err(agent_runtime_error_to_problem)?;
+    Ok(Json(agent_login_terminal_to_contract(terminal)))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/v1/agents/login-terminals/{terminal_id}",
+    params(("terminal_id" = String, Path, description = "Agent login terminal ID")),
+    responses(
+        (status = 204, description = "Agent login terminal closed"),
+        (status = 404, description = "Agent login terminal not found", body = ProblemDetails),
+    ),
+    tag = "agents"
+)]
+pub async fn close_agent_login_terminal(
+    State(state): State<AppState>,
+    Path(terminal_id): Path<String>,
+) -> Result<StatusCode, ProblemResponse> {
+    close_agent_login_terminal_session(&terminal_id, &state.agent_login_terminal_service)
+        .await
+        .map_err(agent_runtime_error_to_problem)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
     get,
     path = "/v1/agents/reconcile",
     responses(
@@ -300,13 +402,11 @@ fn to_summary(
         ResolvedAgentStatus::CredentialsRequired => {
             Some(format!("Set one of: {}", desc.auth.env_vars.join(", ")))
         }
-        ResolvedAgentStatus::LoginRequired => desc.auth.login.as_ref().map(|l| {
-            format!(
-                "Run `{} {}` to authenticate.",
-                l.command.program,
-                l.command.args.join(" ")
-            )
-        }),
+        ResolvedAgentStatus::LoginRequired => desc
+            .auth
+            .login
+            .as_ref()
+            .map(|_| format!("Sign in with {} in Proliferate.", desc.kind.display_name())),
         ResolvedAgentStatus::Unsupported => resolved
             .agent_process
             .message
@@ -344,6 +444,27 @@ fn to_summary(
         expected_env_vars: desc.auth.env_vars.clone(),
         docs_url: desc.docs_url.clone(),
         message,
+    }
+}
+
+fn agent_login_terminal_to_contract(
+    record: InternalAgentLoginTerminalRecord,
+) -> AgentLoginTerminalRecord {
+    AgentLoginTerminalRecord {
+        id: record.id,
+        kind: record.kind,
+        title: record.title,
+        status: match record.status {
+            InternalAgentLoginTerminalStatus::Starting => AgentLoginTerminalStatus::Starting,
+            InternalAgentLoginTerminalStatus::Running => AgentLoginTerminalStatus::Running,
+            InternalAgentLoginTerminalStatus::Exited => AgentLoginTerminalStatus::Exited,
+            InternalAgentLoginTerminalStatus::Failed => AgentLoginTerminalStatus::Failed,
+        },
+        cwd: record.cwd,
+        command_display: record.command_display,
+        exit_code: record.exit_code,
+        created_at: record.created_at,
+        updated_at: record.updated_at,
     }
 }
 

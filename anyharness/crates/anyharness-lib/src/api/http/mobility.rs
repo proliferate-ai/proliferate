@@ -28,7 +28,8 @@ use crate::domains::agents::portability::AgentArtifactFileData;
 use crate::domains::mobility::model::{
     ImportedWorkspaceArchiveSummary, MobilityBlocker, MobilityFileData,
     MobilityPromptAttachmentData, MobilitySessionCandidate, WorkspaceMobilityArchiveData,
-    WorkspaceMobilityPreflightResult, WorkspaceMobilitySessionBundleData, MAX_MOBILITY_FILE_BYTES,
+    WorkspaceMobilityExportOptions, WorkspaceMobilityPreflightResult,
+    WorkspaceMobilitySessionBundleData, MAX_MOBILITY_FILE_BYTES,
 };
 use crate::domains::mobility::service::MobilityError;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
@@ -157,10 +158,64 @@ pub async fn export_workspace_mobility_archive(
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::MobilityWrite)
         .await;
-    assert_workspace_mode(&state, &workspace_id, WorkspaceAccessMode::FrozenForHandoff)?;
+    assert_workspace_mode(
+        &state,
+        &workspace_id,
+        WorkspaceAccessMode::FrozenForHandoff,
+        req.expected_handoff_op_id.as_deref(),
+    )?;
+    if !req.require_clean_git_state {
+        return Err(ApiError::bad_request(
+            "requireCleanGitState is required for mobility exports".to_string(),
+            "MOBILITY_EXPORT_CLEAN_GIT_REQUIRED",
+        ));
+    }
+    if req
+        .expected_handoff_op_id
+        .as_deref()
+        .map(str::trim)
+        .unwrap_or("")
+        .is_empty()
+    {
+        return Err(ApiError::bad_request(
+            "expectedHandoffOpId is required when requireCleanGitState is true".to_string(),
+            "MOBILITY_EXPORT_EXPECTED_HANDOFF_REQUIRED",
+        ));
+    }
+    if req
+        .expected_base_commit_sha
+        .as_deref()
+        .map(str::trim)
+        .unwrap_or("")
+        .is_empty()
+    {
+        return Err(ApiError::bad_request(
+            "expectedBaseCommitSha is required for mobility exports".to_string(),
+            "MOBILITY_EXPORT_EXPECTED_BASE_REQUIRED",
+        ));
+    }
+    if req
+        .expected_branch_name
+        .as_deref()
+        .map(str::trim)
+        .unwrap_or("")
+        .is_empty()
+    {
+        return Err(ApiError::bad_request(
+            "expectedBranchName is required for mobility exports".to_string(),
+            "MOBILITY_EXPORT_EXPECTED_BRANCH_REQUIRED",
+        ));
+    }
     let mobility_service = state.mobility_service.clone();
+    let export_options = WorkspaceMobilityExportOptions {
+        exclude_paths: req.exclude_paths,
+        expected_base_commit_sha: req.expected_base_commit_sha,
+        expected_branch_name: req.expected_branch_name,
+        expected_handoff_op_id: req.expected_handoff_op_id,
+        require_clean_git_state: req.require_clean_git_state,
+    };
     let archive = run_blocking("mobility_export", move || {
-        mobility_service.export_workspace_archive(&workspace_id, &req.exclude_paths)
+        mobility_service.export_workspace_archive(&workspace_id, &export_options)
     })
     .await?
     .map_err(map_mobility_error)?;
@@ -228,7 +283,12 @@ pub async fn destroy_workspace_mobility_source(
         .workspace_operation_gate
         .acquire_shared(&workspace_id, WorkspaceOperationKind::MobilityWrite)
         .await;
-    assert_workspace_mode(&state, &workspace_id, WorkspaceAccessMode::RemoteOwned)?;
+    assert_workspace_mode(
+        &state,
+        &workspace_id,
+        WorkspaceAccessMode::RemoteOwned,
+        None,
+    )?;
     let mobility_service = state.mobility_service.clone();
     let workspace_id_for_destroy = workspace_id.clone();
     let summary = run_blocking("mobility_destroy_source", move || {
@@ -281,6 +341,7 @@ fn assert_workspace_mode(
     state: &AppState,
     workspace_id: &str,
     expected_mode: WorkspaceAccessMode,
+    expected_handoff_op_id: Option<&str>,
 ) -> Result<(), ApiError> {
     assert_workspace_not_retired(state, workspace_id)?;
     let runtime_state = state
@@ -288,6 +349,20 @@ fn assert_workspace_mode(
         .runtime_state(workspace_id)
         .map_err(map_access_error)?;
     if runtime_state.mode == expected_mode {
+        if let Some(expected_handoff_op_id) = expected_handoff_op_id
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            if runtime_state.handoff_op_id.as_deref() != Some(expected_handoff_op_id) {
+                return Err(ApiError::conflict(
+                    format!(
+                        "workspace {workspace_id} must be in {} mode for handoff {expected_handoff_op_id}",
+                        expected_mode.as_str()
+                    ),
+                    "WORKSPACE_MOBILITY_HANDOFF_MISMATCH",
+                ));
+            }
+        }
         return Ok(());
     }
 
@@ -388,6 +463,7 @@ fn to_contract_install_summary(
 
 fn to_contract_archive(archive: WorkspaceMobilityArchiveData) -> WorkspaceMobilityArchive {
     WorkspaceMobilityArchive {
+        source_workspace_id: archive.source_workspace_id,
         source_workspace_path: archive.source_workspace_path,
         repo_root_path: archive.repo_root_path,
         branch_name: archive.branch_name,
@@ -626,6 +702,7 @@ fn from_contract_archive(
     attachment_storage: &PromptAttachmentStorage,
 ) -> Result<WorkspaceMobilityArchiveData, ApiError> {
     Ok(WorkspaceMobilityArchiveData {
+        source_workspace_id: archive.source_workspace_id,
         source_workspace_path: archive.source_workspace_path,
         repo_root_path: archive.repo_root_path,
         branch_name: archive.branch_name,

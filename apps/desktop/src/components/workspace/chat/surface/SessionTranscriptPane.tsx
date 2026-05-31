@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { useActiveTranscriptPaneState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
@@ -18,9 +18,12 @@ import {
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
+  ensureSessionTranscriptEntry,
   getSessionRecord,
   getSessionRecords,
+  patchSessionRecord,
 } from "@/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 interface SessionTranscriptPaneProps {
@@ -94,6 +97,46 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
   }, [coworkManagedWorkspaces]);
   const hasOlderHistory = oldestLoadedEventSeq !== null && oldestLoadedEventSeq > 1;
   const isLoadingOlderHistory = olderHistoryLoadingSessionId === activeSessionId;
+
+  useEffect(() => {
+    if (!activeSessionId || transcript) {
+      return;
+    }
+
+    const directoryEntry =
+      useSessionDirectoryStore.getState().entriesById[activeSessionId] ?? null;
+    if (!directoryEntry) {
+      return;
+    }
+
+    const selectionNonce = useSessionSelectionStore.getState().workspaceSelectionNonce;
+    const workspaceIdAtStart = selectedWorkspaceId;
+    ensureSessionTranscriptEntry(activeSessionId);
+    void rehydrateSessionSlotFromHistory(activeSessionId, {
+      replace: true,
+      isCurrent: () => {
+        const state = useSessionSelectionStore.getState();
+        return state.workspaceSelectionNonce === selectionNonce
+          && state.activeSessionId === activeSessionId
+          && state.selectedWorkspaceId === workspaceIdAtStart;
+      },
+    }).finally(() => {
+      const state = useSessionSelectionStore.getState();
+      if (
+        state.workspaceSelectionNonce === selectionNonce
+        && state.activeSessionId === activeSessionId
+        && state.selectedWorkspaceId === workspaceIdAtStart
+      ) {
+        patchSessionRecord(activeSessionId, { transcriptHydrated: true });
+      }
+    });
+  }, [
+    activeSessionId,
+    rehydrateSessionSlotFromHistory,
+    selectedWorkspaceId,
+    transcript,
+  ]);
+
   const loadOlderHistory = useCallback(() => {
     if (!activeSessionId || !selectedWorkspaceId || !hasOlderHistory || isLoadingOlderHistory) {
       return;

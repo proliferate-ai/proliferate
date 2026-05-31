@@ -136,6 +136,36 @@ export function useStartAgentLoginMutation() {
   });
 }
 
+export function useStartAgentLoginTerminalMutation() {
+  const runtime = useAnyHarnessRuntimeContext();
+
+  return useMutation({
+    mutationFn: async (kind: string) => {
+      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      return client.agents.startLoginTerminal(kind);
+    },
+  });
+}
+
+export function useCloseAgentLoginTerminalMutation() {
+  const runtime = useAnyHarnessRuntimeContext();
+  const queryClient = useQueryClient();
+  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+
+  return useMutation({
+    mutationFn: async (terminalId: string) => {
+      const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
+      await client.agents.closeLoginTerminal(terminalId);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: anyHarnessAgentsKey(runtimeUrl) });
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessAgentLaunchOptionsPrefixKey(runtimeUrl),
+      });
+    },
+  });
+}
+
 interface AgentReconcileStatusQueryOptions extends RuntimeQueryOptions {
   refetchWhileActive?: boolean;
 }

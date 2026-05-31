@@ -98,6 +98,22 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
     let mut exit_after_prompt: Option<ActorExitDisposition> = None;
 
     'drain: loop {
+        drain_replay_notifications_before_prompt(
+            notification_rx,
+            resume_replay_filter,
+            event_sink,
+            background_work_registry,
+            store,
+            session_id,
+            workspace_id,
+            source_agent_kind,
+            config,
+            persisted_config_state,
+            startup_state,
+        )
+        .await;
+        resume_replay_filter.disable();
+
         let latency_fields = latency_trace_fields(current_latency.as_ref());
         tracing::info!(
             session_id = %session_id,
@@ -424,4 +440,36 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
 
     handle.set_busy(false);
     exit_after_prompt
+}
+
+async fn drain_replay_notifications_before_prompt(
+    notification_rx: &mut mpsc::UnboundedReceiver<acp::SessionNotification>,
+    resume_replay_filter: &mut ResumeReplayFilter,
+    event_sink: &Arc<Mutex<SessionEventSink>>,
+    background_work_registry: &mut BackgroundWorkRegistry,
+    store: &SessionStore,
+    session_id: &str,
+    workspace_id: &str,
+    source_agent_kind: &str,
+    config: &SessionActorConfig,
+    persisted_config_state: &mut PersistedSessionConfigState,
+    startup_state: &mut SessionStartupState,
+) {
+    while let Ok(notif) = notification_rx.try_recv() {
+        handle_notification_with_resume_replay_filter(
+            &notif,
+            resume_replay_filter,
+            event_sink,
+            background_work_registry,
+            store,
+            session_id,
+            workspace_id,
+            source_agent_kind,
+            config.plan_service.clone(),
+            config.review_service.clone(),
+            persisted_config_state,
+            startup_state,
+        )
+        .await;
+    }
 }

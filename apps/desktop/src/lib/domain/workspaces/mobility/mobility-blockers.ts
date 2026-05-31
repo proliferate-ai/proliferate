@@ -2,6 +2,7 @@ import type { WorkspaceMobilityPreflightResponse } from "@anyharness/sdk";
 import { mobilityBlockerCopy } from "@/lib/domain/workspaces/mobility/presentation";
 import type {
   WorkspaceMobilityBlockerCode,
+  WorkspaceMobilityCloudPreflightBlocker,
   WorkspaceMobilityCloudPreflightResponse,
   WorkspaceMobilityDirection,
 } from "@/lib/domain/workspaces/mobility/types";
@@ -24,7 +25,12 @@ const SOURCE_BLOCKER_PRIORITY: WorkspaceMobilityBlockerCode[] = [
   "setup_running",
   "session_running",
   "session_awaiting_interaction",
+  "review_active",
+  "unsupported_session",
   "pending_prompt",
+  "workspace_detached",
+  "git_operation_in_progress",
+  "workspace_conflicted",
   "workspace_dirty",
   "local_default_branch_in_use",
   "default_branch_unknown",
@@ -41,6 +47,7 @@ const CLOUD_BLOCKER_PRIORITY: WorkspaceMobilityBlockerCode[] = [
   "owner_mismatch",
   "branch_mismatch",
   "missing_base_commit_sha",
+  "invalid_base_commit_sha",
   "branch_not_published",
   "cloud_repo_access",
   "unknown",
@@ -62,8 +69,32 @@ function cloudBlockerPriority(code: WorkspaceMobilityNormalizedBlockerCode): num
   return index === -1 ? CLOUD_BLOCKER_PRIORITY.length : index;
 }
 
-function normalizeCloudBlockerCode(message: string): WorkspaceMobilityNormalizedBlockerCode {
-  const normalized = message.trim().toLowerCase();
+function normalizeCloudBlockerCode(
+  blocker: string | WorkspaceMobilityCloudPreflightBlocker,
+): WorkspaceMobilityNormalizedBlockerCode {
+  if (typeof blocker !== "string") {
+    switch (blocker.code) {
+      case "github_link_required":
+        return "github_account_required";
+      case "github_repo_access_required":
+        return "cloud_repo_access";
+      case "head_commit_not_published":
+        return "head_commit_not_published";
+      case "invalid_base_commit_sha":
+      case "missing_base_commit_sha":
+      case "branch_not_published":
+      case "cloud_lost":
+      case "workspace_handoff_in_progress":
+      case "user_handoff_in_progress":
+      case "owner_mismatch":
+      case "branch_mismatch":
+        return blocker.code;
+      default:
+        return "unknown";
+    }
+  }
+
+  const normalized = blocker.trim().toLowerCase();
   if (normalized.includes("cloud_lost")) {
     return "cloud_lost";
   }
@@ -81,6 +112,9 @@ function normalizeCloudBlockerCode(message: string): WorkspaceMobilityNormalized
   }
   if (normalized.includes("requested base sha must be non-empty")) {
     return "missing_base_commit_sha";
+  }
+  if (normalized.includes("requestedbasesha must be a full")) {
+    return "invalid_base_commit_sha";
   }
   if (normalized.includes("was not found on github")) {
     return "branch_not_published";
@@ -156,9 +190,9 @@ export function pickPrimaryMobilityBlocker(args: {
   }
 
   const cloudBlockers = [...(args.cloudPreflight?.blockers ?? [])]
-    .map((message) => ({
-      code: normalizeCloudBlockerCode(message),
-      message,
+    .map((blocker) => ({
+      code: normalizeCloudBlockerCode(blocker),
+      message: typeof blocker === "string" ? blocker : blocker.message,
     }))
     .sort((left, right) => cloudBlockerPriority(left.code) - cloudBlockerPriority(right.code));
 

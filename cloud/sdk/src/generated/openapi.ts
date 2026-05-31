@@ -8888,6 +8888,24 @@ export interface components {
             /** Storagebytes */
             storageBytes?: number | null;
         };
+        /** WorkspaceMobilityPreflightBlocker */
+        WorkspaceMobilityPreflightBlocker: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /**
+             * Source
+             * @default cloud
+             */
+            source: string;
+            /** Retryaction */
+            retryAction?: string | null;
+            /** Details */
+            details?: {
+                [key: string]: string;
+            } | null;
+        };
         /** WorkspaceMobilityPreflightRequest */
         WorkspaceMobilityPreflightRequest: {
             /** Direction */
@@ -8902,7 +8920,7 @@ export interface components {
             /** Canstart */
             canStart: boolean;
             /** Blockers */
-            blockers: string[];
+            blockers: components["schemas"]["WorkspaceMobilityPreflightBlocker"][];
             /** Excludedpaths */
             excludedPaths: string[];
             workspace: components["schemas"]["MobilityWorkspaceDetail"];

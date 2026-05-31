@@ -517,6 +517,18 @@ pub(crate) fn managed_registry_binary_for_names(
     find_executable_by_name(&storage, expected_names)
 }
 
+pub(crate) fn managed_registry_npm_binary_for_names(
+    runtime_home: &Path,
+    kind: &AgentKind,
+    expected_names: &[&str],
+) -> Option<PathBuf> {
+    let storage = artifact_root(runtime_home, kind, &ArtifactRole::AgentProcess)
+        .join("registry_npm")
+        .join("node_modules")
+        .join(".bin");
+    find_executable_by_name(&storage, expected_names)
+}
+
 pub(crate) fn has_managed_registry_binary_for_names(
     runtime_home: &Path,
     kind: &AgentKind,
@@ -803,6 +815,31 @@ mod tests {
 
         assert_eq!(
             managed_registry_binary_for_names(&runtime_home, &AgentKind::Cursor, &["cursor-agent"]),
+            Some(binary_path)
+        );
+
+        let _ = std::fs::remove_dir_all(runtime_home);
+    }
+
+    #[test]
+    fn managed_registry_npm_binary_for_names_finds_npm_bin() {
+        let runtime_home = make_temp_dir("anyharness-registry-npm-binary-test");
+        let binary_path = artifact_root(
+            &runtime_home,
+            &AgentKind::Gemini,
+            &ArtifactRole::AgentProcess,
+        )
+        .join("registry_npm")
+        .join("node_modules")
+        .join(".bin")
+        .join("gemini");
+        std::fs::create_dir_all(binary_path.parent().expect("binary parent"))
+            .expect("create registry npm bin dir");
+        std::fs::write(&binary_path, "#!/bin/sh\nexit 0\n").expect("write binary");
+        make_executable(&binary_path).expect("make binary executable");
+
+        assert_eq!(
+            managed_registry_npm_binary_for_names(&runtime_home, &AgentKind::Gemini, &["gemini"]),
             Some(binary_path)
         );
 

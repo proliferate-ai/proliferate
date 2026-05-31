@@ -408,12 +408,23 @@ impl GitService {
             ],
         )?;
 
-        let remote_name = remote.unwrap_or("origin");
+        let upstream_name = if upstream.success {
+            let upstream_ref = upstream.stdout.trim().to_string();
+            upstream_ref
+                .split_once('/')
+                .map(|(remote_name, _)| remote_name.to_string())
+        } else {
+            None
+        };
+        let remote_name = remote
+            .map(str::to_string)
+            .or(upstream_name)
+            .unwrap_or_else(|| "origin".to_string());
 
         let push_args: Vec<&str> = if upstream.success {
-            vec!["push", remote_name, &branch]
+            vec!["push", remote_name.as_str(), &branch]
         } else {
-            vec!["push", "-u", remote_name, &branch]
+            vec!["push", "-u", remote_name.as_str(), &branch]
         };
         let push = if let Some(timeout) = timeout {
             match run_git_with_timeout(&repo_root_path, &push_args, timeout)? {

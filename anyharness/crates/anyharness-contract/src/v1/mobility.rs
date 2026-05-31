@@ -80,6 +80,14 @@ pub struct WorkspaceMobilityPreflightResponse {
 pub struct ExportWorkspaceMobilityArchiveRequest {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exclude_paths: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_handoff_op_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_base_commit_sha: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_branch_name: Option<String>,
+    #[serde(default)]
+    pub require_clean_git_state: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -120,6 +128,8 @@ pub struct DestroyWorkspaceMobilitySourceResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceMobilityArchive {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_workspace_id: Option<String>,
     pub source_workspace_path: String,
     pub repo_root_path: String,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -36,7 +36,6 @@ SERVER_CLEANUP_ITEM_KINDS: frozenset[str] = frozenset(
     }
 )
 _CLEANUP_KIND_ORDER: tuple[str, ...] = (
-    "anyharness_workspace",
     "cloud_session_projection",
     "cloud_transcript_projection",
     "cloud_exposure",

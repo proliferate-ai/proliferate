@@ -16,8 +16,8 @@ use super::resolver;
 use super::service::WorkspaceService;
 use super::store::WorkspaceStore;
 use super::types::{
-    CreateWorktreeResult, ProjectSetupDetectionResult, ResolveRepoRootError,
-    SetWorkspaceDisplayNameError,
+    CreateWorktreeResult, PreparedWorkspaceMobilityDestination, ProjectSetupDetectionResult,
+    ResolveRepoRootError, SetWorkspaceDisplayNameError,
 };
 use crate::adapters::git::service::GitService;
 use crate::origin::OriginContext;
@@ -273,7 +273,7 @@ impl WorkspaceRuntime {
         requested_base_sha: &str,
         destination_id: Option<&str>,
         preferred_workspace_name: Option<&str>,
-    ) -> anyhow::Result<WorkspaceRecord> {
+    ) -> anyhow::Result<PreparedWorkspaceMobilityDestination> {
         let requested_branch = requested_branch.trim();
         let requested_base_sha = requested_base_sha.trim();
         if requested_branch.is_empty() {
@@ -303,7 +303,15 @@ impl WorkspaceRuntime {
             // collide with any active workspace row, regardless of kind.
             if let Some(existing) = self.store.find_active_by_path(&candidate_string)? {
                 if existing.current_branch.as_deref() == Some(requested_branch) {
-                    return Ok(existing);
+                    self.validate_reusable_mobility_destination_workspace(
+                        &existing,
+                        requested_branch,
+                        requested_base_sha,
+                    )?;
+                    return Ok(PreparedWorkspaceMobilityDestination {
+                        workspace: existing,
+                        created: false,
+                    });
                 }
                 anyhow::bail!(
                     "mobility destination conflict: destination id already belongs to branch {}",
@@ -311,10 +319,30 @@ impl WorkspaceRuntime {
                 );
             }
             if candidate.exists() {
-                anyhow::bail!("mobility destination conflict: destination path already exists");
+                let workspace = self.adopt_existing_mobility_destination(
+                    &repo_root,
+                    &candidate,
+                    requested_branch,
+                    requested_base_sha,
+                )?;
+                return Ok(PreparedWorkspaceMobilityDestination {
+                    workspace,
+                    created: true,
+                });
             }
             candidate
         } else {
+            if let Some(existing) = self.find_reusable_mobility_destination_workspace(
+                &repo_root.id,
+                requested_branch,
+                requested_base_sha,
+            )? {
+                return Ok(PreparedWorkspaceMobilityDestination {
+                    workspace: existing,
+                    created: false,
+                });
+            }
+
             let mut slug = sanitize_mobility_destination_name(
                 preferred_workspace_name.unwrap_or(requested_branch),
             );
@@ -370,6 +398,187 @@ impl WorkspaceRuntime {
         }
         let record = build_workspace_record(
             &repo_root,
+            &ctx.repo_root,
+            "worktree",
+            "standard",
+            ctx.current_branch.clone(),
+            OriginContext::system_local_runtime(),
+            None,
+        );
+        self.store.insert(&record)?;
+
+        Ok(PreparedWorkspaceMobilityDestination {
+            workspace: record,
+            created: true,
+        })
+    }
+
+    fn validate_reusable_mobility_destination_workspace(
+        &self,
+        workspace: &WorkspaceRecord,
+        requested_branch: &str,
+        requested_base_sha: &str,
+    ) -> anyhow::Result<()> {
+        if workspace.kind != "worktree"
+            || workspace.surface != "standard"
+            || workspace.current_branch.as_deref() != Some(requested_branch)
+        {
+            anyhow::bail!(
+                "mobility destination conflict: destination workspace is not a reusable worktree"
+            );
+        }
+
+        let ctx = resolver::resolve_git_context(&workspace.path)?;
+        if !ctx.is_worktree || ctx.current_branch.as_deref() != Some(requested_branch) {
+            anyhow::bail!(
+                "mobility destination conflict: destination workspace is not on requested branch {requested_branch}"
+            );
+        }
+        let workspace_path = Path::new(&ctx.repo_root);
+        let actual_head = git_stdout_result(workspace_path, &["rev-parse", "HEAD"])?;
+        let requested_head = git_stdout_result(
+            workspace_path,
+            &[
+                "rev-parse",
+                "--verify",
+                &format!("{requested_base_sha}^{{commit}}"),
+            ],
+        )?;
+        if actual_head != requested_head {
+            anyhow::bail!(
+                "mobility destination conflict: destination workspace is at {actual_head}, not requested commit {requested_head}"
+            );
+        }
+        let status = git_stdout_result(
+            workspace_path,
+            &["status", "--porcelain", "--untracked-files=all"],
+        )?;
+        if !status.trim().is_empty() {
+            anyhow::bail!(
+                "mobility destination conflict: destination workspace has uncommitted changes"
+            );
+        }
+        Ok(())
+    }
+
+    fn find_reusable_mobility_destination_workspace(
+        &self,
+        repo_root_id: &str,
+        requested_branch: &str,
+        requested_base_sha: &str,
+    ) -> anyhow::Result<Option<WorkspaceRecord>> {
+        let requested_head = format!("{requested_base_sha}^{{commit}}");
+        let base_dir = self
+            .runtime_home
+            .join("mobility")
+            .join("destinations")
+            .join(repo_root_id);
+        for workspace in self.store.list_active_by_repo_root_id(repo_root_id)? {
+            if workspace.kind != "worktree"
+                || workspace.surface != "standard"
+                || workspace.current_branch.as_deref() != Some(requested_branch)
+                || !Path::new(&workspace.path).exists()
+                || !Path::new(&workspace.path).starts_with(&base_dir)
+            {
+                continue;
+            }
+
+            let ctx = match resolver::resolve_git_context(&workspace.path) {
+                Ok(ctx) => ctx,
+                Err(_) => continue,
+            };
+            if !ctx.is_worktree || ctx.current_branch.as_deref() != Some(requested_branch) {
+                continue;
+            }
+
+            let workspace_path = Path::new(&ctx.repo_root);
+            let actual_head = git_stdout_result(workspace_path, &["rev-parse", "HEAD"])?;
+            let requested_head =
+                git_stdout_result(workspace_path, &["rev-parse", "--verify", &requested_head])?;
+            if actual_head != requested_head {
+                continue;
+            }
+
+            let status = git_stdout_result(
+                workspace_path,
+                &["status", "--porcelain", "--untracked-files=all"],
+            )?;
+            if !status.trim().is_empty() {
+                anyhow::bail!(
+                    "mobility destination conflict: existing branch {requested_branch} has uncommitted changes in {}",
+                    workspace.path
+                );
+            }
+
+            return Ok(Some(workspace));
+        }
+
+        Ok(None)
+    }
+
+    fn adopt_existing_mobility_destination(
+        &self,
+        repo_root: &RepoRootRecord,
+        target_path: &Path,
+        requested_branch: &str,
+        requested_base_sha: &str,
+    ) -> anyhow::Result<WorkspaceRecord> {
+        let target_path_string = target_path.display().to_string();
+
+        if let Some(retired) = self
+            .store
+            .find_retired_incomplete_cleanup_by_path_and_kind(&target_path_string, "worktree")?
+        {
+            anyhow::bail!(
+                "mobility destination conflict: destination path has pending cleanup from retired workspace {}",
+                retired.id
+            );
+        }
+
+        let ctx = resolver::resolve_git_context(&target_path_string).map_err(|error| {
+            anyhow::anyhow!(
+                "mobility destination conflict: destination path already exists but is not a usable git worktree: {error}"
+            )
+        })?;
+        if !ctx.is_worktree {
+            anyhow::bail!(
+                "mobility destination conflict: destination path already exists but is not a git worktree"
+            );
+        }
+        if ctx.current_branch.as_deref() != Some(requested_branch) {
+            anyhow::bail!(
+                "mobility destination conflict: destination path already exists for branch {}",
+                ctx.current_branch.as_deref().unwrap_or("<unknown>")
+            );
+        }
+
+        let actual_head = git_stdout_result(Path::new(&ctx.repo_root), &["rev-parse", "HEAD"])?;
+        let requested_head = git_stdout_result(
+            Path::new(&ctx.repo_root),
+            &[
+                "rev-parse",
+                "--verify",
+                &format!("{requested_base_sha}^{{commit}}"),
+            ],
+        )?;
+        if actual_head != requested_head {
+            anyhow::bail!(
+                "mobility destination conflict: destination path is at {actual_head}, not requested commit {requested_head}"
+            );
+        }
+
+        let status = git_stdout_result(
+            Path::new(&ctx.repo_root),
+            &["status", "--porcelain", "--untracked-files=all"],
+        )?;
+        if !status.trim().is_empty() {
+            anyhow::bail!(
+                "mobility destination conflict: destination path already exists with uncommitted changes"
+            );
+        }
+
+        let record = build_workspace_record(
+            repo_root,
             &ctx.repo_root,
             "worktree",
             "standard",
@@ -675,6 +884,7 @@ impl WorkspaceRuntime {
                 fs::remove_dir_all(worktree)?;
             }
         }
+        resolver::prune_stale_worktrees_if_possible(Path::new(repo_root_path));
 
         if self.store.find_by_id(workspace_id)?.is_some() {
             self.delete_workflow.delete_workspace_record(workspace_id)?;
@@ -1011,6 +1221,22 @@ fn git_ref_exists(repo_root: &Path, ref_name: &str) -> bool {
         .unwrap_or(false)
 }
 
+fn git_stdout_result(repo_root: &Path, args: &[&str]) -> anyhow::Result<String> {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(repo_root)
+        .output()
+        .map_err(|error| anyhow::anyhow!("git {:?} failed: {error}", args))?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use std::env;
@@ -1126,7 +1352,7 @@ mod tests {
         );
         let base_sha = git_stdout(source.path(), ["rev-parse", "HEAD"]);
 
-        let workspace = runtime
+        let prepared = runtime
             .create_mobility_destination(
                 &source_workspace.repo_root.id,
                 "feature/mobility-pushed",
@@ -1136,7 +1362,8 @@ mod tests {
             )
             .expect("create mobility destination");
 
-        let worktree_path = Path::new(&workspace.path);
+        assert!(prepared.created);
+        let worktree_path = Path::new(&prepared.workspace.path);
         let local_head = git_stdout(worktree_path, ["rev-parse", "HEAD"]);
         let remote_head = git_stdout(
             remote.path(),
@@ -1154,6 +1381,150 @@ mod tests {
 
         assert_eq!(local_head.trim(), remote_head.trim());
         assert_eq!(upstream.trim(), "origin/feature/mobility-pushed");
+    }
+
+    #[test]
+    fn create_mobility_destination_adopts_clean_existing_destination_path() {
+        let source = TempDirGuard::new("runtime-mobility-adopt-source");
+        let runtime_home = TempDirGuard::new("runtime-mobility-adopt-home");
+        init_repo(source.path());
+
+        let db = Db::open_in_memory().expect("open db");
+        let runtime = make_runtime(&db, runtime_home.path());
+        let source_workspace = runtime
+            .create_workspace(&source.path().display().to_string())
+            .expect("create source workspace");
+        let base_sha = git_stdout(source.path(), ["rev-parse", "HEAD"]);
+        let destination_path = runtime_home
+            .path()
+            .join("mobility")
+            .join("destinations")
+            .join(&source_workspace.repo_root.id)
+            .join("destination-1");
+        fs::create_dir_all(destination_path.parent().expect("destination parent"))
+            .expect("create destination parent");
+        crate::workspaces::resolver::create_mobility_git_worktree(
+            &source.path().display().to_string(),
+            &destination_path.display().to_string(),
+            "feature/adopt",
+            &base_sha,
+        )
+        .expect("create orphan destination worktree");
+
+        let prepared = runtime
+            .create_mobility_destination(
+                &source_workspace.repo_root.id,
+                "feature/adopt",
+                &base_sha,
+                Some("destination-1"),
+                None,
+            )
+            .expect("adopt destination");
+
+        assert!(prepared.created);
+        let workspace = prepared.workspace;
+        assert_eq!(
+            Path::new(&workspace.path),
+            fs::canonicalize(&destination_path)
+                .expect("canonicalize destination")
+                .as_path()
+        );
+        assert_eq!(workspace.current_branch.as_deref(), Some("feature/adopt"));
+        let stored = WorkspaceStore::new(db.clone())
+            .find_active_by_path(&workspace.path)
+            .expect("find by path")
+            .expect("stored workspace");
+        assert_eq!(stored.id, workspace.id);
+    }
+
+    #[test]
+    fn create_mobility_destination_reuses_clean_existing_branch_worktree() {
+        let source = TempDirGuard::new("runtime-mobility-reuse-source");
+        let runtime_home = TempDirGuard::new("runtime-mobility-reuse-home");
+        init_repo(source.path());
+
+        let db = Db::open_in_memory().expect("open db");
+        let runtime = make_runtime(&db, runtime_home.path());
+        let source_workspace = runtime
+            .create_workspace(&source.path().display().to_string())
+            .expect("create source workspace");
+        let base_sha = git_stdout(source.path(), ["rev-parse", "HEAD"]);
+
+        let first = runtime
+            .create_mobility_destination(
+                &source_workspace.repo_root.id,
+                "feature/reuse-existing",
+                &base_sha,
+                None,
+                Some("feature reuse existing"),
+            )
+            .expect("create first destination");
+        let second = runtime
+            .create_mobility_destination(
+                &source_workspace.repo_root.id,
+                "feature/reuse-existing",
+                &base_sha,
+                None,
+                Some("feature reuse existing"),
+            )
+            .expect("reuse existing destination");
+
+        assert!(first.created);
+        assert!(!second.created);
+        assert_eq!(second.workspace.id, first.workspace.id);
+        let active_branch_workspaces = WorkspaceStore::new(db.clone())
+            .list_active_by_repo_root_id(&source_workspace.repo_root.id)
+            .expect("list workspaces")
+            .into_iter()
+            .filter(|workspace| {
+                workspace.current_branch.as_deref() == Some("feature/reuse-existing")
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(active_branch_workspaces.len(), 1);
+    }
+
+    #[test]
+    fn create_mobility_destination_rejects_dirty_existing_destination_path() {
+        let source = TempDirGuard::new("runtime-mobility-dirty-adopt-source");
+        let runtime_home = TempDirGuard::new("runtime-mobility-dirty-adopt-home");
+        init_repo(source.path());
+
+        let db = Db::open_in_memory().expect("open db");
+        let runtime = make_runtime(&db, runtime_home.path());
+        let source_workspace = runtime
+            .create_workspace(&source.path().display().to_string())
+            .expect("create source workspace");
+        let base_sha = git_stdout(source.path(), ["rev-parse", "HEAD"]);
+        let destination_path = runtime_home
+            .path()
+            .join("mobility")
+            .join("destinations")
+            .join(&source_workspace.repo_root.id)
+            .join("destination-1");
+        fs::create_dir_all(destination_path.parent().expect("destination parent"))
+            .expect("create destination parent");
+        crate::workspaces::resolver::create_mobility_git_worktree(
+            &source.path().display().to_string(),
+            &destination_path.display().to_string(),
+            "feature/dirty-adopt",
+            &base_sha,
+        )
+        .expect("create orphan destination worktree");
+        fs::write(destination_path.join("dirty.txt"), "dirty\n").expect("dirty destination");
+
+        let error = runtime
+            .create_mobility_destination(
+                &source_workspace.repo_root.id,
+                "feature/dirty-adopt",
+                &base_sha,
+                Some("destination-1"),
+                None,
+            )
+            .expect_err("dirty destination must not be adopted");
+
+        assert!(error
+            .to_string()
+            .contains("destination path already exists with uncommitted changes"));
     }
 
     #[test]

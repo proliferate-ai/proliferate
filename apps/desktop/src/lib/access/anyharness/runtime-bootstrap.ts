@@ -57,24 +57,27 @@ async function pollUntilHealthy(seedRuntimeUrl?: string): Promise<void> {
 
   for (let i = 0; i < maxAttempts; i += 1) {
     await new Promise((resolve) => setTimeout(resolve, 500));
+    let runtimeInfo: RuntimeInfo | null = null;
     try {
-      const info = await getRuntimeInfo();
-
-      if (info.url !== currentRuntimeUrl) {
-        currentRuntimeUrl = info.url;
-        useHarnessConnectionStore.setState({ runtimeUrl: info.url });
-      }
-
-      if (await confirmRuntimeReady(info.url)) {
-        useHarnessConnectionStore.setState({ connectionState: "healthy", error: null });
-        return;
-      }
-      if (info.status === "failed") {
-        useHarnessConnectionStore.setState({ connectionState: "failed", error: `Runtime ${info.status}` });
-        return;
+      runtimeInfo = await getRuntimeInfo();
+      if (runtimeInfo.url !== currentRuntimeUrl) {
+        currentRuntimeUrl = runtimeInfo.url;
+        useHarnessConnectionStore.setState({ runtimeUrl: runtimeInfo.url });
       }
     } catch {
-      continue;
+      runtimeInfo = null;
+    }
+
+    if (currentRuntimeUrl && await confirmRuntimeReady(currentRuntimeUrl)) {
+      useHarnessConnectionStore.setState({ connectionState: "healthy", error: null });
+      return;
+    }
+    if (runtimeInfo?.status === "failed") {
+      useHarnessConnectionStore.setState({
+        connectionState: "failed",
+        error: `Runtime ${runtimeInfo.status}`,
+      });
+      return;
     }
   }
   console.error("[harness] pollUntilHealthy: gave up after %d attempts", maxAttempts);

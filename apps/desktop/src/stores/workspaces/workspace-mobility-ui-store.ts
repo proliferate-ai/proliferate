@@ -4,12 +4,14 @@ import { create } from "zustand";
 interface WorkspaceMobilityUiState {
   confirmSnapshotByLogicalWorkspaceId: Record<string, WorkspaceMobilityConfirmSnapshot>;
   activePromptRequestIdByLogicalWorkspaceId: Record<string, number>;
+  presentedCompletionByLogicalWorkspaceId: Record<string, string>;
   showMcpNoticeByLogicalWorkspaceId: Record<string, boolean>;
   dismissedMcpNoticeByLogicalWorkspaceId: Record<string, boolean>;
   setConfirmSnapshot: (snapshot: WorkspaceMobilityConfirmSnapshot) => void;
   clearConfirmSnapshot: (logicalWorkspaceId: string) => void;
   setActivePromptRequestId: (logicalWorkspaceId: string, requestId: number) => void;
   clearActivePromptRequestId: (logicalWorkspaceId: string) => void;
+  markCompletionPresented: (logicalWorkspaceId: string, completionKey: string) => void;
   showMcpNotice: (logicalWorkspaceId: string) => void;
   clearMcpNoticeVisibility: (logicalWorkspaceId: string) => void;
   dismissMcpNotice: (logicalWorkspaceId: string) => void;
@@ -19,6 +21,7 @@ interface WorkspaceMobilityUiState {
 export const useWorkspaceMobilityUiStore = create<WorkspaceMobilityUiState>((set) => ({
   confirmSnapshotByLogicalWorkspaceId: {},
   activePromptRequestIdByLogicalWorkspaceId: {},
+  presentedCompletionByLogicalWorkspaceId: {},
   showMcpNoticeByLogicalWorkspaceId: {},
   dismissedMcpNoticeByLogicalWorkspaceId: {},
 
@@ -56,16 +59,38 @@ export const useWorkspaceMobilityUiStore = create<WorkspaceMobilityUiState>((set
     return { activePromptRequestIdByLogicalWorkspaceId: next };
   }),
 
-  showMcpNotice: (logicalWorkspaceId) => set((state) => ({
-    showMcpNoticeByLogicalWorkspaceId: {
-      ...state.showMcpNoticeByLogicalWorkspaceId,
-      [logicalWorkspaceId]: true,
-    },
-    dismissedMcpNoticeByLogicalWorkspaceId: {
-      ...state.dismissedMcpNoticeByLogicalWorkspaceId,
-      [logicalWorkspaceId]: false,
-    },
-  })),
+  markCompletionPresented: (logicalWorkspaceId, completionKey) => set((state) => {
+    if (state.presentedCompletionByLogicalWorkspaceId[logicalWorkspaceId] === completionKey) {
+      return state;
+    }
+
+    return {
+      presentedCompletionByLogicalWorkspaceId: {
+        ...state.presentedCompletionByLogicalWorkspaceId,
+        [logicalWorkspaceId]: completionKey,
+      },
+    };
+  }),
+
+  showMcpNotice: (logicalWorkspaceId) => set((state) => {
+    if (
+      state.showMcpNoticeByLogicalWorkspaceId[logicalWorkspaceId]
+      || state.dismissedMcpNoticeByLogicalWorkspaceId[logicalWorkspaceId]
+    ) {
+      return state;
+    }
+
+    return {
+      showMcpNoticeByLogicalWorkspaceId: {
+        ...state.showMcpNoticeByLogicalWorkspaceId,
+        [logicalWorkspaceId]: true,
+      },
+      dismissedMcpNoticeByLogicalWorkspaceId: {
+        ...state.dismissedMcpNoticeByLogicalWorkspaceId,
+        [logicalWorkspaceId]: false,
+      },
+    };
+  }),
 
   clearMcpNoticeVisibility: (logicalWorkspaceId) => set((state) => {
     if (!(logicalWorkspaceId in state.showMcpNoticeByLogicalWorkspaceId)) {

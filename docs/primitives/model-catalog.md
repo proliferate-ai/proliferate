@@ -495,6 +495,16 @@ Agent Defaults
 Each harness should be an expandable section. The normal model picker remains
 compact and only uses the effective visible model list.
 
+Agent Defaults also owns local harness readiness repair for launch defaults:
+managed install state, provider CLI login, credential discovery, and dynamic
+model refresh. Agent Authentication remains the stored/synced/shared
+credential surface for cloud and team flows.
+
+Catalog `auth.login` commands are provider guidance, not shell instructions for
+the user. Runtime login command resolution must prefer managed native,
+registry binary, and registry npm executables before falling back to global
+`PATH`, and PATH fallback is allowed only when the executable is resolvable.
+
 Home launch defaults, automation defaults, Slack defaults, and other
 cloud-mediated launch pickers must consume the same effective visible model
 list. Existing saved or active selections may be preserved for repair, but new

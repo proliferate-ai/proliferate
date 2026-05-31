@@ -54,6 +54,19 @@ def _workspace_snapshot(
     )
 
 
+def _clean_display_name(
+    display_name: str | None,
+    *,
+    anyharness_workspace_id: str,
+) -> str | None:
+    cleaned = display_name.strip() if display_name else None
+    if not cleaned:
+        return None
+    if cleaned == anyharness_workspace_id.strip():
+        return None
+    return cleaned
+
+
 async def upsert_synced_workspace(
     db: AsyncSession,
     *,
@@ -79,6 +92,10 @@ async def upsert_synced_workspace(
         anyharness_workspace_id=anyharness_workspace_id,
     )
     now = utcnow()
+    incoming_display_name = _clean_display_name(
+        display_name,
+        anyharness_workspace_id=anyharness_workspace_id,
+    )
     if workspace is None:
         workspace = CloudWorkspace(
             user_id=owner_user_id,
@@ -89,7 +106,7 @@ async def upsert_synced_workspace(
             billing_subject_id=billing_subject_id,
             runtime_environment_id=None,
             target_id=target_id,
-            display_name=display_name,
+            display_name=incoming_display_name,
             git_provider=git_provider,
             git_owner=git_owner,
             git_repo_name=git_repo_name,
@@ -128,7 +145,6 @@ async def upsert_synced_workspace(
         db.add(mapping)
     else:
         workspace.billing_subject_id = billing_subject_id
-        incoming_display_name = display_name.strip() if display_name else None
         if workspace.display_name is None and incoming_display_name is not None:
             workspace.display_name = incoming_display_name
         workspace.git_provider = git_provider

@@ -8,12 +8,14 @@ import { MOBILITY_SUCCESS_DWELL_MS } from "@/config/workspace-mobility";
 import type { WorkspaceMobilityDirection } from "@/lib/domain/workspaces/mobility/types";
 import { useWorkspaceMobilityCleanupActions } from "@/hooks/workspaces/mobility/use-workspace-mobility-cleanup-actions";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
+import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobility-ui-store";
 
 export type WorkspaceMobilityOverlayMode = "cleanup_failed" | "completion";
 
 export interface WorkspaceMobilityCompletionSnapshot {
   description: string | null;
   direction: WorkspaceMobilityDirection | null;
+  logicalWorkspaceId: string;
   title: string | null;
 }
 
@@ -59,12 +61,30 @@ export function useWorkspaceMobilityOverlayState(): WorkspaceMobilityOverlayStat
   const cleanupActions = useWorkspaceMobilityCleanupActions(mobilityState);
   const [completionSnapshot, setCompletionSnapshot] = useState<WorkspaceMobilityCompletionSnapshot | null>(null);
   const [cleanupFailureDismissed, setCleanupFailureDismissed] = useState(false);
+  const completionKey = mobilityState.status.phase === "success"
+    ? mobilityState.status.activeHandoff?.id ?? null
+    : null;
+  const presentedCompletionKey = useWorkspaceMobilityUiStore((state) => (
+    mobilityState.selectedLogicalWorkspaceId
+      ? state.presentedCompletionByLogicalWorkspaceId[mobilityState.selectedLogicalWorkspaceId] ?? null
+      : null
+  ));
+  const markCompletionPresented = useWorkspaceMobilityUiStore((state) => state.markCompletionPresented);
 
   useEffect(() => {
     if (mobilityState.status.phase === "success") {
+      if (
+        !mobilityState.selectedLogicalWorkspaceId
+        || !completionKey
+        || presentedCompletionKey === completionKey
+      ) {
+        return;
+      }
+      markCompletionPresented(mobilityState.selectedLogicalWorkspaceId, completionKey);
       setCompletionSnapshot({
         description: mobilityState.status.description,
         direction: mobilityState.status.direction,
+        logicalWorkspaceId: mobilityState.selectedLogicalWorkspaceId,
         title: mobilityState.status.title,
       });
       return;
@@ -78,14 +98,23 @@ export function useWorkspaceMobilityOverlayState(): WorkspaceMobilityOverlayStat
       setCompletionSnapshot(null);
     }
   }, [
+    completionKey,
+    markCompletionPresented,
+    mobilityState.selectedLogicalWorkspaceId,
     mobilityState.status.description,
     mobilityState.status.direction,
     mobilityState.status.phase,
     mobilityState.status.title,
+    presentedCompletionKey,
   ]);
 
+  const currentCompletionSnapshot =
+    completionSnapshot?.logicalWorkspaceId === mobilityState.selectedLogicalWorkspaceId
+      ? completionSnapshot
+      : null;
+
   useEffect(() => {
-    if (!completionSnapshot || mobilityState.showMcpNotice) {
+    if (!currentCompletionSnapshot || mobilityState.showMcpNotice) {
       return;
     }
 
@@ -93,7 +122,7 @@ export function useWorkspaceMobilityOverlayState(): WorkspaceMobilityOverlayStat
       setCompletionSnapshot(null);
     }, MOBILITY_SUCCESS_DWELL_MS);
     return () => window.clearTimeout(timer);
-  }, [completionSnapshot, mobilityState.showMcpNotice]);
+  }, [currentCompletionSnapshot, mobilityState.showMcpNotice]);
 
   useEffect(() => {
     if (mobilityState.status.phase !== "cleanup_failed") {
@@ -111,13 +140,13 @@ export function useWorkspaceMobilityOverlayState(): WorkspaceMobilityOverlayStat
       }
       return "cleanup_failed" as const;
     }
-    if (completionSnapshot || mobilityState.showMcpNotice) {
+    if (currentCompletionSnapshot || mobilityState.showMcpNotice) {
       return "completion" as const;
     }
     return "hidden" as const;
   }, [
     cleanupFailureDismissed,
-    completionSnapshot,
+    currentCompletionSnapshot,
     mobilityState.showMcpNotice,
     mobilityState.status.phase,
   ]);
@@ -128,15 +157,15 @@ export function useWorkspaceMobilityOverlayState(): WorkspaceMobilityOverlayStat
 
   const completionDirection = resolveCompletionDirection({
     effectiveOwner: mobilityState.selectedLogicalWorkspace?.effectiveOwner ?? null,
-    snapshot: completionSnapshot,
+    snapshot: currentCompletionSnapshot,
     statusDirection: mobilityState.status.direction,
   });
   const direction = completionDirection;
   const phase = mode === "completion" ? "success" : mobilityState.status.phase;
   const fallbackTitle = getMobilityOverlayTitle(direction, phase);
-  const title = completionSnapshot?.title ?? mobilityState.status.title ?? fallbackTitle;
+  const title = currentCompletionSnapshot?.title ?? mobilityState.status.title ?? fallbackTitle;
   const description =
-    completionSnapshot?.description
+    currentCompletionSnapshot?.description
     ?? mobilityState.status.description
     ?? mobilityStatusCopy(phase, direction).description;
 

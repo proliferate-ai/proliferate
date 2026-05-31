@@ -542,6 +542,7 @@ anyharness_workspace            Desktop      yes (it talks to AnyHarness)
 cloud_workspace                 Server       no — Cloud-only mutation
 cloud_exposure                  Server       no — Cloud-only mutation
 cloud_session_projection        Server       no — Cloud-only mutation
+cloud_transcript_projection     Server       no — passive (worker reconciles)
 worker_projection_cursor        Server       no — passive (worker reconciles)
 ```
 
@@ -553,7 +554,9 @@ every workspace_move_cleanup_reconciler_interval_seconds (default 300):
   load pending cleanup_items where next_attempt_at <= now AND
     status IN ('pending','failed') AND
     item_kind IN ('cloud_workspace','cloud_exposure',
-                  'cloud_session_projection','worker_projection_cursor')
+                  'cloud_session_projection',
+                  'cloud_transcript_projection',
+                  'worker_projection_cursor')
   for each:
     execute via the cleanup_executor module (§5.4)
     on success: status='completed', completed_at=now
@@ -573,7 +576,8 @@ every workspace_move_cleanup_reconciler_interval_seconds (default 300):
 
 Result: if Desktop closes after `cutover_committed`, the
 Cloud-side cleanup items (`cloud_workspace`, `cloud_exposure`,
-`cloud_session_projection`, `worker_projection_cursor`) complete
+`cloud_session_projection`, `cloud_transcript_projection`,
+`worker_projection_cursor`) complete
 on their own in the background. Only the AnyHarness-side
 `anyharness_workspace` destroy waits for Desktop to come back.
 The handoff phase advances to `cleanup_pending` and stays there
@@ -994,7 +998,7 @@ Chunk B  cloud_workspace_move_cleanup_item
 Chunk C  Cloud-side cleanup executor
   - cleanup_executor.py for Cloud-side items
     (cloud_workspace, cloud_exposure, cloud_session_projection,
-     worker_projection_cursor)
+     cloud_transcript_projection, worker_projection_cursor)
   - integration with spec 04 exposure status
   - reconciler tick re-surfaces failed items
 
@@ -1056,6 +1060,8 @@ Preferred implementation is one PR per spec. Chunks are review checkpoints insid
    - `cloud_workspace`: server archives row
    - `cloud_exposure`: server archives exposure (spec 04)
    - `cloud_session_projection`: server ends projection
+   - `cloud_transcript_projection`: server waits for worker
+     reconciliation to remove the projection
    - `worker_projection_cursor`: server confirms next worker
      reconciliation removed the cursor
 8. After `cutover_committed`, the source-side cleanup CANNOT

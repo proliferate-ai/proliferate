@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Session } from "@anyharness/sdk";
-import { findCompatibleExistingSession } from "@/lib/domain/sessions/creation/compatible-session";
+import {
+  findCompatibleExistingSession,
+  shouldProbeCompatibleRuntimeSessions,
+} from "@/lib/domain/sessions/creation/compatible-session";
 
 function session(overrides: Partial<Session>): Session {
   return {
@@ -73,5 +76,32 @@ describe("findCompatibleExistingSession", () => {
       agentKind: "codex",
       modelId: "gpt-5.5",
     })).toBeNull();
+  });
+});
+
+describe("shouldProbeCompatibleRuntimeSessions", () => {
+  it("allows direct runtime reuse for local and target workspaces", () => {
+    expect(shouldProbeCompatibleRuntimeSessions({
+      preferExistingCompatibleSession: true,
+      runtimeLocation: "local",
+    })).toBe(true);
+    expect(shouldProbeCompatibleRuntimeSessions({
+      preferExistingCompatibleSession: true,
+      runtimeLocation: "target",
+    })).toBe(true);
+  });
+
+  it("does not reuse direct cloud runtime sessions that may not be projected", () => {
+    expect(shouldProbeCompatibleRuntimeSessions({
+      preferExistingCompatibleSession: true,
+      runtimeLocation: "cloud",
+    })).toBe(false);
+  });
+
+  it("respects callers that did not request compatible-session probing", () => {
+    expect(shouldProbeCompatibleRuntimeSessions({
+      preferExistingCompatibleSession: false,
+      runtimeLocation: "local",
+    })).toBe(false);
   });
 });

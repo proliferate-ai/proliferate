@@ -3,11 +3,13 @@ import { useWorkspaceMobilityFooterFlow } from "@/hooks/workspaces/mobility/use-
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import {
   ChevronDown,
+  CircleAlert,
   Spinner,
 } from "@proliferate/ui/icons";
 import { SidebarWorkspaceVariantIcon } from "@/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
 import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
 import { WorkspaceMobilityLocationPopover } from "./WorkspaceMobilityLocationPopover";
+import { WorkspaceMobilityGitPrepDialog } from "./WorkspaceMobilityGitPrepDialog";
 import { WorkspaceOpenInWebFooterControl } from "./WorkspaceOpenInWebFooterControl";
 import { WorkspaceRemoteAccessFooterControl } from "./WorkspaceRemoteAccessFooterControl";
 
@@ -28,6 +30,23 @@ export function WorkspaceMobilityFooterProgressStatus({
   );
 }
 
+function WorkspaceMobilityFooterFailureStatus({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex h-7 min-w-0 max-w-[34rem] shrink items-center gap-1.5 rounded-full bg-destructive/10 px-2 text-sm text-destructive">
+      <CircleAlert className="size-3 shrink-0" />
+      <span className="min-w-0 truncate font-medium">{title}</span>
+      <span className="h-3 w-px shrink-0 bg-destructive/30" aria-hidden="true" />
+      <span className="min-w-0 truncate text-destructive/80">{description}</span>
+    </div>
+  );
+}
+
 export function WorkspaceMobilityFooterRow() {
   const footerContext = useMobilityFooterContext();
   const flow = useWorkspaceMobilityFooterFlow();
@@ -38,12 +57,21 @@ export function WorkspaceMobilityFooterRow() {
 
   if (flow.progressStatus) {
     return (
-      <div className="rounded-[var(--radius-composer)] px-2 pt-2">
-        <WorkspaceMobilityFooterProgressStatus
-          title={flow.progressStatus.title}
-          statusLabel={flow.progressStatus.statusLabel}
+      <>
+        <div className="rounded-[var(--radius-composer)] px-2 pt-2">
+          <WorkspaceMobilityFooterProgressStatus
+            title={flow.progressStatus.title}
+            statusLabel={flow.progressStatus.statusLabel}
+          />
+        </div>
+        <WorkspaceMobilityGitPrepDialog
+          open={flow.gitPrepDialogOpen}
+          workflow={flow.gitPrepWorkflow}
+          onCancel={flow.closePopover}
+          onOpenGitPanel={flow.handleOpenGitPanelFromPrep}
+          onSubmit={flow.handleSubmitGitPrep}
         />
-      </div>
+      </>
     );
   }
 
@@ -97,14 +125,30 @@ export function WorkspaceMobilityFooterRow() {
   ) : locationButton;
 
   return (
-    <div className="rounded-[var(--radius-composer)] px-2 pt-2">
-      <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
-        {locationTrigger}
+    <>
+      <div className="rounded-[var(--radius-composer)] px-2 pt-2">
+        <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
+          {flow.failureStatus && (
+            <WorkspaceMobilityFooterFailureStatus
+              title={flow.failureStatus.title}
+              description={flow.failureStatus.description}
+            />
+          )}
 
-        <WorkspaceRemoteAccessFooterControl />
+          {locationTrigger}
 
-        <WorkspaceOpenInWebFooterControl />
+          <WorkspaceRemoteAccessFooterControl />
+
+          <WorkspaceOpenInWebFooterControl />
+        </div>
       </div>
-    </div>
+      <WorkspaceMobilityGitPrepDialog
+        open={flow.gitPrepDialogOpen}
+        workflow={flow.gitPrepWorkflow}
+        onCancel={flow.closePopover}
+        onOpenGitPanel={flow.handleOpenGitPanelFromPrep}
+        onSubmit={flow.handleSubmitGitPrep}
+      />
+    </>
   );
 }

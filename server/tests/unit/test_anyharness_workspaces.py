@@ -105,6 +105,66 @@ async def test_resolve_runtime_workspace_raises_when_workspace_id_is_missing(
 
 
 @pytest.mark.asyncio
+async def test_prepare_runtime_mobility_destination_uses_runtime_problem_detail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeAsyncClient(
+        [
+            _response(
+                400,
+                json={
+                    "title": "Invalid request",
+                    "detail": "existing local branch has uncommitted changes",
+                },
+                url="https://runtime.invalid/v1/repo-roots/repo-1/mobility/prepare-destination",
+            )
+        ]
+    )
+    monkeypatch.setattr(workspaces.httpx, "AsyncClient", lambda **_kwargs: client)
+
+    with pytest.raises(CloudRuntimeReconnectError, match="uncommitted changes"):
+        await workspaces.prepare_runtime_mobility_destination(
+            "https://runtime.invalid",
+            "runtime-token",
+            repo_root_id="repo-1",
+            requested_branch="feature/move",
+            requested_base_sha="abc123",
+            destination_id="workspace-1",
+        )
+
+
+@pytest.mark.asyncio
+async def test_prepare_runtime_mobility_destination_accepts_current_contract_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeAsyncClient(
+        [
+            _response(
+                200,
+                json={
+                    "repoRoot": {"id": "repo-1"},
+                    "workspace": {"id": "workspace-123"},
+                },
+                url="https://runtime.invalid/v1/repo-roots/repo-1/mobility/prepare-destination",
+            )
+        ]
+    )
+    monkeypatch.setattr(workspaces.httpx, "AsyncClient", lambda **_kwargs: client)
+
+    workspace = await workspaces.prepare_runtime_mobility_destination(
+        "https://runtime.invalid",
+        "runtime-token",
+        repo_root_id="repo-1",
+        requested_branch="feature/move",
+        requested_base_sha="abc123",
+        destination_id="workspace-1",
+    )
+
+    assert workspace.workspace_id == "workspace-123"
+    assert workspace.repo_root_id == "repo-1"
+
+
+@pytest.mark.asyncio
 async def test_list_runtime_workspaces_normalizes_live_session_counts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

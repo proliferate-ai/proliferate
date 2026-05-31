@@ -92,14 +92,6 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         icon: "edit",
       },
       {
-        value: "auto",
-        label: "Auto",
-        shortLabel: "Auto",
-        description: "Use a model classifier to approve or deny permission prompts.",
-        tone: "success",
-        icon: "sparkles",
-      },
-      {
         value: "plan",
         label: "Plan",
         shortLabel: "Plan",

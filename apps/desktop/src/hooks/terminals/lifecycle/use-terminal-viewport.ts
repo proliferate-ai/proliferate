@@ -1,9 +1,8 @@
 import type { TerminalRecord } from "@anyharness/sdk";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useTerminalActions } from "@/hooks/terminals/workflows/use-terminal-actions";
 import { useTerminalStreamController } from "@/hooks/terminals/lifecycle/use-terminal-stream-controller";
-import { getTerminalTheme, onThemeChange } from "@/config/theme";
-import { resolveReadableCodeFontScale } from "@/lib/domain/preferences/appearance";
+import { useXtermSurface } from "@/hooks/terminals/lifecycle/use-xterm-surface";
 import {
   sendInput,
   sendResize,
@@ -13,7 +12,6 @@ import {
   type TerminalStreamIdentity,
 } from "@/lib/infra/terminals/terminal-stream-registry";
 import { useTerminalStore } from "@/stores/terminal/terminal-store";
-import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 interface UseTerminalViewportInput {
   terminal: TerminalRecord;
@@ -23,7 +21,7 @@ interface UseTerminalViewportInput {
   focusRequestToken: number;
 }
 
-// Owns xterm setup, terminal stream replay, and viewport resize/focus lifecycle.
+// Owns workspace terminal stream replay and input wiring for the shared xterm surface.
 export function useTerminalViewport({
   terminal,
   workspaceId,
@@ -31,141 +29,49 @@ export function useTerminalViewport({
   canConnect,
   focusRequestToken,
 }: UseTerminalViewportInput) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const xtermRef = useRef<import("@xterm/xterm").Terminal | null>(null);
-  const fitAddonRef = useRef<import("@xterm/addon-fit").FitAddon | null>(null);
-  const [isTerminalReady, setIsTerminalReady] = useState(false);
-  const [hasBeenVisible, setHasBeenVisible] = useState(visible);
   const streamIdentityRef = useRef<TerminalStreamIdentity | null>(null);
   const unsubscribeReplayRef = useRef<(() => void) | null>(null);
-  const readableCodeFontSizeId = useUserPreferencesStore((state) => state.readableCodeFontSizeId);
-  const terminalFontSize = resolveReadableCodeFontScale(readableCodeFontSizeId).monacoFontSize;
-  const terminalFontSizeRef = useRef(terminalFontSize);
   const connectionVersion = useTerminalStore(
     (state) => state.connectionVersionByTerminal[terminal.id] ?? 0,
   );
   const { resizeTab } = useTerminalActions();
   const { ensureTabConnection } = useTerminalStreamController();
 
-  useEffect(() => {
-    if (visible) {
-      setHasBeenVisible(true);
+  const handleTerminalData = useCallback((data: string) => {
+    const identity = streamIdentityRef.current;
+    if (identity) {
+      sendInput(identity, data);
     }
-  }, [visible]);
+  }, []);
 
-  useEffect(() => {
-    terminalFontSizeRef.current = terminalFontSize;
-    const term = xtermRef.current;
-    if (!term) {
-      return;
+  const handleTerminalResize = useCallback(({ cols, rows }: { cols: number; rows: number }) => {
+    if (workspaceId) {
+      void resizeTab(terminal.id, workspaceId, cols, rows);
     }
-    term.options.fontSize = terminalFontSize;
-    requestAnimationFrame(() => {
-      fitAddonRef.current?.fit();
-    });
-  }, [terminalFontSize]);
+    const identity = streamIdentityRef.current;
+    if (identity) {
+      sendResize(identity, cols, rows);
+    }
+  }, [resizeTab, terminal.id, workspaceId]);
 
-  useEffect(() => {
-    if (!hasBeenVisible) return;
-    const container = containerRef.current;
-    if (!container) return;
-    if (xtermRef.current) return;
+  const { containerRef, isReady: isTerminalReady, terminalRef } = useXtermSurface({
+    visible,
+    focusRequestToken,
+    onData: handleTerminalData,
+    onResize: handleTerminalResize,
+  });
 
-    setIsTerminalReady(false);
-    let cancelled = false;
-    let resizeObserver: ResizeObserver | null = null;
-    let unsubscribeTheme = () => {};
-
-    void (async () => {
-      const { Terminal } = await import("@xterm/xterm");
-      const { FitAddon } = await import("@xterm/addon-fit");
-      const { WebLinksAddon } = await import("@xterm/addon-web-links");
-
-      if (cancelled || !containerRef.current || xtermRef.current) return;
-
-      let term: import("@xterm/xterm").Terminal;
-      let fitAddon: import("@xterm/addon-fit").FitAddon;
-
-      try {
-        term = new Terminal({
-          cursorBlink: true,
-          fontSize: terminalFontSizeRef.current,
-          fontFamily: "'Geist Mono', 'SF Mono', Menlo, Monaco, 'Courier New', monospace",
-          theme: getTerminalTheme(),
-          allowTransparency: true,
-          scrollback: 5000,
-        });
-
-        fitAddon = new FitAddon();
-        term.loadAddon(fitAddon);
-        term.loadAddon(new WebLinksAddon());
-
-        if (cancelled || !containerRef.current) {
-          term.dispose();
-          return;
-        }
-
-        term.open(containerRef.current);
-        fitAddon.fit();
-      } catch (err) {
-        console.warn("[TerminalViewport] xterm init error (likely disposal race):", err);
-        return;
-      }
-
-      if (cancelled) {
-        term.dispose();
-        return;
-      }
-
-      xtermRef.current = term;
-      fitAddonRef.current = fitAddon;
-
-      unsubscribeTheme = onThemeChange(() => {
-        term.options.theme = getTerminalTheme();
-      });
-
-      term.onData((data) => {
-        const identity = streamIdentityRef.current;
-        if (identity) {
-          sendInput(identity, data);
-        }
-      });
-
-      term.onResize(({ cols, rows }) => {
-        if (workspaceId) {
-          void resizeTab(terminal.id, workspaceId, cols, rows);
-        }
-        const identity = streamIdentityRef.current;
-        if (identity) {
-          sendResize(identity, cols, rows);
-        }
-      });
-
-      resizeObserver = new ResizeObserver(() => {
-        if (!cancelled) fitAddon.fit();
-      });
-      resizeObserver.observe(containerRef.current);
-      setIsTerminalReady(true);
-    })();
-
-    return () => {
-      cancelled = true;
-      resizeObserver?.disconnect();
-      unsubscribeReplayRef.current?.();
-      unsubscribeReplayRef.current = null;
-      unsubscribeTheme();
-      xtermRef.current?.dispose();
-      xtermRef.current = null;
-      fitAddonRef.current = null;
-    };
-  }, [hasBeenVisible, resizeTab, terminal.id, workspaceId]);
+  useEffect(() => () => {
+    unsubscribeReplayRef.current?.();
+    unsubscribeReplayRef.current = null;
+  }, []);
 
   useEffect(() => {
     if (!visible || !isTerminalReady || !canConnect || !workspaceId) {
       return;
     }
     void ensureTabConnection(terminal.id, workspaceId, terminal.status).then((identity) => {
-      if (!identity || !xtermRef.current) {
+      if (!identity || !terminalRef.current) {
         return;
       }
       const existingIdentity = streamIdentityRef.current;
@@ -179,7 +85,7 @@ export function useTerminalViewport({
       }
       unsubscribeReplayRef.current?.();
       streamIdentityRef.current = identity;
-      const term = xtermRef.current;
+      const term = terminalRef.current;
       unsubscribeReplayRef.current = subscribeWithReplay(identity, (entry) => {
         writeTerminalReplayEntry(term, entry);
       });
@@ -191,18 +97,10 @@ export function useTerminalViewport({
     isTerminalReady,
     terminal.id,
     terminal.status,
+    terminalRef,
     visible,
     workspaceId,
   ]);
-
-  useEffect(() => {
-    if (visible && isTerminalReady && fitAddonRef.current) {
-      requestAnimationFrame(() => {
-        fitAddonRef.current?.fit();
-        xtermRef.current?.focus();
-      });
-    }
-  }, [focusRequestToken, isTerminalReady, visible]);
 
   return {
     containerRef,

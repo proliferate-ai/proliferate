@@ -9,6 +9,7 @@ import {
   resolveRelativeWorkspaceShellTab,
   type WorkspaceShellTab,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
+import { resolveAvailableLaunchSelection } from "@/lib/domain/chat/models/model-selection";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
   failLatencyFlow,
@@ -74,7 +75,11 @@ export function useWorkspaceCommandPaletteTabs() {
     if (!selectedWorkspaceId) {
       return false;
     }
-    const selection = currentLaunchIdentity ?? configuredLaunch.selection;
+    const selection = resolveAvailableLaunchSelection(
+      configuredLaunch.launchCatalog.launchAgents,
+      currentLaunchIdentity,
+      configuredLaunch.selection,
+    );
     if (!selection) {
       return false;
     }
@@ -96,14 +101,20 @@ export function useWorkspaceCommandPaletteTabs() {
     return true;
   }, [
     configuredLaunch.selection,
+    configuredLaunch.launchCatalog.launchAgents,
     createEmptySessionWithResolvedConfig,
     currentLaunchIdentity,
     selectedWorkspaceId,
     showToast,
   ]);
 
+  const newSessionSelection = resolveAvailableLaunchSelection(
+    configuredLaunch.launchCatalog.launchAgents,
+    currentLaunchIdentity,
+    configuredLaunch.selection,
+  );
   const newSessionDisabledReason = selectedWorkspaceId
-    ? currentLaunchIdentity
+    ? newSessionSelection
       ? null
       : configuredLaunch.disabledReason
     : "Workspace is still opening.";

@@ -19,6 +19,7 @@ describe("local-slot sidebar aliases", () => {
     const groups = buildGroups({
       logicalWorkspaces: [logicalWorkspace],
       selectedLogicalWorkspaceId: slotId,
+      showArchived: true,
       archivedIds: [slotId],
       pendingPromptCounts: {
         [slotId]: 2,

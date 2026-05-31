@@ -167,9 +167,11 @@ function DestinationPicker({
 
 function SelectedDestinationRow({
   destination,
+  disabled = false,
   onBackToDestinations,
 }: {
   destination: WorkspaceMobilityDestinationOption;
+  disabled?: boolean;
   onBackToDestinations?: () => void;
 }) {
   return (
@@ -177,6 +179,7 @@ function SelectedDestinationRow({
       icon={<DestinationOptionIcon option={destination} />}
       label={destination.label}
       selected
+      disabled={disabled}
       title={destination.detail}
       onClick={() => {
         onBackToDestinations?.();
@@ -237,7 +240,8 @@ export function WorkspaceMobilityLocationPopover({
       <MobilitySection>Move to</MobilitySection>
       <SelectedDestinationRow
         destination={selectedDestination}
-        onBackToDestinations={onBackToDestinations}
+        disabled={isActionPending}
+        onBackToDestinations={isActionPending ? undefined : onBackToDestinations}
       />
       <div className={MOBILITY_DIVIDER_CLASS} />
 
@@ -286,6 +290,7 @@ export function WorkspaceMobilityLocationPopover({
               variant="ghost"
               size="sm"
               onClick={onClose}
+              disabled={isActionPending}
             >
               {secondaryLabel}
             </Button>

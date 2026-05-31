@@ -16,7 +16,7 @@ export function useEnsureCloudMobilityWorkspace() {
       applyCloudMobilityWorkspaceDetail(queryClient, detail);
       await queryClient.invalidateQueries({
         queryKey: cloudMobilityWorkspacesKey(),
-      });
+      }).catch(() => undefined);
     },
   });
 }

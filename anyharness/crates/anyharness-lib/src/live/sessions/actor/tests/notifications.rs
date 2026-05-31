@@ -166,6 +166,29 @@ fn resume_replay_filter_suppresses_after_user_echo_until_quiet_gap() {
 }
 
 #[test]
+fn resume_replay_filter_disable_allows_current_prompt_after_loaded_session() {
+    let mut filter = ResumeReplayFilter::new(
+        "codex",
+        NativeSessionStartupDisposition::LoadedExisting,
+        "idle",
+    );
+    let base = Instant::now();
+    filter.disable();
+
+    let user_echo = acp::SessionNotification::new(
+        "native-1",
+        acp::SessionUpdate::UserMessageChunk(acp::ContentChunk::new("current prompt".into())),
+    );
+    let assistant = acp::SessionNotification::new(
+        "native-1",
+        acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new("fresh answer".into())),
+    );
+
+    assert!(!filter.should_suppress(&user_echo, base));
+    assert!(!filter.should_suppress(&assistant, base + Duration::from_millis(10)));
+}
+
+#[test]
 fn resume_replay_filter_ignores_non_resume_agent_chunks() {
     let mut filter = ResumeReplayFilter::new(
         "claude",

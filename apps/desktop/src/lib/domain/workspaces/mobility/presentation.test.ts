@@ -83,10 +83,20 @@ describe("workspace mobility presentation", () => {
       direction: "local_to_cloud",
       branchName: "feature/test-gap",
     })).toEqual({
-      headline: "Can't move this workspace to cloud yet",
+      headline: "Publish branch before moving",
       body: "This branch isn't on GitHub yet.",
-      helper: "Publish `feature/test-gap` before moving to cloud.",
-      actionLabel: "Publish branch",
+      helper: "Push `feature/test-gap` so the destination can check out the exact commit.",
+      actionLabel: "Push and move",
+    });
+
+    expect(mobilityBlockerCopy({
+      code: "workspace_dirty",
+      direction: "local_to_cloud",
+    })).toEqual({
+      headline: "Prepare branch for move",
+      body: "This workspace has uncommitted changes.",
+      helper: "Commit and push these changes so the destination can check out the exact code.",
+      actionLabel: "Prepare branch",
     });
 
     expect(mobilityBlockerCopy({
@@ -97,6 +107,26 @@ describe("workspace mobility presentation", () => {
       body: "GitHub access for this repo is not authorized.",
       helper: "You can be signed in while Proliferate is still missing access to this repository or organization.",
       actionLabel: "Manage GitHub access",
+    });
+
+    expect(mobilityBlockerCopy({
+      code: "owner_mismatch",
+      direction: "local_to_cloud",
+    })).toEqual({
+      headline: "Workspace is already in cloud",
+      body: "This branch is already owned by the cloud workspace.",
+      helper: "Open the cloud workspace or refresh the workspace list.",
+      actionLabel: "Got it",
+    });
+
+    expect(mobilityBlockerCopy({
+      code: "owner_mismatch",
+      direction: "cloud_to_local",
+    })).toEqual({
+      headline: "Workspace is already local",
+      body: "This branch is already owned by a local worktree.",
+      helper: "Open the local worktree or refresh the workspace list.",
+      actionLabel: "Got it",
     });
 
     expect(mobilityBlockerCopy({

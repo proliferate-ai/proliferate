@@ -25,6 +25,8 @@ use self::store::AgentAuthConfigRecord;
 pub use self::store::AgentAuthConfigStore;
 use self::validation::validate_config_input;
 
+const CLAUDE_CONFIG_DIR_ENV: &str = "CLAUDE_CONFIG_DIR";
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AgentAuthLaunchOverlay {
     pub support_env: BTreeMap<String, String>,
@@ -247,7 +249,21 @@ impl AgentAuthConfigService {
         }
         reject_expired_selection(selection)
             .map_err(|_| selection_required_error(scope.cloned(), agent_kind, "expired"))?;
+        let mut support_env = selection.support_env.clone();
         let mut protected_env = selection.protected_env.clone();
+        if agent_kind == "claude" && selection.materialization_mode == "gateway_env" {
+            let config_dir = self.claude_gateway_config_dir();
+            std::fs::create_dir_all(&config_dir).map_err(|error| {
+                anyhow::anyhow!(
+                    "failed to create Claude gateway config dir {}: {error}",
+                    config_dir.display()
+                )
+            })?;
+            support_env.insert(
+                CLAUDE_CONFIG_DIR_ENV.to_string(),
+                config_dir.to_string_lossy().into_owned(),
+            );
+        }
         if agent_kind == "codex" && selection.protected_config.contains_key("codex") {
             protected_env.insert(
                 "CODEX_HOME".to_string(),
@@ -255,7 +271,7 @@ impl AgentAuthConfigService {
             );
         }
         Ok(AgentAuthLaunchOverlay {
-            support_env: selection.support_env.clone(),
+            support_env,
             protected_env,
         })
     }
@@ -295,7 +311,15 @@ impl AgentAuthConfigService {
     fn codex_home_dir(&self) -> PathBuf {
         self.runtime_home.join("agent-auth").join("codex")
     }
+
+    fn claude_gateway_config_dir(&self) -> PathBuf {
+        self.runtime_home.join("agent-auth").join("claude-gateway")
+    }
 }
+
+#[cfg(test)]
+#[path = "../auth_config_claude_tests.rs"]
+mod auth_config_claude_tests;
 
 #[cfg(test)]
 #[path = "../auth_config_tests.rs"]

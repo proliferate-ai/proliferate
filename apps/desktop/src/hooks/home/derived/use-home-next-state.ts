@@ -30,7 +30,7 @@ export function useHomeNextState({
   modeOverrideId,
   selectedSshTargetId = null,
 }: UseHomeNextStateArgs) {
-  const model = useHomeNextModelSelection({ modelSelectionOverride });
+  const model = useHomeNextModelSelection({ modelSelectionOverride, repoLaunchKind });
   const repository = useHomeNextRepositorySelection({
     destination,
     repositorySelection,

@@ -287,6 +287,20 @@ describe("buildMobilityFooterContext", () => {
     expect(context?.isActive).toBe(true);
   });
 
+  it("keeps the location control interactive during background cleanup", () => {
+    const context = buildMobilityFooterContext({
+      logicalWorkspace: makeLogicalWorkspace(),
+      status: makeStatus({
+        direction: "cloud_to_local",
+        phase: "cleanup_pending",
+        isBlocking: false,
+      }),
+    });
+
+    expect(context?.isInteractive).toBe(true);
+    expect(context?.isActive).toBe(false);
+  });
+
   it("keeps cleanup failures interactive for retry", () => {
     const context = buildMobilityFooterContext({
       logicalWorkspace: makeLogicalWorkspace(),

@@ -16,6 +16,7 @@ use super::http::{
     runtime_config, sessions, subagents, terminals, workspaces, worktrees,
 };
 use super::sse::sessions as sse_sessions;
+use super::ws::agent_login_terminals as ws_agent_login_terminals;
 use super::ws::terminals as ws_terminals;
 use crate::api::auth::{user_route_allowed, AuthContext, AuthError};
 use crate::api::http::error::ApiError;
@@ -33,6 +34,14 @@ pub fn build_router(state: AppState) -> Router {
             "/agents/reconcile",
             get(agents::get_reconcile_status).post(agents::reconcile_agents),
         )
+        .route(
+            "/agents/login-terminals/{terminal_id}",
+            get(agents::get_agent_login_terminal).delete(agents::close_agent_login_terminal),
+        )
+        .route(
+            "/agents/login-terminals/{terminal_id}/ws",
+            get(ws_agent_login_terminals::agent_login_terminal_ws),
+        )
         .route("/agents/{kind}", get(agents::get_agent))
         .route(
             "/agents/{kind}/model-registry",
@@ -46,6 +55,10 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/agents/{kind}/login/start",
             post(agents::start_agent_login),
+        )
+        .route(
+            "/agents/{kind}/login/terminal",
+            post(agents::start_agent_login_terminal),
         )
         .route(
             "/agents/auth-config",

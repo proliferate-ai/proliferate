@@ -12,6 +12,31 @@ from proliferate.integrations.anyharness.models import (
 )
 
 _MOBILITY_DESTINATION_PREPARE_TIMEOUT_SECONDS = 180.0
+_MOBILITY_DESTROY_SOURCE_TIMEOUT_SECONDS = 60.0
+
+
+def _runtime_status_error_message(
+    exc: httpx.HTTPStatusError,
+    fallback: str,
+) -> str:
+    response = exc.response
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = None
+
+    if isinstance(payload, dict):
+        detail = payload.get("detail")
+        if isinstance(detail, str) and detail.strip():
+            return detail.strip()
+        title = payload.get("title")
+        if isinstance(title, str) and title.strip():
+            return title.strip()
+
+    text = response.text.strip()
+    if text:
+        return f"{fallback} Runtime returned {response.status_code}: {text[:500]}"
+    return fallback
 
 
 def _parse_resolved_workspace(
@@ -111,6 +136,10 @@ async def prepare_runtime_mobility_destination(
                 raise CloudRuntimeReconnectError(
                     "Cloud runtime returned invalid JSON when preparing a worktree destination."
                 ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise CloudRuntimeReconnectError(
+            _runtime_status_error_message(exc, "Failed to prepare worktree destination.")
+        ) from exc
     except httpx.HTTPError as exc:
         raise CloudRuntimeReconnectError("Failed to prepare worktree destination.") from exc
 
@@ -153,3 +182,32 @@ async def list_runtime_workspaces(
             )
         )
     return summaries
+
+
+async def destroy_runtime_mobility_source(
+    runtime_url: str,
+    access_token: str,
+    *,
+    anyharness_workspace_id: str,
+) -> None:
+    try:
+        async with httpx.AsyncClient(timeout=_MOBILITY_DESTROY_SOURCE_TIMEOUT_SECONDS) as client:
+            response = await client.post(
+                f"{runtime_url}/v1/workspaces/{anyharness_workspace_id}/mobility/destroy-source",
+                headers=auth_headers(access_token),
+                json={},
+            )
+            if response.status_code == 404:
+                return
+            response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise CloudRuntimeReconnectError(
+            _runtime_status_error_message(
+                exc,
+                "Failed to destroy old AnyHarness mobility source.",
+            )
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise CloudRuntimeReconnectError(
+            "Failed to destroy old AnyHarness mobility source."
+        ) from exc

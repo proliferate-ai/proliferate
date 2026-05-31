@@ -260,7 +260,7 @@ describe("buildMobilityPromptState", () => {
     expect(prompt.headline).toBe("Checking local branch sync");
   });
 
-  it("shows a publish CTA when the branch is not on GitHub", () => {
+  it("routes dirty unpublished branches to branch prep", () => {
     const prompt = buildMobilityPromptState({
       isPreparing: false,
       hasResolvedPrompt: true,
@@ -290,9 +290,44 @@ describe("buildMobilityPromptState", () => {
     });
 
     expect(prompt.variant).toBe("blocked");
+    expect(prompt.primaryActionKind).toBe("prepare_branch");
+    expect(prompt.actionLabel).toBe("Prepare branch");
+    expect(prompt.warning).toBeNull();
+  });
+
+  it("shows a publish CTA when a clean branch is not on GitHub", () => {
+    const prompt = buildMobilityPromptState({
+      isPreparing: false,
+      hasResolvedPrompt: true,
+      preparationError: null,
+      locationKind: "local_worktree",
+      repoBacked: true,
+      canMoveToCloud: true,
+      canBringBackLocal: false,
+      hasLocalRepoRoot: true,
+      selectionLocked: false,
+      status: makeStatus(),
+      confirmSnapshot: makeSnapshot({
+        cloudPreflight: {
+          canStart: false,
+          blockers: ["The branch 'feature/workspace-mobility' was not found on GitHub."],
+          excludedPaths: [],
+          workspace: {} as never,
+        },
+      }),
+      gitSync: {
+        upstreamBranch: null,
+        ahead: 0,
+        behind: 0,
+        clean: true,
+      },
+      isGitSyncResolved: true,
+    });
+
+    expect(prompt.variant).toBe("blocked");
     expect(prompt.primaryActionKind).toBe("publish_branch");
-    expect(prompt.actionLabel).toBe("Publish branch");
-    expect(prompt.warning).toBe("Uncommitted changes will move with the workspace after this branch is synced.");
+    expect(prompt.actionLabel).toBe("Push and move");
+    expect(prompt.warning).toBeNull();
   });
 
   it("shows a GitHub connect CTA when no GitHub account is linked", () => {
@@ -354,7 +389,42 @@ describe("buildMobilityPromptState", () => {
     expect(prompt.body).toBe("GitHub access for this repo is not authorized.");
   });
 
-  it("shows a push CTA for ahead-only local commits", () => {
+  it("shows a push CTA for clean ahead-only local commits", () => {
+    const prompt = buildMobilityPromptState({
+      isPreparing: false,
+      hasResolvedPrompt: true,
+      preparationError: null,
+      locationKind: "local_worktree",
+      repoBacked: true,
+      canMoveToCloud: true,
+      canBringBackLocal: false,
+      hasLocalRepoRoot: true,
+      selectionLocked: false,
+      status: makeStatus(),
+      confirmSnapshot: makeSnapshot({
+        cloudPreflight: {
+          canStart: false,
+          blockers: ["The branch 'feature/workspace-mobility' on GitHub is not at the requested commit."],
+          excludedPaths: [],
+          workspace: {} as never,
+        },
+      }),
+      gitSync: {
+        upstreamBranch: "origin/feature/workspace-mobility",
+        ahead: 2,
+        behind: 0,
+        clean: true,
+      },
+      isGitSyncResolved: true,
+    });
+
+    expect(prompt.variant).toBe("blocked");
+    expect(prompt.primaryActionKind).toBe("push_commits");
+    expect(prompt.actionLabel).toBe("Push and move");
+    expect(prompt.warning).toBeNull();
+  });
+
+  it("routes dirty ahead local commits to branch prep", () => {
     const prompt = buildMobilityPromptState({
       isPreparing: false,
       hasResolvedPrompt: true,
@@ -384,8 +454,44 @@ describe("buildMobilityPromptState", () => {
     });
 
     expect(prompt.variant).toBe("blocked");
-    expect(prompt.primaryActionKind).toBe("push_commits");
-    expect(prompt.actionLabel).toBe("Push commits");
-    expect(prompt.warning).toBe("Uncommitted changes will move with the workspace after this branch is synced.");
+    expect(prompt.primaryActionKind).toBe("prepare_branch");
+    expect(prompt.actionLabel).toBe("Prepare branch");
+    expect(prompt.warning).toBeNull();
+  });
+
+  it("routes dirty workspace blockers to branch prep", () => {
+    const prompt = buildMobilityPromptState({
+      isPreparing: false,
+      hasResolvedPrompt: true,
+      preparationError: null,
+      locationKind: "local_worktree",
+      repoBacked: true,
+      canMoveToCloud: true,
+      canBringBackLocal: false,
+      hasLocalRepoRoot: true,
+      selectionLocked: false,
+      status: makeStatus(),
+      confirmSnapshot: makeSnapshot({
+        sourcePreflight: {
+          canMove: false,
+          branchName: "feature/workspace-mobility",
+          baseCommitSha: "abc123456789",
+          blockers: [{ code: "workspace_dirty", message: "Workspace has uncommitted changes." }],
+          warnings: [],
+          sessions: [],
+        } as never,
+      }),
+      gitSync: {
+        upstreamBranch: "origin/feature/workspace-mobility",
+        ahead: 0,
+        behind: 0,
+        clean: false,
+      },
+      isGitSyncResolved: true,
+    });
+
+    expect(prompt.variant).toBe("blocked");
+    expect(prompt.primaryActionKind).toBe("prepare_branch");
+    expect(prompt.actionLabel).toBe("Prepare branch");
   });
 });

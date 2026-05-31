@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   useCloudAgentCatalog: vi.fn(),
   useAgentCatalog: vi.fn(),
   useAgentLaunchOptionsQuery: vi.fn(),
+  useSelectedCloudRuntimeState: vi.fn(),
 }));
 
 vi.mock("@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog", () => ({
@@ -26,6 +27,10 @@ vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
 
 vi.mock("@anyharness/sdk-react", () => ({
   useAgentLaunchOptionsQuery: mocks.useAgentLaunchOptionsQuery,
+}));
+
+vi.mock("@/hooks/workspaces/use-selected-cloud-runtime-state", () => ({
+  useSelectedCloudRuntimeState: mocks.useSelectedCloudRuntimeState,
 }));
 
 function launchAgent(
@@ -89,6 +94,9 @@ describe("useChatLaunchCatalog", () => {
       isLoading: false,
       isError: false,
       error: null,
+    });
+    mocks.useSelectedCloudRuntimeState.mockReturnValue({
+      connectionInfo: null,
     });
     useSessionSelectionStore.setState({
       pendingWorkspaceEntry: null,
@@ -228,6 +236,50 @@ describe("useChatLaunchCatalog", () => {
     expect(result.current.defaultLaunchSelection).toEqual({
       kind: "cursor",
       modelId: "gpt-5.4-medium",
+    });
+  });
+
+  it("uses cloud connection ready agents instead of local runtime readiness for cloud targets", () => {
+    mocks.useAgentCatalog.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      error: null,
+      agentsByKind: new Map([
+        ["codex", { readiness: "ready" }],
+        ["claude", { readiness: "ready" }],
+      ]),
+    });
+    mocks.useSelectedCloudRuntimeState.mockReturnValue({
+      connectionInfo: {
+        readyAgentKinds: ["codex"],
+      },
+    });
+    mocks.useAgentLaunchOptionsQuery.mockReturnValue({
+      data: {
+        workspaceId: "workspace-1",
+        agents: [{
+          kind: "claude",
+          displayName: "Claude",
+          defaultModelId: "local-sonnet",
+          models: [{
+            id: "local-sonnet",
+            displayName: "Local Sonnet",
+            isDefault: true,
+            defaultOptIn: true,
+          }],
+        }],
+      },
+      isLoading: false,
+      isError: false,
+      error: null,
+    });
+
+    const { result } = renderHook(() => useChatLaunchCatalog({ activeSelection: null }));
+
+    expect(result.current.launchAgents.map((agent) => agent.kind)).toEqual(["codex"]);
+    expect(result.current.defaultLaunchSelection).toEqual({
+      kind: "codex",
+      modelId: "gpt-5.5",
     });
   });
 

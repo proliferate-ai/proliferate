@@ -847,6 +847,143 @@ async def test_destroy_workspace_runtime_skips_shared_profile_slot(
 
 
 @pytest.mark.asyncio
+async def test_ensure_cloud_workspace_replaces_failed_unmaterialized_retry_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid4())
+    failed_workspace = SimpleNamespace(
+        id=uuid4(),
+        status=workspace_service.CloudWorkspaceStatus.error.value,
+        anyharness_workspace_id=None,
+        last_error="mobility destination conflict: destination path already exists",
+    )
+    created_workspace = SimpleNamespace(id=uuid4())
+    archived: list[object] = []
+    created: list[dict[str, object]] = []
+
+    async def _load_existing_cloud_workspace(**_kwargs):
+        return failed_workspace
+
+    async def _archive_failed(workspace_id):
+        archived.append(workspace_id)
+
+    async def _load_repo_config_value(**_kwargs):
+        return SimpleNamespace(configured=True)
+
+    async def _authorization(**_kwargs) -> SandboxStartAuthorization:
+        return _allowed_start_authorization()
+
+    async def _get_billing_snapshot_for_subject(_subject_id):
+        return SimpleNamespace()
+
+    def _repo_limit_for_billing_snapshot(_snapshot):
+        return 10
+
+    async def _create_cloud_workspace_for_user(**kwargs):
+        created.append(kwargs)
+        return created_workspace
+
+    monkeypatch.setattr(
+        workspace_service,
+        "get_linked_github_account",
+        lambda _user: SimpleNamespace(),
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "load_existing_cloud_workspace",
+        _load_existing_cloud_workspace,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "_archive_failed_cloud_workspace_for_mobility_retry",
+        _archive_failed,
+    )
+    monkeypatch.setattr(workspace_service, "load_repo_config_value", _load_repo_config_value)
+    monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
+    monkeypatch.setattr(
+        workspace_service,
+        "get_billing_snapshot_for_subject",
+        _get_billing_snapshot_for_subject,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "repo_limit_for_billing_snapshot",
+        _repo_limit_for_billing_snapshot,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "create_cloud_workspace_for_user",
+        _create_cloud_workspace_for_user,
+    )
+
+    result = await workspace_service.ensure_cloud_workspace_for_existing_branch(
+        user,
+        git_provider="github",
+        git_owner="acme",
+        git_repo_name="rocket",
+        branch_name="feature/cloud",
+        display_name="Rocket",
+    )
+
+    assert result is created_workspace
+    assert archived == [failed_workspace.id]
+    assert created
+    assert created[0]["git_branch"] == "feature/cloud"
+    assert created[0]["display_name"] == "Rocket"
+
+
+@pytest.mark.asyncio
+async def test_ensure_cloud_workspace_reuses_materialized_error_workspace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid4())
+    existing_workspace = SimpleNamespace(
+        id=uuid4(),
+        status=workspace_service.CloudWorkspaceStatus.error.value,
+        anyharness_workspace_id="workspace-1",
+        last_error="agent runtime failed",
+    )
+
+    async def _load_existing_cloud_workspace(**_kwargs):
+        return existing_workspace
+
+    async def _unexpected(*_args, **_kwargs) -> None:
+        raise AssertionError("materialized error workspace should be reused for start retry")
+
+    monkeypatch.setattr(
+        workspace_service,
+        "get_linked_github_account",
+        lambda _user: SimpleNamespace(),
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "load_existing_cloud_workspace",
+        _load_existing_cloud_workspace,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "_archive_failed_cloud_workspace_for_mobility_retry",
+        _unexpected,
+    )
+    monkeypatch.setattr(
+        workspace_service,
+        "create_cloud_workspace_for_user",
+        _unexpected,
+    )
+
+    result = await workspace_service.ensure_cloud_workspace_for_existing_branch(
+        user,
+        git_provider="github",
+        git_owner="acme",
+        git_repo_name="rocket",
+        branch_name="feature/cloud",
+        display_name="Rocket",
+    )
+
+    assert result is existing_workspace
+
+
+@pytest.mark.asyncio
 async def test_start_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1101,3 +1238,85 @@ async def test_start_cloud_workspace_returns_ready_workspace_without_requeue(
 
     assert payload.status == workspace_service.CloudWorkspaceStatus.ready.value
     assert workspace.status == workspace_service.CloudWorkspaceStatus.ready.value
+
+
+@pytest.mark.asyncio
+async def test_start_cloud_workspace_requeues_ready_workspace_for_requested_revision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid4())
+    workspace = SimpleNamespace(
+        id=uuid4(),
+        user_id=user.id,
+        status=workspace_service.CloudWorkspaceStatus.ready.value,
+        git_owner="acme",
+        git_repo_name="rocket",
+        git_branch="feature/cloud",
+        git_base_branch="main",
+        runtime_url="https://runtime.invalid",
+        runtime_token_ciphertext="ciphertext",
+        anyharness_workspace_id="workspace-123",
+        last_error="old error",
+        status_detail="Ready",
+        updated_at=datetime.now(UTC),
+        ready_at=datetime.now(UTC),
+    )
+    scheduled: list[tuple[object, object]] = []
+    saved_statuses: list[tuple[object, object, object]] = []
+
+    async def _require_workspace(_user_id, _workspace_id):
+        return workspace
+
+    async def _repo_branches(*_args, **_kwargs) -> SimpleNamespace:
+        return SimpleNamespace(branches=["main"])
+
+    async def _authorization(**_kwargs) -> SandboxStartAuthorization:
+        return _allowed_start_authorization()
+
+    async def _agent_auth_agent_kinds(_user_id):
+        return ("claude",)
+
+    async def _save_workspace(_workspace):
+        saved_statuses.append((_workspace.status, _workspace.status_detail, _workspace.last_error))
+        return _workspace
+
+    async def _build_workspace_detail(_workspace):
+        return SimpleNamespace(status=_workspace.status)
+
+    monkeypatch.setattr(
+        workspace_service,
+        "cloud_workspace_user_can_interact",
+        _require_workspace,
+    )
+    monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
+    monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
+    monkeypatch.setattr(
+        workspace_service,
+        "_load_personal_agent_auth_agent_kinds",
+        _agent_auth_agent_kinds,
+    )
+    monkeypatch.setattr(workspace_service, "save_workspace", _save_workspace)
+    monkeypatch.setattr(workspace_service, "_build_workspace_detail", _build_workspace_detail)
+    monkeypatch.setattr(
+        workspace_service,
+        "schedule_workspace_provision",
+        lambda workspace_id, **kwargs: scheduled.append(
+            (workspace_id, kwargs.get("requested_base_sha"))
+        ),
+    )
+
+    payload = await workspace_service.start_cloud_workspace(
+        user,
+        workspace.id,
+        requested_base_sha="a" * 40,
+    )
+
+    assert payload.status == workspace_service.CloudWorkspaceStatus.materializing.value
+    assert saved_statuses == [
+        (
+            workspace_service.CloudWorkspaceStatus.materializing.value,
+            "Preparing requested revision",
+            None,
+        )
+    ]
+    assert scheduled == [(workspace.id, "a" * 40)]

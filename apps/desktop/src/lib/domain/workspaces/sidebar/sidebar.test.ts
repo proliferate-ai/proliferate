@@ -12,6 +12,7 @@ import {
 } from "./sidebar-workspace-types";
 import {
   buildGroups,
+  makeCloudWorkspace,
   makeCloudLogicalWorkspace,
   makeLocalLogicalWorkspace,
   makeRepoRoot,
@@ -224,6 +225,33 @@ describe("sidebar workspace filters", () => {
 
     expect(groups).toHaveLength(1);
     expect(groups[0]?.items.map((item) => item.id)).toEqual(["local-visible"]);
+  });
+
+  it("keeps an active local destination visible when its old cloud materialization is archived", () => {
+    const localDestination = makeLocalLogicalWorkspace({
+      id: "migrated-worktree",
+      repoKey: "/tmp/repo-a",
+      repoName: "repo-a",
+      kind: "worktree",
+      branch: "feature/migrated",
+    });
+    const groups = buildGroups({
+      logicalWorkspaces: [{
+        ...localDestination,
+        cloudWorkspace: makeCloudWorkspace({
+          id: "archived-cloud-source",
+          repoName: "repo-a",
+          branch: "feature/migrated",
+          status: "archived",
+          productLifecycle: "archived",
+        }),
+      }],
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.items.map((item) => item.id)).toEqual(["migrated-worktree"]);
+    expect(groups[0]?.items[0]?.archived).toBe(false);
+    expect(groups[0]?.items[0]?.variant).toBe("worktree");
   });
 
   it("composes archived visibility with workspace-type filtering", () => {

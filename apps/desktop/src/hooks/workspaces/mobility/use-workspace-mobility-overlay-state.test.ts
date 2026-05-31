@@ -8,6 +8,7 @@ describe("resolveCompletionDirection", () => {
       snapshot: {
         description: "This workspace has moved back to your local machine.",
         direction: "cloud_to_local",
+        logicalWorkspaceId: "logical-1",
         title: "Now local",
       },
       statusDirection: null,

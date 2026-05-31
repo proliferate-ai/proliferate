@@ -1,8 +1,8 @@
 import type { AgentAuthAgentKind, CloudWorkspaceDetail } from "@/lib/access/cloud/client";
 import {
-  getCloudWorkspace,
-  getCloudWorkspaceConnection,
-} from "@proliferate/cloud-sdk/client/workspaces";
+  getCloudWorkspaceConnectionWithRetry,
+  getCloudWorkspaceWithRetry,
+} from "@/lib/access/cloud/workspace-connection-retry";
 import { issueCloudWorkspaceDirectAccessToken } from "@proliferate/cloud-sdk/client/claims";
 import { ensureSshAnyHarnessTunnel } from "@/lib/access/tauri/ssh-tunnel";
 import { getSshDirectTargetProfile } from "@/lib/access/tauri/ssh-target-profile";
@@ -64,7 +64,8 @@ export async function resolveRuntimeTargetForWorkspace(
     };
   }
 
-  const cloudWorkspace: CloudWorkspaceDetail | undefined = await getCloudWorkspace(cloudWorkspaceId);
+  const cloudWorkspace: CloudWorkspaceDetail | undefined =
+    await getCloudWorkspaceWithRetry(cloudWorkspaceId);
   if (!cloudWorkspace) throw new Error("Cloud workspace not found.");
   const cloudWorkspaceCommandMetadata = cloudWorkspace as CloudWorkspaceCommandMetadata;
   if (cloudWorkspace.status !== "ready") {
@@ -110,7 +111,7 @@ export async function resolveRuntimeTargetForWorkspace(
     };
   }
 
-  const connection = await getCloudWorkspaceConnection(cloudWorkspace.id);
+  const connection = await getCloudWorkspaceConnectionWithRetry(cloudWorkspace.id);
 
   return {
     location: "cloud",

@@ -2,6 +2,7 @@ import { anyHarnessWorkspaceQueryKeyRoots } from "@anyharness/sdk-react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { clearCachedCloudConnections } from "@/hooks/access/cloud/cloud-connection-cache";
+import { cloudMobilityWorkspacesKey } from "@/hooks/access/cloud/query-keys";
 import { workspaceCollectionsScopeKey } from "@/hooks/workspaces/cache/query-keys";
 
 interface ClearWorkspaceOwnerFlipCacheInput {
@@ -64,8 +65,31 @@ export function useWorkspaceMobilityCache(runtimeUrl: string) {
     });
   }, [queryClient, runtimeUrl]);
 
+  const refreshWorkspaceCollections = useCallback(async () => {
+    const workspaceCollectionsKey = workspaceCollectionsScopeKey(runtimeUrl);
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: workspaceCollectionsKey,
+      }),
+      queryClient.invalidateQueries({
+        queryKey: cloudMobilityWorkspacesKey(),
+      }),
+    ]);
+    await Promise.all([
+      queryClient.refetchQueries({
+        queryKey: workspaceCollectionsKey,
+        type: "active",
+      }),
+      queryClient.refetchQueries({
+        queryKey: cloudMobilityWorkspacesKey(),
+        type: "active",
+      }),
+    ]);
+  }, [queryClient, runtimeUrl]);
+
   return {
     clearWorkspaceOwnerFlipCache,
     invalidateWorkspaceCollections,
+    refreshWorkspaceCollections,
   };
 }

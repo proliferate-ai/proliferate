@@ -7,6 +7,7 @@ interface ChatInputAvailabilityArgs {
   selectedCloudRuntimePhase: "ready" | "resuming" | "failed" | "claim_required" | null;
   selectedCloudRuntimeActionBlockReason: string | null;
   activeSessionId: string | null;
+  activeSessionLaunchDisabledReason?: string | null;
   isConfiguredLaunchLoading: boolean;
   hasReadyConfiguredLaunch: boolean;
   configuredLaunchDisabledReason: string | null;
@@ -77,6 +78,7 @@ export function resolveChatInputAvailability({
   selectedCloudRuntimePhase,
   selectedCloudRuntimeActionBlockReason,
   activeSessionId,
+  activeSessionLaunchDisabledReason = null,
   isConfiguredLaunchLoading,
   hasReadyConfiguredLaunch,
   configuredLaunchDisabledReason,
@@ -169,6 +171,15 @@ export function resolveChatInputAvailability({
     return {
       isDisabled: true,
       disabledReason: configuredLaunchDisabledReason ?? "Your chosen default agent is not ready yet.",
+      areRuntimeControlsDisabled: false,
+      selectedWorkspaceKind,
+    };
+  }
+
+  if (activeSessionId && activeSessionLaunchDisabledReason) {
+    return {
+      isDisabled: true,
+      disabledReason: activeSessionLaunchDisabledReason,
       areRuntimeControlsDisabled: false,
       selectedWorkspaceKind,
     };

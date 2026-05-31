@@ -2,6 +2,7 @@ import type { AgentSummary, ReconcileAgentResult } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { AgentAuthTerminalPanel } from "@/components/agents/AgentAuthTerminalPanel";
 import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { AgentDefaultComposer } from "@/components/settings/panes/AgentDefaultComposer";
@@ -13,12 +14,14 @@ import { Badge, type BadgeTone } from "@proliferate/ui/primitives/Badge";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import { useAgentAuthTerminalWorkflow } from "@/hooks/agents/workflows/use-agent-auth-terminal-workflow";
 import { useModelRegistrySettings } from "@/hooks/settings/workflows/use-model-registry-settings";
 import {
   mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,
 } from "@/lib/domain/agents/cloud-launch-catalog";
 import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
 import { withUpdatedModelVisibilityOverride } from "@/lib/domain/chat/models/model-visibility";
+import { isReadyAgent } from "@/lib/domain/agents/status";
 import {
   getAgentStatusDisplay,
   type AgentStatusTone,
@@ -31,6 +34,7 @@ export function AgentDefaultsPane() {
   const navigate = useNavigate();
   const [setupAgent, setSetupAgent] = useState<AgentSummary | null>(null);
   const showToast = useToastStore((state) => state.show);
+  const authTerminalWorkflow = useAgentAuthTerminalWorkflow();
   const {
     connectionState,
     runtimeError,
@@ -75,11 +79,31 @@ export function AgentDefaultsPane() {
     });
   }, [launchAgents, orderedAgentDefaultRows]);
 
+  useEffect(() => {
+    const sessions = authTerminalWorkflow.sessionsByKind;
+    for (const session of Object.values(sessions)) {
+      if (!session.terminal) {
+        continue;
+      }
+      const agent = agents.find((candidate) => candidate.kind === session.kind);
+      if (!agent || !isReadyAgent(agent)) {
+        continue;
+      }
+      showToast(`${agent.displayName} is ready.`);
+      void authTerminalWorkflow.closeAuthTerminal(session.kind);
+    }
+  }, [
+    agents,
+    authTerminalWorkflow.closeAuthTerminal,
+    authTerminalWorkflow.sessionsByKind,
+    showToast,
+  ]);
+
   return (
     <section className="space-y-5">
       <SettingsPageHeader
         title="Agent Defaults"
-        description="Configure how each agent harness launches by default. Authentication lives in Agent Authentication."
+        description="Configure default harness launch behavior. Local installs and sign-in repair live here; shared credentials live in Agent Authentication."
       />
 
       <AgentDefaultsSection title="Default harness">
@@ -221,6 +245,7 @@ export function AgentDefaultsPane() {
           agentsLoading={agentsLoading}
           isReconciling={isReconciling}
           reconcileResultsByKind={reconcileResultsByKind}
+          authTerminalWorkflow={authTerminalWorkflow}
           onOpenAuthentication={(agentKind) => {
             navigate(buildSettingsHref({
               section: "agent-authentication",
@@ -248,6 +273,7 @@ function AgentConfigurationIssuesSection({
   agentsLoading,
   isReconciling,
   reconcileResultsByKind,
+  authTerminalWorkflow,
   onOpenAuthentication,
   onReviewSetup,
 }: {
@@ -255,6 +281,7 @@ function AgentConfigurationIssuesSection({
   agentsLoading: boolean;
   isReconciling: boolean;
   reconcileResultsByKind: Map<string, ReconcileAgentResult>;
+  authTerminalWorkflow: ReturnType<typeof useAgentAuthTerminalWorkflow>;
   onOpenAuthentication: (agentKind: string) => void;
   onReviewSetup: (agent: AgentSummary) => void;
 }) {
@@ -277,51 +304,93 @@ function AgentConfigurationIssuesSection({
             reconcileResult,
             isReconciling,
           });
+          const canOpenInlineAuth = agent.readiness === "login_required"
+            && agent.supportsLogin;
           const usesAuthenticationPage = agent.readiness === "credentials_required"
-            || agent.readiness === "login_required";
+            || (agent.readiness === "login_required" && !agent.supportsLogin);
+          const authTerminalSession = authTerminalWorkflow.sessionsByKind[agent.kind] ?? null;
+          const authActionLabel = authTerminalSession?.isStarting
+            ? "Opening..."
+            : authTerminalSession?.terminal
+              ? "Restart auth"
+              : authTerminalSession?.errorMessage
+                ? "Retry auth"
+              : "Open auth";
 
           return (
             <div
               key={agent.kind}
-              className="flex items-start gap-3 border-b border-border/60 px-3 py-3 last:border-b-0"
+              className="border-b border-border/60 px-3 py-3 last:border-b-0"
             >
-              <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-foreground/5 text-muted-foreground">
-                <ProviderIcon kind={agent.kind} className="size-4" />
-              </span>
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-foreground/5 text-muted-foreground">
+                  <ProviderIcon kind={agent.kind} className="size-4" />
+                </span>
 
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <span className="truncate text-sm font-medium text-foreground">
-                    {agent.displayName}
-                  </span>
-                  <Badge tone={badgeToneForAgentStatus(status.tone)}>
-                    {status.label}
-                  </Badge>
-                </div>
-                <p className="text-sm leading-5 text-muted-foreground">
-                  {configurationDetailForAgent(agent, reconcileResult)}
-                </p>
-                {agent.expectedEnvVars.length > 0 ? (
-                  <p className="text-xs text-muted-foreground/80">
-                    Expected credentials: {agent.expectedEnvVars.join(", ")}
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <span className="truncate text-sm font-medium text-foreground">
+                      {agent.displayName}
+                    </span>
+                    <Badge tone={badgeToneForAgentStatus(status.tone)}>
+                      {status.label}
+                    </Badge>
+                  </div>
+                  <p className="text-sm leading-5 text-muted-foreground">
+                    {configurationDetailForAgent(agent, reconcileResult)}
                   </p>
-                ) : null}
+                  {agent.expectedEnvVars.length > 0 ? (
+                    <p className="text-xs text-muted-foreground/80">
+                      Expected credentials: {agent.expectedEnvVars.join(", ")}
+                    </p>
+                  ) : null}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  loading={authTerminalSession?.isStarting ?? false}
+                  onClick={() => {
+                    if (canOpenInlineAuth) {
+                      void authTerminalWorkflow.openAuthTerminal(agent, {
+                        restart: Boolean(authTerminalSession),
+                      });
+                      return;
+                    }
+                    if (usesAuthenticationPage) {
+                      onOpenAuthentication(agent.kind);
+                      return;
+                    }
+                    onReviewSetup(agent);
+                  }}
+                >
+                  {canOpenInlineAuth
+                    ? authActionLabel
+                    : usesAuthenticationPage
+                      ? "Open auth"
+                      : "Review setup"}
+                </Button>
               </div>
 
-              <Button
-                variant="outline"
-                size="sm"
-                className="shrink-0"
-                onClick={() => {
-                  if (usesAuthenticationPage) {
-                    onOpenAuthentication(agent.kind);
-                    return;
-                  }
-                  onReviewSetup(agent);
-                }}
-              >
-                {usesAuthenticationPage ? "Open auth" : "Review setup"}
-              </Button>
+              {authTerminalSession ? (
+                <div className="pl-11">
+                  <AgentAuthTerminalPanel
+                    session={authTerminalSession}
+                    baseUrl={authTerminalWorkflow.runtimeConnection.baseUrl}
+                    authToken={authTerminalWorkflow.runtimeConnection.authToken}
+                    onClose={(kind) => {
+                      void authTerminalWorkflow.closeAuthTerminal(kind);
+                    }}
+                    onExit={(kind, code) => {
+                      void authTerminalWorkflow.handleTerminalExit(kind, code);
+                    }}
+                    onRestart={() => {
+                      void authTerminalWorkflow.openAuthTerminal(agent, { restart: true });
+                    }}
+                  />
+                </div>
+              ) : null}
             </div>
           );
         })}
@@ -344,14 +413,14 @@ function configurationDetailForAgent(
   if (reconcileResult?.outcome === "failed" && reconcileResult.message?.trim()) {
     return reconcileResult.message;
   }
-  if (agent.message?.trim()) {
-    return agent.message;
-  }
   if (agent.readiness === "credentials_required") {
     return "Add or select credentials in Agent Authentication before using this harness as a default.";
   }
   if (agent.readiness === "login_required") {
-    return "Complete authentication in Agent Authentication before using this harness as a default.";
+    return `Sign in with ${agent.displayName} in Proliferate.`;
+  }
+  if (agent.message?.trim()) {
+    return agent.message;
   }
   if (agent.readiness === "install_required") {
     return "The managed harness install has not completed yet.";

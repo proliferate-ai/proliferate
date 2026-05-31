@@ -155,15 +155,26 @@ function mobilityPromptForScenario(
         primaryActionKind: "confirm_move",
       };
     case "mobility-local-blocked":
+      return {
+        variant: "blocked",
+        direction: "local_to_cloud",
+        headline: "Prepare branch for move",
+        body: "This workspace has uncommitted changes.",
+        helper: "Commit and push these changes so the destination can check out the exact code.",
+        actionLabel: "Prepare branch",
+        warning: null,
+        blocker: null,
+        primaryActionKind: "prepare_branch",
+      };
     case "mobility-unpublished-branch":
       return {
         variant: "blocked",
         direction: "local_to_cloud",
-        headline: "Can't move this workspace to cloud yet",
+        headline: "Publish branch before moving",
         body: "This branch isn't on GitHub yet.",
-        helper: "Publish `feature/workspace-mobility` before moving to cloud.",
-        actionLabel: "Publish branch",
-        warning: "Uncommitted changes will move with the workspace after this branch is synced.",
+        helper: "Push `feature/workspace-mobility` so the destination can check out the exact commit.",
+        actionLabel: "Push and move",
+        warning: null,
         blocker: null,
         primaryActionKind: "publish_branch",
       };
@@ -171,11 +182,11 @@ function mobilityPromptForScenario(
       return {
         variant: "blocked",
         direction: "local_to_cloud",
-        headline: "Can't move this workspace to cloud yet",
-        body: "Your latest commit isn't on GitHub yet.",
-        helper: "Push `feature/workspace-mobility` before moving to cloud.",
-        actionLabel: "Push commits",
-        warning: "Uncommitted changes will move with the workspace after this branch is synced.",
+        headline: "Publish branch before moving",
+        body: "This branch has commits that only exist on this runtime.",
+        helper: "Push `feature/workspace-mobility` so the destination can check out the exact commit.",
+        actionLabel: "Push and move",
+        warning: null,
         blocker: null,
         primaryActionKind: "push_commits",
       };
@@ -183,10 +194,10 @@ function mobilityPromptForScenario(
       return {
         variant: "blocked",
         direction: "local_to_cloud",
-        headline: "Can't move this workspace to cloud yet",
+        headline: "Sync branch before moving",
         body: "This branch is out of sync with GitHub.",
         helper: "Pull or rebase locally, then try again.",
-        actionLabel: null,
+        actionLabel: "Got it",
         warning: null,
         blocker: null,
         primaryActionKind: null,

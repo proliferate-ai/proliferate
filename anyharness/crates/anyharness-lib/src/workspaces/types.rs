@@ -79,3 +79,9 @@ pub struct CreateWorktreeResult {
     pub workspace: WorkspaceRecord,
     pub setup_script: Option<SetupScriptExecutionResult>,
 }
+
+#[derive(Debug, Clone)]
+pub struct PreparedWorkspaceMobilityDestination {
+    pub workspace: WorkspaceRecord,
+    pub created: bool,
+}

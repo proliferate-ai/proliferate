@@ -33,6 +33,8 @@ export type MobilityPromptPrimaryActionKind =
   | "manage_github_access"
   | "publish_branch"
   | "push_commits"
+  | "prepare_branch"
+  | "open_git_tools"
   | "retry_prepare"
   | null;
 
@@ -58,6 +60,9 @@ export function isMobilityPromptPrimaryActionPending(
     case "publish_branch":
     case "push_commits":
       return pending.isBranchSyncing;
+    case "prepare_branch":
+    case "open_git_tools":
+      return false;
     default:
       return false;
   }
@@ -251,14 +256,20 @@ export function buildMobilityPromptState(args: {
       }),
     };
     const primaryActionKind: MobilityPromptPrimaryActionKind = blocker.code === "branch_not_published"
-      ? "publish_branch"
-      : blocker.code === "head_commit_not_published"
-        ? "push_commits"
-        : blocker.code === "github_account_required"
-          ? "connect_github"
-          : blocker.code === "cloud_repo_access"
-            ? "manage_github_access"
-            : null;
+        ? "publish_branch"
+        : blocker.code === "head_commit_not_published"
+          ? "push_commits"
+            : blocker.code === "workspace_dirty"
+              ? "prepare_branch"
+              : blocker.code === "workspace_conflicted"
+                || blocker.code === "workspace_detached"
+                || blocker.code === "git_operation_in_progress"
+                ? "open_git_tools"
+              : blocker.code === "github_account_required"
+                ? "connect_github"
+                : blocker.code === "cloud_repo_access"
+                  ? "manage_github_access"
+                  : null;
     const warning = summarizeBranchSyncRecoveryWarning({
       preflight: args.confirmSnapshot?.sourcePreflight ?? null,
       blockerCode: isDisplayMobilityBlockerCode(blocker.code) ? blocker.code : null,

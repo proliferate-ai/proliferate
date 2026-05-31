@@ -14,6 +14,8 @@ pub mod model;
 pub mod operation_gate;
 pub mod purge;
 pub mod resolver;
+#[cfg(test)]
+mod resolver_tests;
 pub mod retention;
 pub mod retention_policy;
 pub mod retire_preflight;

@@ -2,7 +2,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { cloudWorkspaceConnectionKey } from "@/hooks/access/cloud/query-keys";
 import { clearCachedCloudConnections } from "@/hooks/access/cloud/cloud-connection-cache";
-import { getCloudWorkspaceConnection } from "@proliferate/cloud-sdk/client/workspaces";
+import {
+  getCloudWorkspaceConnectionWithRetry,
+} from "@/lib/access/cloud/workspace-connection-retry";
 
 export function useCloudWorkspaceConnectionCache() {
   const queryClient = useQueryClient();
@@ -25,7 +27,7 @@ export function useCloudWorkspaceConnectionCache() {
       exact: true,
       refetchType: "none",
     });
-    const connection = await getCloudWorkspaceConnection(workspaceId);
+    const connection = await getCloudWorkspaceConnectionWithRetry(workspaceId);
     queryClient.setQueryData(queryKey, connection);
     return connection;
   }, [queryClient]);

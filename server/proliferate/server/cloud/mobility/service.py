@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 from contextlib import suppress
 from datetime import timedelta
@@ -62,10 +63,12 @@ from proliferate.server.cloud.mobility.domain.lifecycle import (
     FINAL_HANDOFF_PHASES,
     HANDOFF_PHASE_CLEANUP_FAILED,
     HANDOFF_PHASE_CLEANUP_PENDING,
+    HANDOFF_PHASE_COMPLETED,
     HANDOFF_PHASE_CUTOVER_COMMITTED,
     HANDOFF_PHASE_DESTINATION_READY,
     HANDOFF_PHASE_HANDOFF_FAILED,
     HANDOFF_PHASE_INSTALL_SUCCEEDED,
+    HANDOFF_PHASE_REPAIR_REQUIRED,
     HANDOFF_PHASE_SOURCE_FROZEN,
     HANDOFF_PHASE_START_REQUESTED,
     LIFECYCLE_CLEANUP_FAILED,
@@ -74,7 +77,6 @@ from proliferate.server.cloud.mobility.domain.lifecycle import (
     OWNER_LOCAL,
     active_lifecycle_state,
     cleanup_retry_delay_seconds,
-    is_local_to_cloud_direction,
     is_retryable_mobility_failure,
     is_valid_handoff_direction,
     is_valid_handoff_phase,
@@ -88,6 +90,7 @@ from proliferate.server.cloud.mobility.domain.lifecycle import (
     visible_failure_status_detail,
 )
 from proliferate.server.cloud.mobility.models import (
+    WorkspaceMobilityPreflightBlocker,
     WorkspaceMobilityPreflightResponse,
     mobility_workspace_detail_payload,
 )
@@ -101,6 +104,7 @@ from proliferate.utils.time import duration_ms, utcnow
 _STALE_HANDOFF_AFTER = timedelta(seconds=120)
 _BRANCH_NOT_PUBLISHED_BLOCKER = "The branch '{branch}' was not found on GitHub."
 _BRANCH_HEAD_MISMATCH_BLOCKER = "The branch '{branch}' on GitHub is not at the requested commit."
+_FULL_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 _WORKER_PROGRESS_PHASES = frozenset(
     {
         HANDOFF_PHASE_SOURCE_FROZEN,
@@ -109,6 +113,26 @@ _WORKER_PROGRESS_PHASES = frozenset(
         HANDOFF_PHASE_CLEANUP_PENDING,
     }
 )
+DESKTOP_CLEANUP_ITEM_KINDS = frozenset({"anyharness_workspace"})
+
+
+def _mobility_blocker(
+    code: str,
+    message: str,
+    *,
+    source: str = "cloud",
+    retry_action: str | None = None,
+    details: dict[str, str] | None = None,
+) -> WorkspaceMobilityPreflightBlocker:
+    return WorkspaceMobilityPreflightBlocker(
+        code=code,
+        message=message,
+        source=source,
+        retry_action=retry_action,
+        details=details,
+    )
+
+
 _ALLOWED_PHASE_TRANSITIONS: dict[str, frozenset[str]] = {
     HANDOFF_PHASE_START_REQUESTED: frozenset({HANDOFF_PHASE_SOURCE_FROZEN}),
     HANDOFF_PHASE_SOURCE_FROZEN: frozenset({HANDOFF_PHASE_DESTINATION_READY}),
@@ -128,6 +152,16 @@ _MOBILITY_BACKFILLABLE_WORKSPACE_STATUSES = frozenset(
 
 def _should_backfill_mobility_from_cloud_workspace(workspace: CloudWorkspace) -> bool:
     return workspace.status in _MOBILITY_BACKFILLABLE_WORKSPACE_STATUSES
+
+
+def _preserve_failed_handoff_during_passive_backfill(
+    *,
+    lifecycle_state: str,
+    has_active_handoff: bool,
+) -> bool:
+    # Passive list backfill may discover a destination cloud workspace, but it
+    # must not flip logical ownership after an executor failed before cutover.
+    return False
 
 
 def _phase_transition_allowed(*, current_phase: str, requested_phase: str) -> bool:
@@ -262,7 +296,7 @@ async def list_cloud_workspace_mobility_for_user(
         await backfill_cloud_workspace_mobility_for_workspace(
             workspace=workspace,
             active_lifecycle_state=active_lifecycle_state(OWNER_CLOUD),
-            is_retryable_failure=is_retryable_mobility_failure,
+            is_retryable_failure=_preserve_failed_handoff_during_passive_backfill,
         )
     return await list_cloud_workspace_mobility_store(user_id=user_id)
 
@@ -356,6 +390,10 @@ async def preflight_cloud_workspace_handoff(
     normalized_requested_base_sha = (
         requested_base_sha.strip() if requested_base_sha is not None else None
     )
+    requested_base_sha_is_full = bool(
+        normalized_requested_base_sha
+        and _FULL_SHA_RE.fullmatch(normalized_requested_base_sha) is not None
+    )
     await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
     detail_started = time.perf_counter()
     workspace = await get_cloud_workspace_mobility_detail(
@@ -363,7 +401,7 @@ async def preflight_cloud_workspace_handoff(
         mobility_workspace_id=mobility_workspace_id,
     )
     detail_elapsed_ms = duration_ms(detail_started)
-    blockers: list[str] = []
+    blockers: list[WorkspaceMobilityPreflightBlocker] = []
     if not is_valid_handoff_direction(direction):
         raise CloudApiError(
             "invalid_handoff_direction",
@@ -371,19 +409,54 @@ async def preflight_cloud_workspace_handoff(
             status_code=400,
         )
     if workspace.cloud_lost_at is not None:
-        blockers.append("cloud workspace is in cloud_lost state")
+        blockers.append(
+            _mobility_blocker(
+                "cloud_lost",
+                "Cloud workspace is in cloud_lost state.",
+                retry_action="retry_prepare",
+            )
+        )
     if workspace.active_handoff is not None:
-        blockers.append("handoff already in progress for workspace")
+        blockers.append(
+            _mobility_blocker(
+                "workspace_handoff_in_progress",
+                "Handoff already in progress for workspace.",
+            )
+        )
     active_handoff = await load_active_user_handoff_op_for_user(
         user_id=user_id,
         final_handoff_phases=FINAL_HANDOFF_PHASES,
     )
     if active_handoff is not None and active_handoff.mobility_workspace_id != workspace.id:
-        blockers.append("another handoff is already in progress for this user")
+        blockers.append(
+            _mobility_blocker(
+                "user_handoff_in_progress",
+                "Another handoff is already in progress for this user.",
+            )
+        )
     owner_blocker = owner_direction_blocker(owner=workspace.owner, direction=direction)
     if owner_blocker is not None:
-        blockers.append(owner_blocker)
-    if is_local_to_cloud_direction(direction):
+        blockers.append(
+            _mobility_blocker(
+                "owner_mismatch",
+                owner_blocker,
+            )
+        )
+    if not normalized_requested_base_sha:
+        blockers.append(
+            _mobility_blocker(
+                "missing_base_commit_sha",
+                "requestedBaseSha is required for workspace moves.",
+            )
+        )
+    elif not requested_base_sha_is_full:
+        blockers.append(
+            _mobility_blocker(
+                "invalid_base_commit_sha",
+                "requestedBaseSha must be a full 40-character commit SHA.",
+            )
+        )
+    if is_valid_handoff_direction(direction):
         user = await load_user_with_oauth_accounts_by_id(user_id)
         if user is None:
             raise CloudApiError("user_not_found", "User not found.", status_code=404)
@@ -404,22 +477,49 @@ async def preflight_cloud_workspace_handoff(
         except CloudApiError as error:
             branch_lookup_elapsed_ms = duration_ms(branch_lookup_started)
             if error.code in {"github_link_required", "github_repo_access_required"}:
-                blockers.append(error.message)
+                blockers.append(
+                    _mobility_blocker(
+                        error.code,
+                        error.message,
+                        retry_action=(
+                            "connect_github"
+                            if error.code == "github_link_required"
+                            else "manage_github_access"
+                        ),
+                    )
+                )
             else:
                 raise
         else:
             branch_lookup_elapsed_ms = duration_ms(branch_lookup_started)
             if normalized_requested_branch not in repo_branches.branches:
                 blockers.append(
-                    _BRANCH_NOT_PUBLISHED_BLOCKER.format(branch=normalized_requested_branch)
+                    _mobility_blocker(
+                        "branch_not_published",
+                        _BRANCH_NOT_PUBLISHED_BLOCKER.format(branch=normalized_requested_branch),
+                        retry_action="push_branch",
+                        details={"branch": normalized_requested_branch},
+                    )
                 )
             elif (
-                normalized_requested_base_sha
+                requested_base_sha_is_full
                 and repo_branches.branch_heads_by_name.get(normalized_requested_branch)
                 != normalized_requested_base_sha
             ):
                 blockers.append(
-                    _BRANCH_HEAD_MISMATCH_BLOCKER.format(branch=normalized_requested_branch)
+                    _mobility_blocker(
+                        "head_commit_not_published",
+                        _BRANCH_HEAD_MISMATCH_BLOCKER.format(branch=normalized_requested_branch),
+                        retry_action="push_branch",
+                        details={
+                            "branch": normalized_requested_branch,
+                            "requestedBaseSha": normalized_requested_base_sha,
+                            "githubHeadSha": repo_branches.branch_heads_by_name.get(
+                                normalized_requested_branch,
+                                "",
+                            ),
+                        },
+                    )
                 )
 
     repo_config_started = time.perf_counter()
@@ -435,9 +535,16 @@ async def preflight_cloud_workspace_handoff(
         else []
     )
     if normalized_requested_branch != workspace.git_branch:
-        blockers.append("requested branch does not match logical workspace branch")
-    if requested_base_sha is not None and not normalized_requested_base_sha:
-        blockers.append("requested base sha must be non-empty when provided")
+        blockers.append(
+            _mobility_blocker(
+                "branch_mismatch",
+                "requested branch does not match logical workspace branch",
+                details={
+                    "requestedBranch": normalized_requested_branch,
+                    "workspaceBranch": workspace.git_branch,
+                },
+            )
+        )
 
     response = WorkspaceMobilityPreflightResponse(
         can_start=not blockers,
@@ -495,8 +602,11 @@ async def start_cloud_workspace_handoff(
     if not preflight.can_start:
         raise CloudApiError(
             "mobility_preflight_failed",
-            "; ".join(preflight.blockers),
+            "; ".join(blocker.message for blocker in preflight.blockers),
             status_code=409,
+            extra_detail={
+                "blockers": [blocker.model_dump(by_alias=True) for blocker in preflight.blockers],
+            },
         )
     source_owner = normalize_owner(workspace.owner)
     target_owner = target_owner_for_direction(direction)
@@ -812,7 +922,10 @@ async def complete_cloud_workspace_handoff_cleanup(
             handoff_op_id=handoff_op_id,
         )
     except ValueError as error:
-        raise CloudApiError("handoff_not_found", str(error), status_code=404) from error
+        message = str(error)
+        if "not found" in message:
+            raise CloudApiError("handoff_not_found", message, status_code=404) from error
+        raise CloudApiError("invalid_handoff_phase", message, status_code=409) from error
 
 
 async def list_cloud_workspace_handoff_cleanup_items(
@@ -863,6 +976,12 @@ async def start_cloud_workspace_handoff_cleanup_item(
     )
     if item is None:
         raise CloudApiError("cleanup_item_not_found", "Cleanup item not found.", status_code=404)
+    if item.item_kind not in DESKTOP_CLEANUP_ITEM_KINDS:
+        raise CloudApiError(
+            "cleanup_item_server_owned",
+            "This cleanup item is completed by the server.",
+            status_code=409,
+        )
     return await update_cleanup_item_status(db, cleanup_item=item, status="in_progress")
 
 
@@ -893,6 +1012,12 @@ async def complete_cloud_workspace_handoff_cleanup_item(
     )
     if item is None:
         raise CloudApiError("cleanup_item_not_found", "Cleanup item not found.", status_code=404)
+    if item.item_kind not in DESKTOP_CLEANUP_ITEM_KINDS:
+        raise CloudApiError(
+            "cleanup_item_server_owned",
+            "This cleanup item is completed by the server.",
+            status_code=409,
+        )
     value = await update_cleanup_item_status(db, cleanup_item=item, status="completed")
     if await all_cleanup_items_completed(db, handoff_op_id=handoff_op_id):
         with suppress(CloudApiError, ValueError):
@@ -934,6 +1059,12 @@ async def fail_cloud_workspace_handoff_cleanup_item(
     )
     if item is None:
         raise CloudApiError("cleanup_item_not_found", "Cleanup item not found.", status_code=404)
+    if item.item_kind not in DESKTOP_CLEANUP_ITEM_KINDS:
+        raise CloudApiError(
+            "cleanup_item_server_owned",
+            "This cleanup item is completed by the server.",
+            status_code=409,
+        )
     value = await update_cleanup_item_status(
         db,
         cleanup_item=item,
@@ -979,6 +1110,14 @@ async def repair_cloud_workspace_handoff(
         mobility_workspace_id=mobility_workspace_id,
         handoff_op_id=handoff_op_id,
     )
+    handoff = await get_cloud_workspace_handoff_op(
+        db,
+        user_id=user_id,
+        handoff_op_id=handoff_op_id,
+        lock=True,
+    )
+    if handoff is None or handoff.mobility_workspace_id != mobility_workspace_id:
+        raise CloudApiError("handoff_not_found", "Mobility handoff not found.", status_code=404)
     if action == "mark_complete":
         if not await all_cleanup_items_completed(db, handoff_op_id=handoff_op_id):
             raise CloudApiError(
@@ -991,6 +1130,23 @@ async def repair_cloud_workspace_handoff(
             user_id=user_id,
             mobility_workspace_id=mobility_workspace_id,
             handoff_op_id=handoff_op_id,
+        )
+    if handoff.canonical_side != CANONICAL_SIDE_DESTINATION or handoff.finalized_at is None:
+        raise CloudApiError(
+            "handoff_not_finalized",
+            "Cleanup can only resume after cutover is committed.",
+            status_code=409,
+        )
+    if handoff.phase not in {
+        HANDOFF_PHASE_CUTOVER_COMMITTED,
+        HANDOFF_PHASE_CLEANUP_PENDING,
+        HANDOFF_PHASE_CLEANUP_FAILED,
+        HANDOFF_PHASE_REPAIR_REQUIRED,
+    }:
+        raise CloudApiError(
+            "invalid_handoff_phase",
+            "Cleanup can only resume from a finalized cleanup phase.",
+            status_code=409,
         )
     return await update_cloud_workspace_handoff_phase_for_user(
         db,
@@ -1024,6 +1180,10 @@ async def fail_cloud_workspace_handoff(
             user_id=user_id,
             handoff_op_id=handoff_op_id,
         )
+        if handoff is not None and (
+            handoff.phase == HANDOFF_PHASE_COMPLETED or handoff.cleanup_completed_at is not None
+        ):
+            return handoff
         phase = (
             HANDOFF_PHASE_CLEANUP_FAILED
             if handoff is not None and handoff.canonical_side == CANONICAL_SIDE_DESTINATION

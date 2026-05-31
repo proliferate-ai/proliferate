@@ -59,6 +59,7 @@ export function markCloudDisplayNameSyncCompleted(
 
 export function shouldBackfillCloudDisplayNameFromRuntime(input: {
   runtimeDisplayName: string | null | undefined;
+  runtimeWorkspaceId?: string | null | undefined;
   backfillSuppressed: boolean;
 }): {
   shouldBackfill: boolean;
@@ -70,6 +71,11 @@ export function shouldBackfillCloudDisplayNameFromRuntime(input: {
 
   const displayName = input.runtimeDisplayName?.trim() ?? "";
   if (!displayName) {
+    return { shouldBackfill: false, displayName: null };
+  }
+
+  const runtimeWorkspaceId = input.runtimeWorkspaceId?.trim() ?? "";
+  if (runtimeWorkspaceId && displayName === runtimeWorkspaceId) {
     return { shouldBackfill: false, displayName: null };
   }
 
