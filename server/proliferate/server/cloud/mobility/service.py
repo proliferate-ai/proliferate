@@ -1180,12 +1180,8 @@ async def fail_cloud_workspace_handoff(
             user_id=user_id,
             handoff_op_id=handoff_op_id,
         )
-        if (
-            handoff is not None
-            and (
-                handoff.phase == HANDOFF_PHASE_COMPLETED
-                or handoff.cleanup_completed_at is not None
-            )
+        if handoff is not None and (
+            handoff.phase == HANDOFF_PHASE_COMPLETED or handoff.cleanup_completed_at is not None
         ):
             return handoff
         phase = (

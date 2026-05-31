@@ -4,12 +4,10 @@ import {
   type AgentSummary,
 } from "@anyharness/sdk";
 import {
-  anyHarnessAgentLaunchOptionsPrefixKey,
   useAnyHarnessRuntimeContext,
   useCloseAgentLoginTerminalMutation,
   useStartAgentLoginTerminalMutation,
 } from "@anyharness/sdk-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAgentResourcesCache } from "@/hooks/access/anyharness/agents/use-agent-resources-cache";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
@@ -37,10 +35,9 @@ export function useAgentAuthTerminalWorkflow() {
   // Owns Agent Defaults' local auth terminal workflow. Components decide layout;
   // this hook owns start/close/restart and post-exit readiness refresh.
   const runtime = useAnyHarnessRuntimeContext();
-  const queryClient = useQueryClient();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
-  const { invalidateAgentSetupResources } = useAgentResourcesCache();
+  const { invalidateAgentLaunchReadinessResources } = useAgentResourcesCache();
   const startLoginTerminal = useStartAgentLoginTerminalMutation();
   const closeLoginTerminal = useCloseAgentLoginTerminalMutation();
   const [sessionsByKind, setSessionsByKind] = useState<Record<string, AgentAuthTerminalSession>>({});
@@ -57,14 +54,8 @@ export function useAgentAuthTerminalWorkflow() {
   );
 
   const refreshAgentReadiness = useCallback(async () => {
-    const normalizedRuntimeUrl = runtimeConnection.baseUrl.trim();
-    await Promise.all([
-      invalidateAgentSetupResources(normalizedRuntimeUrl),
-      queryClient.invalidateQueries({
-        queryKey: anyHarnessAgentLaunchOptionsPrefixKey(normalizedRuntimeUrl),
-      }),
-    ]);
-  }, [invalidateAgentSetupResources, queryClient, runtimeConnection.baseUrl]);
+    await invalidateAgentLaunchReadinessResources(runtimeConnection.baseUrl);
+  }, [invalidateAgentLaunchReadinessResources, runtimeConnection.baseUrl]);
 
   const closeExistingTerminal = useCallback(async (
     session: AgentAuthTerminalSession | undefined,

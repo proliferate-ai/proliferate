@@ -138,8 +138,8 @@ async def test_ensure_requested_base_sha_fetches_branch_head_and_verifies_commit
         "refs/heads/feature/cloud:refs/remotes/origin/feature/cloud"
     ) in command
     assert (
-        "test \"$(git -C /home/user/workspace rev-parse --verify "
-        "refs/remotes/origin/feature/cloud)\" = "
+        'test "$(git -C /home/user/workspace rev-parse --verify '
+        'refs/remotes/origin/feature/cloud)" = '
     ) in command
     assert "git -C /home/user/workspace rev-parse --verify" in command
     assert f"{'a' * 40}^{{commit}}" in command

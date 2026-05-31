@@ -1277,9 +1277,7 @@ async def test_start_cloud_workspace_requeues_ready_workspace_for_requested_revi
         return ("claude",)
 
     async def _save_workspace(_workspace):
-        saved_statuses.append(
-            (_workspace.status, _workspace.status_detail, _workspace.last_error)
-        )
+        saved_statuses.append((_workspace.status, _workspace.status_detail, _workspace.last_error))
         return _workspace
 
     async def _build_workspace_detail(_workspace):

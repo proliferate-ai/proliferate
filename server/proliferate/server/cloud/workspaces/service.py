@@ -2030,10 +2030,7 @@ async def start_cloud_workspace(
     has_requested_revision = bool((requested_base_sha or "").strip())
     if start_request_should_return_existing(workspace.status) and not has_requested_revision:
         return await _build_workspace_detail(workspace)
-    if (
-        has_requested_revision
-        and workspace.status == CloudWorkspaceStatus.materializing.value
-    ):
+    if has_requested_revision and workspace.status == CloudWorkspaceStatus.materializing.value:
         raise CloudApiError(
             "cloud_workspace_already_materializing",
             "Cloud workspace is already preparing. Try the move again once it is ready.",

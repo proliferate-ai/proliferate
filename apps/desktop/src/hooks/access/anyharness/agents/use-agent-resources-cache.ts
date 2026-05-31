@@ -1,4 +1,5 @@
 import {
+  anyHarnessAgentLaunchOptionsPrefixKey,
   anyHarnessAgentReconcileStatusKey,
   anyHarnessAgentsKey,
 } from "@anyharness/sdk-react";
@@ -37,7 +38,24 @@ export function useAgentResourcesCache() {
     ]);
   }, [queryClient]);
 
+  const invalidateAgentLaunchReadinessResources = useCallback(async (
+    runtimeUrl: string,
+  ) => {
+    const normalizedRuntimeUrl = runtimeUrl.trim();
+    if (!normalizedRuntimeUrl) {
+      return;
+    }
+
+    await Promise.all([
+      invalidateAgentSetupResources(normalizedRuntimeUrl),
+      queryClient.invalidateQueries({
+        queryKey: anyHarnessAgentLaunchOptionsPrefixKey(normalizedRuntimeUrl),
+      }),
+    ]);
+  }, [invalidateAgentSetupResources, queryClient]);
+
   return {
+    invalidateAgentLaunchReadinessResources,
     invalidateAgentListResources,
     invalidateAgentSetupResources,
   };
