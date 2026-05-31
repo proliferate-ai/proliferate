@@ -1,10 +1,8 @@
 # Errors
 
-Status: authoritative for server error classes, integration-error
-translation, and HTTP error mapping.
-
-Read after `docs/structures/server/README.md` when a change adds, moves, catches, or
-translates errors.
+Server errors have three homes: shared product error bases, domain-specific
+product errors, and integration-local vendor errors. Product services raise
+product/domain errors; one HTTP translation boundary turns them into responses.
 
 ## Ownership
 
@@ -145,8 +143,8 @@ Direct `HTTPException` is allowed only at actual HTTP boundaries:
   with FastAPI
 - routes returning non-product assets or callback pages where the response is
   not the normal JSON error contract
-- temporary transitional route translation while a domain has not yet moved to
-  product errors
+- route-level translation in a migration exception that does not yet have a
+  domain error type
 
 It is banned in:
 
@@ -173,9 +171,10 @@ Banned:
 - Integration code catching its own error type to produce an HTTP response.
 - Domain errors wrapping unrelated exceptions without adding product meaning.
 
-## Migration Notes
+## Migration Exceptions
 
-When migrating a domain:
+Existing code may still translate domain errors inside route handlers or keep
+service error classes outside the domain error model. When touching that code:
 
 1. Add or update `server/<domain>/errors.py`.
 2. Convert service-layer `*ServiceError` classes to domain errors.

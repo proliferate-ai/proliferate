@@ -1,11 +1,8 @@
 # Database
 
-Status: authoritative for `db/store/`, `db/models/`, transactions, and the
-type pipeline between persistence, internal logic, and wire format.
-
-Read after `docs/structures/server/README.md`. This guide details how database access is
-organized, how data flows from ORM to dataclass to Pydantic, how transactions
-are owned, and the column conventions that apply across the schema.
+The database layer owns persistence schema, query execution, transaction
+boundaries, and the type boundary between persistence, internal logic, and wire
+format. Service code sees frozen dataclasses, not ORM rows.
 
 ## Ownership
 
@@ -25,7 +22,7 @@ this guide because they're all aspects of the database layer.
 
 ORM tables. Nothing else.
 
-### Folder shape
+### Shape
 
 ```text
 db/models/
@@ -60,7 +57,7 @@ classes (a primary entity plus its junction tables).
 
 All DB access lives here.
 
-### Folder shape
+### Shape
 
 Default: flat file per resource.
 

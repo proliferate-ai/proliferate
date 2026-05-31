@@ -1,16 +1,9 @@
 # Workers
 
-Status: provisional but authoritative for current background-job cleanup.
-
-Read after `docs/structures/server/README.md`. This guide details how non-HTTP entry
-points are organized, how worker-side logic relates to HTTP-side logic, and
-when a worker subfolder is earned.
-
-This guide is intentionally modest. Proliferate does not yet have a robust
-worker framework, queue abstraction, or broad scheduler system. Do not use this
-guide as permission to invent one. It exists to keep the background jobs we
-already have from mixing entrypoint code, service orchestration, store access,
-and pure logic in the same files.
+Workers are non-HTTP entry points for domain work that runs outside the request
+lifecycle. Keep entry points, worker orchestration, stores, integrations, and
+pure logic separate in the same way HTTP code separates handlers, services,
+stores, integrations, and domain rules.
 
 Default to the simplest shape that keeps ownership clear:
 
@@ -42,7 +35,7 @@ Worker code follows the same layer law as HTTP code:
 - Worker entry points don't construct vendor clients. Worker services or
   executors call integrations through their public API.
 
-## Folder Shape
+## Shape
 
 ### Default: sibling files at the domain root
 
@@ -255,7 +248,7 @@ process entry, scheduler loop, worker-facing orchestration, and one or more
 server-side executors. The promoted shape should separate API-facing
 operations from worker-process operations.
 
-### Today (transitional)
+### Migration exception
 
 ```text
 server/<domain>/
@@ -268,7 +261,7 @@ server/<domain>/
   <external_executor_surface>.py # API-facing surface for an external executor
 ```
 
-Issues:
+This flat shape is an exception because:
 
 - Pure parsing logic belongs in `domain/`, not at the worker-shaped layer.
 - Worker-process executors and scheduler logic sit alongside API-facing
@@ -276,7 +269,7 @@ Issues:
 - API-facing services for external executors must not be mistaken for
   server-side worker executors.
 
-### Target
+### Canonical shape
 
 ```text
 server/<domain>/
@@ -329,9 +322,10 @@ The parent `service.py` remains API-facing. Worker-process concerns move into
 - A worker subfolder with only `main.py`. Promote when there's substantial
   content; otherwise keep `worker.py` at the parent.
 
-## Migration Notes
+## Migration Exceptions
 
-When promoting an existing flat layout to `worker/`:
+Existing domains may still keep worker-only files at the parent domain level.
+When promoting that layout to `worker/`:
 
 1. Identify worker-only files (executors, scheduler loop bodies, queue
    handlers).

@@ -1,10 +1,10 @@
 # Auth
 
-Status: authoritative for authentication, authorization helpers,
-resource-access route deps, and product policy rules.
-
-Read after `docs/structures/server/README.md`. This guide details the three-layer auth
-model and how each layer's responsibility is enforced.
+Server auth has three distinct boundaries: authentication identifies the user,
+resource access checks whether that user can touch a resource, and product
+policy decides whether the current resource state allows an action. Keep those
+boundaries separate so route handlers stay thin and services do not become
+hidden permission layers.
 
 ## Ownership
 
@@ -22,7 +22,7 @@ Plus one shared module:
 |---|---|
 | `auth/authorization.py` | Reusable helpers (`require_org_role`, `OwnerContext`, `PolicyVerdict`) used by both resource-access deps and policy functions |
 
-## Folder Shape
+## Shape
 
 ```text
 auth/
@@ -311,9 +311,10 @@ the handler body.
 - Mixing authentication and authorization in one dep. Each dep does one
   job; compose them via `Depends(... = Depends(...))`.
 
-## Migration Notes
+## Migration Exceptions
 
-When moving authorization helpers to `auth/authorization.py`:
+Existing code may still keep shared authorization helpers inside product
+domains. When touching that code:
 
 1. Move `require_org_role` and related helpers from
    `organizations/service.py`.
@@ -322,7 +323,8 @@ When moving authorization helpers to `auth/authorization.py`:
 3. Verify no domain-specific assumptions baked into the helpers; helpers
    are domain-agnostic.
 
-When introducing `<domain>/access.py`:
+Existing code may still do resource lookup and access checks inline in
+services. When introducing `<domain>/access.py`:
 
 1. Identify endpoints currently doing authorization inline in service.py.
 2. Move the lookup + access check to a route dep returning the resource.
@@ -330,6 +332,7 @@ When introducing `<domain>/access.py`:
 4. Remove the inline authorization from the service.
 5. Service now operates on a snapshot known to be authorized.
 
+Existing code may still keep state-based product rules inline in services.
 When introducing `<domain>/domain/policy.py`:
 
 1. Find inline `if not allowed: raise HTTPException(...)` blocks in
