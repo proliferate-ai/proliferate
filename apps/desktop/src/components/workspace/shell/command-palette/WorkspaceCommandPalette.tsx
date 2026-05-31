@@ -22,6 +22,16 @@ interface RunCommandState {
   isLaunching: boolean;
 }
 
+interface WorkspaceWebActionState {
+  openCurrentWorkspaceInWeb: () => void;
+  disabledReason: string | null;
+}
+
+interface WorkspaceRemoteAccessActionState {
+  syncToWeb: () => void;
+  syncToWebDisabledReason: string | null;
+}
+
 export interface WorkspaceCommandPaletteProps {
   open: boolean;
   onClose: () => void;
@@ -33,6 +43,8 @@ export interface WorkspaceCommandPaletteProps {
   canOpenRepositorySettings: boolean;
   repositorySettingsDisabledReason: string | null;
   runCommand: RunCommandState;
+  workspaceWebActions: WorkspaceWebActionState;
+  workspaceRemoteAccessActions: WorkspaceRemoteAccessActionState;
   openTerminalPanel: () => boolean;
   onToggleLeftSidebar: () => void;
   onToggleRightPanel: () => void;
@@ -57,6 +69,8 @@ function WorkspaceCommandPaletteContent({
   canOpenRepositorySettings,
   repositorySettingsDisabledReason,
   runCommand,
+  workspaceWebActions,
+  workspaceRemoteAccessActions,
   openTerminalPanel,
   onToggleLeftSidebar,
   onToggleRightPanel,
@@ -73,6 +87,8 @@ function WorkspaceCommandPaletteContent({
     canOpenRepositorySettings,
     repositorySettingsDisabledReason,
     runCommand,
+    workspaceWebActions,
+    workspaceRemoteAccessActions,
     openTerminalPanel,
     onToggleLeftSidebar,
     onToggleRightPanel,

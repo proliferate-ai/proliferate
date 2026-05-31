@@ -6,7 +6,9 @@ interface UseMainScreenShortcutsArgs {
   enabled?: boolean;
   canOpenCommandPalette: boolean;
   onOpenCommandPalette: () => void;
+  onOpenWorkspaceInWeb: () => void;
   onOpenTerminal: () => boolean;
+  onSyncWorkspaceToWeb: () => void;
   onToggleLeftSidebar: () => void;
   onToggleRightPanel: () => void;
 }
@@ -17,7 +19,9 @@ export function useMainScreenShortcuts({
   enabled = true,
   canOpenCommandPalette,
   onOpenCommandPalette,
+  onOpenWorkspaceInWeb,
   onOpenTerminal,
+  onSyncWorkspaceToWeb,
   onToggleLeftSidebar,
   onToggleRightPanel,
 }: UseMainScreenShortcutsArgs): void {
@@ -43,4 +47,12 @@ export function useMainScreenShortcuts({
   useShortcutHandler("workspace.open-command-palette", () => {
     onOpenCommandPalette();
   }, { enabled: enabled && canOpenCommandPalette });
+
+  useShortcutHandler("workspace.open-in-web", () => {
+    onOpenWorkspaceInWeb();
+  }, { enabled: canUseWorkspaceShortcuts });
+
+  useShortcutHandler("workspace.sync-to-web", () => {
+    onSyncWorkspaceToWeb();
+  }, { enabled: canUseWorkspaceShortcuts });
 }

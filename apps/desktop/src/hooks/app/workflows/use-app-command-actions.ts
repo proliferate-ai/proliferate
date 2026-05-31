@@ -4,6 +4,7 @@ import type { Workspace } from "@anyharness/sdk";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
+import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
 import { useSelectedLogicalWorkspace } from "@/hooks/workspaces/derived/use-selected-logical-workspace";
 import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
@@ -15,6 +16,7 @@ import { useHomeNextTargetSelectionSnapshot } from "@/hooks/home/ui/use-home-nex
 import { useHomeNextRepositorySelection } from "@/hooks/home/derived/use-home-next-repository-selection";
 import { APP_ROUTES } from "@/config/app-routes";
 import { requestSupportDialog } from "@/lib/infra/support/support-dialog-request";
+import { getProliferateWebBaseUrl } from "@/lib/infra/proliferate-web";
 import { buildCloudRepoSettingsHref, buildSettingsHref } from "@/lib/domain/settings/navigation";
 import {
   buildConfiguredCloudRepoKeys,
@@ -49,6 +51,7 @@ export interface AppCommandActions {
   goHome: AppCommandAction;
   goPlugins: AppCommandAction;
   goAutomations: AppCommandAction;
+  openWebApp: AppCommandAction;
   openSupport: AppCommandAction;
   addRepository: AppCommandAction;
   newLocalWorkspace: AppCommandAction;
@@ -65,6 +68,7 @@ export function useAppCommandActions(): AppCommandActions {
   const location = useLocation();
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const showToast = useToastStore((state) => state.show);
+  const { openExternal } = useTauriShellActions();
   const { goToTopLevelRoute, navigateToWorkspaceShell } = useWorkspaceNavigationWorkflow();
   const { selectedLogicalWorkspace } = useSelectedLogicalWorkspace();
   const { copyWorkspaceLocation, copyBranchName } = useWorkspaceCopyActions();
@@ -177,6 +181,12 @@ export function useAppCommandActions(): AppCommandActions {
   const goAutomations = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.automations);
   }, [goToTopLevelRoute]);
+  const openWebApp = useCallback(() => {
+    showToast("Opening web app...", "info");
+    void openExternal(getProliferateWebBaseUrl()).catch(() => {
+      showToast("Failed to open the web app.");
+    });
+  }, [openExternal, showToast]);
   const openSupport = useCallback(() => {
     requestSupportDialog();
   }, []);
@@ -339,6 +349,10 @@ export function useAppCommandActions(): AppCommandActions {
       execute: goAutomations,
       disabledReason: null,
     },
+    openWebApp: {
+      execute: openWebApp,
+      disabledReason: null,
+    },
     openSupport: {
       execute: openSupport,
       disabledReason: null,
@@ -385,6 +399,7 @@ export function useAppCommandActions(): AppCommandActions {
     goHome,
     goPlugins,
     goAutomations,
+    openWebApp,
     openSupport,
     openSettings,
     selectedWorkspaceCopyMetadata.branchName,

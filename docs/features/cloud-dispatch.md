@@ -509,6 +509,16 @@ Web app's `/workspaces/{id}` route resolves the workspace,
 applies `can_view_cloud_workspace` (spec 05 §5.7), and renders
 the workspace.
 
+Desktop ships default shortcuts for the web handoff verbs:
+
+- `Cmd+Option+W` on macOS / `Ctrl+Alt+W` elsewhere opens the current
+  workspace in the web app when the workspace has a Cloud link.
+- `Cmd+Option+S` on macOS / `Ctrl+Alt+S` elsewhere starts or resumes
+  remote-access sync for the current workspace so it becomes available from
+  web.
+- `Cmd+Ctrl+W` on macOS / `Ctrl+Alt+Shift+W` elsewhere opens the web app
+  without targeting a workspace.
+
 Mobile app handles `https://app.proliferate.ai/workspaces/{id}`
 via universal link / app link config:
 

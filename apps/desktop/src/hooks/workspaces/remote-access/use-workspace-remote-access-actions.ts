@@ -41,6 +41,10 @@ function remoteAccessEnabled(exposureState: string | null | undefined): boolean 
     || exposureState === "stale";
 }
 
+function remoteAccessAvailableFromWeb(exposureState: string | null | undefined): boolean {
+  return exposureState === "tracked" || exposureState === "live";
+}
+
 function remoteAccessLabel(exposureState: string | null | undefined): string {
   switch (exposureState) {
     case "live":
@@ -148,6 +152,7 @@ export function useWorkspaceRemoteAccessActions() {
   const localWorkspace = logicalWorkspace?.localWorkspace ?? null;
   const exposureState = cloudWorkspace?.exposureState ?? "untracked";
   const isEnabled = remoteAccessEnabled(exposureState);
+  const isAvailableFromWeb = remoteAccessAvailableFromWeb(exposureState);
   const label = remoteAccessLabel(exposureState);
   const dispatchTarget = useMemo(() => (
     (targetsQuery.data ?? []).find((target) => (
@@ -182,6 +187,13 @@ export function useWorkspaceRemoteAccessActions() {
         : dispatchTarget
           ? "Create a Cloud record for this local workspace and start syncing it."
           : "Start Desktop dispatch sync and make this workspace available from web and mobile.";
+  const syncToWebDisabledReason = isPending
+    ? "Remote access update already in progress."
+    : mobility.selectionLocked
+      ? "Workspace sync is still finishing."
+      : (!cloudWorkspaceId && !canBootstrap)
+        ? title
+        : null;
 
   const ensureDispatchTarget = useCallback(async () => {
     if (dispatchTarget) {
@@ -259,14 +271,10 @@ export function useWorkspaceRemoteAccessActions() {
     }
   }, [cloudWorkspace, createExistingTargetEnrollment, targetsQuery]);
 
-  const handleClick = useCallback(async () => {
-    if (disabled) {
-      return;
-    }
+  const enableRemoteAccess = useCallback(async () => {
     try {
-      if (cloudWorkspaceId && isEnabled) {
-        await disableMutation.mutateAsync(cloudWorkspaceId);
-        showToast("Remote access disabled.");
+      if (cloudWorkspaceId && isAvailableFromWeb) {
+        showToast("Workspace is already available from web.", "info");
       } else if (cloudWorkspaceId) {
         await ensureWorkspaceSyncWorker();
         await enableMutation.mutateAsync(cloudWorkspaceId);
@@ -299,16 +307,48 @@ export function useWorkspaceRemoteAccessActions() {
   }, [
     bootstrapMutation,
     cloudWorkspaceId,
-    disabled,
-    disableMutation,
     enableMutation,
     ensureDispatchTarget,
     ensureWorkspaceSyncWorker,
-    isEnabled,
+    isAvailableFromWeb,
     localWorkspace,
     logicalWorkspace,
     showToast,
   ]);
+
+  const handleClick = useCallback(async () => {
+    if (disabled) {
+      return;
+    }
+    if (cloudWorkspaceId && isEnabled) {
+      try {
+        await disableMutation.mutateAsync(cloudWorkspaceId);
+        showToast("Remote access disabled.");
+      } catch (error) {
+        console.error("Remote access update failed", error);
+        showToast(errorMessage(error));
+      }
+      return;
+    }
+
+    await enableRemoteAccess();
+  }, [
+    cloudWorkspaceId,
+    disabled,
+    disableMutation,
+    enableRemoteAccess,
+    isEnabled,
+    showToast,
+  ]);
+
+  const syncToWeb = useCallback(() => {
+    if (syncToWebDisabledReason) {
+      showToast(syncToWebDisabledReason);
+      return;
+    }
+
+    void enableRemoteAccess();
+  }, [enableRemoteAccess, showToast, syncToWebDisabledReason]);
 
   return {
     disabled,
@@ -316,6 +356,8 @@ export function useWorkspaceRemoteAccessActions() {
     isEnabled,
     isPending,
     label,
+    syncToWeb,
+    syncToWebDisabledReason,
     title,
   };
 }

@@ -1,10 +1,16 @@
 import { Smartphone, Spinner } from "@proliferate/ui/icons";
-import { useWorkspaceRemoteAccessActions } from "@/hooks/workspaces/remote-access/use-workspace-remote-access-actions";
+import { useWorkspaceShellActions } from "@/components/workspace/shell/providers/WorkspaceShellActionsContext";
 import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
 
 export function WorkspaceRemoteAccessFooterControl() {
+  const shellActions = useWorkspaceShellActions();
+  const actions = shellActions?.workspaceRemoteAccessActions;
+  if (!actions) {
+    return null;
+  }
+
   const { disabled, handleClick, isEnabled, isPending, label, title } =
-    useWorkspaceRemoteAccessActions();
+    actions;
 
   return (
     <ComposerControlButton
