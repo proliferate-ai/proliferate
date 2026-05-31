@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { CloudOwnerSelection } from "@proliferate/cloud-sdk";
+import type { BillingReturnSurface, CloudOwnerSelection } from "@proliferate/cloud-sdk";
 import {
   useCloudBilling,
   useCloudBillingActions,
@@ -29,6 +29,7 @@ export interface BillingSettingsSurfaceProps {
   organization: BillingSettingsOrganization | null;
   organizationLoading?: boolean;
   enabled?: boolean;
+  billingReturnSurface?: BillingReturnSurface;
   checkoutReturnState?: BillingCheckoutReturnState;
   onOpenUrl: (url: string) => void | Promise<void>;
   onOpenOrganizationSettings: () => void;
@@ -38,15 +39,17 @@ export function BillingSettingsSurface({
   organization,
   organizationLoading = organization?.loading ?? false,
   enabled = true,
+  billingReturnSurface = "web",
   checkoutReturnState = null,
   onOpenUrl,
   onOpenOrganizationSettings,
 }: BillingSettingsSurfaceProps) {
+  const billingReturnOptions = { returnSurface: billingReturnSurface };
   const comparisonOwner = organization?.canManageBilling
     ? { ownerScope: "organization" as const, organizationId: organization.id }
     : undefined;
   const comparisonBilling = useCloudBilling(comparisonOwner, enabled);
-  const comparisonActions = useCloudBillingActions(comparisonOwner);
+  const comparisonActions = useCloudBillingActions(comparisonOwner, billingReturnOptions);
   const [comparisonActionError, setComparisonActionError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -118,6 +121,7 @@ export function BillingSettingsSurface({
           actionsEnabled={false}
           accountCreditsOnly
           enabled={enabled}
+          billingReturnSurface={billingReturnSurface}
           onOpenUrl={onOpenUrl}
         />
 
@@ -155,6 +159,7 @@ export function BillingSettingsSurface({
             checkoutReturnState={checkoutReturnState}
             actionsEnabled
             enabled={enabled}
+            billingReturnSurface={billingReturnSurface}
             onOpenUrl={onOpenUrl}
           />
         ) : organization ? (
@@ -179,6 +184,7 @@ function BillingOwnerController({
   actionsEnabled,
   accountCreditsOnly = false,
   enabled,
+  billingReturnSurface,
   onOpenUrl,
 }: {
   title: string;
@@ -189,10 +195,11 @@ function BillingOwnerController({
   actionsEnabled: boolean;
   accountCreditsOnly?: boolean;
   enabled: boolean;
+  billingReturnSurface: BillingReturnSurface;
   onOpenUrl: (url: string) => void | Promise<void>;
 }) {
   const billing = useCloudBilling(owner, enabled);
-  const billingActions = useCloudBillingActions(owner);
+  const billingActions = useCloudBillingActions(owner, { returnSurface: billingReturnSurface });
   const billingPlan = billing.data;
   const [actionError, setActionError] = useState<string | null>(null);
   const invoiceUrl = billingPlan?.hostedInvoiceUrl ?? null;

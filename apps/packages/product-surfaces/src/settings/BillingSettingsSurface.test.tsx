@@ -125,6 +125,31 @@ describe("BillingSettingsSurface", () => {
     expect(cloudHooks.createBillingPortal).toHaveBeenCalledTimes(1);
   });
 
+  it("passes the selected return surface to billing actions", () => {
+    render(
+      <BillingSettingsSurface
+        billingReturnSurface="desktop"
+        organization={{
+          id: "org_1",
+          name: "Team One",
+          canManageBilling: true,
+          loading: false,
+        }}
+        onOpenUrl={vi.fn()}
+        onOpenOrganizationSettings={vi.fn()}
+      />,
+    );
+
+    expect(cloudHooks.useCloudBillingActions).toHaveBeenCalledWith(
+      { ownerScope: "organization", organizationId: "org_1" },
+      { returnSurface: "desktop" },
+    );
+    expect(cloudHooks.useCloudBillingActions).toHaveBeenCalledWith(
+      undefined,
+      { returnSurface: "desktop" },
+    );
+  });
+
   it("shows billing action errors from failed checkout starts", async () => {
     cloudHooks.useCloudBilling.mockImplementation(() => ({
       data: billingPlan(),
