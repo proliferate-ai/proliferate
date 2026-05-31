@@ -114,7 +114,24 @@ at the start of the task, not halfway through implementation.
 
 1. `docs/structures/server/README.md`
 
-### AnyHarness Runtime (`anyharness/crates/**`)
+### Proliferate Worker (`anyharness/crates/proliferate-worker/**`)
+
+1. `docs/structures/proliferate-worker/README.md`
+
+### Proliferate Supervisor (`anyharness/crates/proliferate-supervisor/**`)
+
+1. `docs/structures/proliferate-supervisor/README.md`
+2. `install/README.md` when changing SSH installer config, service generation,
+   target install layout, or target smoke-test behavior.
+3. `docs/structures/server/README.md` when changing managed-cloud bootstrap
+   code that writes supervisor config or launches supervisor.
+
+### AnyHarness Runtime
+
+Applies to `anyharness/crates/anyharness/**`,
+`anyharness/crates/anyharness-lib/**`,
+`anyharness/crates/anyharness-contract/**`, and
+`anyharness/crates/anyharness-credential-discovery/**`.
 
 1. `docs/structures/anyharness/README.md`
 2. The focused guide under `docs/structures/anyharness/guides/**` for the layer being
