@@ -3,6 +3,146 @@
 Read this doc before touching release workflows, deployment infra, updater
 publishing, or the desktop in-app update flow.
 
+## Agent Deployment Runbook
+
+Use this section when another agent is asked to deploy a merged change to
+staging or production. The detailed reference sections below explain how the
+workflows are built; this section is the operator path.
+
+Safe prompt to give an agent:
+
+```text
+Read docs/dev/ci-cd.md, then deploy <surface or all> to <staging or production>
+from latest main. Watch the GitHub Actions run end to end, approve required
+environment gates, fix or report any failing lane with the exact failing job
+and logs, and verify the deployed URLs/artifacts before finishing.
+```
+
+Before deploying:
+
+1. Confirm the target commit is on `main`.
+2. Confirm CI passed for that commit.
+3. Decide whether this is a normal detected-surface deploy, a forced full
+   deploy, or a deliberately gated partial deploy.
+4. Inspect the target environment gates before dispatching:
+   - `MOBILE_DEPLOY_ENABLED`
+   - `EAS_SUBMIT_ENABLED`
+   - `DESKTOP_DEPLOY_ENABLED`
+   - `WORKERS_DEPLOY_ENABLED`
+5. Do not print or document secret values. If a secret is invalid, update the
+   GitHub environment secret and mention only that it was refreshed.
+
+### Staging
+
+Normal staging flow:
+
+1. Merge the PR to `main`.
+2. Wait for `CI` on `main` to finish successfully.
+3. Let `Deploy Staging` run from the `workflow_run` trigger.
+4. Watch the `Deploy Staging` run until every selected lane finishes.
+5. Verify the staging surfaces that ran.
+
+Manual staging dispatch is allowed when the automatic run did not start or
+when explicitly requested:
+
+```text
+Workflow: Deploy Staging
+ref: <main SHA or ref>
+force_surfaces: <blank, comma-separated surfaces, or all>
+dry_run: false
+```
+
+For a staging plan only, use `dry_run=true` and do not treat it as a deploy.
+
+### Production
+
+Production is promoted manually from a staging-tested commit:
+
+```text
+Workflow: Promote Production
+ref: <main SHA>
+force_surfaces: <blank, comma-separated surfaces, or all>
+require_staging_success: true
+dry_run: false
+```
+
+Normal production flow:
+
+1. Confirm a successful `Deploy Staging` run exists for the exact `main` SHA.
+2. Dispatch `Promote Production` with `require_staging_success=true`.
+3. Approve the GitHub `Production` environment gates as they appear.
+4. Watch every selected lane until completion.
+5. Verify the production surfaces that ran.
+
+Bypass `require_staging_success` only when explicitly directed. If bypassing
+staging, the agent must state that staging was bypassed and should watch the
+E2B lane closely because production will build and smoke the immutable template
+before moving the rolling production tag.
+
+### Surface Selection
+
+The workflow detects deploy surfaces from the diff against the previous
+successful deploy. `force_surfaces` is additive: it adds surfaces to whatever
+the diff already detected. It is not an "only these surfaces" filter.
+
+Use these values:
+
+```text
+force_surfaces=<blank>  # deploy only detected surfaces
+force_surfaces=all      # deploy every lane that is enabled by env gates
+force_surfaces=web      # deploy detected surfaces plus web
+```
+
+If the intent is "only web" but the diff also detects mobile, server, E2B, or
+desktop, do not assume `force_surfaces=web` will suppress the other lanes.
+Temporarily use the relevant environment gate only when the operator explicitly
+wants a lane suppressed.
+
+### Verification
+
+Always verify the surfaces that actually ran:
+
+```text
+API production: curl -fsS https://app.proliferate.com/api/health
+API staging: curl -fsS https://staging-app.proliferate.com/api/health
+
+Web production: curl -I https://web.proliferate.com/
+Web staging: curl -I https://staging.proliferate.com/
+
+Desktop stable updater:
+curl -fsS https://downloads.proliferate.com/desktop/stable/latest.json
+
+Mobile/TestFlight:
+Confirm EAS submit finished for the exact build id produced by the build step,
+then confirm App Store Connect/TestFlight processing for the matching app,
+version, and build number.
+
+E2B:
+Confirm the deploy job promoted the expected rolling tag (`staging` or
+`production`) and the smoke step passed.
+```
+
+When reporting back, include the workflow run URL, commit SHA, surfaces that
+ran, skipped lanes, verification results, and any follow-up needed.
+
+### Failure Rules
+
+- Do not call a deploy successful while a selected lane is still running,
+  waiting for approval, failed, or canceled.
+- If web fails on `vercel pull` or `vercel deploy` with an invalid token,
+  refresh the `VERCEL_TOKEN` environment secret from a valid local or
+  organization token; never paste the token in chat or docs.
+- If mobile builds an IPA but EAS submit fails, the app did not reach
+  TestFlight. Open the Expo submission detail and inspect the `jobRun.errors`
+  detail before changing repo code.
+- If mobile reports `EAS_UPLOAD_TO_ASC_VERSION_DUPLICATE`, confirm production
+  is using EAS remote build numbers and that the workflow submitted the captured
+  build id, not `--latest`.
+- If desktop fails during Apple notarization after signing and compiling, retry
+  once before changing code; repeated failures need the notary log.
+- E2B cache save/restore warnings are not failures when the E2B job completes
+  and smoke passes.
+
 ## 1. File Tree
 
 ```text
@@ -663,7 +803,10 @@ Mobile/TestFlight operational notes:
 - `MOBILE_DEPLOY_ENABLED=true` only means the mobile lane runs.
 - The `Build iOS app` step uploads an IPA to EAS Build. That alone does not
   update TestFlight.
-- TestFlight is updated only after `Submit latest iOS build` succeeds. If EAS
+- The mobile workflow captures the build id from `Build iOS app` and submits
+  that exact build id. Do not change this back to `eas submit --latest`; that
+  can race with a newer staging or manual iOS build and submit the wrong IPA.
+- TestFlight is updated only after `Submit iOS build` succeeds. If EAS
   reports a finished IPA and then `Something went wrong when submitting your
   app to Apple App Store Connect`, the build did not reach TestFlight.
 - Set `EAS_SUBMIT_ENABLED=false` for build-only mobile validation. Leave it
@@ -672,11 +815,15 @@ Mobile/TestFlight operational notes:
 
 Known failure signatures and what they mean:
 
-- `Submit latest iOS build` fails after EAS prints `Build finished`, an IPA URL,
+- `Submit iOS build` fails after EAS prints `Build finished`, an IPA URL,
   `Scheduled iOS submission`, and then `Something went wrong when submitting
   your app to Apple App Store Connect`: the app was built, but TestFlight was
   not updated. The failure is in EAS Submit/App Store Connect after the IPA
   exists, not in the repository build.
+- `EAS_UPLOAD_TO_ASC_VERSION_DUPLICATE`: App Store Connect has already seen the
+  app version/build number pair. Production uses EAS remote build numbers with
+  `autoIncrement=true`; check that the submitted build is the production build
+  and that the workflow used the captured build id, not `--latest`.
 - First response: open the Expo submission URL from the job log and check the
   detailed submission error. If the EAS UI does not show a specific app metadata
   or credential error, retry submit for the already-built IPA before changing
