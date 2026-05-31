@@ -97,6 +97,31 @@ a {
   backdrop-filter: var(--color-composer-backdrop-filter);
 }
 
+/* ---- Proliferate icon: one-shot resolve animation ---- */
+@keyframes proliferate-resolve {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.animate-resolve-0 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0s forwards; }
+.animate-resolve-1 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.05s forwards; }
+.animate-resolve-2 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.1s forwards; }
+.animate-resolve-3 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.15s forwards; }
+.animate-resolve-4 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.2s forwards; }
+.animate-resolve-5 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.25s forwards; }
+.animate-resolve-6 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.3s forwards; }
+.animate-resolve-7 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.35s forwards; }
+.animate-resolve-8 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.4s forwards; }
+
+@keyframes brand-mark-fade-out {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.animate-brand-mark-fade-out {
+  animation: brand-mark-fade-out 0.22s ease-out forwards;
+}
+
 @keyframes web-sidebar-panel-slide-in {
   from {
     opacity: 0;

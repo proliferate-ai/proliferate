@@ -67,6 +67,15 @@ describe("CloudChatSurface", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy details" }));
     expect(onCopy).toHaveBeenCalledTimes(1);
   });
+
+  it("shows a transcript skeleton without replacing the loaded shell", () => {
+    renderSurface({}, { transcriptLoading: true });
+
+    expect(screen.getByText("Bramble")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Switch sessions in Bramble/u })).toBeTruthy();
+    expect(screen.getByRole("status", { name: "Loading session content" })).toBeTruthy();
+    expect(screen.queryByText("No transcript yet")).toBeNull();
+  });
 });
 
 const baseHeader: CloudChatHeaderView = {
@@ -105,11 +114,15 @@ const baseHeader: CloudChatHeaderView = {
   },
 };
 
-function renderSurface(header: Partial<CloudChatHeaderView> = {}) {
+function renderSurface(
+  header: Partial<CloudChatHeaderView> = {},
+  options: { transcriptLoading?: boolean } = {},
+) {
   return render(
     <CloudChatSurface
       header={{ ...baseHeader, ...header }}
       transcriptRows={[]}
+      transcriptLoading={options.transcriptLoading}
       emptyTitle="No transcript yet"
       composer={{
         value: "",

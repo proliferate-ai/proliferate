@@ -10,7 +10,7 @@ import { SessionCheckScreen } from "@/components/auth/SessionCheckScreen";
 import {
   BRAILLE_SWEEP_DOT_FRAMES,
   BRAILLE_SWEEP_FRAME_INTERVAL_MS,
-} from "@/hooks/ui/use-braille-sweep";
+} from "@proliferate/product-ui/brand/ProliferateLivingMark";
 import {
   buildUiTextScaleCssVariables,
   DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES,

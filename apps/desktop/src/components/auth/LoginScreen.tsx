@@ -1,4 +1,4 @@
-import { ProliferateLivingMark } from "@/components/brand/ProliferateLivingMark";
+import { ProliferateLivingMark } from "@proliferate/product-ui/brand/ProliferateLivingMark";
 import { AuthAppearanceBoundary } from "@/components/auth/AuthAppearanceBoundary";
 import { ArrowRight, GitHub } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";

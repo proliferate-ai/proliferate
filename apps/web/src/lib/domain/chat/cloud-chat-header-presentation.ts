@@ -4,7 +4,10 @@ import type {
   CloudSessionProjection,
   CloudWorkspaceSnapshot,
 } from "@proliferate/cloud-sdk";
-import type { cloudCommandReadiness } from "@proliferate/product-domain/workspaces/cloud-work-inventory";
+import {
+  cloudWorkspaceRuntimeIsInProgress,
+  type cloudCommandReadiness,
+} from "@proliferate/product-domain/workspaces/cloud-work-inventory";
 
 type HeaderWorkspace = NonNullable<CloudWorkspaceSnapshot["workspace"]>;
 type CloudChatHeaderTone =
@@ -37,7 +40,10 @@ export function buildCloudChatHeaderStatus(input: {
   if (workspaceHasError(input.workspace)) {
     return { label: "Error", tone: "destructive" };
   }
-  if (workspaceIsPreparing(input.workspace) || input.workspacePreparationMessage) {
+  if (
+    input.workspacePreparationMessage
+    || (workspaceIsPreparing(input.workspace) && input.commandReadiness.state !== "ready")
+  ) {
     return { label: "Starting", tone: "info", live: true };
   }
   if (sessionHasError(input.session)) {
@@ -156,8 +162,7 @@ function workspaceIsPreparing(workspace: HeaderWorkspace): boolean {
   return workspace.workspaceStatus === "pending"
     || workspace.workspaceStatus === "materializing"
     || workspace.workspaceStatus === "needs_rematerialization"
-    || workspace.runtime?.status === "pending"
-    || workspace.runtime?.status === "provisioning";
+    || cloudWorkspaceRuntimeIsInProgress(workspace);
 }
 
 function sessionHasPendingInput(

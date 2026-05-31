@@ -1,4 +1,4 @@
-import { ProliferateLivingMark } from "@/components/brand/ProliferateLivingMark";
+import { ProliferateLivingMark } from "@proliferate/product-ui/brand/ProliferateLivingMark";
 import { AuthAppearanceBoundary } from "@/components/auth/AuthAppearanceBoundary";
 import { AUTH_GATE_LABELS } from "@/copy/auth/auth-copy";
 import { twMerge } from "tailwind-merge";

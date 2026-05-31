@@ -4,27 +4,48 @@ import {
   ProliferateIcon,
   ProliferateIconResolve,
 } from "@proliferate/ui/proliferate-icons";
-import {
-  BRAILLE_SWEEP_DOT_FRAMES,
-  BRAILLE_SWEEP_FRAME_INTERVAL_MS,
-} from "@/hooks/ui/use-braille-sweep";
+
+export const BRAILLE_SWEEP_DOT_FRAMES = [
+  [0],
+  [0, 1, 4],
+  [0, 1, 2, 4, 5, 8],
+  [0, 1, 2, 3, 4, 5, 6, 8, 9, 12],
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13],
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13],
+  [0, 1, 2, 3, 4, 5, 6, 8, 9, 12],
+  [0, 1, 2, 4, 5, 8],
+  [0, 1, 4],
+  [0],
+] as const;
+
+export const BRAILLE_SWEEP_FRAME_INTERVAL_MS = 60;
 
 const BRAILLE_DOT_INDICES = Array.from({ length: 16 }, (_, index) => index);
 const ICON_ENTER_MS = 700;
 const ICON_HOLD_MS = 950;
 const ICON_EXIT_MS = 220;
 const BRAILLE_END_HOLD_MS = 120;
+const MARK_LAYER_CLASS = "absolute inset-0 flex items-center justify-center";
 
 interface ProliferateLivingMarkProps {
   className?: string;
   complete?: boolean;
   onResolved?: () => void;
+  testIds?: {
+    root?: string;
+    brailleLayer?: string;
+    iconLayer?: string;
+  };
 }
 
 export function ProliferateLivingMark({
   className,
   complete = false,
   onResolved,
+  testIds,
 }: ProliferateLivingMarkProps) {
   const prefersReducedMotion = usePrefersReducedMotion();
   const resolvedRef = useRef(false);
@@ -38,6 +59,8 @@ export function ProliferateLivingMark({
     "grid size-12 shrink-0 grid-cols-4 grid-rows-4 gap-1.5 text-foreground",
     className,
   );
+  const visibleBrailleDots =
+    BRAILLE_SWEEP_DOT_FRAMES[brailleIndex] ?? BRAILLE_SWEEP_DOT_FRAMES[0];
 
   useEffect(() => {
     if (prefersReducedMotion || phase !== "braille") {
@@ -46,7 +69,7 @@ export function ProliferateLivingMark({
 
     setBrailleIndex(0);
 
-    const timer = setInterval(() => {
+    const timer = window.setInterval(() => {
       setBrailleIndex((current) => {
         if (current >= BRAILLE_SWEEP_DOT_FRAMES.length - 1) {
           return current;
@@ -55,7 +78,7 @@ export function ProliferateLivingMark({
       });
     }, BRAILLE_SWEEP_FRAME_INTERVAL_MS);
 
-    return () => clearInterval(timer);
+    return () => window.clearInterval(timer);
   }, [phase, prefersReducedMotion]);
 
   useEffect(() => {
@@ -66,12 +89,12 @@ export function ProliferateLivingMark({
       return;
     }
 
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       setCycle((current) => current + 1);
       setPhase("icon-enter");
     }, BRAILLE_END_HOLD_MS);
 
-    return () => clearTimeout(timer);
+    return () => window.clearTimeout(timer);
   }, [brailleIndex, phase, prefersReducedMotion]);
 
   useEffect(() => {
@@ -79,8 +102,8 @@ export function ProliferateLivingMark({
       return;
     }
 
-    const timer = setTimeout(() => setPhase("icon-hold"), ICON_ENTER_MS);
-    return () => clearTimeout(timer);
+    const timer = window.setTimeout(() => setPhase("icon-hold"), ICON_ENTER_MS);
+    return () => window.clearTimeout(timer);
   }, [phase, prefersReducedMotion]);
 
   useEffect(() => {
@@ -97,8 +120,8 @@ export function ProliferateLivingMark({
       return () => window.cancelAnimationFrame(frame);
     }
 
-    const timer = setTimeout(() => setPhase("icon-exit"), ICON_HOLD_MS);
-    return () => clearTimeout(timer);
+    const timer = window.setTimeout(() => setPhase("icon-exit"), ICON_HOLD_MS);
+    return () => window.clearTimeout(timer);
   }, [complete, onResolved, phase, prefersReducedMotion]);
 
   useEffect(() => {
@@ -111,8 +134,8 @@ export function ProliferateLivingMark({
       return;
     }
 
-    const timer = setTimeout(() => setPhase("braille"), ICON_EXIT_MS);
-    return () => clearTimeout(timer);
+    const timer = window.setTimeout(() => setPhase("braille"), ICON_EXIT_MS);
+    return () => window.clearTimeout(timer);
   }, [complete, phase, prefersReducedMotion]);
 
   useEffect(() => {
@@ -127,39 +150,45 @@ export function ProliferateLivingMark({
 
   if (prefersReducedMotion) {
     return (
-      <div className="flex size-12 items-center justify-center">
+      <div
+        aria-hidden="true"
+        className="flex size-12 items-center justify-center"
+        data-testid={testIds?.root}
+      >
         <ProliferateIcon className={iconClassName} />
       </div>
     );
   }
 
   return (
-    <div className="relative size-12 shrink-0 overflow-hidden">
-      {phase === "braille" && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <LivingBrailleMark
-            className={brailleClassName}
-            visibleDots={
-              BRAILLE_SWEEP_DOT_FRAMES[brailleIndex] ?? BRAILLE_SWEEP_DOT_FRAMES[0]
-            }
-          />
+    <div
+      aria-hidden="true"
+      className="relative size-12 shrink-0 overflow-hidden"
+      data-testid={testIds?.root}
+    >
+      {phase === "braille" ? (
+        <div className={MARK_LAYER_CLASS} data-testid={testIds?.brailleLayer}>
+          <LivingBrailleMark className={brailleClassName} visibleDots={visibleBrailleDots} />
         </div>
-      )}
-      {phase === "icon-enter" && (
-        <div className="absolute inset-0 flex items-center justify-center">
+      ) : null}
+      {phase === "icon-enter" ? (
+        <div className={MARK_LAYER_CLASS} data-testid={testIds?.iconLayer}>
           <ProliferateIconResolve key={cycle} className={iconClassName} />
         </div>
-      )}
-      {phase === "icon-hold" && (
-        <div className="absolute inset-0 flex items-center justify-center">
+      ) : null}
+      {phase === "icon-hold" ? (
+        <div className={MARK_LAYER_CLASS} data-testid={testIds?.iconLayer}>
           <ProliferateIcon className={iconClassName} />
         </div>
-      )}
-      {phase === "icon-exit" && (
-        <div className="absolute inset-0 flex animate-brand-mark-fade-out items-center justify-center">
+      ) : null}
+      {phase === "icon-exit" ? (
+        <div
+          className={twMerge(MARK_LAYER_CLASS, "animate-brand-mark-fade-out")}
+          data-testid={testIds?.iconLayer}
+        >
           <ProliferateIcon className={iconClassName} />
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -201,10 +230,7 @@ function LivingBrailleMark({
   const visibleDotSet = new Set(visibleDots);
 
   return (
-    <span
-      aria-hidden
-      className={className}
-    >
+    <span aria-hidden="true" className={className}>
       {BRAILLE_DOT_INDICES.map((dotIndex) => {
         const isVisible = visibleDotSet.has(dotIndex);
 

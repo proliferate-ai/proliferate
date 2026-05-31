@@ -23,7 +23,7 @@ export function RecentWorkStatusDot({
         aria-hidden="true"
         className={`size-1.5 shrink-0 rounded-full ${
           indicator.hollow ? "border border-current bg-transparent" : "bg-current"
-        } ${indicator.live ? "animate-pulse" : ""}`}
+        } ${indicator.live ? "animate-pulse motion-reduce:animate-none" : ""}`}
       />
       {showLabel ? (
         <span className="min-w-0 truncate text-xs leading-4">
@@ -40,7 +40,7 @@ function statusToneClass(
 ): string {
   switch (indicator.tone) {
     case "attention":
-      return "text-warning";
+      return surface === "sidebar" ? "text-sidebar-muted-foreground" : "text-warning";
     case "progress":
       return "text-info";
     case "success":

@@ -70,6 +70,7 @@ import {
 } from "@proliferate/product-domain/chats/cloud/harness-availability";
 import {
   cloudCommandReadiness,
+  cloudWorkspaceRuntimeIsInProgress,
   recentWorkCommandability,
 } from "@proliferate/product-domain/workspaces/cloud-work-inventory";
 
@@ -79,6 +80,7 @@ import {
   buildCloudChatHeaderStatus,
   cloudChatSessionStatusLabel,
 } from "../../../lib/domain/chat/cloud-chat-header-presentation";
+import { shouldShowInitialCloudTranscriptLoading } from "../../../lib/domain/chat/cloud-chat-loading-presentation";
 import {
   dispatchPendingHomePrompt,
   enqueuePromptCommandWithRetry,
@@ -94,6 +96,7 @@ import {
   savePendingHomePrompt,
   type PendingHomePrompt,
 } from "../../../lib/access/cloud/pending-home-prompt-store";
+import { CloudChatWorkspaceLoadingState } from "./CloudChatWorkspaceLoadingState";
 import {
   clearWebCloudSessionDraft,
   createWebCloudSessionDraft,
@@ -214,9 +217,8 @@ export function ChatScreen() {
     () => cloudPendingInteractionsRequireProjectedRows(pendingInteractions),
     [pendingInteractions],
   );
-  const visiblePendingHomePromptStatus = isCopyFeedbackStatus(pendingHomePromptStatus)
-    ? null
-    : friendlyCommandStatusMessage(pendingHomePromptStatus) ?? pendingHomePromptStatus;
+  const visiblePendingHomePromptStatus =
+    friendlyCommandStatusMessage(pendingHomePromptStatus) ?? pendingHomePromptStatus;
   const pendingPromptCommandId = useMemo(
     () => latestPendingPromptCommandId(pendingInteractions),
     [pendingInteractions],
@@ -1660,12 +1662,13 @@ export function ChatScreen() {
     }
   }
 
-  async function copyComposerFooterValue(value: string, label: string) {
-    setPendingHomePromptStatus((current) => isCopyFeedbackStatus(current) ? null : current);
+  async function copyComposerFooterValue(value: string, label: string): Promise<boolean> {
     try {
       await navigator.clipboard.writeText(value);
+      return true;
     } catch {
       console.warn(`${label} could not be copied.`);
+      return false;
     }
   }
 
@@ -1710,12 +1713,21 @@ export function ChatScreen() {
   }
 
   if (workspaceQuery.isLoading && !snapshot) {
-    return <WorkspaceLoadingState />;
+    return <CloudChatWorkspaceLoadingState />;
   }
 
   if (workspaceQuery.error || !workspace) {
     return <MissingState title="Workspace not available" />;
   }
+
+  const loadingInitialTranscript = shouldShowInitialCloudTranscriptLoading({
+    hasSession: Boolean(session),
+    sessionEventsLoading: sessionEventsQuery.isLoading,
+    transcriptSnapshotLoading: transcriptQuery.isLoading,
+    transcriptSource: transcriptView.source,
+    visibleTranscriptRowCount: visibleTranscriptRows.length,
+    hasSharedTranscriptState: Boolean(sharedTranscriptState),
+  });
 
   const workspaceCommandability = recentWorkCommandability(workspace);
   const commandReadiness = cloudCommandReadiness(workspace);
@@ -1766,6 +1778,7 @@ export function ChatScreen() {
       workspace,
       workspaceStatus,
       message: commandMessage,
+      workspaceCommandReady,
     })
     : null;
   const headerDiagnosticsText = buildCloudChatHeaderDiagnosticsText({
@@ -1869,23 +1882,25 @@ export function ChatScreen() {
       label: branchName,
       detail: "Branch",
       icon: "branch",
+      feedback: "copied",
+      feedbackKey: branchName,
       title: "Copy branch name",
-      onClick: () => void copyComposerFooterValue(branchName, "Branch name"),
+      onClick: () => copyComposerFooterValue(branchName, "Branch name"),
     },
     {
       id: "copy-repo",
       label: repoLabel,
       detail: "Repo",
       icon: "repo",
+      feedback: "copied",
+      feedbackKey: repoLabel,
       title: "Copy repository name",
-      onClick: () => void copyComposerFooterValue(repoLabel, "Repository"),
+      onClick: () => copyComposerFooterValue(repoLabel, "Repository"),
     },
   ];
   const emptyTitle = !session
     ? `Start the first session in ${workspaceTitle}`
-    : sessionEventsQuery.isLoading && transcriptView.source === "empty"
-      ? "Loading transcript"
-      : "No transcript yet";
+    : "No transcript yet";
 
   return (
     <CloudChatSurface
@@ -1893,6 +1908,7 @@ export function ChatScreen() {
       transcriptRows={visibleTranscriptRows}
       transcriptState={sharedTranscriptState}
       transcriptStatus={commandMessage}
+      transcriptLoading={loadingInitialTranscript}
       transcriptPlanActions={transcriptPlanActions}
       emptyTitle={emptyTitle}
       emptyDescription={
@@ -1935,75 +1951,6 @@ function MissingState({ title }: { title: string }) {
         </Button>
       </div>
     </div>
-  );
-}
-
-function WorkspaceLoadingState() {
-  return (
-    <div
-      className="flex h-full flex-col bg-background text-foreground"
-      role="status"
-      aria-live="polite"
-      aria-label="Loading workspace"
-    >
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
-        <WebSkeletonBlock className="size-8 rounded-md" />
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <WebSkeletonBlock className="h-3 w-36" />
-          <WebSkeletonBlock className="h-7 w-28 rounded-lg bg-muted/45" />
-        </div>
-        <WebSkeletonBlock className="hidden h-8 w-28 rounded-md bg-muted/45 sm:block" />
-      </header>
-
-      <div className="web-scrollbar min-h-0 flex-1 overflow-hidden">
-        <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-6 py-6">
-          <div className="mt-12 flex flex-col items-center text-center">
-            <div className="flex w-36 flex-col items-center gap-2" aria-hidden="true">
-              <WebSkeletonBlock className="h-2 w-24" />
-              <WebSkeletonBlock className="h-2 w-36 bg-muted/45" />
-            </div>
-            <p className="mt-4 text-chat font-medium leading-[var(--text-chat--line-height)] text-muted-foreground">
-              Loading workspace
-            </p>
-            <p className="mt-1 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground/80">
-              Fetching sessions and transcript.
-            </p>
-          </div>
-
-          <div className="mt-12 flex w-full flex-col gap-7" aria-hidden="true">
-            <div className="ml-auto flex w-[72%] max-w-lg flex-col items-end gap-2">
-              <WebSkeletonBlock className="h-3 w-full rounded-lg" />
-              <WebSkeletonBlock className="h-3 w-[64%] rounded-lg bg-muted/45" />
-            </div>
-            <div className="flex w-[78%] max-w-xl flex-col gap-2">
-              <WebSkeletonBlock className="h-3 w-full" />
-              <WebSkeletonBlock className="h-3 w-[86%] bg-muted/45" />
-              <WebSkeletonBlock className="h-3 w-[42%] bg-muted/45" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <footer className="relative z-20 shrink-0 border-t border-border/40 px-6 py-4">
-        <div className="mx-auto w-full max-w-3xl rounded-xl bg-foreground/5 p-3">
-          <WebSkeletonBlock className="h-3 w-48" />
-          <div className="mt-5 flex items-center justify-between gap-3">
-            <WebSkeletonBlock className="h-7 w-32 rounded-md bg-muted/45" />
-            <WebSkeletonBlock className="size-8 rounded-md bg-muted/45" />
-          </div>
-        </div>
-      </footer>
-      <span className="sr-only">Loading workspace</span>
-    </div>
-  );
-}
-
-function WebSkeletonBlock({ className }: { className?: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`block rounded-md bg-muted/60 motion-safe:animate-pulse ${className ?? ""}`}
-    />
   );
 }
 
@@ -2133,17 +2080,19 @@ function workspaceNoticeForStatus(input: {
   workspace: CloudWorkspaceSnapshot["workspace"];
   workspaceStatus: string | null;
   message: string | null;
+  workspaceCommandReady: boolean;
 }): Omit<CloudChatHeaderNoticeView, "action" | "diagnostics"> | null {
   const message = input.message?.trim() ?? null;
   const normalizedWorkspaceStatus = input.workspaceStatus?.toLowerCase() ?? null;
   const runtimeStatus = input.workspace.runtime?.status?.toLowerCase() ?? null;
+  const runtimeIsProvisioning =
+    !input.workspaceCommandReady && cloudWorkspaceRuntimeIsInProgress(input.workspace);
   const isProvisioning =
     normalizedWorkspaceStatus === "pending"
     || normalizedWorkspaceStatus === "materializing"
     || normalizedWorkspaceStatus === "needs_rematerialization"
     || normalizedWorkspaceStatus === "provisioning"
-    || runtimeStatus === "pending"
-    || runtimeStatus === "provisioning";
+    || runtimeIsProvisioning;
   const isFailed =
     normalizedWorkspaceStatus === "error"
     || runtimeStatus === "error"
@@ -2167,14 +2116,14 @@ function workspaceNoticeForStatus(input: {
     return {
       title: "Preparing workspace.",
       description: message.replace(/^Workspace accepted\.\s*/u, "") || "Preparing the selected runtime so this session can start.",
-      tone: "warning",
+      tone: "info",
     };
   }
   if (isProvisioning) {
     return {
       title: "Starting workspace.",
       description: message ?? "Preparing the cloud runtime so this session can start.",
-      tone: "warning",
+      tone: "info",
     };
   }
   return null;
@@ -2320,14 +2269,6 @@ function isCloudRuntimeProfileMessage(message: string): boolean {
       || normalized.includes("does not match")
       || normalized.includes("target mismatch")
       || normalized.includes("target_mismatch"));
-}
-
-function isCopyFeedbackStatus(message: string | null): boolean {
-  const normalized = message?.trim().toLowerCase() ?? "";
-  return normalized === "branch name copied."
-    || normalized === "branch name could not be copied."
-    || normalized === "repository copied."
-    || normalized === "repository could not be copied.";
 }
 
 function relativeSessionTime(value: string | null): string | null {
