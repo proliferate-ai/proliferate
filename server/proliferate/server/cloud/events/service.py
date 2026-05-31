@@ -9,7 +9,6 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db import engine as db_engine
 from proliferate.db.store import cloud_workspaces
 from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import targets as targets_store
@@ -46,20 +45,25 @@ from proliferate.server.cloud.live.service import (
     projection_patch_from_event,
     publish_session_patch,
 )
-from proliferate.server.cloud.slack.service import (
-    enqueue_post_session_event,
-    process_due_outbound_messages,
-)
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
+
+# SLACK BOT PARKED: outbound Slack callbacks are preserved in the Slack service
+# but intentionally detached from event ingest while the bot flow is disabled.
+# from proliferate.db import engine as db_engine
+# from proliferate.server.cloud.slack.service import (
+#     enqueue_post_session_event,
+#     process_due_outbound_messages,
+# )
 
 SESSION_DURABLE_EVENT_HARD_CAP = 10_000
 SESSION_PAYLOAD_BYTES_HARD_CAP = 25 * 1024 * 1024
-END_OF_TURN_KINDS = {
-    "item_completed",
-    "interaction_requested",
-    "session_ended",
-    "turn_ended",
-}
+# SLACK BOT PARKED: end-of-turn kinds are only needed for Slack outbound posting.
+# END_OF_TURN_KINDS = {
+#     "item_completed",
+#     "interaction_requested",
+#     "session_ended",
+#     "turn_ended",
+# }
 
 
 @dataclass(frozen=True)
@@ -88,7 +92,8 @@ async def ingest_worker_event_batch(
     cloud_workspace_by_session: dict[str, UUID | None] = {}
     projection_patches: list[CloudSessionPatchResponse] = []
     event_acks: list[WorkerEventAck] = []
-    slack_outbound_queued = False
+    # SLACK BOT PARKED: no Slack outbound work is queued from cloud event ingest.
+    # slack_outbound_queued = False
 
     for event in body.events:
         if event.seq <= 0:
@@ -221,16 +226,17 @@ async def ingest_worker_event_batch(
                 payload_json=payload_decision.payload_json,
                 include_transcript=False,
             )
-            if current_event_type in END_OF_TURN_KINDS:
-                await enqueue_post_session_event(
-                    db,
-                    cloud_workspace_id=policy.cloud_workspace_id,
-                    session_id=event.session_id,
-                    event_type=current_event_type,
-                    event_payload=event.event,
-                    seq=event.seq,
-                )
-                slack_outbound_queued = True
+            # SLACK BOT PARKED: do not enqueue Slack thread replies.
+            # if current_event_type in END_OF_TURN_KINDS:
+            #     await enqueue_post_session_event(
+            #         db,
+            #         cloud_workspace_id=policy.cloud_workspace_id,
+            #         session_id=event.session_id,
+            #         event_type=current_event_type,
+            #         event_payload=event.event,
+            #         seq=event.seq,
+            #     )
+            #     slack_outbound_queued = True
             if policy.live_fanout:
                 projection_patches.append(patch)
             continue
@@ -305,16 +311,17 @@ async def ingest_worker_event_batch(
             payload_json=payload_decision.payload_json,
             include_transcript=policy.transcript_rows,
         )
-        if current_event_type in END_OF_TURN_KINDS:
-            await enqueue_post_session_event(
-                db,
-                cloud_workspace_id=policy.cloud_workspace_id,
-                session_id=event.session_id,
-                event_type=current_event_type,
-                event_payload=event.event,
-                seq=event.seq,
-            )
-            slack_outbound_queued = True
+        # SLACK BOT PARKED: do not enqueue Slack thread replies.
+        # if current_event_type in END_OF_TURN_KINDS:
+        #     await enqueue_post_session_event(
+        #         db,
+        #         cloud_workspace_id=policy.cloud_workspace_id,
+        #         session_id=event.session_id,
+        #         event_type=current_event_type,
+        #         event_payload=event.event,
+        #         seq=event.seq,
+        #     )
+        #     slack_outbound_queued = True
         if policy.live_fanout:
             projection_patches.append(patch)
 
@@ -345,8 +352,9 @@ async def ingest_worker_event_batch(
     for patch in projection_patches:
         await publish_session_patch(patch)
 
-    if slack_outbound_queued:
-        db_engine.defer_after_commit(db, process_due_outbound_messages)
+    # SLACK BOT PARKED: do not process Slack outbound queue after event commits.
+    # if slack_outbound_queued:
+    #     db_engine.defer_after_commit(db, process_due_outbound_messages)
 
     log_cloud_event(
         "cloud worker event batch ingested",

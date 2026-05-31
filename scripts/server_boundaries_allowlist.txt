@@ -24,7 +24,6 @@ SERVICE_ORM_IMPORT server/proliferate/server/cloud/workspaces/service.py 3 trans
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/billing/service.py 1 transitional billing checkout service opens isolated organization checkout sessions
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/agent_auth/service.py 1 transitional agent auth service opens isolated DB sessions for deferred materialization
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/commands/service.py 1 transitional command service defers isolated DB work after commit
-SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/events/service.py 1 transitional event service defers isolated DB work after commit
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/live/service.py 1 transitional live service opens DB session during worker migration
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/slack/service.py 1 transitional Slack service opens isolated DB sessions for deferred event handling
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/workspaces/service.py 1 transitional workspace service opens DB session during managed-cloud migration

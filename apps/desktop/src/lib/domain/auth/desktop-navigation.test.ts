@@ -60,6 +60,12 @@ describe("desktopNavigationTarget", () => {
     ).toBe("/settings?inviteHandoff=abc123&section=organization");
   });
 
+  it("routes parked Slack bot settings links to general settings", () => {
+    expect(desktopNavigationTarget("proliferate://settings/slack-bot")).toBe(
+      "/settings?section=general",
+    );
+  });
+
   it("rejects unsupported desktop navigation links", () => {
     expect(desktopNavigationTarget("https://plugins?source=mcp_oauth_callback")).toBeNull();
     expect(desktopNavigationTarget("proliferate://plugins/extra")).toBeNull();

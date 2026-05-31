@@ -1,3 +1,5 @@
+import pytest
+from httpx import ASGITransport, AsyncClient
 from starlette.requests import Request
 
 from proliferate.auth.desktop.service import build_github_callback_url
@@ -37,6 +39,27 @@ def test_create_app_mounts_routes_without_api_prefix_by_default(
     assert "/auth/desktop/token" in paths
     assert "/v1/telemetry/anonymous" in paths
     assert "/v1/automations" in paths
+
+
+def test_slack_bot_routes_are_parked() -> None:
+    paths = _route_paths()
+
+    assert "/v1/cloud/slack/events" not in paths
+    assert "/v1/cloud/slack/oauth/start" not in paths
+    assert "/v1/cloud/slack/bot-config" not in paths
+
+
+@pytest.mark.asyncio
+async def test_slack_bot_routes_return_404_while_parked() -> None:
+    transport = ASGITransport(app=create_app())  # type: ignore[arg-type]
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        events = await client.post("/v1/cloud/slack/events")
+        oauth_start = await client.get("/v1/cloud/slack/oauth/start")
+        bot_config = await client.get("/v1/cloud/slack/bot-config")
+
+    assert events.status_code == 404
+    assert oauth_start.status_code == 404
+    assert bot_config.status_code == 404
 
 
 def test_create_app_mounts_routes_under_api_prefix_when_configured(
