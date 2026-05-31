@@ -11,7 +11,8 @@ import { GeneralPane } from "@/components/settings/panes/GeneralPane";
 import { KeyboardShortcutsPane } from "@/components/settings/panes/KeyboardShortcutsPane";
 import { OrganizationPane } from "@/components/settings/panes/OrganizationPane";
 import { ReviewSettingsPane } from "@/components/settings/panes/ReviewSettingsPane";
-import { SlackBotPane } from "@/components/settings/panes/SlackBotPane";
+// SLACK BOT PARKED: pane implementation is preserved but not rendered while disabled.
+// import { SlackBotPane } from "@/components/settings/panes/SlackBotPane";
 import { BillingPane } from "@/components/settings/panes/BillingPane";
 import { CloudAuthUnavailablePane } from "@/components/settings/panes/CloudAuthUnavailablePane";
 import { CloudSignInRequiredPane } from "@/components/settings/panes/CloudSignInRequiredPane";
@@ -120,21 +121,22 @@ function renderSettingsSection(
 
     return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
   }
-  if (activeSection === "slack-bot") {
-    if (!cloudEnabled) {
-      return <CloudUnavailablePane />;
-    }
-
-    if (cloudActive) {
-      return <SlackBotPane />;
-    }
-
-    if (cloudSignInChecking) {
-      return <CloudSignInRequiredPane />;
-    }
-
-    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
-  }
+  // SLACK BOT PARKED: render branch is intentionally disabled with the settings entry point.
+  // if (activeSection === "slack-bot") {
+  //   if (!cloudEnabled) {
+  //     return <CloudUnavailablePane />;
+  //   }
+  //
+  //   if (cloudActive) {
+  //     return <SlackBotPane />;
+  //   }
+  //
+  //   if (cloudSignInChecking) {
+  //     return <CloudSignInRequiredPane />;
+  //   }
+  //
+  //   return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+  // }
   if (activeSection === "compute") {
     if (!cloudEnabled) {
       return <CloudUnavailablePane />;
@@ -208,7 +210,8 @@ export function SettingsScreen({
           "agent-authentication": !cloudEnabled,
           "shared-environments": !cloudEnabled,
           compute: !cloudEnabled,
-          "slack-bot": !cloudEnabled,
+          // SLACK BOT PARKED: section is not registered while the flow is disabled.
+          // "slack-bot": !cloudEnabled,
         }}
         onCheckForUpdates={() => { void checkNow(); }}
         updateActionState={{

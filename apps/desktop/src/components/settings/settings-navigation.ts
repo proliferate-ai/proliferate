@@ -1,6 +1,5 @@
 import type { ComponentType } from "react";
 import {
-  BotMessageSquare,
   Building2,
   CircleUser,
   ClipboardList,
@@ -32,7 +31,7 @@ export type SettingsNavItem =
   | { kind: "action"; id: "checkForUpdates" | "support"; label: string; icon: ComponentType<IconProps> };
 
 export interface SettingsNavGroup {
-  id: "preferences" | "organization_account" | "workspace" | "agents" | "slack_bot" | "help";
+  id: "preferences" | "organization_account" | "workspace" | "agents" | "help";
   heading: string | null;
   items: SettingsNavItem[];
 }
@@ -87,19 +86,20 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
       { kind: "section", id: "review", label: "Review", icon: ClipboardList },
     ],
   },
-  {
-    id: "slack_bot",
-    heading: null,
-    items: [
-      {
-        kind: "section",
-        id: "slack-bot",
-        label: "Slack bot",
-        icon: BotMessageSquare,
-        adminOnly: true,
-      },
-    ],
-  },
+  // SLACK BOT PARKED: navigation entry is intentionally unregistered while the flow is disabled.
+  // {
+  //   id: "slack_bot",
+  //   heading: null,
+  //   items: [
+  //     {
+  //       kind: "section",
+  //       id: "slack-bot",
+  //       label: "Slack bot",
+  //       icon: BotMessageSquare,
+  //       adminOnly: true,
+  //     },
+  //   ],
+  // },
   {
     id: "help",
     heading: "Help",

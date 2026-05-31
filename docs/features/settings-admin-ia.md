@@ -256,9 +256,11 @@ Agents
                                                            content)
   review                   ReviewSettingsPane             (existing)
 
-Slack bot                  SlackBotPane                   (new; hidden until
-                                                           spec 07 wires
-                                                           content)
+Slack bot                  SlackBotPane                   (parked/disabled;
+                                                           spec 07 logic is
+                                                           preserved but entry
+                                                           points are commented
+                                                           out)
 
 Help
   support                  action (existing)

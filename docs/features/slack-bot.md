@@ -1,6 +1,8 @@
 # 07 — Slack Bot
 
-Status: implementation-ready spec.
+Status: parked/disabled. The implementation is preserved, but the desktop
+settings entry point, cloud Slack router, and session-event outbound hook are
+intentionally commented out until the Slack bot flow is revived.
 
 Date: 2026-05-20.
 

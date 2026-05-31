@@ -25,7 +25,6 @@ from proliferate.server.cloud.runtime_config.api import (
 )
 from proliferate.server.cloud.sandbox_profiles.api import router as sandbox_profiles_router
 from proliferate.server.cloud.skills.api import router as skills_router
-from proliferate.server.cloud.slack.api import router as slack_router
 from proliferate.server.cloud.target_config.api import router as target_config_router
 from proliferate.server.cloud.target_config.api import worker_router as target_config_worker_router
 from proliferate.server.cloud.target_git_identity.api import (
@@ -36,6 +35,9 @@ from proliferate.server.cloud.webhooks.api import router as webhooks_router
 from proliferate.server.cloud.worker.api import router as worker_router
 from proliferate.server.cloud.workspaces.api import router as workspaces_router
 from proliferate.server.cloud.worktree_policy.api import router as worktree_policy_router
+
+# SLACK BOT PARKED: preserve the Slack API module, but do not mount its routes.
+# from proliferate.server.cloud.slack.api import router as slack_router
 
 router = APIRouter(prefix="/cloud", tags=["cloud"])
 router.include_router(repos_router)
@@ -53,7 +55,8 @@ router.include_router(mcp_connections_router)
 router.include_router(mcp_oauth_router)
 router.include_router(plugins_router)
 router.include_router(skills_router)
-router.include_router(slack_router)
+# SLACK BOT PARKED: /v1/cloud/slack/* is intentionally disabled and returns 404.
+# router.include_router(slack_router)
 router.include_router(webhooks_router)
 router.include_router(targets_router)
 router.include_router(compute_router)

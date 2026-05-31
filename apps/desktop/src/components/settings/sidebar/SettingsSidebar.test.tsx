@@ -138,7 +138,6 @@ describe("SettingsSidebar layout and shortcuts", () => {
       "Agent Defaults",
       "Agent Authentication",
       "Review",
-      "Slack bot",
       "Help",
       "Support",
     ];
@@ -156,7 +155,8 @@ describe("SettingsSidebar layout and shortcuts", () => {
   it("renders admin tags for admin-only settings rows", () => {
     renderSettingsSidebar();
 
-    expect(screen.getAllByText("Admin")).toHaveLength(2);
+    expect(screen.getAllByText("Admin")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /Slack bot/ })).toBeNull();
   });
 
   it("disables admin-only rows for non-admins", () => {
@@ -238,7 +238,7 @@ describe("SettingsSidebar layout and shortcuts", () => {
       source: "keyboard",
       digit: 9,
     })).toBe(true);
-    expect(onSelectSection).toHaveBeenLastCalledWith("slack-bot");
+    expect(onSelectSection).toHaveBeenLastCalledWith("review");
   });
 
   it("keeps disabled sections in numbering but declines their shortcut", async () => {
