@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { ChevronRight, CloudIcon, FolderClosedFilled, FolderFilled, Plus, Settings, Trash } from "@proliferate/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
@@ -8,12 +8,14 @@ import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
 import { SidebarWorkspaceVariantIcon } from "@/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
 import { SHORTCUTS } from "@/config/shortcuts";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
+import type { NewWorkspaceCommandScope } from "@/lib/domain/workspaces/creation/new-workspace-command";
 import {
   confirmRepoRemoval,
   repoRemovalConfirmationCopy,
   requestRepoRemovalConfirmation,
 } from "@/lib/domain/workspaces/sidebar/repo-context-menu";
 import { useRepoGroupNativeContextMenu } from "@/hooks/workspaces/ui/use-repo-group-native-context-menu";
+import { useNewWorkspaceCommandScopeStore } from "@/stores/workspaces/new-workspace-command-scope-store";
 import { SidebarActionButton } from "./SidebarActionButton";
 import { ProductSidebarRepoGroupHeader } from "@proliferate/product-ui/sidebar/ProductSidebar";
 
@@ -26,6 +28,7 @@ interface RepoGroupProps {
   onNewWorkspace?: () => void;
   onNewLocalWorkspace?: () => void;
   onCloudWorkspaceAction?: () => void;
+  newWorkspaceCommandScope?: NewWorkspaceCommandScope | null;
   cloudWorkspaceLabel?: string;
   cloudWorkspaceEnabled?: boolean;
   cloudWorkspaceTooltip?: string;
@@ -44,6 +47,7 @@ export function RepoGroup({
   onNewWorkspace,
   onNewLocalWorkspace,
   onCloudWorkspaceAction,
+  newWorkspaceCommandScope,
   cloudWorkspaceLabel = "New cloud workspace",
   cloudWorkspaceEnabled = true,
   cloudWorkspaceTooltip,
@@ -51,6 +55,8 @@ export function RepoGroup({
   onOpenSettings,
 }: RepoGroupProps) {
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  const setActiveNewWorkspaceScope = useNewWorkspaceCommandScopeStore((state) => state.setActiveScope);
+  const clearActiveNewWorkspaceScope = useNewWorkspaceCommandScopeStore((state) => state.clearActiveScope);
   const handleRequestRemove = () => requestRepoRemovalConfirmation(
     () => setRemoveConfirmOpen(true),
   );
@@ -67,6 +73,24 @@ export function RepoGroup({
     onOpenSettings: () => onOpenSettings?.(),
     onRequestRemove: handleRequestRemove,
   });
+  const handleCreatePopoverOpenChange = (open: boolean) => {
+    if (!newWorkspaceCommandScope) {
+      return;
+    }
+    if (open) {
+      setActiveNewWorkspaceScope(newWorkspaceCommandScope);
+    } else {
+      clearActiveNewWorkspaceScope(newWorkspaceCommandScope.id);
+    }
+  };
+  useEffect(() => {
+    const scopeId = newWorkspaceCommandScope?.id;
+    return () => {
+      if (scopeId) {
+        clearActiveNewWorkspaceScope(scopeId);
+      }
+    };
+  }, [clearActiveNewWorkspaceScope, newWorkspaceCommandScope?.id]);
 
   const headerRow = (
     <ProductSidebarRepoGroupHeader
@@ -96,6 +120,7 @@ export function RepoGroup({
           side="right"
           stopPropagation
           className={`w-64 ${POPOVER_SURFACE_CLASS}`}
+          onOpenChange={handleCreatePopoverOpenChange}
         >
           {(close) => (
             <>

@@ -31,6 +31,13 @@ attachment. Clicking `Send` emits a support report job to the main app and
 closes the support window immediately. Progress and failure notifications are
 shown from the main app toast system.
 
+Upload failures distinguish retryable transfer errors from blocked setup
+states. Missing Cloud sign-in, dev auth bypass, and missing server storage
+configuration keep the report queued but show actionable copy instead of the
+generic background-retry message. Local payload problems such as oversized or
+missing attachment data are terminal and ask the user to submit again with a
+smaller payload.
+
 Development builds may keep the old manual debug exports available behind the
 legacy support dialog. Production UI must not expose raw export names such as
 active session JSON, workspace JSON, debug bundle, or investigation JSON.

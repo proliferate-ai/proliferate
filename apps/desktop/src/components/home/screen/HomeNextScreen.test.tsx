@@ -158,7 +158,7 @@ vi.mock("@/components/workspace/chat/transcript/UserMessage", () => ({
   ),
 }));
 
-function installLocalStorageMock() {
+function installLocalStorageMock(options?: { throwOnSet?: boolean }) {
   const values = new Map<string, string>();
   Object.defineProperty(window, "localStorage", {
     configurable: true,
@@ -170,7 +170,12 @@ function installLocalStorageMock() {
       getItem: (key: string) => values.get(key) ?? null,
       key: (index: number) => Array.from(values.keys())[index] ?? null,
       removeItem: (key: string) => values.delete(key),
-      setItem: (key: string, value: string) => values.set(key, String(value)),
+      setItem: (key: string, value: string) => {
+        if (options?.throwOnSet) {
+          throw new Error("localStorage write failed");
+        }
+        values.set(key, String(value));
+      },
     },
   });
 }
@@ -381,5 +386,19 @@ describe("HomeNextScreen target selection persistence", () => {
         repoLaunchKind: "local",
         baseBranchOverride: "feature/sticky",
       });
+  });
+
+  it("keeps target selection in memory when localStorage writes fail", () => {
+    installLocalStorageMock({ throwOnSet: true });
+    resetHomeNext();
+    render(<HomeNextScreen />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mock repo" }));
+
+    expect(screenMocks.homeNextStateArgs).toMatchObject({
+      destination: "repository",
+      repositorySelection: { kind: "repository", sourceRoot: "/repo-b" },
+    });
+    expect(window.localStorage.getItem(HOME_NEXT_TARGET_SELECTION_STORAGE_KEY)).toBeNull();
   });
 });

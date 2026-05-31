@@ -41,7 +41,8 @@ export function desktopNavigationTarget(url: string): string | null {
 
   if (parsed.hostname === "settings" && parsed.pathname === "/slack-bot") {
     const params = new URLSearchParams(parsed.search);
-    params.set("section", "slack-bot");
+    // SLACK BOT PARKED: legacy Slack settings links land on General while disabled.
+    params.set("section", "general");
     return `/settings?${params.toString()}`;
   }
 

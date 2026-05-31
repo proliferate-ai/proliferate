@@ -36,6 +36,10 @@ export function normalizeSettingsSection(value: string | null): SettingsSection 
   if (value === "repo" || value === "cloudRepo") {
     return "environments";
   }
+  if (value === "slack-bot") {
+    // SLACK BOT PARKED: old direct links fall back to the default settings page.
+    return SETTINGS_DEFAULT_SECTION;
+  }
   if (value === "cloud") {
     return "agent-authentication";
   }

@@ -70,6 +70,18 @@ describe("settings navigation", () => {
     });
   });
 
+  it("falls parked Slack bot settings links back to general", () => {
+    expect(resolveSettingsSelection({
+      rawSection: "slack-bot",
+      repositories: [],
+    })).toEqual({
+      activeSection: "general",
+      activeRepoSourceRoot: null,
+      focus: {},
+      inviteHandoff: null,
+    });
+  });
+
   it("resolves the review settings section", () => {
     expect(resolveSettingsSelection({
       rawSection: "review",

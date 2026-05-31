@@ -156,8 +156,8 @@ export const SHORTCUTS = {
     nonMacLabel: "Ctrl+Alt+Shift+N",
     description: "New worktree workspace",
     owner: "js",
-    match: { kind: "fixed", key: "n", meta: true, shift: false, alt: true },
-    nonMacMatch: { kind: "fixed", key: "n", meta: true, shift: true, alt: true },
+    match: { kind: "fixed-code", code: "KeyN", meta: true, shift: false, alt: true },
+    nonMacMatch: { kind: "fixed-code", code: "KeyN", meta: true, shift: true, alt: true },
     allowInInputs: true,
   },
   newLocal: {
@@ -166,7 +166,7 @@ export const SHORTCUTS = {
     nonMacLabel: "Ctrl+Shift+N",
     description: "New local workspace",
     owner: "js",
-    match: { kind: "fixed", key: "n", meta: true, shift: true, alt: false },
+    match: { kind: "fixed-code", code: "KeyN", meta: true, shift: true, alt: false },
     allowInInputs: true,
   },
   newCloud: {
@@ -175,8 +175,8 @@ export const SHORTCUTS = {
     nonMacLabel: "Ctrl+Alt+N",
     description: "New cloud workspace",
     owner: "js",
-    match: { kind: "fixed", key: "n", meta: true, ctrl: true, shift: false, alt: false },
-    nonMacMatch: { kind: "fixed", key: "n", meta: true, shift: false, alt: true },
+    match: { kind: "fixed-code", code: "KeyN", meta: true, ctrl: true, shift: false, alt: false },
+    nonMacMatch: { kind: "fixed-code", code: "KeyN", meta: true, shift: false, alt: true },
     allowInInputs: true,
   },
   addRepository: {

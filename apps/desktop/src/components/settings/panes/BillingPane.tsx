@@ -27,6 +27,7 @@ export function BillingPane() {
   return (
     <BillingSettingsSurface
       enabled={billingEnabled && cloudActive}
+      billingReturnSurface="desktop"
       organization={activeOrganization
         ? {
             id: activeOrganization.id,
