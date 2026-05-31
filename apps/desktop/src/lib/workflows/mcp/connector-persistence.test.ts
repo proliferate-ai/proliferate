@@ -119,27 +119,13 @@ function posthogCatalogEntry() {
     name: "PostHog",
     serverNameBase: "posthog",
     iconId: "posthog",
-    authFieldId: "apiKey",
-    secretFields: [
-      {
-        id: "apiKey",
-        label: "Project API key",
-        placeholder: "phx_...",
-        helperText: "key",
-        getTokenInstructions: "key",
-        prefixHint: "phx_",
-      },
-    ],
-    requiredFields: [
-      {
-        id: "apiKey",
-        label: "Project API key",
-        placeholder: "phx_...",
-        helperText: "key",
-        getTokenInstructions: "key",
-        prefixHint: "phx_",
-      },
-    ],
+    cloudSecretSync: false,
+    authKind: "oauth",
+    oauthClientMode: "dcr",
+    authStyle: null,
+    authFieldId: null,
+    secretFields: [],
+    requiredFields: [],
     settingsSchema: [
       {
         id: "region",
@@ -641,20 +627,13 @@ describe("cloud MCP connector persistence", () => {
     });
   });
 
-  it("creates settings-backed API-key connections before writing secrets", async () => {
-    await installConnector("posthog", { apiKey: "phx_example" }, { region: "eu" });
+  it("rejects browser-auth connectors from the API-key install flow", async () => {
+    await expect(
+      installConnector("posthog", { apiKey: "phx_example" }, { region: "eu" }),
+    ).rejects.toThrow("PostHog uses browser auth.");
 
-    expect(mocks.createCloudMcpConnectionMock).toHaveBeenCalledWith({
-      catalogEntryId: "posthog",
-      settings: { region: "eu" },
-      enabled: true,
-    });
-    expect(mocks.putCloudMcpSecretAuthMock).toHaveBeenCalledWith("conn_1", {
-      secretFields: { apiKey: "phx_example" },
-    });
-    expect(
-      mocks.createCloudMcpConnectionMock.mock.invocationCallOrder[0],
-    ).toBeLessThan(mocks.putCloudMcpSecretAuthMock.mock.invocationCallOrder[0] ?? 0);
+    expect(mocks.createCloudMcpConnectionMock).not.toHaveBeenCalled();
+    expect(mocks.putCloudMcpSecretAuthMock).not.toHaveBeenCalled();
   });
 
   it("installs no-auth HTTP connectors without writing secret auth", async () => {

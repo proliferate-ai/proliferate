@@ -1,9 +1,12 @@
 import type { SVGProps } from "react";
 import type { ConnectorCatalogEntry } from "@/lib/domain/mcp/types";
+import axiomIcon from "@/assets/connector-icons/axiom.svg";
+import axiomDarkIcon from "@/assets/connector-icons/axiom-dark.svg";
 import cloudflareIcon from "@/assets/connector-icons/cloudflare.svg";
 import context7Icon from "@/assets/connector-icons/context7.jpeg";
 import exaIcon from "@/assets/connector-icons/exa.svg";
 import filesystemIcon from "@/assets/connector-icons/filesystem.svg";
+import gmailIcon from "@/assets/connector-icons/gmail.svg";
 import gitlabIcon from "@/assets/connector-icons/gitlab.svg";
 import huggingfaceIcon from "@/assets/connector-icons/huggingface.svg";
 import neonIcon from "@/assets/connector-icons/neon.svg";
@@ -12,6 +15,8 @@ import playwrightIcon from "@/assets/connector-icons/playwright.svg";
 import posthogIcon from "@/assets/connector-icons/posthog.svg";
 import renderIcon from "@/assets/connector-icons/render.svg";
 import renderDarkIcon from "@/assets/connector-icons/render-dark.svg";
+import sentryIcon from "@/assets/connector-icons/sentry.svg";
+import sentryDarkIcon from "@/assets/connector-icons/sentry-dark.svg";
 import supabaseIcon from "@/assets/connector-icons/supabase.png";
 import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
 import { selectConnectorIconTileClass } from "@/lib/domain/mcp/connector-icon-tile";
@@ -81,10 +86,16 @@ interface ConnectorIconImageConfig {
 }
 
 const CONNECTOR_ICON_IMAGES = {
+  axiom: {
+    lightSrc: axiomIcon,
+    darkSrc: axiomDarkIcon,
+    darkTileClassName: "bg-background",
+  },
   cloudflare: { lightSrc: cloudflareIcon },
   context7: { lightSrc: context7Icon },
   exa: { lightSrc: exaIcon },
   filesystem: { lightSrc: filesystemIcon },
+  gmail: { lightSrc: gmailIcon },
   gitlab: { lightSrc: gitlabIcon },
   huggingface: { lightSrc: huggingfaceIcon },
   neon: { lightSrc: neonIcon },
@@ -94,6 +105,11 @@ const CONNECTOR_ICON_IMAGES = {
   render: {
     lightSrc: renderIcon,
     darkSrc: renderDarkIcon,
+    darkTileClassName: "bg-background",
+  },
+  sentry: {
+    lightSrc: sentryIcon,
+    darkSrc: sentryDarkIcon,
     darkTileClassName: "bg-background",
   },
   supabase: { lightSrc: supabaseIcon },

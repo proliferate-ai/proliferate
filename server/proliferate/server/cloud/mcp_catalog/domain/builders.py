@@ -34,5 +34,9 @@ def bearer_header(secret_field_id: str) -> HeaderTemplate:
     return HeaderTemplate("Authorization", f"Bearer {{secret.{secret_field_id}}}")
 
 
+def oauth_bearer_header() -> HeaderTemplate:
+    return HeaderTemplate("Authorization", "Bearer {secret.accessToken}", optional=True)
+
+
 def secret_query(parameter_name: str, secret_field_id: str) -> QueryTemplate:
     return QueryTemplate(parameter_name, f"{{secret.{secret_field_id}}}")

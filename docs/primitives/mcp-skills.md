@@ -56,14 +56,14 @@ Out of scope:
 Three layers, each with its own ownership:
 
 ```text
-Catalog entry            "What GitHub MCP is, how it can be launched."
+Catalog entry            "What Render MCP is, how it can be launched."
                          File/code-backed. Global. No user secrets.
                          Owners: server/proliferate/server/cloud/mcp_catalog/
                                  server/proliferate/server/cloud/plugins/catalog/
 
-Configured item          "Pablo connected GitHub with these settings/auth."
-                         "Pablo enabled Fix CI skill."
-                         "Pablo installed GitHub plugin."
+Configured item          "Pablo connected Render with these settings/auth."
+                         "Pablo enabled Render monitor skill."
+                         "Pablo installed Render plugin."
                          Owned by a user or organization.
                          DB-backed. Carries enabled + public_to_org.
 
@@ -448,16 +448,16 @@ public plugin
   -> publicize its publicizable child MCPs/skills via the same resolver
 ```
 
-In practice, "install GitHub plugin" UX writes:
+In practice, "install Render plugin" UX writes:
 
 ```text
-cloud_plugin_configured_item   (owner, plugin_id=github, enabled=true)
+cloud_plugin_configured_item   (owner, plugin_id=render, enabled=true)
 cloud_mcp_connection           (one per plugin-required MCP, enabled=true)
 cloud_skill_configured_item    (one per plugin's default-enabled skill)
 ```
 
 The plugin row is not optional in V1. It is the parent/audit row that lets the
-product show "Pablo enabled GitHub" and re-expand future default child items
+product show "Pablo enabled Render" and re-expand future default child items
 deterministically. Child MCP/skill rows are still the runtime source, but the
 plugin row remains the product source for the package-level toggle.
 
@@ -591,7 +591,7 @@ ownership.
 Determinism rules:
 
 ```text
-duplicate server_name (e.g. two GitHub MCPs publicized by different users)
+duplicate server_name (e.g. two Render MCPs publicized by different users)
   preferred server_name when unique;
   on collision: server_name + '__' + short(connection_id_8)
   emit a warning describing the rename and source
@@ -1562,14 +1562,14 @@ Manual smoke cases:
      -> compiled manifest excludes the skill
      -> UI shows the blocking reason
 
-6. Install GitHub plugin
+6. Install Render plugin
      -> writes cloud_plugin_configured_item plus
         cloud_mcp_connection + cloud_skill_configured_item for default-enabled
         children
      -> single recompile produces one revision with all children
 
-7. Two users publicize GitHub MCP into the same org
-     -> resolver renames the second one to e.g. "github__a1b2c3d4"
+7. Two users publicize Render MCP into the same org
+     -> resolver renames the second one to e.g. "render__a1b2c3d4"
      -> UI shows the rename + source
 
 8. Worker offline, then back online

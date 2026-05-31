@@ -53,6 +53,7 @@ import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session
 import {
   assertDirectSessionCreateRuntimeConfigStamped,
   createPendingSessionId,
+  prepareLocalSessionRuntimeConfig,
   pruneInactiveSessionStreams,
   type FlushAwareSessionStreamHandle,
   type SessionStreamPruningDeps,
@@ -454,11 +455,16 @@ export function useSessionCreationActions() {
           ?? await getSession(targetConnection, startResult.sessionId, requestOptions);
       } else {
         assertDirectSessionCreateRuntimeConfigStamped(target);
+        const expectedRuntimeConfigRevision = await prepareLocalSessionRuntimeConfig(
+          targetConnection,
+          requestOptions,
+        );
         session = await createSession(targetConnection, {
           workspaceId: target.anyharnessWorkspaceId,
           agentKind: options.agentKind,
           modelId: options.modelId,
           ...(resolvedModeId ? { modeId: resolvedModeId } : {}),
+          ...(expectedRuntimeConfigRevision ? { expectedRuntimeConfigRevision } : {}),
           subagentsEnabled,
           origin: DESKTOP_ORIGIN,
         }, requestOptions);

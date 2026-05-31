@@ -529,7 +529,7 @@ class TestCloudMcpConnections:
         assert authed.json()["authStatus"] == "ready"
 
     @pytest.mark.asyncio
-    async def test_posthog_settings_and_secret_storage(
+    async def test_posthog_settings_and_secret_auth_rejected(
         self,
         client: AsyncClient,
     ) -> None:
@@ -561,7 +561,8 @@ class TestCloudMcpConnections:
             headers=headers,
             json={"secretFields": {"apiKey": "phx-example"}},
         )
-        assert authed.status_code == 200
+        assert authed.status_code == 400
+        assert authed.json()["detail"]["code"] == "invalid_payload"
 
     @pytest.mark.asyncio
     async def test_schema_settings_defaults_and_legacy_supabase_kind(

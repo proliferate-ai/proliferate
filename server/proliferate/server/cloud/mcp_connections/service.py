@@ -122,6 +122,7 @@ def _auth_state(
     state = resolve_connection_auth_state(
         entry_auth_kind=entry.auth_kind if entry else None,
         has_auth=record.auth is not None,
+        stored_auth_kind=record.auth.auth_kind if record.auth else None,
         stored_auth_status=record.auth.auth_status if record.auth else None,
     )
     return state.auth_kind, state.auth_status
