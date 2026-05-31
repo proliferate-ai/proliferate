@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { SupportReportWindow } from "./components/support/SupportReportWindow";
+import { initializeTheme } from "./config/theme";
 import "./lib/access/cloud/client";
 import { bootstrapProliferateApiConfig } from "./lib/infra/proliferate-api";
 import { initializeAnonymousTelemetry } from "./lib/integrations/telemetry/anonymous";
@@ -23,6 +24,8 @@ import {
 } from "./lib/infra/measurement/boot-stall-diagnostics";
 import { installDebugMeasurement } from "./lib/infra/measurement/debug-measurement-install";
 import { logRendererEvent } from "./lib/access/tauri/diagnostics";
+import { useAppearancePreferenceLifecycle } from "./hooks/preferences/lifecycle/use-appearance-preference-lifecycle";
+import { useUserPreferencesLifecycle } from "./hooks/preferences/lifecycle/use-user-preferences-lifecycle";
 import { AppProviders } from "./providers/AppProviders";
 import "./index.css";
 
@@ -35,6 +38,7 @@ const IS_SUPPORT_WINDOW =
   && new URLSearchParams(window.location.search).get("support") === "1";
 
 document.documentElement.dataset.proliferateClient = "desktop";
+initializeTheme();
 
 const rendererStartupStartedAt = startStartupTimer();
 installWebKitPerformanceMeasureDetailGuard();
@@ -104,7 +108,7 @@ if (!import.meta.env.DEV) {
 function renderApp() {
   recordRendererStartupEvent("render.start");
   const content = IS_SUPPORT_WINDOW ? (
-    <SupportReportWindow />
+    <SupportReportWindowHost />
   ) : (
     <BrowserRouter>
       <AppProviders>
@@ -121,6 +125,12 @@ function renderApp() {
     </React.StrictMode>,
   );
   recordRendererStartupEvent("render.scheduled");
+}
+
+function SupportReportWindowHost() {
+  useUserPreferencesLifecycle();
+  useAppearancePreferenceLifecycle();
+  return <SupportReportWindow />;
 }
 
 let appRendered = false;
