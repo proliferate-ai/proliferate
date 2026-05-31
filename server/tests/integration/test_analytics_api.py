@@ -21,6 +21,7 @@ async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]
     from proliferate.auth.models import UserCreate
     from proliferate.auth.users import UserManager, get_user_db
     from proliferate.db.engine import get_async_session
+    from proliferate.db.models.auth import OAuthAccount
 
     user_id: str | None = None
     async for session in get_async_session():
@@ -32,6 +33,15 @@ async def _register_and_login(client: AsyncClient, email: str) -> dict[str, str]
                     password="unused-oauth-only",
                     display_name="Analytics Tester",
                 ),
+            )
+            session.add(
+                OAuthAccount(
+                    user_id=user.id,
+                    oauth_name="github",
+                    access_token="github-access-token",
+                    account_id=f"github-{user.id}",
+                    account_email=email,
+                )
             )
             await session.commit()
             user_id = str(user.id)
