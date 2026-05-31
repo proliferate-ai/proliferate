@@ -1,11 +1,8 @@
 # Server Domains
 
-Status: authoritative for `server/<domain>/` layout.
-
-Read after `docs/structures/server/README.md`. This guide details the shape of a backend
-product domain: api/service/models layout, where pure logic goes, when to
-promote a subdomain, how worker-side logic fits in, and how domains coordinate
-with each other.
+Backend product domains keep transport, orchestration, wire models, pure rules,
+authorization deps, errors, and non-HTTP entry points in predictable homes. A
+domain folder answers "what product area owns this?"
 
 ## Ownership
 
@@ -23,7 +20,7 @@ A `server/<domain>/` folder is one product area's home. It owns:
 A domain folder must answer "what product area?" — not transport, not UI shape,
 not deployment target.
 
-## Folder Shape
+## Shape
 
 Default shape for a small or moderate domain:
 
@@ -407,61 +404,61 @@ Two `service.py` files coexist when surfaces are genuinely distinct. They
 share `domain/` and the store. See [workers.md](workers.md) for the full
 worker organization.
 
-## Worked Example: Cloud Runtime Carving
+## Migration Example: Cloud Runtime Carving
 
-Today `cloud/runtime/` is a 17-file flat folder mixing five distinct
-concerns. Post-carving:
+`cloud/runtime/` is a migration exception when it mixes vendor access,
+provisioning, credentials, config sync, and liveness concerns in one flat
+folder. The carved shape is:
 
 ```text
-integrations/anyharness/                  ← MOVED OUT
+integrations/anyharness/                  <- moved out
   __init__.py
-  client.py                               ← was anyharness_api.py
-  sessions.py                             ← was session_api.py
-  workspace_operations.py                 ← was workspace_operations.py
+  client.py                               <- was anyharness_api.py
+  sessions.py                             <- was session_api.py
+  workspace_operations.py                 <- was workspace_operations.py
   errors.py
   models.py
 
 cloud/runtime/
   api.py
-  service.py                              ← cross-cutting only
-  models.py                               ← shared types
+  service.py                              <- cross-cutting only
+  models.py                               <- shared types
 
-  provisioning/                           ← subdomain
-    service.py                            ← was provision.py (further decomposed)
-    models.py                             ← provision input/result types
-    bootstrap.py                          ← runtime startup setup
+  provisioning/                           <- subdomain
+    service.py                            <- was provision.py
+    models.py                             <- provision input/result types
+    bootstrap.py                          <- runtime startup setup
     git_operations.py
-    sandbox_helpers.py                    ← was sandbox_exec.py
-    scheduler.py                          ← provision task scheduling
+    sandbox_helpers.py                    <- was sandbox_exec.py
+    scheduler.py                          <- provision task scheduling
     domain/
-      step_tracker.py                     ← _StepTracker extracted
-      identity_resolver.py                ← _resolve_git_identity extracted
-      data_key.py                         ← was top-level
+      step_tracker.py                     <- _StepTracker extracted
+      identity_resolver.py                <- _resolve_git_identity extracted
+      data_key.py                         <- was top-level
 
-  credentials/                            ← subdomain
-    service.py                            ← sync_workspace_credentials
-    models.py                             ← provision credential dataclasses
+  credentials/                            <- subdomain
+    service.py                            <- sync_workspace_credentials
+    models.py                             <- provision credential dataclasses
     domain/
-      freshness.py                        ← was credential_freshness.py
+      freshness.py                        <- was credential_freshness.py
 
-  config_sync/                            ← subdomain
-    service.py                            ← combines repo + worktree policy
-    repo_config.py                        ← was repo_config_apply.py
-    worktree_policy.py                    ← was worktree_policy_sync.py
+  config_sync/                            <- subdomain
+    service.py                            <- combines repo + worktree policy
+    repo_config.py                        <- was repo_config_apply.py
+    worktree_policy.py                    <- was worktree_policy_sync.py
 
-  liveness/                               ← subdomain
-    service.py                            ← ensure_running orchestration
-    reconciler.py                         ← was setup_monitor.py
+  liveness/                               <- subdomain
+    service.py                            <- ensure_running orchestration
+    reconciler.py                         <- was setup_monitor.py
     domain/
-      restart_policy.py                   ← pure restart logic
-      health_checks.py                    ← provider-specific health waits
+      restart_policy.py                   <- pure restart logic
+      health_checks.py                    <- provider-specific health waits
 ```
 
 Each subdomain is coherent and reasonably sized. The AnyHarness vendor client
-leaves product code entirely. `provisioning/service.py` is still large after
-the carving and needs internal decomposition as a follow-up — that work
-extracts the pure helpers (step tracker, identity resolver) into
-`provisioning/domain/`.
+leaves product code entirely. Large provisioning helpers that are pure product
+rules belong in `provisioning/domain/`; vendor calls belong in
+`integrations/anyharness/`.
 
 ## Patterns
 

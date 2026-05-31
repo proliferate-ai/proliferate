@@ -1,15 +1,8 @@
 # Integrations
 
-Status: provisional. Authoritative for `integrations/<vendor>/` shapes and
-adapter conventions until the integration patterns are revisited.
-
-Read after `docs/structures/server/README.md`. This guide details how third-party SDK
-and API access is organized: when to use a single file, when to promote to a
-folder, and how multi-vendor protocols are abstracted.
-
-This guide is marked provisional because the current rules are based on a
-small number of existing integrations. Patterns may shift as new
-integrations expose gaps.
+Integrations are the server's raw external access boundary. Product domains
+call integration public APIs; integrations own vendor clients, vendor wire
+types, authentication, retries, and protocol translation.
 
 ## Ownership
 
@@ -32,7 +25,7 @@ Integration code does not own:
 - Database access (no `db/store/**` imports).
 - Service-layer orchestration.
 
-## Folder Shape
+## Shape
 
 Three legal shapes, picked by what the integration is.
 
@@ -51,7 +44,7 @@ Inside the file:
 - Payload dataclasses (when the integration parses structured responses).
 - Public functions exported to product code.
 
-Examples (today): `anthropic.py`, `customerio.py`, `github.py`, `resend.py`,
+Examples: `anthropic.py`, `customerio.py`, `github.py`, `resend.py`,
 `sentry.py`, `anonymous_telemetry.py`.
 
 ### Shape 2: Folder, single provider
@@ -78,7 +71,7 @@ or any set of features that don't fit cleanly in one file.
   This is the explicit Python-package exception to the repo-wide no-barrel
   rule; use it only for integration package public APIs.
 
-Example (today): `slack/` with `webhooks.py` + `errors.py`.
+Example: `slack/` with `webhooks.py` + `errors.py`.
 
 Concern files should be coarse and meaningful. Do not mechanically mirror
 every endpoint, REST resource, or SDK method into its own file. Start with the
@@ -110,7 +103,7 @@ selects an implementation at runtime.
 - `errors.py` — shared error types raised by any provider.
 - `__init__.py` — exports the factory and shared types.
 
-Example (today): `sandbox/` with `base.py`, `daytona.py`, `e2b.py`,
+Example: `sandbox/` with `base.py`, `daytona.py`, `e2b.py`,
 `factory.py`.
 
 ## Picking a Shape
@@ -121,7 +114,7 @@ Example (today): `sandbox/` with `base.py`, `daytona.py`, `e2b.py`,
 | One vendor, multiple distinct concerns | Shape 2 (single-provider folder) |
 | Multiple vendors implementing the same protocol | Shape 3 (polymorphic folder) |
 
-Shape can change over time:
+Shape changes when ownership changes:
 
 - Single file → single-provider folder when concerns split (extract
   webhooks, OAuth, etc.).
@@ -276,16 +269,16 @@ service owns "what to do when the event arrives."
 6. **Add unit tests** for the integration that mock the HTTP layer.
 7. **For folder integrations:** export the public API from `__init__.py`.
 
-## Forward Pass
+## Migration Exceptions
 
-When the existing integrations are revisited:
+Existing code has these integration-boundary exceptions:
 
-- The `billing/stripe.py` (single-file folder) anti-pattern needs flattening
-  to `integrations/stripe.py` until a second billing provider arrives.
-- `integrations/mcp_oauth.py` (450 lines) likely needs promotion to
-  `mcp_oauth/` with `client.py`, `flows.py`, `models.py`, `errors.py`.
-- `cloud/runtime/anyharness_api.py` (593 lines) + `session_api.py` (251) +
-  `workspace_operations.py` (222) need consolidation under
+- `billing/stripe.py` is a single-file folder anti-pattern. Flatten it to
+  `integrations/stripe.py` unless it earns a multi-file vendor folder.
+- `integrations/mcp_oauth.py` is large enough to earn `mcp_oauth/` with
+  `client.py`, `flows.py`, `models.py`, and `errors.py`.
+- `cloud/runtime/anyharness_api.py`, `session_api.py`, and
+  `workspace_operations.py` are AnyHarness vendor access and belong under
   `integrations/anyharness/` as a single-provider folder.
 
 These are concrete cleanups, not rule changes.

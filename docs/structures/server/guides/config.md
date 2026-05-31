@@ -1,11 +1,8 @@
 # Config And Constants
 
-Status: authoritative for `config.py`, `constants/<area>.py`, and server
-module-level constants.
-
-Read after `docs/structures/server/README.md` when a change introduces or moves settings,
-limits, defaults, timeouts, headers, protocol labels, feature flags, URLs, or
-other shared values.
+Server values have three homes: deployment-derived settings, shared product or
+protocol constants, and private file-local implementation details. Put each
+value in the narrowest home that makes its ownership obvious.
 
 ## Ownership
 
@@ -135,9 +132,10 @@ Ask these in order:
 
 If unsure, prefer `constants/<area>.py` over scattering the value inline.
 
-## Migration Notes
+## Migration Exceptions
 
-When cleaning an existing domain:
+Existing code may still keep product constants inline in services, handlers,
+workers, integrations, or stores. When touching that code:
 
 1. Search for module-level literals in `api.py`, `service.py`, worker files,
    and `db/store/**`.
