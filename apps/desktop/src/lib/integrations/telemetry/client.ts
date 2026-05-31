@@ -20,6 +20,7 @@ import {
 import {
   identifyDesktopPostHogUser,
   initializeDesktopPostHog,
+  getDesktopPostHogSupportRefs,
   resetDesktopPostHogUser,
   trackDesktopPostHogEvent,
 } from "./posthog";
@@ -28,6 +29,7 @@ import {
   captureDesktopSentryException,
   clearDesktopSentryUser,
   getDesktopRootErrorHandlers,
+  getRecentDesktopSentryEventIds,
   initializeDesktopSentry,
   setDesktopSentryTag,
   setDesktopSentryUser,
@@ -159,4 +161,21 @@ export function setTelemetryTag(key: string, value: string): void {
   }
 
   setDesktopSentryTag(key, value);
+}
+
+export function getSupportReportTelemetryRefs(): {
+  posthogDistinctId?: string;
+  posthogSessionId?: string;
+  sentryEventIds?: string[];
+} | undefined {
+  if (!getDesktopTelemetryRuntimeState().vendorEnabled) {
+    return undefined;
+  }
+  const posthogRefs = getDesktopPostHogSupportRefs();
+  const sentryEventIds = getRecentDesktopSentryEventIds();
+  const refs = {
+    ...posthogRefs,
+    ...(sentryEventIds.length > 0 ? { sentryEventIds } : {}),
+  };
+  return Object.keys(refs).length > 0 ? refs : undefined;
 }

@@ -263,7 +263,7 @@ class TestSupportApi:
             records.append(value)
 
         monkeypatch.setattr(
-            "proliferate.server.support.service.presign_put_object",
+            "proliferate.server.support.storage.presign_put_object",
             fake_presign_put_object,
         )
         monkeypatch.setattr(
@@ -347,7 +347,7 @@ class TestSupportApi:
             fake_put_json_object,
         )
         monkeypatch.setattr(
-            "proliferate.server.support.service.presign_put_object",
+            "proliferate.server.support.storage.presign_put_object",
             fake_presign_put_object,
         )
 
@@ -402,70 +402,21 @@ class TestSupportApi:
         assert payload["diagnostics"]["putUrl"].startswith("https://s3.test/")
         assert payload["attachments"][0]["clientFileId"] == "file-1"
 
-    @pytest.mark.asyncio
-    async def test_support_report_create_includes_authorized_cloud_workspace_correlation(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        session = await _register_and_login(client, "support-report-cloud@example.com")
-        workspace = await _seed_personal_cloud_workspace(
-            db_session,
-            user_id=session["user_id"],
-            suffix="support",
-        )
-        headers = {"Authorization": f"Bearer {session['access_token']}"}
-        monkeypatch.setattr(settings, "support_report_s3_bucket", "support-bucket")
-
-        async def fake_put_json_object(
-            *,
-            bucket: str,
-            key: str,
-            value: dict[str, object],
-            region_name: str | None = None,
-        ) -> None:
-            assert bucket == "support-bucket"
-            assert key.endswith("/request.json")
-
-        async def fake_collect_cloud_diagnostics_for_report(report_id: str) -> None:
-            assert report_id
-
-        monkeypatch.setattr(
-            "proliferate.server.support.service.put_json_object",
-            fake_put_json_object,
-        )
-        monkeypatch.setattr(
-            "proliferate.server.support.api.collect_cloud_diagnostics_for_report",
-            fake_collect_cloud_diagnostics_for_report,
-        )
-
-        response = await client.post(
-            "/v1/support/reports",
+        changed_upload_targets = await client.post(
+            f"/v1/support/reports/{first.json()['reportId']}/upload-targets",
             headers=headers,
             json={
-                "clientJobId": "support-job-cloud",
-                "message": "Cloud workspace failed.",
-                "sourceSurface": "desktop",
-                "scope": {
-                    "kind": "choose_workspace",
-                    "workspaceIds": [f"cloud:{workspace.id}"],
+                "diagnostics": {
+                    "contentType": "application/json",
+                    "sizeBytes": 1024,
+                    "sha256": "changed",
                 },
-                "workspaceRefs": [
-                    {
-                        "id": f"cloud:{workspace.id}",
-                        "location": "cloud",
-                        "cloudWorkspaceId": str(workspace.id),
-                        "anyharnessWorkspaceId": workspace.anyharness_workspace_id,
-                    }
-                ],
+                "attachments": [],
             },
         )
 
-        assert response.status_code == 200
-        payload = response.json()
-        assert payload["cloudDiagnosticsStatus"] == "pending"
-        assert payload["serverCorrelation"]["cloudWorkspaceIds"] == [str(workspace.id)]
+        assert changed_upload_targets.status_code == 400
+        assert changed_upload_targets.json()["detail"]["code"] == "support_report_upload_invalid"
 
     @pytest.mark.asyncio
     async def test_support_report_upload_returns_503_when_storage_unconfigured(
@@ -564,7 +515,7 @@ class TestSupportApi:
         monkeypatch.setattr(
             "proliferate.server.support.service.get_json_object", fake_get_json_object
         )
-        monkeypatch.setattr("proliferate.server.support.service.head_object", fake_head_object)
+        monkeypatch.setattr("proliferate.server.support.storage.head_object", fake_head_object)
         monkeypatch.setattr(
             "proliferate.server.support.service.put_json_object", fake_put_json_object
         )

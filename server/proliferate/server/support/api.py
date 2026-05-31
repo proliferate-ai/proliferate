@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_active_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
-from proliferate.server.support.diagnostics import collect_cloud_diagnostics_for_report
+from proliferate.server.support.jobs import schedule_cloud_diagnostics_after_commit
 from proliferate.server.support.models import (
     SupportMessageRequest,
     SupportMessageResponse,
@@ -62,7 +62,6 @@ async def create_support_report_upload_endpoint(
 @router.post("/reports", response_model=SupportReportCreateResponse)
 async def create_support_report_endpoint(
     body: SupportReportCreateRequest,
-    background_tasks: BackgroundTasks,
     user: User = Depends(current_active_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> SupportReportCreateResponse:
@@ -74,7 +73,7 @@ async def create_support_report_endpoint(
         body=body,
     )
     if response.cloud_diagnostics_status == "pending":
-        background_tasks.add_task(collect_cloud_diagnostics_for_report, response.report_id)
+        await schedule_cloud_diagnostics_after_commit(db, response.report_id)
     return response
 
 

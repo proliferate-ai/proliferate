@@ -24,8 +24,10 @@ class RequestTelemetryMiddleware(BaseHTTPMiddleware):
             set_server_sentry_tag("request_id", request_id)
         set_server_sentry_tag("http_method", request.method)
         set_server_sentry_tag("http_route", _sanitized_route(request))
-        response = await call_next(request)
-        set_server_sentry_correlation_context(get_correlation_context())
+        try:
+            response = await call_next(request)
+        finally:
+            set_server_sentry_correlation_context(get_correlation_context())
         return response
 
 

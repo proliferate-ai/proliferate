@@ -33,7 +33,10 @@ import type {
   SupportReportServerCorrelation,
   SupportReportWorkspaceOption,
 } from "@/lib/domain/support/report-types";
-import { trackProductEvent } from "@/lib/integrations/telemetry/client";
+import {
+  getSupportReportTelemetryRefs,
+  trackProductEvent,
+} from "@/lib/integrations/telemetry/client";
 import {
   describeSupportReportUploadFailure,
   shouldShowSupportReportUploadFailureToast,
@@ -255,6 +258,7 @@ function buildCreateReportRequest(
     context: job.snapshot.context,
     scope: job.scope,
     workspaceRefs: workspaceRefsForJob(job),
+    telemetryRefs: getSupportReportTelemetryRefs(),
     expectedClientUploads: {
       diagnostics: true,
       attachmentCount,

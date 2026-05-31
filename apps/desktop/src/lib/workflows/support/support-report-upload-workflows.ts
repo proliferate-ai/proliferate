@@ -1,6 +1,11 @@
+import type {
+  GetSessionLiveConfigResponse,
+  SessionRawNotificationEnvelope,
+} from "@anyharness/sdk";
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import type { SupportDiagnosticsBundle } from "@/lib/access/tauri/diagnostics";
 import { sanitizeSupportUploadPayload } from "@/lib/domain/support/report-upload-sanitizer";
+import { sanitizeSessionDebugExportedSession } from "@/lib/domain/support/session-debug/sanitizer";
 import type {
   SupportReportJob,
   SupportReportServerCorrelation,
@@ -14,6 +19,8 @@ const MAX_WORKSPACES = 5;
 const MAX_SESSIONS_PER_WORKSPACE = 3;
 const MAX_EVENTS_PER_SESSION = 200;
 const MAX_RAW_NOTIFICATIONS_PER_SESSION = 100;
+const SENSITIVE_LIVE_CONFIG_KEY_PATTERN =
+  /(prompt|instruction|message|content|text|rawInput|rawOutput|rawConfig)/i;
 
 export interface SupportReportUploadDependencies<
   Connection extends AnyHarnessResolvedConnection = AnyHarnessResolvedConnection,
@@ -74,15 +81,13 @@ export async function buildSupportReportPackage<
 ): Promise<SupportReportPackage> {
   const collectionErrors: string[] = [];
   const runtimeDiagnostics = await dependencies.collectDiagnostics().catch((error) => {
-      collectionErrors.push(formatError("runtimeDiagnostics", error));
-      return null;
-    });
+    collectionErrors.push(formatError("runtimeDiagnostics", error));
+    return null;
+  });
   const workspaceIds = workspaceIdsForJob(job).slice(0, MAX_WORKSPACES);
-  const workspaces = job.scope.kind === "app_only"
-    ? []
-    : await Promise.all(workspaceIds.map((workspaceId) =>
-      collectWorkspaceDiagnostics(workspaceId, dependencies)
-    ));
+  const workspaces = job.scope.kind === "app_only" ? [] : await Promise.all(
+    workspaceIds.map((workspaceId) => collectWorkspaceDiagnostics(workspaceId, dependencies)),
+  );
 
   return sanitizeSupportUploadPayload({
     schemaVersion: 2,
@@ -126,9 +131,9 @@ async function collectWorkspaceDiagnostics<
     const recentSessions = [...sessions]
       .sort(compareUpdatedAtDesc)
       .slice(0, MAX_SESSIONS_PER_WORKSPACE);
-    const exportedSessions = await Promise.all(recentSessions.map((session) =>
-      collectSessionDiagnostics(client, session.id)
-    ));
+    const exportedSessions = await Promise.all(
+      recentSessions.map((session) => collectSessionDiagnostics(client, session.id)),
+    );
 
     return {
       requestedWorkspaceId: workspaceId,
@@ -175,12 +180,20 @@ async function collectSessionDiagnostics(
     },
   );
 
+  const sanitized = sanitizeSessionDebugExportedSession({
+    session: summary,
+    normalizedEvents: Array.isArray(normalizedEvents) ? normalizedEvents : [],
+    liveConfig: sanitizeLiveConfig(liveConfig),
+    rawNotifications: Array.isArray(rawNotifications) ? rawNotifications : [],
+    errors: [],
+  });
+
   return {
     sessionId,
-    summary,
-    normalizedEvents: Array.isArray(normalizedEvents) ? normalizedEvents : [],
-    liveConfig,
-    rawNotifications: Array.isArray(rawNotifications) ? rawNotifications : [],
+    summary: sanitized.session,
+    normalizedEvents: sanitized.normalizedEvents ?? [],
+    liveConfig: sanitized.liveConfig,
+    rawNotifications: sanitized.rawNotifications ?? [],
     errors,
   };
 }
@@ -220,16 +233,41 @@ function dateMs(value: string | null | undefined): number {
   return Number.isFinite(time) ? time : 0;
 }
 
-function redactNotificationBody(value: unknown): unknown {
-  if (!value || typeof value !== "object") {
+function redactNotificationBody(
+  value: SessionRawNotificationEnvelope,
+): SessionRawNotificationEnvelope {
+  return {
+    ...value,
+    notification: { redacted: true },
+  };
+}
+
+function sanitizeLiveConfig(
+  value: GetSessionLiveConfigResponse | null,
+): GetSessionLiveConfigResponse | null {
+  return sanitizeLiveConfigValue(value) as GetSessionLiveConfigResponse | null;
+}
+
+function sanitizeLiveConfigValue(value: unknown, keyHint = ""): unknown {
+  if (value == null) {
     return value;
   }
-  return {
-    ...(value as Record<string, unknown>),
-    body: "[REDACTED]",
-    payload: "[REDACTED]",
-    notification: "[REDACTED]",
-  };
+  if (typeof value === "string") {
+    return SENSITIVE_LIVE_CONFIG_KEY_PATTERN.test(keyHint) ? "[REDACTED]" : value;
+  }
+  if (typeof value !== "object") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeLiveConfigValue(item, keyHint));
+  }
+  const output: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    output[key] = SENSITIVE_LIVE_CONFIG_KEY_PATTERN.test(key)
+      ? "[REDACTED]"
+      : sanitizeLiveConfigValue(item, key);
+  }
+  return output;
 }
 
 function formatError(scope: string, error: unknown): string {

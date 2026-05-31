@@ -293,6 +293,8 @@ pub async fn collect_support_diagnostics_bundle(
         })
         .map(|value| scrub_diagnostic_text(&value));
 
+    let support_health = health.clone().map(scrub_health_response);
+
     Ok(SupportDiagnosticsBundle {
         schema_version: 1,
         manifest: SupportDiagnosticsManifest {
@@ -310,10 +312,18 @@ pub async fn collect_support_diagnostics_bundle(
             platform: format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH),
             timestamp: Utc::now().to_rfc3339(),
         },
-        health,
+        health: support_health,
         logs,
         collection_errors,
     })
+}
+
+fn scrub_health_response(health: HealthResponse) -> HealthResponse {
+    HealthResponse {
+        runtime_home: scrub_diagnostic_text(&health.runtime_home),
+        status: health.status,
+        version: health.version,
+    }
 }
 
 fn collect_log_files(base_path: &Path) -> Vec<PathBuf> {
@@ -461,7 +471,10 @@ mod tests {
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use super::{collect_log_files, scrub_diagnostic_text, suggested_bundle_file_name};
+    use super::{
+        collect_log_files, scrub_diagnostic_text, scrub_health_response,
+        suggested_bundle_file_name, HealthResponse,
+    };
 
     fn temp_path(file_name: &str) -> PathBuf {
         let unique = SystemTime::now()
@@ -497,5 +510,18 @@ mod tests {
     fn scrubber_hides_secrets_in_exported_text() {
         let scrubbed = scrub_diagnostic_text("Authorization: Bearer token123");
         assert!(!scrubbed.contains("token123"));
+    }
+
+    #[test]
+    fn scrub_health_response_hides_runtime_home() {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/Users/example".to_string());
+        let health = scrub_health_response(HealthResponse {
+            runtime_home: format!("{home}/.proliferate/anyharness"),
+            status: "ok".to_string(),
+            version: "0.1.0".to_string(),
+        });
+
+        assert!(!health.runtime_home.contains(&home));
+        assert!(health.runtime_home.starts_with("~") || !home.starts_with('/'));
     }
 }
