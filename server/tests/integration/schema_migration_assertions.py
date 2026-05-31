@@ -337,8 +337,7 @@ async def assert_current_schema(
 
     password_login_attempt_columns = await conn.run_sync(
         lambda sync_conn: {
-            column["name"]
-            for column in inspect(sync_conn).get_columns("password_login_attempt")
+            column["name"] for column in inspect(sync_conn).get_columns("password_login_attempt")
         }
     )
     assert {
