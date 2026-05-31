@@ -318,11 +318,7 @@ class TestSupportApi:
                 "objects": {
                     "diagnostics": {"objectKey": "support/reports/report123/diagnostics.json"},
                     "attachments": [
-                        {
-                            "objectKey": (
-                                "support/reports/report123/attachments/file-1/screen.png"
-                            )
-                        }
+                        {"objectKey": ("support/reports/report123/attachments/file-1/screen.png")}
                     ],
                 },
             }
@@ -335,9 +331,7 @@ class TestSupportApi:
         ) -> dict[str, object]:
             assert bucket == "support-bucket"
             return {
-                "ContentLength": 512
-                if key.endswith("diagnostics.json")
-                else 100,
+                "ContentLength": 512 if key.endswith("diagnostics.json") else 100,
             }
 
         async def fake_put_json_object(

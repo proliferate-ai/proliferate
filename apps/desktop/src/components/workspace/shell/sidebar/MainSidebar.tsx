@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
@@ -29,7 +29,7 @@ import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useSidebarShortcutTargets } from "@/hooks/workspaces/derived/use-sidebar-shortcut-targets";
-import { useSupportReportSnapshot } from "@/hooks/support/derived/use-support-report-snapshot";
+import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "@/hooks/workspaces/use-workspace-display-name-actions";
@@ -46,8 +46,6 @@ import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-i
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import { buildShortcutRangeLabelById } from "@/lib/domain/shortcuts/presentation";
 import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
-import { subscribeSupportDialogRequest } from "@/lib/infra/support/support-dialog-request";
-import { openSupportReportWindow } from "@/lib/access/tauri/support";
 import { useShortcutRevealVisible } from "@/providers/ShortcutRevealProvider";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -61,7 +59,7 @@ export const MainSidebar = memo(function MainSidebar() {
   useDebugRenderCount("workspace-sidebar");
   useSessionActivityReconciler();
   const actions = useWorkspaceSidebarActions();
-  const supportSnapshot = useSupportReportSnapshot({ source: "sidebar" });
+  const handleOpenSupport = useOpenSupportReportWindow({ source: "sidebar" });
   const shortcutRevealVisible = useShortcutRevealVisible();
   const sidebarShortcutTargetIds = useSidebarShortcutTargets();
   const {
@@ -74,13 +72,6 @@ export const MainSidebar = memo(function MainSidebar() {
     isPending: isCloudRepoConfigsPending,
   } = useCloudRepoConfigs(cloudActive);
   const showToast = useToastStore((state) => state.show);
-  const handleOpenSupport = useCallback(() => {
-    void openSupportReportWindow(supportSnapshot).catch((error) => {
-      const message = error instanceof Error ? error.message : "Failed to open support.";
-      showToast(message);
-    });
-  }, [showToast, supportSnapshot]);
-  useEffect(() => subscribeSupportDialogRequest(handleOpenSupport), [handleOpenSupport]);
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const {
     workspaceTypes,

@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { ArrowLeft } from "@proliferate/ui/icons";
 import { SidebarNavRow } from "@proliferate/ui/layout/SidebarNavRow";
 import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
@@ -16,10 +16,7 @@ import { useSettingsSectionShortcuts } from "@/hooks/settings/ui/use-settings-se
 import { useShortcutRevealVisible } from "@/providers/ShortcutRevealProvider";
 import { buildShortcutRangeLabelById } from "@/lib/domain/shortcuts/presentation";
 import { buildSettingsShortcutSectionTargets } from "@/lib/domain/settings/shortcut-targets";
-import { openSupportReportWindow } from "@/lib/access/tauri/support";
-import { subscribeSupportDialogRequest } from "@/lib/infra/support/support-dialog-request";
-import { useSupportReportSnapshot } from "@/hooks/support/derived/use-support-report-snapshot";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
 import type { UpdaterPhase } from "@/hooks/access/tauri/use-updater";
 
 interface SettingsSidebarProps {
@@ -145,8 +142,7 @@ export function SettingsSidebar({
   updateActionState,
 }: SettingsSidebarProps) {
   const appVersion = useAppVersion().data?.trim();
-  const supportSnapshot = useSupportReportSnapshot({ source: "settings" });
-  const showToast = useToastStore((state) => state.show);
+  const handleOpenSupport = useOpenSupportReportWindow({ source: "settings" });
   const shortcutRevealVisible = useShortcutRevealVisible();
   const effectiveDisabledSections = useMemo(() => {
     const next: Partial<Record<SettingsSection, boolean>> = { ...disabledSections };
@@ -177,14 +173,6 @@ export function SettingsSidebar({
     targets: shortcutTargets,
     onSelectSection,
   });
-  const handleOpenSupport = useCallback(() => {
-    void openSupportReportWindow(supportSnapshot).catch((error) => {
-      const message = error instanceof Error ? error.message : "Failed to open support.";
-      showToast(message);
-    });
-  }, [showToast, supportSnapshot]);
-  useEffect(() => subscribeSupportDialogRequest(handleOpenSupport), [handleOpenSupport]);
-
   function handleItemClick(item: SettingsNavItem) {
     if (isSettingsItemDisabled(item, effectiveDisabledSections, updateActionState, adminAccess)) {
       return;

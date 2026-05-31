@@ -136,14 +136,10 @@ async def create_support_report_upload(
         )
 
     context_record = (
-        body.context.model_dump(by_alias=True, exclude_none=True)
-        if body.context
-        else None
+        body.context.model_dump(by_alias=True, exclude_none=True) if body.context else None
     )
     diagnostics_record = (
-        diagnostics_target.model_dump(by_alias=True)
-        if diagnostics_target
-        else None
+        diagnostics_target.model_dump(by_alias=True) if diagnostics_target else None
     )
     record = {
         "schemaVersion": 1,
