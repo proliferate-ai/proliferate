@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type ChangeEvent,
+  type ClipboardEvent,
+  type DragEvent,
+} from "react";
 import {
   closeSupportReportWindow,
   deleteStagedSupportReportAttachment,
@@ -67,6 +74,40 @@ export function useSupportReportWindowState() {
       setStagingError(error instanceof Error ? error.message : "Failed to add attachment.");
     }
   }, []);
+
+  const handleAttachmentPaste = useCallback((event: ClipboardEvent<HTMLElement>) => {
+    const files = extractAttachmentTransferFiles(event.clipboardData);
+    if (files.length === 0) {
+      return;
+    }
+    event.preventDefault();
+    void stageFiles(files);
+  }, [stageFiles]);
+
+  const handleAttachmentDragOver = useCallback((event: DragEvent<HTMLElement>) => {
+    if (!isAttachmentFileTransfer(event.dataTransfer)) {
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const handleAttachmentDrop = useCallback((event: DragEvent<HTMLElement>) => {
+    const files = extractAttachmentTransferFiles(event.dataTransfer);
+    if (files.length === 0) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    void stageFiles(files);
+  }, [stageFiles]);
+
+  const handleAttachmentInputChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      void stageFiles(event.target.files);
+    }
+    event.currentTarget.value = "";
+  }, [stageFiles]);
 
   const defaultWorkspace = snapshot?.workspaceOptions.find((workspace) =>
     workspace.id === snapshot.defaultWorkspaceId
@@ -151,6 +192,10 @@ export function useSupportReportWindowState() {
     attachments,
     canSend,
     defaultWorkspace,
+    handleAttachmentDragOver,
+    handleAttachmentDrop,
+    handleAttachmentInputChange,
+    handleAttachmentPaste,
     handleCancel,
     handleSend,
     message,
@@ -160,14 +205,13 @@ export function useSupportReportWindowState() {
     setMessage,
     setScope,
     snapshot,
-    stageFiles,
     stagingError,
     toggleWorkspace,
   };
 }
 
 function scopeFallbackFileName(file: File): string {
-  return file.name || "attachment";
+  return file.name || fallbackAttachmentFileName(file.type);
 }
 
 async function stageAttachment(file: File): Promise<StagedSupportReportAttachment> {
@@ -197,6 +241,44 @@ async function fileToBase64(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
   return dataUrl.split(",", 2)[1] ?? "";
+}
+
+function extractAttachmentTransferFiles(transfer: DataTransfer): File[] {
+  const files = Array.from(transfer.files);
+  if (files.length > 0) {
+    return files;
+  }
+  return Array.from(transfer.items)
+    .filter((item) => item.kind === "file")
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file !== null);
+}
+
+function isAttachmentFileTransfer(transfer: DataTransfer): boolean {
+  return transfer.files.length > 0
+    || Array.from(transfer.items).some((item) => item.kind === "file")
+    || Array.from(transfer.types).includes("Files");
+}
+
+function fallbackAttachmentFileName(contentType: string): string {
+  switch (contentType) {
+    case "image/jpeg":
+      return "screenshot.jpg";
+    case "image/png":
+      return "screenshot.png";
+    case "image/webp":
+      return "screenshot.webp";
+    case "image/gif":
+      return "screenshot.gif";
+    case "image/tiff":
+      return "screenshot.tiff";
+    case "application/pdf":
+      return "attachment.pdf";
+    case "text/plain":
+      return "attachment.txt";
+    default:
+      return "attachment";
+  }
 }
 
 export type SupportReportWindowDefaultWorkspace = SupportReportWorkspaceOption | null;

@@ -88,6 +88,7 @@ pub fn open_support_report_window(
     .inner_size(560.0, 720.0)
     .min_inner_size(480.0, 560.0)
     .resizable(true)
+    .disable_drag_drop_handler()
     .build()
     .map_err(|error| error.to_string())?;
     window.show().map_err(|error| error.to_string())?;

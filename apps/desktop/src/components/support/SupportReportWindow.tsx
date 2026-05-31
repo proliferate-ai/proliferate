@@ -23,6 +23,10 @@ export function SupportReportWindow() {
     attachments,
     canSend,
     defaultWorkspace,
+    handleAttachmentDragOver,
+    handleAttachmentDrop,
+    handleAttachmentInputChange,
+    handleAttachmentPaste,
     handleCancel,
     handleSend,
     message,
@@ -32,24 +36,21 @@ export function SupportReportWindow() {
     setMessage,
     setScope,
     snapshot,
-    stageFiles,
     stagingError,
     toggleWorkspace,
   } = useSupportReportWindowState();
 
   return (
     <main
-      className="flex h-screen min-h-0 flex-col overflow-hidden bg-popover/95 text-popover-foreground shadow-floating backdrop-blur-lg"
-      onPaste={(event) => {
-        if (event.clipboardData.files.length > 0) {
-          void stageFiles(event.clipboardData.files);
-        }
-      }}
+      className="flex h-screen min-h-0 flex-col overflow-hidden bg-popover/95 font-mono text-popover-foreground shadow-floating backdrop-blur-lg"
+      onPaste={handleAttachmentPaste}
+      onDragOver={handleAttachmentDragOver}
+      onDrop={handleAttachmentDrop}
     >
       <div className="shrink-0 border-b border-popover-ring/70 px-4 py-3" data-tauri-drag-region="true">
         <div className="flex items-center gap-2">
           <LifeBuoy className="size-4 text-muted-foreground" />
-          <h1 className="text-base font-semibold leading-6">Report issue</h1>
+          <h1 className="text-sm font-semibold leading-6">Report issue</h1>
         </div>
       </div>
 
@@ -61,12 +62,13 @@ export function SupportReportWindow() {
             </label>
             <Textarea
               id="support-message"
+              variant="code"
               autoFocus
               data-telemetry-mask
               value={message}
               onChange={(event) => setMessage(event.target.value)}
               placeholder="Tell us what went wrong."
-              className="min-h-[132px] resize-y bg-surface-control"
+              className="min-h-[132px]"
             />
           </section>
 
@@ -85,15 +87,8 @@ export function SupportReportWindow() {
             </div>
             <button
               type="button"
-              className="flex min-h-[88px] w-full flex-col items-center justify-center rounded-lg border border-dashed border-border/80 bg-surface-control/80 px-4 py-4 text-center text-sm text-muted-foreground transition-colors hover:border-ring hover:bg-popover-accent hover:text-popover-foreground"
+              className="flex min-h-[88px] w-full flex-col items-center justify-center rounded-lg border border-dashed border-border/80 bg-surface-control/80 px-4 py-4 text-center text-xs text-muted-foreground transition-colors hover:border-ring hover:bg-popover-accent hover:text-popover-foreground"
               onClick={() => fileInputRef.current?.click()}
-              onDragOver={(event) => {
-                event.preventDefault();
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                void stageFiles(event.dataTransfer.files);
-              }}
             >
               <CloudUpload className="mb-2 size-5" />
               <span>Drop screenshots or files here</span>
@@ -103,12 +98,7 @@ export function SupportReportWindow() {
               type="file"
               multiple
               className="hidden"
-              onChange={(event) => {
-                if (event.target.files) {
-                  void stageFiles(event.target.files);
-                }
-                event.currentTarget.value = "";
-              }}
+              onChange={handleAttachmentInputChange}
             />
             {stagingError ? (
               <p className="text-xs leading-5 text-destructive">{stagingError}</p>
@@ -118,12 +108,12 @@ export function SupportReportWindow() {
                 {attachments.map((attachment) => (
                   <div
                     key={attachment.id}
-                    className="flex min-h-10 items-center gap-3 rounded-lg border border-border/70 bg-surface-control/70 px-3 py-2 text-sm"
+                    className="flex min-h-10 items-center gap-3 rounded-lg border border-border/70 bg-surface-control/70 px-3 py-2 text-xs"
                   >
                     <FileText className="size-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate font-medium">{attachment.fileName}</div>
-                      <div className="text-xs text-muted-foreground">
+                      <div className="truncate font-medium leading-5">{attachment.fileName}</div>
+                      <div className="text-[11px] leading-4 text-muted-foreground">
                         {attachment.contentType || "file"} · {formatBytes(attachment.sizeBytes)}
                       </div>
                     </div>
@@ -154,7 +144,7 @@ export function SupportReportWindow() {
                 return (
                   <label
                     key={option.kind}
-                    className={`flex min-h-10 cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                    className={`flex min-h-10 cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 text-xs transition-colors ${
                       scopeKind === option.kind
                         ? "border-ring bg-popover-accent text-popover-foreground"
                         : "border-border/70 bg-surface-control/60 hover:bg-popover-accent"
@@ -169,9 +159,9 @@ export function SupportReportWindow() {
                       className="mt-1"
                     />
                     <span className="min-w-0 flex-1">
-                      <span className="block font-medium">{option.label}</span>
+                      <span className="block font-medium leading-5">{option.label}</span>
                       {description ? (
-                        <span className="block truncate text-xs leading-4 text-muted-foreground">
+                        <span className="block truncate text-[11px] leading-4 text-muted-foreground">
                           {description}
                         </span>
                       ) : null}
@@ -186,7 +176,7 @@ export function SupportReportWindow() {
                 {snapshot.workspaceOptions.map((workspace) => (
                   <label
                     key={workspace.id}
-                    className="flex min-h-10 cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-popover-accent"
+                    className="flex min-h-10 cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-xs transition-colors hover:bg-popover-accent"
                   >
                     <input
                       type="checkbox"
@@ -196,8 +186,8 @@ export function SupportReportWindow() {
                     />
                     <Folder className="size-4 shrink-0 text-muted-foreground" />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{workspace.label}</span>
-                      <span className="block truncate text-xs text-muted-foreground">
+                      <span className="block truncate font-medium leading-5">{workspace.label}</span>
+                      <span className="block truncate text-[11px] leading-4 text-muted-foreground">
                         {[workspace.location, workspace.branch, workspace.status]
                           .filter(Boolean)
                           .join(" · ")}
