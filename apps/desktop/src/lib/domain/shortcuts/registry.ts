@@ -16,7 +16,7 @@ interface RegisteredShortcutHandler {
   handler: ShortcutHandler;
 }
 
-const shortcutHandlers = new Map<ShortcutId, RegisteredShortcutHandler>();
+const shortcutHandlers = new Map<ShortcutId, RegisteredShortcutHandler[]>();
 const VALID_SHORTCUT_IDS = new Set<ShortcutId>(
   Object.values(SHORTCUTS).map((shortcut) => shortcut.id),
 );
@@ -35,29 +35,33 @@ export function registerShortcutHandler(
     return () => {};
   }
 
-  if (shortcutHandlers.has(id)) {
-    const message = `Duplicate shortcut handler registration for ${id}`;
-    if (import.meta.env.DEV) {
-      throw new Error(message);
-    }
-
-    console.error(message);
-    return () => {};
+  const token = Symbol(id);
+  const handlers = shortcutHandlers.get(id) ?? [];
+  if (handlers.length > 0) {
+    console.warn(`Duplicate shortcut handler registration for ${id}; using latest handler`);
   }
 
-  const token = Symbol(id);
-  shortcutHandlers.set(id, { token, handler });
+  shortcutHandlers.set(id, [...handlers, { token, handler }]);
 
   return () => {
     const current = shortcutHandlers.get(id);
-    if (current?.token === token) {
-      shortcutHandlers.delete(id);
+    if (!current) {
+      return;
     }
+
+    const next = current.filter((entry) => entry.token !== token);
+    if (next.length === 0) {
+      shortcutHandlers.delete(id);
+      return;
+    }
+
+    shortcutHandlers.set(id, next);
   };
 }
 
 export function getShortcutHandler(id: ShortcutId): ShortcutHandler | null {
-  return shortcutHandlers.get(id)?.handler ?? null;
+  const handlers = shortcutHandlers.get(id);
+  return handlers?.[handlers.length - 1]?.handler ?? null;
 }
 
 export function runShortcutHandler(id: ShortcutId, trigger: ShortcutTrigger): boolean {

@@ -2,7 +2,8 @@ import type {
   TranscriptState,
   TurnRecord,
 } from "@anyharness/sdk";
-import type { ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useRevertGitPatchesMutation } from "@anyharness/sdk-react";
 import { TurnDiffPanel } from "./TurnDiffPanel";
 import {
   TRAILING_STATUS_MIN_HEIGHT,
@@ -24,10 +25,14 @@ import {
 import {
   resolveAssistantTurnActionTime,
 } from "@proliferate/product-domain/chats/transcript/transcript-action-time";
+import {
+  collectTurnFileRevertPatchEntries,
+} from "@proliferate/product-domain/chats/transcript/turn-file-patches";
 import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 import type { TurnDisplayBlock } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
 import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";
+import { useToastStore } from "@/stores/toast/toast-store";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 
@@ -115,6 +120,58 @@ export function TranscriptTurnRow({
   const trailingStatusClassName = tailAssistantCopyContent
     ? undefined
     : TRAILING_STATUS_MIN_HEIGHT;
+  const revertPatchesMutation = useRevertGitPatchesMutation({ workspaceId: selectedWorkspaceId });
+  const showToast = useToastStore((state) => state.show);
+  const [undoneTurnIds, setUndoneTurnIds] = useState<ReadonlySet<string>>(() => new Set());
+  const turnRevertPatches = useMemo(
+    () => row.isLastTurnRow && turn.completedAt
+      ? collectTurnFileRevertPatchEntries(turn, transcript)
+      : { entries: [], blockedReason: null },
+    [row.isLastTurnRow, transcript, turn],
+  );
+  const turnUndoCompleted = undoneTurnIds.has(turn.turnId);
+  const undoDisabledReason = turnUndoCompleted
+    ? "Undo has already been applied for this turn."
+    : turnRevertPatches.blockedReason
+    ?? (!selectedWorkspaceId ? "Undo is unavailable until a workspace is selected." : null)
+    ?? (turnRevertPatches.entries.length === 0
+      ? "Undo is unavailable because this turn has no complete file patches."
+      : null);
+  const handleUndoTurnChanges = useCallback(() => {
+    if (undoDisabledReason || turnRevertPatches.entries.length === 0) {
+      return;
+    }
+    const fileCount = new Set(turnRevertPatches.entries.map((entry) => entry.path)).size;
+    const confirmed = typeof window === "undefined"
+      || window.confirm(`Undo file changes from the last turn? This will reverse ${fileCount} file${fileCount === 1 ? "" : "s"} as one operation.`);
+    if (!confirmed) {
+      return;
+    }
+    void revertPatchesMutation.mutateAsync({
+      sourceLabel: "last turn",
+      entries: turnRevertPatches.entries,
+    }).then(() => {
+      setUndoneTurnIds((current) => {
+        if (current.has(turn.turnId)) {
+          return current;
+        }
+        const next = new Set(current);
+        next.add(turn.turnId);
+        return next;
+      });
+      showToast("Undid last turn file changes.", "info");
+      onOpenTurnChanges?.();
+    }).catch((error) => {
+      showToast(formatUndoError(error));
+    });
+  }, [
+    onOpenTurnChanges,
+    revertPatchesMutation,
+    showToast,
+    turn.turnId,
+    turnRevertPatches.entries,
+    undoDisabledReason,
+  ]);
 
   return (
     <TurnShell isFirst={rowIndex === 0}>
@@ -137,6 +194,9 @@ export function TranscriptTurnRow({
             transcript={transcript}
             onOpenFile={onOpenFile}
             onOpenReviewPane={onOpenTurnChanges}
+            onUndoTurnChanges={undoDisabledReason ? undefined : handleUndoTurnChanges}
+            undoDisabledReason={undoDisabledReason}
+            undoBusy={revertPatchesMutation.isPending}
           />
         )}
         <TurnAssistantActionRow
@@ -151,6 +211,13 @@ export function TranscriptTurnRow({
       </div>
     </TurnShell>
   );
+}
+
+function formatUndoError(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return "Could not undo last turn file changes.";
 }
 
 function resolveTurnTrailingStatusForRow({

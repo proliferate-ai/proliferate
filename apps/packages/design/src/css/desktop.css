@@ -320,8 +320,8 @@
   --diffs-bg-context-override: var(--codex-diffs-context-surface);
   --diffs-bg-separator-override: var(--codex-diffs-separator-surface);
   --diffs-bg-hover-override: var(--codex-diffs-hover-surface);
-  --diffs-bg-addition-override: var(--git-new-line-highlight);
-  --diffs-bg-deletion-override: var(--git-removed-line-highlight);
+  --diffs-bg-addition-override: color-mix(in srgb, var(--codex-diffs-surface) 88%, var(--diffs-addition-color-override));
+  --diffs-bg-deletion-override: color-mix(in srgb, var(--codex-diffs-surface) 88%, var(--diffs-deletion-color-override));
   --diffs-bg-addition-number-override: var(--codex-diffs-addition-number);
   --diffs-bg-deletion-number-override: var(--codex-diffs-deletion-number);
   --color-diff-added-bg: var(--diffs-bg-addition-override);
@@ -686,6 +686,10 @@ mark.codex-thread-find-active {
   --color-diff-deleted: #e02e2a;
   --diffs-fg: #fcfcfc;
   --diffs-mixer: #fcfcfc;
+  --diffs-bg-addition-override: color-mix(in srgb, #181818 86%, #00a240);
+  --diffs-bg-deletion-override: color-mix(in srgb, #181818 86%, #e02e2a);
+  --diffs-bg-addition-number-override: color-mix(in srgb, #181818 89%, #00a240);
+  --diffs-bg-deletion-number-override: color-mix(in srgb, #181818 89%, #e02e2a);
   --color-diff-added-bg: var(--diffs-bg-addition-override);
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 }
@@ -1430,11 +1434,11 @@ mark.codex-thread-find-active {
 }
 
 .composer-diff-simple-line {
-  --codex-diffs-surface: var(--color-diff-code-surface);
+  --codex-diffs-surface: var(--color-diff-main-surface);
   --codex-diffs-header-surface: var(--codex-diffs-surface);
   --codex-diffs-empty-surface: color-mix(in srgb, var(--codex-diffs-surface) 96%, var(--color-foreground));
   --diffs-bg: var(--codex-diffs-surface);
-  background-color: var(--codex-diffs-surface);
+  background-color: var(--color-diff-code-surface);
   scrollbar-color: var(--color-scrollbar-thumb) transparent;
 }
 
@@ -1475,6 +1479,10 @@ mark.codex-thread-find-active {
   background-color: var(--codex-diffs-context-number);
 }
 
+.composer-diff-simple-line .diff-gutter-cell {
+  border-inline-end: 1px solid var(--color-diff-code-surface);
+}
+
 .composer-diff-simple-line .diff-gutter-cell[data-line-type="context"] {
   background-color: var(--codex-diffs-context-number);
   color: color-mix(in srgb, var(--diffs-fg) 35%, transparent);
@@ -1508,7 +1516,7 @@ mark.codex-thread-find-active {
   position: absolute;
   inset-block: 0;
   inset-inline-start: 0;
-  width: 2px;
+  width: 3px;
 }
 
 .composer-diff-simple-line .diff-gutter-cell[data-line-type="change-addition"]::before {
@@ -1516,7 +1524,11 @@ mark.codex-thread-find-active {
 }
 
 .composer-diff-simple-line .diff-gutter-cell[data-line-type="change-deletion"]::before {
-  background-color: var(--diffs-deletion-color-override);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--diffs-deletion-color-override) 0 1px,
+    transparent 1px 3px
+  );
 }
 
 .composer-diff-simple-line [data-separator]:empty {

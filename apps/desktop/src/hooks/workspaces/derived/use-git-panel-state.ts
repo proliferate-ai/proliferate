@@ -25,6 +25,7 @@ import { useRepoPreferencesStore } from "@/stores/preferences/repo-preferences-s
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import { collectLatestCompletedTurnTouchedFiles } from "@proliferate/product-domain/chats/transcript/last-turn-file-changes";
+import { collectTurnFileRevertPatchEntries } from "@proliferate/product-domain/chats/transcript/turn-file-patches";
 
 const EMPTY_STATUS_FILES: GitChangedFile[] = [];
 const EMPTY_BRANCH_FILES: GitDiffFile[] = [];
@@ -101,6 +102,12 @@ export function useGitPanelState(
     () => collectLatestCompletedTurnTouchedFiles(activeTranscript),
     [activeTranscript],
   );
+  const lastTurnRevertPatches = useMemo(
+    () => lastTurnTouched.turn && activeTranscript
+      ? collectTurnFileRevertPatchEntries(lastTurnTouched.turn, activeTranscript)
+      : { entries: [], blockedReason: null },
+    [activeTranscript, lastTurnTouched.turn],
+  );
   const baseWorktreeFilesQuery = useGitBaseWorktreeDiffFilesQuery({
     workspaceId: activeWorkspaceId,
     baseRef: activeBaseRef,
@@ -169,6 +176,7 @@ export function useGitPanelState(
       : files.length,
     activeFilterLabel,
     lastTurn: lastTurnTouched.turn,
+    lastTurnRevertPatches,
     isRuntimeReady,
     runtimeBlockedReason,
     isLoading: loading,

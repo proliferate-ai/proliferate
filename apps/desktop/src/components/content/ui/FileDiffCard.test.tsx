@@ -31,7 +31,7 @@ describe("FileChangesCard and FileDiffCard", () => {
     expect(html).toContain("bg-[var(--color-diff-panel-surface)]");
     expect(html).toContain("text-chat leading-[var(--text-chat--line-height)]");
     expect(html).not.toContain("thread-diff-virtualized");
-    expect(html).toContain("--codex-diffs-surface:var(--codex-diffs-surface-override, var(--color-diff-surface))");
+    expect(html).toContain("--codex-diffs-surface:var(--codex-diffs-surface-override, var(--color-diff-panel-surface))");
     expect(html).toContain("data-diff-surface=\"sidebar\"");
     expect(html).toContain("codex-review-diff-card");
     expect(html).toContain("data-app-action-review-file-expanded=\"true\"");

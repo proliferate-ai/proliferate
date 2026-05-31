@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CommitRequest,
   GitDiffOptions,
+  GitRevertPatchesRequest,
   ListBaseWorktreeDiffFilesOptions,
   ListBranchDiffFilesOptions,
   PushRequest,
@@ -254,6 +255,22 @@ export function useUnstageGitPathsMutation(options?: { workspaceId?: string | nu
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       await client.git.unstagePaths(resolved.connection.anyharnessWorkspaceId, paths);
+    },
+    onSuccess: async () => invalidateWorkspaceGit(queryClient, runtimeUrl, workspaceId),
+  });
+}
+
+export function useRevertGitPatchesMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const queryClient = useQueryClient();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useMutation({
+    mutationFn: async (input: GitRevertPatchesRequest) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.git.revertPatches(resolved.connection.anyharnessWorkspaceId, input);
     },
     onSuccess: async () => invalidateWorkspaceGit(queryClient, runtimeUrl, workspaceId),
   });

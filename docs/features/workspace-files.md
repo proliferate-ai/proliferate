@@ -126,3 +126,9 @@ The right-sidebar Last turn mode keeps transcript-derived touched-file metadata
 separate from current git diff metadata. If a touched file has no current diff
 against the selected base, the row remains visible but suppresses current
 status/stat badges and renders a no-current-diff message.
+
+Last-turn undo is transcript-backed and all-or-nothing. The UI only builds undo
+requests from top-level visible `file_change` parts that include complete patch
+data, and the runtime rejects unsafe paths, staged/partially staged affected
+files, stale patches, and conflicted git operations before applying the reverse
+patch.

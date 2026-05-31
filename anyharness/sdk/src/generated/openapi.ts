@@ -1236,6 +1236,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/git/revert-patches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["revert_patches"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/git/stage": {
         parameters: {
             query?: never;
@@ -2487,6 +2503,22 @@ export interface components {
         GitIncludedState: "included" | "excluded" | "partial";
         /** @enum {string} */
         GitOperation: "none" | "merge" | "rebase" | "cherry_pick" | "revert";
+        GitRevertPatchEntry: {
+            oldPath?: string | null;
+            operation: components["schemas"]["FileChangeOperation"];
+            patch: string;
+            patchTruncated?: boolean | null;
+            path: string;
+        };
+        GitRevertPatchesRequest: {
+            entries: components["schemas"]["GitRevertPatchEntry"][];
+            sourceLabel?: string | null;
+        };
+        GitRevertPatchesResponse: {
+            headOidAfter: string;
+            headOidBefore: string;
+            revertedPaths: string[];
+        };
         GitStatusSnapshot: {
             actions: components["schemas"]["GitActionAvailability"];
             /** Format: int32 */
@@ -7573,6 +7605,60 @@ export interface operations {
                 };
             };
             /** @description Push rejected */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    revert_patches: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GitRevertPatchesRequest"];
+            };
+        };
+        responses: {
+            /** @description Patches reverted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitRevertPatchesResponse"];
+                };
+            };
+            /** @description Undo failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Patch no longer applies */
             409: {
                 headers: {
                     [name: string]: unknown;

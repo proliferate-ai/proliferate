@@ -10,12 +10,14 @@ import {
   useGitBaseWorktreeDiffFilesQuery,
   useGitBranchDiffFilesQuery,
   useGitDiffQuery,
+  useRevertGitPatchesMutation,
 } from "./git.js";
 
 const mocks = vi.hoisted(() => ({
   getDiff: vi.fn(),
   listBranchDiffFiles: vi.fn(),
   listBaseWorktreeDiffFiles: vi.fn(),
+  revertPatches: vi.fn(),
 }));
 
 vi.mock("../lib/client-cache.js", () => ({
@@ -24,6 +26,7 @@ vi.mock("../lib/client-cache.js", () => ({
       getDiff: mocks.getDiff,
       listBranchDiffFiles: mocks.listBranchDiffFiles,
       listBaseWorktreeDiffFiles: mocks.listBaseWorktreeDiffFiles,
+      revertPatches: mocks.revertPatches,
     },
   }),
 }));
@@ -34,6 +37,7 @@ describe("sdk-react git timing hooks", () => {
     mocks.getDiff.mockReset();
     mocks.listBranchDiffFiles.mockReset();
     mocks.listBaseWorktreeDiffFiles.mockReset();
+    mocks.revertPatches.mockReset();
     vi.restoreAllMocks();
   });
 
@@ -216,6 +220,44 @@ describe("sdk-react git timing hooks", () => {
           signal: callerController.signal,
         }),
       }),
+    );
+  });
+
+  it("calls revert patch mutations and invalidates git queries", async () => {
+    mocks.revertPatches.mockResolvedValue({
+      revertedPaths: ["README.md"],
+      headOidBefore: "head",
+      headOidAfter: "head",
+    });
+    const queryClient = createQueryClient();
+
+    const { result } = renderHook(() => useRevertGitPatchesMutation(), {
+      wrapper: createWrapper(queryClient, "http://runtime-revert.test"),
+    });
+
+    await result.current.mutateAsync({
+      sourceLabel: "last turn",
+      entries: [{
+        path: "README.md",
+        oldPath: null,
+        operation: "edit",
+        patch: "@@ -1 +1 @@\n-old\n+new",
+        patchTruncated: false,
+      }],
+    });
+
+    expect(mocks.revertPatches).toHaveBeenCalledWith(
+      "anyharness-workspace-1",
+      {
+        sourceLabel: "last turn",
+        entries: [{
+          path: "README.md",
+          oldPath: null,
+          operation: "edit",
+          patch: "@@ -1 +1 @@\n-old\n+new",
+          patchTruncated: false,
+        }],
+      },
     );
   });
 });

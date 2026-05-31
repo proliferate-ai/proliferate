@@ -29,6 +29,10 @@ vi.mock("@anyharness/sdk-react", () => ({
   useUnstageGitPathsMutation: () => ({
     mutateAsync: vi.fn(),
   }),
+  useRevertGitPatchesMutation: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
 }));
 
 vi.mock("@/hooks/workspaces/files/use-workspace-file-actions", () => ({

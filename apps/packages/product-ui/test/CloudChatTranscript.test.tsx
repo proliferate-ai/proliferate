@@ -116,4 +116,33 @@ describe("CloudChatTranscript", () => {
     fireEvent.click(screen.getByText("Details"));
     expect(screen.getByText(/traceback detail/)).toBeTruthy();
   });
+
+  it("renders assistant markdown lists with explicit markers", () => {
+    render(
+      <CloudChatTranscript
+        emptyTitle="No transcript"
+        rows={[
+          {
+            id: "assistant",
+            kind: "assistant",
+            body: [
+              "Things:",
+              "",
+              "- First bullet",
+              "- Second bullet",
+              "",
+              "1. First number",
+              "2. Second number",
+            ].join("\n"),
+          },
+        ]}
+      />,
+    );
+
+    const [unorderedList] = screen.getAllByRole("list");
+    expect(unorderedList.className).toContain("list-disc");
+    expect(screen.getByText("First bullet")).toBeTruthy();
+    expect(screen.getByText("Second number")).toBeTruthy();
+    expect(document.body.innerHTML).toContain("list-decimal");
+  });
 });

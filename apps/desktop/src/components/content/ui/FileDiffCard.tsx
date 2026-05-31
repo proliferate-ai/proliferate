@@ -230,7 +230,11 @@ export function FileDiffCard({
   const compactLabel = displayLabel ?? basename;
   const fullLabel = displayLabel ?? displayPath;
   const isSidebar = surface === "sidebar";
-  const surfaceTextClass = isSidebar ? "text-sidebar-foreground" : "text-foreground";
+  const chatTextClass = embedded ? "text-foreground" : "text-muted-foreground";
+  const chatPathButtonClass = embedded
+    ? "text-foreground hover:text-foreground focus-visible:ring-border"
+    : "text-muted-foreground hover:text-foreground focus-visible:ring-border";
+  const surfaceTextClass = isSidebar ? "text-sidebar-foreground" : chatTextClass;
   const surfaceActionClass = isSidebar
     ? "text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-sidebar-ring"
     : "text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-border";
@@ -239,7 +243,7 @@ export function FileDiffCard({
     : embedded ? "" : "rounded-lg";
   const cardStyle = {
     "--codex-diffs-surface":
-      "var(--codex-diffs-surface-override, var(--color-diff-surface))",
+      "var(--codex-diffs-surface-override, var(--color-diff-panel-surface))",
     "--codex-diffs-header-surface": isSidebar
       ? "color-mix(in srgb, var(--codex-diffs-surface) 98%, var(--color-foreground))"
       : "var(--codex-diffs-surface)",
@@ -256,13 +260,13 @@ export function FileDiffCard({
     : "bg-[var(--codex-diffs-header-surface)]";
   const headerInnerClass = isSidebar
     ? "group/diff-header @container/diff-header relative flex min-h-9 items-center gap-2.5 px-[calc(var(--codex-diffs-header-padding-x,0.75rem)+0.5rem)] py-1.5 text-chat leading-[var(--text-chat--line-height)] hover:bg-[var(--codex-diffs-separator-surface)]"
-    : "group/diff-header @container/diff-header relative flex min-h-8 items-center gap-2.5 px-[var(--codex-diffs-header-padding-x,1rem)] py-[var(--codex-diffs-header-padding-y,0.5rem)] text-chat leading-[var(--text-chat--line-height)] hover:bg-foreground/5";
+    : "group/diff-header @container/diff-header relative flex min-h-7 items-center gap-2 px-[var(--codex-diffs-header-padding-x,1rem)] py-[var(--codex-diffs-header-padding-y,0.25rem)] text-chat leading-[var(--text-chat--line-height)] hover:bg-foreground/5";
   const actionRevealClass = isSidebar
     ? "opacity-0 transition-opacity duration-200 group-hover/file-diff:opacity-100 group-focus-within/file-diff:opacity-100"
     : "hidden group-hover/diff-header:block group-focus-within/diff-header:block";
   const statsClass = isSidebar
     ? "leading-none"
-    : "leading-none group-hover/diff-header:hidden group-focus-within/diff-header:hidden";
+    : "text-chat leading-none text-muted-foreground";
   const pathContent = (
     <>
       <span className="min-w-0 truncate text-chat leading-[var(--text-chat--line-height)] [direction:ltr] [unicode-bidi:plaintext] @xs/diff-header:hidden">
@@ -314,7 +318,7 @@ export function FileDiffCard({
                     onOpenFile();
                   }}
                   className={`h-auto min-w-0 truncate rounded-none border-0 bg-transparent p-0 text-start text-chat font-normal leading-[var(--text-chat--line-height)] shadow-none select-text [direction:rtl] hover:bg-transparent focus-visible:ring-1 ${
-                    isSidebar ? "text-sidebar-foreground hover:text-sidebar-foreground focus-visible:ring-sidebar-ring" : "text-foreground hover:text-foreground focus-visible:ring-border"
+                    isSidebar ? "text-sidebar-foreground hover:text-sidebar-foreground focus-visible:ring-sidebar-ring" : chatPathButtonClass
                   }`}
                 >
                   {pathContent}
@@ -327,6 +331,13 @@ export function FileDiffCard({
                   {pathContent}
                 </span>
               )}
+              {!isSidebar && showStats && (
+                <FileChangeStats
+                  additions={additions}
+                  deletions={deletions}
+                  className={statsClass}
+                />
+              )}
             </div>
 
             <div className="ms-auto flex shrink-0 items-center gap-1.5">
@@ -335,7 +346,7 @@ export function FileDiffCard({
                   {actions}
                 </div>
               )}
-              {showStats && (
+              {isSidebar && showStats && (
                 <FileChangeStats
                   additions={additions}
                   deletions={deletions}

@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::events::FileChangeOperation;
+
 // ---------------------------------------------------------------------------
 // Status snapshot — the main UI contract for workspace git state
 // ---------------------------------------------------------------------------
@@ -213,6 +215,38 @@ pub struct StagePathsRequest {
 #[serde(rename_all = "camelCase")]
 pub struct UnstagePathsRequest {
     pub paths: Vec<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Revert patches
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GitRevertPatchEntry {
+    pub path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub old_path: Option<String>,
+    pub operation: FileChangeOperation,
+    pub patch: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub patch_truncated: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GitRevertPatchesRequest {
+    pub entries: Vec<GitRevertPatchEntry>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_label: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GitRevertPatchesResponse {
+    pub reverted_paths: Vec<String>,
+    pub head_oid_before: String,
+    pub head_oid_after: String,
 }
 
 // ---------------------------------------------------------------------------

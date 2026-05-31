@@ -33,7 +33,7 @@ describe("TurnDiffPanel", () => {
     expect(html).toContain("GitPanel.tsx");
   });
 
-  it("keeps the aggregate review entry point invisible while file rows keep their action", () => {
+  it("renders visible aggregate review and undo actions while file rows keep their action", () => {
     const turn = PLAYGROUND_END_TURN_DIFF_TRANSCRIPT.turnsById["turn-end-diff"];
     const html = renderToStaticMarkup(
       createElement(TurnDiffPanel, {
@@ -41,15 +41,14 @@ describe("TurnDiffPanel", () => {
         transcript: PLAYGROUND_END_TURN_DIFF_TRANSCRIPT,
         onOpenFile: () => {},
         onOpenReviewPane: () => {},
+        onUndoTurnChanges: () => {},
       }),
     );
 
-    expect(html).toContain("Open changes review");
-    expect(html).toContain("--turn-diff-header-hover-surface");
-    expect(html).toContain("var(--color-diff-panel-surface)_96%");
-    expect(html).toContain("var(--color-background)");
-    expect(html).toContain("hover:bg-[var(--turn-diff-header-hover-surface)]");
-    expect(html).not.toContain(">Review</button>");
+    expect(html).not.toContain("Open changes review");
+    expect(html).toContain(">Review</button>");
+    expect(html).toContain(">Undo</button>");
+    expect(html).toContain("Review changes");
     expect(html).toContain("Show file in review");
     expect(html).toContain("data-app-action-review-file-toggle");
   });
@@ -75,8 +74,7 @@ describe("TurnDiffPanel", () => {
 
     expect(html).toContain("Edited README.md");
     expect(html).not.toContain("Edited 1 file");
-    expect(html).toContain(">README.md</span>");
-    expect(html).not.toContain(">Details</span>");
+    expect(html).toContain(">Details</span>");
     expect(html.match(/>\+2<\/span>/g)).toHaveLength(1);
     expect(html.match(/>-1<\/span>/g)).toHaveLength(1);
     expect(html).toContain("data-app-action-review-file-expanded=\"false\"");

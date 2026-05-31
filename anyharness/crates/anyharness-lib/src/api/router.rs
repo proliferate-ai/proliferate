@@ -320,6 +320,10 @@ pub fn build_router(state: AppState) -> Router {
             "/workspaces/{workspace_id}/git/unstage",
             post(git::unstage_paths),
         )
+        .route(
+            "/workspaces/{workspace_id}/git/revert-patches",
+            post(git::revert_patches),
+        )
         .route("/workspaces/{workspace_id}/git/commit", post(git::commit))
         .route("/workspaces/{workspace_id}/git/push", post(git::push))
         // Hosting (workspace-scoped, GitHub CLI-backed)

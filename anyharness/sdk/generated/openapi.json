@@ -4200,6 +4200,77 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/git/revert-patches": {
+      "post": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "revert_patches",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GitRevertPatchesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Patches reverted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitRevertPatchesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Undo failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Patch no longer applies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/git/stage": {
       "post": {
         "tags": [
@@ -9025,6 +9096,79 @@
           "cherry_pick",
           "revert"
         ]
+      },
+      "GitRevertPatchEntry": {
+        "type": "object",
+        "required": [
+          "path",
+          "operation",
+          "patch"
+        ],
+        "properties": {
+          "oldPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "operation": {
+            "$ref": "#/components/schemas/FileChangeOperation"
+          },
+          "patch": {
+            "type": "string"
+          },
+          "patchTruncated": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "GitRevertPatchesRequest": {
+        "type": "object",
+        "required": [
+          "entries"
+        ],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GitRevertPatchEntry"
+            }
+          },
+          "sourceLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "GitRevertPatchesResponse": {
+        "type": "object",
+        "required": [
+          "revertedPaths",
+          "headOidBefore",
+          "headOidAfter"
+        ],
+        "properties": {
+          "headOidAfter": {
+            "type": "string"
+          },
+          "headOidBefore": {
+            "type": "string"
+          },
+          "revertedPaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "GitStatusSnapshot": {
         "type": "object",

@@ -5,6 +5,8 @@ import type {
   GitBranchRef,
   GitDiffOptions,
   GitDiffResponse,
+  GitRevertPatchesRequest,
+  GitRevertPatchesResponse,
   GitStatusSnapshot,
   ListBaseWorktreeDiffFilesOptions,
   ListBranchDiffFilesOptions,
@@ -129,6 +131,16 @@ export class GitClient {
     await this.transport.post<void>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/git/unstage`,
       { paths } satisfies UnstagePathsRequest,
+    );
+  }
+
+  async revertPatches(
+    workspaceId: string,
+    input: GitRevertPatchesRequest,
+  ): Promise<GitRevertPatchesResponse> {
+    return this.transport.post<GitRevertPatchesResponse>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/git/revert-patches`,
+      input,
     );
   }
 

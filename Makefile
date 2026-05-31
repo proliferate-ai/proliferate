@@ -770,6 +770,7 @@ shared-build:
 	pnpm --filter @proliferate/product-domain build
 	pnpm --filter @proliferate/ui build
 	pnpm --filter @proliferate/product-ui build
+	pnpm --filter @proliferate/product-surfaces build
 
 runtime-build:
 	$(CARGO) build --workspace

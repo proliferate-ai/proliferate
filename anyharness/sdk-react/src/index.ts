@@ -193,6 +193,7 @@ export {
   useGitBranchesQuery,
   useStageGitPathsMutation,
   useUnstageGitPathsMutation,
+  useRevertGitPatchesMutation,
   useCommitGitMutation,
   usePushGitMutation,
   useRenameGitBranchMutation,

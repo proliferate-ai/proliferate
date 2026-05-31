@@ -1,11 +1,12 @@
 use std::time::Instant;
 
 use anyharness_contract::v1::{
-    CommitRequest, CommitResponse, GitActionAvailability as ContractGitActionAvailability,
-    GitBranchDiffFilesResponse, GitBranchRef, GitChangedFile as ContractGitChangedFile,
-    GitDiffFile as ContractGitDiffFile, GitDiffResponse, GitDiffScope as ContractGitDiffScope,
-    GitFileStatus as ContractGitFileStatus, GitIncludedState as ContractGitIncludedState,
-    GitOperation as ContractGitOperation, GitStatusSnapshot,
+    CommitRequest, CommitResponse, FileChangeOperation,
+    GitActionAvailability as ContractGitActionAvailability, GitBranchDiffFilesResponse,
+    GitBranchRef, GitChangedFile as ContractGitChangedFile, GitDiffFile as ContractGitDiffFile,
+    GitDiffResponse, GitDiffScope as ContractGitDiffScope, GitFileStatus as ContractGitFileStatus,
+    GitIncludedState as ContractGitIncludedState, GitOperation as ContractGitOperation,
+    GitRevertPatchEntry, GitRevertPatchesRequest, GitRevertPatchesResponse, GitStatusSnapshot,
     GitStatusSummary as ContractGitStatusSummary, PushRequest, PushResponse, RenameBranchRequest,
     RenameBranchResponse, StagePathsRequest, UnstagePathsRequest,
 };
@@ -24,8 +25,11 @@ use crate::adapters::git::types::{
     GitChangedFile as InternalGitChangedFile, GitDiffError, GitDiffFile as InternalGitDiffFile,
     GitDiffResult as InternalGitDiffResult, GitDiffScope as InternalGitDiffScope,
     GitFileStatus as InternalGitFileStatus, GitIncludedState as InternalGitIncludedState,
-    GitOperation as InternalGitOperation, GitStatusSnapshot as InternalGitStatusSnapshot,
-    GitStatusSummary as InternalGitStatusSummary, PushError,
+    GitOperation as InternalGitOperation, GitRevertPatchEntry as InternalGitRevertPatchEntry,
+    GitRevertPatchOperation as InternalGitRevertPatchOperation, GitRevertPatchesError,
+    GitRevertPatchesResult as InternalGitRevertPatchesResult,
+    GitStatusSnapshot as InternalGitStatusSnapshot, GitStatusSummary as InternalGitStatusSummary,
+    PushError,
 };
 use crate::adapters::git::GitService;
 use crate::app::AppState;
@@ -467,6 +471,49 @@ pub async fn unstage_paths(
 }
 
 // ---------------------------------------------------------------------------
+// Revert patches
+// ---------------------------------------------------------------------------
+
+#[utoipa::path(
+    post,
+    path = "/v1/workspaces/{workspace_id}/git/revert-patches",
+    params(("workspace_id" = String, Path, description = "Workspace ID")),
+    request_body = GitRevertPatchesRequest,
+    responses(
+        (status = 200, description = "Patches reverted", body = GitRevertPatchesResponse),
+        (status = 400, description = "Undo failed", body = anyharness_contract::v1::ProblemDetails),
+        (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "Patch no longer applies", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "git"
+)]
+pub async fn revert_patches(
+    State(state): State<AppState>,
+    Path(workspace_id): Path<String>,
+    Json(req): Json<GitRevertPatchesRequest>,
+) -> Result<Json<GitRevertPatchesResponse>, ApiError> {
+    let entries = req
+        .entries
+        .into_iter()
+        .map(git_revert_patch_entry_to_internal)
+        .collect::<Vec<_>>();
+    let response = run_git_task(
+        &state,
+        workspace_id,
+        GitTaskAccess::Write,
+        "git revert patches",
+        move |_, ws_path| {
+            GitService::revert_patches(&ws_path, &entries)
+                .map(git_revert_patches_to_contract)
+                .map_err(git_revert_patches_error_to_api)
+        },
+    )
+    .await?;
+
+    Ok(Json(response))
+}
+
+// ---------------------------------------------------------------------------
 // Commit
 // ---------------------------------------------------------------------------
 
@@ -665,6 +712,26 @@ fn git_branch_diff_files_to_contract(
     }
 }
 
+fn git_revert_patch_entry_to_internal(entry: GitRevertPatchEntry) -> InternalGitRevertPatchEntry {
+    InternalGitRevertPatchEntry {
+        path: entry.path,
+        old_path: entry.old_path,
+        operation: file_change_operation_to_internal(entry.operation),
+        patch: entry.patch,
+        patch_truncated: entry.patch_truncated.unwrap_or(false),
+    }
+}
+
+fn git_revert_patches_to_contract(
+    response: InternalGitRevertPatchesResult,
+) -> GitRevertPatchesResponse {
+    GitRevertPatchesResponse {
+        reverted_paths: response.reverted_paths,
+        head_oid_before: response.head_oid_before,
+        head_oid_after: response.head_oid_after,
+    }
+}
+
 fn git_diff_file_to_contract(file: InternalGitDiffFile) -> ContractGitDiffFile {
     ContractGitDiffFile {
         path: file.path,
@@ -693,6 +760,17 @@ fn git_operation_to_contract(operation: InternalGitOperation) -> ContractGitOper
         InternalGitOperation::Rebase => ContractGitOperation::Rebase,
         InternalGitOperation::CherryPick => ContractGitOperation::CherryPick,
         InternalGitOperation::Revert => ContractGitOperation::Revert,
+    }
+}
+
+fn file_change_operation_to_internal(
+    operation: FileChangeOperation,
+) -> InternalGitRevertPatchOperation {
+    match operation {
+        FileChangeOperation::Create => InternalGitRevertPatchOperation::Create,
+        FileChangeOperation::Edit => InternalGitRevertPatchOperation::Edit,
+        FileChangeOperation::Delete => InternalGitRevertPatchOperation::Delete,
+        FileChangeOperation::Move => InternalGitRevertPatchOperation::Move,
     }
 }
 
@@ -739,6 +817,47 @@ fn git_diff_error_to_api(error: GitDiffError) -> ApiError {
         GitDiffError::GitFailed { message } => ApiError::bad_request(message, "GIT_DIFF_FAILED"),
         GitDiffError::Internal(error) => {
             ApiError::bad_request(error.to_string(), "GIT_DIFF_FAILED")
+        }
+    }
+}
+
+fn git_revert_patches_error_to_api(error: GitRevertPatchesError) -> ApiError {
+    match error {
+        GitRevertPatchesError::NothingToRevert => {
+            ApiError::bad_request("nothing to undo", "GIT_UNDO_EMPTY")
+        }
+        GitRevertPatchesError::MissingPatch { path } => ApiError::bad_request(
+            format!("cannot undo {path} because the patch is missing"),
+            "GIT_UNDO_PATCH_MISSING",
+        ),
+        GitRevertPatchesError::TruncatedPatch { path } => ApiError::bad_request(
+            format!("cannot undo {path} because the patch was truncated"),
+            "GIT_UNDO_PATCH_TRUNCATED",
+        ),
+        GitRevertPatchesError::UnsafePath { path } => ApiError::bad_request(
+            format!("cannot undo unsafe path {path}"),
+            "GIT_UNDO_UNSAFE_PATH",
+        ),
+        GitRevertPatchesError::PartialStaging { path } => ApiError::conflict(
+            format!("cannot undo {path} because it has partially staged changes"),
+            "GIT_UNDO_PARTIAL_STAGING",
+        ),
+        GitRevertPatchesError::StagedChanges { path } => ApiError::conflict(
+            format!("cannot undo {path} because it has staged changes"),
+            "GIT_UNDO_STAGED_CHANGES",
+        ),
+        GitRevertPatchesError::ConflictedOperation => ApiError::conflict(
+            "cannot undo while git is resolving another operation",
+            "GIT_UNDO_CONFLICTED_OPERATION",
+        ),
+        GitRevertPatchesError::PatchRejected { message, .. } => {
+            ApiError::conflict(message, "GIT_UNDO_PATCH_REJECTED")
+        }
+        GitRevertPatchesError::GitFailed { message } => {
+            ApiError::bad_request(message, "GIT_UNDO_FAILED")
+        }
+        GitRevertPatchesError::Internal(error) => {
+            ApiError::bad_request(error.to_string(), "GIT_UNDO_FAILED")
         }
     }
 }
