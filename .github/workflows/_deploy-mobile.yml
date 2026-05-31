@@ -29,6 +29,7 @@ jobs:
         working-directory: apps/mobile
     env:
       MOBILE_DEPLOY_ENABLED: ${{ vars.MOBILE_DEPLOY_ENABLED || 'false' }}
+      APP_VARIANT: ${{ vars.APP_VARIANT || (inputs.environment == 'staging' && 'staging' || '') }}
       EAS_BUILD_PROFILE: ${{ vars.EAS_BUILD_PROFILE || inputs.environment }}
       EAS_SUBMIT_PROFILE: ${{ vars.EAS_SUBMIT_PROFILE || inputs.environment }}
       EAS_SUBMIT_ENABLED: ${{ vars.EAS_SUBMIT_ENABLED || 'false' }}
@@ -108,6 +109,7 @@ jobs:
             --platform ios \
             --profile "$EAS_SUBMIT_PROFILE" \
             --id "$BUILD_ID" \
+            --verbose \
             --non-interactive
         env:
           BUILD_ID: ${{ steps.build.outputs.build_id }}
