@@ -8,7 +8,6 @@ import { ToastContainer } from "@/components/feedback/Toast"
 import { TurnEndCelebration } from "@/components/feedback/TurnEndCelebration"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
 import { MacWindowControlsSafeArea } from "@/components/app/chrome/MacWindowControlsSafeArea"
-import { applyAppearancePreference, initializeTheme } from "@/config/theme"
 import { useExportRunningAgentCount } from "@/hooks/app/lifecycle/use-export-running-agent-count"
 import { useWorkspaceActivityIndicator } from "@/hooks/app/lifecycle/use-workspace-activity-indicator"
 import { useAppShortcuts } from "@/hooks/app/lifecycle/use-app-shortcuts"
@@ -18,6 +17,7 @@ import { useAgentAutoReconcile } from "@/hooks/agents/lifecycle/use-agent-auto-r
 import { useLocalAutomationExecutor } from "@/hooks/automations/lifecycle/use-local-automation-executor"
 import { useHomeDeferredLaunchRunner } from "@/hooks/home/lifecycle/use-home-deferred-launch-runner"
 import { useRuntimeInputSyncRuntime } from "@/hooks/cloud/lifecycle/use-runtime-input-sync-runtime"
+import { useAppearancePreferenceLifecycle } from "@/hooks/preferences/lifecycle/use-appearance-preference-lifecycle"
 import { useRepoPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-repo-preferences-lifecycle"
 import { useUserPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-user-preferences-lifecycle"
 import { useWorkspaceUiLifecycle } from "@/hooks/preferences/lifecycle/use-workspace-ui-lifecycle"
@@ -186,6 +186,9 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_user_preferences_lifecycle")
   useUserPreferencesLifecycle()
   recordBootDiagnosticOnce("app_runtime.render.after.use_user_preferences_lifecycle")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_appearance_preference_lifecycle")
+  useAppearancePreferenceLifecycle()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_appearance_preference_lifecycle")
   recordBootDiagnosticOnce("app_runtime.render.before.use_repo_preferences_lifecycle")
   useRepoPreferencesLifecycle()
   recordBootDiagnosticOnce("app_runtime.render.after.use_repo_preferences_lifecycle")
@@ -205,41 +208,6 @@ function AppRuntime() {
   useEffect(() => {
     recordAppRendererEvent("app.bootstrap.start")
     logStartupDebug("app.bootstrap.start")
-    initializeTheme()
-    const applyStoredAppearance = () => {
-      const {
-        themePreset,
-        colorMode,
-        uiFontSizeId,
-        readableCodeFontSizeId,
-      } = useUserPreferencesStore.getState()
-      applyAppearancePreference({
-        themePreset,
-        colorMode,
-        uiFontSizeId,
-        readableCodeFontSizeId,
-      })
-    }
-    applyStoredAppearance()
-
-    const unsubscribeAppearance = useUserPreferencesStore.subscribe((state, prev) => {
-      if (
-        state.themePreset !== prev.themePreset
-        || state.colorMode !== prev.colorMode
-        || state.uiFontSizeId !== prev.uiFontSizeId
-        || state.readableCodeFontSizeId !== prev.readableCodeFontSizeId
-      ) {
-        applyStoredAppearance()
-      }
-    })
-    const systemModeQuery = window.matchMedia("(prefers-color-scheme: dark)")
-    const handleSystemModeChange = () => {
-      if (useUserPreferencesStore.getState().colorMode === "system") {
-        applyStoredAppearance()
-      }
-    }
-    systemModeQuery.addEventListener("change", handleSystemModeChange)
-
     const authBootstrapStartedAt = startStartupTimer()
     recordAppRendererEvent("app.auth_bootstrap.start")
     logStartupDebug("app.auth_bootstrap.start")
@@ -253,10 +221,6 @@ function AppRuntime() {
         authStatus: useAuthStore.getState().status,
       })
     })
-    return () => {
-      unsubscribeAppearance()
-      systemModeQuery.removeEventListener("change", handleSystemModeChange)
-    }
   }, [bootstrapAuth])
 
   useEffect(() => {

@@ -42,7 +42,7 @@ export function SupportReportWindow() {
 
   return (
     <main
-      className="flex h-screen min-h-0 flex-col overflow-hidden bg-popover/95 font-mono text-popover-foreground shadow-floating backdrop-blur-lg"
+      className="flex h-screen min-h-0 flex-col overflow-hidden bg-popover/95 text-popover-foreground shadow-floating backdrop-blur-lg"
       onPaste={handleAttachmentPaste}
       onDragOver={handleAttachmentDragOver}
       onDrop={handleAttachmentDrop}
