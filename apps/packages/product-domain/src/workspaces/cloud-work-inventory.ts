@@ -709,11 +709,14 @@ export function recentWorkStatusIndicatorForSession(
   if (sessionIsReviewReady(sessionStatus)) {
     return STATUS_INDICATORS.review_ready;
   }
-  if (sessionIsRunning(sessionStatus) || workspaceIsInProgress(workspace)) {
+  if (sessionIsRunning(sessionStatus)) {
     return STATUS_INDICATORS.running;
   }
   if (workspaceIsCommandReady(workspace)) {
     return STATUS_INDICATORS.ready;
+  }
+  if (workspaceIsInProgress(workspace)) {
+    return STATUS_INDICATORS.running;
   }
   return STATUS_INDICATORS.idle;
 }
@@ -761,6 +764,7 @@ type CloudWorkspaceStatusIndicatorFacts = Pick<
   | "visibility"
   | "workspaceStatus"
 > &
+  Partial<Pick<CloudWorkspaceSummary, "directTargetContext">> &
   Partial<Pick<CloudWorkspaceDetail, "anyharnessWorkspaceId">>;
 
 export function cloudWorkStatusForWorkspace(
@@ -768,12 +772,20 @@ export function cloudWorkStatusForWorkspace(
     CloudWorkspaceSummary,
     | "actionBlockKind"
     | "actionBlockReason"
+    | "exposure"
+    | "exposureState"
     | "lastError"
     | "runtime"
+    | "sandboxType"
+    | "status"
+    | "statusDetail"
+    | "targetId"
     | "visibility"
     | "workspaceStatus"
     | "lastSessionSummary"
-  >,
+  > &
+    Partial<Pick<CloudWorkspaceSummary, "directTargetContext">> &
+    Partial<Pick<CloudWorkspaceDetail, "anyharnessWorkspaceId">>,
 ): CloudWorkStatusFilter {
   if (workspace.visibility === "archived" || workspace.workspaceStatus === "archived") {
     return "archived";
@@ -794,9 +806,13 @@ export function cloudWorkStatusForWorkspace(
     workspace.workspaceStatus === "pending"
     || workspace.workspaceStatus === "materializing"
     || workspace.workspaceStatus === "needs_rematerialization"
-    || workspace.runtime?.status === "pending"
-    || workspace.runtime?.status === "provisioning"
   ) {
+    return "active";
+  }
+  if (cloudCommandReadiness(workspace).commandable) {
+    return "ready";
+  }
+  if (cloudWorkspaceRuntimeIsInProgress(workspace)) {
     return "active";
   }
   return "ready";
@@ -877,7 +893,8 @@ function workspaceNeedsInput(
 }
 
 function workspaceIsInProgress(
-  workspace: Pick<CloudWorkspaceSummary, "runtime" | "status" | "workspaceStatus">,
+  workspace: Pick<CloudWorkspaceSummary, "runtime" | "sandboxType" | "status" | "workspaceStatus">
+    & Partial<Pick<CloudWorkspaceSummary, "directTargetContext">>,
 ): boolean {
   return workspace.workspaceStatus === "pending"
     || workspace.workspaceStatus === "materializing"
@@ -885,8 +902,30 @@ function workspaceIsInProgress(
     || workspace.status === "pending"
     || workspace.status === "materializing"
     || workspace.status === "needs_rematerialization"
-    || workspace.runtime?.status === "pending"
-    || workspace.runtime?.status === "provisioning";
+    || cloudWorkspaceRuntimeIsInProgress(workspace);
+}
+
+export function cloudWorkspaceRuntimeIsInProgress(
+  workspace: Pick<CloudWorkspaceSummary, "runtime" | "sandboxType">
+    & Partial<Pick<CloudWorkspaceSummary, "directTargetContext">>,
+): boolean {
+  if (workspace.runtime?.status !== "pending" && workspace.runtime?.status !== "provisioning") {
+    return false;
+  }
+  if (workspace.runtime.environmentId) {
+    return true;
+  }
+  return !workspaceUsesDirectTargetRuntime(workspace);
+}
+
+function workspaceUsesDirectTargetRuntime(
+  workspace: Pick<CloudWorkspaceSummary, "sandboxType">
+    & Partial<Pick<CloudWorkspaceSummary, "directTargetContext">>,
+): boolean {
+  return Boolean(workspace.directTargetContext)
+    || workspace.sandboxType === "local"
+    || workspace.sandboxType === "ssh"
+    || workspace.sandboxType === "self_hosted";
 }
 
 function workspaceIsCommandReady(workspace: CloudWorkspaceStatusIndicatorFacts): boolean {

@@ -1,6 +1,8 @@
 import { type ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 
+import { ProliferateLivingMark } from "../brand/ProliferateLivingMark";
+
 interface LoadingStateProps {
   label: ReactNode;
   description?: ReactNode;
@@ -22,11 +24,8 @@ export function LoadingState({
       aria-live="polite"
     >
       <div className="flex flex-col items-center text-center">
-        <div className="flex w-36 flex-col items-center gap-2" aria-hidden="true">
-          <SkeletonBlock className="h-2 w-24" />
-          <SkeletonBlock className="h-2 w-36 bg-muted/45" />
-        </div>
-        <p className="mt-4 text-sm font-medium text-muted-foreground">{label}</p>
+        <ProliferateLivingMark />
+        <p className="mt-5 text-sm font-medium text-foreground">{label}</p>
         {description ? (
           <p className="mt-1 max-w-xs text-xs leading-5 text-muted-foreground/80">
             {description}
@@ -34,14 +33,5 @@ export function LoadingState({
         ) : null}
       </div>
     </div>
-  );
-}
-
-function SkeletonBlock({ className }: { className?: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={twMerge("block rounded-md bg-muted/60 motion-safe:animate-pulse", className)}
-    />
   );
 }

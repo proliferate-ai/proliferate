@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CloudChatComposer } from "../src/chat/CloudChatComposer";
 
 describe("CloudChatComposer", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
 
   it("uses the shared composer surface and submits through the textarea", () => {
     const onChange = vi.fn();
@@ -125,5 +128,97 @@ describe("CloudChatComposer", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "GPT-5.4" }));
     expect(onSelect).toHaveBeenCalledWith("codex:gpt-5.4");
+  });
+
+  it("shows copied feedback for footer copy controls", async () => {
+    vi.useFakeTimers();
+    const onCopy = vi.fn().mockResolvedValue(true);
+
+    render(
+      <CloudChatComposer
+        composer={{
+          value: "",
+          placeholder: "Send a prompt",
+          canSubmit: false,
+          onChange: vi.fn(),
+          onSubmit: vi.fn(),
+          controls: [],
+          footerControls: [
+            {
+              id: "copy-branch",
+              label: "feature/loading",
+              detail: "Branch",
+              icon: "branch",
+              feedback: "copied",
+              title: "Copy branch name",
+              onClick: onCopy,
+            },
+          ],
+        }}
+      />,
+    );
+
+    const copyButton = screen.getByTitle("Copy branch name");
+    expect(copyButton.querySelector(".lucide-git-branch")).toBeTruthy();
+    fireEvent.click(copyButton);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(onCopy).toHaveBeenCalledTimes(1);
+    expect(copyButton.title).toBe("Copied");
+    expect(screen.getByRole("button", { name: "Copied branch name" })).toBe(copyButton);
+    expect(screen.getByText("Copied branch name")).toBeTruthy();
+    expect(copyButton.querySelector(".lucide-check")).toBeTruthy();
+    expect(copyButton.querySelector(".lucide-git-branch")).toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(1400);
+    });
+
+    expect(copyButton.title).toBe("Copy branch name");
+    expect(copyButton.querySelector(".lucide-git-branch")).toBeTruthy();
+  });
+
+  it("does not show copied feedback when footer copy controls report failure", async () => {
+    vi.useFakeTimers();
+    const onCopy = vi.fn().mockResolvedValue(false);
+
+    render(
+      <CloudChatComposer
+        composer={{
+          value: "",
+          placeholder: "Send a prompt",
+          canSubmit: false,
+          onChange: vi.fn(),
+          onSubmit: vi.fn(),
+          controls: [],
+          footerControls: [
+            {
+              id: "copy-repo",
+              label: "proliferate-ai/proliferate",
+              detail: "Repo",
+              icon: "repo",
+              feedback: "copied",
+              title: "Copy repository name",
+              onClick: onCopy,
+            },
+          ],
+        }}
+      />,
+    );
+
+    const copyButton = screen.getByTitle("Copy repository name");
+    fireEvent.click(copyButton);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(onCopy).toHaveBeenCalledTimes(1);
+    expect(copyButton.title).toBe("Copy repository name");
+    expect(copyButton.querySelector(".lucide-check")).toBeNull();
+    expect(screen.queryByText("Copied repository name")).toBeNull();
   });
 });

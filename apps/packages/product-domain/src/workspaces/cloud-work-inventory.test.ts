@@ -44,6 +44,16 @@ describe("cloud work inventory", () => {
     expect(cloudWorkStatusForWorkspace(workspace({ workspaceStatus: "needs_rematerialization" }))).toBe("active");
     expect(cloudWorkStatusForWorkspace(workspace({ workspaceStatus: "ready", runtime: runtime("running") }))).toBe("ready");
     expect(cloudWorkStatusForWorkspace(workspace({
+      sandboxType: "local",
+      workspaceStatus: "ready",
+      runtime: runtime("pending", { environmentId: null }),
+    }))).toBe("ready");
+    expect(cloudWorkStatusForWorkspace(workspace({
+      sandboxType: "managed_personal",
+      workspaceStatus: "ready",
+      runtime: runtime("pending", { environmentId: null }),
+    }))).toBe("active");
+    expect(cloudWorkStatusForWorkspace(workspace({
       workspaceStatus: "ready",
       runtime: runtime("running"),
       lastSessionSummary: {
@@ -95,6 +105,27 @@ describe("cloud work inventory", () => {
       workspaceStatus: "materializing",
       status: "materializing",
       runtime: runtime("provisioning"),
+    }))).toMatchObject({ kind: "running", tone: "progress", label: "In progress", live: true });
+    expect(recentWorkStatusIndicatorForWorkspace(workspace({
+      sandboxType: "local",
+      exposureState: "tracked",
+      exposure: {
+        id: "exposure",
+        visibility: "private",
+        claimedByUserId: null,
+        defaultProjectionLevel: "live",
+        commandable: true,
+        status: "active",
+      },
+      workspaceStatus: "ready",
+      status: "ready",
+      runtime: runtime("pending", { environmentId: null }),
+    }))).toMatchObject({ kind: "ready", tone: "success", label: "Ready", live: false });
+    expect(recentWorkStatusIndicatorForWorkspace(workspace({
+      sandboxType: "managed_personal",
+      workspaceStatus: "ready",
+      status: "ready",
+      runtime: runtime("pending", { environmentId: null }),
     }))).toMatchObject({ kind: "running", tone: "progress", label: "In progress", live: true });
 
     expect(recentWorkStatusIndicatorForWorkspace(workspace({
@@ -693,7 +724,7 @@ describe("cloud work inventory", () => {
   });
 
   it("trusts active managed cloud exposure routing when runtime summary lags", () => {
-    const readiness = cloudCommandReadiness({
+    const laggingWorkspace = {
       ...workspace({
         sandboxType: "managed_personal",
         targetId: "target",
@@ -709,10 +740,17 @@ describe("cloud work inventory", () => {
         },
       }),
       anyharnessWorkspaceId: "runtime-workspace",
-    });
+    };
+    const readiness = cloudCommandReadiness(laggingWorkspace);
 
     expect(readiness.state).toBe("ready");
     expect(readiness.commandable).toBe(true);
+    expect(recentWorkStatusIndicatorForWorkspace(laggingWorkspace)).toMatchObject({
+      kind: "ready",
+      tone: "success",
+      label: "Ready",
+    });
+    expect(cloudWorkStatusForWorkspace(laggingWorkspace)).toBe("ready");
   });
 
   it("surfaces workspace provisioning errors before generic not-ready copy", () => {
@@ -742,7 +780,7 @@ describe("cloud work inventory", () => {
 
 type RuntimeSummary = NonNullable<CloudWorkspaceSummary["runtime"]>;
 
-function runtime(status: RuntimeSummary["status"]): RuntimeSummary {
+function runtime(status: RuntimeSummary["status"], overrides: Partial<RuntimeSummary> = {}): RuntimeSummary {
   return {
     environmentId: "env",
     status,
@@ -750,6 +788,7 @@ function runtime(status: RuntimeSummary["status"]): RuntimeSummary {
     runtimeAuth: null,
     actionBlockKind: null,
     actionBlockReason: null,
+    ...overrides,
   };
 }
 

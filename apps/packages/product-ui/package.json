@@ -99,6 +99,10 @@
       "types": "./dist/brand/ProliferateMark.d.ts",
       "import": "./dist/brand/ProliferateMark.js"
     },
+    "./brand/ProliferateLivingMark": {
+      "types": "./dist/brand/ProliferateLivingMark.d.ts",
+      "import": "./dist/brand/ProliferateLivingMark.js"
+    },
     "./chat/ClaimBanner": {
       "types": "./dist/chat/ClaimBanner.d.ts",
       "import": "./dist/chat/ClaimBanner.js"

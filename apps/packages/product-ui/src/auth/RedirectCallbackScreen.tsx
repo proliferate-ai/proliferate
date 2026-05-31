@@ -1,8 +1,8 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ProliferateIcon, ProliferateIconResolve } from "@proliferate/ui/proliferate-icons";
+import { ProliferateLivingMark } from "../brand/ProliferateLivingMark";
 
 export type RedirectCallbackTone = "neutral" | "success" | "error";
 
@@ -34,30 +34,6 @@ const toneClasses: Record<RedirectCallbackTone, string> = {
   error: "bg-destructive/10 text-destructive",
 };
 
-const BRAILLE_DOT_INDICES = Array.from({ length: 16 }, (_, index) => index);
-const BRAILLE_SWEEP_DOT_FRAMES = [
-  [0],
-  [0, 1, 4],
-  [0, 1, 2, 4, 5, 8],
-  [0, 1, 2, 3, 4, 5, 6, 8, 9, 12],
-  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13],
-  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13],
-  [0, 1, 2, 3, 4, 5, 6, 8, 9, 12],
-  [0, 1, 2, 4, 5, 8],
-  [0, 1, 4],
-  [0],
-] as const;
-
-const BRAILLE_FRAME_INTERVAL_MS = 60;
-const ICON_ENTER_MS = 700;
-const ICON_HOLD_MS = 950;
-const ICON_EXIT_MS = 220;
-const BRAILLE_END_HOLD_MS = 120;
-const REDIRECT_MARK_LAYER_CLASS = "absolute inset-0 flex items-center justify-center";
-
 export function RedirectCallbackScreen({
   title,
   description,
@@ -82,7 +58,15 @@ export function RedirectCallbackScreen({
         <main className="w-full max-w-md space-y-8">
           <div className="space-y-5">
             <div className="flex size-12 items-center justify-center">
-              {brandMark ?? <RedirectCallbackLivingMark />}
+              {brandMark ?? (
+                <ProliferateLivingMark
+                  testIds={{
+                    root: "redirect-callback-living-mark",
+                    brailleLayer: "redirect-callback-braille-layer",
+                    iconLayer: "redirect-callback-icon-layer",
+                  }}
+                />
+              )}
             </div>
             <div className="space-y-2.5">
               <h1 className="text-3xl font-semibold leading-tight text-foreground">{title}</h1>
@@ -193,143 +177,5 @@ function RedirectCallbackButton({
       {action.icon}
       {action.label}
     </Button>
-  );
-}
-
-function RedirectCallbackLivingMark() {
-  const [phase, setPhase] = useState<"braille" | "icon-enter" | "icon-hold" | "icon-exit">(
-    "braille",
-  );
-  const [cycle, setCycle] = useState(0);
-  const [brailleIndex, setBrailleIndex] = useState(0);
-  const iconClassName = "size-12 text-foreground";
-  const visibleBrailleDots =
-    BRAILLE_SWEEP_DOT_FRAMES[brailleIndex] ?? BRAILLE_SWEEP_DOT_FRAMES[0];
-
-  useEffect(() => {
-    if (phase !== "braille") {
-      return;
-    }
-
-    setBrailleIndex(0);
-
-    const timer = window.setInterval(() => {
-      setBrailleIndex((current) => {
-        if (current >= BRAILLE_SWEEP_DOT_FRAMES.length - 1) {
-          return current;
-        }
-        return current + 1;
-      });
-    }, BRAILLE_FRAME_INTERVAL_MS);
-
-    return () => window.clearInterval(timer);
-  }, [phase]);
-
-  useEffect(() => {
-    if (phase !== "braille" || brailleIndex < BRAILLE_SWEEP_DOT_FRAMES.length - 1) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setCycle((current) => current + 1);
-      setPhase("icon-enter");
-    }, BRAILLE_END_HOLD_MS);
-
-    return () => window.clearTimeout(timer);
-  }, [brailleIndex, phase]);
-
-  useEffect(() => {
-    if (phase !== "icon-enter") {
-      return;
-    }
-
-    const timer = window.setTimeout(() => setPhase("icon-hold"), ICON_ENTER_MS);
-    return () => window.clearTimeout(timer);
-  }, [phase]);
-
-  useEffect(() => {
-    if (phase !== "icon-hold") {
-      return;
-    }
-
-    const timer = window.setTimeout(() => setPhase("icon-exit"), ICON_HOLD_MS);
-    return () => window.clearTimeout(timer);
-  }, [phase]);
-
-  useEffect(() => {
-    if (phase !== "icon-exit") {
-      return;
-    }
-
-    const timer = window.setTimeout(() => setPhase("braille"), ICON_EXIT_MS);
-    return () => window.clearTimeout(timer);
-  }, [phase]);
-
-  return (
-    <div
-      aria-hidden="true"
-      className="relative size-12 shrink-0 overflow-hidden"
-      data-testid="redirect-callback-living-mark"
-    >
-      {phase === "braille" ? (
-        <div
-          className={REDIRECT_MARK_LAYER_CLASS}
-          data-testid="redirect-callback-braille-layer"
-        >
-          <RedirectCallbackBrailleMark visibleDots={visibleBrailleDots} />
-        </div>
-      ) : null}
-      {phase === "icon-enter" ? (
-        <div
-          className={REDIRECT_MARK_LAYER_CLASS}
-          data-testid="redirect-callback-icon-layer"
-        >
-          <ProliferateIconResolve key={cycle} className={iconClassName} />
-        </div>
-      ) : null}
-      {phase === "icon-hold" ? (
-        <div
-          className={REDIRECT_MARK_LAYER_CLASS}
-          data-testid="redirect-callback-icon-layer"
-        >
-          <ProliferateIcon className={iconClassName} />
-        </div>
-      ) : null}
-      {phase === "icon-exit" ? (
-        <div
-          className={twMerge(REDIRECT_MARK_LAYER_CLASS, "animate-brand-mark-fade-out")}
-          data-testid="redirect-callback-icon-layer"
-        >
-          <ProliferateIcon className={iconClassName} />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function RedirectCallbackBrailleMark({ visibleDots }: { visibleDots: readonly number[] }) {
-  const visibleDotSet = new Set(visibleDots);
-
-  return (
-    <span
-      aria-hidden
-      className="grid size-12 shrink-0 grid-cols-4 grid-rows-4 gap-1.5 text-foreground"
-    >
-      {BRAILLE_DOT_INDICES.map((dotIndex) => {
-        const isVisible = visibleDotSet.has(dotIndex);
-
-        return (
-          <span
-            key={dotIndex}
-            className={twMerge(
-              "block size-2 place-self-center rounded-full bg-current transition-opacity duration-100 ease-out",
-              isVisible ? "opacity-100" : "opacity-0",
-            )}
-            data-braille-dot={dotIndex}
-            data-visible={isVisible ? "true" : "false"}
-          />
-        );
-      })}
-    </span>
   );
 }

@@ -130,6 +130,42 @@ describe("buildCloudChatHeaderStatus", () => {
     expect(status()).toEqual({ label: "Ready", tone: "success" });
   });
 
+  it("does not treat local routed workspaces with no runtime environment as starting", () => {
+    expect(status({
+      workspace: workspace({
+        sandboxType: "local",
+        runtime: {
+          environmentId: null,
+          status: "pending",
+          generation: 1,
+          actionBlockKind: null,
+          actionBlockReason: null,
+        },
+      }),
+    })).toEqual({ label: "Ready", tone: "success" });
+  });
+
+  it("keeps managed no-env pending runtime states in setup", () => {
+    expect(status({
+      workspace: workspace({
+        sandboxType: "managed_personal",
+        runtime: {
+          environmentId: null,
+          status: "pending",
+          generation: 1,
+          actionBlockKind: null,
+          actionBlockReason: null,
+        },
+      }),
+      workspaceCommandReady: false,
+      commandReadiness: {
+        state: "workspace_not_ready",
+        commandable: false,
+        message: "Cloud runtime is still starting.",
+      },
+    })).toEqual({ label: "Starting", tone: "info", live: true });
+  });
+
   it("falls back to idle when commands are unavailable and nothing is active", () => {
     expect(status({
       workspaceCommandReady: false,
