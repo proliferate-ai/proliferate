@@ -185,11 +185,7 @@ async def desktop_runtime_config_apply_request(
             status_code=409,
         )
     target = await targets_store.get_target_by_id(db, resolved_target_id)
-    if (
-        target is None
-        or target.sandbox_profile_id != profile.id
-        or target.archived_at is not None
-    ):
+    if target is None or target.sandbox_profile_id != profile.id or target.archived_at is not None:
         raise CloudApiError(
             "runtime_config_target_not_found",
             "Runtime config target was not found for this sandbox profile.",
