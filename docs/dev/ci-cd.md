@@ -706,6 +706,9 @@ ECS_SERVER_SERVICE
 ECS_SERVER_CONTAINER_NAME
 API_HEALTH_PATH
 E2B_TEMPLATE_REF
+SUPPORT_REPORT_S3_BUCKET
+SUPPORT_REPORT_S3_PREFIX
+SUPPORT_REPORT_S3_REGION
 
 # E2B
 E2B_PUBLIC_TEMPLATE_FAMILY
@@ -772,6 +775,9 @@ API_HEALTH_PATH=/api/health
 E2B_TEMPLATE_REF=pablo-5391/proliferate-runtime-cloud:staging
 E2B_PUBLIC_TEMPLATE_FAMILY=pablo-5391/proliferate-runtime-cloud
 E2B_TEAM_ID=18587c49-ea26-407a-8f22-def12957005f
+SUPPORT_REPORT_S3_BUCKET=proliferate-support-reports-dev
+SUPPORT_REPORT_S3_PREFIX=support/reports
+SUPPORT_REPORT_S3_REGION=us-east-1
 VERCEL_ENVIRONMENT=staging
 VERCEL_TARGET=staging
 VERCEL_ORG_ID=team_Ic8IL7bOkRza1fHw7ROqLHSI
@@ -795,6 +801,10 @@ desktop version bump. Production mobile may be enabled with
 App Store Connect submission part of the production promote gate. For
 non-mobile promotes while submission is unhealthy, temporarily set
 `MOBILE_DEPLOY_ENABLED=false` or `EAS_SUBMIT_ENABLED=false` before dispatching.
+Production support report uploads use the private
+`proliferate-support-reports-prod` bucket with the `support/reports` prefix in
+`us-east-1`; staging/dev support report uploads use
+`proliferate-support-reports-dev` with the same prefix and region.
 Keep `VERCEL_TOKEN` as an environment secret, and keep E2B API credentials as
 repo or environment secrets; do not document secret values here.
 

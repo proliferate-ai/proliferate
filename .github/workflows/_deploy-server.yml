@@ -45,6 +45,13 @@ jobs:
       WEB_URL: ${{ vars.WEB_URL }}
       API_HEALTH_PATH: ${{ vars.API_HEALTH_PATH || '/api/health' }}
       E2B_TEMPLATE_REF: ${{ vars.E2B_TEMPLATE_REF }}
+      SUPPORT_REPORT_S3_BUCKET: ${{ vars.SUPPORT_REPORT_S3_BUCKET }}
+      SUPPORT_REPORT_S3_PREFIX: ${{ vars.SUPPORT_REPORT_S3_PREFIX || 'support/reports' }}
+      SUPPORT_REPORT_S3_REGION: ${{ vars.SUPPORT_REPORT_S3_REGION || vars.AWS_REGION || 'us-east-1' }}
+      SUPPORT_REPORT_UPLOAD_URL_EXPIRES_SECONDS: ${{ vars.SUPPORT_REPORT_UPLOAD_URL_EXPIRES_SECONDS || '900' }}
+      SUPPORT_REPORT_DIAGNOSTICS_MAX_BYTES: ${{ vars.SUPPORT_REPORT_DIAGNOSTICS_MAX_BYTES || '26214400' }}
+      SUPPORT_REPORT_ATTACHMENT_MAX_BYTES: ${{ vars.SUPPORT_REPORT_ATTACHMENT_MAX_BYTES || '26214400' }}
+      SUPPORT_REPORT_TOTAL_ATTACHMENT_MAX_BYTES: ${{ vars.SUPPORT_REPORT_TOTAL_ATTACHMENT_MAX_BYTES || '104857600' }}
       DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
       GIT_SHA: ${{ inputs.git_sha }}
     steps:
@@ -118,6 +125,13 @@ jobs:
             --arg e2b "$E2B_TEMPLATE_REF" \
             --arg git "$GIT_SHA" \
             --arg release "proliferate-server@${GIT_SHA:0:12}" \
+            --arg support_report_bucket "$SUPPORT_REPORT_S3_BUCKET" \
+            --arg support_report_prefix "$SUPPORT_REPORT_S3_PREFIX" \
+            --arg support_report_region "$SUPPORT_REPORT_S3_REGION" \
+            --arg support_report_expires "$SUPPORT_REPORT_UPLOAD_URL_EXPIRES_SECONDS" \
+            --arg support_report_diagnostics_max "$SUPPORT_REPORT_DIAGNOSTICS_MAX_BYTES" \
+            --arg support_report_attachment_max "$SUPPORT_REPORT_ATTACHMENT_MAX_BYTES" \
+            --arg support_report_total_attachment_max "$SUPPORT_REPORT_TOTAL_ATTACHMENT_MAX_BYTES" \
             '[
               {"name":"API_URL","value":$api_url},
               {"name":"API_BASE_URL","value":$api_base},
@@ -133,7 +147,14 @@ jobs:
               {"name":"CLOUD_RUNTIME_SENTRY_ENVIRONMENT","value":$environment},
               {"name":"CLOUD_RUNTIME_SENTRY_RELEASE","value":$release},
               {"name":"CLOUD_TARGET_SENTRY_ENVIRONMENT","value":$environment},
-              {"name":"CLOUD_TARGET_SENTRY_RELEASE","value":$release}
+              {"name":"CLOUD_TARGET_SENTRY_RELEASE","value":$release},
+              {"name":"SUPPORT_REPORT_S3_BUCKET","value":$support_report_bucket},
+              {"name":"SUPPORT_REPORT_S3_PREFIX","value":$support_report_prefix},
+              {"name":"SUPPORT_REPORT_S3_REGION","value":$support_report_region},
+              {"name":"SUPPORT_REPORT_UPLOAD_URL_EXPIRES_SECONDS","value":$support_report_expires},
+              {"name":"SUPPORT_REPORT_DIAGNOSTICS_MAX_BYTES","value":$support_report_diagnostics_max},
+              {"name":"SUPPORT_REPORT_ATTACHMENT_MAX_BYTES","value":$support_report_attachment_max},
+              {"name":"SUPPORT_REPORT_TOTAL_ATTACHMENT_MAX_BYTES","value":$support_report_total_attachment_max}
             ]' > env-updates.json
 
           jq \

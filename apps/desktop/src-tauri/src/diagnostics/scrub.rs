@@ -28,6 +28,23 @@ fn env_secret_regex() -> &'static Regex {
     })
 }
 
+fn long_opaque_token_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| {
+        Regex::new(r"\b[A-Za-z0-9_\-+/=]{48,}\b").expect("long opaque token regex should be valid")
+    })
+}
+
+fn signed_url_query_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| {
+        Regex::new(
+            r"(?i)([?&](?:x-amz-signature|x-amz-credential|x-amz-security-token|signature|sig|token|key|secret)=)[^&#\s]+",
+        )
+        .expect("signed URL query regex should be valid")
+    })
+}
+
 pub fn scrub_diagnostic_text(input: &str) -> String {
     let mut value = input.to_string();
 
@@ -44,8 +61,14 @@ pub fn scrub_diagnostic_text(input: &str) -> String {
     value = bare_bearer_regex()
         .replace_all(&value, "$1[REDACTED]")
         .into_owned();
-    env_secret_regex()
+    value = env_secret_regex()
         .replace_all(&value, "$1[REDACTED]")
+        .into_owned();
+    value = signed_url_query_regex()
+        .replace_all(&value, "$1[REDACTED]")
+        .into_owned();
+    long_opaque_token_regex()
+        .replace_all(&value, "[REDACTED]")
         .into_owned()
 }
 
@@ -62,6 +85,18 @@ mod tests {
         assert!(!scrubbed.contains("super-secret"));
         assert!(!scrubbed.contains("abc123"));
         assert!(!scrubbed.contains("xyz789"));
+        assert!(scrubbed.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn scrubs_signed_urls_and_long_tokens() {
+        let scrubbed = scrub_diagnostic_text(
+            "https://bucket.s3.amazonaws.com/key?X-Amz-Signature=abcdef&x-amz-security-token=secret aaaabbbbccccddddeeeeffffgggghhhhiiiijjjjkkkkllll",
+        );
+
+        assert!(!scrubbed.contains("abcdef"));
+        assert!(!scrubbed.contains("secret"));
+        assert!(!scrubbed.contains("aaaabbbb"));
         assert!(scrubbed.contains("[REDACTED]"));
     }
 }

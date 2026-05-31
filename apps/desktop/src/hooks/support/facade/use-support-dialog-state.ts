@@ -37,7 +37,7 @@ export function useSupportDialogState({
   const showToast = useToastStore((state) => state.show);
   const sessionDebugActions = useSessionDebugActions();
   const [isExportingDebugBundle, setIsExportingDebugBundle] = useState(false);
-  const canExportDebugBundle = isTauriDesktop();
+  const canExportDebugBundle = import.meta.env.DEV && isTauriDesktop();
   const contextLabel = useMemo(() => formatSupportContextLabel(context), [context]);
   const fallbackBody = useMemo(() => buildSupportEmailBody(context), [context]);
 

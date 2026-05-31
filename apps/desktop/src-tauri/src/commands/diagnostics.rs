@@ -5,9 +5,10 @@ use tauri::State;
 
 use crate::{
     diagnostics::{
-        export_debug_bundle_to_path, save_diagnostic_json_to_path, scrub_diagnostic_text,
-        suggested_bundle_file_name, ExportDebugBundleOptions, ExportDebugBundleResult,
-        SaveDiagnosticJsonOptions, SaveDiagnosticJsonResult,
+        collect_support_diagnostics_bundle, export_debug_bundle_to_path,
+        save_diagnostic_json_to_path, scrub_diagnostic_text, suggested_bundle_file_name,
+        ExportDebugBundleOptions, ExportDebugBundleResult, SaveDiagnosticJsonOptions,
+        SaveDiagnosticJsonResult, SupportDiagnosticsBundle,
     },
     sidecar::{RuntimeStatus, SharedSidecar},
 };
@@ -99,6 +100,21 @@ pub async fn export_debug_bundle(
     })
     .await
     .map(Some)
+}
+
+#[tauri::command]
+pub async fn collect_support_diagnostics(
+    sidecar: State<'_, SharedSidecar>,
+) -> Result<SupportDiagnosticsBundle, String> {
+    let (runtime_url_override, runtime_status_override) = {
+        let guard = sidecar.lock().await;
+        (
+            Some(guard.info.url.clone()),
+            Some(runtime_status_label(&guard.info.status).to_string()),
+        )
+    };
+
+    collect_support_diagnostics_bundle(runtime_url_override, runtime_status_override).await
 }
 
 #[tauri::command]

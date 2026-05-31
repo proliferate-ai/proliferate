@@ -45,7 +45,7 @@ migration exception and state the canonical owner/rule directly.
 | Server | `docs/structures/server/README.md`; focused guides under `docs/structures/server/guides/` |
 | AnyHarness SDKs | `docs/structures/sdk/README.md` |
 | Cloud provisioning, commands, auth, MCPs, billing, claiming | `docs/primitives/` |
-| Product workflows and surfaces | `docs/features/` |
+| Product workflows and surfaces | `docs/features/`; `docs/features/support-reporting.md` for Desktop support report uploads |
 | Local dev, CI/CD, deployment, env vars, analytics, observability | `docs/dev/` |
 
 ## Spec Rules

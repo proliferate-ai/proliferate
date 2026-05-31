@@ -24,3 +24,18 @@ class SupportDeliveryFailed(ProliferateError):
 
     def __init__(self) -> None:
         super().__init__("Support message could not be delivered.")
+
+
+class SupportReportStorageUnavailable(ProliferateError):
+    code = "support_report_storage_unavailable"
+    status_code = 503
+
+    def __init__(self) -> None:
+        super().__init__("Support report upload storage is not configured.")
+
+
+class SupportReportUploadInvalid(InvalidRequest):
+    code = "support_report_upload_invalid"
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)

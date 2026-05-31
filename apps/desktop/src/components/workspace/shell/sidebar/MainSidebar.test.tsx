@@ -5,24 +5,11 @@ import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
-import type { SupportMessageContext } from "@proliferate/cloud-sdk/client/support";
 
-const supportDialogRender = vi.hoisted(() => vi.fn());
+const openSupportReportWindow = vi.hoisted(() => vi.fn(async () => {}));
 
-vi.mock("@/components/support/SupportDialog", () => ({
-  SupportDialog: (props: {
-    onClose: () => void;
-    context: SupportMessageContext;
-  }) => {
-    supportDialogRender(props);
-    return (
-      <div data-testid="support-dialog">
-        <button type="button" onClick={props.onClose}>
-          Close support
-        </button>
-      </div>
-    );
-  },
+vi.mock("@/lib/access/tauri/support", () => ({
+  openSupportReportWindow,
 }));
 
 vi.mock("@/components/diagnostics/DebugProfiler", () => ({
@@ -138,12 +125,19 @@ vi.mock("@/hooks/workspaces/derived/use-sidebar-shortcut-targets", () => ({
   useSidebarShortcutTargets: () => [],
 }));
 
-vi.mock("@/hooks/support/derived/use-sidebar-support-context", () => ({
-  useSidebarSupportContext: () => ({
+vi.mock("@/hooks/support/derived/use-support-report-snapshot", () => ({
+  useSupportReportSnapshot: () => ({
+    openedAt: "2026-05-30T00:00:00.000Z",
     source: "sidebar",
-    intent: "general",
-    workspaceName: "hedgehog",
-    workspaceLocation: "local",
+    context: {
+      source: "sidebar",
+      intent: "general",
+      workspaceName: "hedgehog",
+      workspaceLocation: "local",
+    },
+    defaultScope: "app_only",
+    defaultWorkspaceId: null,
+    workspaceOptions: [],
   }),
 }));
 
@@ -259,22 +253,14 @@ function renderMainSidebar() {
   );
 }
 
-describe("MainSidebar support mount boundary", () => {
-  it("does not mount SupportDialog until Support is opened", async () => {
+describe("MainSidebar support window", () => {
+  it("opens the support report window from Support", async () => {
     renderMainSidebar();
-
-    expect(supportDialogRender).not.toHaveBeenCalled();
-    expect(screen.queryByTestId("support-dialog")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Support/ }));
 
-    expect(supportDialogRender).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId("support-dialog")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Close support" }));
-
     await waitFor(() => {
-      expect(screen.queryByTestId("support-dialog")).toBeNull();
+      expect(openSupportReportWindow).toHaveBeenCalledTimes(1);
     });
   });
 });

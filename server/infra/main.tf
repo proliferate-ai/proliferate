@@ -128,6 +128,38 @@ variable "customerio_welcome_transactional_message_id" {
   default = ""
 }
 
+variable "support_report_s3_bucket" {
+  default = ""
+}
+
+variable "support_report_s3_prefix" {
+  default = "support/reports"
+}
+
+variable "support_report_s3_region" {
+  default = ""
+}
+
+variable "support_report_upload_url_expires_seconds" {
+  default = "900"
+}
+
+variable "support_report_diagnostics_max_bytes" {
+  default = "26214400"
+}
+
+variable "support_report_attachment_max_bytes" {
+  default = "26214400"
+}
+
+variable "support_report_total_attachment_max_bytes" {
+  default = "104857600"
+}
+
+variable "support_report_retention_days" {
+  default = 30
+}
+
 # ── VPC (use default for now, swap for dedicated VPC later) ──
 
 data "aws_vpc" "default" {
@@ -274,6 +306,165 @@ resource "aws_iam_role" "ecs_task" {
   assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
 }
 
+# ── Support Reports ──
+
+locals {
+  support_report_s3_prefix = trim(var.support_report_s3_prefix, "/")
+}
+
+resource "aws_s3_bucket" "support_reports" {
+  count  = var.support_report_s3_bucket == "" ? 0 : 1
+  bucket = var.support_report_s3_bucket
+
+  tags = {
+    Name        = var.support_report_s3_bucket
+    Environment = var.environment
+    Purpose     = "support-reports"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "support_reports" {
+  count  = var.support_report_s3_bucket == "" ? 0 : 1
+  bucket = aws_s3_bucket.support_reports[0].id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "support_reports" {
+  count  = var.support_report_s3_bucket == "" ? 0 : 1
+  bucket = aws_s3_bucket.support_reports[0].id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_versioning" "support_reports" {
+  count  = var.support_report_s3_bucket == "" ? 0 : 1
+  bucket = aws_s3_bucket.support_reports[0].id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "support_reports" {
+  count  = var.support_report_s3_bucket == "" ? 0 : 1
+  bucket = aws_s3_bucket.support_reports[0].id
+
+  rule {
+    id     = "expire-support-reports"
+    status = "Enabled"
+
+    filter {
+      prefix = "${local.support_report_s3_prefix}/"
+    }
+
+    expiration {
+      days = var.support_report_retention_days
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = var.support_report_retention_days
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}
+
+resource "aws_s3_bucket_cors_configuration" "support_reports" {
+  count  = var.support_report_s3_bucket == "" ? 0 : 1
+  bucket = aws_s3_bucket.support_reports[0].id
+
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["PUT"]
+    allowed_origins = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
+
+data "aws_iam_policy_document" "support_reports_bucket" {
+  count = var.support_report_s3_bucket == "" ? 0 : 1
+
+  statement {
+    sid     = "DenyInsecureTransport"
+    effect  = "Deny"
+    actions = ["s3:*"]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    resources = [
+      aws_s3_bucket.support_reports[0].arn,
+      "${aws_s3_bucket.support_reports[0].arn}/*",
+    ]
+
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+
+  statement {
+    sid     = "DenyUnencryptedObjectUploads"
+    effect  = "Deny"
+    actions = ["s3:PutObject"]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    resources = ["${aws_s3_bucket.support_reports[0].arn}/*"]
+
+    condition {
+      test     = "StringNotEquals"
+      variable = "s3:x-amz-server-side-encryption"
+      values   = ["AES256"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "support_reports" {
+  count  = var.support_report_s3_bucket == "" ? 0 : 1
+  bucket = aws_s3_bucket.support_reports[0].id
+  policy = data.aws_iam_policy_document.support_reports_bucket[0].json
+}
+
+data "aws_iam_policy_document" "support_reports_ecs" {
+  count = var.support_report_s3_bucket == "" ? 0 : 1
+
+  statement {
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+    ]
+
+    resources = [
+      "${aws_s3_bucket.support_reports[0].arn}/${local.support_report_s3_prefix}/*",
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "support_reports_ecs" {
+  count  = var.support_report_s3_bucket == "" ? 0 : 1
+  name   = "support-reports-s3"
+  role   = aws_iam_role.ecs_task.id
+  policy = data.aws_iam_policy_document.support_reports_ecs[0].json
+}
+
 # ── CloudWatch Logs ──
 
 resource "aws_cloudwatch_log_group" "server" {
@@ -329,6 +520,13 @@ resource "aws_ecs_task_definition" "server" {
         { name = "CUSTOMERIO_APP_API_KEY", value = var.customerio_app_api_key },
         { name = "CUSTOMERIO_FROM_EMAIL", value = var.customerio_from_email },
         { name = "CUSTOMERIO_WELCOME_TRANSACTIONAL_MESSAGE_ID", value = var.customerio_welcome_transactional_message_id },
+        { name = "SUPPORT_REPORT_S3_BUCKET", value = var.support_report_s3_bucket },
+        { name = "SUPPORT_REPORT_S3_PREFIX", value = var.support_report_s3_prefix },
+        { name = "SUPPORT_REPORT_S3_REGION", value = var.support_report_s3_region },
+        { name = "SUPPORT_REPORT_UPLOAD_URL_EXPIRES_SECONDS", value = var.support_report_upload_url_expires_seconds },
+        { name = "SUPPORT_REPORT_DIAGNOSTICS_MAX_BYTES", value = var.support_report_diagnostics_max_bytes },
+        { name = "SUPPORT_REPORT_ATTACHMENT_MAX_BYTES", value = var.support_report_attachment_max_bytes },
+        { name = "SUPPORT_REPORT_TOTAL_ATTACHMENT_MAX_BYTES", value = var.support_report_total_attachment_max_bytes },
       ]
 
       logConfiguration = {
@@ -375,4 +573,8 @@ output "ecs_cluster_name" {
 
 output "ecs_service_name" {
   value = aws_ecs_service.server.name
+}
+
+output "support_report_s3_bucket" {
+  value = var.support_report_s3_bucket
 }

@@ -449,6 +449,14 @@ export type GenerateSessionTitleRequest = components["schemas"]["GenerateSession
 export type GenerateSessionTitleResponse = components["schemas"]["GenerateSessionTitleResponse"];
 export type SupportMessageContext     = components["schemas"]["SupportMessageContext"];
 export type SendSupportMessageRequest = components["schemas"]["SupportMessageRequest"];
+export type SupportReportCompleteRequest =
+  components["schemas"]["SupportReportCompleteRequest"];
+export type SupportReportCompleteResponse =
+  components["schemas"]["SupportReportCompleteResponse"];
+export type SupportReportUploadRequest =
+  components["schemas"]["SupportReportUploadRequest"];
+export type SupportReportUploadResponse =
+  components["schemas"]["SupportReportUploadResponse"];
 export type CloudMobilityRepoRef = components["schemas"]["MobilityRepoRef"];
 export type CloudMobilityHandoffSummary = components["schemas"]["MobilityHandoffSummary"];
 export type CloudMobilityWorkspaceSummary = components["schemas"]["MobilityWorkspaceSummary"];

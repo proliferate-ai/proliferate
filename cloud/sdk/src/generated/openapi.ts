@@ -2877,6 +2877,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/support/report-uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Support Report Upload Endpoint */
+        post: operations["create_support_report_upload_endpoint_v1_support_report_uploads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/support/reports/{report_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete Support Report Upload Endpoint */
+        post: operations["complete_support_report_upload_endpoint_v1_support_reports__report_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/billing/plan": {
         parameters: {
             query?: never;
@@ -7506,6 +7540,131 @@ export interface components {
              * @default true
              */
             ok: boolean;
+        };
+        /** SupportReportAttachmentUploadTarget */
+        SupportReportAttachmentUploadTarget: {
+            /** Objectkey */
+            objectKey: string;
+            /** Puturl */
+            putUrl: string;
+            /** Contenttype */
+            contentType: string;
+            /** Maxsizebytes */
+            maxSizeBytes: number;
+            /** Expiresinseconds */
+            expiresInSeconds: number;
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            };
+            /** Clientfileid */
+            clientFileId: string;
+        };
+        /** SupportReportCompleteRequest */
+        SupportReportCompleteRequest: {
+            diagnostics?: components["schemas"]["SupportReportCompletedObject"] | null;
+            /** Attachments */
+            attachments?: components["schemas"]["SupportReportCompletedObject"][];
+            /** Packagemanifest */
+            packageManifest?: {
+                [key: string]: unknown;
+            };
+        };
+        /** SupportReportCompleteResponse */
+        SupportReportCompleteResponse: {
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+            /** Reportid */
+            reportId: string;
+        };
+        /** SupportReportCompletedObject */
+        SupportReportCompletedObject: {
+            /** Objectkey */
+            objectKey: string;
+            /** Sha256 */
+            sha256: string;
+            /** Sizebytes */
+            sizeBytes: number;
+        };
+        /** SupportReportDiagnosticsUpload */
+        SupportReportDiagnosticsUpload: {
+            /**
+             * Contenttype
+             * @default application/json
+             */
+            contentType: string;
+            /** Sizebytes */
+            sizeBytes: number;
+            /** Sha256 */
+            sha256: string;
+        };
+        /** SupportReportUploadFile */
+        SupportReportUploadFile: {
+            /** Clientfileid */
+            clientFileId: string;
+            /** Filename */
+            fileName: string;
+            /**
+             * Contenttype
+             * @default application/octet-stream
+             */
+            contentType: string;
+            /** Sizebytes */
+            sizeBytes: number;
+            /** Sha256 */
+            sha256: string;
+        };
+        /** SupportReportUploadRequest */
+        SupportReportUploadRequest: {
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            context?: components["schemas"]["SupportMessageContext"] | null;
+            scope: components["schemas"]["SupportReportWorkspaceScope"];
+            diagnostics?: components["schemas"]["SupportReportDiagnosticsUpload"] | null;
+            /** Attachments */
+            attachments?: components["schemas"]["SupportReportUploadFile"][];
+        };
+        /** SupportReportUploadResponse */
+        SupportReportUploadResponse: {
+            /** Reportid */
+            reportId: string;
+            diagnostics?: components["schemas"]["SupportReportUploadTarget"] | null;
+            /** Attachments */
+            attachments?: components["schemas"]["SupportReportAttachmentUploadTarget"][];
+        };
+        /** SupportReportUploadTarget */
+        SupportReportUploadTarget: {
+            /** Objectkey */
+            objectKey: string;
+            /** Puturl */
+            putUrl: string;
+            /** Contenttype */
+            contentType: string;
+            /** Maxsizebytes */
+            maxSizeBytes: number;
+            /** Expiresinseconds */
+            expiresInSeconds: number;
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            };
+        };
+        /** SupportReportWorkspaceScope */
+        SupportReportWorkspaceScope: {
+            /**
+             * Kind
+             * @default most_recent_workspace
+             * @enum {string}
+             */
+            kind: "most_recent_workspace" | "choose_workspace" | "app_only";
+            /** Workspaceids */
+            workspaceIds?: string[];
         };
         /** SyncSyncedCredentialEnvRequest */
         SyncSyncedCredentialEnvRequest: {
@@ -15079,6 +15238,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupportMessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_support_report_upload_endpoint_v1_support_report_uploads_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportReportUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportReportUploadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_support_report_upload_endpoint_v1_support_reports__report_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportReportCompleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportReportCompleteResponse"];
                 };
             };
             /** @description Validation Error */

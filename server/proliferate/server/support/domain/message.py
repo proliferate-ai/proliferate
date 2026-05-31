@@ -54,6 +54,45 @@ def build_support_message_plan(
     )
 
 
+def build_support_report_plan(
+    *,
+    sender_name: str,
+    sender_email: str,
+    message: str,
+    report_id: str,
+    s3_prefix: str,
+    diagnostics_included: bool,
+    attachment_count: int,
+    context: Mapping[str, object] | None = None,
+    request_id: str | None = None,
+) -> SupportMessagePlan:
+    payload_context = context or {}
+    fields = [
+        SupportMessageField("Report ID", report_id),
+        SupportMessageField("From", sender_name),
+        SupportMessageField("Email", sender_email),
+        SupportMessageField("S3 prefix", s3_prefix),
+        SupportMessageField("Diagnostics", "included" if diagnostics_included else "not included"),
+        SupportMessageField("Attachments", str(attachment_count)),
+    ]
+
+    _append_context_field(fields, "Source", payload_context.get("source"))
+    _append_context_field(fields, "Page", payload_context.get("pathname"))
+    _append_workspace_field(
+        fields,
+        name=payload_context.get("workspace_name"),
+        location=payload_context.get("workspace_location"),
+    )
+    _append_context_field(fields, "Workspace ID", payload_context.get("workspace_id"))
+    _append_context_field(fields, "Request ID", request_id)
+
+    return SupportMessagePlan(
+        message=message,
+        fallback_text=f"Support report {report_id} from {sender_name}: {message[:140]}",
+        fields=tuple(fields),
+    )
+
+
 def _append_context_field(
     fields: list[SupportMessageField],
     label: str,

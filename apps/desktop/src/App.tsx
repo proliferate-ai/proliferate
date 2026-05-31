@@ -24,6 +24,7 @@ import { useWorkspaceUiLifecycle } from "@/hooks/preferences/lifecycle/use-works
 import { useSessionIntentDispatcher } from "@/hooks/sessions/lifecycle/use-session-intent-dispatcher"
 import { useSessionSelectionLifecycle } from "@/hooks/sessions/lifecycle/use-session-selection-lifecycle"
 import { useShortcutDispatcher } from "@/hooks/shortcuts/lifecycle/use-shortcut-dispatcher"
+import { useSupportReportUploadQueue } from "@/hooks/support/lifecycle/use-support-report-upload-queue"
 import { useTurnEndSound } from "@/hooks/sessions/lifecycle/use-turn-end-sound"
 import { useLocalWorktreeSettingsTarget } from "@/hooks/workspaces/facade/use-local-worktree-settings-target"
 import { useWorktreeCleanupPolicySync } from "@/hooks/workspaces/lifecycle/use-worktree-cleanup-policy-sync"
@@ -197,6 +198,9 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_session_selection_lifecycle")
   useSessionSelectionLifecycle()
   recordBootDiagnosticOnce("app_runtime.render.after.use_session_selection_lifecycle")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_support_report_upload_queue")
+  useSupportReportUploadQueue()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_support_report_upload_queue")
 
   useEffect(() => {
     recordAppRendererEvent("app.bootstrap.start")
