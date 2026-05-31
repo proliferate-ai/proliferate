@@ -41,6 +41,10 @@ function remoteAccessEnabled(exposureState: string | null | undefined): boolean 
     || exposureState === "stale";
 }
 
+function remoteAccessAvailableFromWeb(exposureState: string | null | undefined): boolean {
+  return exposureState === "tracked" || exposureState === "live";
+}
+
 function remoteAccessLabel(exposureState: string | null | undefined): string {
   switch (exposureState) {
     case "live":
@@ -148,6 +152,7 @@ export function useWorkspaceRemoteAccessActions() {
   const localWorkspace = logicalWorkspace?.localWorkspace ?? null;
   const exposureState = cloudWorkspace?.exposureState ?? "untracked";
   const isEnabled = remoteAccessEnabled(exposureState);
+  const isAvailableFromWeb = remoteAccessAvailableFromWeb(exposureState);
   const label = remoteAccessLabel(exposureState);
   const dispatchTarget = useMemo(() => (
     (targetsQuery.data ?? []).find((target) => (
@@ -268,7 +273,7 @@ export function useWorkspaceRemoteAccessActions() {
 
   const enableRemoteAccess = useCallback(async () => {
     try {
-      if (cloudWorkspaceId && isEnabled) {
+      if (cloudWorkspaceId && isAvailableFromWeb) {
         showToast("Workspace is already available from web.", "info");
       } else if (cloudWorkspaceId) {
         await ensureWorkspaceSyncWorker();
@@ -305,7 +310,7 @@ export function useWorkspaceRemoteAccessActions() {
     enableMutation,
     ensureDispatchTarget,
     ensureWorkspaceSyncWorker,
-    isEnabled,
+    isAvailableFromWeb,
     localWorkspace,
     logicalWorkspace,
     showToast,

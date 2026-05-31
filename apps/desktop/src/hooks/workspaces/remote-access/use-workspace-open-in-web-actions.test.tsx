@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useWorkspaceOpenInWebActions } from "@/hooks/workspaces/remote-access/use-workspace-open-in-web-actions";
 
 const hookMocks = vi.hoisted(() => ({
+  copyText: vi.fn(() => Promise.resolve()),
   openExternal: vi.fn(() => Promise.resolve()),
   showToast: vi.fn(),
   mobility: {
@@ -16,13 +17,9 @@ const hookMocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@proliferate/cloud-sdk", () => ({
-  webWorkspaceDeepLink: (workspaceId: string, baseUrl: string) =>
-    `${baseUrl}/workspaces/${workspaceId}`,
-}));
-
 vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
   useTauriShellActions: () => ({
+    copyText: hookMocks.copyText,
     openExternal: hookMocks.openExternal,
   }),
 }));
@@ -42,6 +39,7 @@ vi.mock("@/stores/toast/toast-store", () => ({
 
 describe("useWorkspaceOpenInWebActions", () => {
   beforeEach(() => {
+    hookMocks.copyText.mockClear();
     hookMocks.openExternal.mockClear();
     hookMocks.showToast.mockClear();
     hookMocks.mobility.selectionLocked = false;
@@ -55,19 +53,21 @@ describe("useWorkspaceOpenInWebActions", () => {
     cleanup();
   });
 
-  it("shows feedback when opening the current workspace in web", () => {
+  it("copies the link and shows feedback when opening the current workspace in web", async () => {
     const { result } = renderHook(() => useWorkspaceOpenInWebActions());
 
     act(() => {
       result.current.openCurrentWorkspaceInWeb();
     });
 
-    expect(hookMocks.openExternal).toHaveBeenCalledWith(
-      "https://web.proliferate.com/workspaces/cloud-workspace-1",
-    );
-    expect(hookMocks.showToast).toHaveBeenCalledWith(
-      "Opening workspace in web...",
-      "info",
-    );
+    const expectedUrl = "https://web.proliferate.com/cloud/workspaces/cloud-workspace-1";
+    await waitFor(() => {
+      expect(hookMocks.copyText).toHaveBeenCalledWith(expectedUrl);
+      expect(hookMocks.openExternal).toHaveBeenCalledWith(expectedUrl);
+      expect(hookMocks.showToast).toHaveBeenCalledWith(
+        "Workspace link copied. Opening in web...",
+        "info",
+      );
+    });
   });
 });

@@ -7,7 +7,7 @@ import { useToastStore } from "@/stores/toast/toast-store";
 
 export function useWorkspaceOpenInWebActions() {
   const mobility = useWorkspaceMobilityState();
-  const { openExternal } = useTauriShellActions();
+  const { copyText, openExternal } = useTauriShellActions();
   const showToast = useToastStore((state) => state.show);
   const cloudWorkspaceId = mobility.selectedLogicalWorkspace?.cloudWorkspace?.id
     ?? mobility.selectedLogicalWorkspace?.mobilityWorkspace?.cloudWorkspaceId
@@ -36,11 +36,21 @@ export function useWorkspaceOpenInWebActions() {
       return;
     }
 
-    showToast("Opening workspace in web...", "info");
-    void openExternal(url).catch(() => {
-      showToast("Failed to open the web workspace.");
-    });
-  }, [disabledReason, openExternal, showToast, url]);
+    void (async () => {
+      try {
+        await copyText(url);
+        showToast("Workspace link copied. Opening in web...", "info");
+      } catch {
+        showToast("Opening workspace in web. Failed to copy link.");
+      }
+
+      try {
+        await openExternal(url);
+      } catch {
+        showToast("Failed to open the web workspace.");
+      }
+    })();
+  }, [copyText, disabledReason, openExternal, showToast, url]);
 
   return {
     disabled: disabledReason !== null,
