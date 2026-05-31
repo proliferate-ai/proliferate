@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
 import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCallbackScreen";
@@ -32,8 +32,13 @@ export function BillingReturnHandoffPage() {
   const location = useLocation();
   const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const shouldReturnToDesktop = params.get("returnSurface") === "desktop";
+  const [handoffTimedOut, setHandoffTimedOut] = useState(false);
   const deepLinkUrl = useMemo(
     () => desktopBillingDeepLink(location.search),
+    [location.search],
+  );
+  const webBillingPath = useMemo(
+    () => webBillingSettingsPath(location.search),
     [location.search],
   );
 
@@ -43,8 +48,35 @@ export function BillingReturnHandoffPage() {
     }
   }, [deepLinkUrl, shouldReturnToDesktop]);
 
+  useEffect(() => {
+    if (!shouldReturnToDesktop) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setHandoffTimedOut(true), 8000);
+    return () => window.clearTimeout(timer);
+  }, [shouldReturnToDesktop]);
+
   if (!shouldReturnToDesktop) {
-    return <Navigate to={webBillingSettingsPath(location.search)} replace />;
+    return <Navigate to={webBillingPath} replace />;
+  }
+
+  if (handoffTimedOut) {
+    return (
+      <RedirectCallbackScreen
+        title="Desktop did not open"
+        description="The billing return link is ready, but the operating system has not handed it to Proliferate Desktop."
+        statusLabel="Billing redirect waiting"
+        primaryAction={{
+          label: "Try opening Desktop again",
+          onClick: () => window.location.assign(deepLinkUrl),
+        }}
+        secondaryAction={{
+          label: "Open billing in browser",
+          onClick: () => window.location.assign(webBillingPath),
+        }}
+      />
+    );
   }
 
   return (

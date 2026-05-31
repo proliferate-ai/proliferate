@@ -8,6 +8,7 @@ import {
   getCurrentTeamCheckout,
   getCloudBillingPlan,
   updateOverageSettings,
+  type BillingCheckoutReturnOptions,
   type BillingPlanInfo,
   type BillingUrlResponse,
   type CloudOwnerSelection,
@@ -44,7 +45,10 @@ export function useCloudBilling(owner?: CloudOwnerSelection, enabled = true) {
   });
 }
 
-export function useCloudBillingActions(owner?: CloudOwnerSelection) {
+export function useCloudBillingActions(
+  owner?: CloudOwnerSelection,
+  returnOptions?: BillingCheckoutReturnOptions,
+) {
   const client = useCloudClient();
   const queryClient = useQueryClient();
   const keyOwner = normalizedOwner(owner);
@@ -53,15 +57,15 @@ export function useCloudBillingActions(owner?: CloudOwnerSelection) {
   };
 
   const cloudCheckout = useMutation<BillingUrlResponse>({
-    mutationFn: () => createCloudCheckoutSession(keyOwner, client),
+    mutationFn: () => createCloudCheckoutSession(keyOwner, client, returnOptions),
     onSuccess: invalidateBilling,
   });
   const billingPortal = useMutation<BillingUrlResponse>({
-    mutationFn: () => createBillingPortalSession(keyOwner, client),
+    mutationFn: () => createBillingPortalSession(keyOwner, client, returnOptions),
     onSuccess: invalidateBilling,
   });
   const refillCheckout = useMutation<BillingUrlResponse>({
-    mutationFn: () => createRefillCheckoutSession(keyOwner, client),
+    mutationFn: () => createRefillCheckoutSession(keyOwner, client, returnOptions),
     onSuccess: invalidateBilling,
   });
   const overage = useMutation<
