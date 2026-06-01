@@ -9,6 +9,7 @@ import {
   completeSupportReportUpload,
   createSupportReport,
   createSupportReportUploadTargets,
+  ensureSupportReportTracker,
 } from "@proliferate/cloud-sdk/client/support";
 import type {
   SupportReportCompleteRequest,
@@ -63,6 +64,10 @@ interface PersistedSupportReportJob {
   lastFailureKind?: SupportReportUploadFailureKind | null;
   lastFailureToastAt?: string | null;
   lastFailureToastKind?: SupportReportUploadFailureKind | null;
+}
+
+interface SupportReportUploadResult {
+  reportId: string;
 }
 
 export function useSupportReportUploadQueue(): void {
@@ -149,9 +154,12 @@ async function drainSupportReportQueue(
     }
 
     try {
-      await uploadSupportReport(entry.job, dependencies);
+      const result = await uploadSupportReport(entry.job, dependencies);
       removePersistedJob(entry.job.jobId);
-      showToast("Thanks. Report sent.", "info");
+      showToast(
+        `Thanks. Report sent. Support has the details. (${result.reportId})`,
+        "info",
+      );
     } catch (error) {
       const attemptCount = entry.attemptCount + 1;
       const failure = describeSupportReportUploadFailure(error, attemptCount);
@@ -184,8 +192,19 @@ async function drainSupportReportQueue(
 async function uploadSupportReport(
   job: SupportReportJob,
   dependencies: SupportReportUploadDependencies<AnyHarnessResolvedConnection>,
-): Promise<void> {
+): Promise<SupportReportUploadResult> {
   validateAttachmentSizes(job);
+  const report = await createSupportReport(buildCreateReportRequest(job, job.attachments.length));
+  const serverCorrelation = toLocalServerCorrelation(report);
+  if (report.status === "completed") {
+    void nudgeSupportReportTracker(report.reportId);
+    trackSupportReportSubmitted(job, serverCorrelation, job.attachments.length);
+    await deleteSupportReportJobAttachments(job);
+    return {
+      reportId: report.reportId,
+    };
+  }
+
   const attachmentBlobs = await Promise.all(job.attachments.map(async (attachment) => ({
     attachment,
     blob: await loadAttachmentBlob(attachment),
@@ -194,8 +213,6 @@ async function uploadSupportReport(
     sha256Hex(await blob.arrayBuffer())
   ));
 
-  const report = await createSupportReport(buildCreateReportRequest(job, attachmentBlobs.length));
-  const serverCorrelation = toLocalServerCorrelation(report);
   const reportPackage = await buildSupportReportPackage(job, dependencies, serverCorrelation);
   const diagnosticsBlob = jsonBlob(reportPackage);
   if (diagnosticsBlob.size > DIAGNOSTICS_MAX_BYTES) {
@@ -252,8 +269,16 @@ async function uploadSupportReport(
     },
   };
   await completeSupportReportUpload(upload.reportId, completeRequest);
+  void nudgeSupportReportTracker(upload.reportId);
   trackSupportReportSubmitted(job, serverCorrelation, completedAttachments.length);
   await deleteSupportReportJobAttachments(job);
+  return {
+    reportId: upload.reportId,
+  };
+}
+
+async function nudgeSupportReportTracker(reportId: string): Promise<void> {
+  await ensureSupportReportTracker(reportId).catch(() => null);
 }
 
 function buildCreateReportRequest(
@@ -272,6 +297,7 @@ function buildCreateReportRequest(
       diagnostics: true,
       attachmentCount,
     },
+    publicContentConsent: job.publicContentConsent !== false,
   };
 }
 
@@ -366,6 +392,7 @@ function trackSupportReportSubmitted(
   trackProductEvent("support_report_submitted", {
     source_surface: "desktop",
     scope_kind: job.scope.kind,
+    public_content_consent: job.publicContentConsent !== false,
     diagnostics_included: true,
     attachment_count: attachmentCount,
     workspace_count: workspaceIds.length,

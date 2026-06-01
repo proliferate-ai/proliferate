@@ -19,6 +19,8 @@ provider "aws" {
   region = var.aws_region
 }
 
+data "aws_caller_identity" "current" {}
+
 # ── Variables ──
 
 variable "aws_region" {
@@ -158,6 +160,88 @@ variable "support_report_total_attachment_max_bytes" {
 
 variable "support_report_retention_days" {
   default = 30
+}
+
+variable "support_report_internal_base_url" {
+  default = ""
+}
+
+variable "support_tracker_enabled" {
+  default = "false"
+}
+
+variable "support_tracker_reconciler_interval_seconds" {
+  default = "30.0"
+}
+
+variable "support_tracker_reconciler_batch_size" {
+  default = "10"
+}
+
+variable "support_tracker_max_attempts" {
+  default = "8"
+}
+
+variable "support_tracker_retry_base_seconds" {
+  default = "60.0"
+}
+
+variable "support_github_app_id" {
+  default = ""
+}
+
+variable "support_github_app_private_key" {
+  sensitive = true
+  default   = ""
+}
+
+variable "support_github_app_private_key_parameter_name" {
+  default = ""
+}
+
+variable "support_github_app_installation_id" {
+  default = ""
+}
+
+variable "support_github_owner" {
+  default = ""
+}
+
+variable "support_github_repo" {
+  default = ""
+}
+
+variable "support_github_label_support" {
+  default = "support"
+}
+
+variable "support_github_label_private" {
+  default = "private-details"
+}
+
+variable "support_linear_api_key" {
+  sensitive = true
+  default   = ""
+}
+
+variable "support_linear_api_key_parameter_name" {
+  default = ""
+}
+
+variable "support_linear_team_id" {
+  default = ""
+}
+
+variable "support_linear_project_id" {
+  default = ""
+}
+
+variable "support_linear_label_ids" {
+  default = ""
+}
+
+variable "support_linear_private_details_label_id" {
+  default = ""
 }
 
 # ── VPC (use default for now, swap for dedicated VPC later) ──
@@ -301,6 +385,25 @@ resource "aws_iam_role_policy_attachment" "ecs_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+data "aws_iam_policy_document" "support_tracker_secret_parameters" {
+  count = length(local.support_tracker_secret_parameter_arns) == 0 ? 0 : 1
+
+  statement {
+    actions = [
+      "ssm:GetParameter",
+      "ssm:GetParameters",
+    ]
+    resources = local.support_tracker_secret_parameter_arns
+  }
+}
+
+resource "aws_iam_role_policy" "support_tracker_secret_parameters" {
+  count  = length(local.support_tracker_secret_parameter_arns) == 0 ? 0 : 1
+  name   = "support-tracker-secret-parameters"
+  role   = aws_iam_role.ecs_execution.id
+  policy = data.aws_iam_policy_document.support_tracker_secret_parameters[0].json
+}
+
 resource "aws_iam_role" "ecs_task" {
   name               = "proliferate-ecs-task-${var.environment}"
   assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
@@ -310,6 +413,34 @@ resource "aws_iam_role" "ecs_task" {
 
 locals {
   support_report_s3_prefix = trim(var.support_report_s3_prefix, "/")
+  support_github_app_private_key_parameter_name = (
+    var.support_github_app_private_key_parameter_name != ""
+    ? var.support_github_app_private_key_parameter_name
+    : (
+      var.support_tracker_enabled == "true"
+      ? "/proliferate/${var.environment}/support/github-app-private-key"
+      : ""
+    )
+  )
+  support_linear_api_key_parameter_name = (
+    var.support_linear_api_key_parameter_name != ""
+    ? var.support_linear_api_key_parameter_name
+    : (
+      var.support_linear_team_id != ""
+      ? "/proliferate/${var.environment}/support/linear-api-key"
+      : ""
+    )
+  )
+  support_tracker_secret_parameter_names = compact([
+    local.support_github_app_private_key_parameter_name,
+    local.support_linear_api_key_parameter_name,
+  ])
+  support_tracker_secret_parameter_arns = [
+    for name in local.support_tracker_secret_parameter_names :
+    startswith(name, "arn:")
+    ? name
+    : "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter${name}"
+  ]
 }
 
 resource "aws_s3_bucket" "support_reports" {
@@ -527,7 +658,38 @@ resource "aws_ecs_task_definition" "server" {
         { name = "SUPPORT_REPORT_DIAGNOSTICS_MAX_BYTES", value = var.support_report_diagnostics_max_bytes },
         { name = "SUPPORT_REPORT_ATTACHMENT_MAX_BYTES", value = var.support_report_attachment_max_bytes },
         { name = "SUPPORT_REPORT_TOTAL_ATTACHMENT_MAX_BYTES", value = var.support_report_total_attachment_max_bytes },
+        { name = "SUPPORT_REPORT_INTERNAL_BASE_URL", value = var.support_report_internal_base_url },
+        { name = "SUPPORT_TRACKER_ENABLED", value = var.support_tracker_enabled },
+        { name = "SUPPORT_TRACKER_RECONCILER_INTERVAL_SECONDS", value = var.support_tracker_reconciler_interval_seconds },
+        { name = "SUPPORT_TRACKER_RECONCILER_BATCH_SIZE", value = var.support_tracker_reconciler_batch_size },
+        { name = "SUPPORT_TRACKER_MAX_ATTEMPTS", value = var.support_tracker_max_attempts },
+        { name = "SUPPORT_TRACKER_RETRY_BASE_SECONDS", value = var.support_tracker_retry_base_seconds },
+        { name = "SUPPORT_GITHUB_APP_ID", value = var.support_github_app_id },
+        { name = "SUPPORT_GITHUB_APP_INSTALLATION_ID", value = var.support_github_app_installation_id },
+        { name = "SUPPORT_GITHUB_OWNER", value = var.support_github_owner },
+        { name = "SUPPORT_GITHUB_REPO", value = var.support_github_repo },
+        { name = "SUPPORT_GITHUB_LABEL_SUPPORT", value = var.support_github_label_support },
+        { name = "SUPPORT_GITHUB_LABEL_PRIVATE", value = var.support_github_label_private },
+        { name = "SUPPORT_LINEAR_TEAM_ID", value = var.support_linear_team_id },
+        { name = "SUPPORT_LINEAR_PROJECT_ID", value = var.support_linear_project_id },
+        { name = "SUPPORT_LINEAR_LABEL_IDS", value = var.support_linear_label_ids },
+        { name = "SUPPORT_LINEAR_PRIVATE_DETAILS_LABEL_ID", value = var.support_linear_private_details_label_id },
       ]
+
+      secrets = concat(
+        local.support_github_app_private_key_parameter_name == "" ? [] : [
+          {
+            name      = "SUPPORT_GITHUB_APP_PRIVATE_KEY"
+            valueFrom = local.support_github_app_private_key_parameter_name
+          }
+        ],
+        local.support_linear_api_key_parameter_name == "" ? [] : [
+          {
+            name      = "SUPPORT_LINEAR_API_KEY"
+            valueFrom = local.support_linear_api_key_parameter_name
+          }
+        ],
+      )
 
       logConfiguration = {
         logDriver = "awslogs"

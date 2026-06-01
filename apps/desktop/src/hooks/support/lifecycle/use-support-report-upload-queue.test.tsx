@@ -24,6 +24,7 @@ const cloudSupportMocks = vi.hoisted(() => ({
   completeSupportReportUpload: vi.fn(async () => {}),
   createSupportReport: vi.fn(async () => ({
     reportId: "report-1",
+    status: "created",
     cloudDiagnosticsStatus: "not_applicable",
     serverCorrelation: {
       reportId: "report-1",
@@ -47,6 +48,13 @@ const cloudSupportMocks = vi.hoisted(() => ({
       headers: {},
     },
     attachments: [],
+  })),
+  ensureSupportReportTracker: vi.fn(async () => ({
+    ok: true,
+    reportId: "report-1",
+    trackerStatus: "pending",
+    githubIssueUrl: null,
+    linearIssueUrl: null,
   })),
 }));
 
@@ -179,6 +187,43 @@ describe("useSupportReportUploadQueue", () => {
     listener?.handler(job);
 
     expect(sendingToastCalls()).toHaveLength(1);
+    await waitFor(() => {
+      expect(cloudSupportMocks.completeSupportReportUpload).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("cleans up a queued job when create returns an already completed report", async () => {
+    cloudSupportMocks.createSupportReport.mockResolvedValueOnce({
+      reportId: "report-1",
+      status: "completed",
+      cloudDiagnosticsStatus: "not_applicable",
+      serverCorrelation: {
+        reportId: "report-1",
+        requestId: "request-1",
+        ownerUserId: "user-1",
+        primaryOrganizationId: null,
+        primaryTenantId: "user:user-1",
+        tenantIds: ["user:user-1"],
+        cloudWorkspaceIds: [],
+        cloudTargetIds: [],
+        anyharnessWorkspaceIds: [],
+        sessionIds: [],
+      },
+    });
+    renderHook(() => useSupportReportUploadQueue());
+
+    await waitFor(() => {
+      expect(activeListeners()).toHaveLength(1);
+    });
+
+    activeListeners()[0]?.handler(makeSupportReportJob("job-completed"));
+
+    await waitFor(() => {
+      expect(cloudSupportMocks.createSupportReport).toHaveBeenCalledTimes(1);
+      expect(cloudSupportMocks.createSupportReportUploadTargets).not.toHaveBeenCalled();
+      expect(cloudSupportMocks.completeSupportReportUpload).not.toHaveBeenCalled();
+      expect(cloudSupportMocks.ensureSupportReportTracker).toHaveBeenCalledWith("report-1");
+    });
   });
 });
 
@@ -201,6 +246,7 @@ function makeSupportReportJob(jobId: string): SupportReportJob {
       kind: "app_only",
       workspaceIds: [],
     },
+    publicContentConsent: true,
     snapshot: {
       openedAt: "2026-05-31T12:00:00.000Z",
       source: "sidebar",

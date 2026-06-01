@@ -821,6 +821,120 @@
   description: Maximum combined size of all support report attachments
   tags: [local-dev, self-hosted, production]
 
+- name: SUPPORT_REPORT_INTERNAL_BASE_URL
+  secret: false
+  default: ""
+  description: Internal support-report viewer URL prefix; Slack, GitHub, and Linear receive only this report URL or report ID, never S3 keys
+  tags: [production]
+
+- name: SUPPORT_TRACKER_ENABLED
+  secret: false
+  default: "false"
+  description: Enables server-owned creation/reconciliation of GitHub and Linear issues for completed support reports
+  tags: [local-dev, production]
+
+- name: SUPPORT_TRACKER_RECONCILER_INTERVAL_SECONDS
+  secret: false
+  default: "30.0"
+  description: Background support tracker reconciliation interval in seconds
+  tags: [production]
+
+- name: SUPPORT_TRACKER_RECONCILER_BATCH_SIZE
+  secret: false
+  default: "10"
+  description: Maximum support reports processed per tracker reconciliation pass
+  tags: [production]
+
+- name: SUPPORT_TRACKER_MAX_ATTEMPTS
+  secret: false
+  default: "8"
+  description: Maximum retry attempts before a support tracker job is marked permanently failed
+  tags: [production]
+
+- name: SUPPORT_TRACKER_RETRY_BASE_SECONDS
+  secret: false
+  default: "60.0"
+  description: Base exponential-backoff delay for retryable support tracker failures
+  tags: [production]
+
+- name: SUPPORT_GITHUB_APP_ID
+  secret: false
+  default: ""
+  description: GitHub App ID for the support issue bot
+  tags: [production]
+
+- name: SUPPORT_GITHUB_APP_PRIVATE_KEY
+  secret: true
+  default: ""
+  description: GitHub App private key for the support issue bot
+  tags: [production]
+
+- name: SUPPORT_GITHUB_APP_PRIVATE_KEY_PARAMETER_NAME
+  secret: false
+  default: ""
+  description: SSM SecureString parameter name used as the ECS secret source for SUPPORT_GITHUB_APP_PRIVATE_KEY
+  tags: [production]
+
+- name: SUPPORT_GITHUB_APP_INSTALLATION_ID
+  secret: false
+  default: ""
+  description: Installation ID for the GitHub App on the support issue repository
+  tags: [production]
+
+- name: SUPPORT_GITHUB_OWNER
+  secret: false
+  default: ""
+  description: GitHub owner or organization that receives public support issues
+  tags: [production]
+
+- name: SUPPORT_GITHUB_REPO
+  secret: false
+  default: ""
+  description: GitHub repository that receives public support issues
+  tags: [production]
+
+- name: SUPPORT_GITHUB_LABEL_SUPPORT
+  secret: false
+  default: "support issue"
+  description: Label applied to every GitHub issue created from a support report
+  tags: [production]
+
+- name: SUPPORT_GITHUB_LABEL_PRIVATE
+  secret: false
+  default: "private"
+  description: Label applied when the submitter does not consent to publishing their message in GitHub
+  tags: [production]
+
+- name: SUPPORT_LINEAR_API_KEY
+  secret: true
+  default: ""
+  description: Optional Linear API key used to create private internal support triage issues
+  tags: [production]
+
+- name: SUPPORT_LINEAR_API_KEY_PARAMETER_NAME
+  secret: false
+  default: ""
+  description: SSM SecureString parameter name used as the ECS secret source for SUPPORT_LINEAR_API_KEY
+  tags: [production]
+
+- name: SUPPORT_LINEAR_TEAM_ID
+  secret: false
+  default: ""
+  description: Optional Linear team ID for support report tracker issues
+  tags: [production]
+
+- name: SUPPORT_LINEAR_PROJECT_ID
+  secret: false
+  default: ""
+  description: Optional Linear project ID for support report tracker issues
+  tags: [production]
+
+- name: SUPPORT_LINEAR_LABEL_IDS
+  secret: false
+  default: ""
+  description: Optional comma-separated Linear label IDs applied to support report tracker issues
+  tags: [production]
+
 - name: SIGNUPS_SLACK_WEBHOOK_URL
   secret: true
   default: ""

@@ -8,7 +8,7 @@ import { useSupportReportWindowState } from "@/hooks/support/facade/use-support-
 const supportAccess = vi.hoisted(() => ({
   closeSupportReportWindow: vi.fn(async () => {}),
   deleteStagedSupportReportAttachment: vi.fn(async () => {}),
-  getSupportReportWindowSnapshot: vi.fn(async () => null),
+  getSupportReportWindowSnapshot: vi.fn(async (): Promise<unknown> => null),
   listenSupportSnapshotUpdates: vi.fn(async () => vi.fn()),
   stageSupportReportAttachment: vi.fn(async (input: { fileName: string }) => ({
     path: `/tmp/${input.fileName}`,
@@ -65,6 +65,51 @@ describe("useSupportReportWindowState attachments", () => {
     expect(event.preventDefault).toHaveBeenCalled();
     expect(event.stopPropagation).toHaveBeenCalled();
     expect(result.current.attachments[0]?.fileName).toBe("screenshot.png");
+  });
+
+  it("submits only one job for repeated send clicks", async () => {
+    supportAccess.getSupportReportWindowSnapshot.mockResolvedValueOnce({
+      openedAt: "2026-05-31T12:00:00.000Z",
+      source: "sidebar",
+      context: {
+        source: "sidebar",
+        intent: "general",
+      },
+      defaultScope: "app_only",
+      defaultWorkspaceId: null,
+      workspaceOptions: [],
+    });
+    let resolveSubmit: (() => void) | null = null;
+    supportAccess.submitSupportReportJob.mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => {
+        resolveSubmit = resolve;
+      });
+    });
+
+    const { result } = renderHook(() => useSupportReportWindowState());
+
+    await waitFor(() => {
+      expect(result.current.snapshot).not.toBeNull();
+    });
+    act(() => {
+      result.current.setMessage("Help");
+    });
+    await waitFor(() => {
+      expect(result.current.canSend).toBe(true);
+    });
+
+    act(() => {
+      void result.current.handleSend();
+      void result.current.handleSend();
+    });
+
+    expect(supportAccess.submitSupportReportJob).toHaveBeenCalledTimes(1);
+    act(() => {
+      resolveSubmit?.();
+    });
+    await waitFor(() => {
+      expect(supportAccess.closeSupportReportWindow).toHaveBeenCalledTimes(1);
+    });
   });
 });
 

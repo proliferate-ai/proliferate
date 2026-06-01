@@ -93,6 +93,7 @@ function makeJob(): SupportReportJob {
       kind: "most_recent_workspace",
       workspaceIds: ["workspace-ui"],
     },
+    publicContentConsent: true,
     snapshot: {
       openedAt: now.toISOString(),
       source: "sidebar",

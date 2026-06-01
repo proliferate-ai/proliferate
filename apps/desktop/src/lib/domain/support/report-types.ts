@@ -63,6 +63,7 @@ export interface SupportReportJob {
     kind: SupportReportScopeKind;
     workspaceIds: string[];
   };
+  publicContentConsent: boolean;
   snapshot: SupportReportWindowSnapshot;
   attachments: SupportReportAttachmentPayload[];
 }

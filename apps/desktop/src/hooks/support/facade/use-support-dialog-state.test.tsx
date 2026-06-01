@@ -28,6 +28,7 @@ vi.mock("@/hooks/support/workflows/use-session-debug-actions", () => ({
 }));
 
 vi.mock("@/lib/access/tauri/diagnostics", () => ({
+  collectSupportDiagnostics: vi.fn(async () => null),
   exportDebugBundle: vi.fn(async () => null),
   isTauriDesktop: () => false,
   logRendererDiagnostic: vi.fn(async () => undefined),

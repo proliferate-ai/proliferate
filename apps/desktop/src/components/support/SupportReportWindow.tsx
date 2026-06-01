@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { CloudUpload, FileText, Folder, LifeBuoy, X } from "@proliferate/ui/icons";
 import {
@@ -29,11 +30,14 @@ export function SupportReportWindow() {
     handleAttachmentPaste,
     handleCancel,
     handleSend,
+    isSubmitting,
     message,
+    publicContentConsent,
     removeAttachment,
     scopeKind,
     selectedWorkspaceIds,
     setMessage,
+    setPublicContentConsent,
     setScope,
     snapshot,
     stagingError,
@@ -198,6 +202,23 @@ export function SupportReportWindow() {
               </div>
             ) : null}
           </section>
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border/70 bg-surface-control/60 px-3 py-2 text-xs">
+            <Checkbox
+              checked={publicContentConsent}
+              onChange={(event) => setPublicContentConsent(event.currentTarget.checked)}
+              className="mt-1"
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block font-medium leading-5">
+                Include my message in the public issue
+              </span>
+              <span className="block text-[11px] leading-4 text-muted-foreground">
+                Your message may appear on GitHub. Do not include secrets or API keys.
+                Diagnostics and files stay private.
+              </span>
+            </span>
+          </label>
         </div>
       </div>
 
@@ -205,7 +226,7 @@ export function SupportReportWindow() {
         <Button type="button" variant="ghost" onClick={() => { void handleCancel(); }}>
           Cancel
         </Button>
-        <Button type="button" disabled={!canSend} onClick={() => { void handleSend(); }}>
+        <Button type="button" disabled={!canSend} loading={isSubmitting} onClick={() => { void handleSend(); }}>
           Send
         </Button>
       </div>

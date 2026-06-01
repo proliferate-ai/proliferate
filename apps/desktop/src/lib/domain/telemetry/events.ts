@@ -208,6 +208,7 @@ export interface DesktopProductEventMap {
   support_report_submitted: {
     source_surface: "desktop";
     scope_kind: SupportReportScopeKind;
+    public_content_consent: boolean;
     diagnostics_included: boolean;
     attachment_count: number;
     workspace_count: number;

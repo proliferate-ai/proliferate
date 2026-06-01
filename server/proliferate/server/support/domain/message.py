@@ -60,7 +60,7 @@ def build_support_report_plan(
     sender_email: str,
     message: str,
     report_id: str,
-    s3_prefix: str,
+    internal_url: str | None,
     diagnostics_included: bool,
     attachment_count: int,
     context: Mapping[str, object] | None = None,
@@ -73,10 +73,10 @@ def build_support_report_plan(
         SupportMessageField("Report ID", report_id),
         SupportMessageField("From", sender_name),
         SupportMessageField("Email", sender_email),
-        SupportMessageField("S3 prefix", s3_prefix),
         SupportMessageField("Diagnostics", "included" if diagnostics_included else "not included"),
         SupportMessageField("Attachments", str(attachment_count)),
     ]
+    _append_context_field(fields, "Internal report", internal_url)
 
     _append_context_field(fields, "Source", payload_context.get("source"))
     _append_context_field(fields, "Page", payload_context.get("pathname"))
@@ -95,6 +95,24 @@ def build_support_report_plan(
     return SupportMessagePlan(
         message=message,
         fallback_text=f"Support report {report_id} from {sender_name}: {message[:140]}",
+        fields=tuple(fields),
+    )
+
+
+def build_support_tracker_plan(
+    *,
+    report_id: str,
+    github_issue_url: str | None,
+    linear_issue_url: str | None,
+    internal_url: str | None,
+) -> SupportMessagePlan:
+    fields = [SupportMessageField("Report ID", report_id)]
+    _append_context_field(fields, "GitHub", github_issue_url)
+    _append_context_field(fields, "Linear", linear_issue_url)
+    _append_context_field(fields, "Internal report", internal_url)
+    return SupportMessagePlan(
+        message="Support report tracker links are ready.",
+        fallback_text=f"Support report {report_id} tracker links are ready.",
         fields=tuple(fields),
     )
 

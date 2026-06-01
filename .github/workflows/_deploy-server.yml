@@ -52,6 +52,26 @@ jobs:
       SUPPORT_REPORT_DIAGNOSTICS_MAX_BYTES: ${{ vars.SUPPORT_REPORT_DIAGNOSTICS_MAX_BYTES || '26214400' }}
       SUPPORT_REPORT_ATTACHMENT_MAX_BYTES: ${{ vars.SUPPORT_REPORT_ATTACHMENT_MAX_BYTES || '26214400' }}
       SUPPORT_REPORT_TOTAL_ATTACHMENT_MAX_BYTES: ${{ vars.SUPPORT_REPORT_TOTAL_ATTACHMENT_MAX_BYTES || '104857600' }}
+      SUPPORT_REPORT_INTERNAL_BASE_URL: ${{ vars.SUPPORT_REPORT_INTERNAL_BASE_URL }}
+      SUPPORT_TRACKER_ENABLED: ${{ vars.SUPPORT_TRACKER_ENABLED || 'false' }}
+      SUPPORT_TRACKER_RECONCILER_INTERVAL_SECONDS: ${{ vars.SUPPORT_TRACKER_RECONCILER_INTERVAL_SECONDS || '30.0' }}
+      SUPPORT_TRACKER_RECONCILER_BATCH_SIZE: ${{ vars.SUPPORT_TRACKER_RECONCILER_BATCH_SIZE || '10' }}
+      SUPPORT_TRACKER_MAX_ATTEMPTS: ${{ vars.SUPPORT_TRACKER_MAX_ATTEMPTS || '8' }}
+      SUPPORT_TRACKER_RETRY_BASE_SECONDS: ${{ vars.SUPPORT_TRACKER_RETRY_BASE_SECONDS || '60.0' }}
+      SUPPORT_GITHUB_APP_ID: ${{ vars.SUPPORT_GITHUB_APP_ID }}
+      SUPPORT_GITHUB_APP_PRIVATE_KEY: ${{ secrets.SUPPORT_GITHUB_APP_PRIVATE_KEY }}
+      SUPPORT_GITHUB_APP_PRIVATE_KEY_PARAMETER_NAME: ${{ vars.SUPPORT_GITHUB_APP_PRIVATE_KEY_PARAMETER_NAME }}
+      SUPPORT_GITHUB_APP_INSTALLATION_ID: ${{ vars.SUPPORT_GITHUB_APP_INSTALLATION_ID }}
+      SUPPORT_GITHUB_OWNER: ${{ vars.SUPPORT_GITHUB_OWNER }}
+      SUPPORT_GITHUB_REPO: ${{ vars.SUPPORT_GITHUB_REPO }}
+      SUPPORT_GITHUB_LABEL_SUPPORT: ${{ vars.SUPPORT_GITHUB_LABEL_SUPPORT || 'support' }}
+      SUPPORT_GITHUB_LABEL_PRIVATE: ${{ vars.SUPPORT_GITHUB_LABEL_PRIVATE || 'private-details' }}
+      SUPPORT_LINEAR_API_KEY: ${{ secrets.SUPPORT_LINEAR_API_KEY }}
+      SUPPORT_LINEAR_API_KEY_PARAMETER_NAME: ${{ vars.SUPPORT_LINEAR_API_KEY_PARAMETER_NAME }}
+      SUPPORT_LINEAR_TEAM_ID: ${{ vars.SUPPORT_LINEAR_TEAM_ID }}
+      SUPPORT_LINEAR_PROJECT_ID: ${{ vars.SUPPORT_LINEAR_PROJECT_ID }}
+      SUPPORT_LINEAR_LABEL_IDS: ${{ vars.SUPPORT_LINEAR_LABEL_IDS }}
+      SUPPORT_LINEAR_PRIVATE_DETAILS_LABEL_ID: ${{ vars.SUPPORT_LINEAR_PRIVATE_DETAILS_LABEL_ID }}
       DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
       GIT_SHA: ${{ inputs.git_sha }}
     steps:
@@ -69,6 +89,12 @@ jobs:
           : "${API_BASE_URL:?Set API_BASE_URL on the GitHub environment.}"
           : "${WEB_URL:?Set WEB_URL on the GitHub environment.}"
           : "${E2B_TEMPLATE_REF:?Set E2B_TEMPLATE_REF on the GitHub environment.}"
+          if [ "$SUPPORT_TRACKER_ENABLED" = "true" ]; then
+            : "${SUPPORT_GITHUB_APP_ID:?Set SUPPORT_GITHUB_APP_ID when support tracker is enabled.}"
+            : "${SUPPORT_GITHUB_APP_INSTALLATION_ID:?Set SUPPORT_GITHUB_APP_INSTALLATION_ID when support tracker is enabled.}"
+            : "${SUPPORT_GITHUB_OWNER:?Set SUPPORT_GITHUB_OWNER when support tracker is enabled.}"
+            : "${SUPPORT_GITHUB_REPO:?Set SUPPORT_GITHUB_REPO when support tracker is enabled.}"
+          fi
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -117,6 +143,39 @@ jobs:
             --query taskDefinition \
             > task-definition.raw.json
 
+          support_github_private_key_parameter="$SUPPORT_GITHUB_APP_PRIVATE_KEY_PARAMETER_NAME"
+          if [ -z "$support_github_private_key_parameter" ] && [ "$SUPPORT_TRACKER_ENABLED" = "true" ]; then
+            support_github_private_key_parameter="/proliferate/${DEPLOY_ENVIRONMENT}/support/github-app-private-key"
+          fi
+          support_linear_api_key_parameter="$SUPPORT_LINEAR_API_KEY_PARAMETER_NAME"
+          if [ -z "$support_linear_api_key_parameter" ] && [ -n "$SUPPORT_LINEAR_TEAM_ID" ]; then
+            support_linear_api_key_parameter="/proliferate/${DEPLOY_ENVIRONMENT}/support/linear-api-key"
+          fi
+          if [ -n "$SUPPORT_GITHUB_APP_PRIVATE_KEY" ] && [ -z "$support_github_private_key_parameter" ]; then
+            echo "SUPPORT_GITHUB_APP_PRIVATE_KEY_PARAMETER_NAME is required when a GitHub private key is provided." >&2
+            exit 1
+          fi
+          if [ -n "$SUPPORT_LINEAR_API_KEY" ] && [ -z "$support_linear_api_key_parameter" ]; then
+            echo "SUPPORT_LINEAR_API_KEY_PARAMETER_NAME is required when a Linear API key is provided." >&2
+            exit 1
+          fi
+          if [ -n "$SUPPORT_GITHUB_APP_PRIVATE_KEY" ]; then
+            aws ssm put-parameter \
+              --name "$support_github_private_key_parameter" \
+              --type SecureString \
+              --value "$SUPPORT_GITHUB_APP_PRIVATE_KEY" \
+              --overwrite \
+              >/dev/null
+          fi
+          if [ -n "$SUPPORT_LINEAR_API_KEY" ]; then
+            aws ssm put-parameter \
+              --name "$support_linear_api_key_parameter" \
+              --type SecureString \
+              --value "$SUPPORT_LINEAR_API_KEY" \
+              --overwrite \
+              >/dev/null
+          fi
+
           jq -n \
             --arg api_url "$API_URL" \
             --arg api_base "$API_BASE_URL" \
@@ -132,6 +191,22 @@ jobs:
             --arg support_report_diagnostics_max "$SUPPORT_REPORT_DIAGNOSTICS_MAX_BYTES" \
             --arg support_report_attachment_max "$SUPPORT_REPORT_ATTACHMENT_MAX_BYTES" \
             --arg support_report_total_attachment_max "$SUPPORT_REPORT_TOTAL_ATTACHMENT_MAX_BYTES" \
+            --arg support_report_internal_base_url "$SUPPORT_REPORT_INTERNAL_BASE_URL" \
+            --arg support_tracker_enabled "$SUPPORT_TRACKER_ENABLED" \
+            --arg support_tracker_interval "$SUPPORT_TRACKER_RECONCILER_INTERVAL_SECONDS" \
+            --arg support_tracker_batch_size "$SUPPORT_TRACKER_RECONCILER_BATCH_SIZE" \
+            --arg support_tracker_max_attempts "$SUPPORT_TRACKER_MAX_ATTEMPTS" \
+            --arg support_tracker_retry_base "$SUPPORT_TRACKER_RETRY_BASE_SECONDS" \
+            --arg support_github_app_id "$SUPPORT_GITHUB_APP_ID" \
+            --arg support_github_app_installation_id "$SUPPORT_GITHUB_APP_INSTALLATION_ID" \
+            --arg support_github_owner "$SUPPORT_GITHUB_OWNER" \
+            --arg support_github_repo "$SUPPORT_GITHUB_REPO" \
+            --arg support_github_label_support "$SUPPORT_GITHUB_LABEL_SUPPORT" \
+            --arg support_github_label_private "$SUPPORT_GITHUB_LABEL_PRIVATE" \
+            --arg support_linear_team_id "$SUPPORT_LINEAR_TEAM_ID" \
+            --arg support_linear_project_id "$SUPPORT_LINEAR_PROJECT_ID" \
+            --arg support_linear_label_ids "$SUPPORT_LINEAR_LABEL_IDS" \
+            --arg support_linear_private_details_label_id "$SUPPORT_LINEAR_PRIVATE_DETAILS_LABEL_ID" \
             '[
               {"name":"API_URL","value":$api_url},
               {"name":"API_BASE_URL","value":$api_base},
@@ -154,16 +229,65 @@ jobs:
               {"name":"SUPPORT_REPORT_UPLOAD_URL_EXPIRES_SECONDS","value":$support_report_expires},
               {"name":"SUPPORT_REPORT_DIAGNOSTICS_MAX_BYTES","value":$support_report_diagnostics_max},
               {"name":"SUPPORT_REPORT_ATTACHMENT_MAX_BYTES","value":$support_report_attachment_max},
-              {"name":"SUPPORT_REPORT_TOTAL_ATTACHMENT_MAX_BYTES","value":$support_report_total_attachment_max}
+              {"name":"SUPPORT_REPORT_TOTAL_ATTACHMENT_MAX_BYTES","value":$support_report_total_attachment_max},
+              {"name":"SUPPORT_REPORT_INTERNAL_BASE_URL","value":$support_report_internal_base_url},
+              {"name":"SUPPORT_TRACKER_ENABLED","value":$support_tracker_enabled},
+              {"name":"SUPPORT_TRACKER_RECONCILER_INTERVAL_SECONDS","value":$support_tracker_interval},
+              {"name":"SUPPORT_TRACKER_RECONCILER_BATCH_SIZE","value":$support_tracker_batch_size},
+              {"name":"SUPPORT_TRACKER_MAX_ATTEMPTS","value":$support_tracker_max_attempts},
+              {"name":"SUPPORT_TRACKER_RETRY_BASE_SECONDS","value":$support_tracker_retry_base},
+              {"name":"SUPPORT_GITHUB_APP_ID","value":$support_github_app_id},
+              {"name":"SUPPORT_GITHUB_APP_INSTALLATION_ID","value":$support_github_app_installation_id},
+              {"name":"SUPPORT_GITHUB_OWNER","value":$support_github_owner},
+              {"name":"SUPPORT_GITHUB_REPO","value":$support_github_repo},
+              {"name":"SUPPORT_GITHUB_LABEL_SUPPORT","value":$support_github_label_support},
+              {"name":"SUPPORT_GITHUB_LABEL_PRIVATE","value":$support_github_label_private},
+              {"name":"SUPPORT_LINEAR_TEAM_ID","value":$support_linear_team_id},
+              {"name":"SUPPORT_LINEAR_PROJECT_ID","value":$support_linear_project_id},
+              {"name":"SUPPORT_LINEAR_LABEL_IDS","value":$support_linear_label_ids},
+              {"name":"SUPPORT_LINEAR_PRIVATE_DETAILS_LABEL_ID","value":$support_linear_private_details_label_id}
             ]' > env-updates.json
+
+          jq -n \
+            --arg support_github_private_key_parameter "$support_github_private_key_parameter" \
+            --arg support_linear_api_key_parameter "$support_linear_api_key_parameter" \
+            '[
+              (
+                if $support_github_private_key_parameter == "" then empty else
+                {
+                  "name":"SUPPORT_GITHUB_APP_PRIVATE_KEY",
+                  "valueFrom":$support_github_private_key_parameter
+                }
+                end
+              ),
+              (
+                if $support_linear_api_key_parameter == "" then empty else
+                {
+                  "name":"SUPPORT_LINEAR_API_KEY",
+                  "valueFrom":$support_linear_api_key_parameter
+                }
+                end
+              )
+            ]' > secret-updates.json
 
           jq \
             --arg container "$ECS_SERVER_CONTAINER_NAME" \
             --arg image "${{ steps.image.outputs.image_uri }}" \
             --slurpfile updates env-updates.json \
+            --slurpfile secret_updates secret-updates.json \
             '
               def merge_environment($updates):
                 (.environment // []) as $current
+                | ($updates[0] | map(.name)) as $updated_names
+                | ["SUPPORT_GITHUB_APP_PRIVATE_KEY", "SUPPORT_LINEAR_API_KEY"] as $secret_names
+                | ($current | map(select(
+                    .name as $name
+                    | ($updated_names | index($name) | not)
+                    and ($secret_names | index($name) | not)
+                  ))) + $updates[0];
+
+              def merge_secrets($updates):
+                (.secrets // []) as $current
                 | ($updates[0] | map(.name)) as $updated_names
                 | ($current | map(select(.name as $name | ($updated_names | index($name) | not)))) + $updates[0];
 
@@ -180,6 +304,7 @@ jobs:
                   if .name == $container then
                     .image = $image
                     | .environment = merge_environment($updates)
+                    | .secrets = merge_secrets($secret_updates)
                   else
                     .
                   end

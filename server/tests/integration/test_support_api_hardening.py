@@ -197,6 +197,7 @@ async def test_support_report_complete_requires_all_expected_uploads(
             "message": "The app got stuck.",
             "sourceSurface": "desktop",
             "scope": {"kind": "app_only", "workspaceIds": []},
+            "expectedClientUploads": {"diagnostics": True, "attachmentCount": 1},
         },
     )
     assert create.status_code == 200
@@ -239,3 +240,110 @@ async def test_support_report_complete_requires_all_expected_uploads(
 
     assert complete.status_code == 400
     assert complete.json()["detail"]["code"] == "support_report_upload_invalid"
+
+
+@pytest.mark.asyncio
+async def test_support_report_complete_rejects_changed_manifest_size_and_checksum(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = await _register_and_login(client, "support-report-changed-upload@example.com")
+    headers = {"Authorization": f"Bearer {session['access_token']}"}
+    monkeypatch.setattr(settings, "support_report_s3_bucket", "support-bucket")
+
+    async def fake_put_json_object(
+        *,
+        bucket: str,
+        key: str,
+        value: dict[str, object],
+        region_name: str | None = None,
+    ) -> None:
+        assert bucket == "support-bucket"
+        assert key.endswith("/request.json")
+
+    async def fake_presign_put_object(
+        *,
+        bucket: str,
+        key: str,
+        content_type: str,
+        expires_seconds: int,
+        region_name: str | None = None,
+    ) -> str:
+        return f"https://s3.test/{key}"
+
+    async def fake_head_object(
+        *,
+        bucket: str,
+        key: str,
+        region_name: str | None = None,
+    ) -> dict[str, object]:
+        raise AssertionError("completion should fail before checking S3 metadata")
+
+    monkeypatch.setattr(
+        "proliferate.server.support.service.put_json_object",
+        fake_put_json_object,
+    )
+    monkeypatch.setattr(
+        "proliferate.server.support.storage.presign_put_object",
+        fake_presign_put_object,
+    )
+    monkeypatch.setattr("proliferate.server.support.storage.head_object", fake_head_object)
+
+    create = await client.post(
+        "/v1/support/reports",
+        headers=headers,
+        json={
+            "clientJobId": "support-job-changed-upload",
+            "message": "The app got stuck.",
+            "sourceSurface": "desktop",
+            "scope": {"kind": "app_only", "workspaceIds": []},
+            "expectedClientUploads": {"diagnostics": True, "attachmentCount": 0},
+        },
+    )
+    assert create.status_code == 200
+    report_id = create.json()["reportId"]
+    targets = await client.post(
+        f"/v1/support/reports/{report_id}/upload-targets",
+        headers=headers,
+        json={
+            "diagnostics": {
+                "contentType": "application/json",
+                "sizeBytes": 512,
+                "sha256": "abc123",
+            },
+            "attachments": [],
+        },
+    )
+    assert targets.status_code == 200
+
+    changed_size = await client.post(
+        f"/v1/support/reports/{report_id}/complete",
+        headers=headers,
+        json={
+            "diagnostics": {
+                "objectKey": targets.json()["diagnostics"]["objectKey"],
+                "sha256": "abc123",
+                "sizeBytes": 513,
+            },
+            "attachments": [],
+            "packageManifest": {"schemaVersion": 2},
+        },
+    )
+    assert changed_size.status_code == 400
+    assert changed_size.json()["detail"]["code"] == "support_report_upload_invalid"
+
+    changed_checksum = await client.post(
+        f"/v1/support/reports/{report_id}/complete",
+        headers=headers,
+        json={
+            "diagnostics": {
+                "objectKey": targets.json()["diagnostics"]["objectKey"],
+                "sha256": "changed",
+                "sizeBytes": 512,
+            },
+            "attachments": [],
+            "packageManifest": {"schemaVersion": 2},
+        },
+    )
+    assert changed_checksum.status_code == 400
+    assert changed_checksum.json()["detail"]["code"] == "support_report_upload_invalid"
