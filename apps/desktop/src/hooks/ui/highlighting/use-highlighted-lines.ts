@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
-import { resolveHighlightTheme } from "@/hooks/ui/use-highlighted-code";
+import { resolveHighlightTheme } from "@/hooks/ui/highlighting/use-highlighted-code";
 import {
   highlightLines,
   type HighlightedToken,

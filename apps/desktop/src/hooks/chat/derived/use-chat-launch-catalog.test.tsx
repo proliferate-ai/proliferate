@@ -29,7 +29,7 @@ vi.mock("@anyharness/sdk-react", () => ({
   useAgentLaunchOptionsQuery: mocks.useAgentLaunchOptionsQuery,
 }));
 
-vi.mock("@/hooks/workspaces/cache/use-selected-cloud-runtime-state", () => ({
+vi.mock("@/hooks/workspaces/facade/use-selected-cloud-runtime-state", () => ({
   useSelectedCloudRuntimeState: mocks.useSelectedCloudRuntimeState,
 }));
 

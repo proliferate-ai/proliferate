@@ -10,7 +10,7 @@ import {
   updateCloudWorkspaceDisplayName,
 } from "@proliferate/cloud-sdk/client/workspaces";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/cache/use-selected-cloud-runtime-state";
+import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 import {

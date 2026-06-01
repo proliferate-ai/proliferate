@@ -50,7 +50,7 @@ import { ChatInputControlRow } from "./ChatInputControlRow";
 import { ChatInputDraftArea } from "./ChatInputDraftArea";
 import { ChatInputHiddenFileInput } from "./ChatInputHiddenFileInput";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
-import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
+import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
 
 /**
  * The composer surface: command-aware editor + model / session controls +

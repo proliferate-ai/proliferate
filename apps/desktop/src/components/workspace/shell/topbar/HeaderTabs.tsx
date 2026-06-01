@@ -16,8 +16,8 @@ import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-han
 import { useSessionDismissActions } from "@/hooks/sessions/workflows/use-session-dismiss-actions";
 import { useSessionForkActions } from "@/hooks/sessions/workflows/use-session-fork-actions";
 import { useSessionTitleActions } from "@/hooks/sessions/workflows/use-session-title-actions";
-import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
-import { useResizeObserverWidth } from "@/hooks/ui/use-resize-observer-width";
+import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
+import { useResizeObserverWidth } from "@/hooks/ui/layout/use-resize-observer-width";
 import { useHeaderTabsCloseActions } from "@/hooks/workspaces/workflows/tabs/use-header-tabs-close-actions";
 import { useHeaderTabsGroupEditor } from "@/hooks/workspaces/ui/tabs/use-header-tabs-group-editor";
 import {

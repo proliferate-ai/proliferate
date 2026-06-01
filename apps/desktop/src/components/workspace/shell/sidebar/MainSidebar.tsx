@@ -27,7 +27,7 @@ import { SHORTCUTS } from "@/config/shortcuts";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useCloudRepoConfigs } from "@/hooks/access/cloud/use-cloud-repo-configs";
-import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
+import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
 import { useSidebarShortcutTargets } from "@/hooks/workspaces/derived/use-sidebar-shortcut-targets";
 import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";

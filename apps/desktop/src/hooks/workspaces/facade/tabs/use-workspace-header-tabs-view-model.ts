@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useWorkspaceSessionsQuery } from "@anyharness/sdk-react";
-import { useWorkspaceHeaderSubagentHierarchy } from "@/hooks/workspaces/derived/tabs/use-workspace-header-subagent-hierarchy";
+import { useWorkspaceHeaderSubagentHierarchy } from "@/hooks/workspaces/cache/tabs/use-workspace-header-subagent-hierarchy";
 import {
   buildHeaderLiveVisibilityCandidates,
   buildKnownHeaderSessions,

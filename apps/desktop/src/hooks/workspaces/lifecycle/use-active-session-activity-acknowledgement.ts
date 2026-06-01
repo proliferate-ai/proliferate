@@ -4,7 +4,7 @@ import type { WorkspaceRenderSurface } from "@/lib/domain/workspaces/tabs/shell-
 import {
   isDocumentVisibleAndFocused,
   useDocumentFocusVisibilityNonce,
-} from "@/hooks/ui/use-document-focus-visibility";
+} from "@/hooks/ui/document/use-document-focus-visibility";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 
 export function useActiveSessionActivityAcknowledgement(

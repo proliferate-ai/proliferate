@@ -27,7 +27,7 @@ vi.mock("@/components/content/ui/DiffViewer", () => ({
   DiffViewer: () => createElement("div", null, "diff rendered"),
 }));
 
-vi.mock("@/hooks/ui/use-highlighted-lines", () => ({
+vi.mock("@/hooks/ui/highlighting/use-highlighted-lines", () => ({
   useHighlightedLines: (code: string) =>
     code.split("\n").map((line) => [{ content: line }]),
 }));

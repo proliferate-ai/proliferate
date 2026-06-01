@@ -1,4 +1,3 @@
-import { useReadWorkspaceFileQuery } from "@anyharness/sdk-react";
 import {
   useWorkspaceFileContext,
   type WorkspaceFileContext,
@@ -20,5 +19,3 @@ export function useWorkspaceFileActions(inputContext?: WorkspaceFileContext) {
     ...bufferActions,
   };
 }
-
-export { useReadWorkspaceFileQuery };

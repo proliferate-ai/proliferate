@@ -22,7 +22,7 @@ vi.mock("@/hooks/chat/facade/use-delegated-work-composer", () => ({
   useDelegatedWorkComposer: () => null,
 }));
 
-vi.mock("@/hooks/workspaces/cache/use-selected-cloud-runtime-state", () => ({
+vi.mock("@/hooks/workspaces/facade/use-selected-cloud-runtime-state", () => ({
   useSelectedCloudRuntimeState: () => ({ state: null }),
 }));
 

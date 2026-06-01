@@ -820,7 +820,7 @@ apps/desktop/src/components/workspace/chat/input/delegated-work/**
 apps/desktop/src/components/workspace/shell/tabs/**
 apps/desktop/src/hooks/cowork/**
 apps/desktop/src/hooks/chat/facade/use-delegated-work-composer.ts
-apps/desktop/src/hooks/workspaces/derived/tabs/use-workspace-header-subagent-hierarchy.ts
+apps/desktop/src/hooks/workspaces/cache/tabs/use-workspace-header-subagent-hierarchy.ts
 apps/desktop/src/lib/domain/delegated-work/**
 apps/desktop/src/lib/access/anyharness/cowork.ts
 ```

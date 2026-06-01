@@ -14,7 +14,7 @@ Scope:
 - `apps/desktop/src/hooks/chat/workflows/subagents/**`
 - `apps/desktop/src/hooks/cowork/**`
 - `apps/desktop/src/hooks/reviews/**`
-- `apps/desktop/src/hooks/workspaces/derived/tabs/use-workspace-header-subagent-hierarchy.ts`
+- `apps/desktop/src/hooks/workspaces/cache/tabs/use-workspace-header-subagent-hierarchy.ts`
 - `apps/desktop/src/lib/domain/delegated-work/**`
 - `apps/desktop/src/lib/domain/chat/subagents/**`
 - `apps/desktop/src/lib/domain/reviews/**`
@@ -533,7 +533,7 @@ apps/desktop/src/hooks/chat/workflows/subagents/**
 apps/desktop/src/hooks/cowork/**
 apps/desktop/src/hooks/reviews/**
 apps/desktop/src/hooks/plans/**
-apps/desktop/src/hooks/workspaces/derived/tabs/use-workspace-header-subagent-hierarchy.ts
+apps/desktop/src/hooks/workspaces/cache/tabs/use-workspace-header-subagent-hierarchy.ts
 apps/desktop/src/hooks/workspaces/facade/tabs/use-workspace-header-tabs-view-model.ts
 apps/desktop/src/hooks/workspaces/workflows/tabs/use-header-tabs-close-actions.ts
 ```

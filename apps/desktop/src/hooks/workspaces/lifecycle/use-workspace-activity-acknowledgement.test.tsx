@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   logicalWorkspaces: [] as LogicalWorkspace[],
 }));
 
-vi.mock("@/hooks/ui/use-document-focus-visibility", () => ({
+vi.mock("@/hooks/ui/document/use-document-focus-visibility", () => ({
   isDocumentVisibleAndFocused: () => mocks.focused,
   useDocumentFocusVisibilityNonce: () => mocks.focusVisibilityNonce,
 }));

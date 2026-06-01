@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { selectPrimaryPendingInteraction } from "@anyharness/sdk";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/derived/mobility/use-workspace-mobility-state";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/cache/use-selected-cloud-runtime-state";
+import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   resolveChatInputAvailability,

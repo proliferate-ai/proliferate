@@ -26,7 +26,7 @@ import { useMainScreenState } from "@/hooks/main/facade/use-main-screen-state";
 import { useMainScreenShortcuts } from "@/hooks/main/lifecycle/use-main-screen-shortcuts";
 import { useMainScreenActions } from "@/hooks/main/workflows/use-main-screen-actions";
 import { useTransparentChromeEnabled } from "@/hooks/theme/derived/use-transparent-chrome";
-import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
+import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
 import { useNativeOverlayOpen } from "@proliferate/ui/overlays/overlay-presence";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
 import { useRunWorkspaceCommand } from "@/hooks/workspaces/workflows/use-run-workspace-command";

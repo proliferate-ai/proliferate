@@ -51,7 +51,7 @@ apps/desktop/src/hooks/home/workflows/use-home-next-launch.ts 611 existing deskt
 apps/desktop/src/hooks/sessions/lifecycle/use-session-stream-flush.ts 666 existing desktop hook oversized file
 apps/desktop/src/hooks/sessions/workflows/use-session-creation-actions.ts 765 existing desktop hook oversized file
 apps/desktop/src/hooks/sessions/workflows/use-session-runtime-actions.ts 860 existing desktop hook oversized file
-apps/desktop/src/hooks/workspaces/derived/tabs/use-workspace-header-subagent-hierarchy.ts 643 existing desktop hook oversized file
+apps/desktop/src/hooks/workspaces/cache/tabs/use-workspace-header-subagent-hierarchy.ts 643 existing desktop hook oversized file
 apps/desktop/src/hooks/workspaces/workflows/tabs/use-workspace-shell-activation.ts 671 existing desktop hook oversized file
 apps/desktop/src/hooks/workspaces/workflows/use-workspace-bootstrap-actions.ts 899 existing desktop hook oversized file
 apps/desktop/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 759 existing desktop oversized test file

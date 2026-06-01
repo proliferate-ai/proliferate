@@ -8,7 +8,7 @@ import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/selection/
 import {
   isDocumentVisibleAndFocused,
   useDocumentFocusVisibilityNonce,
-} from "@/hooks/ui/use-document-focus-visibility";
+} from "@/hooks/ui/document/use-document-focus-visibility";
 
 export function useSessionErrorAcknowledgement(): void {
   const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);

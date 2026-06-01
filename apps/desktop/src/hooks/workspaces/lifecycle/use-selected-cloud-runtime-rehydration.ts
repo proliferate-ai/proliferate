@@ -6,7 +6,7 @@ import { logLatency, startLatencyTimer } from "@/lib/infra/measurement/debug-lat
 import { useWorkspaceBootstrapActions } from "@/hooks/workspaces/workflows/use-workspace-bootstrap-actions";
 import { usePendingWorkspaceSessionMaterialization } from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
 import { hasWorkspaceBootstrappedInSession } from "./workspace-bootstrap-memory";
-import type { SelectedCloudRuntimeState } from "@/hooks/workspaces/cache/use-selected-cloud-runtime-state";
+import type { SelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 
 export function useSelectedCloudRuntimeRehydration(
   selectedCloudRuntime: SelectedCloudRuntimeState,
