@@ -13,15 +13,17 @@ import type { AgentAuthProvider, LocalAgentAuthSource } from "@/hooks/access/tau
 import {
   AGENT_AUTH_AGENT_ORDER,
   agentAuthAgentLabel,
+} from "@/lib/domain/agent-auth/agent-auth-agent-presentation";
+import { agentAuthManagedCreditsCapabilityLabel } from "@/lib/domain/agent-auth/agent-auth-gateway-capabilities";
+import {
   agentAuthCredentialAvailability,
   agentAuthCredentialKindLabel,
   agentAuthCredentialOwnerLabel,
   agentAuthCredentialStatusLabel,
   agentAuthCredentialStatusTone,
-  agentAuthManagedCreditsCapabilityLabel,
   credentialSummaryDetails,
   isProliferateManagedCreditsCredential,
-} from "@/lib/domain/agent-auth/agent-auth-presentation";
+} from "@/lib/domain/agent-auth/agent-auth-credential-presentation";
 
 export function AuthenticationMethodsSection({
   capabilities,

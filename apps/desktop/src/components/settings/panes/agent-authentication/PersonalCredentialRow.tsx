@@ -13,7 +13,7 @@ import {
   agentAuthCredentialStatusTone,
   credentialSummaryDetails,
   isProliferateManagedCreditsCredential,
-} from "@/lib/domain/agent-auth/agent-auth-presentation";
+} from "@/lib/domain/agent-auth/agent-auth-credential-presentation";
 import type { PersonalCredentialConfirmationAction } from "@/lib/domain/agent-auth/personal-credential-presentation";
 
 export function PersonalCredentialRow({

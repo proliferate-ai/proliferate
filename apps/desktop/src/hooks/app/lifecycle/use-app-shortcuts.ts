@@ -1,5 +1,5 @@
 import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
-import type { AppCommandActions } from "@/hooks/app/workflows/use-app-command-actions";
+import type { AppCommandActions } from "@/hooks/app/workflows/app-command-action-types";
 import { useSidebarShortcutTargets } from "@/hooks/workspaces/derived/use-sidebar-shortcut-targets";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 import { getFocusZone, isRightPanelFocusZone } from "@/lib/domain/focus-zone";

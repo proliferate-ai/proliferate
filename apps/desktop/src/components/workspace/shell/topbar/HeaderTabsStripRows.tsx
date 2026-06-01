@@ -9,7 +9,7 @@ import {
   TAB_GROUP_PILL_WIDTH,
 } from "@/lib/domain/workspaces/tabs/chrome-layout";
 import type { ManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
-import { SHORTCUTS } from "@/config/shortcuts";
+import { SHORTCUTS } from "@/config/shortcuts/registry";
 import { buildShortcutRangeLabelById } from "@/lib/domain/shortcuts/presentation";
 
 interface HeaderTabsDragControls {

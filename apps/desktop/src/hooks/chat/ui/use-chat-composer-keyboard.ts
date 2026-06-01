@@ -1,6 +1,6 @@
 import { useCallback, type KeyboardEvent } from "react";
 import { getPreviousSessionModeValue } from "@/lib/domain/chat/session-controls/session-mode-control";
-import { COMPOSER_SHORTCUTS } from "@/config/shortcuts";
+import { COMPOSER_SHORTCUTS } from "@/config/shortcuts/composer-shortcuts";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 import {
   isComposerSubmitKey,
