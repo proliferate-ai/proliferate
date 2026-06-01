@@ -84,7 +84,7 @@ vi.mock("@proliferate/ui/layout/SidebarActionButton", () => ({
   ),
 }));
 
-vi.mock("@proliferate/product-ui/sidebar/ProductSidebar", () => ({
+vi.mock("@proliferate/product-ui/sidebar/ProductSidebarRepositories", () => ({
   ProductSidebarRepoGroupHeader: ({ action, label }: {
     action: ReactNode;
     label: string;

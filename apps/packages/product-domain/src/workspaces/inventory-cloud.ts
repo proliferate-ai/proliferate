@@ -1,16 +1,18 @@
 import type { CloudWorkspaceSummary } from "@proliferate/cloud-sdk";
 
 import {
-  cloudWorkStatusForWorkspace,
   recentWorkCloudAccessLabel,
-  recentWorkCloudAccessState,
-  recentWorkCommandability,
   recentWorkCommandabilityLabel,
   recentWorkRuntimeLabel,
-  recentWorkRuntimeLocationForWorkspace,
-  recentWorkSourceForWorkspace,
   recentWorkSourceLabel,
-} from "./cloud-work-inventory";
+} from "./cloud-work-labels";
+import { recentWorkSourceForWorkspace } from "./cloud-work-items";
+import {
+  recentWorkCloudAccessState,
+  recentWorkCommandability,
+  recentWorkRuntimeLocationForWorkspace,
+} from "./cloud-work-runtime";
+import { cloudWorkStatusForWorkspace } from "./cloud-work-status";
 import type {
   WorkspaceInventoryItemView,
   WorkspaceInventoryLocationKind,

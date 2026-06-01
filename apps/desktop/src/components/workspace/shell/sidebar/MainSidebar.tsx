@@ -13,7 +13,7 @@ import {
   ProductSidebarBody,
   ProductSidebarFrame,
   ProductSidebarScrollableContent,
-} from "@proliferate/product-ui/sidebar/ProductSidebar";
+} from "@proliferate/product-ui/sidebar/ProductSidebarLayout";
 import {
   isDefaultSidebarWorkspaceTypes,
 } from "@/lib/domain/workspaces/sidebar/sidebar-workspace-types";

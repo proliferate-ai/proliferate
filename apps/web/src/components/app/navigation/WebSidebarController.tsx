@@ -35,7 +35,7 @@ import type {
   SidebarNavItemView,
   SidebarSectionMessageView,
   SidebarWorkspaceGroupView,
-} from "@proliferate/product-ui/sidebar/ProductSidebar";
+} from "@proliferate/product-ui/sidebar/ProductSidebarModel";
 import { ProductSidebar } from "@proliferate/product-ui/sidebar/ProductSidebar";
 import { RecentWorkStatusDot } from "@proliferate/product-ui/workspaces/RecentWorkStatusDot";
 

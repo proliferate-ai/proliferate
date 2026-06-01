@@ -91,6 +91,10 @@
       "types": "./dist/billing/BillingSettingsPane.d.ts",
       "import": "./dist/billing/BillingSettingsPane.js"
     },
+    "./billing/BillingOwnerCard": {
+      "types": "./dist/billing/BillingOwnerCard.d.ts",
+      "import": "./dist/billing/BillingOwnerCard.js"
+    },
     "./brand/ProliferateMark": {
       "types": "./dist/brand/ProliferateMark.d.ts",
       "import": "./dist/brand/ProliferateMark.js"
@@ -190,6 +194,34 @@
     "./sidebar/ProductSidebar": {
       "types": "./dist/sidebar/ProductSidebar.d.ts",
       "import": "./dist/sidebar/ProductSidebar.js"
+    },
+    "./sidebar/ProductSidebarFooter": {
+      "types": "./dist/sidebar/ProductSidebarFooter.d.ts",
+      "import": "./dist/sidebar/ProductSidebarFooter.js"
+    },
+    "./sidebar/ProductSidebarLayout": {
+      "types": "./dist/sidebar/ProductSidebarLayout.d.ts",
+      "import": "./dist/sidebar/ProductSidebarLayout.js"
+    },
+    "./sidebar/ProductSidebarModel": {
+      "types": "./dist/sidebar/ProductSidebarModel.d.ts",
+      "import": "./dist/sidebar/ProductSidebarModel.js"
+    },
+    "./sidebar/ProductSidebarNavigation": {
+      "types": "./dist/sidebar/ProductSidebarNavigation.d.ts",
+      "import": "./dist/sidebar/ProductSidebarNavigation.js"
+    },
+    "./sidebar/ProductSidebarRepositories": {
+      "types": "./dist/sidebar/ProductSidebarRepositories.d.ts",
+      "import": "./dist/sidebar/ProductSidebarRepositories.js"
+    },
+    "./sidebar/ProductSidebarShowToggleRow": {
+      "types": "./dist/sidebar/ProductSidebarShowToggleRow.d.ts",
+      "import": "./dist/sidebar/ProductSidebarShowToggleRow.js"
+    },
+    "./sidebar/ProductSidebarThreads": {
+      "types": "./dist/sidebar/ProductSidebarThreads.d.ts",
+      "import": "./dist/sidebar/ProductSidebarThreads.js"
     },
     "./new-chat/NewChatSurface": {
       "types": "./dist/new-chat/NewChatSurface.d.ts",

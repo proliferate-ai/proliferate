@@ -5,10 +5,8 @@ import {
   Home,
   LifeBuoy,
 } from "@proliferate/ui/icons";
-import {
-  ProductSidebarPrimaryNavigation,
-  type SidebarNavItemView,
-} from "@proliferate/product-ui/sidebar/ProductSidebar";
+import type { SidebarNavItemView } from "@proliferate/product-ui/sidebar/ProductSidebarModel";
+import { ProductSidebarPrimaryNavigation } from "@proliferate/product-ui/sidebar/ProductSidebarNavigation";
 
 interface SidebarPrimaryNavigationProps {
   homeActive: boolean;
