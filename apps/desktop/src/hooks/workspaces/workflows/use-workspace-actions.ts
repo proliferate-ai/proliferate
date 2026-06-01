@@ -16,7 +16,7 @@ import {
 import {
   collectWorktreeBasenamesForRepo,
   generateWorkspaceSlug,
-} from "@/lib/domain/workspaces/creation/arrival";
+} from "@/lib/domain/workspaces/creation/workspace-slug";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { isCloudWorkspaceId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {

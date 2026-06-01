@@ -11,7 +11,7 @@ import {
 import type {
   CloudRepoEnvVarRow,
   CloudRepoSharedEnvFile,
-} from "@/hooks/cloud/ui/use-cloud-repo-config-draft";
+} from "@/lib/domain/settings/cloud-repo-config-draft";
 
 interface RepoSharedEnvFilesCardProps {
   files: CloudRepoSharedEnvFile[];

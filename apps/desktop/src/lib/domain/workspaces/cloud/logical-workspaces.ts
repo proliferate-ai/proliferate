@@ -3,13 +3,7 @@ import type {
   CloudMobilityWorkspaceSummary,
   CloudWorkspaceSummary,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { cloudWorkspaceUsesCloudRuntime } from "@/lib/domain/workspaces/cloud/cloud-runtime-kind";
 import { isCloudWorkspaceFailedBeforeReady } from "@/lib/domain/workspaces/cloud/cloud-workspace-status";
-import {
-  humanizeBranchName,
-  workspaceCurrentBranchName,
-} from "@/lib/domain/workspaces/creation/branch-naming";
 import {
   cloudWorkspaceGroupKey,
   localWorkspaceGroupKey,
@@ -17,263 +11,32 @@ import {
 } from "@/lib/domain/workspaces/cloud/collections";
 import {
   buildLocalSlotLogicalWorkspaceId,
-  buildPathLogicalWorkspaceId,
   buildRemoteLogicalWorkspaceId,
-  buildRepoRootLogicalWorkspaceId,
   normalizeLogicalWorkspaceBranchKey,
 } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
 import {
   resolvePreferredLogicalWorkspaceMaterialization,
 } from "@/lib/domain/workspaces/cloud/logical-workspace-materialization";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
-import { workspaceDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
-
-function workspaceBranchKey(workspace: Workspace): string {
-  const originalBranch = workspace.originalBranch?.trim();
-  if (originalBranch) {
-    return normalizeLogicalWorkspaceBranchKey(originalBranch);
-  }
-
-  return normalizeLogicalWorkspaceBranchKey(workspaceCurrentBranchName(workspace));
-}
-
-function cloudBranchKey(workspace: CloudWorkspaceSummary): string {
-  return normalizeLogicalWorkspaceBranchKey(workspace.repo.branch);
-}
-
-function remoteRepoKey(
-  provider: string | null | undefined,
-  owner: string | null | undefined,
-  repoName: string | null | undefined,
-): string | null {
-  if (!provider || !owner || !repoName) {
-    return null;
-  }
-
-  return `${provider.trim()}:${owner.trim()}:${repoName.trim()}`;
-}
-
-function resolveLocalWorkspaceRepoRoot(
-  workspace: Workspace,
-  repoRootsById: Map<string, RepoRoot>,
-  repoRootsByRemoteKey: Map<string, RepoRoot>,
-): RepoRoot | null {
-  if (workspace.repoRootId) {
-    const repoRoot = repoRootsById.get(workspace.repoRootId);
-    if (repoRoot) {
-      return repoRoot;
-    }
-  }
-
-  const workspaceRemoteKey = remoteRepoKey(
-    workspace.gitProvider,
-    workspace.gitOwner,
-    workspace.gitRepoName,
-  );
-  return workspaceRemoteKey ? repoRootsByRemoteKey.get(workspaceRemoteKey) ?? null : null;
-}
-
-function buildBaseLogicalWorkspaceIdForLocalWorkspace(
-  workspace: Workspace,
-  repoRoot: RepoRoot | null,
-): string {
-  if (repoRoot?.remoteProvider && repoRoot.remoteOwner && repoRoot.remoteRepoName) {
-    return buildRemoteLogicalWorkspaceId(
-      repoRoot.remoteProvider,
-      repoRoot.remoteOwner,
-      repoRoot.remoteRepoName,
-      workspaceBranchKey(workspace),
-    );
-  }
-
-  if (workspace.gitProvider && workspace.gitOwner && workspace.gitRepoName) {
-    return buildRemoteLogicalWorkspaceId(
-      workspace.gitProvider,
-      workspace.gitOwner,
-      workspace.gitRepoName,
-      workspaceBranchKey(workspace),
-    );
-  }
-
-  if (workspace.repoRootId) {
-    return buildRepoRootLogicalWorkspaceId(workspace.repoRootId, workspaceBranchKey(workspace));
-  }
-
-  return buildPathLogicalWorkspaceId(
-    workspace.sourceRepoRootPath ?? workspace.path,
-    workspaceBranchKey(workspace),
-  );
-}
-
-function compareLocalWorkspaceCanonicalOrder(left: Workspace, right: Workspace): number {
-  const byCreatedAt = new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
-  if (byCreatedAt !== 0) {
-    return byCreatedAt;
-  }
-  return left.id.localeCompare(right.id);
-}
-
-function buildLogicalWorkspaceIdForCloudWorkspace(workspace: CloudWorkspaceSummary): string {
-  return buildRemoteLogicalWorkspaceId(
-    workspace.repo.provider,
-    workspace.repo.owner,
-    workspace.repo.name,
-    cloudBranchKey(workspace),
-  );
-}
-
-function cloudWorkspaceMatchesSelection(
-  workspace: CloudWorkspaceSummary,
-  logicalId: string,
-  currentSelectionId: string | null | undefined,
-): boolean {
-  return currentSelectionId === logicalId
-    || currentSelectionId === cloudWorkspaceSyntheticId(workspace.id);
-}
-
-function cloudWorkspaceSelectedByMaterialization(
-  workspace: CloudWorkspaceSummary,
-  currentSelectionId: string | null | undefined,
-): boolean {
-  return currentSelectionId === cloudWorkspaceSyntheticId(workspace.id);
-}
-
-function cloudWorkspaceIsArchived(workspace: CloudWorkspaceSummary): boolean {
-  return workspace.productLifecycle === "archived"
-    || workspace.status === "archived"
-    || workspace.workspaceStatus === "archived";
-}
-
-function cloudWorkspaceTimestamp(workspace: CloudWorkspaceSummary): number {
-  return new Date(workspace.updatedAt ?? workspace.createdAt ?? "").getTime() || 0;
-}
-
-function preferCloudWorkspaceForLogicalSlot(
-  current: CloudWorkspaceSummary | null,
-  candidate: CloudWorkspaceSummary,
-  currentSelectionId: string | null | undefined,
-): CloudWorkspaceSummary {
-  if (!current) {
-    return candidate;
-  }
-
-  const candidateSelected = cloudWorkspaceSelectedByMaterialization(candidate, currentSelectionId);
-  const currentSelected = cloudWorkspaceSelectedByMaterialization(current, currentSelectionId);
-  if (candidateSelected !== currentSelected) {
-    return candidateSelected ? candidate : current;
-  }
-
-  const candidateArchived = cloudWorkspaceIsArchived(candidate);
-  const currentArchived = cloudWorkspaceIsArchived(current);
-  if (candidateArchived !== currentArchived) {
-    return candidateArchived ? current : candidate;
-  }
-
-  return cloudWorkspaceTimestamp(candidate) >= cloudWorkspaceTimestamp(current)
-    ? candidate
-    : current;
-}
-
-function localDefaultDisplayName(workspace: Workspace): string {
-  return workspaceDisplayName(workspace);
-}
-
-function cloudDefaultDisplayName(workspace: CloudWorkspaceSummary): string {
-  const override = workspace.displayName?.trim();
-  if (override) {
-    return override;
-  }
-
-  return workspace.repo.branch?.trim()
-    ? humanizeBranchName(workspace.repo.branch)
-    : workspace.repo.name;
-}
-
-function mobilityDefaultDisplayName(workspace: CloudMobilityWorkspaceSummary): string {
-  const override = workspace.displayName?.trim();
-  if (override) {
-    return override;
-  }
-
-  return workspace.repo.branch?.trim()
-    ? humanizeBranchName(workspace.repo.branch)
-    : workspace.repo.name;
-}
-
-function latestUpdatedAt(
-  localWorkspace: Workspace | null,
-  cloudWorkspace: CloudWorkspaceSummary | null,
-  mobilityWorkspace: CloudMobilityWorkspaceSummary | null,
-): string {
-  const localUpdatedAt = localWorkspace?.updatedAt ?? "";
-  const cloudUpdatedAt = cloudWorkspace?.updatedAt ?? cloudWorkspace?.createdAt ?? "";
-  const mobilityUpdatedAt = mobilityWorkspace?.updatedAt ?? mobilityWorkspace?.createdAt ?? "";
-  return [localUpdatedAt, cloudUpdatedAt, mobilityUpdatedAt]
-    .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] ?? "";
-}
-
-function inferLifecycle(
-  localWorkspace: Workspace | null,
-  cloudWorkspace: CloudWorkspaceSummary | null,
-  mobilityWorkspace: CloudMobilityWorkspaceSummary | null,
-  owner: "local" | "cloud",
-): LogicalWorkspace["lifecycle"] {
-  const mobilityLifecycle = mobilityWorkspace?.lifecycleState;
-  if (
-    mobilityLifecycle === "local_active"
-    || mobilityLifecycle === "moving_to_cloud"
-    || mobilityLifecycle === "cloud_active"
-    || mobilityLifecycle === "shared_cloud_active"
-    || mobilityLifecycle === "ssh_active"
-    || mobilityLifecycle === "moving_to_local"
-    || mobilityLifecycle === "handoff_failed"
-    || mobilityLifecycle === "cleanup_failed"
-    || mobilityLifecycle === "repair_required"
-    || mobilityLifecycle === "cloud_lost"
-  ) {
-    return mobilityLifecycle;
-  }
-
-  if (mobilityWorkspace?.lastError) {
-    return "handoff_failed";
-  }
-
-  if (owner === "cloud") {
-    return "cloud_active";
-  }
-
-  if (localWorkspace || cloudWorkspace) {
-    return "local_active";
-  }
-
-  return "handoff_failed";
-}
-
-function effectiveOwnerFromMobilityOwner(
-  owner: string | null | undefined,
-): "local" | "cloud" | null {
-  switch (owner) {
-    case "local":
-      return "local";
-    case "cloud":
-    case "personal_cloud":
-    case "shared_cloud":
-    case "ssh":
-      return "cloud";
-    default:
-      return null;
-  }
-}
-
-function effectiveOwnerHintForWorkspace(
-  mobilityOwner: string | null | undefined,
-  cloudWorkspace: CloudWorkspaceSummary | null,
-): "local" | "cloud" | null {
-  if (cloudWorkspace && !cloudWorkspaceUsesCloudRuntime(cloudWorkspace)) {
-    return null;
-  }
-  return effectiveOwnerFromMobilityOwner(mobilityOwner);
-}
+import {
+  buildBaseLogicalWorkspaceIdForLocalWorkspace,
+  buildLogicalWorkspaceIdForCloudWorkspace,
+  cloudBranchKey,
+  compareLocalWorkspaceCanonicalOrder,
+  remoteRepoKey,
+  resolveLocalWorkspaceRepoRoot,
+  workspaceBranchKey,
+} from "@/lib/domain/workspaces/cloud/logical-workspace-source";
+import {
+  cloudDefaultDisplayName,
+  cloudWorkspaceMatchesSelection,
+  effectiveOwnerHintForWorkspace,
+  inferLifecycle,
+  latestUpdatedAt,
+  localDefaultDisplayName,
+  mobilityDefaultDisplayName,
+  preferCloudWorkspaceForLogicalSlot,
+} from "@/lib/domain/workspaces/cloud/logical-workspace-slot";
 
 export function buildLogicalWorkspaces(args: {
   localWorkspaces: Workspace[];
