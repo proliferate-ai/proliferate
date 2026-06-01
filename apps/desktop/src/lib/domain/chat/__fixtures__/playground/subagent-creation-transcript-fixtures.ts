@@ -11,6 +11,7 @@ const singleCreationItem = subagentCreationFixture(
   "Runtime Survey",
   "Inspect the runtime server SDK path and report API mismatches.",
   1,
+  "turn-subagent-creation-single",
 );
 
 export const PLAYGROUND_SUBAGENT_CREATION_SINGLE_TRANSCRIPT: TranscriptState = {
@@ -33,10 +34,7 @@ export const PLAYGROUND_SUBAGENT_CREATION_SINGLE_TRANSCRIPT: TranscriptState = {
     },
   },
   itemsById: {
-    [singleCreationItem.itemId]: {
-      ...singleCreationItem,
-      turnId: "turn-subagent-creation-single",
-    },
+    [singleCreationItem.itemId]: singleCreationItem,
   },
   openAssistantItemId: null,
   openThoughtItemId: null,
@@ -93,11 +91,12 @@ function subagentCreationFixture(
   label: string,
   prompt: string,
   seq: number,
+  turnId = "turn-subagent-creations",
 ) {
   return toolCallItem({
     itemId,
     toolCallId: itemId,
-    turnId: "turn-subagent-creations",
+    turnId,
     title: "mcp__subagents__create_subagent",
     nativeToolName: "mcp__subagents__create_subagent",
     semanticKind: "subagent",
