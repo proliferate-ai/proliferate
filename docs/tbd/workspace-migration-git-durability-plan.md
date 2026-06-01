@@ -178,9 +178,11 @@ unrelated `origin`.
 
 - Cloud-to-local destination preparation ultimately adds a worktree for an exact
   ref and can fail if the local repo has not fetched the cloud-pushed commit
-  yet (`anyharness/crates/anyharness-lib/src/workspaces/resolver.rs:220`).
-- If a branch already exists locally, the current worktree path can reset it to
-  the requested ref (`anyharness/crates/anyharness-lib/src/workspaces/runtime.rs:356`).
+  yet
+  (`anyharness/crates/anyharness-lib/src/adapters/git/operations/worktrees.rs`).
+- If a branch already exists locally, the mobility-destination workflow can
+  advance it to the requested ref
+  (`anyharness/crates/anyharness-lib/src/workspaces/runtime/mobility.rs`).
 
 Implication: cloud-to-local needs a destination Git safety phase before
 `prepare-destination`: fetch the requested branch/SHA, verify reachability,
@@ -633,7 +635,8 @@ Likely files:
 - `anyharness/crates/anyharness-lib/src/domains/mobility/service.rs`
 - `anyharness/crates/anyharness-lib/src/domains/mobility/workspace_delta.rs`
 - `anyharness/crates/anyharness-lib/src/workspaces/resolver.rs`
-- `anyharness/crates/anyharness-lib/src/workspaces/runtime.rs`
+- `anyharness/crates/anyharness-lib/src/workspaces/runtime/mobility.rs`
+- `anyharness/crates/anyharness-lib/src/adapters/git/operations/worktrees.rs`
 - `server/proliferate/server/cloud/mobility/models.py`
 - `server/proliferate/server/cloud/mobility/service.py`
 - `server/proliferate/server/cloud/mobility/domain/lifecycle.py`

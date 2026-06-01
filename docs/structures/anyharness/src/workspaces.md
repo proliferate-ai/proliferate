@@ -29,9 +29,14 @@ The workspaces area owns:
 Core model and runtime files:
 
 - `anyharness/crates/anyharness-lib/src/workspaces/model.rs`
-- `anyharness/crates/anyharness-lib/src/workspaces/runtime.rs`
-- `anyharness/crates/anyharness-lib/src/workspaces/service.rs`
-- `anyharness/crates/anyharness-lib/src/workspaces/store.rs`
+- `anyharness/crates/anyharness-lib/src/workspaces/runtime/mod.rs` with
+  workflow files for identity, worktree creation, materialization, lifecycle,
+  env, access, repo metadata, and mobility-destination preparation
+- `anyharness/crates/anyharness-lib/src/workspaces/service/mod.rs` with
+  durable rule files for identity, worktree registration, metadata, env, and
+  record construction
+- `anyharness/crates/anyharness-lib/src/workspaces/store/mod.rs` with SQL split
+  into lookups, listings, mutations, and row mapping
 - `anyharness/crates/anyharness-lib/src/workspaces/resolver.rs`
 
 ### `WorkspaceRecord` (`anyharness/crates/anyharness-lib/src/workspaces/model.rs`)
@@ -80,7 +85,7 @@ This is the bridge from raw filesystem path to durable workspace record.
 ### Resolve From Path
 
 `resolve_from_path(...)`
-(`anyharness/crates/anyharness-lib/src/workspaces/runtime.rs`)
+(`anyharness/crates/anyharness-lib/src/workspaces/runtime/identity.rs`)
 is the idempotent lookup-or-create path.
 
 It:
@@ -107,7 +112,7 @@ workspace rows.
 ### Create Workspace
 
 `create_workspace(...)`
-(`anyharness/crates/anyharness-lib/src/workspaces/runtime.rs`)
+(`anyharness/crates/anyharness-lib/src/workspaces/runtime/identity.rs`)
 is the explicit create path.
 
 For `kind=local`, create is intentionally non-idempotent by path: creating a
@@ -123,7 +128,7 @@ retired cleanup for the same worktree path still block creation.
 ### Create Worktree
 
 `create_worktree(...)`
-(`anyharness/crates/anyharness-lib/src/workspaces/runtime.rs`):
+(`anyharness/crates/anyharness-lib/src/workspaces/runtime/worktrees.rs`):
 
 1. loads the repo root and requires it to resolve to a managed repo path
 2. runs `git worktree add -b ...`
@@ -144,7 +149,7 @@ path and accepting only matching worktree identity.
 ### Workspace Environment
 
 `workspace_env(...)`
-(`anyharness/crates/anyharness-lib/src/workspaces/runtime.rs`)
+(`anyharness/crates/anyharness-lib/src/workspaces/runtime/env.rs`)
 derives the runtime env for workspace-scoped operations from the durable
 workspace row plus its owning repo root.
 
@@ -167,10 +172,11 @@ launch env.
 The underlying git-context and worktree helpers live in:
 
 - `anyharness/crates/anyharness-lib/src/workspaces/resolver.rs`
+- `anyharness/crates/anyharness-lib/src/adapters/git/operations/worktrees.rs`
 
 The durable workspace rows are loaded and stored through:
 
-- `anyharness/crates/anyharness-lib/src/workspaces/store.rs`
+- `anyharness/crates/anyharness-lib/src/workspaces/store/**`
 
 ## Boundaries
 
