@@ -19,7 +19,7 @@ import { useInvalidateCloudBillingState } from "@/hooks/access/cloud/use-cloud-b
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getWorkspaceSessionRecords } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
+import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import {

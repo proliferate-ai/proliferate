@@ -26,7 +26,7 @@ import type {
 } from "@/lib/domain/automations/run/ui-records";
 import type { AutomationOwnerScope } from "@/lib/domain/automations/run/types";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
+import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-activation-workflow";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import {

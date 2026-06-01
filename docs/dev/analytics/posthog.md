@@ -108,7 +108,7 @@ Server/cloud API PostHog is not configured.
   - code path:
     - `apps/mobile/src/App.tsx`
     - `apps/mobile/src/providers/MobileTelemetryProvider.tsx`
-    - `apps/mobile/src/hooks/telemetry/use-mobile-screen-telemetry.ts`
+    - `apps/mobile/src/hooks/telemetry/lifecycle/use-mobile-screen-telemetry.ts`
     - `apps/mobile/src/lib/integrations/telemetry/config.ts`
     - `apps/mobile/src/lib/integrations/telemetry/posthog.ts`
   - sends:
@@ -191,7 +191,7 @@ No server PostHog env vars exist in the current implementation.
 - Mobile PostHog adapter and provider:
   - `apps/mobile/src/lib/integrations/telemetry/posthog.ts`
   - `apps/mobile/src/providers/MobileTelemetryProvider.tsx`
-  - `apps/mobile/src/hooks/telemetry/use-mobile-screen-telemetry.ts`
+  - `apps/mobile/src/hooks/telemetry/lifecycle/use-mobile-screen-telemetry.ts`
 - Exact desktop product events currently captured:
   - `chat_session_created`
   - `chat_prompt_submitted`

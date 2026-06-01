@@ -5,7 +5,7 @@ import type {
 } from "@anyharness/sdk";
 import { useState } from "react";
 import { useActivePendingInteractionState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
-import { useChatMcpElicitationActions } from "@/hooks/chat/use-chat-mcp-elicitation-actions";
+import { useChatMcpElicitationActions } from "@/hooks/chat/workflows/use-chat-mcp-elicitation-actions";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
 import { McpElicitationFormPanel } from "./McpElicitationFormPanel";
 import {

@@ -85,7 +85,7 @@ vi.mock("@/hooks/workspaces/derived/use-standard-repo-projection", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/use-workspace-entry-actions", () => ({
+vi.mock("@/hooks/workspaces/workflows/use-workspace-entry-actions", () => ({
   useWorkspaceEntryActions: () => ({
     createLocalWorkspaceAndEnter: hookMocks.createLocalWorkspaceAndEnter,
     isCreatingLocalWorkspace: false,

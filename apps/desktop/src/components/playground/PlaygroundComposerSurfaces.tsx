@@ -13,7 +13,7 @@ import {
 } from "@/config/chat";
 import type { ScenarioKey } from "@/config/playground";
 import { useComposerTextareaAutosize } from "@/hooks/chat/ui/use-composer-textarea-autosize";
-import type { PlaygroundReplayState } from "@/hooks/playground/use-replay-session";
+import type { PlaygroundReplayState } from "@/hooks/playground/lifecycle/use-replay-session";
 import {
   createPlaygroundModelSelectorProps,
   createPlaygroundSessionConfigControls,

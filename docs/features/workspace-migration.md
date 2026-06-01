@@ -300,7 +300,7 @@ NOT in archive: MCP bindings, agent auth, runtime config caches,
 explicitly dropped on import; sessions rebind MCP after handoff
 via spec 01 runtime config.
 
-**Desktop UI** (`apps/desktop/src/hooks/workspaces/mobility/` (15 files)
+**Desktop UI** (`apps/desktop/src/hooks/workspaces/{derived,lifecycle,ui,workflows}/mobility/`
 + `apps/desktop/src/lib/domain/workspaces/mobility/` (11 files)):
 
 ```text
@@ -962,7 +962,7 @@ apps/desktop/src/components/mobility/WorkspaceMobilityOverlay.tsx
   + handle repair_required state with explicit buttons
 apps/desktop/src/components/mobility/PerItemCleanupStatus.tsx       (new)
 
-apps/desktop/src/hooks/workspaces/mobility/
+apps/desktop/src/hooks/workspaces/workflows/mobility/
   use-start-handoff.ts                            extend with direction
   use-execute-cleanup-items.ts                    (new) drives per-item
   use-mobility-repair.ts                          (new)
@@ -1156,9 +1156,9 @@ apps/desktop/src/components/mobility/MigrationEditorModal.test.tsx
   - destination exposure intent radio respects direction
 apps/desktop/src/lib/domain/workspaces/mobility/cleanup-item-runner.test.ts
   - per-item execution + status reporting
-apps/desktop/src/hooks/workspaces/mobility/use-execute-cleanup-items.test.ts
-apps/desktop/src/hooks/workspaces/mobility/use-mobility-repair.test.ts
-apps/desktop/src/hooks/workspaces/mobility/use-shared-source-direct-attach.test.ts
+apps/desktop/src/hooks/workspaces/workflows/mobility/use-execute-cleanup-items.test.ts
+apps/desktop/src/hooks/workspaces/workflows/mobility/use-mobility-repair.test.ts
+apps/desktop/src/hooks/workspaces/workflows/mobility/use-shared-source-direct-attach.test.ts
 apps/desktop/src/components/workspace/shell/sidebar/use-workspace-sidebar-native-context-menu.test.ts
   - "Move to another target..." visibility gates
 ```

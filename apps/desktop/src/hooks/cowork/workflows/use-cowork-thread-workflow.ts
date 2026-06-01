@@ -24,9 +24,9 @@ import {
   startLatencyTimer,
 } from "@/lib/infra/measurement/debug-latency";
 import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
-import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
-import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
-import { useWorkspaceEntryFlow } from "@/hooks/workspaces/use-workspace-entry-flow";
+import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
+import { useWorkspaceFileActions } from "@/hooks/workspaces/facade/files/use-workspace-file-actions";
+import { useWorkspaceEntryFlow } from "@/hooks/workspaces/workflows/use-workspace-entry-flow";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useCloudLaunchModelRegistries } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";

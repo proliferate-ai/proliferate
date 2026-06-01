@@ -7,7 +7,7 @@ import {
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { renderContentSearchMarkedToken } from "@/components/content/ui/search/ContentSearchMarks";
-import { useHighlightedLines } from "@/hooks/ui/use-highlighted-lines";
+import { useHighlightedLines } from "@/hooks/ui/highlighting/use-highlighted-lines";
 import {
   buildContentSearchLineMatchIds,
   findContentSearchTokenMatchSegments,

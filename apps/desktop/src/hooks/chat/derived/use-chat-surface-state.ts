@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
+import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import {
   resolveChatSurfaceState,
   type ChatSurfaceState,

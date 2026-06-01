@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { APP_ROUTES } from "@/config/app-routes";
 import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
-import { clearWorkspaceRuntimeState } from "@/hooks/workspaces/selection/clear-runtime-state";
+import { clearWorkspaceRuntimeState } from "@/hooks/workspaces/workflows/selection/clear-runtime-state";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";

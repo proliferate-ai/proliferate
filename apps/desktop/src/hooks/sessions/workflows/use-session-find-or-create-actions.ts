@@ -14,7 +14,7 @@ import {
   sessionSlotBelongsToWorkspace,
 } from "@proliferate/product-domain/sessions/activity";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
+import { writeChatShellIntentForSession } from "@/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
 import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/workflows/session-shell-selection";
 import {
   getSessionRecords,

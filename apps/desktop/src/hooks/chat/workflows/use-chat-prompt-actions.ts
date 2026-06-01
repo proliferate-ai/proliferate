@@ -5,8 +5,8 @@ import {
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
 import { useWorkspaceSetupStatusCache } from "@/hooks/access/anyharness/workspaces/use-workspace-setup-status-cache";
-import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
-import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
+import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
+import { useSessionRuntimeActions } from "@/hooks/sessions/workflows/use-session-runtime-actions";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session-prompt-workflow";
 import { useSessionCancelActions } from "@/hooks/sessions/workflows/use-session-cancel-actions";
 import { useSessionFindOrCreateActions } from "@/hooks/sessions/workflows/use-session-find-or-create-actions";
@@ -32,7 +32,7 @@ import {
 import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
 import { createPendingSessionId } from "@/lib/workflows/sessions/session-runtime";
-import { writeChatShellIntentForSession } from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
+import { writeChatShellIntentForSession } from "@/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
 import { hasPromptContent } from "@/lib/domain/chat/composer/prompt-input";
 import type { PromptAttachmentSnapshot } from "@proliferate/product-domain/chats/composer/prompt-attachment-snapshot";

@@ -24,7 +24,7 @@ vi.mock("react", () => ({
   useCallback: <T extends (...args: never[]) => unknown>(callback: T) => callback,
 }));
 
-vi.mock("@/hooks/sessions/use-session-creation-actions", () => ({
+vi.mock("@/hooks/sessions/workflows/use-session-creation-actions", () => ({
   useSessionCreationActions: () => ({
     createEmptySessionWithResolvedConfig: mocks.createEmptySessionWithResolvedConfig,
   }),

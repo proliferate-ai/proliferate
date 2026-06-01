@@ -3,7 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import { CHAT_MODEL_SELECTOR_LABELS } from "@/copy/chat/chat-copy";
 import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
+import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { getPendingSessionConfigChange } from "@proliferate/product-domain/sessions/pending-config";
 import {
   resolveMatchingModelControlLabel,
@@ -13,7 +13,7 @@ import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-s
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
-import { useChatLaunchActions } from "@/hooks/chat/use-chat-launch-actions";
+import { useChatLaunchActions } from "@/hooks/chat/workflows/use-chat-launch-actions";
 import { useChatLaunchCatalog } from "@/hooks/chat/derived/use-chat-launch-catalog";
 import { useChatLaunchControlActions } from "@/hooks/chat/workflows/use-chat-launch-control-actions";
 import { buildLaunchControlDescriptors } from "@/lib/domain/chat/models/launch-control-descriptors";

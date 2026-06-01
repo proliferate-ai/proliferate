@@ -3,8 +3,8 @@ import type { SessionActivationOutcome } from "@/hooks/sessions/workflows/sessio
 import {
   type SelectSessionOptionsWithoutGuard,
   useWorkspaceShellActivation,
-} from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
-import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
+} from "@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
+import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 export type OpenWorkspaceSessionResult =

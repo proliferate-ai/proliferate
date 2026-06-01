@@ -1,12 +1,12 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { useActiveTranscriptPaneState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
-import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
+import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
 import { MessageList } from "@/components/workspace/chat/transcript/MessageList";
 import { ConnectedPlanHandoffDialog } from "@/components/workspace/chat/plans/ConnectedPlanHandoffDialog";
 import { usePlanHandoffDialogState } from "@/hooks/plans/ui/use-plan-handoff-dialog-state";
 import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";
-import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
+import { useWorkspaceShellActivation } from "@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
 import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-activation-workflow";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useCoworkManagedWorkspaces } from "@/hooks/access/anyharness/cowork/use-cowork-managed-workspaces";

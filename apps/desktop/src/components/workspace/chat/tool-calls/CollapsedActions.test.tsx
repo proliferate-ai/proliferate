@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { toolItem } from "@proliferate/product-domain/chats/transcript/transcript-presentation-test-fixtures";
 import { CollapsedActions, InlineToolActions } from "./CollapsedActions";
 
-vi.mock("@/hooks/workspaces/files/use-file-reference-actions", () => ({
+vi.mock("@/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
   useFileReferenceActions: ({ rawPath }: { rawPath: string }) => ({
     reference: {
       rawPath,

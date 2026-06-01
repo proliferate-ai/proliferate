@@ -51,7 +51,7 @@ the presentation table.
 Cowork uses that preference verbatim when creating threads
 (`apps/desktop/src/hooks/cowork/workflows/use-cowork-thread-workflow.ts`), and
 session creation reads the same preference directly from the store
-(`apps/desktop/src/hooks/sessions/use-session-creation-actions.ts`).
+(`apps/desktop/src/hooks/sessions/workflows/use-session-creation-actions.ts`).
 
 Registered agent kinds come from
 `anyharness/crates/anyharness-lib/src/domains/agents/model.rs`: `claude`,

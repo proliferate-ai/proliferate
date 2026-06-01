@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
+import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 
 export function useWorkspaceRuntimeBlock() {
   const selectedCloudRuntime = useSelectedCloudRuntimeState();

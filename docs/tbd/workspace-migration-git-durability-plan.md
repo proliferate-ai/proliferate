@@ -224,18 +224,18 @@ than duplicating commit/push behavior inside mobility code.
   (`apps/desktop/src/lib/domain/workspaces/mobility/mobility-prompt.ts:30`).
 - Footer prompt handling maps publish/push actions to `syncBranchForCloudMove`,
   which only pushes and reruns preparation
-  (`apps/desktop/src/hooks/workspaces/mobility/use-workspace-mobility-footer-flow.ts:349`).
+  (`apps/desktop/src/hooks/workspaces/ui/mobility/use-workspace-mobility-footer-flow.ts:349`).
 - `syncBranchForCloudMove` uses `usePushGitMutation` against the local workspace
   only and does not commit dirty work
-  (`apps/desktop/src/hooks/workspaces/mobility/use-workspace-mobility-handoff-actions.ts:184`).
+  (`apps/desktop/src/hooks/workspaces/workflows/mobility/use-workspace-mobility-handoff-actions.ts:184`).
 - Current mobility prompt state and branch sync are local-workspace biased; they
   do not yet bind Git status/stage/commit/push to the selected source runtime
   for cloud-to-local moves.
 - Local-to-cloud preparation already ensures a mobility row, runs source
   AnyHarness preflight, runs cloud preflight, and stores a confirm snapshot
-  (`apps/desktop/src/hooks/workspaces/mobility/use-local-to-cloud-handoff.ts:112`).
+  (`apps/desktop/src/hooks/workspaces/workflows/mobility/use-local-to-cloud-handoff.ts:112`).
 - Cloud-to-local preparation follows the same shape
-  (`apps/desktop/src/hooks/workspaces/mobility/use-cloud-to-local-handoff.ts:115`).
+  (`apps/desktop/src/hooks/workspaces/workflows/mobility/use-cloud-to-local-handoff.ts:115`).
 - `WorkspaceMobilityUiStore` stores confirm snapshots and active prompt request
   ids, but not a pending Git-prep intent
   (`apps/desktop/src/stores/workspaces/workspace-mobility-ui-store.ts:4`).
@@ -306,7 +306,7 @@ query error.
   cloud workspace error state rather than a durable typed handoff failure.
 - The desktop waiter currently reports a generic timeout if the cloud workspace
   never reaches ready
-  (`apps/desktop/src/hooks/workspaces/mobility/use-cloud-workspace-readiness-waiter.ts:8`).
+  (`apps/desktop/src/hooks/workspaces/workflows/mobility/use-cloud-workspace-readiness-waiter.ts:8`).
 
 Implication: server preflight and start should stay strict, typed, and
 idempotent. They should validate branch and requested head for every
@@ -715,9 +715,9 @@ Likely files:
 - `apps/desktop/src/lib/domain/workspaces/mobility/presentation.ts`
 - `apps/desktop/src/lib/domain/workspaces/mobility/mobility-prompt.ts`
 - `apps/desktop/src/lib/domain/workspaces/mobility/mobility-warnings.ts`
-- `apps/desktop/src/hooks/workspaces/mobility/use-workspace-mobility-state.ts`
-- `apps/desktop/src/hooks/workspaces/mobility/use-workspace-mobility-handoff-actions.ts`
-- `apps/desktop/src/hooks/workspaces/mobility/use-workspace-mobility-footer-flow.ts`
+- `apps/desktop/src/hooks/workspaces/derived/mobility/use-workspace-mobility-state.ts`
+- `apps/desktop/src/hooks/workspaces/workflows/mobility/use-workspace-mobility-handoff-actions.ts`
+- `apps/desktop/src/hooks/workspaces/ui/mobility/use-workspace-mobility-footer-flow.ts`
 - `apps/desktop/src/stores/workspaces/workspace-mobility-ui-store.ts`
 - `apps/desktop/src/components/workspace/chat/input/WorkspaceMobilityLocationPopover.tsx`
 - a new component under the existing workspace/chat surface, for example
@@ -759,9 +759,9 @@ Plan:
 
 Likely files:
 
-- `apps/desktop/src/hooks/workspaces/mobility/use-local-to-cloud-handoff.ts`
-- `apps/desktop/src/hooks/workspaces/mobility/use-cloud-to-local-handoff.ts`
-- `apps/desktop/src/hooks/workspaces/mobility/use-workspace-mobility-handoff-actions.ts`
+- `apps/desktop/src/hooks/workspaces/workflows/mobility/use-local-to-cloud-handoff.ts`
+- `apps/desktop/src/hooks/workspaces/workflows/mobility/use-cloud-to-local-handoff.ts`
+- `apps/desktop/src/hooks/workspaces/workflows/mobility/use-workspace-mobility-handoff-actions.ts`
 
 Plan:
 

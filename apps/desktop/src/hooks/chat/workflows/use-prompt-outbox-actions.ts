@@ -5,7 +5,7 @@ import {
   canDismissPromptOutboxEntry,
   canRetryPromptOutboxEntry,
 } from "@proliferate/product-domain/sessions/intents/session-intent-actions";
-import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
+import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 

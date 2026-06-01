@@ -30,7 +30,7 @@ import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import { fetchSessionHistory } from "@/lib/workflows/sessions/session-runtime";
 import { activityFromTranscript } from "@/lib/domain/sessions/directory/directory-activity";
-import { useLinkedSessionMounting } from "@/hooks/chat/subagents/use-linked-session-mounting";
+import { useLinkedSessionMounting } from "@/hooks/chat/workflows/subagents/use-linked-session-mounting";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";

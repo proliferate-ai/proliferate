@@ -35,7 +35,7 @@ vi.mock("@anyharness/sdk-react", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/files/use-workspace-file-actions", () => ({
+vi.mock("@/hooks/workspaces/facade/files/use-workspace-file-actions", () => ({
   useWorkspaceFileActions: () => ({
     openFile: vi.fn(),
     openFileDiff: vi.fn(),
@@ -43,7 +43,7 @@ vi.mock("@/hooks/workspaces/files/use-workspace-file-actions", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/files/derived/use-workspace-file-context", () => ({
+vi.mock("@/hooks/workspaces/derived/files/use-workspace-file-context", () => ({
   useWorkspaceFileContext: () => ({
     workspaceUiKey: "workspace-1",
     materializedWorkspaceId: "workspace-1",

@@ -3,7 +3,7 @@ import {
   buildPendingWorkspaceUiKey,
   type PendingWorkspaceEntry,
 } from "@/lib/domain/workspaces/creation/pending-entry";
-import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
+import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
 import {
   getWorkspaceSessionRecords,
   patchSessionRecord,

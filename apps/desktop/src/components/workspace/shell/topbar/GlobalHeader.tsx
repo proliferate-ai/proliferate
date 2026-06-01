@@ -20,7 +20,7 @@ import {
   SplitPanel,
 } from "@proliferate/ui/icons";
 import type { Workspace } from "@anyharness/sdk";
-import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
+import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
 import { workspaceHeaderTitle } from "@/lib/domain/workspaces/display/workspace-display";
 
 const HEADER_ICON_BUTTON_CLASS =

@@ -4,7 +4,7 @@ import { resolveSessionSidebarActivityState } from "@proliferate/product-domain/
 import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
+import { useSessionRuntimeActions } from "@/hooks/sessions/workflows/use-session-runtime-actions";
 import { isHotSessionClientId } from "@/lib/workflows/sessions/hot-session-ingest-manager";
 
 const ACTIVITY_RECONCILE_DELAY_MS = 5_000;

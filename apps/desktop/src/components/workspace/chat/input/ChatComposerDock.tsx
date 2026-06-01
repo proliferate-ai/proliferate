@@ -6,7 +6,7 @@ import {
   CHAT_DOCK_LOWER_BACKDROP_FADE_HEIGHT_PX,
   CHAT_SURFACE_GUTTER_CLASSNAME,
 } from "@/config/chat-layout";
-import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
+import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
 
 interface ChatComposerDockProps extends HTMLAttributes<HTMLDivElement> {
   backdrop?: boolean;

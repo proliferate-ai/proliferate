@@ -32,8 +32,8 @@ import {
 } from "./drawer/MobileDrawer";
 import { MobileTopBar } from "../primitives/MobileTopBar";
 import { MobileWorkspacesScreen } from "../work/MobileAllWorkScreen";
-import { useMobileClientDailyActivity } from "../../hooks/telemetry/use-mobile-client-daily-activity";
-import { useMobileScreenTelemetry } from "../../hooks/telemetry/use-mobile-screen-telemetry";
+import { useMobileClientDailyActivity } from "../../hooks/telemetry/lifecycle/use-mobile-client-daily-activity";
+import { useMobileScreenTelemetry } from "../../hooks/telemetry/lifecycle/use-mobile-screen-telemetry";
 import {
   deleteMobileStorageItem,
   getMobileStorageItem,

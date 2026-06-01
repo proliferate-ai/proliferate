@@ -14,7 +14,7 @@ import { renderAttachedSlot } from "@/components/playground/composer-slots/Playg
 import { renderOutboundSlot } from "@/components/playground/composer-slots/PlaygroundOutboundSlotFixtures";
 import type { PlaygroundScenarioSelection } from "@/config/playground";
 import { useComposerDockSlots } from "@/hooks/chat/ui/use-composer-dock-slots";
-import type { PlaygroundReplayState } from "@/hooks/playground/use-replay-session";
+import type { PlaygroundReplayState } from "@/hooks/playground/lifecycle/use-replay-session";
 
 interface PlaygroundComposerProps {
   dockRef: Ref<HTMLDivElement>;

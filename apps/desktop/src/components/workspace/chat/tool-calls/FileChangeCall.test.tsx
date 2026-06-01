@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { FileChangeCall } from "./FileChangeCall";
 
-vi.mock("@/hooks/workspaces/files/use-file-reference-actions", () => ({
+vi.mock("@/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
   useFileReferenceActions: ({ rawPath }: { rawPath: string }) => ({
     reference: {
       rawPath,

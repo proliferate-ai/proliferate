@@ -12,13 +12,13 @@ vi.mock("@/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
   useOpenCoworkCodingSession: () => vi.fn(),
 }));
 
-vi.mock("@/hooks/workspaces/selection/use-workspace-selection", () => ({
+vi.mock("@/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
   useWorkspaceSelection: () => ({
     selectWorkspace: vi.fn(),
   }),
 }));
 
-vi.mock("@/hooks/workspaces/files/use-file-reference-actions", () => ({
+vi.mock("@/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
   useFileReferenceActions: ({ rawPath }: { rawPath: string }) => ({
     reference: {
       rawPath,

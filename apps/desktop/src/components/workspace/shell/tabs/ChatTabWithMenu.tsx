@@ -15,7 +15,7 @@ import {
   renderChatTabIcon,
   renderChatTabStatusBadge,
 } from "@/components/workspace/shell/tabs/tab-rendering";
-import { useWorkspaceTabNativeContextMenu } from "@/hooks/workspaces/tabs/use-workspace-tab-native-context-menu";
+import { useWorkspaceTabNativeContextMenu } from "@/hooks/workspaces/ui/tabs/use-workspace-tab-native-context-menu";
 import type {
   HeaderChatTabEntry,
 } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";

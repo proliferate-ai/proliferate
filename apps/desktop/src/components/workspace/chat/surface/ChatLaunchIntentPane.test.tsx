@@ -6,7 +6,7 @@ import { ChatLaunchIntentPane } from "./ChatLaunchIntentPane";
 import type { ChatLaunchIntent } from "@/lib/domain/chat/launch/launch-intent";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
 
-vi.mock("@/hooks/chat/use-chat-launch-intent-actions", () => ({
+vi.mock("@/hooks/chat/workflows/use-chat-launch-intent-actions", () => ({
   useChatLaunchIntentActions: () => ({
     dismiss: vi.fn(),
     isRetrying: false,

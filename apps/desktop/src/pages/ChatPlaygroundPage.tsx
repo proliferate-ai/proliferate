@@ -9,7 +9,7 @@ import {
 } from "@/config/playground";
 import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "@/config/chat-layout";
 import { useChatDockInset } from "@/hooks/chat/ui/use-chat-dock-inset";
-import { useReplaySession } from "@/hooks/playground/use-replay-session";
+import { useReplaySession } from "@/hooks/playground/lifecycle/use-replay-session";
 
 export function ChatPlaygroundPage() {
   const [params, setParams] = useSearchParams();

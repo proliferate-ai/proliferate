@@ -3,7 +3,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Pencil, X } from "@proliferate/ui/icons";
 import { useActiveSessionId } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { usePromptOutboxActions } from "@/hooks/chat/workflows/use-prompt-outbox-actions";
-import { useQueuedPromptEditReader } from "@/hooks/chat/use-queued-prompt-edit";
+import { useQueuedPromptEditReader } from "@/hooks/chat/ui/use-queued-prompt-edit";
 import { useDeletePendingPrompt } from "@/hooks/sessions/workflows/use-delete-pending-prompt";
 import {
   derivePendingPromptQueueRow,
