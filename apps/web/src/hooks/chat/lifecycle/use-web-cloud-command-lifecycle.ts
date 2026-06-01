@@ -1,4 +1,4 @@
-import { useEffect, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import {
   getCommandStatus,
   type CloudCommandResponse,
@@ -66,6 +66,18 @@ export function useWebCloudCommandLifecycle(input: {
     sessionEventsRefetch,
     workspaceRefetch,
   } = input;
+  const pendingPromptCommandIdsForPolling = useStableCommandIds(
+    pendingPromptCommandIds,
+    pendingPromptCommandIdsKey,
+  );
+  const optimisticPromptCommandIdsForPolling = useStableCommandIds(
+    optimisticPromptCommandIds,
+    optimisticPromptCommandIdsKey,
+  );
+  const pendingConfigCommandIdsForPolling = useStableCommandIds(
+    pendingConfigCommandIds,
+    pendingConfigCommandIdsKey,
+  );
 
   useEffect(() => {
     const command = commandStatus;
@@ -114,7 +126,7 @@ export function useWebCloudCommandLifecycle(input: {
   ]);
 
   useEffect(() => {
-    if (pendingPromptCommandIds.length === 0) {
+    if (pendingPromptCommandIdsForPolling.length === 0) {
       return;
     }
     let active = true;
@@ -122,7 +134,7 @@ export function useWebCloudCommandLifecycle(input: {
 
     const pollPendingCommands = async () => {
       let sawTerminalCommand = false;
-      for (const commandId of pendingPromptCommandIds) {
+      for (const commandId of pendingPromptCommandIdsForPolling) {
         try {
           const command = await getCommandStatus(commandId, client);
           if (isTerminalCommandStatus(command.status)) {
@@ -151,14 +163,13 @@ export function useWebCloudCommandLifecycle(input: {
     };
   }, [
     client,
-    pendingPromptCommandIds,
-    pendingPromptCommandIdsKey,
+    pendingPromptCommandIdsForPolling,
     sessionEventsRefetch,
     transcriptRefetch,
   ]);
 
   useEffect(() => {
-    if (optimisticPromptCommandIds.length === 0) {
+    if (optimisticPromptCommandIdsForPolling.length === 0) {
       return;
     }
     let active = true;
@@ -167,7 +178,7 @@ export function useWebCloudCommandLifecycle(input: {
     const pollOptimisticPromptCommands = async () => {
       let sawTerminalCommand = false;
       let failureMessage: string | null = null;
-      for (const commandId of optimisticPromptCommandIds) {
+      for (const commandId of optimisticPromptCommandIdsForPolling) {
         try {
           const command = await getCommandStatus(commandId, client);
           if (isTerminalCommandStatus(command.status)) {
@@ -221,8 +232,7 @@ export function useWebCloudCommandLifecycle(input: {
     };
   }, [
     client,
-    optimisticPromptCommandIds,
-    optimisticPromptCommandIdsKey,
+    optimisticPromptCommandIdsForPolling,
     sessionEventsRefetch,
     setOptimisticPrompts,
     setPendingHomePromptStatus,
@@ -248,7 +258,7 @@ export function useWebCloudCommandLifecycle(input: {
   ]);
 
   useEffect(() => {
-    if (pendingConfigCommandIds.length === 0) {
+    if (pendingConfigCommandIdsForPolling.length === 0) {
       return;
     }
     let active = true;
@@ -256,7 +266,7 @@ export function useWebCloudCommandLifecycle(input: {
 
     const pollPendingConfigCommands = async () => {
       let sawTerminalCommand = false;
-      for (const commandId of pendingConfigCommandIds) {
+      for (const commandId of pendingConfigCommandIdsForPolling) {
         try {
           const command = await getCommandStatus(commandId, client);
           if (isTerminalCommandStatus(command.status)) {
@@ -295,8 +305,7 @@ export function useWebCloudCommandLifecycle(input: {
     };
   }, [
     client,
-    pendingConfigCommandIds,
-    pendingConfigCommandIdsKey,
+    pendingConfigCommandIdsForPolling,
     setPendingConfigChanges,
     setPendingHomePromptStatus,
     workspaceRefetch,
@@ -432,4 +441,12 @@ export function useWebCloudCommandLifecycle(input: {
     setOptimisticPrompts,
     setPendingHomePromptStatus,
   ]);
+}
+
+function useStableCommandIds(commandIds: readonly string[], key: string): readonly string[] {
+  const stateRef = useRef({ commandIds, key });
+  if (stateRef.current.key !== key) {
+    stateRef.current = { commandIds, key };
+  }
+  return stateRef.current.commandIds;
 }

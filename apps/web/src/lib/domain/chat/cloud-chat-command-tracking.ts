@@ -3,6 +3,10 @@ import type { PendingConfigChange } from "@proliferate/product-domain/chats/clou
 
 import type { CloudChatOptimisticPrompt } from "./cloud-chat-prompt-projection";
 
+export function commandIdsKey(commandIds: readonly string[]): string {
+  return commandIds.join("\0");
+}
+
 export function latestPendingPromptCommandId(
   pendingInteractions: readonly CloudPendingInteraction[],
 ): string | null {
