@@ -92,7 +92,8 @@ Live ACP interaction type where an agent asks for an MCP form or URL reveal.
 Current implementation owner:
 
 ```text
-acp/mcp_elicitation/
+live/sessions/interactions/mcp_elicitation.rs
+live/sessions/interactions/mcp_elicitation/
 ```
 
 Target owner:

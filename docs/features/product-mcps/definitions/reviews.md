@@ -507,7 +507,7 @@ anyharness/crates/anyharness-lib/src/domains/plans/
   store.rs
 
 anyharness/crates/anyharness-lib/src/sessions/runtime/plans.rs
-anyharness/crates/anyharness-lib/src/acp/event_sink/plans.rs
+anyharness/crates/anyharness-lib/src/live/sessions/event_sink/plans.rs
 anyharness/crates/anyharness-lib/src/live/sessions/actor/notifications/plans.rs
 ```
 
