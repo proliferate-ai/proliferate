@@ -1,25 +1,21 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
-    Json,
 };
 use serde_json::Value;
 
 use super::access::assert_workspace_mutable;
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::domains::cowork::mcp::definition as cowork_mcp_definition;
-use crate::domains::reviews::mcp::definition as reviews_mcp_definition;
 use crate::integrations::mcp::product_server::{
-    ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDispatchError,
-    ProductMcpRequestContext, PRODUCT_MCP_TOKEN_HEADER_NAME,
+    PRODUCT_MCP_TOKEN_HEADER_NAME, ProductMcpAuthHeader, ProductMcpContextError,
+    ProductMcpDispatchError, ProductMcpEndpointOperation, ProductMcpRequestContext,
 };
 use crate::sessions::mcp_bindings::product_registry::{
-    ProductMcpEndpointHandler, ProductMcpEndpointOperation,
+    ProductMcpEndpointHandler, legacy_route_aliases,
 };
-use crate::sessions::subagents::mcp::definition as subagents_mcp_definition;
-use crate::sessions::workspace_naming::mcp::definition as workspace_naming_mcp_definition;
 
 pub async fn get_product_mcp_endpoint(
     State(_state): State<AppState>,
@@ -62,7 +58,7 @@ pub async fn post_subagents_legacy_mcp_endpoint(
         &state,
         &workspace_id,
         &session_id,
-        subagents_mcp_definition::ROUTE_SLUG,
+        legacy_route_aliases::SUBAGENTS,
         headers,
         body,
     )
@@ -86,7 +82,7 @@ pub async fn post_reviews_legacy_mcp_endpoint(
         &state,
         &workspace_id,
         &session_id,
-        reviews_mcp_definition::ROUTE_SLUG,
+        legacy_route_aliases::REVIEWS,
         headers,
         body,
     )
@@ -110,7 +106,7 @@ pub async fn post_workspace_naming_legacy_mcp_endpoint(
         &state,
         &workspace_id,
         &session_id,
-        workspace_naming_mcp_definition::ROUTE_SLUG,
+        legacy_route_aliases::WORKSPACE_NAMING,
         headers,
         body,
     )
@@ -134,7 +130,7 @@ pub async fn post_cowork_legacy_mcp_endpoint(
         &state,
         &workspace_id,
         &session_id,
-        cowork_mcp_definition::ROUTE_SLUG,
+        legacy_route_aliases::COWORK,
         headers,
         body,
     )
