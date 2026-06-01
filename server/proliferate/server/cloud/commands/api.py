@@ -16,10 +16,8 @@ from proliferate.server.cloud.commands.models import (
     CreateCloudCommandRequest,
     command_response_payload,
 )
-from proliferate.server.cloud.commands.service import (
-    enqueue_command_and_commit,
-    get_command_status,
-)
+from proliferate.server.cloud.commands.service import get_command_status
+from proliferate.server.cloud.commands.transactions import enqueue_command_and_commit
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 
 router = APIRouter(prefix="/commands", tags=["cloud-commands"])
