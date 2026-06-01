@@ -1,48 +1,23 @@
-"""Stripe billing integration.
-
-This adapter owns raw Stripe HTTP calls. Billing policy and local accounting
-stay in ``server.billing`` and ``db.store.billing``.
-"""
+"""Stripe HTTP client helpers."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlencode
 
 import httpx
 
 from proliferate.config import settings
-from proliferate.constants.billing import PRO_SEAT_MONTHLY_AMOUNT_CENTS
-from proliferate.server.billing.pricing import (
-    configured_managed_cloud_meter_id,
-    configured_managed_cloud_overage_price_id,
-    configured_pro_monthly_price_id,
-)
+from proliferate.integrations.stripe.errors import StripeIntegrationError
+from proliferate.integrations.stripe.models import StripePriceDetails, StripeUrlResponse
 
 STRIPE_API_BASE = "https://api.stripe.com/v1"
 STRIPE_TIMEOUT_SECONDS = 10.0
-CLOUD_MONTHLY_AMOUNT_CENTS = 20000
-REFILL_10H_AMOUNT_CENTS = 2000
-
-
-class StripeBillingError(RuntimeError):
-    def __init__(self, code: str, message: str, *, status_code: int = 502) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
-        self.status_code = status_code
-
-
-@dataclass(frozen=True)
-class StripeUrlResponse:
-    url: str
-    id: str | None = None
 
 
 def _require_secret_key() -> str:
     if not settings.stripe_secret_key:
-        raise StripeBillingError(
+        raise StripeIntegrationError(
             "stripe_unconfigured",
             "Stripe secret key is not configured.",
             status_code=503,
@@ -81,7 +56,7 @@ async def _request(
                 content=content,
             )
     except httpx.HTTPError as exc:
-        raise StripeBillingError(
+        raise StripeIntegrationError(
             "stripe_request_failed",
             "Could not reach Stripe. Check the local Stripe configuration and network.",
         ) from exc
@@ -95,13 +70,15 @@ async def _request(
             error = payload.get("error")
             if isinstance(error, dict) and isinstance(error.get("message"), str):
                 message = error["message"]
-        raise StripeBillingError(
+        raise StripeIntegrationError(
             "stripe_request_failed",
             message,
             status_code=response.status_code,
         )
     if not isinstance(payload, dict):
-        raise StripeBillingError("stripe_invalid_response", "Stripe returned an invalid response.")
+        raise StripeIntegrationError(
+            "stripe_invalid_response", "Stripe returned an invalid response."
+        )
     return payload
 
 
@@ -188,11 +165,7 @@ async def create_subscription_checkout_session(
             ]
         )
     if overage_price_id:
-        data.extend(
-            [
-                ("line_items[1][price]", overage_price_id),
-            ]
-        )
+        data.append(("line_items[1][price]", overage_price_id))
     payload = await _request(
         "POST",
         "/checkout/sessions",
@@ -201,7 +174,7 @@ async def create_subscription_checkout_session(
     )
     url = payload.get("url")
     if not isinstance(url, str):
-        raise StripeBillingError(
+        raise StripeIntegrationError(
             "stripe_invalid_response",
             "Stripe did not return a checkout URL.",
         )
@@ -237,7 +210,9 @@ async def create_refill_checkout_session(
     )
     url = payload.get("url")
     if not isinstance(url, str):
-        raise StripeBillingError("stripe_invalid_response", "Stripe did not return a refill URL.")
+        raise StripeIntegrationError(
+            "stripe_invalid_response", "Stripe did not return a refill URL."
+        )
     return StripeUrlResponse(url=url)
 
 
@@ -255,7 +230,9 @@ async def create_customer_portal_session(
     )
     url = payload.get("url")
     if not isinstance(url, str):
-        raise StripeBillingError("stripe_invalid_response", "Stripe did not return a portal URL.")
+        raise StripeIntegrationError(
+            "stripe_invalid_response", "Stripe did not return a portal URL."
+        )
     return StripeUrlResponse(url=url)
 
 
@@ -291,6 +268,24 @@ async def retrieve_price(price_id: str) -> dict[str, Any]:
     return await _request("GET", f"/prices/{price_id}")
 
 
+async def retrieve_price_details(price_id: str) -> StripePriceDetails:
+    payload = await retrieve_price(price_id)
+    recurring = payload.get("recurring")
+    recurring_payload = recurring if isinstance(recurring, dict) else {}
+    currency = payload.get("currency")
+    unit_amount = payload.get("unit_amount")
+    interval = recurring_payload.get("interval")
+    usage_type = recurring_payload.get("usage_type")
+    meter = recurring_payload.get("meter")
+    return StripePriceDetails(
+        currency=currency if isinstance(currency, str) else None,
+        unit_amount=unit_amount if isinstance(unit_amount, int) else None,
+        recurring_interval=interval if isinstance(interval, str) else None,
+        recurring_usage_type=usage_type if isinstance(usage_type, str) else None,
+        recurring_meter=meter if isinstance(meter, str) else None,
+    )
+
+
 async def create_meter_event(
     *,
     event_name: str,
@@ -303,7 +298,9 @@ async def create_meter_event(
 ) -> dict[str, Any]:
     meter_quantity = quantity if quantity is not None else quantity_seconds
     if meter_quantity is None:
-        raise StripeBillingError("stripe_invalid_meter_quantity", "Meter quantity is required.")
+        raise StripeIntegrationError(
+            "stripe_invalid_meter_quantity", "Meter quantity is required."
+        )
     data = [
         ("event_name", event_name),
         ("identifier", identifier),
@@ -337,79 +334,6 @@ def line_items_include_price(lines: list[dict[str, Any]], price_id: str) -> bool
     return any(_price_id(line) == price_id for line in lines)
 
 
-def _assert_price(condition: bool, message: str) -> None:
-    if not condition:
-        raise StripeBillingError("stripe_price_misconfigured", message, status_code=503)
-
-
-def _recurring(price: dict[str, Any]) -> dict[str, Any]:
-    recurring = price.get("recurring")
-    return recurring if isinstance(recurring, dict) else {}
-
-
-async def validate_cloud_subscription_price_configuration() -> None:
-    if not settings.stripe_cloud_monthly_price_id:
-        raise StripeBillingError(
-            "stripe_price_unconfigured",
-            "Stripe Cloud monthly price ID is not configured.",
-            status_code=503,
-        )
-    cloud = await retrieve_price(settings.stripe_cloud_monthly_price_id)
-
-    _assert_price(
-        cloud.get("unit_amount") == CLOUD_MONTHLY_AMOUNT_CENTS,
-        "Cloud monthly price must be $200/month.",
-    )
-    _assert_price(
-        _recurring(cloud).get("interval") == "month",
-        "Cloud monthly price must recur monthly.",
-    )
-
-
-async def validate_pro_subscription_price_configuration() -> None:
-    pro_price_id = configured_pro_monthly_price_id()
-    overage_price_id = configured_managed_cloud_overage_price_id()
-    if not pro_price_id:
-        raise StripeBillingError(
-            "stripe_price_unconfigured",
-            "Stripe Pro monthly price ID is not configured.",
-            status_code=503,
-        )
-    if not overage_price_id:
-        raise StripeBillingError(
-            "stripe_price_unconfigured",
-            "Stripe managed cloud overage price ID is not configured.",
-            status_code=503,
-        )
-
-    pro_price = await retrieve_price(pro_price_id)
-    _assert_price(pro_price.get("currency") == "usd", "Pro monthly price must be USD.")
-    _assert_price(
-        pro_price.get("unit_amount") == PRO_SEAT_MONTHLY_AMOUNT_CENTS,
-        "Pro monthly price must be $20/month.",
-    )
-    _assert_price(
-        _recurring(pro_price).get("interval") == "month",
-        "Pro price must recur monthly.",
-    )
-
-    overage = await retrieve_price(overage_price_id)
-    recurring = _recurring(overage)
-    _assert_price(overage.get("currency") == "usd", "Overage price must be USD.")
-    _assert_price(overage.get("unit_amount") == 1, "Overage price must be 1 cent per unit.")
-    _assert_price(recurring.get("interval") == "month", "Overage price must recur monthly.")
-    _assert_price(
-        recurring.get("usage_type") == "metered",
-        "Overage price must be a metered recurring price.",
-    )
-    meter_id = configured_managed_cloud_meter_id()
-    if meter_id:
-        _assert_price(
-            recurring.get("meter") == meter_id,
-            "Overage price must use the configured managed cloud meter.",
-        )
-
-
 async def update_subscription_item_quantity(
     *,
     subscription_item_id: str,
@@ -424,18 +348,4 @@ async def update_subscription_item_quantity(
             ("proration_behavior", "always_invoice"),
         ],
         idempotency_key=idempotency_key,
-    )
-
-
-async def validate_refill_price_configuration() -> None:
-    if not settings.stripe_refill_10h_price_id:
-        raise StripeBillingError(
-            "stripe_refill_price_unconfigured",
-            "Stripe refill price is not configured.",
-            status_code=503,
-        )
-    refill = await retrieve_price(settings.stripe_refill_10h_price_id)
-    _assert_price(
-        refill.get("unit_amount") == REFILL_10H_AMOUNT_CENTS,
-        "Refill price must be $20.",
     )

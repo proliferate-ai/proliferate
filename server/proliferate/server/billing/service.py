@@ -138,7 +138,7 @@ from proliferate.db.store.organizations import (
 )
 from proliferate.errors import ProliferateError
 from proliferate.integrations import resend
-from proliferate.integrations.billing import stripe as stripe_billing
+from proliferate.integrations import stripe as stripe_billing
 from proliferate.server.billing.domain.accounting import (
     active_pro_period_start,
     next_accounting_boundary,
@@ -202,6 +202,9 @@ from proliferate.server.billing.pricing import (
     configured_managed_cloud_meter_event_name,
     configured_managed_cloud_overage_price_id,
     configured_pro_monthly_price_id,
+    validate_cloud_subscription_price_configuration,
+    validate_pro_subscription_price_configuration,
+    validate_refill_price_configuration,
 )
 from proliferate.server.billing.seats import (
     prorated_seat_grant_hours,
@@ -1408,10 +1411,7 @@ async def create_team_checkout_session(
     clean_name = _raise_team_name_issue(team_name)
     normalized_invites = sorted({email.strip().lower() for email in invite_emails if email})
     success_url, cancel_url, _portal_return_url = _require_redirect_urls(return_surface)
-    try:
-        await stripe_billing.validate_pro_subscription_price_configuration()
-    except stripe_billing.StripeBillingError as error:
-        raise _map_stripe_error(error) from error
+    await validate_pro_subscription_price_configuration()
 
     async with db.begin():
         await acquire_membership_activation_lock(db, user.id)
@@ -1728,13 +1728,10 @@ async def create_cloud_checkout_session(
                 status_code=409,
             )
     success_url, cancel_url, portal_return_url = _require_redirect_urls(return_surface)
-    try:
-        if settings.pro_billing_enabled:
-            await stripe_billing.validate_pro_subscription_price_configuration()
-        else:
-            await stripe_billing.validate_cloud_subscription_price_configuration()
-    except stripe_billing.StripeBillingError as error:
-        raise _map_stripe_error(error) from error
+    if settings.pro_billing_enabled:
+        await validate_pro_subscription_price_configuration()
+    else:
+        await validate_cloud_subscription_price_configuration()
 
     subject_id, stripe_customer_id = await _ensure_stripe_customer_for_owner(
         db,
@@ -1824,10 +1821,7 @@ async def create_refill_checkout_session(
             status_code=409,
         )
     success_url, cancel_url, _portal_return_url = _require_redirect_urls(return_surface)
-    try:
-        await stripe_billing.validate_refill_price_configuration()
-    except stripe_billing.StripeBillingError as error:
-        raise _map_stripe_error(error) from error
+    await validate_refill_price_configuration()
     subject_id, stripe_customer_id = await _ensure_stripe_customer_for_owner(
         db,
         user,

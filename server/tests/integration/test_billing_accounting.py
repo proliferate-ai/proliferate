@@ -38,7 +38,7 @@ from proliferate.db.store.billing import (
     ensure_billing_grant,
     ensure_personal_billing_subject,
 )
-from proliferate.integrations.billing import stripe as stripe_billing
+from proliferate.integrations import stripe as stripe_billing
 from proliferate.server.billing import service as billing_service
 from tests.integration.billing_accounting_helpers import (
     patch_global_session_factory,

@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-import json
 import logging
-import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -34,7 +30,7 @@ from proliferate.db.store.billing import (
     mark_webhook_event_processed_by_id,
     upsert_stripe_subscription_record,
 )
-from proliferate.integrations.billing import stripe as stripe_billing
+from proliferate.integrations import stripe as stripe_billing
 from proliferate.server.billing.domain.pricing import (
     monthly_subscription_price_ids,
     overage_subscription_price_ids,
@@ -87,7 +83,6 @@ from proliferate.server.notifications import (
     load_billing_slack_notification_context,
 )
 
-STRIPE_SIGNATURE_TOLERANCE_SECONDS = 300
 STRIPE_PROVIDER = "stripe"
 PAYMENT_HOLD_SOURCE = "stripe_webhook"
 BILLING_SLACK_ACTIVE_STATUSES = {"active", "trialing"}
@@ -95,6 +90,10 @@ BILLING_SLACK_CANCELLED_STATUSES = {"canceled"}
 BILLING_SLACK_PRE_START_STATUSES = {"incomplete"}
 
 logger = logging.getLogger(__name__)
+
+
+def _map_stripe_error(error: stripe_billing.StripeBillingError) -> BillingServiceError:
+    return BillingServiceError(error.code, error.message, status_code=error.status_code)
 
 
 async def _run_billing_store_read[T, **P](
@@ -118,12 +117,6 @@ async def _run_billing_store_write[T, **P](
 
 
 @dataclass(frozen=True)
-class StripeSignature:
-    timestamp: int
-    signatures: tuple[str, ...]
-
-
-@dataclass(frozen=True)
 class SubscriptionSyncResult:
     record: BillingSubscription | None
     notifications: tuple[BillingSlackNotification, ...] = ()
@@ -134,40 +127,19 @@ async def handle_stripe_webhook(
     payload: bytes,
     signature_header: str | None,
 ) -> StripeWebhookAck:
-    if not settings.stripe_webhook_secret:
-        raise BillingServiceError(
-            "stripe_webhook_unconfigured",
-            "Stripe webhook secret is not configured.",
-            status_code=503,
-        )
-    _verify_stripe_signature(
-        payload=payload,
-        signature_header=signature_header,
-        secret=settings.stripe_webhook_secret,
-    )
     try:
-        event = json.loads(payload)
-    except json.JSONDecodeError as exc:
-        raise BillingServiceError(
-            "stripe_webhook_invalid_json",
-            "Stripe webhook payload is not valid JSON.",
-            status_code=400,
-        ) from exc
-
-    event_id = event.get("id")
-    event_type = event.get("type")
-    if not isinstance(event_id, str) or not isinstance(event_type, str):
-        raise BillingServiceError(
-            "stripe_webhook_invalid_event",
-            "Stripe webhook payload is missing an event id or type.",
-            status_code=400,
+        stripe_event = stripe_billing.construct_webhook_event(
+            payload=payload,
+            signature_header=signature_header,
         )
+    except stripe_billing.StripeBillingError as error:
+        raise _map_stripe_error(error) from error
 
     claim = await _run_billing_store_write(
         claim_webhook_event,
         provider=STRIPE_PROVIDER,
-        event_id=event_id,
-        event_type=event_type,
+        event_id=stripe_event.event_id,
+        event_type=stripe_event.event_type,
     )
     if claim.status == "in_progress":
         raise BillingServiceError(
@@ -179,7 +151,7 @@ async def handle_stripe_webhook(
     notifications: tuple[BillingSlackNotification, ...] = ()
     if claim.status == "claimed" and claim.receipt is not None:
         try:
-            dispatch_notifications = await _dispatch_stripe_event(event)
+            dispatch_notifications = await _dispatch_stripe_event(stripe_event.payload)
         except Exception as exc:
             await _run_billing_store_write(
                 mark_webhook_event_failed_by_id,
@@ -194,11 +166,10 @@ async def handle_stripe_webhook(
         )
         await deliver_billing_slack_notifications(notifications)
 
-    livemode = event.get("livemode")
     return StripeWebhookAck(
-        event_id=event_id,
-        event_type=event_type,
-        livemode=livemode if isinstance(livemode, bool) else None,
+        event_id=stripe_event.event_id,
+        event_type=stripe_event.event_type,
+        livemode=stripe_event.livemode,
     )
 
 
@@ -564,60 +535,3 @@ async def _apply_payment_hold_for_subscription(subscription: dict[str, Any]) -> 
         source=PAYMENT_HOLD_SOURCE,
         source_ref=_id_from_expandable(subscription.get("id")),
     )
-
-
-def _verify_stripe_signature(
-    *,
-    payload: bytes,
-    signature_header: str | None,
-    secret: str,
-    now: int | None = None,
-) -> None:
-    signature = _parse_signature_header(signature_header)
-    current_time = int(time.time()) if now is None else now
-    if abs(current_time - signature.timestamp) > STRIPE_SIGNATURE_TOLERANCE_SECONDS:
-        raise BillingServiceError(
-            "stripe_webhook_stale_signature",
-            "Stripe webhook signature timestamp is outside the allowed tolerance.",
-            status_code=401,
-        )
-    signed_payload = str(signature.timestamp).encode("ascii") + b"." + payload
-    expected = hmac.new(secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
-    if not any(hmac.compare_digest(expected, candidate) for candidate in signature.signatures):
-        raise BillingServiceError(
-            "stripe_webhook_invalid_signature",
-            "Stripe webhook signature is invalid.",
-            status_code=401,
-        )
-
-
-def _parse_signature_header(signature_header: str | None) -> StripeSignature:
-    if not signature_header:
-        raise BillingServiceError(
-            "stripe_webhook_missing_signature",
-            "Stripe webhook signature header is missing.",
-            status_code=401,
-        )
-    fields: dict[str, list[str]] = {}
-    for item in signature_header.split(","):
-        key, separator, value = item.partition("=")
-        if not separator:
-            continue
-        fields.setdefault(key, []).append(value)
-    timestamps = fields.get("t") or []
-    signatures = tuple(value for value in fields.get("v1", []) if value)
-    try:
-        timestamp = int(timestamps[0])
-    except (IndexError, ValueError) as exc:
-        raise BillingServiceError(
-            "stripe_webhook_invalid_signature",
-            "Stripe webhook signature timestamp is invalid.",
-            status_code=401,
-        ) from exc
-    if not signatures:
-        raise BillingServiceError(
-            "stripe_webhook_invalid_signature",
-            "Stripe webhook signature does not include a v1 signature.",
-            status_code=401,
-        )
-    return StripeSignature(timestamp=timestamp, signatures=signatures)

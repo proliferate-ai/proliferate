@@ -353,7 +353,7 @@ Scope:
 
 - `server/proliferate/server/billing/**`
 - `server/proliferate/db/store/billing.py`
-- `server/proliferate/integrations/billing/**`
+- `server/proliferate/integrations/stripe/**`
 - billing tests
 
 Canonical docs:
@@ -370,9 +370,13 @@ Current debt:
 - Billing store self-opens sessions and commits heavily.
 - Billing store imports product code.
 - Billing service imports ORM/session internals.
-- `integrations/billing/stripe.py` is a single-file folder and imports product
-  billing pricing helpers.
 - Billing service and store are oversized.
+
+Resolved debt:
+
+- The old billing-scoped Stripe integration single-file folder and product
+  import debt has been removed. Stripe now lives under
+  `server/proliferate/integrations/stripe/**`.
 
 Target result:
 
@@ -408,8 +412,8 @@ Done when:
 
 - Billing-related boundary allowlist entries are gone or materially reduced per
   PR.
-- `integrations/billing/stripe.py` is replaced by a legal multi-file
-  `integrations/stripe/` package.
+- Stripe uses the legal multi-file `server/proliferate/integrations/stripe/**`
+  package and does not import billing product domains.
 - Billing files above server hard thresholds are split along documented
   ownership boundaries.
 

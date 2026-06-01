@@ -264,11 +264,11 @@ BillingPlanPolicy dataclass:
   (and others)
 ```
 
-**Stripe integration** (`server/proliferate/server/billing/`):
+**Billing domain + Stripe integration**:
 
 ```text
 api.py             route registration
-stripe_webhooks.py handle_stripe_webhook + signature verify
+stripe_webhooks.py handle_stripe_webhook + Stripe event dispatch
 service.py         authorize_sandbox_start, snapshot building,
                    create_cloud_checkout_session,
                    update_overage_settings,
@@ -282,8 +282,9 @@ pricing.py         price ids from settings
 seats.py           proration grant helpers
 domain/            pure functions: accounting, plan rules,
                    pricing, seat calcs, webhook parsing
-integrations/billing/stripe.py
-                   raw Stripe API calls
+integrations/stripe/
+                   raw Stripe HTTP, webhook signature/event construction,
+                   typed Stripe payloads, and Stripe errors
 ```
 
 **Stripe webhook events handled today**:
