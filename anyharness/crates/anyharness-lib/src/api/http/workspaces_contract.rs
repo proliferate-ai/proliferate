@@ -1,12 +1,17 @@
 use anyharness_contract::v1::{
-    DetectProjectSetupResponse, GetSetupStatusResponse, SetupHint, SetupHintCategory,
-    SetupScriptStatus, Workspace, WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind,
-    WorkspaceLifecycleState, WorkspaceSurface,
+    DetectProjectSetupResponse, GetSetupStatusResponse, RepoRoot, RepoRootKind,
+    ResolveWorkspaceResponse, SetupHint, SetupHintCategory, SetupScriptStatus, Workspace,
+    WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
+    WorkspaceSurface,
 };
 
 use super::error::ApiError;
+use crate::app::AppState;
 use crate::domains::terminals::model::{TerminalCommandRunRecord, TerminalCommandRunStatus};
+use crate::origin::OriginContext;
+use crate::repo_roots::model::RepoRootRecord;
 use crate::workspaces::model::WorkspaceRecord;
+use crate::workspaces::runtime::WorkspaceResolution;
 use crate::workspaces::types::{
     DetectedHintCategory, DetectedSetupHint, ProjectSetupDetectionResult,
     SetWorkspaceDisplayNameError,
@@ -70,6 +75,31 @@ pub(super) fn map_set_workspace_display_name_error(
     }
 }
 
+pub(super) async fn resolve_workspace_response_to_contract(
+    state: &AppState,
+    result: WorkspaceResolution,
+) -> Result<ResolveWorkspaceResponse, ApiError> {
+    Ok(ResolveWorkspaceResponse {
+        repo_root: repo_root_to_contract(result.repo_root),
+        workspace: workspace_to_contract(state, result.workspace).await?,
+    })
+}
+
+pub(crate) async fn workspace_to_contract(
+    state: &AppState,
+    record: WorkspaceRecord,
+) -> Result<Workspace, ApiError> {
+    let execution_summary = state
+        .session_runtime
+        .workspace_execution_summary(&record.id)
+        .await
+        .map_err(|error| ApiError::internal(error.to_string()))?;
+    Ok(workspace_to_contract_with_summary(
+        record,
+        execution_summary,
+    ))
+}
+
 pub(super) fn workspace_to_contract_with_summary(
     record: WorkspaceRecord,
     execution_summary: anyharness_contract::v1::WorkspaceExecutionSummary,
@@ -123,6 +153,29 @@ pub(super) fn workspace_to_contract_with_summary(
     }
 }
 
+pub(super) fn workspace_kind_to_contract(kind: &str) -> WorkspaceKind {
+    match kind {
+        "worktree" => WorkspaceKind::Worktree,
+        _ => WorkspaceKind::Local,
+    }
+}
+
+pub(super) fn workspace_lifecycle_to_contract(value: &str) -> WorkspaceLifecycleState {
+    match value {
+        "retired" => WorkspaceLifecycleState::Retired,
+        _ => WorkspaceLifecycleState::Active,
+    }
+}
+
+pub(super) fn workspace_cleanup_to_contract(value: &str) -> WorkspaceCleanupState {
+    match value {
+        "pending" => WorkspaceCleanupState::Pending,
+        "complete" => WorkspaceCleanupState::Complete,
+        "failed" => WorkspaceCleanupState::Failed,
+        _ => WorkspaceCleanupState::None,
+    }
+}
+
 pub(super) fn workspace_cleanup_operation_to_contract(
     operation: Option<&str>,
 ) -> Option<WorkspaceCleanupOperation> {
@@ -130,6 +183,41 @@ pub(super) fn workspace_cleanup_operation_to_contract(
         Some("retire") => Some(WorkspaceCleanupOperation::Retire),
         Some("purge") => Some(WorkspaceCleanupOperation::Purge),
         _ => None,
+    }
+}
+
+pub(super) fn request_origin_or_api_default(
+    origin: Option<anyharness_contract::v1::OriginContext>,
+    operation: &'static str,
+) -> OriginContext {
+    match origin {
+        Some(origin) => OriginContext::from_contract(origin),
+        None => {
+            tracing::warn!(
+                operation,
+                "AnyHarness request omitted origin; defaulting to api/local_runtime"
+            );
+            OriginContext::api_local_runtime()
+        }
+    }
+}
+
+fn repo_root_to_contract(record: RepoRootRecord) -> RepoRoot {
+    RepoRoot {
+        id: record.id,
+        kind: match record.kind.as_str() {
+            "managed" => RepoRootKind::Managed,
+            _ => RepoRootKind::External,
+        },
+        path: record.path,
+        display_name: record.display_name,
+        default_branch: record.default_branch,
+        remote_provider: record.remote_provider,
+        remote_owner: record.remote_owner,
+        remote_repo_name: record.remote_repo_name,
+        remote_url: record.remote_url,
+        created_at: record.created_at,
+        updated_at: record.updated_at,
     }
 }
 

@@ -1,4 +1,4 @@
-"""Compatibility imports for pure billing accounting helpers."""
+"""Compatibility exports for billing accounting helpers."""
 
 from __future__ import annotations
 

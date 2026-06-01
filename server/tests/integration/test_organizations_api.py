@@ -10,11 +10,19 @@ from sqlalchemy import select
 
 from proliferate.auth.authorization import OwnerSelection
 from proliferate.constants.organizations import (
+    ORGANIZATION_INVITATION_DELIVERY_SKIPPED,
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+    ORGANIZATION_ROLE_MEMBER,
     ORGANIZATION_ROLE_OWNER,
     ORGANIZATION_STATUS_ACTIVE,
 )
-from proliferate.db.models.organizations import Organization, OrganizationMembership
+from proliferate.db.models.auth import User
+from proliferate.db.models.organizations import (
+    Organization,
+    OrganizationInvitation,
+    OrganizationMembership,
+)
+from proliferate.integrations import resend
 from proliferate.server.organizations import service as organization_service
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
@@ -237,6 +245,60 @@ async def test_authenticated_users_cannot_create_arbitrary_organizations(
         json={"name": "Second Org"},
     )
     assert response.status_code == 405
+
+
+@pytest.mark.asyncio
+async def test_invitation_is_durable_before_email_delivery(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    owner = await _create_user_and_get_tokens(client, email="durable-owner@acme.dev")
+    organization = await _create_organization_for_user(user_id=owner["user_id"])
+    organization_id = uuid.UUID(organization["organization_id"])
+    monkeypatch.setattr(organization_service, "_new_token", lambda: "durable-invite-token")
+    sent_invites: list[dict[str, str]] = []
+
+    async def fake_send_organization_invitation_email(
+        **kwargs: str,
+    ) -> resend.ResendEmailResult:
+        sent_invites.append(dict(kwargs))
+        return resend.ResendEmailResult(provider_message_id=None, skipped=True)
+
+    monkeypatch.setattr(
+        resend,
+        "send_organization_invitation_email",
+        fake_send_organization_invitation_email,
+    )
+
+    from proliferate.db import engine as engine_module
+
+    async with engine_module.async_session_factory() as session:
+        actor = await session.get(User, uuid.UUID(owner["user_id"]))
+        assert actor is not None
+        result = await organization_service.create_invitation(
+            session,
+            actor,
+            organization_id,
+            email="durable-member@acme.dev",
+            role=ORGANIZATION_ROLE_MEMBER,
+        )
+        await session.rollback()
+
+    assert result.invitation.email == "durable-member@acme.dev"
+    assert result.invitation.delivery_status == ORGANIZATION_INVITATION_DELIVERY_SKIPPED
+    assert sent_invites and sent_invites[0]["to_email"] == "durable-member@acme.dev"
+
+    async with engine_module.async_session_factory() as session:
+        invitation = (
+            await session.execute(
+                select(OrganizationInvitation).where(
+                    OrganizationInvitation.organization_id == organization_id,
+                    OrganizationInvitation.email == "durable-member@acme.dev",
+                )
+            )
+        ).scalar_one()
+
+    assert invitation.delivery_status == ORGANIZATION_INVITATION_DELIVERY_SKIPPED
 
 
 @pytest.mark.asyncio

@@ -13,7 +13,10 @@ use url::form_urlencoded;
 use super::http::{
     agent_auth_config, agents, agents_model_registry, auth as http_auth, cowork, files, git,
     health, hosting, mobility, plans, processes, product_mcp, replay, repo_roots, reviews,
-    runtime_config, sessions, subagents, terminals, workspaces, worktrees,
+    runtime_config, sessions, sessions_config, sessions_events, sessions_fork,
+    sessions_interactions, sessions_lifecycle, sessions_pending, sessions_prompt, sessions_resume,
+    subagents, terminals, workspaces, workspaces_lifecycle, workspaces_purge, workspaces_setup,
+    workspaces_worktrees, worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::agent_login_terminals as ws_agent_login_terminals;
@@ -79,18 +82,21 @@ pub fn build_router(state: AppState) -> Router {
             get(workspaces::list_workspaces).post(workspaces::create_workspace),
         )
         .route("/workspaces/resolve", post(workspaces::resolve_workspace))
-        .route("/workspaces/worktrees", post(workspaces::create_worktree))
+        .route(
+            "/workspaces/worktrees",
+            post(workspaces_worktrees::create_worktree),
+        )
         .route(
             "/workspaces/{workspace_id}",
-            get(workspaces::get_workspace).delete(workspaces::purge_workspace),
+            get(workspaces::get_workspace).delete(workspaces_purge::purge_workspace),
         )
         .route(
             "/workspaces/{workspace_id}/purge/preflight",
-            get(workspaces::purge_workspace_preflight),
+            get(workspaces_purge::purge_workspace_preflight),
         )
         .route(
             "/workspaces/{workspace_id}/purge/retry",
-            post(workspaces::retry_purge_workspace),
+            post(workspaces_purge::retry_purge_workspace),
         )
         .route(
             "/worktrees/inventory",
@@ -111,15 +117,15 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route(
             "/workspaces/{workspace_id}/retire/preflight",
-            get(workspaces::retire_workspace_preflight),
+            get(workspaces_lifecycle::retire_workspace_preflight),
         )
         .route(
             "/workspaces/{workspace_id}/retire",
-            post(workspaces::retire_workspace),
+            post(workspaces_lifecycle::retire_workspace),
         )
         .route(
             "/workspaces/{workspace_id}/retire/cleanup-retry",
-            post(workspaces::retry_retire_cleanup),
+            post(workspaces_lifecycle::retry_retire_cleanup),
         )
         .route(
             "/repo-roots",
@@ -191,23 +197,23 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route(
             "/workspaces/{workspace_id}/detect-setup",
-            get(workspaces::detect_project_setup),
+            get(workspaces_setup::detect_project_setup),
         )
         .route(
             "/workspaces/{workspace_id}/setup-status",
-            get(workspaces::get_setup_status),
+            get(workspaces_setup::get_setup_status),
         )
         .route(
             "/workspaces/{workspace_id}/setup-rerun",
-            post(workspaces::rerun_setup),
+            post(workspaces_setup::rerun_setup),
         )
         .route(
             "/workspaces/{workspace_id}/setup-start",
-            post(workspaces::start_setup),
+            post(workspaces_setup::start_setup),
         )
         .route(
             "/workspaces/{workspace_id}/sessions/restore",
-            post(sessions::restore_dismissed_session),
+            post(sessions_lifecycle::restore_dismissed_session),
         )
         .route(
             "/workspaces/{workspace_id}/plans",
@@ -420,61 +426,65 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route(
             "/sessions/{session_id}/title",
-            patch(sessions::update_session_title),
+            patch(sessions_config::update_session_title),
         )
         .route(
             "/sessions/{session_id}/live-config",
-            get(sessions::get_live_session_config),
+            get(sessions_config::get_live_session_config),
         )
         .route(
             "/sessions/{session_id}/config-options",
-            post(sessions::set_session_config_option),
+            post(sessions_config::set_session_config_option),
         )
         .route(
             "/sessions/{session_id}/prompt",
-            post(sessions::prompt_session),
+            post(sessions_prompt::prompt_session),
         )
-        .route("/sessions/{session_id}/fork", post(sessions::fork_session))
+        .route(
+            "/sessions/{session_id}/fork",
+            post(sessions_fork::fork_session),
+        )
         .route(
             "/sessions/{session_id}/pending-prompts/{seq}",
-            patch(sessions::edit_pending_prompt).delete(sessions::delete_pending_prompt),
+            patch(sessions_pending::edit_pending_prompt)
+                .delete(sessions_pending::delete_pending_prompt),
         )
         .route(
             "/sessions/{session_id}/prompt-attachments/{attachment_id}",
-            get(sessions::get_prompt_attachment),
+            get(sessions_pending::get_prompt_attachment),
         )
         .route(
             "/sessions/{session_id}/resume",
-            post(sessions::resume_session),
+            post(sessions_resume::resume_session),
         )
         .route(
             "/sessions/{session_id}/cancel",
-            post(sessions::cancel_session),
+            post(sessions_lifecycle::cancel_session),
         )
         .route(
             "/sessions/{session_id}/close",
-            post(sessions::close_session),
+            post(sessions_lifecycle::close_session),
         )
         .route(
             "/sessions/{session_id}/dismiss",
-            post(sessions::dismiss_session),
+            post(sessions_lifecycle::dismiss_session),
         )
         .route(
             "/sessions/{session_id}/events",
-            get(sessions::list_session_events),
+            get(sessions_events::list_session_events),
         )
         .route(
             "/sessions/{session_id}/raw-notifications",
-            get(sessions::list_session_raw_notifications),
+            get(sessions_events::list_session_raw_notifications),
         )
         // Interactions
         .route(
             "/sessions/{session_id}/interactions/{request_id}/resolve",
-            post(sessions::resolve_interaction),
+            post(sessions_interactions::resolve_interaction),
         )
         .route(
             "/sessions/{session_id}/interactions/{request_id}/mcp-url/reveal",
-            post(sessions::reveal_mcp_elicitation_url),
+            post(sessions_interactions::reveal_mcp_elicitation_url),
         )
         // SSE
         .route(

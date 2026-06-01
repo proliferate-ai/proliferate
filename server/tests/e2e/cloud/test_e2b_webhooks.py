@@ -89,6 +89,7 @@ async def test_e2b_webhook_duplicate_ignored(
         sandbox_status="running",
     )
     await open_usage_segment_for_sandbox(
+        db_session,
         user_id=workspace.user_id,
         workspace_id=workspace.id,
         sandbox_id=sandbox.id,
@@ -97,6 +98,7 @@ async def test_e2b_webhook_duplicate_ignored(
         started_at=utcnow(),
         opened_by="test",
     )
+    await db_session.commit()
     event_id = f"evt-{uuid.uuid4()}"
     body, signature = build_signed_e2b_webhook(
         event_id=event_id,
@@ -279,6 +281,7 @@ async def test_e2b_webhook_paused_updates_state(
         sandbox_status="running",
     )
     await open_usage_segment_for_sandbox(
+        db_session,
         user_id=workspace.user_id,
         workspace_id=workspace.id,
         sandbox_id=sandbox.id,
@@ -287,6 +290,7 @@ async def test_e2b_webhook_paused_updates_state(
         started_at=utcnow(),
         opened_by="test",
     )
+    await db_session.commit()
     body, signature = build_signed_e2b_webhook(
         event_id=f"evt-{uuid.uuid4()}",
         event_type="sandbox.lifecycle.paused",
@@ -309,8 +313,10 @@ async def test_e2b_webhook_paused_updates_state(
     assert refreshed_environment.status == "paused"
     assert refreshed_sandbox.status == "paused"
 
+    sandbox_id = sandbox.id
+    db_session.expire_all()
     segment = (
-        await db_session.execute(select(UsageSegment).where(UsageSegment.sandbox_id == sandbox.id))
+        await db_session.execute(select(UsageSegment).where(UsageSegment.sandbox_id == sandbox_id))
     ).scalar_one()
     assert segment.ended_at is not None
 
@@ -334,6 +340,7 @@ async def test_e2b_webhook_killed_updates_state(
         with_runtime_metadata=True,
     )
     await open_usage_segment_for_sandbox(
+        db_session,
         user_id=workspace.user_id,
         workspace_id=workspace.id,
         sandbox_id=sandbox.id,
@@ -342,6 +349,7 @@ async def test_e2b_webhook_killed_updates_state(
         started_at=utcnow(),
         opened_by="test",
     )
+    await db_session.commit()
     body, signature = build_signed_e2b_webhook(
         event_id=f"evt-{uuid.uuid4()}",
         event_type="sandbox.lifecycle.killed",

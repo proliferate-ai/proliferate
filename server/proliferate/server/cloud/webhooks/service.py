@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.billing import (
     BILLING_MODE_ENFORCE,
@@ -15,11 +18,6 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_CLOSED_BY_WEBHOOK_TIMEOUT,
     USAGE_SEGMENT_OPENED_BY_PROVISION,
     USAGE_SEGMENT_OPENED_BY_WEBHOOK_RESUMED,
-)
-from proliferate.db.store.billing import (
-    close_usage_segment_for_sandbox,
-    open_usage_segment_for_sandbox,
-    remember_sandbox_event_receipt,
 )
 from proliferate.db.store.cloud_runtime_environments import (
     load_runtime_environment_by_id,
@@ -36,7 +34,12 @@ from proliferate.integrations.sandbox import (
     get_sandbox_provider,
     verify_e2b_webhook_signature,
 )
-from proliferate.server.billing.service import get_billing_snapshot_for_subject
+from proliferate.server.billing.service import (
+    get_billing_snapshot_for_subject,
+    record_cloud_sandbox_usage_started,
+    record_cloud_sandbox_usage_stopped,
+    remember_cloud_sandbox_event_receipt,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.domain.provider_events import (
     is_stale_provider_event as _is_stale_provider_event,
@@ -80,7 +83,67 @@ def _metadata_sandbox_id(metadata: dict[str, str]) -> UUID | None:
         return None
 
 
+async def remember_sandbox_event_receipt(
+    *,
+    event_id: str,
+    provider: str,
+    event_type: str,
+    external_sandbox_id: str | None,
+) -> bool:
+    return await remember_cloud_sandbox_event_receipt(
+        event_id=event_id,
+        provider=provider,
+        event_type=event_type,
+        external_sandbox_id=external_sandbox_id,
+    )
+
+
+async def open_usage_segment_for_sandbox(
+    *,
+    runtime_environment_id: UUID | None = None,
+    workspace_id: UUID | None = None,
+    sandbox_id: UUID,
+    external_sandbox_id: str | None,
+    sandbox_execution_id: str | None,
+    started_at: datetime,
+    opened_by: str,
+    user_id: UUID | None = None,
+    is_billable: bool = True,
+    event_id: str | None = None,
+) -> object:
+    return await record_cloud_sandbox_usage_started(
+        runtime_environment_id=runtime_environment_id,
+        workspace_id=workspace_id,
+        sandbox_id=sandbox_id,
+        external_sandbox_id=external_sandbox_id,
+        sandbox_execution_id=sandbox_execution_id,
+        started_at=started_at,
+        opened_by=opened_by,
+        user_id=user_id,
+        is_billable=is_billable,
+        event_id=event_id,
+    )
+
+
+async def close_usage_segment_for_sandbox(
+    *,
+    sandbox_id: UUID,
+    ended_at: datetime,
+    closed_by: str,
+    is_billable: bool | None = None,
+    event_id: str | None = None,
+) -> object | None:
+    return await record_cloud_sandbox_usage_stopped(
+        sandbox_id=sandbox_id,
+        ended_at=ended_at,
+        closed_by=closed_by,
+        is_billable=is_billable,
+        event_id=event_id,
+    )
+
+
 async def handle_e2b_webhook(
+    _db: AsyncSession,
     *,
     payload: bytes,
     signature: str | None,

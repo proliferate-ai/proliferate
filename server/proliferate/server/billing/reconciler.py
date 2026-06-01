@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
+from datetime import datetime
 from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.billing import (
@@ -17,13 +21,23 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_OPENED_BY_RECONCILER_REPAIR,
 )
 from proliferate.constants.cloud import CloudRuntimeEnvironmentStatus
+from proliferate.db import engine as db_engine
 from proliferate.db.models.billing import UsageSegment
 from proliferate.db.store.billing import (
-    close_usage_segment_for_sandbox,
-    list_all_open_usage_segments,
-    open_usage_segment_for_sandbox,
-    record_billing_decision_event,
-    with_billing_reconciler_lock,
+    close_usage_segment_for_sandbox as close_usage_segment_for_sandbox_record,
+)
+from proliferate.db.store.billing import (
+    list_all_open_usage_segments as list_all_open_usage_segments_record,
+)
+from proliferate.db.store.billing import (
+    open_usage_segment_for_sandbox as open_usage_segment_for_sandbox_record,
+)
+from proliferate.db.store.billing import (
+    record_billing_decision_event as record_billing_decision_event_record,
+)
+from proliferate.db.store.billing import (
+    release_billing_reconciler_lock,
+    try_acquire_billing_reconciler_lock,
 )
 from proliferate.db.store.cloud_runtime_environments import (
     load_runtime_environment_by_id,
@@ -51,6 +65,106 @@ from proliferate.utils.time import utcnow
 logger = logging.getLogger("proliferate.billing.reconciler")
 
 _reconciler_task: asyncio.Task[None] | None = None
+
+
+async def open_usage_segment_for_sandbox(
+    *,
+    runtime_environment_id: UUID | None = None,
+    workspace_id: UUID | None = None,
+    sandbox_id: UUID,
+    external_sandbox_id: str | None,
+    sandbox_execution_id: str | None,
+    started_at: datetime,
+    opened_by: str,
+    user_id: UUID | None = None,
+    is_billable: bool = True,
+    event_id: str | None = None,
+) -> UsageSegment:
+    async with db_engine.async_session_factory() as db, db.begin():
+        return await open_usage_segment_for_sandbox_record(
+            db,
+            runtime_environment_id=runtime_environment_id,
+            workspace_id=workspace_id,
+            sandbox_id=sandbox_id,
+            external_sandbox_id=external_sandbox_id,
+            sandbox_execution_id=sandbox_execution_id,
+            started_at=started_at,
+            opened_by=opened_by,
+            user_id=user_id,
+            is_billable=is_billable,
+            event_id=event_id,
+        )
+
+
+async def close_usage_segment_for_sandbox(
+    *,
+    sandbox_id: UUID,
+    ended_at: datetime,
+    closed_by: str,
+    is_billable: bool | None = None,
+    event_id: str | None = None,
+) -> UsageSegment | None:
+    async with db_engine.async_session_factory() as db, db.begin():
+        return await close_usage_segment_for_sandbox_record(
+            db,
+            sandbox_id=sandbox_id,
+            ended_at=ended_at,
+            closed_by=closed_by,
+            is_billable=is_billable,
+            event_id=event_id,
+        )
+
+
+async def list_all_open_usage_segments() -> list[UsageSegment]:
+    async with db_engine.async_session_factory() as db:
+        return await list_all_open_usage_segments_record(db)
+
+
+async def record_billing_decision_event(
+    *,
+    billing_subject_id: UUID,
+    actor_user_id: UUID | None,
+    workspace_id: UUID | None,
+    decision_type: str,
+    mode: str,
+    would_block_start: bool,
+    would_pause_active: bool,
+    reason: str | None,
+    active_sandbox_count: int,
+    remaining_seconds: float | None,
+) -> None:
+    async with db_engine.async_session_factory() as db, db.begin():
+        await record_billing_decision_event_record(
+            db,
+            billing_subject_id=billing_subject_id,
+            actor_user_id=actor_user_id,
+            workspace_id=workspace_id,
+            decision_type=decision_type,
+            mode=mode,
+            would_block_start=would_block_start,
+            would_pause_active=would_pause_active,
+            reason=reason,
+            active_sandbox_count=active_sandbox_count,
+            remaining_seconds=remaining_seconds,
+        )
+
+
+async def with_billing_reconciler_lock[T](
+    callback: Callable[[AsyncSession], Awaitable[T]],
+) -> tuple[bool, T | None]:
+    async with db_engine.async_session_factory() as db:
+        acquired = await try_acquire_billing_reconciler_lock(db)
+        if not acquired:
+            return False, None
+        try:
+            result = await callback(db)
+            await db.commit()
+            return True, result
+        except Exception:
+            await db.rollback()
+            raise
+        finally:
+            await release_billing_reconciler_lock(db)
 
 
 def _is_running_state(state: str) -> bool:
