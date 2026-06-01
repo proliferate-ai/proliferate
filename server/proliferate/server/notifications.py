@@ -192,63 +192,77 @@ async def _send_claimed_signup_slack_notification(
     *,
     dedupe_key: str,
 ) -> bool:
-    claim = await claim_webhook_event(
-        provider=SIGNUP_SLACK_RECEIPT_PROVIDER,
-        event_id=dedupe_key,
-        event_type="desktop_github_signup",
-    )
+    async with db_engine.async_session_factory() as db, db.begin():
+        claim = await claim_webhook_event(
+            db,
+            provider=SIGNUP_SLACK_RECEIPT_PROVIDER,
+            event_id=dedupe_key,
+            event_type="desktop_github_signup",
+        )
     if claim.status != "claimed" or claim.receipt is None:
         return False
 
     try:
         sent = await send_signup_slack_notification(notification)
     except Exception as exc:
-        await mark_webhook_event_failed_by_id(
-            receipt_id=claim.receipt.id,
-            error=f"{type(exc).__name__}: {exc}",
-        )
+        async with db_engine.async_session_factory() as db, db.begin():
+            await mark_webhook_event_failed_by_id(
+                db,
+                receipt_id=claim.receipt.id,
+                error=f"{type(exc).__name__}: {exc}",
+            )
         logger.exception("Signup Slack notification task failed")
         return False
 
     if sent or not settings.signups_slack_webhook_url.strip():
-        await mark_webhook_event_processed_by_id(receipt_id=claim.receipt.id)
+        async with db_engine.async_session_factory() as db, db.begin():
+            await mark_webhook_event_processed_by_id(db, receipt_id=claim.receipt.id)
         return sent
 
-    await mark_webhook_event_failed_by_id(
-        receipt_id=claim.receipt.id,
-        error="signup Slack notification delivery failed",
-    )
+    async with db_engine.async_session_factory() as db, db.begin():
+        await mark_webhook_event_failed_by_id(
+            db,
+            receipt_id=claim.receipt.id,
+            error="signup Slack notification delivery failed",
+        )
     return False
 
 
 async def _deliver_billing_slack_notification(
     notification: BillingSlackNotification,
 ) -> None:
-    claim = await claim_webhook_event(
-        provider=BILLING_SLACK_RECEIPT_PROVIDER,
-        event_id=f"{notification.stripe_subscription_id}:{notification.event}",
-        event_type=f"subscription.{notification.event}",
-    )
+    async with db_engine.async_session_factory() as db, db.begin():
+        claim = await claim_webhook_event(
+            db,
+            provider=BILLING_SLACK_RECEIPT_PROVIDER,
+            event_id=f"{notification.stripe_subscription_id}:{notification.event}",
+            event_type=f"subscription.{notification.event}",
+        )
     if claim.status != "claimed" or claim.receipt is None:
         return
 
     try:
         sent = await send_billing_slack_notification(notification)
     except Exception as exc:
-        await mark_webhook_event_failed_by_id(
-            receipt_id=claim.receipt.id,
-            error=f"{type(exc).__name__}: {exc}",
-        )
+        async with db_engine.async_session_factory() as db, db.begin():
+            await mark_webhook_event_failed_by_id(
+                db,
+                receipt_id=claim.receipt.id,
+                error=f"{type(exc).__name__}: {exc}",
+            )
         logger.exception("Billing Slack notification delivery failed")
         return
 
     if sent or not _billing_slack_webhook_configured(notification.event):
-        await mark_webhook_event_processed_by_id(receipt_id=claim.receipt.id)
+        async with db_engine.async_session_factory() as db, db.begin():
+            await mark_webhook_event_processed_by_id(db, receipt_id=claim.receipt.id)
         return
-    await mark_webhook_event_failed_by_id(
-        receipt_id=claim.receipt.id,
-        error="billing Slack notification delivery failed",
-    )
+    async with db_engine.async_session_factory() as db, db.begin():
+        await mark_webhook_event_failed_by_id(
+            db,
+            receipt_id=claim.receipt.id,
+            error="billing Slack notification delivery failed",
+        )
 
 
 def _billing_slack_webhook_configured(event: BillingSlackEvent) -> bool:

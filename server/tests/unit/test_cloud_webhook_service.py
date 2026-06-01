@@ -63,7 +63,7 @@ async def test_duplicate_e2b_webhook_returns_before_state_mutation(
         }
     ).encode()
 
-    async def _remember_sandbox_event_receipt(**_kwargs: object) -> bool:
+    async def _remember_sandbox_event_receipt(*_args: object, **_kwargs: object) -> bool:
         return False
 
     async def _unexpected(*_args: object, **_kwargs: object) -> object:
@@ -77,7 +77,7 @@ async def test_duplicate_e2b_webhook_returns_before_state_mutation(
     )
     monkeypatch.setattr(webhook_service, "load_cloud_sandbox_by_external_id", _unexpected)
 
-    receipt = await webhook_service.handle_e2b_webhook(payload=payload, signature=None)
+    receipt = await webhook_service.handle_e2b_webhook(object(), payload=payload, signature=None)
 
     assert receipt.received is True
 
@@ -111,7 +111,7 @@ async def test_killed_e2b_webhook_clears_runtime_metadata_and_increments_generat
     sandbox_state_updates: list[dict[str, object]] = []
     runtime_state_updates: list[dict[str, object]] = []
 
-    async def _remember_sandbox_event_receipt(**_kwargs: object) -> bool:
+    async def _remember_sandbox_event_receipt(*_args: object, **_kwargs: object) -> bool:
         return True
 
     async def _load_cloud_sandbox_by_external_id(_external_sandbox_id: str) -> object:
@@ -123,7 +123,7 @@ async def test_killed_e2b_webhook_clears_runtime_metadata_and_increments_generat
     async def _save_sandbox_provider_state(_sandbox_id: object, **kwargs: object) -> None:
         sandbox_state_updates.append(kwargs)
 
-    async def _close_usage_segment_for_sandbox(**_kwargs: object) -> None:
+    async def _close_usage_segment_for_sandbox(*_args: object, **_kwargs: object) -> None:
         return None
 
     async def _save_runtime_environment_state(
@@ -164,7 +164,7 @@ async def test_killed_e2b_webhook_clears_runtime_metadata_and_increments_generat
         _save_runtime_environment_state,
     )
 
-    receipt = await webhook_service.handle_e2b_webhook(payload=payload, signature=None)
+    receipt = await webhook_service.handle_e2b_webhook(object(), payload=payload, signature=None)
 
     assert receipt.received is True
     assert sandbox_state_updates[-1] == {
@@ -215,7 +215,7 @@ async def test_timeout_e2b_webhook_closes_usage_as_paused(
     sandbox_state_updates: list[dict[str, object]] = []
     runtime_state_updates: list[dict[str, object]] = []
 
-    async def _remember_sandbox_event_receipt(**_kwargs: object) -> bool:
+    async def _remember_sandbox_event_receipt(*_args: object, **_kwargs: object) -> bool:
         return True
 
     async def _load_cloud_sandbox_by_external_id(_external_sandbox_id: str) -> object:
@@ -227,7 +227,7 @@ async def test_timeout_e2b_webhook_closes_usage_as_paused(
     async def _save_sandbox_provider_state(_sandbox_id: object, **kwargs: object) -> None:
         sandbox_state_updates.append(kwargs)
 
-    async def _close_usage_segment_for_sandbox(**kwargs: object) -> None:
+    async def _close_usage_segment_for_sandbox(*_args: object, **kwargs: object) -> None:
         closed_segments.append(kwargs)
 
     async def _save_runtime_environment_state(
@@ -268,7 +268,7 @@ async def test_timeout_e2b_webhook_closes_usage_as_paused(
         _save_runtime_environment_state,
     )
 
-    receipt = await webhook_service.handle_e2b_webhook(payload=payload, signature=None)
+    receipt = await webhook_service.handle_e2b_webhook(object(), payload=payload, signature=None)
 
     assert receipt.received is True
     assert closed_segments[-1]["closed_by"] == "webhook_timeout"

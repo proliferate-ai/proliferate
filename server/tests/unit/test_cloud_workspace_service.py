@@ -431,7 +431,7 @@ async def test_launch_workspace_on_target_keeps_workspace_id_after_expire_all(
         _resolve_new_direct_target_workspace_create,
     )
     monkeypatch.setattr(
-        workspace_service,
+        workspace_service.billing_store,
         "ensure_personal_billing_subject",
         _ensure_personal_billing_subject,
     )

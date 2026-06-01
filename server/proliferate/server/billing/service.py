@@ -8,6 +8,7 @@ import json
 import logging
 import math
 import secrets
+from dataclasses import replace
 from datetime import datetime, timedelta
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import UUID
@@ -28,7 +29,9 @@ from proliferate.constants.billing import (
     BILLING_SUBJECT_KIND_PERSONAL,
     BILLING_USAGE_EXPORT_STATUS_FAILED_TERMINAL,
     BILLING_USAGE_EXPORT_STATUS_OBSERVED,
+    BILLING_USAGE_EXPORT_STATUS_PENDING,
     BILLING_USAGE_EXPORT_STATUS_SUCCEEDED,
+    BILLING_USAGE_EXPORT_STATUS_WRITTEN_OFF,
     FREE_INCLUDED_GRANT_TYPE,
     FREE_TRIAL_V2_GRANT_TYPE,
     PRO_DEFAULT_OVERAGE_CAP_CENTS_PER_SEAT,
@@ -65,30 +68,50 @@ from proliferate.db.store.billing import (
     BillingAccountingResult,
     BillingSnapshotState,
     BillingSubjectStripeState,
-    account_usage_for_billing_subject,
+    ClaimedUsageExport,
+    acquire_billing_subject_accounting_lock,
     bind_stripe_customer_to_billing_subject,
     claim_pending_seat_adjustments,
-    claim_usage_exports_for_sending,
     count_active_seats_for_billing_subject_id,
+    create_usage_export,
     ensure_billing_grant_record,
     get_billing_snapshot_state_for_subject,
     get_billing_snapshot_state_for_user,
+    get_billing_subject_by_id,
     get_or_create_organization_stripe_customer_state,
+    get_or_create_overage_remainder,
     get_or_create_user_stripe_customer_state,
+    list_accountable_usage_ranges,
     list_billing_subject_ids_for_usage_accounting,
-    load_billing_snapshot_state,
-    load_billing_snapshot_state_for_subject,
+    list_grants_for_update,
+    load_billing_subscription_by_id,
     mark_seat_adjustment_failed,
     mark_seat_adjustment_grant_issued,
     mark_seat_adjustment_stripe_confirmed,
     mark_usage_export_failed,
     mark_usage_export_succeeded,
     maybe_create_org_seat_adjustment,
+    prepare_initial_org_seat_reconcile,
     record_billing_decision_event,
+    record_grant_consumption,
     resolve_billing_subject_id_for_workspace,
     set_overage_policy_for_subject,
     set_overage_policy_for_user,
+    sum_meter_quantity_cents_for_subject,
     upsert_billing_subscription,
+    upsert_usage_cursor,
+)
+from proliferate.db.store.billing import (
+    claim_usage_exports_for_sending as claim_usage_exports_for_sending_record,
+)
+from proliferate.db.store.billing import (
+    close_usage_segment_for_sandbox as close_usage_segment_for_sandbox_record,
+)
+from proliferate.db.store.billing import (
+    open_usage_segment_for_sandbox as open_usage_segment_for_sandbox_record,
+)
+from proliferate.db.store.billing import (
+    remember_sandbox_event_receipt as remember_sandbox_event_receipt_record,
 )
 from proliferate.db.store.organization_records import (
     CheckoutIntentRecord,
@@ -112,9 +135,13 @@ from proliferate.errors import ProliferateError
 from proliferate.integrations import resend
 from proliferate.integrations.billing import stripe as stripe_billing
 from proliferate.server.billing.domain.accounting import (
+    active_pro_period_start,
+    next_accounting_boundary,
     ordered_accounting_grants,
+    overage_seconds_to_cents,
     stripe_status_is_terminal,
     terminal_meter_event_error,
+    usage_export_idempotency_key,
     usage_export_identifier,
 )
 from proliferate.server.billing.domain.plans import (
@@ -262,7 +289,126 @@ async def maybe_create_organization_seat_adjustment(
         db,
         organization_id=organization_id,
         membership_id=membership_id,
+        pro_billing_enabled=settings.pro_billing_enabled,
+        pro_monthly_price_id=configured_pro_monthly_price_id(),
     )
+
+
+async def reconcile_initial_org_subscription_seats(
+    record: BillingSubscription,
+) -> BillingSubscription:
+    async with db_engine.async_session_factory() as db, db.begin():
+        adjustment = await prepare_initial_org_seat_reconcile(
+            db,
+            billing_subscription_id=record.id,
+            pro_billing_enabled=settings.pro_billing_enabled,
+            pro_monthly_price_id=configured_pro_monthly_price_id(),
+        )
+    if adjustment is None:
+        async with db_engine.async_session_factory() as db:
+            reloaded = await load_billing_subscription_by_id(db, record.id)
+        return reloaded or record
+    try:
+        await stripe_billing.update_subscription_item_quantity(
+            subscription_item_id=adjustment.monthly_subscription_item_id,
+            quantity=adjustment.target_quantity,
+            idempotency_key=f"initial-seat-reconcile:{adjustment.id}:seats:{adjustment.target_quantity}",
+        )
+        async with db_engine.async_session_factory() as db, db.begin():
+            await mark_seat_adjustment_stripe_confirmed(
+                db,
+                adjustment_id=adjustment.id,
+            )
+        async with db_engine.async_session_factory() as db, db.begin():
+            await mark_seat_adjustment_grant_issued(
+                db,
+                adjustment_id=adjustment.id,
+            )
+    except stripe_billing.StripeBillingError as error:
+        async with db_engine.async_session_factory() as db, db.begin():
+            await mark_seat_adjustment_failed(
+                db,
+                adjustment_id=adjustment.id,
+                error=error.message,
+                terminal=stripe_status_is_terminal(error.status_code),
+            )
+        raise
+    except Exception as error:
+        async with db_engine.async_session_factory() as db, db.begin():
+            await mark_seat_adjustment_failed(
+                db,
+                adjustment_id=adjustment.id,
+                error=f"{type(error).__name__}: {error}",
+            )
+        raise
+    async with db_engine.async_session_factory() as db:
+        reloaded = await load_billing_subscription_by_id(db, record.id)
+    return reloaded or record
+
+
+async def remember_cloud_sandbox_event_receipt(
+    *,
+    event_id: str,
+    provider: str,
+    event_type: str,
+    external_sandbox_id: str | None,
+) -> bool:
+    async with db_engine.async_session_factory() as db, db.begin():
+        return await remember_sandbox_event_receipt_record(
+            db,
+            event_id=event_id,
+            provider=provider,
+            event_type=event_type,
+            external_sandbox_id=external_sandbox_id,
+        )
+
+
+async def record_cloud_sandbox_usage_started(
+    *,
+    runtime_environment_id: UUID | None = None,
+    workspace_id: UUID | None = None,
+    sandbox_id: UUID,
+    external_sandbox_id: str | None,
+    sandbox_execution_id: str | None,
+    started_at: datetime,
+    opened_by: str,
+    user_id: UUID | None = None,
+    is_billable: bool = True,
+    event_id: str | None = None,
+) -> object:
+    async with db_engine.async_session_factory() as db, db.begin():
+        return await open_usage_segment_for_sandbox_record(
+            db,
+            runtime_environment_id=runtime_environment_id,
+            workspace_id=workspace_id,
+            sandbox_id=sandbox_id,
+            external_sandbox_id=external_sandbox_id,
+            sandbox_execution_id=sandbox_execution_id,
+            started_at=started_at,
+            opened_by=opened_by,
+            user_id=user_id,
+            is_billable=is_billable,
+            event_id=event_id,
+        )
+
+
+async def record_cloud_sandbox_usage_stopped(
+    *,
+    sandbox_id: UUID,
+    ended_at: datetime,
+    closed_by: str,
+    is_billable: bool | None = None,
+    event_id: str | None = None,
+) -> object | None:
+    async with db_engine.async_session_factory() as db, db.begin():
+        return await close_usage_segment_for_sandbox_record(
+            db,
+            sandbox_id=sandbox_id,
+            ended_at=ended_at,
+            closed_by=closed_by,
+            is_billable=is_billable,
+            event_id=event_id,
+        )
 
 
 def _grant_applies_to_paid_state(grant: BillingGrant, *, is_paid_cloud: bool) -> bool:
@@ -330,7 +476,9 @@ def _segment_seconds(segment: UsageSegment, now: datetime) -> float:
 
 
 async def get_billing_snapshot(user_id: UUID) -> BillingSnapshot:
-    state = await load_billing_snapshot_state(user_id)
+    async with db_engine.async_session_factory() as db, db.begin():
+        state = await get_billing_snapshot_state_for_user(db, user_id)
+        state = await state_with_overage_usage(db, state)
     return _build_billing_snapshot(state)
 
 
@@ -342,7 +490,9 @@ async def get_billing_snapshot_for_request(
 
 
 async def get_billing_snapshot_for_subject(billing_subject_id: UUID) -> BillingSnapshot:
-    state = await load_billing_snapshot_state_for_subject(billing_subject_id)
+    async with db_engine.async_session_factory() as db, db.begin():
+        state = await get_billing_snapshot_state_for_subject(db, billing_subject_id)
+        state = await state_with_overage_usage(db, state)
     return _build_billing_snapshot(state)
 
 
@@ -351,6 +501,7 @@ async def get_billing_snapshot_for_subject_in_session(
     billing_subject_id: UUID,
 ) -> BillingSnapshot:
     state = await get_billing_snapshot_state_for_subject(db, billing_subject_id)
+    state = await state_with_overage_usage(db, state)
     return _build_billing_snapshot(state)
 
 
@@ -359,6 +510,7 @@ async def _get_billing_snapshot_for_request(
     user_id: UUID,
 ) -> BillingSnapshot:
     state = await get_billing_snapshot_state_for_user(db, user_id)
+    state = await state_with_overage_usage(db, state)
     return _build_billing_snapshot(state)
 
 
@@ -367,6 +519,7 @@ async def _get_billing_snapshot_for_subject_request(
     billing_subject_id: UUID,
 ) -> BillingSnapshot:
     state = await get_billing_snapshot_state_for_subject(db, billing_subject_id)
+    state = await state_with_overage_usage(db, state)
     return _build_billing_snapshot(state)
 
 
@@ -571,12 +724,16 @@ async def authorize_sandbox_start_for_billing_subject(
     billing_subject_id: UUID,
     workspace_id: UUID | None = None,
 ) -> SandboxStartAuthorization:
-    snapshot = await get_billing_snapshot_for_subject(billing_subject_id)
-    return await _record_sandbox_start_authorization(
-        snapshot,
-        actor_user_id=actor_user_id,
-        workspace_id=workspace_id,
-    )
+    async with db_engine.async_session_factory() as db, db.begin():
+        state = await get_billing_snapshot_state_for_subject(db, billing_subject_id)
+        state = await state_with_overage_usage(db, state)
+        snapshot = _build_billing_snapshot(state)
+        return await _record_sandbox_start_authorization(
+            db,
+            snapshot,
+            actor_user_id=actor_user_id,
+            workspace_id=workspace_id,
+        )
 
 
 async def authorize_sandbox_start(
@@ -584,19 +741,27 @@ async def authorize_sandbox_start(
     user_id: UUID,
     workspace_id: UUID | None,
 ) -> SandboxStartAuthorization:
-    if workspace_id is None:
-        snapshot = await get_billing_snapshot(user_id)
-    else:
-        billing_subject_id = await resolve_billing_subject_id_for_workspace(workspace_id)
-        snapshot = await get_billing_snapshot_for_subject(billing_subject_id)
-    return await _record_sandbox_start_authorization(
-        snapshot,
-        actor_user_id=user_id,
-        workspace_id=workspace_id,
-    )
+    async with db_engine.async_session_factory() as db, db.begin():
+        if workspace_id is None:
+            state = await get_billing_snapshot_state_for_user(db, user_id)
+        else:
+            billing_subject_id = await resolve_billing_subject_id_for_workspace(
+                db,
+                workspace_id,
+            )
+            state = await get_billing_snapshot_state_for_subject(db, billing_subject_id)
+        state = await state_with_overage_usage(db, state)
+        snapshot = _build_billing_snapshot(state)
+        return await _record_sandbox_start_authorization(
+            db,
+            snapshot,
+            actor_user_id=user_id,
+            workspace_id=workspace_id,
+        )
 
 
 async def _record_sandbox_start_authorization(
+    db: AsyncSession,
     snapshot: BillingSnapshot,
     *,
     actor_user_id: UUID | None,
@@ -606,6 +771,7 @@ async def _record_sandbox_start_authorization(
     allowed = not enforced or not snapshot.start_blocked
     reason = snapshot.start_block_reason if snapshot.start_blocked else None
     await record_billing_decision_event(
+        db,
         billing_subject_id=snapshot.billing_subject_id,
         actor_user_id=actor_user_id,
         workspace_id=workspace_id,
@@ -1020,14 +1186,16 @@ async def _send_staged_team_checkout_invitation(
     email: str,
 ) -> None:
     token = secrets.token_urlsafe(32)
-    record = await invitation_store.create_or_rotate_organization_invitation(
-        organization_id=organization_id,
-        email=email,
-        role=ORGANIZATION_ROLE_MEMBER,
-        token_hash=_organization_invite_token_hash(token),
-        invited_by_user_id=invited_by_user_id,
-        expires_at=utcnow() + timedelta(days=ORGANIZATION_INVITE_EXPIRES_DAYS),
-    )
+    async with db_engine.async_session_factory() as db, db.begin():
+        record = await invitation_store.create_or_rotate_organization_invitation(
+            db,
+            organization_id=organization_id,
+            email=email,
+            role=ORGANIZATION_ROLE_MEMBER,
+            token_hash=_organization_invite_token_hash(token),
+            invited_by_user_id=invited_by_user_id,
+            expires_at=utcnow() + timedelta(days=ORGANIZATION_INVITE_EXPIRES_DAYS),
+        )
     if record is None:
         logger.warning(
             "Skipping staged team checkout invitation because organization was not found",
@@ -1748,6 +1916,245 @@ async def update_overage_settings(
     )
 
 
+async def state_with_overage_usage(
+    db: AsyncSession,
+    state: BillingSnapshotState,
+) -> BillingSnapshotState:
+    active_period_start = active_pro_period_start(
+        state.subscriptions,
+        now=utcnow(),
+        price_ids=billing_price_ids_from_settings(),
+    )
+    if active_period_start is None:
+        return state
+    return replace(
+        state,
+        managed_cloud_overage_used_cents=await sum_meter_quantity_cents_for_subject(
+            db,
+            state.billing_subject_id,
+            period_start=active_period_start,
+        ),
+    )
+
+
+async def account_usage_for_billing_subject(
+    *,
+    billing_subject_id: UUID,
+    is_paid_cloud: bool,
+    billing_subscription_id: UUID | None,
+    period_start: datetime | None,
+    period_end: datetime | None,
+    overage_enabled: bool,
+    billing_mode: str,
+    overage_cap_cents: int | None = None,
+    consume_grants: bool = True,
+    export_overage: bool = True,
+    scan_until: datetime | None = None,
+) -> BillingAccountingResult:
+    if billing_mode not in {BILLING_MODE_OBSERVE, BILLING_MODE_ENFORCE}:
+        return BillingAccountingResult(
+            billing_subject_id=billing_subject_id,
+            consumed_seconds=0.0,
+            export_seconds=0.0,
+            export_count=0,
+        )
+
+    now = utcnow()
+    effective_scan_until = coerce_utc(scan_until) or now
+    period_start_utc = coerce_utc(period_start)
+    period_end_utc = coerce_utc(period_end)
+    if is_paid_cloud and period_end_utc is not None:
+        effective_scan_until = min(effective_scan_until, period_end_utc)
+    if effective_scan_until > now:
+        effective_scan_until = now
+
+    async with db_engine.async_session_factory() as db, db.begin():
+        await acquire_billing_subject_accounting_lock(db, billing_subject_id)
+        subject = await get_billing_subject_by_id(db, billing_subject_id)
+        if subject is None:
+            return BillingAccountingResult(
+                billing_subject_id=billing_subject_id,
+                consumed_seconds=0.0,
+                export_seconds=0.0,
+                export_count=0,
+            )
+
+        grants = await list_grants_for_update(db, billing_subject_id)
+        usage_ranges = await list_accountable_usage_ranges(
+            db,
+            billing_subject_id=billing_subject_id,
+            scan_until=effective_scan_until,
+        )
+
+        consumed_seconds = 0.0
+        export_seconds = 0.0
+        export_count = 0
+        export_status = (
+            BILLING_USAGE_EXPORT_STATUS_OBSERVED
+            if billing_mode == BILLING_MODE_OBSERVE
+            else BILLING_USAGE_EXPORT_STATUS_PENDING
+        )
+        can_export_overage = export_overage and is_paid_cloud and overage_enabled
+        accounting_boundaries = (
+            (period_start_utc,) if is_paid_cloud and period_start_utc is not None else ()
+        )
+        cap_used_cents = 0
+        overage_remainder = None
+        if can_export_overage and period_start_utc is not None:
+            cap_used_cents = await sum_meter_quantity_cents_for_subject(
+                db,
+                billing_subject_id,
+                period_start=period_start_utc,
+            )
+            overage_remainder = await get_or_create_overage_remainder(
+                db,
+                billing_subject_id=billing_subject_id,
+                billing_subscription_id=billing_subscription_id,
+                period_start=period_start_utc,
+            )
+
+        for segment, range_start, range_end in usage_ranges:
+            accounted_from = range_start
+            while accounted_from < range_end:
+                accounted_until = next_accounting_boundary(
+                    accounted_from,
+                    range_end,
+                    grants if consume_grants else [],
+                    accounting_boundaries,
+                )
+                seconds = max((accounted_until - accounted_from).total_seconds(), 0.0)
+                if seconds <= 0:
+                    break
+
+                uncovered_seconds = seconds
+                if consume_grants:
+                    for grant in ordered_accounting_grants(
+                        grants,
+                        pro_billing_enabled=settings.pro_billing_enabled,
+                        is_paid_cloud=is_paid_cloud,
+                        at=accounted_from,
+                    ):
+                        consumed = min(float(grant.remaining_seconds), uncovered_seconds)
+                        if consumed <= 0:
+                            continue
+                        grant.remaining_seconds = max(
+                            float(grant.remaining_seconds) - consumed,
+                            0.0,
+                        )
+                        grant.updated_at = now
+                        await record_grant_consumption(
+                            db,
+                            billing_subject_id=billing_subject_id,
+                            billing_grant_id=grant.id,
+                            usage_segment_id=segment.id,
+                            accounted_from=accounted_from,
+                            accounted_until=accounted_until,
+                            seconds=consumed,
+                            source="usage_accounting",
+                        )
+                        consumed_seconds += consumed
+                        uncovered_seconds -= consumed
+                        if uncovered_seconds <= 0:
+                            break
+
+                slice_is_in_paid_period = (
+                    period_start_utc is None or accounted_from >= period_start_utc
+                )
+                if uncovered_seconds > 0 and can_export_overage and slice_is_in_paid_period:
+                    remainder_cents = (
+                        float(overage_remainder.fractional_cents)
+                        if overage_remainder is not None
+                        else 0.0
+                    )
+                    meter_cents, fractional_cents = overage_seconds_to_cents(
+                        uncovered_seconds,
+                        fractional_cents=remainder_cents,
+                    )
+                    if overage_remainder is not None:
+                        overage_remainder.fractional_cents = fractional_cents
+                        overage_remainder.updated_at = now
+
+                    if meter_cents > 0:
+                        cap_remaining_cents = (
+                            max(overage_cap_cents - cap_used_cents, 0)
+                            if overage_cap_cents is not None
+                            else meter_cents
+                        )
+                        billable_cents = min(meter_cents, cap_remaining_cents)
+                        writeoff_cents = max(meter_cents - billable_cents, 0)
+                        base_idempotency_key = usage_export_idempotency_key(
+                            billing_subject_id=billing_subject_id,
+                            usage_segment_id=segment.id,
+                            accounted_from=accounted_from,
+                            accounted_until=accounted_until,
+                        )
+                        billable_seconds = (
+                            uncovered_seconds * billable_cents / meter_cents
+                            if billable_cents > 0
+                            else 0.0
+                        )
+                        writeoff_seconds = max(uncovered_seconds - billable_seconds, 0.0)
+                        if billable_cents > 0:
+                            await create_usage_export(
+                                db,
+                                billing_subject_id=billing_subject_id,
+                                billing_subscription_id=billing_subscription_id,
+                                usage_segment_id=segment.id,
+                                period_start=period_start,
+                                period_end=period_end,
+                                accounted_from=accounted_from,
+                                accounted_until=accounted_until,
+                                quantity_seconds=billable_seconds,
+                                meter_quantity_cents=billable_cents,
+                                cap_cents_snapshot=overage_cap_cents,
+                                cap_used_cents_snapshot=cap_used_cents,
+                                idempotency_key=f"{base_idempotency_key}:billable",
+                                status=export_status,
+                            )
+                            cap_used_cents += billable_cents
+                            export_seconds += billable_seconds
+                            export_count += 1
+                        if writeoff_cents > 0:
+                            await create_usage_export(
+                                db,
+                                billing_subject_id=billing_subject_id,
+                                billing_subscription_id=billing_subscription_id,
+                                usage_segment_id=segment.id,
+                                period_start=period_start,
+                                period_end=period_end,
+                                accounted_from=accounted_from,
+                                accounted_until=accounted_until,
+                                quantity_seconds=writeoff_seconds,
+                                meter_quantity_cents=0,
+                                cap_cents_snapshot=overage_cap_cents,
+                                cap_used_cents_snapshot=cap_used_cents,
+                                writeoff_reason="overage_cap_exhausted",
+                                idempotency_key=f"{base_idempotency_key}:writeoff",
+                                status=BILLING_USAGE_EXPORT_STATUS_WRITTEN_OFF,
+                            )
+                            export_count += 1
+
+                await upsert_usage_cursor(
+                    db,
+                    billing_subject_id=billing_subject_id,
+                    usage_segment_id=segment.id,
+                    accounted_until=accounted_until,
+                )
+                accounted_from = accounted_until
+
+        return BillingAccountingResult(
+            billing_subject_id=billing_subject_id,
+            consumed_seconds=consumed_seconds,
+            export_seconds=export_seconds,
+            export_count=export_count,
+        )
+
+
+async def claim_usage_exports_for_sending(*, limit: int = 100) -> list[ClaimedUsageExport]:
+    async with db_engine.async_session_factory() as db, db.begin():
+        return await claim_usage_exports_for_sending_record(db, limit=limit)
+
+
 async def _account_usage_for_snapshot_state(
     state: BillingSnapshotState,
     *,
@@ -1785,9 +2192,15 @@ async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
 
     await process_pending_seat_adjustments()
 
-    subject_ids = await list_billing_subject_ids_for_usage_accounting(limit=subject_limit)
+    async with db_engine.async_session_factory() as db, db.begin():
+        subject_ids = await list_billing_subject_ids_for_usage_accounting(
+            db,
+            limit=subject_limit,
+        )
     for billing_subject_id in subject_ids:
-        state = await load_billing_snapshot_state_for_subject(billing_subject_id)
+        async with db_engine.async_session_factory() as db, db.begin():
+            state = await get_billing_snapshot_state_for_subject(db, billing_subject_id)
+            state = await state_with_overage_usage(db, state)
         now = utcnow()
         unlimited_state = _compute_unlimited_cloud_hours_state(
             subscriptions=state.subscriptions,
@@ -1843,22 +2256,24 @@ async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
 
         if any(result.export_count > 0 for result in results):
             snapshot = _build_billing_snapshot(state)
-            await record_billing_decision_event(
-                billing_subject_id=billing_subject_id,
-                actor_user_id=None,
-                workspace_id=None,
-                decision_type=BILLING_DECISION_OVERAGE_EXPORT,
-                mode=settings.cloud_billing_mode,
-                would_block_start=False,
-                would_pause_active=False,
-                reason=(
-                    BILLING_USAGE_EXPORT_STATUS_OBSERVED
-                    if settings.cloud_billing_mode == BILLING_MODE_OBSERVE
-                    else "pending"
-                ),
-                active_sandbox_count=snapshot.active_sandbox_count,
-                remaining_seconds=snapshot.remaining_seconds,
-            )
+            async with db_engine.async_session_factory() as db, db.begin():
+                await record_billing_decision_event(
+                    db,
+                    billing_subject_id=billing_subject_id,
+                    actor_user_id=None,
+                    workspace_id=None,
+                    decision_type=BILLING_DECISION_OVERAGE_EXPORT,
+                    mode=settings.cloud_billing_mode,
+                    would_block_start=False,
+                    would_pause_active=False,
+                    reason=(
+                        BILLING_USAGE_EXPORT_STATUS_OBSERVED
+                        if settings.cloud_billing_mode == BILLING_MODE_OBSERVE
+                        else "pending"
+                    ),
+                    active_sandbox_count=snapshot.active_sandbox_count,
+                    remaining_seconds=snapshot.remaining_seconds,
+                )
 
     if settings.cloud_billing_mode == BILLING_MODE_ENFORCE:
         await send_pending_usage_exports()
@@ -1868,7 +2283,8 @@ async def process_pending_seat_adjustments(*, limit: int = 100) -> None:
     if not settings.pro_billing_enabled or settings.cloud_billing_mode == BILLING_MODE_OFF:
         return
 
-    adjustments = await claim_pending_seat_adjustments(limit=limit)
+    async with db_engine.async_session_factory() as db, db.begin():
+        adjustments = await claim_pending_seat_adjustments(db, limit=limit)
     for adjustment in adjustments:
         try:
             await stripe_billing.update_subscription_item_quantity(
@@ -1876,7 +2292,11 @@ async def process_pending_seat_adjustments(*, limit: int = 100) -> None:
                 quantity=adjustment.target_quantity,
                 idempotency_key=f"seat-quantity:{adjustment.id}:seats:{adjustment.target_quantity}",
             )
-            await mark_seat_adjustment_stripe_confirmed(adjustment_id=adjustment.id)
+            async with db_engine.async_session_factory() as db, db.begin():
+                await mark_seat_adjustment_stripe_confirmed(
+                    db,
+                    adjustment_id=adjustment.id,
+                )
             if (
                 adjustment.period_start is not None
                 and adjustment.period_end is not None
@@ -1896,27 +2316,37 @@ async def process_pending_seat_adjustments(*, limit: int = 100) -> None:
                     period_end=adjustment.period_end,
                     effective_at=adjustment.effective_at,
                 )
-                await ensure_billing_grant_record(
-                    user_id=adjustment.user_id,
-                    billing_subject_id=adjustment.billing_subject_id,
-                    grant_type=PRO_SEAT_PRORATION_GRANT_TYPE,
-                    hours_granted=hours_granted,
-                    effective_at=adjustment.effective_at,
-                    expires_at=adjustment.period_end,
-                    source_ref=grant_source_ref,
+                async with db_engine.async_session_factory() as db, db.begin():
+                    await ensure_billing_grant_record(
+                        db,
+                        user_id=adjustment.user_id,
+                        billing_subject_id=adjustment.billing_subject_id,
+                        grant_type=PRO_SEAT_PRORATION_GRANT_TYPE,
+                        hours_granted=hours_granted,
+                        effective_at=adjustment.effective_at,
+                        expires_at=adjustment.period_end,
+                        source_ref=grant_source_ref,
+                    )
+            async with db_engine.async_session_factory() as db, db.begin():
+                await mark_seat_adjustment_grant_issued(
+                    db,
+                    adjustment_id=adjustment.id,
                 )
-            await mark_seat_adjustment_grant_issued(adjustment_id=adjustment.id)
         except stripe_billing.StripeBillingError as error:
-            await mark_seat_adjustment_failed(
-                adjustment_id=adjustment.id,
-                error=error.message,
-                terminal=_stripe_error_is_terminal(error),
-            )
+            async with db_engine.async_session_factory() as db, db.begin():
+                await mark_seat_adjustment_failed(
+                    db,
+                    adjustment_id=adjustment.id,
+                    error=error.message,
+                    terminal=_stripe_error_is_terminal(error),
+                )
         except Exception as error:
-            await mark_seat_adjustment_failed(
-                adjustment_id=adjustment.id,
-                error=f"{type(error).__name__}: {error}",
-            )
+            async with db_engine.async_session_factory() as db, db.begin():
+                await mark_seat_adjustment_failed(
+                    db,
+                    adjustment_id=adjustment.id,
+                    error=f"{type(error).__name__}: {error}",
+                )
 
 
 def _stripe_error_is_terminal(error: stripe_billing.StripeBillingError) -> bool:
@@ -1927,18 +2357,21 @@ async def send_pending_usage_exports(*, limit: int = 100) -> None:
     if settings.cloud_billing_mode != BILLING_MODE_ENFORCE:
         return
 
-    exports = await claim_usage_exports_for_sending(limit=limit)
+    async with db_engine.async_session_factory() as db, db.begin():
+        exports = await claim_usage_exports_for_sending_record(db, limit=limit)
     now = utcnow()
     for export in exports:
         terminal_error = _terminal_export_error(export.accounted_until, now=now)
         if not export.stripe_customer_id:
             terminal_error = "Billing subject has no Stripe customer id."
         if terminal_error is not None:
-            await mark_usage_export_failed(
-                export_id=export.id,
-                terminal=True,
-                error=terminal_error,
-            )
+            async with db_engine.async_session_factory() as db, db.begin():
+                await mark_usage_export_failed(
+                    db,
+                    export_id=export.id,
+                    terminal=True,
+                    error=terminal_error,
+                )
             await _record_usage_export_decision(
                 billing_subject_id=export.billing_subject_id,
                 reason=BILLING_USAGE_EXPORT_STATUS_FAILED_TERMINAL,
@@ -1974,11 +2407,13 @@ async def send_pending_usage_exports(*, limit: int = 100) -> None:
                 meter_kwargs["quantity"] = quantity
             payload = await stripe_billing.create_meter_event(**meter_kwargs)
         except stripe_billing.StripeBillingError as error:
-            await mark_usage_export_failed(
-                export_id=export.id,
-                terminal=False,
-                error=error.message,
-            )
+            async with db_engine.async_session_factory() as db, db.begin():
+                await mark_usage_export_failed(
+                    db,
+                    export_id=export.id,
+                    terminal=False,
+                    error=error.message,
+                )
             await _record_usage_export_decision(
                 billing_subject_id=export.billing_subject_id,
                 reason="failed_retryable",
@@ -1990,12 +2425,14 @@ async def send_pending_usage_exports(*, limit: int = 100) -> None:
             continue
 
         meter_identifier = payload.get("identifier")
-        await mark_usage_export_succeeded(
-            export_id=export.id,
-            stripe_meter_event_identifier=(
-                meter_identifier if isinstance(meter_identifier, str) else identifier
-            ),
-        )
+        async with db_engine.async_session_factory() as db, db.begin():
+            await mark_usage_export_succeeded(
+                db,
+                export_id=export.id,
+                stripe_meter_event_identifier=(
+                    meter_identifier if isinstance(meter_identifier, str) else identifier
+                ),
+            )
         await _record_usage_export_decision(
             billing_subject_id=export.billing_subject_id,
             reason=BILLING_USAGE_EXPORT_STATUS_SUCCEEDED,
@@ -2007,15 +2444,17 @@ def _terminal_export_error(accounted_until: datetime, *, now: datetime) -> str |
 
 
 async def _record_usage_export_decision(*, billing_subject_id: UUID, reason: str) -> None:
-    await record_billing_decision_event(
-        billing_subject_id=billing_subject_id,
-        actor_user_id=None,
-        workspace_id=None,
-        decision_type=BILLING_DECISION_OVERAGE_EXPORT,
-        mode=settings.cloud_billing_mode,
-        would_block_start=False,
-        would_pause_active=False,
-        reason=reason,
-        active_sandbox_count=0,
-        remaining_seconds=None,
-    )
+    async with db_engine.async_session_factory() as db, db.begin():
+        await record_billing_decision_event(
+            db,
+            billing_subject_id=billing_subject_id,
+            actor_user_id=None,
+            workspace_id=None,
+            decision_type=BILLING_DECISION_OVERAGE_EXPORT,
+            mode=settings.cloud_billing_mode,
+            would_block_start=False,
+            would_pause_active=False,
+            reason=reason,
+            active_sandbox_count=0,
+            remaining_seconds=None,
+        )

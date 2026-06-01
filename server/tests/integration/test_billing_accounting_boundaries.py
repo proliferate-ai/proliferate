@@ -24,11 +24,11 @@ from proliferate.db.models.billing import (
     BillingUsageExport,
 )
 from proliferate.db.store.billing import (
-    account_usage_for_billing_subject,
     ensure_billing_grant,
     ensure_personal_billing_subject,
 )
 from proliferate.server.billing import service as billing_service
+from proliferate.server.billing.service import account_usage_for_billing_subject
 from tests.integration.billing_accounting_helpers import (
     patch_global_session_factory,
     seed_usage_segment,

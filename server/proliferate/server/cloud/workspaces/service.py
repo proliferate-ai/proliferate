@@ -37,6 +37,7 @@ from proliferate.db import engine as db_engine
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
+from proliferate.db.store import billing as billing_store
 from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
 from proliferate.db.store.automation_cloud_workspace_claims import (
     create_managed_cloud_workspace_for_claimed_run,
@@ -44,10 +45,6 @@ from proliferate.db.store.automation_cloud_workspace_claims import (
 from proliferate.db.store.automations import (
     AutomationRunValue,
     list_latest_runs_by_cloud_workspace_ids_for_user,
-)
-from proliferate.db.store.billing import (
-    close_usage_segment_for_sandbox,
-    ensure_personal_billing_subject,
 )
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_claims import claims as claims_store
@@ -121,6 +118,7 @@ from proliferate.server.billing.service import (
     authorize_sandbox_start,
     authorize_sandbox_start_for_billing_subject,
     get_billing_snapshot_for_subject,
+    record_cloud_sandbox_usage_stopped,
     repo_limit_for_billing_snapshot,
 )
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
@@ -671,7 +669,7 @@ async def bootstrap_workspace_remote_access(
             status_code=409,
         )
 
-    billing_subject = await ensure_personal_billing_subject(db, user.id)
+    billing_subject = await billing_store.ensure_personal_billing_subject(db, user.id)
     git_provider, git_owner, git_repo_name, git_branch, git_base_branch = (
         _remote_access_repo_fields(body)
     )
@@ -796,7 +794,7 @@ async def launch_workspace_on_target(
         target_kind=target.kind,
         workspace_root=target.default_workspace_root,
     )
-    billing_subject = await ensure_personal_billing_subject(db, user.id)
+    billing_subject = await billing_store.ensure_personal_billing_subject(db, user.id)
     workspace = await create_direct_target_cloud_workspace(
         db,
         target_id=target.id,
@@ -2418,7 +2416,7 @@ async def _stop_workspace_runtime(workspace: CloudWorkspace) -> None:
                     external_sandbox_id=sandbox.external_sandbox_id,
                 )
             else:
-                await close_usage_segment_for_sandbox(
+                await record_cloud_sandbox_usage_stopped(
                     sandbox_id=sandbox.id,
                     ended_at=utcnow(),
                     closed_by=USAGE_SEGMENT_CLOSED_BY_MANUAL_STOP,
@@ -2469,7 +2467,7 @@ async def _destroy_workspace_runtime(workspace: CloudWorkspace) -> None:
                     external_sandbox_id=sandbox.external_sandbox_id,
                 )
             else:
-                await close_usage_segment_for_sandbox(
+                await record_cloud_sandbox_usage_stopped(
                     sandbox_id=sandbox.id,
                     ended_at=utcnow(),
                     closed_by=USAGE_SEGMENT_CLOSED_BY_DESTROY,
