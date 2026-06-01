@@ -22,6 +22,7 @@ import {
 } from "@/lib/domain/workspaces/shell/right-panel-browser-tabs";
 import {
   viewerTargetKey,
+  type ViewerTargetKey,
   type ViewerTarget,
 } from "@/lib/domain/workspaces/viewer/viewer-target";
 
@@ -85,6 +86,43 @@ export function removeBrowserTabFromRightPanelState(
     rightPanelBrowserHeaderKey(browserId),
     { isCloudWorkspaceSelected },
   );
+}
+
+export function removeViewerTargetFromRightPanelState(
+  input: Partial<RightPanelWorkspaceState> | undefined,
+  targetKey: ViewerTargetKey,
+  isCloudWorkspaceSelected: boolean,
+): RightPanelWorkspaceState {
+  const state = reconcileRightPanelWorkspaceState(input, { isCloudWorkspaceSelected });
+  const removedIndex = state.headerOrder.indexOf(targetKey);
+  const headerOrder = state.headerOrder.filter((key) => key !== targetKey);
+  const fallbackEntryKey = removedIndex > 0
+    ? headerOrder[removedIndex - 1]
+    : headerOrder[removedIndex] ?? "tool:git";
+
+  return reconcileRightPanelWorkspaceState(
+    {
+      ...state,
+      headerOrder,
+      activeEntryKey: state.activeEntryKey === targetKey
+        ? fallbackEntryKey
+        : state.activeEntryKey,
+    },
+    { isCloudWorkspaceSelected },
+  );
+}
+
+export function resolveViewerTargetKeyAfterHeaderEntryRemoval(
+  headerOrder: readonly RightPanelHeaderEntryKey[],
+  targetKey: RightPanelHeaderEntryKey,
+): ViewerTargetKey | null {
+  const removedIndex = headerOrder.indexOf(targetKey);
+  const nextHeaderOrder = headerOrder.filter((key) => key !== targetKey);
+  const fallbackEntryKey = removedIndex > 0
+    ? nextHeaderOrder[removedIndex - 1]
+    : nextHeaderOrder[removedIndex] ?? null;
+  const fallbackEntry = parseRightPanelHeaderEntryKey(fallbackEntryKey);
+  return fallbackEntry?.kind === "viewer" ? fallbackEntry.targetKey : null;
 }
 
 export function createBrowserTabInRightPanelState(

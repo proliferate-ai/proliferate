@@ -17,11 +17,11 @@ import {
 import { WorkspaceShellActionsProvider } from "@/components/workspace/shell/providers/WorkspaceShellActionsContext";
 import { WorkspaceCommandPalette } from "@/components/workspace/shell/command-palette/WorkspaceCommandPalette";
 import { RightPanel } from "@/components/workspace/shell/right-panel/RightPanel";
-import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
-import { SidebarUpdatePill } from "@/components/workspace/shell/sidebar/SidebarUpdatePill";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
+import { WorkspaceShellSidebar } from "@/components/workspace/shell/sidebar/WorkspaceShellSidebar";
+import {
+  WorkspaceSidebarHeaderControls,
+} from "@/components/workspace/shell/sidebar/WorkspaceSidebarHeaderControls";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
-import { SplitPanel } from "@proliferate/ui/icons";
 import { useMainScreenState } from "@/hooks/main/facade/use-main-screen-state";
 import { useMainScreenShortcuts } from "@/hooks/main/lifecycle/use-main-screen-shortcuts";
 import { useMainScreenActions } from "@/hooks/main/workflows/use-main-screen-actions";
@@ -214,38 +214,15 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
               data-pending-workspace-attempt-id={pendingWorkspaceEntry?.attemptId ?? undefined}
               data-telemetry-block
             >
-              <div
-                id="main-sidebar"
-                className="flex shrink-0 flex-col overflow-hidden bg-sidebar transition-[width] duration-150 ease-in-out"
-                style={{ width: sidebarOpen ? sidebarWidth : 0 }}
-              >
-                <DebugProfiler id="workspace-sidebar-frame">
-                  <div className="flex h-full min-h-0 flex-col">
-                    <div className="flex h-10 shrink-0 items-center" data-tauri-drag-region="true">
-                      <div className="flex h-full items-center gap-2 pl-[82px]">
-                        <IconButton
-                          tone="sidebar"
-                          size="sm"
-                          onClick={actions.onToggleSidebar}
-                          title="Hide sidebar"
-                          className="rounded-md"
-                        >
-                          <SplitPanel className="size-4" />
-                        </IconButton>
-                        <SidebarUpdatePill
-                          phase={updaterPhase}
-                          downloadProgress={downloadProgress}
-                          onDownloadUpdate={downloadUpdate}
-                          onOpenRestartPrompt={openRestartPrompt}
-                        />
-                      </div>
-                    </div>
-                    <div className="flex-1 min-h-0 overflow-hidden">
-                      <MainSidebar />
-                    </div>
-                  </div>
-                </DebugProfiler>
-              </div>
+              <WorkspaceShellSidebar
+                open={sidebarOpen}
+                width={sidebarWidth}
+                updaterPhase={updaterPhase}
+                downloadProgress={downloadProgress}
+                onToggleSidebar={actions.onToggleSidebar}
+                onDownloadUpdate={downloadUpdate}
+                onOpenRestartPrompt={openRestartPrompt}
+              />
               {sidebarOpen && (
                 <div
                   role="separator"
@@ -269,22 +246,15 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                     <DebugProfiler id="workspace-header-frame">
                       <>
                         {!sidebarOpen && (
-                          <div className="flex items-center gap-2 pl-[82px] pr-2">
-                            <IconButton
-                              size="sm"
-                              onClick={actions.onToggleSidebar}
-                              title="Show sidebar"
-                              className="rounded-md"
-                            >
-                              <SplitPanel className="size-4" />
-                            </IconButton>
-                            <SidebarUpdatePill
-                              phase={updaterPhase}
-                              downloadProgress={downloadProgress}
-                              onDownloadUpdate={downloadUpdate}
-                              onOpenRestartPrompt={openRestartPrompt}
-                            />
-                          </div>
+                          <WorkspaceSidebarHeaderControls
+                            className="pl-[82px] pr-2"
+                            toggleTitle="Show sidebar"
+                            phase={updaterPhase}
+                            downloadProgress={downloadProgress}
+                            onToggleSidebar={actions.onToggleSidebar}
+                            onDownloadUpdate={downloadUpdate}
+                            onOpenRestartPrompt={openRestartPrompt}
+                          />
                         )}
                         {hasWorkspaceShell && !hasLaunchIntentOnlyShell && (
                           <GlobalHeader
