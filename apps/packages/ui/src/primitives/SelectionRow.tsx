@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Check } from "../icons";
+import { Check } from "../icons/core";
 
 interface SelectionRowProps {
   selected: boolean;
