@@ -6,8 +6,6 @@ import type {
   RecentWorkSourceKind,
 } from "@proliferate/product-domain/workspaces/cloud-work-inventory";
 
-import type { MobileIconName } from "../../../components/primitives/MobileIcon";
-
 export type MobileWorkTypeFilter =
   | "all"
   | "cloud"
@@ -18,11 +16,19 @@ export type MobileWorkTypeFilter =
 export type MobileWorkRuntimeFilter = RecentWorkRuntimeLocation | "all";
 export type MobileWorkStatusFilter = CloudWorkStatusFilter | "all";
 export type MobileWorkFilterPanel = "type" | "runtime" | "ownership" | "status" | "repo" | "sort";
+export type MobileWorkFilterIconToken =
+  | "calendar-clock"
+  | "cloud"
+  | "external"
+  | "lock"
+  | "monitor"
+  | "slack"
+  | "workspaces";
 
 export const MOBILE_WORK_TYPE_OPTIONS: readonly {
   id: MobileWorkTypeFilter;
   label: string;
-  icon: MobileIconName;
+  icon: MobileWorkFilterIconToken;
 }[] = [
   { id: "all", label: "All", icon: "workspaces" },
   { id: "cloud", label: "Cloud", icon: "cloud" },
@@ -35,7 +41,7 @@ export const MOBILE_WORK_TYPE_OPTIONS: readonly {
 export const MOBILE_WORK_RUNTIME_OPTIONS: readonly {
   id: MobileWorkRuntimeFilter;
   label: string;
-  icon: MobileIconName;
+  icon: MobileWorkFilterIconToken;
 }[] = [
   { id: "all", label: "All runtimes", icon: "workspaces" },
   { id: "cloud_sandbox", label: "Cloud runtime", icon: "cloud" },

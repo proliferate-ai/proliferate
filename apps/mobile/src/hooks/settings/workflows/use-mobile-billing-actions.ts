@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Linking } from "react-native";
 import { useCloudBillingActions } from "@proliferate/cloud-sdk-react";
+
+import { openNativeUrl } from "../../../lib/access/native/open-url";
 
 export function useMobileBillingActions() {
   const billingActions = useCloudBillingActions({ ownerScope: "personal" });
@@ -15,7 +16,7 @@ export function useMobileBillingActions() {
           : action === "refill"
             ? await billingActions.createRefillCheckout()
             : await billingActions.createCloudCheckout();
-      await Linking.openURL(response.url);
+      await openNativeUrl(response.url);
     } catch (error) {
       setBillingError(error instanceof Error ? error.message : "Billing action could not start.");
     }

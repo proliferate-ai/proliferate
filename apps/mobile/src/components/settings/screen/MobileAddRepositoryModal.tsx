@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 
-import { useMobileRepositoryPicker } from "../../../hooks/settings/facade/use-mobile-repository-picker";
+import { useMobileRepositoryPicker } from "../../../hooks/settings/workflows/use-mobile-repository-picker";
 import { useMobileSettingsSheetSlide } from "../../../hooks/settings/ui/use-mobile-settings-sheet-slide";
 import { colors, radius, spacing } from "../../../styles/tokens";
 import { MobileIcon } from "../../primitives/MobileIcon";
