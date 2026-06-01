@@ -8,10 +8,10 @@ pub mod response;
 
 pub use auth::ProductMcpAuth;
 pub use definition::{ProductMcpDefinition, ProductMcpPromptPolicy, ProductMcpVisibility};
-pub use dispatcher::{ProductMcpServer, dispatch_product_mcp_request};
+pub use dispatcher::{dispatch_product_mcp_request, ProductMcpServer};
 pub use endpoint::ProductMcpEndpointOperation;
 pub use errors::{ProductMcpContextError, ProductMcpDispatchError};
 pub use request::{
-    PRODUCT_MCP_TOKEN_HEADER_NAME, ProductMcpAuthHeader, ProductMcpRequestContext,
-    ProductMcpTokenValidation,
+    ProductMcpAuthHeader, ProductMcpRequestContext, ProductMcpTokenValidation,
+    PRODUCT_MCP_TOKEN_HEADER_NAME,
 };

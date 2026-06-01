@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
-use super::tools::{MUTATING_TOOL_NAMES, READ_ONLY_TOOL_NAMES, build_tool_list};
+use super::tools::{build_tool_list, MUTATING_TOOL_NAMES, READ_ONLY_TOOL_NAMES};
 use crate::integrations::mcp::product_server::{
     ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDefinition,
     ProductMcpEndpointOperation, ProductMcpRequestContext, ProductMcpServer,

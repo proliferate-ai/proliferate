@@ -5,9 +5,9 @@ use async_trait::async_trait;
 use serde_json::Value;
 
 use crate::integrations::mcp::product_server::{
-    ProductMcpAuthHeader, ProductMcpDefinition, ProductMcpDispatchError,
-    ProductMcpEndpointOperation, ProductMcpRequestContext, ProductMcpServer,
-    ProductMcpTokenValidation, dispatch_product_mcp_request,
+    dispatch_product_mcp_request, ProductMcpAuthHeader, ProductMcpDefinition,
+    ProductMcpDispatchError, ProductMcpEndpointOperation, ProductMcpRequestContext,
+    ProductMcpServer, ProductMcpTokenValidation,
 };
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
@@ -428,11 +428,9 @@ mod tests {
         .err()
         .expect("duplicate route slug should fail");
 
-        assert!(
-            error
-                .to_string()
-                .contains("duplicate product MCP route slug")
-        );
+        assert!(error
+            .to_string()
+            .contains("duplicate product MCP route slug"));
     }
 
     #[test]
@@ -450,10 +448,8 @@ mod tests {
         .err()
         .expect("duplicate route alias should fail");
 
-        assert!(
-            error
-                .to_string()
-                .contains("duplicate product MCP route alias")
-        );
+        assert!(error
+            .to_string()
+            .contains("duplicate product MCP route alias"));
     }
 }

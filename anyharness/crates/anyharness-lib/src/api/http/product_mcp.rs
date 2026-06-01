@@ -1,8 +1,8 @@
 use axum::{
-    Json,
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
+    Json,
 };
 use serde_json::Value;
 
@@ -10,11 +10,11 @@ use super::access::assert_workspace_mutable;
 use super::error::ApiError;
 use crate::app::AppState;
 use crate::integrations::mcp::product_server::{
-    PRODUCT_MCP_TOKEN_HEADER_NAME, ProductMcpAuthHeader, ProductMcpContextError,
-    ProductMcpDispatchError, ProductMcpEndpointOperation, ProductMcpRequestContext,
+    ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDispatchError,
+    ProductMcpEndpointOperation, ProductMcpRequestContext, PRODUCT_MCP_TOKEN_HEADER_NAME,
 };
 use crate::sessions::mcp_bindings::product_registry::{
-    ProductMcpEndpointHandler, legacy_route_aliases,
+    legacy_route_aliases, ProductMcpEndpointHandler,
 };
 
 pub async fn get_product_mcp_endpoint(
