@@ -2,8 +2,8 @@ import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { colors } from "../../../styles/tokens";
+import { useMobilePopoverGroup } from "../../../hooks/ui/popover/popover-context";
 import { MobileIcon, type MobileIconName } from "../MobileIcon";
-import { useMobilePopoverGroup } from "./popover-context";
 
 export interface MobilePopoverRowProps {
   id?: string;

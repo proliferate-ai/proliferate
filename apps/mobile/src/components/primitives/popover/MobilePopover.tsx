@@ -18,7 +18,7 @@ import {
   MobilePopoverContext,
   type MobilePopoverContextValue,
   type MobilePopoverOverlay,
-} from "./popover-context";
+} from "../../../hooks/ui/popover/popover-context";
 
 type Anchor =
   | "top-right"

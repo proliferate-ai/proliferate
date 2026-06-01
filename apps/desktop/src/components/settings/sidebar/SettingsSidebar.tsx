@@ -10,7 +10,7 @@ import {
 import {
   SETTINGS_NAV_GROUPS,
   type SettingsNavItem,
-} from "@/components/settings/settings-navigation";
+} from "@/config/settings-navigation";
 import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
 import { useSettingsSectionShortcuts } from "@/hooks/settings/ui/use-settings-section-shortcuts";
 import { useShortcutRevealVisible } from "@/providers/ShortcutRevealProvider";
