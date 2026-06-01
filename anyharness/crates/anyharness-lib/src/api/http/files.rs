@@ -14,6 +14,7 @@ use anyharness_contract::v1::{
     WriteWorkspaceFileResponse,
 };
 
+use crate::adapters::files::safety::SafetyError;
 use crate::adapters::files::service::FileServiceError;
 use crate::adapters::files::types::{
     CreateWorkspaceFileEntryKind as InternalCreateWorkspaceFileEntryKind,
@@ -58,14 +59,59 @@ where
 }
 
 pub(super) fn map_service_error(e: FileServiceError) -> ApiError {
-    let code = e.problem_code();
-    let detail = e.to_string();
-    match e.status_code() {
-        404 => ApiError::not_found(detail, code),
-        409 => ApiError::conflict(detail, code),
-        400 => ApiError::bad_request(detail, code),
-        _ => ApiError::internal(detail),
+    match e {
+        FileServiceError::Safety(error) => map_safety_error(error),
+        FileServiceError::NotFound(path) => {
+            ApiError::not_found(format!("file not found: {path}"), "FILE_NOT_FOUND")
+        }
+        FileServiceError::AlreadyExists(path) => ApiError::conflict(
+            format!("file already exists: {path}"),
+            "FILE_ALREADY_EXISTS",
+        ),
+        FileServiceError::NotAFile(path) => {
+            ApiError::bad_request(format!("not a file: {path}"), "NOT_A_FILE")
+        }
+        FileServiceError::NotADirectory(path) => {
+            ApiError::bad_request(format!("not a directory: {path}"), "NOT_A_DIRECTORY")
+        }
+        FileServiceError::ProtectedPath(path) => ApiError::conflict(
+            format!("workspace path is protected: {path}"),
+            "FILE_PATH_PROTECTED",
+        ),
+        FileServiceError::BinaryFile(path) => {
+            ApiError::bad_request(format!("binary file, not editable: {path}"), "BINARY_FILE")
+        }
+        FileServiceError::FileTooLarge(path) => ApiError::bad_request(
+            format!("file too large for editing: {path}"),
+            "FILE_TOO_LARGE",
+        ),
+        FileServiceError::InvalidCreateRequest(message) => {
+            ApiError::bad_request(message, "INVALID_CREATE_REQUEST")
+        }
+        FileServiceError::InvalidRenameRequest(message) => {
+            ApiError::bad_request(message, "INVALID_RENAME_REQUEST")
+        }
+        FileServiceError::InvalidDeleteRequest(message) => {
+            ApiError::bad_request(message, "INVALID_DELETE_REQUEST")
+        }
+        FileServiceError::VersionMismatch { path, .. } => {
+            ApiError::conflict(format!("version mismatch for: {path}"), "VERSION_MISMATCH")
+        }
+        FileServiceError::Io(error) => ApiError::internal(format!("file I/O error: {error}")),
     }
+}
+
+fn map_safety_error(error: SafetyError) -> ApiError {
+    let detail = error.to_string();
+    let code = match &error {
+        SafetyError::OutsideWorkspace => "PATH_OUTSIDE_WORKSPACE",
+        SafetyError::AbsolutePath
+        | SafetyError::TraversalAttempt
+        | SafetyError::InvalidPath
+        | SafetyError::GitDirectory
+        | SafetyError::IoError(_) => "INVALID_FILE_PATH",
+    };
+    ApiError::bad_request(detail, code)
 }
 
 #[utoipa::path(

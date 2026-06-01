@@ -46,10 +46,19 @@ full contract layer.
 
 ### Path Safety
 
-Every operation begins with `resolve_safe_path(...)`
-(`anyharness/crates/anyharness-lib/src/adapters/files/safety.rs`).
+Every operation begins with the path-safety layer in
+`anyharness/crates/anyharness-lib/src/adapters/files/safety.rs`.
 
-That path-safety layer rejects:
+Use `resolve_safe_path(...)` for operations that need the resolved target path,
+such as list, read, write, create, and stat. This resolver canonicalizes an
+existing target and follows the final component when it exists.
+
+Use `resolve_safe_entry_path(...)` for entry mutations that operate on the
+entry itself, such as rename and delete. This resolver validates and
+canonicalizes parents without following the final component, so deleting or
+renaming a symlink affects the symlink entry rather than its target.
+
+Both resolvers reject:
 
 - absolute paths
 - `..` traversal

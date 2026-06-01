@@ -228,7 +228,7 @@ impl CoworkSessionHooks {
         let lock = self.autosave_lock(&workspace_id);
         tokio::spawn(async move {
             let _guard = lock.lock().await;
-            if let Err(error) = GitService::autosave_cowork_workspace(
+            if let Err(error) = GitService::commit_all_if_dirty(
                 std::path::Path::new(&workspace_path),
                 "Cowork autosave",
             ) {

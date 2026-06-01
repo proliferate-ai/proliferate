@@ -194,14 +194,3 @@ impl std::fmt::Display for SafetyError {
         }
     }
 }
-
-impl SafetyError {
-    pub fn problem_code(&self) -> &'static str {
-        match self {
-            Self::AbsolutePath | Self::TraversalAttempt | Self::InvalidPath => "INVALID_FILE_PATH",
-            Self::GitDirectory => "INVALID_FILE_PATH",
-            Self::OutsideWorkspace => "PATH_OUTSIDE_WORKSPACE",
-            Self::IoError(_) => "INVALID_FILE_PATH",
-        }
-    }
-}

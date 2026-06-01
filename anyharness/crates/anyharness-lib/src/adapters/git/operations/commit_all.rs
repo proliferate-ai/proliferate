@@ -3,10 +3,7 @@ use std::path::{Path, PathBuf};
 use super::super::executor::{run_git, run_git_ok};
 use super::commit::commit_staged;
 
-pub fn autosave_cowork_workspace(
-    workspace_path: &Path,
-    summary: &str,
-) -> anyhow::Result<Option<String>> {
+pub fn commit_all_if_dirty(workspace_path: &Path, summary: &str) -> anyhow::Result<Option<String>> {
     let repo_root = run_git_ok(workspace_path, &["rev-parse", "--show-toplevel"])?
         .trim()
         .to_string();

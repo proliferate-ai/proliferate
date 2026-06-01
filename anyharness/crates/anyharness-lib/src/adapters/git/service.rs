@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use super::executor::resolve_git_repo_root;
 use super::operations::{
-    autosave, branches, commit, diff, diff_files, push, revert_patches, staging, status,
+    branches, commit, commit_all, diff, diff_files, push, revert_patches, staging, status,
 };
 use super::types::{
     CommitError, GitBranch, GitBranchDiffFilesResult, GitDiffError, GitDiffResult, GitDiffScope,
@@ -114,10 +114,10 @@ impl GitService {
         push::push_current_branch_with_timeout(workspace_path, remote, timeout)
     }
 
-    pub fn autosave_cowork_workspace(
+    pub fn commit_all_if_dirty(
         workspace_path: &Path,
         summary: &str,
     ) -> anyhow::Result<Option<String>> {
-        autosave::autosave_cowork_workspace(workspace_path, summary)
+        commit_all::commit_all_if_dirty(workspace_path, summary)
     }
 }

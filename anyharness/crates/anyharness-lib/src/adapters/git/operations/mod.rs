@@ -1,6 +1,6 @@
-pub mod autosave;
 pub mod branches;
 pub mod commit;
+pub mod commit_all;
 pub mod diff;
 mod diff_base;
 pub mod diff_files;

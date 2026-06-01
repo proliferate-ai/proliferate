@@ -128,6 +128,7 @@ The git service also owns:
 - `stage_paths`
 - `unstage_paths`
 - `commit_staged`
+- `commit_all_if_dirty`
 - `push_current_branch`
 - `rename_branch`
 

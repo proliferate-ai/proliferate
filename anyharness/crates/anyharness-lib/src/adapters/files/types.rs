@@ -99,44 +99,6 @@ pub enum FileServiceError {
     Io(String),
 }
 
-impl FileServiceError {
-    pub fn problem_code(&self) -> &'static str {
-        match self {
-            Self::Safety(e) => e.problem_code(),
-            Self::NotFound(_) => "FILE_NOT_FOUND",
-            Self::AlreadyExists(_) => "FILE_ALREADY_EXISTS",
-            Self::NotAFile(_) => "NOT_A_FILE",
-            Self::NotADirectory(_) => "NOT_A_DIRECTORY",
-            Self::ProtectedPath(_) => "FILE_PATH_PROTECTED",
-            Self::BinaryFile(_) => "BINARY_FILE",
-            Self::FileTooLarge(_) => "FILE_TOO_LARGE",
-            Self::InvalidCreateRequest(_) => "INVALID_CREATE_REQUEST",
-            Self::InvalidRenameRequest(_) => "INVALID_RENAME_REQUEST",
-            Self::InvalidDeleteRequest(_) => "INVALID_DELETE_REQUEST",
-            Self::VersionMismatch { .. } => "VERSION_MISMATCH",
-            Self::Io(_) => "FILE_IO_ERROR",
-        }
-    }
-
-    pub fn status_code(&self) -> u16 {
-        match self {
-            Self::Safety(_) => 400,
-            Self::NotFound(_) => 404,
-            Self::AlreadyExists(_) => 409,
-            Self::NotAFile(_) => 400,
-            Self::NotADirectory(_) => 400,
-            Self::ProtectedPath(_) => 409,
-            Self::BinaryFile(_) => 400,
-            Self::FileTooLarge(_) => 400,
-            Self::InvalidCreateRequest(_) => 400,
-            Self::InvalidRenameRequest(_) => 400,
-            Self::InvalidDeleteRequest(_) => 400,
-            Self::VersionMismatch { .. } => 409,
-            Self::Io(_) => 500,
-        }
-    }
-}
-
 impl std::fmt::Display for FileServiceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -145,7 +107,7 @@ impl std::fmt::Display for FileServiceError {
             Self::AlreadyExists(p) => write!(f, "file already exists: {p}"),
             Self::NotAFile(p) => write!(f, "not a file: {p}"),
             Self::NotADirectory(p) => write!(f, "not a directory: {p}"),
-            Self::ProtectedPath(p) => write!(f, "path is protected in cowork: {p}"),
+            Self::ProtectedPath(p) => write!(f, "path is protected: {p}"),
             Self::BinaryFile(p) => write!(f, "binary file, not editable: {p}"),
             Self::FileTooLarge(p) => write!(f, "file too large for editing: {p}"),
             Self::InvalidCreateRequest(message) => write!(f, "{message}"),
