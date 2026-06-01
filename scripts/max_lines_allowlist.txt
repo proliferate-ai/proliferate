@@ -49,11 +49,11 @@ apps/desktop/src/components/workspace/shell/right-panel/RightPanel.test.tsx 732 
 apps/desktop/src/components/workspace/shell/right-panel/RightPanel.tsx 637 existing desktop component oversized file
 apps/desktop/src/hooks/home/workflows/use-home-next-launch.ts 611 existing desktop hook oversized file
 apps/desktop/src/hooks/sessions/lifecycle/use-session-stream-flush.ts 666 existing desktop hook oversized file
-apps/desktop/src/hooks/sessions/use-session-creation-actions.ts 765 existing desktop hook oversized file
-apps/desktop/src/hooks/sessions/use-session-runtime-actions.ts 860 existing desktop hook oversized file
-apps/desktop/src/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy.ts 643 existing desktop hook oversized file
-apps/desktop/src/hooks/workspaces/tabs/use-workspace-shell-activation.ts 671 existing desktop hook oversized file
-apps/desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts 899 existing desktop hook oversized file
+apps/desktop/src/hooks/sessions/workflows/use-session-creation-actions.ts 765 existing desktop hook oversized file
+apps/desktop/src/hooks/sessions/workflows/use-session-runtime-actions.ts 860 existing desktop hook oversized file
+apps/desktop/src/hooks/workspaces/derived/tabs/use-workspace-header-subagent-hierarchy.ts 643 existing desktop hook oversized file
+apps/desktop/src/hooks/workspaces/workflows/tabs/use-workspace-shell-activation.ts 671 existing desktop hook oversized file
+apps/desktop/src/hooks/workspaces/workflows/use-workspace-bootstrap-actions.ts 899 existing desktop hook oversized file
 apps/desktop/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 759 existing desktop oversized test file
 apps/desktop/src/lib/infra/measurement/boot-stall-diagnostics.ts 1284 existing desktop oversized file
 apps/desktop/src/lib/integrations/auth/orchestration.ts 628 existing desktop oversized file
