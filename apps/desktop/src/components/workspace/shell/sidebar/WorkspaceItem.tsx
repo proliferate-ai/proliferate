@@ -27,7 +27,7 @@ import {
   SidebarDetailIndicatorsView,
   SidebarStatusIndicatorView,
 } from "./SidebarIndicators";
-import { SidebarActionButton } from "./SidebarActionButton";
+import { SidebarActionButton } from "@proliferate/ui/layout/SidebarActionButton";
 import { WorkspaceRenamePopover } from "./WorkspaceRenamePopover";
 import { ProductSidebarWorkspaceRow } from "@proliferate/product-ui/sidebar/ProductSidebar";
 

@@ -30,7 +30,7 @@ vi.mock("@proliferate/ui/icons", () => ({
   Plus: () => <span data-testid="plus-icon" />,
 }));
 
-vi.mock("@/components/workspace/shell/sidebar/SidebarActionButton", () => ({
+vi.mock("@proliferate/ui/layout/SidebarActionButton", () => ({
   SidebarActionButton: ({
     children,
     disabled,

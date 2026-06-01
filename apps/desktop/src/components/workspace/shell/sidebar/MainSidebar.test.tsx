@@ -36,7 +36,7 @@ vi.mock("@proliferate/ui/layout/SidebarRowSurface", () => ({
   ),
 }));
 
-vi.mock("./SidebarActionButton", () => ({
+vi.mock("@proliferate/ui/layout/SidebarActionButton", () => ({
   SidebarActionButton: ({
     children,
     onClick,
