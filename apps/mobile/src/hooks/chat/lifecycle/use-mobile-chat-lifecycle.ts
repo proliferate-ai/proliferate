@@ -26,11 +26,11 @@ import {
   clearPendingMobilePrompt,
   savePendingMobilePrompt,
 } from "../../../lib/access/cloud/pending-mobile-prompt-store";
-import {
-  type SendPromptPayload,
-  type StartSessionPayload,
-  type UpdateSessionConfigPayload,
-} from "../../../lib/access/cloud/pending-mobile-prompt-dispatch";
+import type {
+  SendPromptPayload,
+  StartSessionPayload,
+  UpdateSessionConfigPayload,
+} from "../../../lib/access/cloud/pending-mobile-prompt-types";
 import {
   failedPendingInteractionForPendingPrompt,
   failedPendingInteractionMessage,

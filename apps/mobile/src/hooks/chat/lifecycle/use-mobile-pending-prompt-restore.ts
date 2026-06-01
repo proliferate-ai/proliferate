@@ -10,7 +10,7 @@ import {
 } from "../../../lib/access/cloud/pending-mobile-prompt-store";
 import {
   rearmRetryablePendingMobilePrompt,
-} from "../../../lib/access/cloud/pending-mobile-prompt-dispatch";
+} from "../../../lib/access/cloud/pending-mobile-prompt-errors";
 
 export function useMobilePendingPromptRestore({
   chat,

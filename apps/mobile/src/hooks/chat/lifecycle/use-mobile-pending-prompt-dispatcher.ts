@@ -6,16 +6,18 @@ import type {
 
 import type { MobilePendingPrompt } from "../../../navigation/navigation-model";
 import { savePendingMobilePrompt } from "../../../lib/access/cloud/pending-mobile-prompt-store";
+import { dispatchPendingMobilePrompt } from "../../../lib/access/cloud/pending-mobile-prompt-dispatch";
 import {
-  dispatchPendingMobilePrompt,
   rearmRetryablePendingMobilePrompt,
   RetryablePendingPromptDispatchError,
   shouldRetryPendingMobilePromptFailure,
-  type SendPromptPayload,
-  type StartSessionPayload,
-  type UpdateSessionConfigPayload,
-} from "../../../lib/access/cloud/pending-mobile-prompt-dispatch";
-import type { EnqueueCloudCommand } from "../../../lib/access/cloud/pending-mobile-prompt-types";
+} from "../../../lib/access/cloud/pending-mobile-prompt-errors";
+import type {
+  SendPromptPayload,
+  StartSessionPayload,
+  UpdateSessionConfigPayload,
+  EnqueueCloudCommand,
+} from "../../../lib/access/cloud/pending-mobile-prompt-types";
 import {
   markPendingPromptFailed,
 } from "../../../lib/domain/chat/mobile-chat-transcript";

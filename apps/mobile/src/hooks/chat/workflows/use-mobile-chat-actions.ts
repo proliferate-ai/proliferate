@@ -25,11 +25,12 @@ import type {
 import {
   clearPendingMobilePrompt,
 } from "../../../lib/access/cloud/pending-mobile-prompt-store";
-import {
-  ensureMobileWorkspaceReadyForCloudCommands,
-  type SendPromptPayload,
-  type StartSessionPayload,
-} from "../../../lib/access/cloud/pending-mobile-prompt-dispatch";
+import type {
+  SendPromptPayload,
+  StartSessionPayload,
+  UpdateSessionConfigPayload,
+} from "../../../lib/access/cloud/pending-mobile-prompt-types";
+import { ensureMobileWorkspaceReadyForCloudCommands } from "../../../lib/access/cloud/pending-mobile-workspace-readiness";
 import type { OptimisticPrompt } from "../../../lib/domain/chat/mobile-chat-transcript";
 import type { PermissionInteractionOption } from "../../../lib/domain/chat/mobile-chat-permissions";
 import { buildMobileChatComposerControlsModel } from "../../../lib/domain/chat/mobile-chat-composer-controls";
@@ -37,11 +38,6 @@ import { resolveAgentKind } from "../../../lib/domain/chat/mobile-chat-presentat
 import { useMobileCloudAgentResources } from "../../access/cloud/agents/use-mobile-cloud-agent-resources";
 import { useMobileCloudWorkspaceCache } from "../../access/cloud/workspaces/use-mobile-cloud-workspace-cache";
 import { useMobileChatPromptActions } from "./use-mobile-chat-prompt-actions";
-
-type UpdateSessionConfigPayload = {
-  configId: string;
-  value: string;
-};
 
 type ResolveInteractionPayload = {
   requestId: string;

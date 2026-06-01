@@ -18,10 +18,10 @@ import { cloudCommandReadiness } from "@proliferate/product-domain/workspaces/cl
 
 import type { MobilePendingPrompt } from "../../../navigation/navigation-model";
 import { savePendingMobilePrompt } from "../../../lib/access/cloud/pending-mobile-prompt-store";
-import {
-  ensureMobileWorkspaceReadyForCloudCommands,
-  type SendPromptPayload,
-} from "../../../lib/access/cloud/pending-mobile-prompt-dispatch";
+import type {
+  SendPromptPayload,
+} from "../../../lib/access/cloud/pending-mobile-prompt-types";
+import { ensureMobileWorkspaceReadyForCloudCommands } from "../../../lib/access/cloud/pending-mobile-workspace-readiness";
 import type { OptimisticPrompt } from "../../../lib/domain/chat/mobile-chat-transcript";
 import { resolveAgentKind } from "../../../lib/domain/chat/mobile-chat-presentation";
 

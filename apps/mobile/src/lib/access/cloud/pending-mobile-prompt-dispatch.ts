@@ -8,11 +8,6 @@ import {
   assertCommandEnqueued,
   waitForCommandAccepted,
 } from "./pending-mobile-command-status";
-import {
-  rearmRetryablePendingMobilePrompt,
-  RetryablePendingPromptDispatchError,
-  shouldRetryPendingMobilePromptFailure,
-} from "./pending-mobile-prompt-errors";
 import { assertStillCurrent } from "./pending-mobile-prompt-polling";
 import type {
   EnqueueCloudCommand,
@@ -26,20 +21,6 @@ import {
   resumePendingMobilePromptSession,
   startPendingMobilePromptSession,
 } from "./pending-mobile-session-resolution";
-import { ensureMobileWorkspaceReadyForCloudCommands } from "./pending-mobile-workspace-readiness";
-
-export {
-  rearmRetryablePendingMobilePrompt,
-  RetryablePendingPromptDispatchError,
-  shouldRetryPendingMobilePromptFailure,
-};
-export { ensureMobileWorkspaceReadyForCloudCommands };
-export type {
-  PendingMobilePromptDispatchResult,
-  SendPromptPayload,
-  StartSessionPayload,
-  UpdateSessionConfigPayload,
-};
 
 export async function dispatchPendingMobilePrompt(args: {
   client: ProliferateCloudClient;
