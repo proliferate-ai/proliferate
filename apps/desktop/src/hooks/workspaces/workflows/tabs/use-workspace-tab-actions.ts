@@ -11,7 +11,7 @@ import {
   resolveWorkspaceShellTabByShortcutIndex,
   type WorkspaceShellTab,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { resolveAvailableLaunchSelection } from "@/lib/domain/chat/models/model-selection";
+import { resolveAvailableLaunchSelection } from "@/lib/domain/chat/models/launch-selection-defaults";
 import { resolveStoredWorkspaceShellTab } from "@/lib/domain/workspaces/tabs/active-shell-tab";
 import type {
   HeaderWorkspaceShellStripRow,

@@ -2,8 +2,10 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { AgentSummary } from "@anyharness/sdk";
 import {
   filterModelSelectorGroups,
-  type ModelSelectorGroup,
-} from "@/lib/domain/chat/models/model-selection";
+} from "@/lib/domain/chat/models/model-selector-filtering";
+import type {
+  ModelSelectorGroup,
+} from "@/lib/domain/chat/models/model-selector-types";
 
 interface UseModelSelectorMenuArgs {
   groups: ModelSelectorGroup[];

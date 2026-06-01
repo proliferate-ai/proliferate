@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { resolveConfiguredLaunchSelection } from "@/lib/domain/chat/composer/preference-resolvers";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
-import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-selection";
+import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-selector-types";
 import { useChatLaunchCatalog } from "@/hooks/chat/derived/use-chat-launch-catalog";
 import { resolveModelDisplayName } from "@/lib/domain/chat/models/model-display";
 

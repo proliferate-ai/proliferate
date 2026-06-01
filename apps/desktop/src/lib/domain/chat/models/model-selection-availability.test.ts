@@ -3,7 +3,7 @@ import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-c
 import {
   launchSelectionIsAvailable,
   resolveAvailableLaunchSelection,
-} from "./model-selection";
+} from "./launch-selection-defaults";
 
 function launchAgent(
   kind: string,

@@ -1,4 +1,4 @@
-import type { ModelSelectorProps } from "@/lib/domain/chat/models/model-selection";
+import type { ModelSelectorProps } from "@/lib/domain/chat/models/model-selector-types";
 import type { SessionSlashCommandViewModel } from "@/lib/domain/chat/composer/session-slash-command-policy";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 

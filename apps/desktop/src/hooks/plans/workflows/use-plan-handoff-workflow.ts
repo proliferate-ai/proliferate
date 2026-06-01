@@ -27,7 +27,7 @@ import {
 import type {
   ModelSelectorProps,
   ModelSelectorSelection,
-} from "@/lib/domain/chat/models/model-selection";
+} from "@/lib/domain/chat/models/model-selector-types";
 import { resolveModelDisplayName } from "@/lib/domain/chat/models/model-display";
 import { getSessionClientAndWorkspace } from "@/lib/access/anyharness/session-runtime";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";

@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-selection";
+import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-selector-types";
 import type { Workspace } from "@anyharness/sdk";
 import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
 import { formatSessionCreateToastMessage } from "@/lib/domain/sessions/creation/create-session-error";

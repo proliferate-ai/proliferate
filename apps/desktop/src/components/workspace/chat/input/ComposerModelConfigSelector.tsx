@@ -3,38 +3,23 @@ import {
   useMemo,
   useRef,
   useState,
-  type Dispatch,
-  type ReactNode,
-  type SetStateAction,
 } from "react";
 import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import {
-  Check,
-  ChevronDown,
-} from "@proliferate/ui/icons";
-import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { CHAT_MODEL_SELECTOR_LABELS } from "@/copy/chat/chat-copy";
-import {
-  resolveReasoningEffortPresentation,
-} from "@/lib/domain/chat/session-controls/session-reasoning-effort-control";
-import {
-  resolveConfiguredSessionControlValue,
-  resolveSessionControlPresentation,
-} from "@/lib/domain/chat/session-controls/session-mode-control";
-import {
-  summarizeComposerModelConfigControls,
-} from "@/lib/domain/chat/session-controls/composer-control-groups";
+import { summarizeComposerModelConfigControls } from "@/lib/domain/chat/session-controls/composer-control-groups";
+import { sortComposerConfigSubmenuControls } from "@/lib/domain/chat/session-controls/composer-config-submenu-presentation";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
-import type {
-  ModelSelectorGroup,
-  ModelSelectorProps,
-  ModelSelectorSelection,
-} from "@/lib/domain/chat/models/model-selection";
+import { filterComposerModelGroups } from "@/lib/domain/chat/models/model-selector-filtering";
+import type { ModelSelectorProps } from "@/lib/domain/chat/models/model-selector-types";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
-import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { ChevronDown } from "@proliferate/ui/icons";
+import { ProviderIcon } from "@proliferate/ui/provider-icons";
+import {
+  ComposerModelConfigMenu,
+  type ComposerConfigSubmenu,
+  type ComposerSubmenuPosition,
+} from "./ComposerModelConfigMenu";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 
 interface ComposerModelConfigSelectorProps {
@@ -43,17 +28,8 @@ interface ComposerModelConfigSelectorProps {
   controls: LiveSessionControlDescriptor[];
 }
 
-type ComposerConfigSubmenu =
-  | { kind: "harness" }
-  | { kind: "control"; key: LiveSessionControlDescriptor["key"] };
-
 const COMPOSER_SUBMENU_GAP_PX = 4;
 const COMPOSER_SUBMENU_VIEWPORT_MARGIN_PX = 8;
-
-interface ComposerSubmenuPosition {
-  left: number;
-  top: number;
-}
 
 export function ComposerModelConfigSelector({
   modelSelectorProps,
@@ -97,7 +73,7 @@ export function ComposerModelConfigSelector({
     ?? controls.find((control) => control.pendingState)?.pendingState
     ?? null;
   const filteredGroups = useMemo(
-    () => filterModelGroups(activeModelGroups, search),
+    () => filterComposerModelGroups(activeModelGroups, search),
     [activeModelGroups, search],
   );
   const submenuControls = useMemo(
@@ -208,115 +184,49 @@ export function ComposerModelConfigSelector({
         className="w-auto border-0 bg-transparent p-0 shadow-none"
         onOpenChange={(open) => {
           if (!open) {
-            setSearch("");
-            setAddProviderOpen(false);
-            setActiveSubmenu(null);
-            setSubmenuAnchorTop(null);
-            setSubmenuPosition(null);
+            resetMenuState({
+              setActiveSubmenu,
+              setAddProviderOpen,
+              setSearch,
+              setSubmenuAnchorTop,
+              setSubmenuPosition,
+            });
           }
         }}
       >
-        {(close) => {
-          const activeControl = activeSubmenu?.kind === "control"
-            ? submenuControls.find((control) => control.key === activeSubmenu.key) ?? null
-            : null;
-          const showHarnessSubmenu = groups.length > 1;
-          const showSubmenuRows = submenuControls.length > 0 || showHarnessSubmenu;
-
-          return (
-            <div
-              ref={menuRootRef}
-              className="relative w-72 max-w-[calc(100vw-1rem)]"
-              onMouseLeave={() => setActiveSubmenu(null)}
-            >
-              <ComposerPopoverSurface className="w-72 max-w-[calc(100vw-1rem)] p-1">
-                <div className="flex max-h-[min(20rem,calc(100vh-8rem))] min-h-0 flex-col">
-                  <ComposerModelPickerContent
-                    filteredGroups={filteredGroups}
-                    groups={activeModelGroups}
-                    search={search}
-                    onSearchChange={setSearch}
-                    onSelect={(selection) => {
-                      onSelect(selection);
-                      close();
-                    }}
-                  />
-
-                  {(showSubmenuRows || notReadyAgents.length > 0) && (
-                    <div className="shrink-0">
-                      <ComposerMenuSeparator />
-
-                      {notReadyAgents.length > 0 && (
-                        <ComposerAddProviderRows
-                          addProviderOpen={addProviderOpen}
-                          notReadyAgents={notReadyAgents}
-                          onAddProviderOpenChange={setAddProviderOpen}
-                          onSetupAgent={setSetupAgent}
-                        />
-                      )}
-
-                      {showHarnessSubmenu && (
-                        <ComposerSubmenuMenuItem
-                          active={activeSubmenu?.kind === "harness"}
-                          label={harnessLabel}
-                          onOpen={(anchorElement) => {
-                            setAddProviderOpen(false);
-                            setSubmenuPosition(null);
-                            setSubmenuAnchorTop(resolveSubmenuAnchorTop(menuRootRef.current, anchorElement));
-                            setActiveSubmenu({ kind: "harness" });
-                          }}
-                        />
-                      )}
-
-                      {submenuControls.map((control) => (
-                        <ComposerSubmenuMenuItem
-                          key={control.key}
-                          active={activeSubmenu?.kind === "control" && activeSubmenu.key === control.key}
-                          label={resolveControlSubmenuLabel(control)}
-                          onOpen={(anchorElement) => {
-                            setAddProviderOpen(false);
-                            setSubmenuPosition(null);
-                            setSubmenuAnchorTop(resolveSubmenuAnchorTop(menuRootRef.current, anchorElement));
-                            setActiveSubmenu({ kind: "control", key: control.key });
-                          }}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </ComposerPopoverSurface>
-
-              <div
-                ref={submenuRef}
-                className="absolute z-10"
-                style={{
-                  left: submenuPosition?.left ?? 0,
-                  top: submenuPosition?.top ?? 0,
-                  visibility: activeSubmenu && submenuPosition === null ? "hidden" : undefined,
-                }}
-              >
-                {activeSubmenu?.kind === "harness" && (
-                  <ComposerHarnessSubmenu
-                    activeKind={activeKind}
-                    groups={groups}
-                    onSelect={(selection) => {
-                      onSelect(selection);
-                      close();
-                    }}
-                  />
-                )}
-
-                {activeControl && (
-                  <ComposerControlSubmenu
-                    agentKind={agentKind}
-                    control={activeControl}
-                    onClose={close}
-                  />
-                )}
-              </div>
-            </div>
-          );
-        }}
+        {(close) => (
+          <ComposerModelConfigMenu
+            activeKind={activeKind}
+            activeModelGroups={activeModelGroups}
+            activeSubmenu={activeSubmenu}
+            addProviderOpen={addProviderOpen}
+            agentKind={agentKind}
+            filteredGroups={filteredGroups}
+            groups={groups}
+            harnessLabel={harnessLabel}
+            menuRootRef={menuRootRef}
+            notReadyAgents={notReadyAgents}
+            search={search}
+            submenuControls={submenuControls}
+            submenuPosition={submenuPosition}
+            submenuRef={submenuRef}
+            onAddProviderOpenChange={setAddProviderOpen}
+            onClose={close}
+            onMenuMouseLeave={() => setActiveSubmenu(null)}
+            onOpenSubmenu={(submenu, anchorElement) => {
+              setAddProviderOpen(false);
+              setSubmenuPosition(null);
+              setSubmenuAnchorTop(resolveSubmenuAnchorTop(menuRootRef.current, anchorElement));
+              setActiveSubmenu(submenu);
+            }}
+            onSearchChange={setSearch}
+            onSelect={(selection) => {
+              onSelect(selection);
+              close();
+            }}
+            onSetupAgent={setSetupAgent}
+          />
+        )}
       </PopoverButton>
 
       {setupAgent && (
@@ -329,250 +239,24 @@ export function ComposerModelConfigSelector({
   );
 }
 
-function ComposerConfigControlRows({
-  agentKind,
-  control,
-  onClose,
+function resetMenuState({
+  setActiveSubmenu,
+  setAddProviderOpen,
+  setSearch,
+  setSubmenuAnchorTop,
+  setSubmenuPosition,
 }: {
-  agentKind: string | null;
-  control: LiveSessionControlDescriptor;
-  onClose: () => void;
+  setActiveSubmenu: (value: ComposerConfigSubmenu | null) => void;
+  setAddProviderOpen: (value: boolean) => void;
+  setSearch: (value: string) => void;
+  setSubmenuAnchorTop: (value: number | null) => void;
+  setSubmenuPosition: (value: ComposerSubmenuPosition | null) => void;
 }) {
-  return (
-    <>
-      {control.options.map((option) => {
-        return (
-          <PopoverMenuItem
-            key={option.value}
-            label={resolveControlOptionLabel(agentKind, control, option.value, option.label)}
-            trailing={
-              <span className="flex items-center gap-1">
-                {option.selected && <Check className="size-3.5 shrink-0" />}
-                {option.selected && <PendingConfigIndicator pendingState={control.pendingState} />}
-              </span>
-            }
-            disabled={!control.settable}
-            onClick={() => {
-              control.onSelect(option.value);
-              onClose();
-            }}
-          >
-            {resolveControlOptionDescription(agentKind, control, option.value, option.description)}
-          </PopoverMenuItem>
-        );
-      })}
-    </>
-  );
-}
-
-function ComposerSubmenuMenuItem({
-  active,
-  icon,
-  label,
-  onOpen,
-}: {
-  active: boolean;
-  icon?: ReactNode;
-  label: string;
-  onOpen: (anchorElement: HTMLElement) => void;
-}) {
-  return (
-    <PopoverMenuItem
-      aria-expanded={active}
-      aria-haspopup="menu"
-      className={active ? "bg-popover-accent text-popover-foreground" : ""}
-      data-state={active ? "open" : "closed"}
-      icon={icon}
-      label={label}
-      trailing={<ChevronDown className="-rotate-90 size-3.5 shrink-0" />}
-      onClick={(event) => onOpen(event.currentTarget)}
-      onFocus={(event) => onOpen(event.currentTarget)}
-      onMouseEnter={(event) => onOpen(event.currentTarget)}
-    />
-  );
-}
-
-function ComposerControlSubmenu({
-  agentKind,
-  control,
-  onClose,
-}: {
-  agentKind: string | null;
-  control: LiveSessionControlDescriptor;
-  onClose: () => void;
-}) {
-  return (
-    <ComposerPopoverSurface className="w-56 max-w-[calc(100vw-1rem)] p-1">
-      <ComposerConfigControlRows
-        agentKind={agentKind}
-        control={control}
-        onClose={onClose}
-      />
-    </ComposerPopoverSurface>
-  );
-}
-
-function ComposerModelPickerContent({
-  filteredGroups,
-  groups,
-  search,
-  onSearchChange,
-  onSelect,
-}: {
-  filteredGroups: ModelSelectorGroup[];
-  groups: ModelSelectorGroup[];
-  search: string;
-  onSearchChange: (search: string) => void;
-  onSelect: (selection: ModelSelectorSelection) => void;
-}) {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col space-y-1">
-      <div className="space-y-1">
-        <div className="px-1">
-          <div className="flex h-7 items-center rounded-lg border border-border bg-surface-control px-2.5">
-            <Input
-              value={search}
-              onChange={(event) => onSearchChange(event.target.value)}
-              placeholder={CHAT_MODEL_SELECTOR_LABELS.searchPlaceholder}
-              className="h-auto min-w-0 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="min-h-0 max-h-[11rem] overflow-y-auto">
-        {filteredGroups.map((group, index) => (
-          <ComposerModelGroup
-            key={group.kind}
-            group={group}
-            showSeparator={index > 0}
-            onSelect={onSelect}
-          />
-        ))}
-
-        {filteredGroups.length === 0 && groups.length > 0 && (
-          <p className="px-3 py-4 text-center text-sm text-muted-foreground">
-            {CHAT_MODEL_SELECTOR_LABELS.noMatchPrefix} "{search}"
-          </p>
-        )}
-
-        {groups.length === 0 && (
-          <p className="px-3 py-4 text-center text-sm text-muted-foreground">
-            {CHAT_MODEL_SELECTOR_LABELS.noProviders}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ComposerAddProviderRows({
-  addProviderOpen,
-  notReadyAgents,
-  onAddProviderOpenChange,
-  onSetupAgent,
-}: {
-  addProviderOpen: boolean;
-  notReadyAgents: ModelSelectorProps["notReadyAgents"];
-  onAddProviderOpenChange: Dispatch<SetStateAction<boolean>>;
-  onSetupAgent: (agent: ModelSelectorProps["notReadyAgents"][number]) => void;
-}) {
-  return (
-    <>
-      <PopoverMenuItem
-        label={CHAT_MODEL_SELECTOR_LABELS.addProvider}
-        trailing={<ChevronDown className={`size-3.5 shrink-0 transition-transform ${addProviderOpen ? "rotate-180" : ""}`} />}
-        onClick={() => onAddProviderOpenChange((open) => !open)}
-      />
-      {addProviderOpen && notReadyAgents.map((agent) => (
-        <PopoverMenuItem
-          key={agent.kind}
-          label={agent.displayName}
-          trailing={<span className="text-xs text-muted-foreground">Setup</span>}
-          className="ml-2 w-[calc(100%-0.5rem)]"
-          onClick={() => onSetupAgent(agent)}
-        />
-      ))}
-    </>
-  );
-}
-
-function ComposerHarnessSubmenu({
-  activeKind,
-  groups,
-  onSelect,
-}: {
-  activeKind: string | null;
-  groups: ModelSelectorGroup[];
-  onSelect: (selection: ModelSelectorSelection) => void;
-}) {
-  return (
-    <ComposerPopoverSurface className="w-56 max-w-[calc(100vw-1rem)] p-1">
-      {groups.map((group) => (
-        <PopoverMenuItem
-          key={group.kind}
-          icon={<ProviderIcon kind={group.kind} className="size-3.5 shrink-0" />}
-          label={group.providerDisplayName}
-          trailing={
-            group.kind === activeKind
-              ? <Check className="size-3.5 shrink-0" />
-              : null
-          }
-          disabled={group.models.length === 0}
-          onClick={() => {
-            const selection = resolveHarnessSelection(group);
-            if (selection) {
-              onSelect(selection);
-            }
-          }}
-        />
-      ))}
-    </ComposerPopoverSurface>
-  );
-}
-
-function ComposerModelGroup({
-  group,
-  showSeparator,
-  onSelect,
-}: {
-  group: ModelSelectorGroup;
-  showSeparator: boolean;
-  onSelect: (selection: ModelSelectorSelection) => void;
-}) {
-  return (
-    <>
-      {showSeparator && <div className="mx-2 my-1 border-t border-border/60" />}
-      <div className="min-h-5 truncate px-2 py-0.5 text-sm font-[430] leading-4 text-muted-foreground/70">
-        {group.providerDisplayName}
-      </div>
-      {group.models.map((model) => (
-        <PopoverMenuItem
-          key={model.modelId}
-          label={model.displayName}
-          trailing={
-            <span className="flex items-center gap-1">
-              {model.actionKind === "open_new_chat" && !model.isSelected && (
-                <span className="text-xs text-muted-foreground/70">
-                  {CHAT_MODEL_SELECTOR_LABELS.newChatBadge}
-                </span>
-              )}
-              {model.isSelected && <Check className="size-3.5 shrink-0" />}
-            </span>
-          }
-          onClick={() => onSelect({ kind: group.kind, modelId: model.modelId })}
-        />
-      ))}
-    </>
-  );
-}
-
-function ComposerMenuSeparator() {
-  return (
-    <div className="w-full px-2 py-0.5">
-      <div className="h-px w-full bg-border/60" />
-    </div>
-  );
+  setSearch("");
+  setAddProviderOpen(false);
+  setActiveSubmenu(null);
+  setSubmenuAnchorTop(null);
+  setSubmenuPosition(null);
 }
 
 function resolveSubmenuAnchorTop(
@@ -585,108 +269,6 @@ function resolveSubmenuAnchorTop(
   const rootRect = root.getBoundingClientRect();
   const anchorRect = anchorElement.getBoundingClientRect();
   return anchorRect.top - rootRect.top;
-}
-
-function sortComposerConfigSubmenuControls(
-  controls: LiveSessionControlDescriptor[],
-): LiveSessionControlDescriptor[] {
-  const order: Partial<Record<LiveSessionControlDescriptor["key"], number>> = {
-    effort: 0,
-    reasoning: 1,
-    fast_mode: 2,
-    mode: 3,
-    collaboration_mode: 4,
-  };
-
-  return [...controls].sort((left, right) => {
-    const leftOrder = order[left.key] ?? 99;
-    const rightOrder = order[right.key] ?? 99;
-    return leftOrder - rightOrder;
-  });
-}
-
-function resolveControlSubmenuLabel(control: LiveSessionControlDescriptor): string {
-  if (control.key === "effort" || control.key === "reasoning") {
-    return "Reasoning";
-  }
-  if (control.key === "fast_mode") {
-    return "Speed";
-  }
-  return control.label;
-}
-
-function resolveHarnessSelection(
-  group: ModelSelectorGroup,
-): ModelSelectorSelection | null {
-  const selectedModel = group.models.find((model) => model.isSelected) ?? group.models[0] ?? null;
-  return selectedModel
-    ? {
-      kind: group.kind,
-      modelId: selectedModel.modelId,
-    }
-    : null;
-}
-
-function resolveControlOptionLabel(
-  agentKind: string | null,
-  control: LiveSessionControlDescriptor,
-  optionValue: string,
-  optionLabel: string,
-): string {
-  if (control.key === "fast_mode") {
-    if (optionValue === control.enabledValue) {
-      return "Fast";
-    }
-    if (optionValue === control.disabledValue) {
-      return "Standard";
-    }
-  }
-
-  if (control.key === "effort") {
-    return resolveReasoningEffortPresentation(optionValue, optionLabel).shortLabel ?? optionLabel;
-  }
-
-  if (control.key === "mode" || control.key === "collaboration_mode") {
-    return resolveSessionControlPresentation(agentKind, control.key, optionValue).shortLabel ?? optionLabel;
-  }
-
-  return optionLabel;
-}
-
-function resolveControlOptionDescription(
-  agentKind: string | null,
-  control: LiveSessionControlDescriptor,
-  optionValue: string,
-  optionDescription?: string | null,
-): string | null {
-  if (control.key === "fast_mode") {
-    if (optionValue === control.enabledValue) {
-      return "1.5x speed, increased plan usage";
-    }
-    if (optionValue === control.disabledValue) {
-      return "Default speed";
-    }
-  }
-
-  if (control.key === "mode" || control.key === "collaboration_mode") {
-    return resolveConfiguredSessionControlValue(agentKind, control.key, optionValue)?.description
-      ?? shortenRuntimeDescription(optionDescription);
-  }
-
-  if (optionDescription) {
-    return shortenRuntimeDescription(optionDescription);
-  }
-
-  return null;
-}
-
-function shortenRuntimeDescription(description?: string | null): string | null {
-  const trimmed = description?.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  return trimmed.length > 92 ? `${trimmed.slice(0, 89).trimEnd()}...` : trimmed;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -714,22 +296,4 @@ function resolveTriggerLabel(modelSelectorProps: ModelSelectorProps): string {
     return "No agents";
   }
   return CHAT_MODEL_SELECTOR_LABELS.empty;
-}
-
-function filterModelGroups(
-  groups: ModelSelectorGroup[],
-  query: string,
-): ModelSelectorGroup[] {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) {
-    return groups;
-  }
-
-  return groups.flatMap((group) => {
-    const providerMatches = group.providerDisplayName.toLowerCase().includes(normalizedQuery);
-    const models = providerMatches
-      ? group.models
-      : group.models.filter((model) => model.displayName.toLowerCase().includes(normalizedQuery));
-    return models.length > 0 ? [{ ...group, models }] : [];
-  });
 }

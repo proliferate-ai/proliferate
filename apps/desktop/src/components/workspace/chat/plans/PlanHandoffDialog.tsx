@@ -11,7 +11,7 @@ import { PlanReferencePreviewDialog } from "@/components/workspace/chat/plans/Pl
 import { ModelSelector } from "@/components/workspace/chat/input/ModelSelector";
 import type { PromptDisplayPlanPart } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
-import type { ModelSelectorProps } from "@/lib/domain/chat/models/model-selection";
+import type { ModelSelectorProps } from "@/lib/domain/chat/models/model-selector-types";
 
 interface PlanHandoffDialogProps {
   open: boolean;
