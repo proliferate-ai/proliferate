@@ -185,6 +185,39 @@ def has_single_underscore_prefix(path: Path) -> bool:
     )
 
 
+def is_banned_junk_drawer_module(path: Path) -> bool:
+    return path.name in BANNED_JUNK_DRAWER_MODULES or path.name.endswith(
+        BANNED_JUNK_DRAWER_SUFFIXES
+    )
+
+
+def is_product_domain_folder(folder: Path) -> bool:
+    parts = logical_parts(folder)
+    return _starts_with(parts, ("server", "proliferate", "server")) and folder.name == "domain"
+
+
+def is_meaningful_domain_module(path: Path) -> bool:
+    return (
+        path.suffix == ".py"
+        and not has_single_underscore_prefix(path)
+        and not path.name.endswith("_service.py")
+        and not is_banned_junk_drawer_module(path)
+    )
+
+
+def is_allowed_single_file_domain_folder(
+    folder: Path,
+    source_files: list[Path],
+    child_folders: list[Path],
+) -> bool:
+    return (
+        is_product_domain_folder(folder)
+        and len(source_files) == 1
+        and not child_folders
+        and is_meaningful_domain_module(source_files[0])
+    )
+
+
 class BoundaryChecker(ast.NodeVisitor):
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -532,9 +565,7 @@ def check_structure(repo_root: Path = REPO_ROOT) -> list[Violation]:
                     message="server modules must use service.py, not *_service.py",
                 )
             )
-        if path.name in BANNED_JUNK_DRAWER_MODULES or path.name.endswith(
-            BANNED_JUNK_DRAWER_SUFFIXES
-        ):
+        if is_banned_junk_drawer_module(path):
             violations.append(
                 Violation(
                     rule_id="JUNK_DRAWER_MODULE",
@@ -560,6 +591,9 @@ def check_structure(repo_root: Path = REPO_ROOT) -> list[Violation]:
             for path in folder.iterdir()
             if path.is_dir() and not should_skip(path) and path.name != "__pycache__"
         ]
+        if is_allowed_single_file_domain_folder(folder, source_files, child_folders):
+            continue
+
         if len(source_files) == 1 and not child_folders:
             only_file = source_files[0].name
             violations.append(

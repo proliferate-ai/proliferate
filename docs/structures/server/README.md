@@ -311,6 +311,9 @@ matching count in the same PR.
 ### Folder hygiene
 
 - Single-file folders are forbidden. If a folder has only one file, inline it.
+- Exception: `server/**/domain/` may contain exactly one meaningful pure-domain
+  module such as `policy.py`, `pricing.py`, or `validation.py`. Do not add
+  placeholder files just to satisfy folder shape.
 - Domain folders answer "what product area?" — not transport (`cloud/`,
   `api/`, `tauri/` are forbidden as `server/` children; transport stays in
   `integrations/` or `db/`) and not UI shape.

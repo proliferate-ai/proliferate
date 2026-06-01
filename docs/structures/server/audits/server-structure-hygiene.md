@@ -190,7 +190,7 @@ same count-based allowlist:
 
 ```text
 SERVICE_SUFFIX_MODULE         1 finding  across 1 file
-SINGLE_FILE_FOLDER           11 findings across 11 folders
+SINGLE_FILE_FOLDER            4 findings across 4 folders
 UNDERSCORE_PREFIXED_MODULE    1 finding  across 1 file
 ```
 
@@ -221,9 +221,10 @@ Target result:
 
 - Canonical docs describe the current target shape without stale claims.
 - Shape checks cover the server-specific rules that can be enforced safely:
-  single-file folders, single-underscore-prefixed modules, `_service.py`
-  names, helper/misc/common junk-drawer names, server-specific line
-  thresholds, and existing boundary allowlist shrinkage.
+  single-file folders except allowed one-file `domain/` pure-rule folders,
+  single-underscore-prefixed modules, `_service.py` names,
+  helper/misc/common junk-drawer names, server-specific line thresholds, and
+  existing boundary allowlist shrinkage.
 - Boundary and max-lines allowlists remain count-based so cleanup PRs can
   shrink debt incrementally.
 
@@ -686,7 +687,7 @@ Current debt:
 Target result:
 
 - Single-file folders are inlined or promoted into meaningful multi-file
-  folders.
+  folders, except allowed one-file `domain/` pure-rule folders.
 - No underscore-prefixed modules at module scope.
 - No `_service.py`, `_helper.py`, `_helpers.py`, `_utils.py`, `helper.py`,
   `helpers.py`, `misc.py`, `common.py`, or `utils.py` domain files.
