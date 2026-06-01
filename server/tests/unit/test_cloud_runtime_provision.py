@@ -1642,7 +1642,7 @@ class TestProvisionWorkspaceGitSetup:
         )
         monkeypatch.setattr(
             runtime_provision,
-            "close_usage_segment_for_sandbox",
+            "record_cloud_sandbox_usage_stopped",
             _close_usage_segment_for_sandbox,
         )
         monkeypatch.setattr(

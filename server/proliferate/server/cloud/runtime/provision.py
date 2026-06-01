@@ -28,7 +28,6 @@ from proliferate.constants.cloud import (
     WorkspaceStatus as LegacyWorkspaceStatus,
 )
 from proliferate.db import engine as db_engine
-from proliferate.db.store import billing as billing_store
 from proliferate.db.store import cloud_sandboxes
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_repo_config import (
@@ -58,7 +57,11 @@ from proliferate.integrations.sandbox import (
     SandboxProvider,
     get_configured_sandbox_provider,
 )
-from proliferate.server.billing.service import authorize_sandbox_start, run_billing_store_write
+from proliferate.server.billing.service import (
+    authorize_sandbox_start,
+    record_cloud_sandbox_usage_started,
+    record_cloud_sandbox_usage_stopped,
+)
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.agent_auth.service import (
     request_agent_auth_refresh_for_profile_target,
@@ -496,8 +499,7 @@ async def _create_and_connect_sandbox(
         status="provisioning",
         started_at=started_at,
     )
-    await run_billing_store_write(
-        billing_store.open_usage_segment_for_sandbox,
+    await record_cloud_sandbox_usage_started(
         user_id=ctx.user_id,
         runtime_environment_id=ctx.runtime_environment_id,
         workspace_id=ctx.workspace_id,
@@ -1687,8 +1689,7 @@ async def provision_workspace(
                     external_sandbox_id=external_sandbox_id,
                 )
         if sandbox_record is not None and allocated_sandbox_this_attempt:
-            await run_billing_store_write(
-                billing_store.close_usage_segment_for_sandbox,
+            await record_cloud_sandbox_usage_stopped(
                 sandbox_id=sandbox_record.id,
                 ended_at=utcnow(),
                 closed_by=USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE,

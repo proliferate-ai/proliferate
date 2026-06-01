@@ -118,8 +118,8 @@ from proliferate.server.billing.service import (
     authorize_sandbox_start,
     authorize_sandbox_start_for_billing_subject,
     get_billing_snapshot_for_subject,
+    record_cloud_sandbox_usage_stopped,
     repo_limit_for_billing_snapshot,
-    run_billing_store_write,
 )
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kinds
@@ -2416,8 +2416,7 @@ async def _stop_workspace_runtime(workspace: CloudWorkspace) -> None:
                     external_sandbox_id=sandbox.external_sandbox_id,
                 )
             else:
-                await run_billing_store_write(
-                    billing_store.close_usage_segment_for_sandbox,
+                await record_cloud_sandbox_usage_stopped(
                     sandbox_id=sandbox.id,
                     ended_at=utcnow(),
                     closed_by=USAGE_SEGMENT_CLOSED_BY_MANUAL_STOP,
@@ -2468,8 +2467,7 @@ async def _destroy_workspace_runtime(workspace: CloudWorkspace) -> None:
                     external_sandbox_id=sandbox.external_sandbox_id,
                 )
             else:
-                await run_billing_store_write(
-                    billing_store.close_usage_segment_for_sandbox,
+                await record_cloud_sandbox_usage_stopped(
                     sandbox_id=sandbox.id,
                     ended_at=utcnow(),
                     closed_by=USAGE_SEGMENT_CLOSED_BY_DESTROY,

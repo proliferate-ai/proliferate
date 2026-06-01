@@ -8,7 +8,6 @@ import secrets
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Protocol
-from urllib.parse import urlencode
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,19 +31,18 @@ from proliferate.constants.organizations import (
 from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.organization_records import (
-    InvitationCreateRecord,
     InvitationRecord,
     MemberRecord,
     MembershipRecord,
     OrganizationWithMembershipRecord,
     normalize_invitation_email,
 )
-from proliferate.integrations import resend
 from proliferate.server.billing.service import (
     ensure_organization_billing_subject_state,
     ensure_personal_billing_subject_state,
     maybe_create_organization_seat_adjustment,
 )
+from proliferate.server.organizations import invitation_delivery
 from proliferate.server.organizations.domain.policy import (
     can_modify_membership,
     can_modify_owner_memberships,
@@ -71,12 +69,6 @@ OrganizationMembershipRecords = list[OrganizationWithMembershipRecord]
 class OrganizationInvitationEmailResult:
     invitation: InvitationRecord
     delivery_attempted: bool
-
-
-@dataclass(frozen=True)
-class InvitationDeliveryResult:
-    sent: bool
-    skipped: bool
 
 
 class OrganizationActor(Protocol):
@@ -408,32 +400,21 @@ async def create_invitation(
     require_org_role(context, required_roles_for_invitation_role(role))
     normalized_email = normalize_invitation_email(email)
     token = _new_token()
-    record = await invitation_store.create_or_rotate_organization_invitation(
-        db,
+    result = await invitation_delivery.create_and_send_invitation(
         organization_id=organization_id,
         email=normalized_email,
         role=_require_role(role),
         token_hash=_hash_token(token, ORGANIZATION_INVITE_TOKEN_DOMAIN),
         invited_by_user_id=actor_user.id,
         expires_at=utcnow() + timedelta(days=ORGANIZATION_INVITE_EXPIRES_DAYS),
+        token=token,
+        inviter_email=actor_user.email,
     )
-    if record is None:
+    if result is None:
         raise _org_not_found()
-    delivery = await _send_invitation_email(db, record, token, actor_user)
-    invitation = record.invitation
-    if delivery.sent or delivery.skipped:
-        invitation = (
-            await invitation_store.mark_invitation_delivery(
-                db,
-                invitation_id=record.invitation.id,
-                sent=delivery.sent,
-                skipped=delivery.skipped,
-            )
-            or record.invitation
-        )
     return OrganizationInvitationEmailResult(
-        invitation=invitation,
-        delivery_attempted=delivery.sent,
+        invitation=result.invitation,
+        delivery_attempted=result.delivery_attempted,
     )
 
 
@@ -446,70 +427,24 @@ async def resend_invitation(
     context = await _resolve_organization_owner_context(db, actor_user, organization_id)
     require_org_role(context, organization_admin_roles())
     token = _new_token()
-    record = await invitation_store.rotate_organization_invitation(
-        db,
+    result = await invitation_delivery.rotate_and_send_invitation(
         organization_id=organization_id,
         invitation_id=invitation_id,
         token_hash=_hash_token(token, ORGANIZATION_INVITE_TOKEN_DOMAIN),
         expires_at=utcnow() + timedelta(days=ORGANIZATION_INVITE_EXPIRES_DAYS),
+        token=token,
+        inviter_email=actor_user.email,
     )
-    if record is None:
+    if result is None:
         raise OrganizationServiceError(
             "invitation_not_found",
             "Organization invitation not found.",
             status_code=404,
         )
-    delivery = await _send_invitation_email(db, record, token, actor_user)
-    invitation = record.invitation
-    if delivery.sent or delivery.skipped:
-        invitation = (
-            await invitation_store.mark_invitation_delivery(
-                db,
-                invitation_id=record.invitation.id,
-                sent=delivery.sent,
-                skipped=delivery.skipped,
-            )
-            or record.invitation
-        )
     return OrganizationInvitationEmailResult(
-        invitation=invitation,
-        delivery_attempted=delivery.sent,
+        invitation=result.invitation,
+        delivery_attempted=result.delivery_attempted,
     )
-
-
-async def _send_invitation_email(
-    db: AsyncSession,
-    record: InvitationCreateRecord,
-    token: str,
-    actor_user: OrganizationActor,
-) -> InvitationDeliveryResult:
-    invite_url = _invitation_landing_url(token)
-    try:
-        result = await resend.send_organization_invitation_email(
-            to_email=record.invitation.email,
-            organization_name=record.organization.name,
-            inviter_email=actor_user.email,
-            invite_url=invite_url,
-        )
-    except resend.ResendEmailError as error:
-        await invitation_store.mark_invitation_delivery(
-            db,
-            invitation_id=record.invitation.id,
-            sent=False,
-            skipped=False,
-            error=error.message,
-        )
-        return InvitationDeliveryResult(sent=False, skipped=False)
-    return InvitationDeliveryResult(sent=not result.skipped, skipped=result.skipped)
-
-
-def _invitation_landing_url(token: str) -> str:
-    path = "/v1/organizations/invitations/landing"
-    query = urlencode({"token": token})
-    base_url = (settings.api_base_url or settings.frontend_base_url).rstrip("/")
-    if not base_url:
-        return f"{path}?{query}"
-    return f"{base_url}{path}?{query}"
 
 
 async def list_invitations(

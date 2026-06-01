@@ -19,15 +19,6 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_OPENED_BY_PROVISION,
     USAGE_SEGMENT_OPENED_BY_WEBHOOK_RESUMED,
 )
-from proliferate.db.store.billing import (
-    close_usage_segment_for_sandbox as close_usage_segment_for_sandbox_record,
-)
-from proliferate.db.store.billing import (
-    open_usage_segment_for_sandbox as open_usage_segment_for_sandbox_record,
-)
-from proliferate.db.store.billing import (
-    remember_sandbox_event_receipt as remember_sandbox_event_receipt_record,
-)
 from proliferate.db.store.cloud_runtime_environments import (
     load_runtime_environment_by_id,
     save_runtime_environment_state,
@@ -43,7 +34,12 @@ from proliferate.integrations.sandbox import (
     get_sandbox_provider,
     verify_e2b_webhook_signature,
 )
-from proliferate.server.billing.service import get_billing_snapshot_for_subject
+from proliferate.server.billing.service import (
+    get_billing_snapshot_for_subject,
+    record_cloud_sandbox_usage_started,
+    record_cloud_sandbox_usage_stopped,
+    remember_cloud_sandbox_event_receipt,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.domain.provider_events import (
     is_stale_provider_event as _is_stale_provider_event,
@@ -88,15 +84,13 @@ def _metadata_sandbox_id(metadata: dict[str, str]) -> UUID | None:
 
 
 async def remember_sandbox_event_receipt(
-    db: AsyncSession,
     *,
     event_id: str,
     provider: str,
     event_type: str,
     external_sandbox_id: str | None,
 ) -> bool:
-    return await remember_sandbox_event_receipt_record(
-        db,
+    return await remember_cloud_sandbox_event_receipt(
         event_id=event_id,
         provider=provider,
         event_type=event_type,
@@ -105,7 +99,6 @@ async def remember_sandbox_event_receipt(
 
 
 async def open_usage_segment_for_sandbox(
-    db: AsyncSession,
     *,
     runtime_environment_id: UUID | None = None,
     workspace_id: UUID | None = None,
@@ -118,8 +111,7 @@ async def open_usage_segment_for_sandbox(
     is_billable: bool = True,
     event_id: str | None = None,
 ) -> object:
-    return await open_usage_segment_for_sandbox_record(
-        db,
+    return await record_cloud_sandbox_usage_started(
         runtime_environment_id=runtime_environment_id,
         workspace_id=workspace_id,
         sandbox_id=sandbox_id,
@@ -134,7 +126,6 @@ async def open_usage_segment_for_sandbox(
 
 
 async def close_usage_segment_for_sandbox(
-    db: AsyncSession,
     *,
     sandbox_id: UUID,
     ended_at: datetime,
@@ -142,8 +133,7 @@ async def close_usage_segment_for_sandbox(
     is_billable: bool | None = None,
     event_id: str | None = None,
 ) -> object | None:
-    return await close_usage_segment_for_sandbox_record(
-        db,
+    return await record_cloud_sandbox_usage_stopped(
         sandbox_id=sandbox_id,
         ended_at=ended_at,
         closed_by=closed_by,
@@ -153,7 +143,7 @@ async def close_usage_segment_for_sandbox(
 
 
 async def handle_e2b_webhook(
-    db: AsyncSession,
+    _db: AsyncSession,
     *,
     payload: bytes,
     signature: str | None,
@@ -165,7 +155,6 @@ async def handle_e2b_webhook(
         return E2BWebhookReceipt()
 
     if not await remember_sandbox_event_receipt(
-        db,
         event_id=event.id,
         provider="e2b",
         event_type=event.type,
@@ -224,7 +213,6 @@ async def handle_e2b_webhook(
                 provider = get_sandbox_provider(sandbox.provider)
                 await provider.pause_sandbox(event.sandbox_id)
             await close_usage_segment_for_sandbox(
-                db,
                 sandbox_id=sandbox.id,
                 ended_at=event.timestamp,
                 closed_by=USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
@@ -251,7 +239,6 @@ async def handle_e2b_webhook(
             runtime_environment.id if runtime_environment is not None else None
         )
         await open_usage_segment_for_sandbox(
-            db,
             user_id=user_id,
             runtime_environment_id=runtime_environment_id,
             workspace_id=workspace.id if workspace is not None else None,
@@ -283,7 +270,6 @@ async def handle_e2b_webhook(
 
     if event_kind in {PROVIDER_EVENT_KIND_PAUSED, PROVIDER_EVENT_KIND_TIMEOUT}:
         await close_usage_segment_for_sandbox(
-            db,
             sandbox_id=sandbox.id,
             ended_at=event.timestamp,
             closed_by=(
@@ -309,7 +295,6 @@ async def handle_e2b_webhook(
 
     if event_kind == PROVIDER_EVENT_KIND_KILLED:
         await close_usage_segment_for_sandbox(
-            db,
             sandbox_id=sandbox.id,
             ended_at=event.timestamp,
             closed_by=USAGE_SEGMENT_CLOSED_BY_WEBHOOK_KILLED,
