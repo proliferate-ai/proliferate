@@ -61,6 +61,7 @@ from proliferate.db.store.cloud_agent_auth.records import (
     AgentGatewayRuntimeGrantRecord,
     AgentGatewayUsageImportCursorRecord,
     SandboxAgentAuthSelectionRecord,
+    SandboxProfileAgentAuthTargetStateRecord,
     SandboxProfileRecord,
     SandboxProfileTargetStateRecord,
 )
@@ -128,6 +129,7 @@ __all__ = [
     "AgentGatewayRuntimeGrantRecord",
     "AgentGatewayUsageImportCursorRecord",
     "SandboxAgentAuthSelectionRecord",
+    "SandboxProfileAgentAuthTargetStateRecord",
     "SandboxProfileRecord",
     "SandboxProfileTargetStateRecord",
     "bump_sandbox_profile_agent_auth_revision",
