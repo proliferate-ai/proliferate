@@ -7,14 +7,14 @@ use anyhow::Context;
 
 use crate::adapters::git::executor::run_git_ok;
 use crate::domains::agents::portability::{
-    collect_agent_artifacts, delete_session_agent_artifacts, install_session_agent_artifacts,
-    validate_session_agent_artifacts, AgentArtifactFileData,
+    AgentArtifactFileData, collect_agent_artifacts, delete_session_agent_artifacts,
+    install_session_agent_artifacts, validate_session_agent_artifacts,
 };
 use crate::domains::mobility::model::{
-    DestroyedWorkspaceSourceSummary, ImportedWorkspaceArchiveSummary, MobilityBlocker,
-    MobilityFileData, MobilitySessionCandidate, WorkspaceMobilityArchiveData,
-    WorkspaceMobilityExportOptions, WorkspaceMobilityPreflightResult,
-    WorkspaceMobilitySessionBundleData, MAX_MOBILITY_ARCHIVE_BODY_BYTES, MAX_MOBILITY_FILE_BYTES,
+    DestroyedWorkspaceSourceSummary, ImportedWorkspaceArchiveSummary,
+    MAX_MOBILITY_ARCHIVE_BODY_BYTES, MAX_MOBILITY_FILE_BYTES, MobilityBlocker, MobilityFileData,
+    MobilitySessionCandidate, WorkspaceMobilityArchiveData, WorkspaceMobilityExportOptions,
+    WorkspaceMobilityPreflightResult, WorkspaceMobilitySessionBundleData,
 };
 use crate::domains::mobility::store::MobilityStore;
 use crate::domains::mobility::workspace_delta::{collect_workspace_delta, current_branch_name};
@@ -32,7 +32,7 @@ use crate::workspaces::service::WorkspaceService;
 use crate::workspaces::types::PreparedWorkspaceMobilityDestination;
 use crate::{
     adapters::files::safety::resolve_safe_path,
-    adapters::git::{types::GitOperation, GitService},
+    adapters::git::{GitService, types::GitOperation},
 };
 
 const INCLUDE_RAW_NOTIFICATIONS_ENV: &str = "ANYHARNESS_MOBILITY_INCLUDE_RAW_NOTIFICATIONS";
@@ -615,7 +615,7 @@ impl MobilityService {
                     bundle.live_config_snapshot.as_ref(),
                     &bundle.pending_config_changes,
                     &bundle.pending_prompts,
-                    &bundle.prompt_attachments,
+                    &bundle.session_prompt_attachments(),
                     &bundle.events,
                     &bundle.raw_notifications,
                 )?;

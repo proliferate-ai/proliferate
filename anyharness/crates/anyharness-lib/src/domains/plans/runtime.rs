@@ -5,15 +5,17 @@ use anyharness_contract::v1::{PromptInputBlock, ProposedPlanDecisionState, Propo
 
 use super::document;
 use super::model::{
-    PlanDecisionOutcome, PlanDocument, PlanHandoffInput, PlanHandoffOutcome,
-    PlanHandoffPromptOutcome, PlanHandoffRecord, PlanRecord, DEFAULT_IMPLEMENT_INSTRUCTION,
+    DEFAULT_IMPLEMENT_INSTRUCTION, PlanDecisionOutcome, PlanDocument, PlanHandoffInput,
+    PlanHandoffOutcome, PlanHandoffPromptOutcome, PlanHandoffRecord, PlanRecord,
 };
-use super::service::{plan_to_detail, PlanDecisionError, PlanService};
+use super::service::{PlanDecisionError, PlanService, plan_to_detail};
+use crate::live::sessions::{LiveSessionCommandError, LiveSessionManager};
 use crate::origin::OriginContext;
 use crate::sessions::runtime::{
     CreateAndStartSessionError, SendPromptError, SendPromptOutcome, SessionRuntime,
 };
 use crate::sessions::service::SessionService;
+use crate::workspaces::access_gate::WorkspaceAccessGate;
 
 #[derive(Debug, thiserror::Error)]
 pub enum GetPlanError {
@@ -44,6 +46,8 @@ pub struct PlanRuntime {
     plan_service: Arc<PlanService>,
     session_runtime: Arc<SessionRuntime>,
     session_service: Arc<SessionService>,
+    acp_manager: LiveSessionManager,
+    access_gate: Arc<WorkspaceAccessGate>,
     runtime_home: PathBuf,
 }
 
@@ -52,12 +56,16 @@ impl PlanRuntime {
         plan_service: Arc<PlanService>,
         session_runtime: Arc<SessionRuntime>,
         session_service: Arc<SessionService>,
+        acp_manager: LiveSessionManager,
+        access_gate: Arc<WorkspaceAccessGate>,
         runtime_home: PathBuf,
     ) -> Self {
         Self {
             plan_service,
             session_runtime,
             session_service,
+            acp_manager,
+            access_gate,
             runtime_home,
         }
     }
@@ -99,11 +107,9 @@ impl PlanRuntime {
         plan_id: &str,
         expected_version: i64,
     ) -> Result<PlanDecisionOutcome, PlanDecisionError> {
-        self.get_plan_for_workspace(workspace_id, plan_id)
-            .map_err(map_get_plan_error_to_decision)?;
         let plan = self
-            .session_runtime
             .apply_plan_decision(
+                workspace_id,
                 plan_id,
                 expected_version,
                 ProposedPlanDecisionState::Approved,
@@ -120,11 +126,9 @@ impl PlanRuntime {
         plan_id: &str,
         expected_version: i64,
     ) -> Result<PlanDecisionOutcome, PlanDecisionError> {
-        self.get_plan_for_workspace(workspace_id, plan_id)
-            .map_err(map_get_plan_error_to_decision)?;
         let plan = self
-            .session_runtime
             .apply_plan_decision(
+                workspace_id,
                 plan_id,
                 expected_version,
                 ProposedPlanDecisionState::Rejected,
@@ -258,6 +262,41 @@ impl PlanRuntime {
         if plan.workspace_id != workspace_id {
             return Err(GetPlanError::NotFound);
         }
+        Ok(plan)
+    }
+
+    async fn apply_plan_decision(
+        &self,
+        workspace_id: &str,
+        plan_id: &str,
+        expected_version: i64,
+        decision: ProposedPlanDecisionState,
+    ) -> Result<PlanRecord, PlanDecisionError> {
+        let plan = self
+            .get_plan_for_workspace(workspace_id, plan_id)
+            .map_err(map_get_plan_error_to_decision)?;
+        self.access_gate
+            .assert_can_mutate_for_session(&plan.session_id)
+            .map_err(|error| PlanDecisionError::Store(anyhow::anyhow!(error.to_string())))?;
+
+        if let Some(handle) = self.acp_manager.get_handle(&plan.session_id).await {
+            return handle
+                .apply_plan_decision(plan_id.to_string(), expected_version, decision)
+                .await
+                .map_err(|error| match error {
+                    LiveSessionCommandError::ActorUnavailable => PlanDecisionError::Store(
+                        anyhow::anyhow!("session actor is not available for plan decision"),
+                    ),
+                    LiveSessionCommandError::ResponseDropped => PlanDecisionError::Store(
+                        anyhow::anyhow!("session actor dropped plan decision response"),
+                    ),
+                    LiveSessionCommandError::Rejected(error) => error,
+                });
+        }
+
+        let (plan, _) =
+            self.plan_service
+                .update_decision_offline(plan_id, expected_version, decision)?;
         Ok(plan)
     }
 }

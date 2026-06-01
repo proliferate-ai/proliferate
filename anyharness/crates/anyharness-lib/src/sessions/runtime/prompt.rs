@@ -3,13 +3,13 @@ use std::time::Instant;
 use anyharness_contract::v1::PromptInputBlock;
 
 use crate::live::sessions::{LiveSessionCommandError, PromptAcceptError, PromptAcceptance};
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::observability::latency::{LatencyRequestContext, latency_trace_fields};
 use crate::sessions::mcp_bindings::assembly::SESSION_RESTART_REQUIRED_DETAIL;
 use crate::sessions::model::PromptAttachmentState;
+use crate::sessions::prompt::PromptPrepareContext;
 use crate::sessions::prompt::capabilities::capabilities_from_live_config;
 use crate::sessions::prompt::prepare::prepare_prompt;
 use crate::sessions::prompt::provenance::PromptProvenance;
-use crate::sessions::prompt::PromptPrepareContext;
 
 use super::{
     SendPromptError, SendPromptOutcome, SessionLifecycleError, SessionRuntime, StartSessionError,
@@ -63,7 +63,7 @@ impl SessionRuntime {
                 workspace_id: &record.workspace_id,
                 capabilities: capabilities_from_live_config(live_config.as_ref()),
                 attachment_state: PromptAttachmentState::Pending,
-                plan_resolver: self.plan_service.as_ref(),
+                plan_resolver: self.plan_reference_resolver.as_ref(),
             },
             blocks,
         )

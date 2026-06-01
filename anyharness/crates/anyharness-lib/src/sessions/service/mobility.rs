@@ -1,8 +1,8 @@
 use super::SessionService;
-use crate::domains::mobility::model::MobilityPromptAttachmentData;
 use crate::sessions::model::{
-    PendingConfigChangeRecord, PendingPromptRecord, SessionEventRecord,
-    SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord, SessionRecord,
+    PendingConfigChangeRecord, PendingPromptRecord, SessionBundlePromptAttachment,
+    SessionEventRecord, SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord,
+    SessionRecord,
 };
 
 impl SessionService {
@@ -13,7 +13,7 @@ impl SessionService {
         live_config_snapshot: Option<&SessionLiveConfigSnapshotRecord>,
         pending_config_changes: &[PendingConfigChangeRecord],
         pending_prompts: &[PendingPromptRecord],
-        prompt_attachments: &[MobilityPromptAttachmentData],
+        prompt_attachments: &[SessionBundlePromptAttachment],
         events: &[SessionEventRecord],
         raw_notifications: &[SessionRawNotificationRecord],
     ) -> anyhow::Result<()> {

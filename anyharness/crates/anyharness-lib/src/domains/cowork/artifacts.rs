@@ -6,11 +6,12 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use super::manifest::{
+    ArtifactManifestDocument, ArtifactManifestEntry, COWORK_ARTIFACT_MANIFEST_RELATIVE_PATH,
+    COWORK_ARTIFACT_MANIFEST_VERSION, CoworkArtifactError, CoworkArtifactSummary,
     artifact_type_from_path, enrich_manifest_entry, load_manifest_if_present,
     load_manifest_or_empty, manifest_path, validate_relative_artifact_path,
-    ArtifactManifestDocument, ArtifactManifestEntry, CoworkArtifactError, CoworkArtifactSummary,
-    COWORK_ARTIFACT_MANIFEST_RELATIVE_PATH, COWORK_ARTIFACT_MANIFEST_VERSION,
 };
+use crate::workspaces::files_runtime::WorkspaceFileProtection;
 use crate::workspaces::model::WorkspaceRecord;
 
 #[derive(Clone, Default)]
@@ -295,6 +296,40 @@ impl CoworkArtifactRuntime {
     }
 }
 
+impl WorkspaceFileProtection for CoworkArtifactRuntime {
+    fn is_protected_relative_path(
+        &self,
+        workspace: &WorkspaceRecord,
+        relative_path: &str,
+    ) -> anyhow::Result<bool> {
+        if workspace.surface != "cowork" {
+            return Ok(false);
+        }
+        Ok(CoworkArtifactRuntime::is_protected_relative_path(
+            self,
+            workspace,
+            relative_path,
+        )?)
+    }
+
+    fn is_protected_relative_path_or_ancestor(
+        &self,
+        workspace: &WorkspaceRecord,
+        relative_path: &str,
+    ) -> anyhow::Result<bool> {
+        if workspace.surface != "cowork" {
+            return Ok(false);
+        }
+        Ok(
+            CoworkArtifactRuntime::is_protected_relative_path_or_ancestor(
+                self,
+                workspace,
+                relative_path,
+            )?,
+        )
+    }
+}
+
 fn ensure_cowork_workspace(workspace: &WorkspaceRecord) -> Result<(), CoworkArtifactError> {
     if workspace.surface != "cowork" {
         return Err(CoworkArtifactError::WorkspaceNotCowork);
@@ -375,18 +410,36 @@ mod tests {
             )
             .expect("create artifact");
 
-        assert!(runtime
-            .is_protected_relative_path_or_ancestor(workspace.record(), "reports")
-            .expect("check reports"));
-        assert!(runtime
-            .is_protected_relative_path_or_ancestor(workspace.record(), "reports/plan.md")
-            .expect("check artifact"));
-        assert!(runtime
-            .is_protected_relative_path_or_ancestor(workspace.record(), ".proliferate")
-            .expect("check manifest parent"));
-        assert!(!runtime
-            .is_protected_relative_path_or_ancestor(workspace.record(), "reports-plan")
-            .expect("check sibling prefix"));
+        assert!(
+            runtime
+                .is_protected_relative_path_or_ancestor(workspace.record(), "reports")
+                .expect("check reports")
+        );
+        assert!(
+            runtime
+                .is_protected_relative_path_or_ancestor(workspace.record(), "reports/plan.md")
+                .expect("check artifact")
+        );
+        assert!(
+            runtime
+                .is_protected_relative_path_or_ancestor(workspace.record(), ".proliferate")
+                .expect("check manifest parent")
+        );
+        assert!(
+            !runtime
+                .is_protected_relative_path_or_ancestor(workspace.record(), "reports-plan")
+                .expect("check sibling prefix")
+        );
+        let mut standard_workspace = workspace.record().clone();
+        standard_workspace.surface = "standard".to_string();
+        assert!(
+            !<CoworkArtifactRuntime as WorkspaceFileProtection>::is_protected_relative_path_or_ancestor(
+                &runtime,
+                &standard_workspace,
+                ".proliferate",
+            )
+            .expect("standard workspaces are not cowork protected")
+        );
     }
 
     struct TestCoworkWorkspace {

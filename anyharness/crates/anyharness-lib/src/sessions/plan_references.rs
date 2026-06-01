@@ -19,6 +19,10 @@ pub trait PlanReferenceResolver {
     ) -> anyhow::Result<Option<ResolvedPlanReference>>;
 }
 
+pub trait PlanInteractionLinkResolver: Send + Sync {
+    fn has_linked_interaction(&self, session_id: &str, request_id: &str) -> anyhow::Result<bool>;
+}
+
 pub fn render_plan_reference_markdown(title: &str, body_markdown: &str) -> String {
     let title = title.trim();
     let body = body_markdown.trim_end();
