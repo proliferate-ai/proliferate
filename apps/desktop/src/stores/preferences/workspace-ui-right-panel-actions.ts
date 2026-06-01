@@ -6,7 +6,7 @@ import {
   normalizeRightPanelDurableState,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/shell/right-panel-model";
-import { reconcileRightPanelWorkspaceState } from "@/lib/domain/workspaces/shell/right-panel-state";
+import { reconcileRightPanelWorkspaceState } from "@/lib/domain/workspaces/shell/right-panel-state-normalization";
 import { resolveStateValue } from "@/stores/preferences/workspace-ui-state-value";
 import type { WorkspaceUiSet, WorkspaceUiState } from "@/stores/preferences/workspace-ui-store-types";
 

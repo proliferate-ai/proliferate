@@ -38,7 +38,7 @@ import {
   type RightPanelDurableState,
   type RightPanelWorkspaceState,
 } from "@/lib/domain/workspaces/shell/right-panel-model";
-import { reconcileRightPanelWorkspaceState } from "@/lib/domain/workspaces/shell/right-panel-state";
+import { reconcileRightPanelWorkspaceState } from "@/lib/domain/workspaces/shell/right-panel-state-normalization";
 import { resolveSelectedWorkspaceIdentity } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import { resolveWithWorkspaceFallback } from "@/lib/domain/workspaces/selection/workspace-keyed-preferences";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";

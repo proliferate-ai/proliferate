@@ -1,17 +1,12 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
-import {
-  buildWorkspaceArrivalEvent,
-} from "@/lib/domain/workspaces/creation/arrival";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import type {
   PendingWorkspaceEntry,
-  PendingWorkspaceInitialSession,
 } from "@/lib/domain/workspaces/creation/pending-entry";
 import {
-  buildPendingWorkspaceUiKey,
   buildSubmittingPendingWorkspaceEntry as buildSubmittingPendingEntry,
   createPendingWorkspaceAttemptId as createAttemptId,
 } from "@/lib/domain/workspaces/creation/pending-entry";
@@ -44,6 +39,19 @@ import {
   resolveDisplayNameFromPath,
   resolveErrorMessage,
 } from "@/hooks/workspaces/workflows/workspace-entry-action-helpers";
+import {
+  failPendingWorkspaceEntry,
+  finalizePendingWorkspaceSelection,
+} from "@/hooks/workspaces/workflows/workspace-entry-finalization";
+import {
+  runLightweightLocalWorkspaceEntry,
+  runLightweightWorktreeWorkspaceEntry,
+} from "@/hooks/workspaces/workflows/workspace-entry-lightweight";
+import type {
+  WorkspaceEntryInternalOptions,
+  WorkspaceEntryOptions,
+  WorkspaceEntryResult,
+} from "@/hooks/workspaces/workflows/workspace-entry-types";
 
 const EMPTY_REPO_ROOTS: RepoRoot[] = [];
 const EMPTY_WORKSPACES: Workspace[] = [];
@@ -52,25 +60,7 @@ function isAttemptCurrent(attemptId: string): boolean {
   return useSessionSelectionStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
 }
 
-function requestChatInputFocus(): void {
-  useChatInputStore.getState().requestFocus();
-}
-
-interface WorkspaceEntryOptions {
-  lightweight?: boolean;
-  latencyFlowId?: string | null;
-  repoGroupKeyToExpand?: string | null;
-  initialSession?: PendingWorkspaceInitialSession | null;
-}
-
-interface WorkspaceEntryInternalOptions extends WorkspaceEntryOptions {
-  throwOnFailure?: boolean;
-}
-
-interface WorkspaceEntryResult {
-  workspaceId: string;
-  projectedSessionId: string | null;
-}
+function requestChatInputFocus(): void { useChatInputStore.getState().requestFocus(); }
 
 export function useWorkspaceEntryActions() {
   const { data: workspaceCollections } = useWorkspaces();
@@ -91,106 +81,44 @@ export function useWorkspaceEntryActions() {
   const setWorkspaceArrivalEvent = useSessionSelectionStore(
     (state) => state.setWorkspaceArrivalEvent,
   );
-
-  const finalizeSelection = useCallback(async (
-    entry: PendingWorkspaceEntry,
-    workspaceId: string,
-    options?: { latencyFlowId?: string | null; repoGroupKeyToExpand?: string | null },
-  ): Promise<boolean> => {
-    const selectionStartedAt = startLatencyTimer();
-    logLatency("workspace.entry.selection.start", {
-      attemptId: entry.attemptId,
-      source: entry.source,
-      workspaceId,
-      elapsedSincePendingMs: elapsedSince(entry.createdAt),
-    });
-
-    setPendingWorkspaceEntry({
-      ...entry,
-      workspaceId,
-      errorMessage: null,
-    });
-    annotateLatencyFlow(options?.latencyFlowId, {
-      attemptId: entry.attemptId,
-      targetWorkspaceId: workspaceId,
-    });
-    if (options?.repoGroupKeyToExpand) {
-      ensureRepoGroupExpanded(options.repoGroupKeyToExpand);
-    }
-
-    const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(entry);
-    const currentActiveSessionId = useSessionSelectionStore.getState().activeSessionId;
-    const projectedActiveSessionId = currentActiveSessionId
-      && getSessionRecord(currentActiveSessionId)?.workspaceId === pendingWorkspaceUiKey
-      ? currentActiveSessionId
-      : null;
-
-    await selectWorkspace(workspaceId, {
-      force: true,
-      preservePending: true,
-      initialActiveSessionId: projectedActiveSessionId,
-      latencyFlowId: options?.latencyFlowId,
-    });
-
-    if (!isAttemptCurrent(entry.attemptId)) {
-      logLatency("workspace.entry.selection.stale", {
-        attemptId: entry.attemptId,
-        source: entry.source,
-        workspaceId,
-        selectionElapsedMs: elapsedMs(selectionStartedAt),
-      });
-      return false;
-    }
-
-    materializePendingWorkspaceSessions(entry, workspaceId);
-
-    setWorkspaceArrivalEvent(buildWorkspaceArrivalEvent({
-      workspaceId,
-      source: entry.source,
-      setupScript: entry.setupScript,
-      baseBranchName: entry.baseBranchName,
-    }));
-    setPendingWorkspaceEntry(null);
-    logLatency("workspace.entry.selection.success", {
-      attemptId: entry.attemptId,
-      source: entry.source,
-      workspaceId,
-      selectionElapsedMs: elapsedMs(selectionStartedAt),
-      totalElapsedMs: elapsedSince(entry.createdAt),
-    });
-    return true;
-  }, [
+  const entrySelectionDeps = useMemo(() => ({
+    expandRepoGroup: ensureRepoGroupExpanded,
+    getSelectionState: useSessionSelectionStore.getState,
+    getSessionRecord,
+    materializePendingWorkspaceSessions,
+    selectWorkspace,
+    setPendingWorkspaceEntry,
+    setWorkspaceArrivalEvent,
+  }), [
     materializePendingWorkspaceSessions,
     selectWorkspace,
     setPendingWorkspaceEntry,
     setWorkspaceArrivalEvent,
   ]);
 
+  const finalizeSelection = useCallback(async (
+    entry: PendingWorkspaceEntry,
+    workspaceId: string,
+    options?: { latencyFlowId?: string | null; repoGroupKeyToExpand?: string | null },
+  ): Promise<boolean> => {
+    return finalizePendingWorkspaceSelection({
+      entry,
+      workspaceId,
+      options,
+    }, entrySelectionDeps);
+  }, [entrySelectionDeps]);
+
   const failPendingEntry = useCallback((
     entry: PendingWorkspaceEntry,
     errorMessage: string,
     overrides?: Partial<Pick<PendingWorkspaceEntry, "workspaceId" | "request" | "setupScript">>,
   ) => {
-    if (!isAttemptCurrent(entry.attemptId)) {
-      return;
-    }
-
-    logLatency("workspace.entry.failed", {
-      attemptId: entry.attemptId,
-      source: entry.source,
-      workspaceId: overrides?.workspaceId ?? entry.workspaceId,
+    failPendingWorkspaceEntry({
+      entry,
       errorMessage,
-      elapsedSincePendingMs: elapsedSince(entry.createdAt),
-    });
-    setPendingWorkspaceEntry({
-      ...entry,
-      stage: "failed",
-      errorMessage,
-      workspaceId: overrides?.workspaceId ?? entry.workspaceId,
-      request: overrides?.request ?? entry.request,
-      setupScript: overrides?.setupScript ?? entry.setupScript,
-    });
-  }, [setPendingWorkspaceEntry]);
+      overrides,
+    }, entrySelectionDeps);
+  }, [entrySelectionDeps]);
 
   const createLocalWorkspaceAndEnterInternal = useCallback(async (
     sourceRoot: string,
@@ -201,24 +129,15 @@ export function useWorkspaceEntryActions() {
     // Open immediately for feedback; success reopens using the returned workspace.
     ensureRepoGroupExpanded(sourceRepoGroupKey);
 
-    // Lightweight path: skip pending shell, keep current workspace visible,
-    // just run the mutation and select on success. Used when creating from
-    // the sidebar while already in a workspace.
     if (options?.lightweight) {
-      try {
-        requestChatInputFocus();
-        const workspace = await createLocalWorkspace(sourceRoot);
-        await selectWorkspaceWithArrival({
-          workspaceId: workspace.id,
-          source: "local-created",
-          setupScript: null,
-          baseBranchName: null,
-          repoGroupKeyToExpand: sidebarRepoGroupKeyForWorkspace(workspace, repoRoots),
-        });
-        return { workspaceId: workspace.id, projectedSessionId: null };
-      } catch (error) {
-        throw error;
-      }
+      return runLightweightLocalWorkspaceEntry({
+        repoRoots,
+        sourceRoot,
+      }, {
+        createLocalWorkspace,
+        requestChatInputFocus,
+        selectWorkspaceWithArrival,
+      });
     }
 
     const entry = buildSubmittingPendingEntry({
@@ -324,32 +243,17 @@ export function useWorkspaceEntryActions() {
         ?? allWorkspaces.find((workspace) => workspace.repoRootId === repoRootId) ?? null;
     const normalizedInput = normalizeWorktreeInput(input, source, allWorkspaces);
 
-    // Lightweight path: skip pending shell, keep current workspace visible.
-    // Used when creating from the sidebar while already in a workspace.
     if (options?.lightweight) {
-      try {
-        requestChatInputFocus();
-        const resolved = await resolveWorktreeCreationInput(normalizedInput);
-        const result = await createWorktreeWorkspace(resolved.params, {
-          latencyFlowId: options.latencyFlowId,
-        });
-        const repoGroupKeyToExpand = sidebarRepoGroupKeyForWorkspace(result.workspace, repoRoots);
-        annotateLatencyFlow(options.latencyFlowId, {
-          targetWorkspaceId: result.workspace.id,
-        });
-        await selectWorkspaceWithArrival({
-          workspaceId: result.workspace.id,
-          source: "worktree-created",
-          setupScript: result.setupScript ?? null,
-          baseBranchName: resolved.params.baseRef,
-          repoGroupKeyToExpand,
-          latencyFlowId: options.latencyFlowId,
-        });
-        return { workspaceId: result.workspace.id, projectedSessionId: null };
-      } catch (error) {
-        failLatencyFlow(options?.latencyFlowId, "worktree_enter_failed");
-        throw error;
-      }
+      return runLightweightWorktreeWorkspaceEntry({
+        latencyFlowId: options.latencyFlowId,
+        normalizedInput,
+        repoRoots,
+      }, {
+        createWorktreeWorkspace,
+        requestChatInputFocus,
+        resolveWorktreeCreationInput,
+        selectWorkspaceWithArrival,
+      });
     }
 
     const attemptId = createAttemptId();

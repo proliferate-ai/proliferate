@@ -10,7 +10,6 @@ import {
   canCreateRightPanelBrowserTab,
   createBrowserTabInRightPanelState,
   createOrActivateBrowserTabInRightPanelState,
-  reconcileRightPanelWorkspaceState,
   removeBrowserTabFromRightPanelState,
   removeTerminalFromRightPanelState,
   reorderHeaderEntryInRightPanelState,
@@ -18,6 +17,9 @@ import {
   reorderToolInRightPanelState,
   updateBrowserTabUrlInRightPanelState,
 } from "./right-panel-state";
+import {
+  reconcileRightPanelWorkspaceState,
+} from "./right-panel-state-normalization";
 import { fileViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
 
 describe("right panel domain", () => {

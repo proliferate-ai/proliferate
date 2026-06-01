@@ -1,40 +1,23 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { SHORTCUTS } from "@/config/shortcuts/registry";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/facade/files/use-workspace-file-actions";
 import { useWorkspaceFileSearch } from "@/hooks/workspaces/ui/files/use-workspace-file-search";
 import { useWorkspaceCommandPaletteOpenFiles } from "@/hooks/workspaces/derived/use-workspace-command-palette-open-files";
 import { useWorkspaceCommandPaletteTabs } from "@/hooks/workspaces/workflows/use-workspace-command-palette-tabs";
 import { useAppCommandActionsContext } from "@/providers/AppCommandActionsProvider";
 import {
-  commandPaletteCommandValue,
   commandPaletteFileValue,
   filterCommandPaletteEntries,
   groupCommandPaletteEntries,
   splitFilePath,
   type CommandPaletteEntry,
 } from "@/lib/domain/command-palette/entries";
-import { focusChatInput } from "@/lib/domain/focus-zone";
-import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
-import { runShortcutHandler } from "@/lib/domain/shortcuts/registry";
-import { requestRightPanelBrowserTab } from "@/lib/infra/right-panel-new-tab-menu";
-
-interface RunCommandState {
-  onRun: () => void;
-  canRun: boolean;
-  disabledReason: string | null;
-  isLaunching: boolean;
-}
-
-interface WorkspaceWebActionState {
-  openCurrentWorkspaceInWeb: () => void;
-  disabledReason: string | null;
-}
-
-interface WorkspaceRemoteAccessActionState {
-  syncToWeb: () => void;
-  syncToWebDisabledReason: string | null;
-}
+import {
+  buildWorkspaceCommandPaletteEntries,
+  type RunCommandState,
+  type WorkspaceRemoteAccessActionState,
+  type WorkspaceWebActionState,
+} from "@/hooks/workspaces/facade/workspace-command-palette-entries";
 
 interface UseWorkspaceCommandPaletteArgs {
   open: boolean;
@@ -134,278 +117,31 @@ export function useWorkspaceCommandPalette({
     }));
   }, [fileDisabledReason, fileSearch.results, openFile, openFiles, trimmedQuery.length]);
 
-  const commandEntries = useMemo<CommandPaletteEntry[]>(() => [
-    {
-      id: "workspace.focus-chat",
-      value: commandPaletteCommandValue("workspace.focus-chat"),
-      group: "workspace",
-      label: "Focus Chat",
-      icon: "chat",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.focusChat),
-      disabledReason: hasWorkspaceShell ? null : "Workspace is still opening.",
-      execute: () => {
-        focusChatInput();
-      },
-    },
-    {
-      id: "workspace.open-terminal",
-      value: commandPaletteCommandValue("workspace.open-terminal"),
-      group: "workspace",
-      label: "Show Terminal",
-      icon: "panel-bottom",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.openTerminal),
-      disabledReason: selectedWorkspaceId ? null : "Workspace is still opening.",
-      execute: () => {
-        openTerminalPanel();
-      },
-    },
-    {
-      id: "workspace.toggle-left-sidebar",
-      value: commandPaletteCommandValue("workspace.toggle-left-sidebar"),
-      group: "workspace",
-      label: "Toggle Left Sidebar",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.toggleLeftSidebar),
-      disabledReason: hasWorkspaceShell ? null : "Workspace is still opening.",
-      execute: onToggleLeftSidebar,
-    },
-    {
-      id: "workspace.toggle-right-panel",
-      value: commandPaletteCommandValue("workspace.toggle-right-panel"),
-      group: "workspace",
-      label: "Toggle Right Panel",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.toggleRightPanel),
-      disabledReason: hasWorkspaceShell ? null : "Workspace is still opening.",
-      execute: onToggleRightPanel,
-    },
-    {
-      id: "workspace.open-in-web",
-      value: commandPaletteCommandValue("workspace.open-in-web"),
-      group: "workspace",
-      label: "Open Current Workspace in Web",
-      icon: "arrow-right",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.openWorkspaceInWeb),
-      disabledReason: workspaceWebActions.disabledReason,
-      execute: workspaceWebActions.openCurrentWorkspaceInWeb,
-    },
-    {
-      id: "workspace.sync-to-web",
-      value: commandPaletteCommandValue("workspace.sync-to-web"),
-      group: "workspace",
-      label: "Sync Current Workspace to Web",
-      icon: "cloud-plus",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.syncWorkspaceToWeb),
-      disabledReason: workspaceRemoteAccessActions.syncToWebDisabledReason,
-      execute: workspaceRemoteAccessActions.syncToWeb,
-    },
-    {
-      id: "workspace.run-command",
-      value: commandPaletteCommandValue("workspace.run-command"),
-      group: "workspace",
-      label: "Run Workspace Command",
-      icon: "play",
-      detail: runCommand.isLaunching ? "Launching..." : null,
-      keywords: ["show run", "terminal"],
-      disabledReason: runCommand.disabledReason,
-      execute: runCommand.onRun,
-    },
-    {
-      id: "workspace.repository-settings",
-      value: commandPaletteCommandValue("workspace.repository-settings"),
-      group: "workspace",
-      label: "Repository Settings",
-      icon: "settings",
-      keywords: ["repo settings"],
-      disabledReason: canOpenRepositorySettings
-        ? null
-        : repositorySettingsDisabledReason,
-      execute: () => {
-        if (repoSettingsHref) {
-          navigate(repoSettingsHref);
-        }
-      },
-    },
-    {
-      id: "workspace.new-session-tab",
-      value: commandPaletteCommandValue("workspace.new-session-tab"),
-      group: "tabs",
-      label: "New Chat",
-      icon: "chat-plus",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.newSessionTab),
-      disabledReason: canOpenNewSessionTab ? null : newSessionDisabledReason,
-      execute: () => {
-        openNewSessionTab();
-      },
-    },
-    {
-      id: "workspace.previous-tab",
-      value: commandPaletteCommandValue("workspace.previous-tab"),
-      group: "tabs",
-      label: "Previous Tab",
-      icon: "arrow-left",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.previousTab),
-      disabledReason: canActivateRelativeTab ? null : relativeTabDisabledReason,
-      execute: () => {
-        activateRelativeTab(-1);
-      },
-    },
-    {
-      id: "workspace.next-tab",
-      value: commandPaletteCommandValue("workspace.next-tab"),
-      group: "tabs",
-      label: "Next Tab",
-      icon: "arrow-right",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.nextTab),
-      disabledReason: canActivateRelativeTab ? null : relativeTabDisabledReason,
-      execute: () => {
-        activateRelativeTab(1);
-      },
-    },
-    {
-      id: "workspace.restore-tab",
-      value: commandPaletteCommandValue("workspace.restore-tab"),
-      group: "tabs",
-      label: "Restore Closed Tab",
-      icon: "rotate-ccw",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.restoreTab),
-      disabledReason: restoreTabDisabledReason,
-      execute: () => {
-        restoreLastDismissedTab();
-      },
-    },
-    {
-      id: "workspace.open-browser-tab",
-      value: commandPaletteCommandValue("workspace.open-browser-tab"),
-      group: "tabs",
-      label: "Open Browser Tab",
-      icon: "panel-bottom",
-      disabledReason: selectedWorkspaceId ? null : "Workspace is still opening.",
-      execute: () => {
-        requestRightPanelBrowserTab();
-      },
-    },
-    {
-      id: "session.rename",
-      value: commandPaletteCommandValue("session.rename"),
-      group: "tabs",
-      label: "Rename Current Chat",
-      icon: "pencil",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.renameSession),
-      disabledReason: activeSessionId ? null : "No active chat tab.",
-      execute: () => {
-        runShortcutHandler("session.rename", { source: "palette" });
-      },
-    },
-    {
-      id: "app.open-settings",
-      value: commandPaletteCommandValue("app.open-settings"),
-      group: "app",
-      label: "Open Settings",
-      icon: "settings",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.openSettings),
-      disabledReason: appActions.openSettings.disabledReason,
-      execute: () => appActions.openSettings.execute("palette"),
-    },
-    {
-      id: "app.show-keyboard-shortcuts",
-      value: commandPaletteCommandValue("app.show-keyboard-shortcuts"),
-      group: "app",
-      label: "Show Keyboard Shortcuts",
-      icon: "keyboard",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.showKeyboardShortcuts),
-      disabledReason: appActions.showKeyboardShortcuts.disabledReason,
-      execute: () => appActions.showKeyboardShortcuts.execute("palette"),
-    },
-    {
-      id: "app.go-home",
-      value: commandPaletteCommandValue("app.go-home"),
-      group: "app",
-      label: "Go Home",
-      icon: "arrow-left",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.goHome),
-      disabledReason: appActions.goHome.disabledReason,
-      execute: () => appActions.goHome.execute("palette"),
-    },
-    {
-      id: "app.go-plugins",
-      value: commandPaletteCommandValue("app.go-plugins"),
-      group: "app",
-      label: "Go to Plugins",
-      icon: "command",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.goPlugins),
-      disabledReason: appActions.goPlugins.disabledReason,
-      execute: () => appActions.goPlugins.execute("palette"),
-    },
-    {
-      id: "app.go-automations",
-      value: commandPaletteCommandValue("app.go-automations"),
-      group: "app",
-      label: "Go to Automations",
-      icon: "command",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.goAutomations),
-      disabledReason: appActions.goAutomations.disabledReason,
-      execute: () => appActions.goAutomations.execute("palette"),
-    },
-    {
-      id: "app.open-web",
-      value: commandPaletteCommandValue("app.open-web"),
-      group: "app",
-      label: "Open Web App",
-      icon: "arrow-right",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.openWebApp),
-      disabledReason: appActions.openWebApp.disabledReason,
-      execute: () => appActions.openWebApp.execute("palette"),
-    },
-    {
-      id: "app.open-support",
-      value: commandPaletteCommandValue("app.open-support"),
-      group: "app",
-      label: "Open Support",
-      icon: "command",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.openSupport),
-      disabledReason: appActions.openSupport.disabledReason,
-      execute: () => appActions.openSupport.execute("palette"),
-    },
-    {
-      id: "workspace.add-repository",
-      value: commandPaletteCommandValue("workspace.add-repository"),
-      group: "app",
-      label: "Add Repository",
-      icon: "folder-plus",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.addRepository),
-      disabledReason: appActions.addRepository.disabledReason,
-      execute: () => appActions.addRepository.execute("palette"),
-    },
-    {
-      id: "workspace.new-local",
-      value: commandPaletteCommandValue("workspace.new-local"),
-      group: "app",
-      label: "New Local Workspace",
-      icon: "folder-plus",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.newLocal),
-      disabledReason: appActions.newLocalWorkspace.disabledReason,
-      execute: () => appActions.newLocalWorkspace.execute("palette"),
-    },
-    {
-      id: "workspace.new-worktree",
-      value: commandPaletteCommandValue("workspace.new-worktree"),
-      group: "app",
-      label: "New Worktree Workspace",
-      icon: "tree",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.newWorktree),
-      disabledReason: appActions.newWorktreeWorkspace.disabledReason,
-      execute: () => appActions.newWorktreeWorkspace.execute("palette"),
-    },
-    {
-      id: "workspace.new-cloud",
-      value: commandPaletteCommandValue("workspace.new-cloud"),
-      group: "app",
-      label: "New Cloud Workspace",
-      icon: "cloud-plus",
-      shortcut: getShortcutDisplayLabel(SHORTCUTS.newCloud),
-      disabledReason: appActions.newCloudWorkspace.disabledReason,
-      execute: () => appActions.newCloudWorkspace.execute("palette"),
-    },
-  ], [
+  const commandEntries = useMemo<CommandPaletteEntry[]>(() =>
+    buildWorkspaceCommandPaletteEntries({
+      activeSessionId,
+      appActions,
+      canActivateRelativeTab,
+      canOpenNewSessionTab,
+      canOpenRepositorySettings,
+      hasWorkspaceShell,
+      navigate,
+      newSessionDisabledReason,
+      onToggleLeftSidebar,
+      onToggleRightPanel,
+      openNewSessionTab,
+      openTerminalPanel,
+      activateRelativeTab,
+      relativeTabDisabledReason,
+      repoSettingsHref,
+      repositorySettingsDisabledReason,
+      restoreLastDismissedTab,
+      restoreTabDisabledReason,
+      runCommand,
+      selectedWorkspaceId,
+      workspaceRemoteAccessActions,
+      workspaceWebActions,
+    }), [
     appActions,
     activeSessionId,
     activateRelativeTab,
