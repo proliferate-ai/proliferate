@@ -14,19 +14,17 @@ ALLOWLIST_PATH = REPO_ROOT / "scripts" / "anyharness_boundaries_allowlist.txt"
 
 HTTP_TRANSPORT_ROOTS = {"axum", "headers", "http", "http_body", "tower", "utoipa"}
 PRODUCT_DOMAIN_ROOTS = {"domains", "repo_roots", "sessions", "workspaces"}
-LIVE_RUNTIME_ROOTS = {"acp", "live", "terminals"}
+LIVE_RUNTIME_ROOTS = {"acp", "live"}
 PRODUCT_SURFACE_DOMAINS = {"cowork", "mobility", "plans", "plugins", "reviews"}
 DOMAIN_PATH_PREFIXES = (
     "anyharness/crates/anyharness-lib/src/domains/",
     "anyharness/crates/anyharness-lib/src/repo_roots/",
     "anyharness/crates/anyharness-lib/src/sessions/",
-    "anyharness/crates/anyharness-lib/src/terminals/",
     "anyharness/crates/anyharness-lib/src/workspaces/",
 )
 CORE_DOMAIN_PATH_PREFIXES = (
     "anyharness/crates/anyharness-lib/src/repo_roots/",
     "anyharness/crates/anyharness-lib/src/sessions/",
-    "anyharness/crates/anyharness-lib/src/terminals/",
     "anyharness/crates/anyharness-lib/src/workspaces/",
 )
 LIVE_SESSIONS_PREFIX = "anyharness/crates/anyharness-lib/src/live/sessions/"
@@ -41,7 +39,6 @@ LIVE_SESSIONS_PRIVATE_MODULES = {
     "replay",
 }
 SESSION_EVENT_SINK_PREFIXES = (
-    "anyharness/crates/anyharness-lib/src/acp/event_sink/",
     "anyharness/crates/anyharness-lib/src/live/sessions/event_sink/",
 )
 TOKEN_RE = re.compile(r"r#[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*|::|[{}(),;*]")

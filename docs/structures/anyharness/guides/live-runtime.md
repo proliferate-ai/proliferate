@@ -3,12 +3,12 @@
 Status: authoritative for long-lived in-memory runtime systems under
 `anyharness-lib/src/live/**`.
 
-The current code is transitional. The session actor and handle already live
-under `live/sessions/**`; session driver code still uses the current
-`live/sessions/connection/**` name; session event sink, interaction broker,
-background work, manager, and replay pieces still have transitional
-`acp/**` paths. Treat this guide as the target grammar for new work and cleanup
-passes.
+The current code is transitional. Session manager, handle, actor, event sink,
+interaction broker, background work, replay, and the current driver role already
+live under `live/sessions/**`; session driver code still uses the current
+`live/sessions/connection/**` name. Remaining `acp/**` files are shared
+permission, payload, and provider-error helpers, not live-session owners. Treat
+this guide as the target grammar for new work and cleanup passes.
 
 ## Purpose
 
@@ -585,26 +585,31 @@ live/sessions/actor/**
 live/sessions/connection/**
   current name for target driver
 
-acp/manager.rs
-  current AcpManager; target LiveSessionManager
+live/sessions/manager.rs
+  current LiveSessionManager
 
-acp/runtime_client.rs
-  current low-level ACP client; belongs under the session driver or
+live/sessions/connection/runtime_client.rs
+  current low-level ACP client name; target role belongs under driver or
   integrations/acp depending on whether the extracted piece is stateful
 
-acp/event_sink/**
-  target live/sessions/event_sink/**
+live/sessions/event_sink/**
+  current and target session event sink
 
-acp/permission_broker.rs
-acp/permission_broker/**
-acp/mcp_elicitation/**
-  target live/sessions/interactions/**
+live/sessions/interactions/**
+  current and target permission, user-input, and MCP elicitation rendezvous
 
-acp/background_work/**
-  target live/sessions/background_work/**
+live/sessions/background_work/**
+  current and target provider-reported long-running work registry
 
-acp/replay_actor.rs
-  target replay/** unless it truly remains an independent actor
+live/sessions/replay/**
+  current replay actor support; target replay role unless it truly remains an
+  independent actor
+
+acp/permission_context.rs
+acp/permission_payload.rs
+acp/provider_errors.rs
+  remaining shared ACP helper paths; move to integrations/acp only if reusable
+  protocol mechanics earn that owner
 ```
 
 The end-to-end session mental model:
@@ -638,17 +643,25 @@ EventSink
 
 ## Live Terminals
 
-Current terminal code is transitional and still uses:
+Current terminal code is already split by durable and live ownership:
 
 ```text
-terminals/
+domains/terminals/
   model.rs
   service.rs
   store.rs
+
+live/terminals/
+  manager.rs
+  handle.rs
+  driver.rs
+  output_sink.rs
+  replay.rs
   shell.rs
 ```
 
-The target split should make the live and durable pieces explicit:
+Future growth should keep the live and durable pieces explicit and promote
+flat live files into role folders only when the extra shape is earned:
 
 ```text
 domains/terminals/

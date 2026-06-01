@@ -28,15 +28,18 @@ Current migration reality:
 - `sessions/store/**` is the current split session store shape.
 - `sessions/mcp_bindings/**` is the current split session MCP binding and
   launch assembly shape.
-- `acp/event_sink/**` is the current split session event sink shape.
+- `live/sessions/event_sink/**` is the current split session event sink shape.
 - `sessions/runtime/**` is the current split session runtime shape.
-- `live/sessions/actor/**`, `live/sessions/connection/**`, and
-  `live/sessions/handle.rs` are the current split live session shape.
-  `connection/**` is the current name for the target `driver/**` role.
-  Related collaborators such as `AcpManager`, `RuntimeClient`,
-  `SessionEventSink`, `InteractionBroker`, `BackgroundWorkRegistry`, and
-  `replay_actor` may still use transitional `acp/**` paths until their own
-  topology passes.
+- `live/sessions/manager.rs`, `live/sessions/handle.rs`,
+  `live/sessions/actor/**`, `live/sessions/connection/**`,
+  `live/sessions/event_sink/**`, `live/sessions/interactions/**`,
+  `live/sessions/background_work/**`, and `live/sessions/replay/**` are the
+  current split live session shape. `connection/**` is the current name for the
+  target `driver/**` role, and `RuntimeClient` is still the current low-level
+  ACP client name inside that role.
+- Remaining `acp/**` files are shared ACP permission/payload/provider-error
+  helpers, not current owners for live session manager, event sink,
+  interactions, background work, or replay behavior.
 
 ## Module Style
 

@@ -357,8 +357,8 @@ It:
 1. asks `SessionService` to create the durable row
 2. resolves the workspace
 3. resolves the agent again for launch
-4. asks `AcpManager` to start the live actor
-5. `AcpManager` reads the last durable event seq inside its start/inject
+4. asks `LiveSessionManager` to start the live actor
+5. `LiveSessionManager` reads the last durable event seq inside its start/inject
    critical section
 6. persists the native session id and updates status to `idle`
 

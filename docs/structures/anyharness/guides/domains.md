@@ -3,8 +3,8 @@
 Status: authoritative for durable/product code under `anyharness-lib/src/domains/**`.
 
 The current code is transitional. Product domains such as `agents`, `cowork`,
-`reviews`, `plans`, and `mobility` live under `domains/**`. Core session,
-workspace, repo-root, and terminal paths still use top-level transitional
+`reviews`, `plans`, `mobility`, and `terminals` live under `domains/**`. Core
+session, workspace, and repo-root paths still use top-level transitional
 folders until the final topology rename.
 
 Current session-domain reality:
