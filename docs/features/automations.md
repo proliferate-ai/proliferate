@@ -825,7 +825,7 @@ member claims by accident.
 
 - Allowed only when `owner_scope='personal'`.
 - Execute on Desktop via the existing local executor service
-  (`server/automations/local_executor_service.py` +
+  (`server/automations/local_executor.py` +
   `apps/desktop/src/hooks/access/cloud/automations/use-local-automation-run-claims.ts`).
 - Do not call `ensure_personal_sandbox_profile` (no cloud profile
   involved) and do not preflight runtime config / agent auth (the
@@ -908,8 +908,7 @@ server/proliferate/db/store/automations.py
   - extend snapshot dataclasses
   - new helpers: load_automation_for_org, list_automations_for_owner
 
-server/proliferate/db/store/cloud_agent_run_config/              (new)
-  configs.py
+server/proliferate/db/store/cloud_agent_run_config.py            (new)
 
 server/proliferate/server/automations/
   service.py            authorization + validation now branches on

@@ -6,7 +6,7 @@ import asyncio
 from time import perf_counter
 
 from proliferate.integrations.pubsub.redis import get_pubsub_bus
-from proliferate.server.cloud._logging import log_cloud_event
+from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.live.domain.channels import worker_control_channel
 from proliferate.server.cloud.worker.control.checks import (
     check_worker_control,

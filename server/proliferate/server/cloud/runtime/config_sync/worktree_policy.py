@@ -9,7 +9,7 @@ from uuid import UUID
 
 from proliferate.db import engine as db_engine
 from proliferate.integrations import anyharness
-from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
+from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.worktree_policy.service import (
     load_worktree_retention_policy_for_runtime as get_worktree_retention_policy,
 )

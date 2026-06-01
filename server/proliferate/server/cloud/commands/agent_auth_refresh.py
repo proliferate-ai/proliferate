@@ -6,10 +6,10 @@ import logging
 from uuid import UUID
 
 from proliferate.db import session_ops as db_session
-from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.agent_auth.service import (
     request_agent_auth_refresh_for_profile_target,
 )
+from proliferate.server.cloud.event_logging import log_cloud_event
 
 
 async def queue_agent_auth_refresh_for_not_ready_preflight(

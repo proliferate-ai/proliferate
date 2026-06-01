@@ -6,7 +6,7 @@ import time
 from uuid import UUID
 
 from proliferate.integrations import anyharness
-from proliferate.server.cloud._logging import log_cloud_event
+from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.utils.time import duration_ms
 
 

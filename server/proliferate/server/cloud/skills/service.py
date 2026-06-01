@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
 from proliferate.db.store import organizations as organizations_store
-from proliferate.db.store.cloud_skills.configured_items import (
+from proliferate.db.store.cloud_skills import (
     CloudSkillConfiguredItemSnapshot,
     delete_skill_item,
     get_skill_item,

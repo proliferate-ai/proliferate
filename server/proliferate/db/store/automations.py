@@ -28,7 +28,7 @@ from proliferate.constants.cloud import SUPPORTED_GIT_PROVIDER
 from proliferate.db.models.automations import Automation, AutomationRun
 from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
-from proliferate.db.store.cloud_agent_run_config.configs import CloudAgentRunConfigRecord
+from proliferate.db.store.cloud_agent_run_config import CloudAgentRunConfigRecord
 from proliferate.utils.time import utcnow
 
 logger = logging.getLogger(__name__)
