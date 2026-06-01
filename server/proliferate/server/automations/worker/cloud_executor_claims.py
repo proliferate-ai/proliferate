@@ -5,20 +5,18 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from proliferate.db.store.automation_run_claim_transitions import (
-    mark_run_failed,
-)
 from proliferate.db.store.automation_run_claim_values import (
     AutomationRunClaimValue,
-)
-from proliferate.db.store.automation_run_claims import (
-    heartbeat_run_claim,
-    load_current_run_claim,
 )
 from proliferate.server.automations.domain.claim_lifecycle import (
     ACTIVE_CLAIM_STATUSES,
     automation_error_message,
     claim_is_active,
+)
+from proliferate.server.automations.worker.claim_transactions import (
+    heartbeat_run_claim,
+    load_current_run_claim,
+    mark_run_failed,
 )
 from proliferate.server.automations.worker.cloud_executor_config import CloudExecutorConfig
 from proliferate.utils.time import utcnow

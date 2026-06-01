@@ -11,11 +11,13 @@ from proliferate.constants.automations import (
 from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS
 from proliferate.db import engine as db_engine
 from proliferate.db.store.automation_run_claim_values import AutomationRunClaimValue
-from proliferate.db.store.automation_run_claims import claim_cloud_automation_runs
 from proliferate.db.store.cloud_agent_run_config import configs as run_config_store
 from proliferate.server.automations.domain.claim_lifecycle import (
     RECLAIMABLE_STATUSES,
     unconfigured_agent_failure,
+)
+from proliferate.server.automations.worker.claim_transactions import (
+    claim_cloud_automation_runs,
 )
 from proliferate.server.automations.worker.cloud_execution.context import (
     AutomationExecutionContext,

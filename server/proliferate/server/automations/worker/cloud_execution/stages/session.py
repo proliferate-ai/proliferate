@@ -4,10 +4,6 @@ from __future__ import annotations
 
 from typing import cast
 
-from proliferate.db.store.automation_run_claim_transitions import (
-    attach_anyharness_session_to_run,
-    mark_run_creating_session,
-)
 from proliferate.db.store.automation_run_claims import (
     ClaimTransitionRule as StoreClaimTransitionRule,
 )
@@ -15,6 +11,10 @@ from proliferate.server.automations.domain.claim_lifecycle import (
     ANYHARNESS_SESSION_ATTACHMENT_TRANSITION,
     CREATING_SESSION_TRANSITION,
     claim_is_active,
+)
+from proliferate.server.automations.worker.claim_transactions import (
+    attach_anyharness_session_to_run,
+    mark_run_creating_session,
 )
 from proliferate.server.automations.worker.cloud_execution.command_models import (
     StartSessionPayload,

@@ -6,12 +6,12 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.automations import (
     AUTOMATION_EXECUTION_TARGET_CLOUD,
     AUTOMATION_EXECUTOR_KIND_CLOUD,
 )
-from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.exposures import CloudWorkspaceExposure
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.automation_run_claims import (
@@ -26,6 +26,7 @@ from proliferate.db.store.cloud_workspaces import (
 
 
 async def create_cloud_workspace_for_claimed_run(
+    db: AsyncSession,
     *,
     run_id: UUID,
     claim_id: UUID,
@@ -44,6 +45,7 @@ async def create_cloud_workspace_for_claimed_run(
     cloud_repo_limit: int | None = None,
 ) -> CloudWorkspace | None:
     return await _create_workspace_for_claimed_run(
+        db,
         run_id=run_id,
         claim_id=claim_id,
         user_id=user_id,
@@ -64,6 +66,7 @@ async def create_cloud_workspace_for_claimed_run(
 
 
 async def create_managed_cloud_workspace_for_claimed_run(
+    db: AsyncSession,
     *,
     run_id: UUID,
     claim_id: UUID,
@@ -85,6 +88,7 @@ async def create_managed_cloud_workspace_for_claimed_run(
     origin: str = "automation",
 ) -> CloudWorkspace | None:
     return await _create_workspace_for_claimed_run(
+        db,
         run_id=run_id,
         claim_id=claim_id,
         sandbox_profile_id=sandbox_profile_id,
@@ -107,6 +111,7 @@ async def create_managed_cloud_workspace_for_claimed_run(
 
 
 async def _create_workspace_for_claimed_run(
+    db: AsyncSession,
     *,
     run_id: UUID,
     claim_id: UUID,
@@ -128,67 +133,66 @@ async def _create_workspace_for_claimed_run(
     sandbox_profile_id: UUID | None = None,
     target_id: UUID | None = None,
 ) -> CloudWorkspace | None:
-    async with db_engine.async_session_factory() as db:
-        run = await load_claimed_run_for_update(
+    run = await load_claimed_run_for_update(
+        db,
+        run_id=run_id,
+        claim_id=claim_id,
+        now=now,
+        allowed_statuses=transition.allowed_statuses,
+        execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
+        executor_kind=AUTOMATION_EXECUTOR_KIND_CLOUD,
+        claim_is_active=claim_is_active,
+        user_id=user_id,
+    )
+    if run is None:
+        return None
+    if run.cloud_workspace_id is not None:
+        return None
+    if sandbox_profile_id is not None and target_id is not None:
+        workspace = await create_managed_cloud_workspace_for_profile(
             db,
-            run_id=run_id,
-            claim_id=claim_id,
-            now=now,
-            allowed_statuses=transition.allowed_statuses,
-            execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
-            executor_kind=AUTOMATION_EXECUTOR_KIND_CLOUD,
-            claim_is_active=claim_is_active,
-            user_id=user_id,
+            sandbox_profile_id=sandbox_profile_id,
+            target_id=target_id,
+            created_by_user_id=user_id,
+            display_name=display_name,
+            git_provider=git_provider,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            git_branch=git_branch,
+            git_base_branch=git_base_branch,
+            worktree_path=worktree_path,
+            origin_json=origin_json,
+            origin=origin,
+            template_version=template_version,
         )
-        if run is None:
-            return None
-        if run.cloud_workspace_id is not None:
-            return None
-        if sandbox_profile_id is not None and target_id is not None:
-            workspace = await create_managed_cloud_workspace_for_profile(
-                db,
-                sandbox_profile_id=sandbox_profile_id,
-                target_id=target_id,
-                created_by_user_id=user_id,
-                display_name=display_name,
-                git_provider=git_provider,
-                git_owner=git_owner,
-                git_repo_name=git_repo_name,
-                git_branch=git_branch,
-                git_base_branch=git_base_branch,
-                worktree_path=worktree_path,
-                origin_json=origin_json,
-                origin=origin,
-                template_version=template_version,
-            )
-        else:
-            workspace = await create_cloud_workspace_record(
-                db,
-                user_id=user_id,
-                display_name=display_name,
-                git_provider=git_provider,
-                git_owner=git_owner,
-                git_repo_name=git_repo_name,
-                git_branch=git_branch,
-                git_base_branch=git_base_branch,
-                origin_json=origin_json,
-                template_version=template_version,
-                cloud_repo_limit=cloud_repo_limit,
-                commit=False,
-            )
-        run.cloud_workspace_id = workspace.id
-        if target_id is not None:
-            exposure_id = (
-                await db.execute(
-                    select(CloudWorkspaceExposure.id).where(
-                        CloudWorkspaceExposure.target_id == target_id,
-                        CloudWorkspaceExposure.cloud_workspace_id == workspace.id,
-                        CloudWorkspaceExposure.archived_at.is_(None),
-                    )
+    else:
+        workspace = await create_cloud_workspace_record(
+            db,
+            user_id=user_id,
+            display_name=display_name,
+            git_provider=git_provider,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            git_branch=git_branch,
+            git_base_branch=git_base_branch,
+            origin_json=origin_json,
+            template_version=template_version,
+            cloud_repo_limit=cloud_repo_limit,
+            commit=False,
+        )
+    run.cloud_workspace_id = workspace.id
+    if target_id is not None:
+        exposure_id = (
+            await db.execute(
+                select(CloudWorkspaceExposure.id).where(
+                    CloudWorkspaceExposure.target_id == target_id,
+                    CloudWorkspaceExposure.cloud_workspace_id == workspace.id,
+                    CloudWorkspaceExposure.archived_at.is_(None),
                 )
-            ).scalar_one_or_none()
-            run.cloud_workspace_exposure_id = exposure_id
-        run.updated_at = now
-        await db.commit()
-        await db.refresh(workspace)
-        return workspace
+            )
+        ).scalar_one_or_none()
+        run.cloud_workspace_exposure_id = exposure_id
+    run.updated_at = now
+    await db.flush()
+    await db.refresh(workspace)
+    return workspace

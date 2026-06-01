@@ -25,7 +25,6 @@ from proliferate.constants.automations import (
     AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
 )
 from proliferate.constants.cloud import SUPPORTED_GIT_PROVIDER
-from proliferate.db import engine as db_engine
 from proliferate.db.models.automations import Automation, AutomationRun
 from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
@@ -635,6 +634,7 @@ async def list_runs_for_automation_for_user(
 
 
 async def list_latest_runs_by_cloud_workspace_ids_for_user(
+    db: AsyncSession,
     *,
     user_id: UUID,
     cloud_workspace_ids: list[UUID],
@@ -642,22 +642,21 @@ async def list_latest_runs_by_cloud_workspace_ids_for_user(
     if not cloud_workspace_ids:
         return {}
     unique_ids = list(dict.fromkeys(cloud_workspace_ids))
-    async with db_engine.async_session_factory() as db:
-        records = list(
-            (
-                await db.execute(
-                    select(AutomationRun)
-                    .where(
-                        AutomationRun.owner_scope == AUTOMATION_OWNER_SCOPE_PERSONAL,
-                        AutomationRun.owner_user_id == user_id,
-                        AutomationRun.cloud_workspace_id.in_(unique_ids),
-                    )
-                    .order_by(AutomationRun.created_at.desc(), AutomationRun.id.desc())
+    records = list(
+        (
+            await db.execute(
+                select(AutomationRun)
+                .where(
+                    AutomationRun.owner_scope == AUTOMATION_OWNER_SCOPE_PERSONAL,
+                    AutomationRun.owner_user_id == user_id,
+                    AutomationRun.cloud_workspace_id.in_(unique_ids),
                 )
+                .order_by(AutomationRun.created_at.desc(), AutomationRun.id.desc())
             )
-            .scalars()
-            .all()
         )
+        .scalars()
+        .all()
+    )
     values_by_workspace: dict[UUID, AutomationRunValue] = {}
     for record in records:
         if record.cloud_workspace_id is None or record.cloud_workspace_id in values_by_workspace:

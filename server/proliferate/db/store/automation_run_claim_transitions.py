@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 from datetime import datetime
 from uuid import UUID
 
@@ -20,7 +19,6 @@ from proliferate.constants.automations import (
     AUTOMATION_RUN_STATUS_FAILED,
     AUTOMATION_RUN_STATUS_PROVISIONING_WORKSPACE,
 )
-from proliferate.db import engine as db_engine
 from proliferate.db.models.automations import AutomationRun
 from proliferate.db.store.automation_run_claim_values import (
     AutomationRunClaimValue,
@@ -32,13 +30,6 @@ from proliferate.db.store.automation_run_claims import (
     clear_claim_metadata,
     load_claimed_run_for_update,
 )
-
-
-async def _run_self_committing[T](operation: Callable[[AsyncSession], Awaitable[T]]) -> T:
-    async with db_engine.async_session_factory() as db:
-        result = await operation(db)
-        await db.commit()
-        return result
 
 
 def _transition_requirements_satisfied(
@@ -118,7 +109,7 @@ async def _mark_claim_status(
 
 
 async def mark_run_creating_workspace(
-    db: AsyncSession | None = None,
+    db: AsyncSession,
     *,
     run_id: UUID,
     claim_id: UUID,
@@ -129,24 +120,22 @@ async def mark_run_creating_workspace(
     executor_kind: str = AUTOMATION_EXECUTOR_KIND_CLOUD,
     user_id: UUID | None = None,
 ) -> AutomationRunClaimValue | None:
-    async def operation(session: AsyncSession) -> AutomationRunClaimValue | None:
-        return await _mark_claim_status(
-            session,
-            run_id=run_id,
-            claim_id=claim_id,
-            now=now,
-            status=AUTOMATION_RUN_STATUS_CREATING_WORKSPACE,
-            transition=transition,
-            claim_is_active=claim_is_active,
-            execution_target=execution_target,
-            executor_kind=executor_kind,
-            user_id=user_id,
-        )
-
-    return await operation(db) if db is not None else await _run_self_committing(operation)
+    return await _mark_claim_status(
+        db,
+        run_id=run_id,
+        claim_id=claim_id,
+        now=now,
+        status=AUTOMATION_RUN_STATUS_CREATING_WORKSPACE,
+        transition=transition,
+        claim_is_active=claim_is_active,
+        execution_target=execution_target,
+        executor_kind=executor_kind,
+        user_id=user_id,
+    )
 
 
 async def attach_cloud_workspace_to_run(
+    db: AsyncSession,
     *,
     run_id: UUID,
     claim_id: UUID,
@@ -155,27 +144,25 @@ async def attach_cloud_workspace_to_run(
     transition: ClaimTransitionRule,
     claim_is_active: ClaimActivePredicate,
 ) -> bool:
-    async def operation(db: AsyncSession) -> bool:
-        run = await _load_run_for_transition(
-            db,
-            run_id=run_id,
-            claim_id=claim_id,
-            now=now,
-            transition=transition,
-            execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
-            executor_kind=AUTOMATION_EXECUTOR_KIND_CLOUD,
-            claim_is_active=claim_is_active,
-        )
-        if run is None:
-            return False
-        run.cloud_workspace_id = cloud_workspace_id
-        run.updated_at = now
-        return True
-
-    return await _run_self_committing(operation)
+    run = await _load_run_for_transition(
+        db,
+        run_id=run_id,
+        claim_id=claim_id,
+        now=now,
+        transition=transition,
+        execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
+        executor_kind=AUTOMATION_EXECUTOR_KIND_CLOUD,
+        claim_is_active=claim_is_active,
+    )
+    if run is None:
+        return False
+    run.cloud_workspace_id = cloud_workspace_id
+    run.updated_at = now
+    return True
 
 
 async def attach_cloud_target_snapshot_to_run(
+    db: AsyncSession,
     *,
     run_id: UUID,
     claim_id: UUID,
@@ -186,31 +173,28 @@ async def attach_cloud_target_snapshot_to_run(
     transition: ClaimTransitionRule,
     claim_is_active: ClaimActivePredicate,
 ) -> AutomationRunClaimValue | None:
-    async def operation(db: AsyncSession) -> AutomationRunClaimValue | None:
-        run = await _load_run_for_transition(
-            db,
-            run_id=run_id,
-            claim_id=claim_id,
-            now=now,
-            transition=transition,
-            execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
-            executor_kind=AUTOMATION_EXECUTOR_KIND_CLOUD,
-            claim_is_active=claim_is_active,
-        )
-        if run is None:
-            return None
-        run.cloud_target_id_snapshot = cloud_target_id
-        run.cloud_target_kind_snapshot = cloud_target_kind
-        if sandbox_profile_id is not None:
-            run.sandbox_profile_id = sandbox_profile_id
-        run.updated_at = now
-        return claim_value(run)
-
-    return await _run_self_committing(operation)
+    run = await _load_run_for_transition(
+        db,
+        run_id=run_id,
+        claim_id=claim_id,
+        now=now,
+        transition=transition,
+        execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
+        executor_kind=AUTOMATION_EXECUTOR_KIND_CLOUD,
+        claim_is_active=claim_is_active,
+    )
+    if run is None:
+        return None
+    run.cloud_target_id_snapshot = cloud_target_id
+    run.cloud_target_kind_snapshot = cloud_target_kind
+    if sandbox_profile_id is not None:
+        run.sandbox_profile_id = sandbox_profile_id
+    run.updated_at = now
+    return claim_value(run)
 
 
 async def attach_anyharness_workspace_to_run(
-    db: AsyncSession | None = None,
+    db: AsyncSession,
     *,
     run_id: UUID,
     claim_id: UUID,
@@ -222,29 +206,26 @@ async def attach_anyharness_workspace_to_run(
     executor_kind: str = AUTOMATION_EXECUTOR_KIND_DESKTOP,
     user_id: UUID | None = None,
 ) -> AutomationRunClaimValue | None:
-    async def operation(db: AsyncSession) -> AutomationRunClaimValue | None:
-        run = await _load_run_for_transition(
-            db,
-            run_id=run_id,
-            claim_id=claim_id,
-            now=now,
-            transition=transition,
-            execution_target=execution_target,
-            executor_kind=executor_kind,
-            claim_is_active=claim_is_active,
-            user_id=user_id,
-        )
-        if run is None:
-            return None
-        run.anyharness_workspace_id = anyharness_workspace_id
-        run.updated_at = now
-        return claim_value(run)
-
-    return await operation(db) if db is not None else await _run_self_committing(operation)
+    run = await _load_run_for_transition(
+        db,
+        run_id=run_id,
+        claim_id=claim_id,
+        now=now,
+        transition=transition,
+        execution_target=execution_target,
+        executor_kind=executor_kind,
+        claim_is_active=claim_is_active,
+        user_id=user_id,
+    )
+    if run is None:
+        return None
+    run.anyharness_workspace_id = anyharness_workspace_id
+    run.updated_at = now
+    return claim_value(run)
 
 
 async def mark_run_provisioning_workspace(
-    db: AsyncSession | None = None,
+    db: AsyncSession,
     *,
     run_id: UUID,
     claim_id: UUID,
@@ -255,25 +236,22 @@ async def mark_run_provisioning_workspace(
     executor_kind: str = AUTOMATION_EXECUTOR_KIND_CLOUD,
     user_id: UUID | None = None,
 ) -> AutomationRunClaimValue | None:
-    async def operation(session: AsyncSession) -> AutomationRunClaimValue | None:
-        return await _mark_claim_status(
-            session,
-            run_id=run_id,
-            claim_id=claim_id,
-            now=now,
-            status=AUTOMATION_RUN_STATUS_PROVISIONING_WORKSPACE,
-            transition=transition,
-            claim_is_active=claim_is_active,
-            execution_target=execution_target,
-            executor_kind=executor_kind,
-            user_id=user_id,
-        )
-
-    return await operation(db) if db is not None else await _run_self_committing(operation)
+    return await _mark_claim_status(
+        db,
+        run_id=run_id,
+        claim_id=claim_id,
+        now=now,
+        status=AUTOMATION_RUN_STATUS_PROVISIONING_WORKSPACE,
+        transition=transition,
+        claim_is_active=claim_is_active,
+        execution_target=execution_target,
+        executor_kind=executor_kind,
+        user_id=user_id,
+    )
 
 
 async def mark_run_creating_session(
-    db: AsyncSession | None = None,
+    db: AsyncSession,
     *,
     run_id: UUID,
     claim_id: UUID,
@@ -285,26 +263,23 @@ async def mark_run_creating_session(
     executor_kind: str = AUTOMATION_EXECUTOR_KIND_CLOUD,
     user_id: UUID | None = None,
 ) -> AutomationRunClaimValue | None:
-    async def operation(session: AsyncSession) -> AutomationRunClaimValue | None:
-        return await _mark_claim_status(
-            session,
-            run_id=run_id,
-            claim_id=claim_id,
-            now=now,
-            status=AUTOMATION_RUN_STATUS_CREATING_SESSION,
-            transition=transition,
-            claim_is_active=claim_is_active,
-            execution_target=execution_target,
-            executor_kind=executor_kind,
-            user_id=user_id,
-            anyharness_workspace_id=anyharness_workspace_id,
-        )
-
-    return await operation(db) if db is not None else await _run_self_committing(operation)
+    return await _mark_claim_status(
+        db,
+        run_id=run_id,
+        claim_id=claim_id,
+        now=now,
+        status=AUTOMATION_RUN_STATUS_CREATING_SESSION,
+        transition=transition,
+        claim_is_active=claim_is_active,
+        execution_target=execution_target,
+        executor_kind=executor_kind,
+        user_id=user_id,
+        anyharness_workspace_id=anyharness_workspace_id,
+    )
 
 
 async def attach_anyharness_session_to_run(
-    db: AsyncSession | None = None,
+    db: AsyncSession,
     *,
     run_id: UUID,
     claim_id: UUID,
@@ -317,30 +292,27 @@ async def attach_anyharness_session_to_run(
     executor_kind: str = AUTOMATION_EXECUTOR_KIND_CLOUD,
     user_id: UUID | None = None,
 ) -> bool:
-    async def operation(db: AsyncSession) -> bool:
-        run = await _load_run_for_transition(
-            db,
-            run_id=run_id,
-            claim_id=claim_id,
-            now=now,
-            transition=transition,
-            execution_target=execution_target,
-            executor_kind=executor_kind,
-            claim_is_active=claim_is_active,
-            user_id=user_id,
-        )
-        if run is None:
-            return False
-        run.anyharness_workspace_id = anyharness_workspace_id
-        run.anyharness_session_id = anyharness_session_id
-        run.updated_at = now
-        return True
-
-    return await operation(db) if db is not None else await _run_self_committing(operation)
+    run = await _load_run_for_transition(
+        db,
+        run_id=run_id,
+        claim_id=claim_id,
+        now=now,
+        transition=transition,
+        execution_target=execution_target,
+        executor_kind=executor_kind,
+        claim_is_active=claim_is_active,
+        user_id=user_id,
+    )
+    if run is None:
+        return False
+    run.anyharness_workspace_id = anyharness_workspace_id
+    run.anyharness_session_id = anyharness_session_id
+    run.updated_at = now
+    return True
 
 
 async def mark_run_dispatching(
-    db: AsyncSession | None = None,
+    db: AsyncSession,
     *,
     run_id: UUID,
     claim_id: UUID,
@@ -351,26 +323,23 @@ async def mark_run_dispatching(
     executor_kind: str = AUTOMATION_EXECUTOR_KIND_CLOUD,
     user_id: UUID | None = None,
 ) -> AutomationRunClaimValue | None:
-    async def operation(session: AsyncSession) -> AutomationRunClaimValue | None:
-        return await _mark_claim_status(
-            session,
-            run_id=run_id,
-            claim_id=claim_id,
-            now=now,
-            status=AUTOMATION_RUN_STATUS_DISPATCHING,
-            transition=transition,
-            claim_is_active=claim_is_active,
-            execution_target=execution_target,
-            executor_kind=executor_kind,
-            user_id=user_id,
-            dispatch_started_at=now,
-        )
-
-    return await operation(db) if db is not None else await _run_self_committing(operation)
+    return await _mark_claim_status(
+        db,
+        run_id=run_id,
+        claim_id=claim_id,
+        now=now,
+        status=AUTOMATION_RUN_STATUS_DISPATCHING,
+        transition=transition,
+        claim_is_active=claim_is_active,
+        execution_target=execution_target,
+        executor_kind=executor_kind,
+        user_id=user_id,
+        dispatch_started_at=now,
+    )
 
 
 async def mark_run_dispatched(
-    db: AsyncSession | None = None,
+    db: AsyncSession,
     *,
     run_id: UUID,
     claim_id: UUID,
@@ -383,33 +352,30 @@ async def mark_run_dispatched(
     executor_kind: str = AUTOMATION_EXECUTOR_KIND_CLOUD,
     user_id: UUID | None = None,
 ) -> bool:
-    async def operation(db: AsyncSession) -> bool:
-        run = await _load_run_for_transition(
-            db,
-            run_id=run_id,
-            claim_id=claim_id,
-            now=now,
-            transition=transition,
-            execution_target=execution_target,
-            executor_kind=executor_kind,
-            claim_is_active=claim_is_active,
-            user_id=user_id,
-        )
-        if run is None:
-            return False
-        run.status = AUTOMATION_RUN_STATUS_DISPATCHED
-        run.dispatched_at = now
-        run.anyharness_workspace_id = anyharness_workspace_id
-        run.anyharness_session_id = anyharness_session_id
-        clear_claim_metadata(run)
-        run.updated_at = now
-        return True
-
-    return await operation(db) if db is not None else await _run_self_committing(operation)
+    run = await _load_run_for_transition(
+        db,
+        run_id=run_id,
+        claim_id=claim_id,
+        now=now,
+        transition=transition,
+        execution_target=execution_target,
+        executor_kind=executor_kind,
+        claim_is_active=claim_is_active,
+        user_id=user_id,
+    )
+    if run is None:
+        return False
+    run.status = AUTOMATION_RUN_STATUS_DISPATCHED
+    run.dispatched_at = now
+    run.anyharness_workspace_id = anyharness_workspace_id
+    run.anyharness_session_id = anyharness_session_id
+    clear_claim_metadata(run)
+    run.updated_at = now
+    return True
 
 
 async def mark_run_failed(
-    db: AsyncSession | None = None,
+    db: AsyncSession,
     *,
     run_id: UUID,
     claim_id: UUID,
@@ -422,26 +388,23 @@ async def mark_run_failed(
     executor_kind: str = AUTOMATION_EXECUTOR_KIND_CLOUD,
     user_id: UUID | None = None,
 ) -> bool:
-    async def operation(db: AsyncSession) -> bool:
-        run = await load_claimed_run_for_update(
-            db,
-            run_id=run_id,
-            claim_id=claim_id,
-            now=now,
-            allowed_statuses=active_statuses,
-            execution_target=execution_target,
-            executor_kind=executor_kind,
-            claim_is_active=claim_is_active,
-            user_id=user_id,
-        )
-        if run is None:
-            return False
-        run.status = AUTOMATION_RUN_STATUS_FAILED
-        run.failed_at = now
-        run.last_error_code = error_code
-        run.last_error_message = message
-        clear_claim_metadata(run)
-        run.updated_at = now
-        return True
-
-    return await operation(db) if db is not None else await _run_self_committing(operation)
+    run = await load_claimed_run_for_update(
+        db,
+        run_id=run_id,
+        claim_id=claim_id,
+        now=now,
+        allowed_statuses=active_statuses,
+        execution_target=execution_target,
+        executor_kind=executor_kind,
+        claim_is_active=claim_is_active,
+        user_id=user_id,
+    )
+    if run is None:
+        return False
+    run.status = AUTOMATION_RUN_STATUS_FAILED
+    run.failed_at = now
+    run.last_error_code = error_code
+    run.last_error_message = message
+    clear_claim_metadata(run)
+    run.updated_at = now
+    return True
