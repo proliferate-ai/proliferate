@@ -8,11 +8,10 @@ use serde_json::json;
 
 use super::document;
 use super::model::{
-    NewPlan, PlanCreateOutcome, PlanInteractionLinkRecord, PlanRecord, MAX_PLAN_BODY_BYTES,
+    MAX_PLAN_BODY_BYTES, NewPlan, PlanCreateOutcome, PlanInteractionLinkRecord, PlanRecord,
 };
 use super::store::PlanStore;
 use crate::sessions::model::SessionEventRecord;
-use crate::sessions::plan_references::{PlanReferenceResolver, ResolvedPlanReference};
 
 #[derive(Debug, thiserror::Error)]
 pub enum PlanCreateError {
@@ -417,30 +416,6 @@ impl PlanService {
                 created_at: now.clone(),
                 updated_at: now,
             })
-    }
-}
-
-impl PlanReferenceResolver for PlanService {
-    fn resolve_plan_reference(
-        &self,
-        plan_id: &str,
-    ) -> anyhow::Result<Option<ResolvedPlanReference>> {
-        Ok(self.get(plan_id)?.map(plan_reference_from_record))
-    }
-}
-
-fn plan_reference_from_record(plan: PlanRecord) -> ResolvedPlanReference {
-    ResolvedPlanReference {
-        id: plan.id,
-        workspace_id: plan.workspace_id,
-        title: plan.title,
-        body_markdown: plan.body_markdown,
-        snapshot_hash: plan.snapshot_hash,
-        source_session_id: plan.source_session_id,
-        source_turn_id: plan.source_turn_id,
-        source_item_id: plan.source_item_id,
-        source_kind: plan.source_kind,
-        source_tool_call_id: plan.source_tool_call_id,
     }
 }
 

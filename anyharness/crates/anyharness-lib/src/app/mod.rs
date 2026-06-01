@@ -43,7 +43,7 @@ use crate::sessions::deletion::SessionDeleteWorkflow;
 use crate::sessions::links::completions::LinkCompletionStore;
 use crate::sessions::links::service::SessionLinkService;
 use crate::sessions::links::store::SessionLinkStore;
-use crate::sessions::mcp_bindings::crypto::{load_data_cipher_from_env, DATA_KEY_ENV_VAR};
+use crate::sessions::mcp_bindings::crypto::{DATA_KEY_ENV_VAR, load_data_cipher_from_env};
 use crate::sessions::mcp_bindings::product_registry::ProductMcpEndpointRegistry;
 use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::service::SessionService;
@@ -57,7 +57,9 @@ use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::access_store::WorkspaceAccessStore;
 use crate::workspaces::checkout_gate::CheckoutDeletionGate;
 use crate::workspaces::deletion::WorkspaceDeleteWorkflow;
-use crate::workspaces::files_runtime::WorkspaceFilesRuntime;
+use crate::workspaces::files_runtime::{
+    WorkspaceFileProtection, WorkspaceFileProtectionRegistry, WorkspaceFilesRuntime,
+};
 use crate::workspaces::inventory::WorktreeInventoryService;
 use crate::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::workspaces::purge::WorkspacePurgeService;
@@ -197,9 +199,12 @@ impl AppState {
         let cowork_service = Arc::new(CoworkService::new(CoworkStore::new(db.clone())));
         let cowork_artifact_runtime = Arc::new(CoworkArtifactRuntime::new());
         let cowork_mcp_auth = Arc::new(CoworkMcpAuth::new(runtime_home.clone()));
+        let file_protection_registry = WorkspaceFileProtectionRegistry::new(vec![
+            cowork_artifact_runtime.clone() as Arc<dyn WorkspaceFileProtection>,
+        ]);
         let files_runtime = Arc::new(WorkspaceFilesRuntime::new(
             workspace_runtime.clone(),
-            cowork_artifact_runtime.clone(),
+            file_protection_registry,
             workspace_file_search_cache.clone(),
         ));
         let session_service = Arc::new(SessionService::new(
@@ -318,6 +323,7 @@ impl AppState {
             runtime_config_service.clone(),
             workspace_access_gate.clone(),
             plan_service.clone(),
+            plan_service.clone(),
             agent_auth_config_service.clone(),
         ));
         let retire_preflight_checker = Arc::new(RetirePreflightChecker::new(
@@ -378,6 +384,8 @@ impl AppState {
             plan_service.clone(),
             session_runtime.clone(),
             session_service.clone(),
+            acp_manager.clone(),
+            workspace_access_gate.clone(),
             runtime_home.clone(),
         ));
         let review_runtime = Arc::new(ReviewRuntime::new(

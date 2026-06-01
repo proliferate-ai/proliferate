@@ -37,11 +37,9 @@ impl SessionRuntime {
             .ok_or_else(|| ResolveInteractionError::InteractionNotFound(request_id.to_string()))?;
 
         if self
-            .plan_service
-            .store()
-            .find_link_by_request(session_id, request_id)
+            .plan_interaction_link_resolver
+            .has_linked_interaction(session_id, request_id)
             .map_err(ResolveInteractionError::Internal)?
-            .is_some()
         {
             return Err(ResolveInteractionError::PlanLinkedInteraction(
                 request_id.to_string(),

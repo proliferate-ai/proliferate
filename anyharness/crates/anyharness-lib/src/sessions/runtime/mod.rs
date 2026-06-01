@@ -12,9 +12,9 @@ use super::mcp_bindings::crypto::SessionDataCipher;
 use super::mcp_bindings::model::SessionMcpServer;
 use super::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use super::model::SessionRecord;
+use super::plan_references::{PlanInteractionLinkResolver, PlanReferenceResolver};
 use super::service::SessionService;
 use crate::domains::agents::auth_config::{AgentAuthConfigService, AgentAuthSelectionRequired};
-use crate::domains::plans::service::PlanService;
 use crate::domains::runtime_config::service::RuntimeConfigService;
 use crate::live::sessions::LiveSessionManager;
 use crate::sessions::extensions::SessionExtension;
@@ -28,7 +28,6 @@ mod fork;
 mod interactions;
 mod lifecycle;
 mod pending_prompts;
-mod plans;
 mod prompt;
 mod replay;
 mod startup;
@@ -46,7 +45,8 @@ pub struct SessionRuntime {
     product_mcp_launch_catalog: ProductMcpLaunchCatalog,
     runtime_config_service: Arc<RuntimeConfigService>,
     access_gate: Arc<WorkspaceAccessGate>,
-    plan_service: Arc<PlanService>,
+    plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
+    plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
     agent_auth_config_service: Arc<AgentAuthConfigService>,
 }
 
@@ -256,7 +256,8 @@ impl SessionRuntime {
         product_mcp_launch_catalog: ProductMcpLaunchCatalog,
         runtime_config_service: Arc<RuntimeConfigService>,
         access_gate: Arc<WorkspaceAccessGate>,
-        plan_service: Arc<PlanService>,
+        plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
+        plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
         agent_auth_config_service: Arc<AgentAuthConfigService>,
     ) -> Self {
         Self {
@@ -270,7 +271,8 @@ impl SessionRuntime {
             product_mcp_launch_catalog,
             runtime_config_service,
             access_gate,
-            plan_service,
+            plan_reference_resolver,
+            plan_interaction_link_resolver,
             agent_auth_config_service,
         }
     }

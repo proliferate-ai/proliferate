@@ -211,6 +211,12 @@ pub struct PromptAttachmentRecord {
     pub updated_at: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct SessionBundlePromptAttachment {
+    pub record: PromptAttachmentRecord,
+    pub content: Vec<u8>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PromptAttachmentState {
     Pending,

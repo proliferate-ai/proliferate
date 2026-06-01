@@ -2,9 +2,9 @@ use anyharness_contract::v1::PromptInputBlock;
 
 use crate::live::sessions::{LiveSessionCommandError, QueueMutationError};
 use crate::sessions::model::{PromptAttachmentState, SessionRecord};
+use crate::sessions::prompt::PromptPrepareContext;
 use crate::sessions::prompt::capabilities::capabilities_from_live_config;
 use crate::sessions::prompt::prepare::prepare_prompt;
-use crate::sessions::prompt::PromptPrepareContext;
 
 use super::{PendingPromptMutationError, SessionLifecycleError, SessionRuntime};
 
@@ -50,7 +50,7 @@ impl SessionRuntime {
                 workspace_id: &record.workspace_id,
                 capabilities: capabilities_from_live_config(live_config.as_ref()),
                 attachment_state: PromptAttachmentState::Pending,
-                plan_resolver: self.plan_service.as_ref(),
+                plan_resolver: self.plan_reference_resolver.as_ref(),
             },
             blocks,
         )

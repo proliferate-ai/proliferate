@@ -101,7 +101,8 @@ Current app wiring:
 anyharness-lib/src/app/mod.rs
   AppState.cowork_artifact_runtime
   CoworkArtifactRuntime::new()
-  WorkspaceFilesRuntime receives CoworkArtifactRuntime for write protection
+  WorkspaceFileProtectionRegistry receives CoworkArtifactRuntime for write
+  protection
 ```
 
 Current HTTP read APIs:
@@ -539,9 +540,13 @@ Current protection path:
 
 ```text
 workspaces/files_runtime.rs
-  calls CoworkArtifactRuntime::is_protected_relative_path
-  calls CoworkArtifactRuntime::is_protected_relative_path_or_ancestor
+  owns WorkspaceFileProtection and WorkspaceFileProtectionRegistry
+  asks registered file-protection participants about protected paths
   returns FileServiceError::ProtectedPath
+
+domains/cowork/artifacts.rs
+  CoworkArtifactRuntime implements WorkspaceFileProtection for current cowork
+  artifact paths
 ```
 
 Target protection path:

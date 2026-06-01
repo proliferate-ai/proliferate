@@ -1,8 +1,9 @@
 use crate::domains::agents::portability::AgentArtifactFileData;
 use crate::sessions::links::model::SessionLinkRecord;
 use crate::sessions::model::{
-    PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentRecord, SessionEventRecord,
-    SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord, SessionRecord,
+    PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentRecord,
+    SessionBundlePromptAttachment, SessionEventRecord, SessionLiveConfigSnapshotRecord,
+    SessionRawNotificationRecord, SessionRecord,
 };
 use crate::sessions::subagents::model::{SubagentCompletionRecord, SubagentWakeScheduleRecord};
 use crate::workspaces::access_model::WorkspaceAccessRecord;
@@ -53,10 +54,28 @@ pub struct WorkspaceMobilitySessionBundleData {
     pub agent_artifacts: Vec<AgentArtifactFileData>,
 }
 
+impl WorkspaceMobilitySessionBundleData {
+    pub fn session_prompt_attachments(&self) -> Vec<SessionBundlePromptAttachment> {
+        self.prompt_attachments
+            .iter()
+            .map(SessionBundlePromptAttachment::from)
+            .collect()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MobilityPromptAttachmentData {
     pub record: PromptAttachmentRecord,
     pub content: Vec<u8>,
+}
+
+impl From<&MobilityPromptAttachmentData> for SessionBundlePromptAttachment {
+    fn from(attachment: &MobilityPromptAttachmentData) -> Self {
+        Self {
+            record: attachment.record.clone(),
+            content: attachment.content.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
