@@ -16,6 +16,7 @@ from proliferate.db.models.auth import User
 from proliferate.db.models.automations import Automation, AutomationRun
 from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
+from proliferate.db.store.cloud_agent_run_config.configs import CloudAgentRunConfigRecord
 from proliferate.db.store.automations import (
     AutomationScheduleAdvance,
     create_due_scheduled_runs_batch,
@@ -120,7 +121,9 @@ def _repo_row(
     )
 
 
-def _agent_snapshot(config: CloudAgentRunConfig) -> dict[str, object]:
+def _agent_snapshot(
+    config: CloudAgentRunConfig | CloudAgentRunConfigRecord,
+) -> dict[str, object]:
     return {
         "config_id": str(config.id),
         "config_name": config.name,
@@ -221,6 +224,104 @@ async def test_due_scheduler_disables_bad_schedule_and_continues_batch(
 
 
 @pytest.mark.asyncio
+async def test_due_scheduler_skips_failed_snapshot_and_continues_batch(
+    test_engine,  # type: ignore[no-untyped-def]
+) -> None:
+    original_factory = engine_module.async_session_factory
+    engine_module.async_session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
+    now = datetime(2026, 4, 20, 12, 0, tzinfo=UTC)
+    user_id = uuid.uuid4()
+
+    try:
+        async with engine_module.async_session_factory() as session:
+            await _create_user(session, user_id=user_id)
+            good_run_config = await _create_run_config(
+                session,
+                user_id=user_id,
+                model_id="gpt-5.4",
+            )
+            bad_run_config = await _create_run_config(
+                session,
+                user_id=user_id,
+                model_id="retired-model",
+            )
+            good_repo = _repo_row(user_id=user_id, git_repo_name="snapshot-good", now=now)
+            bad_repo = _repo_row(user_id=user_id, git_repo_name="snapshot-bad", now=now)
+            session.add_all([good_repo, bad_repo])
+            await session.flush()
+            good_automation = _automation_row(
+                user_id=user_id,
+                repo_id=good_repo.id,
+                run_config_id=good_run_config.id,
+                title="Good snapshot",
+                prompt="Run good snapshot",
+                schedule_rrule="RRULE:FREQ=HOURLY;INTERVAL=1;BYMINUTE=0",
+                next_run_at=now,
+            )
+            bad_automation = _automation_row(
+                user_id=user_id,
+                repo_id=bad_repo.id,
+                run_config_id=bad_run_config.id,
+                title="Bad snapshot",
+                prompt="Run bad snapshot",
+                schedule_rrule="RRULE:FREQ=HOURLY;INTERVAL=1;BYMINUTE=0",
+                next_run_at=now,
+            )
+            session.add_all([good_automation, bad_automation])
+            await session.commit()
+            good_id = good_automation.id
+            bad_id = bad_automation.id
+
+        def _advance(fields, _now):  # type: ignore[no-untyped-def]
+            return AutomationScheduleAdvance(
+                scheduled_for=fields.next_run_at,
+                next_run_at=now + timedelta(hours=1),
+            )
+
+        def _snapshot_or_skip(
+            config: CloudAgentRunConfigRecord,
+        ) -> dict[str, object] | None:
+            if config.model_id == "retired-model":
+                return None
+            return _agent_snapshot(config)
+
+        async with engine_module.async_session_factory() as session, session.begin():
+            created = await create_due_scheduled_runs_batch(
+                session,
+                now=now,
+                limit=10,
+                schedule_advance_resolver=_advance,
+                agent_run_config_snapshot_builder=_snapshot_or_skip,
+            )
+
+        async with engine_module.async_session_factory() as session:
+            good = await session.get(Automation, good_id)
+            bad = await session.get(Automation, bad_id)
+            runs = list(
+                (
+                    await session.execute(
+                        select(AutomationRun).order_by(AutomationRun.created_at.asc())
+                    )
+                )
+                .scalars()
+                .all()
+            )
+
+        assert created == 1
+        assert good is not None
+        assert good.last_scheduled_at == now
+        assert good.next_run_at == now + timedelta(hours=1)
+        assert bad is not None
+        assert bad.last_scheduled_at is None
+        assert bad.next_run_at == now + timedelta(hours=1)
+        assert [run.automation_id for run in runs] == [good_id]
+        assert runs[0].agent_run_config_snapshot_json is not None
+        assert runs[0].agent_run_config_snapshot_json["model_id"] == "gpt-5.4"
+    finally:
+        engine_module.async_session_factory = original_factory
+
+
+@pytest.mark.asyncio
 async def test_due_scheduler_uses_precomputed_agent_run_config_snapshot(
     test_engine,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -260,7 +361,7 @@ async def test_due_scheduler_uses_precomputed_agent_run_config_snapshot(
                 next_run_at=now + timedelta(hours=1),
             )
 
-        def _canonical_snapshot(config: CloudAgentRunConfig) -> dict[str, object]:
+        def _canonical_snapshot(config: CloudAgentRunConfigRecord) -> dict[str, object]:
             snapshot = _agent_snapshot(config)
             snapshot["model_id"] = "gpt-5.3-codex"
             return snapshot

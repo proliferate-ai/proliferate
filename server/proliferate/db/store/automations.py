@@ -29,6 +29,7 @@ from proliferate.db import engine as db_engine
 from proliferate.db.models.automations import Automation, AutomationRun
 from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
+from proliferate.db.store.cloud_agent_run_config.configs import CloudAgentRunConfigRecord
 from proliferate.utils.time import utcnow
 
 logger = logging.getLogger(__name__)
@@ -202,7 +203,7 @@ ScheduleAdvanceResolver = Callable[
     [AutomationScheduleFields, datetime],
     AutomationScheduleAdvance,
 ]
-AgentRunConfigSnapshotBuilder = Callable[[CloudAgentRunConfig], dict[str, object]]
+AgentRunConfigSnapshotBuilder = Callable[[CloudAgentRunConfigRecord], dict[str, object] | None]
 
 
 def _automation_value(record: Automation, repo_config: CloudRepoConfig) -> AutomationValue:
@@ -272,6 +273,28 @@ def _run_value(record: AutomationRun) -> AutomationRunValue:
         last_error_message=record.last_error_message,
         created_at=record.created_at,
         updated_at=record.updated_at,
+    )
+
+
+def _run_config_value(record: CloudAgentRunConfig) -> CloudAgentRunConfigRecord:
+    return CloudAgentRunConfigRecord(
+        id=record.id,
+        owner_scope=record.owner_scope,
+        owner_user_id=record.owner_user_id,
+        organization_id=record.organization_id,
+        created_by_user_id=record.created_by_user_id,
+        name=record.name,
+        agent_kind=record.agent_kind,
+        model_id=record.model_id,
+        control_values_json=dict(record.control_values_json or {}),
+        usable_in_personal_sandboxes=record.usable_in_personal_sandboxes,
+        usable_in_shared_sandboxes=record.usable_in_shared_sandboxes,
+        seed_key=record.seed_key,
+        system_default_rank=record.system_default_rank,
+        status=record.status,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+        archived_at=record.archived_at,
     )
 
 
@@ -701,69 +724,79 @@ async def create_due_scheduled_runs_batch(
             record.updated_at = now
             continue
         if advance.scheduled_for is not None:
-            snapshot = agent_run_config_snapshot_builder(run_config)
-            result = await db.execute(
-                pg_insert(AutomationRun)
-                .values(
-                    automation_id=record.id,
-                    owner_scope=record.owner_scope,
-                    owner_user_id=record.owner_user_id,
-                    organization_id=record.organization_id,
-                    created_by_user_id=record.created_by_user_id,
-                    trigger_kind=AUTOMATION_RUN_TRIGGER_SCHEDULED,
-                    scheduled_for=advance.scheduled_for,
-                    target_mode=record.target_mode,
-                    status=AUTOMATION_RUN_STATUS_QUEUED,
-                    title_snapshot=record.title,
-                    prompt_snapshot=record.prompt,
-                    git_provider_snapshot=SUPPORTED_GIT_PROVIDER,
-                    git_owner_snapshot=repo_config.git_owner,
-                    git_repo_name_snapshot=repo_config.git_repo_name,
-                    cloud_repo_config_id_snapshot=record.cloud_repo_config_id,
-                    cloud_target_id_snapshot=None,
-                    cloud_target_kind_snapshot=None,
-                    sandbox_profile_id=None,
-                    cloud_workspace_exposure_id=None,
-                    agent_run_config_snapshot_json=snapshot,
-                    cascade_attempt=0,
-                    last_cascade_command_id=None,
-                    last_cascade_reason=None,
-                    executor_kind=None,
-                    executor_id=None,
-                    claim_id=None,
-                    claimed_at=None,
-                    claim_expires_at=None,
-                    last_heartbeat_at=None,
-                    dispatch_started_at=None,
-                    dispatched_at=None,
-                    failed_at=None,
-                    cloud_workspace_id=None,
-                    anyharness_workspace_id=None,
-                    anyharness_session_id=None,
-                    cancelled_at=None,
-                    last_error_code=None,
-                    last_error_message=None,
-                    created_at=now,
-                    updated_at=now,
-                )
-                .on_conflict_do_nothing(
-                    index_elements=[
-                        AutomationRun.automation_id,
-                        AutomationRun.scheduled_for,
-                    ],
-                    index_where=AutomationRun.trigger_kind == AUTOMATION_RUN_TRIGGER_SCHEDULED,
-                )
-                .returning(AutomationRun.id)
-            )
-            if result.scalar_one_or_none() is not None:
-                inserted_count += 1
-                record.last_scheduled_at = advance.scheduled_for
-            else:
-                logger.debug(
-                    "automation scheduled slot already existed automation_id=%s scheduled_for=%s",
+            snapshot = agent_run_config_snapshot_builder(_run_config_value(run_config))
+            if snapshot is None:
+                logger.warning(
+                    "automation agent run config snapshot unavailable; "
+                    "skipping scheduled run automation_id=%s run_config_id=%s scheduled_for=%s",
                     record.id,
+                    run_config.id,
                     advance.scheduled_for,
                 )
+            else:
+                result = await db.execute(
+                    pg_insert(AutomationRun)
+                    .values(
+                        automation_id=record.id,
+                        owner_scope=record.owner_scope,
+                        owner_user_id=record.owner_user_id,
+                        organization_id=record.organization_id,
+                        created_by_user_id=record.created_by_user_id,
+                        trigger_kind=AUTOMATION_RUN_TRIGGER_SCHEDULED,
+                        scheduled_for=advance.scheduled_for,
+                        target_mode=record.target_mode,
+                        status=AUTOMATION_RUN_STATUS_QUEUED,
+                        title_snapshot=record.title,
+                        prompt_snapshot=record.prompt,
+                        git_provider_snapshot=SUPPORTED_GIT_PROVIDER,
+                        git_owner_snapshot=repo_config.git_owner,
+                        git_repo_name_snapshot=repo_config.git_repo_name,
+                        cloud_repo_config_id_snapshot=record.cloud_repo_config_id,
+                        cloud_target_id_snapshot=None,
+                        cloud_target_kind_snapshot=None,
+                        sandbox_profile_id=None,
+                        cloud_workspace_exposure_id=None,
+                        agent_run_config_snapshot_json=snapshot,
+                        cascade_attempt=0,
+                        last_cascade_command_id=None,
+                        last_cascade_reason=None,
+                        executor_kind=None,
+                        executor_id=None,
+                        claim_id=None,
+                        claimed_at=None,
+                        claim_expires_at=None,
+                        last_heartbeat_at=None,
+                        dispatch_started_at=None,
+                        dispatched_at=None,
+                        failed_at=None,
+                        cloud_workspace_id=None,
+                        anyharness_workspace_id=None,
+                        anyharness_session_id=None,
+                        cancelled_at=None,
+                        last_error_code=None,
+                        last_error_message=None,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    .on_conflict_do_nothing(
+                        index_elements=[
+                            AutomationRun.automation_id,
+                            AutomationRun.scheduled_for,
+                        ],
+                        index_where=AutomationRun.trigger_kind == AUTOMATION_RUN_TRIGGER_SCHEDULED,
+                    )
+                    .returning(AutomationRun.id)
+                )
+                if result.scalar_one_or_none() is not None:
+                    inserted_count += 1
+                    record.last_scheduled_at = advance.scheduled_for
+                else:
+                    logger.debug(
+                        "automation scheduled slot already existed automation_id=%s "
+                        "scheduled_for=%s",
+                        record.id,
+                        advance.scheduled_for,
+                    )
         record.next_run_at = advance.next_run_at
         record.updated_at = now
     return inserted_count

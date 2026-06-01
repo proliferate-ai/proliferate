@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
@@ -17,6 +18,7 @@ from proliferate.db.store.automations import (
     AutomationScheduleFields,
     create_due_scheduled_runs_batch,
 )
+from proliferate.db.store.cloud_agent_run_config.configs import CloudAgentRunConfigRecord
 from proliferate.server.automations.domain.claim_lifecycle import (
     AUTOMATION_RUN_STATUS_DISPATCHING,
     dispatch_uncertain_failure,
@@ -25,7 +27,10 @@ from proliferate.server.automations.domain.schedule import due_and_next_occurren
 from proliferate.server.cloud.agent_run_config.service import (
     snapshot_json as agent_run_config_snapshot_json,
 )
+from proliferate.server.cloud.errors import CloudApiError
 from proliferate.utils.time import utcnow
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -48,6 +53,22 @@ def _resolve_due_schedule(
         now=now,
     )
     return AutomationScheduleAdvance(scheduled_for=scheduled_for, next_run_at=next_run_at)
+
+
+def _scheduled_agent_run_config_snapshot_json(
+    value: CloudAgentRunConfigRecord,
+) -> dict[str, object] | None:
+    try:
+        return agent_run_config_snapshot_json(value)
+    except CloudApiError as error:
+        logger.warning(
+            "automation scheduled run config snapshot failed; "
+            "skipping run_config_id=%s code=%s message=%s",
+            value.id,
+            error.code,
+            error.message,
+        )
+        return None
 
 
 async def _sweep_expired_dispatching_runs(
@@ -73,7 +94,7 @@ async def _create_due_scheduled_runs_batch(
             now=utcnow(),
             limit=max(1, batch_size),
             schedule_advance_resolver=_resolve_due_schedule,
-            agent_run_config_snapshot_builder=agent_run_config_snapshot_json,
+            agent_run_config_snapshot_builder=_scheduled_agent_run_config_snapshot_json,
         )
 
 

@@ -15,10 +15,61 @@ from proliferate.db.models.auth import User
 from proliferate.db.models.automations import Automation, AutomationRun
 from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
+from proliferate.db.store.cloud_agent_run_config.configs import CloudAgentRunConfigRecord
 from proliferate.server.automations.domain.claim_lifecycle import (
     AUTOMATION_ERROR_DISPATCH_UNCERTAIN,
 )
 from proliferate.server.automations.worker import service as worker_service
+from proliferate.server.cloud.errors import CloudApiError
+
+
+def _run_config_record(*, user_id: uuid.UUID) -> CloudAgentRunConfigRecord:
+    now = datetime(2026, 4, 20, 12, 0, tzinfo=UTC)
+    return CloudAgentRunConfigRecord(
+        id=uuid.uuid4(),
+        owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+        owner_user_id=user_id,
+        organization_id=None,
+        created_by_user_id=user_id,
+        name="Retired model config",
+        agent_kind="codex",
+        model_id="retired-model",
+        control_values_json={},
+        usable_in_personal_sandboxes=True,
+        usable_in_shared_sandboxes=False,
+        seed_key=None,
+        system_default_rank=None,
+        status="active",
+        created_at=now,
+        updated_at=now,
+        archived_at=None,
+    )
+
+
+def test_scheduled_snapshot_wrapper_skips_cloud_api_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_id = uuid.uuid4()
+
+    def _raise_cloud_api_error(_config: CloudAgentRunConfigRecord) -> dict[str, object]:
+        raise CloudApiError(
+            "model_unavailable",
+            "Model is not available for this agent.",
+            status_code=400,
+        )
+
+    monkeypatch.setattr(
+        worker_service,
+        "agent_run_config_snapshot_json",
+        _raise_cloud_api_error,
+    )
+
+    assert (
+        worker_service._scheduled_agent_run_config_snapshot_json(
+            _run_config_record(user_id=user_id),
+        )
+        is None
+    )
 
 
 @pytest.mark.asyncio
