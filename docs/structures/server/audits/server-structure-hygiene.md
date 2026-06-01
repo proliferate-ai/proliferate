@@ -186,12 +186,13 @@ cannot grow without updating the explicit exception and files that shrink must
 lower or remove their exception.
 
 The structure checker also tracks folder and naming migration debt through the
-same count-based allowlist:
+same count-based allowlist. Lane 4 removed the billing Stripe integration
+single-file folder debt, and Lane 9 removes the remaining folder/name entries:
 
 ```text
-SERVICE_SUFFIX_MODULE         1 finding  across 1 file
-SINGLE_FILE_FOLDER            4 findings across 4 folders
-UNDERSCORE_PREFIXED_MODULE    1 finding  across 1 file
+SERVICE_SUFFIX_MODULE         0 findings
+SINGLE_FILE_FOLDER            0 findings
+UNDERSCORE_PREFIXED_MODULE    0 findings
 ```
 
 ## Lane 1: Docs Truth And Guardrails
@@ -691,11 +692,12 @@ Canonical docs:
 
 Current debt:
 
-- Single-file folders exist in store, integration, and domain paths.
-- `server/proliferate/server/cloud/_logging.py` violates the no
-  underscore-prefixed module rule.
-- Some sibling files use `_service.py` naming or sit beside `service.py`
-  while acting like service helpers.
+- Lane 9 removes the non-billing single-file store folders, the cloud
+  underscore-prefixed logging module, and the automation `_service.py` module.
+- No folder/name hygiene entries remain in the server boundary allowlist.
+- Parent-level sibling files that act like service helpers remain a broader
+  folder-hygiene concern for future ownership cleanup when identified outside
+  this path-only PR.
 
 Target result:
 
@@ -723,7 +725,8 @@ cd server && uv run pytest -q tests/unit tests/integration
 Done when:
 
 - Folder/name hygiene has an executable guardrail.
-- Existing single-file-folder and naming exceptions are gone.
+- Non-billing single-file-folder and naming exceptions owned by Lane 9 are
+  gone.
 
 ## Recommended PR Ordering
 

@@ -1,4 +1,4 @@
-import { type IconProps } from "./icons";
+import type { IconProps } from "./icons/types";
 
 type ProliferateNode = { x: number; y: number; size: number };
 

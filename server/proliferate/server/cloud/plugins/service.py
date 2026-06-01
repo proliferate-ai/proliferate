@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
 from proliferate.db.store import organizations as organizations_store
-from proliferate.db.store.cloud_plugins.configured_items import (
+from proliferate.db.store.cloud_plugins import (
     CloudPluginConfiguredItemSnapshot,
     delete_plugin_item,
     get_plugin_item,
@@ -14,7 +14,7 @@ from proliferate.db.store.cloud_plugins.configured_items import (
     patch_plugin_item,
     upsert_personal_plugin_item,
 )
-from proliferate.db.store.cloud_skills.configured_items import upsert_personal_skill_item
+from proliferate.db.store.cloud_skills import upsert_personal_skill_item
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mcp_catalog.availability import catalog_entry_is_configured
 from proliferate.server.cloud.mcp_catalog.catalog import build_connector_catalog

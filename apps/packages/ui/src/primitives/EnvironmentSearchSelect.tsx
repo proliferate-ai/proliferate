@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Check, ChevronDown } from "../icons";
+import { Check, ChevronDown } from "../icons/core";
 import { matchesPickerSearch } from "../utils/search";
 import { Button } from "./Button";
 import { PickerEmptyRow, PickerPopoverContent } from "./PickerPopoverContent";

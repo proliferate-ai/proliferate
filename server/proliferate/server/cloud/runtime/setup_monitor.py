@@ -18,7 +18,7 @@ from proliferate.db.store.cloud_workspace_setup_runs import (
 )
 from proliferate.db.store.cloud_workspaces import load_cloud_workspace_by_id
 from proliferate.integrations.anyharness import get_remote_terminal_command_run
-from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
+from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.runtime.service import get_workspace_connection
 from proliferate.server.cloud.workspaces.domain.setup_runs import (
     bounded_setup_monitor_error,

@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from proliferate.db.store.cloud_plugins.configured_items import (
+from proliferate.db.store.cloud_plugins import (
     CloudPluginConfiguredItemSnapshot,
 )
 

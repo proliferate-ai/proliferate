@@ -16,6 +16,7 @@ from proliferate.constants.automations import (
     CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION,
     CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_SYSTEM,
 )
+from proliferate.db.store import cloud_agent_run_config as run_config_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.automations import (
     AutomationRunValue,
@@ -27,8 +28,7 @@ from proliferate.db.store.automations import (
     load_automation_by_id,
     update_automation_for_user,
 )
-from proliferate.db.store.cloud_agent_run_config import configs as run_config_store
-from proliferate.db.store.cloud_agent_run_config.configs import CloudAgentRunConfigRecord
+from proliferate.db.store.cloud_agent_run_config import CloudAgentRunConfigRecord
 from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigLimitExceededError,
     bootstrap_cloud_repo_config,

@@ -9,7 +9,7 @@ from uuid import UUID
 from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS
 from proliferate.integrations import anyharness
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError, RemoteAgentSummary
-from proliferate.server.cloud._logging import log_cloud_event
+from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.utils.time import duration_ms
 
 

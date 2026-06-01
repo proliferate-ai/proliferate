@@ -9,7 +9,7 @@ from uuid import UUID
 
 from proliferate.integrations import anyharness
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError
-from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
+from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
 from proliferate.utils.time import duration_ms
 
 
