@@ -43,6 +43,12 @@ from proliferate.utils.crypto import decrypt_text
 SLACK_BOT_SCOPES = (
     "app_mentions:read,chat:write,chat:write.public,channels:history,channels:read,groups:read"
 )
+_SLACK_BOT_POLICY_STATUS_CODES = {
+    "slack_channel_not_allowed": 403,
+    "slack_not_connected": 404,
+    "slack_bot_disabled": 409,
+    "slack_connection_requires_reauth": 409,
+}
 
 
 @dataclass(frozen=True)
@@ -64,7 +70,11 @@ def require_active_slack_bot(
         slack_channel_id=slack_channel_id,
     )
     if isinstance(verdict, SlackBotDenied):
-        raise CloudApiError(verdict.code, verdict.message, status_code=verdict.status_code)
+        raise CloudApiError(
+            verdict.code,
+            verdict.message,
+            status_code=_SLACK_BOT_POLICY_STATUS_CODES[verdict.code],
+        )
     assert connection is not None
     assert config is not None
     return connection, config

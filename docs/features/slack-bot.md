@@ -603,12 +603,12 @@ END_OF_TURN_KINDS = {
 }
 ```
 
-`enqueue_post_session_processors` schedules a small handler:
+`enqueue_post_session_processors` schedules the Slack worker post-session hook:
 
 ```text
-server/proliferate/server/cloud/slack/post_session_hook.py
+server/proliferate/server/cloud/slack/worker/post_session.py
 
-handle_post_session_event(cloud_session_id, event):
+enqueue_post_session_event(cloud_session_id, event):
   load slack_thread_work via cloud_session.cloud_workspace_id
   if no slack_thread_work: return
   format Slack reply (block kit) using messages.py helpers:
@@ -661,11 +661,14 @@ slack_outbound_message_queue
   CHECK ck_slack_outbound_source
 ```
 
-Worker:
+Worker transaction entry and sender:
 
 ```text
-server/proliferate/server/cloud/slack/outbound_worker.py
-  every N seconds:
+server/proliferate/server/cloud/slack/worker/main.py
+  process_due_outbound_messages() opens the worker transaction
+
+server/proliferate/server/cloud/slack/worker/outbound.py
+  within each worker pass:
     select up to batch_size queued rows where next_attempt_at <= now
     for each row:
       attempt post via Slack chat.postMessage (decrypt bot token)
@@ -795,11 +798,15 @@ server/proliferate/server/cloud/slack/                               (new)
                           PATCH /v1/cloud/slack/bot-config
                           POST /v1/cloud/slack/bot-config/validate-connection
   service.py              install/reconnect; bot_config CRUD;
-                          mention handler; thread follow-up handler
+                          event ingest fast path
   signature.py            HMAC-SHA256 verification (Slack-flavored)
   oauth.py                exchange code; refresh as needed
-  outbound_worker.py      retry + rate-limit aware sender
-  post_session_hook.py    end-of-turn -> outbound queue insert
+  worker/
+    main.py               deferred job and outbound transaction entry points
+    events.py             mention handler; thread follow-up handler
+    commands.py           command launch + workspace materialization helpers
+    outbound.py           retry + rate-limit aware sender
+    post_session.py       end-of-turn -> outbound queue insert
   domain/
     repo_router.py        pure router (heuristic match)
     mention_parse.py      strip @mention, extract --repo hints
@@ -885,28 +892,28 @@ Chunk C  Inbound event handler
   - POST /v1/cloud/slack/events
   - signature.py HMAC verify
   - parse + dedupe via slack_event_envelope_seen
-  - enqueue slack_inbound_event_job (lightweight background loop)
+  - enqueue slack_inbound_event_job and defer worker/main.py entry point
   - 200 OK fast path
 
 Chunk D  Mention handler + thread follow-up handler
-  - background processor for inbound jobs
+  - worker/events.py background processor for inbound jobs
   - ensure_organization_sandbox_profile
   - repo router (fixed + auto)
   - managed_profile_launch with origin='slack'
   - slack_thread_work insert
   - ack message via outbound queue
-  - start_session + send_prompt enqueue
+  - worker/commands.py start_session + send_prompt enqueue
   - follow-up: send_prompt on existing session
 
 Chunk E  End-of-turn hook + post-session processor
   - END_OF_TURN_KINDS in events/service.py
-  - enqueue_post_session_processors after _apply_projection
-  - PostSessionProcessor registry
-  - Slack processor: looks up slack_thread_work; formats reply;
+  - enqueue_post_session_event after _apply_projection
+  - worker/post_session.py looks up slack_thread_work; formats reply;
     inserts into outbound queue
 
 Chunk F  Outbound queue + sender
-  - outbound_worker.py periodic loop
+  - worker/main.py periodic entry point
+  - worker/outbound.py sender
   - Slack chat.postMessage call (httpx)
   - rate-limit/Retry-After handling
   - exponential backoff
@@ -1014,7 +1021,7 @@ server/tests/cloud/slack/test_repo_config_owner_scope.py
 server/tests/cloud/slack/test_outbound_retry_after.py
 server/tests/cloud/slack/test_outbound_exponential_backoff.py
 server/tests/cloud/slack/test_outbound_idempotency_key.py
-server/tests/cloud/slack/test_post_session_hook_registers.py
+server/tests/cloud/slack/test_post_session_worker_registers.py
 server/tests/cloud/slack/test_end_of_turn_enqueues_outbound.py
 server/tests/cloud/slack/test_admin_gate_on_settings.py
 server/tests/cloud/slack/test_agent_run_config_inheritance.py

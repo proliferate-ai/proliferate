@@ -633,11 +633,13 @@ Canonical docs:
 
 Current debt:
 
-- Slack API imports store records directly.
-- Slack service opens sessions and commits/rolls back in deferred handlers.
-- Slack domain policy imports product constants.
-- Slack service is oversized and coordinates repo routing, events, outbound,
-  command launch, OAuth, and settings.
+- Slack bot remains parked/disabled, so revive-path comments and feature docs
+  must point at the current worker owners before the flow is re-enabled.
+- Deferred Slack event, post-session, outbound, and command-launch work now
+  lives under `server/proliferate/server/cloud/slack/worker/**`; future revive
+  work must keep transaction ownership at those worker entry points.
+- Slack API/store, Slack service session-helper, Slack domain purity, and Slack
+  service max-lines allowlist debt has been removed by Lane 8.
 
 Target result:
 

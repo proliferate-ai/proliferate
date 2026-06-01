@@ -43,12 +43,12 @@ from proliferate.server.cloud.slack.domain.message_format import (
     clarification_blocks,
     configuration_blocks,
 )
-from proliferate.server.cloud.slack.domain.policy import SlackBotDenied, check_active_slack_bot
 from proliferate.server.cloud.slack.domain.repo_router import (
     RepoRoutingCandidate,
     choose_repo,
 )
 from proliferate.server.cloud.slack.worker import commands as command_worker
+from proliferate.server.cloud.slack.worker.policy import require_active_slack_bot
 
 SLACK_CONFIGURATION_ERROR_CODES = {
     "slack_agent_run_config_invalid",
@@ -129,7 +129,7 @@ async def _handle_app_mention(
     if not is_human_slack_message(event, bot_user_id=connection.slack_bot_user_id):
         return
     config = await bot_config_store.get_bot_config(db, organization_id=connection.organization_id)
-    _require_active_slack_bot(
+    require_active_slack_bot(
         connection=connection,
         config=config,
         slack_channel_id=_required_str(event, "channel"),
@@ -292,7 +292,7 @@ async def _handle_thread_followup(
     if not is_human_slack_message(event, bot_user_id=connection.slack_bot_user_id):
         return
     config = await bot_config_store.get_bot_config(db, organization_id=connection.organization_id)
-    _require_active_slack_bot(
+    require_active_slack_bot(
         connection=connection,
         config=config,
         slack_channel_id=_required_str(event, "channel"),
@@ -544,28 +544,12 @@ async def _require_org_repo(
     return repo
 
 
-def _require_active_slack_bot(
-    *,
-    connection: SlackWorkspaceConnectionRecord | None,
-    config: SlackBotConfigRecord | None,
-    slack_channel_id: str | None = None,
-) -> tuple[SlackWorkspaceConnectionRecord, SlackBotConfigRecord]:
-    verdict = check_active_slack_bot(
-        connection=connection,
-        config=config,
-        slack_channel_id=slack_channel_id,
-    )
-    if isinstance(verdict, SlackBotDenied):
-        raise CloudApiError(verdict.code, verdict.message, status_code=verdict.status_code)
-    assert connection is not None
-    assert config is not None
-    return connection, config
-
-
 def _workspace_url(cloud_workspace_id: UUID | None) -> str | None:
-    if cloud_workspace_id is None or not settings.frontend_base_url:
-        return None
-    return f"{settings.frontend_base_url.rstrip('/')}/cloud/workspaces/{cloud_workspace_id}"
+    return (
+        None
+        if cloud_workspace_id is None or not settings.frontend_base_url
+        else f"{settings.frontend_base_url.rstrip('/')}/cloud/workspaces/{cloud_workspace_id}"
+    )
 
 
 def _slack_settings_url() -> str | None:

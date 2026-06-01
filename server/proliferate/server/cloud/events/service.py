@@ -47,13 +47,11 @@ from proliferate.server.cloud.live.service import (
 )
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
 
-# SLACK BOT PARKED: outbound Slack callbacks are preserved in the Slack service
-# but intentionally detached from event ingest while the bot flow is disabled.
+# SLACK BOT PARKED: outbound Slack callbacks are preserved in Slack worker
+# owners but intentionally detached from event ingest while the bot flow is disabled.
 # from proliferate.db import engine as db_engine
-# from proliferate.server.cloud.slack.service import (
-#     enqueue_post_session_event,
-#     process_due_outbound_messages,
-# )
+# from proliferate.server.cloud.slack.worker.main import process_due_outbound_messages
+# from proliferate.server.cloud.slack.worker.post_session import enqueue_post_session_event
 
 SESSION_DURABLE_EVENT_HARD_CAP = 10_000
 SESSION_PAYLOAD_BYTES_HARD_CAP = 25 * 1024 * 1024
