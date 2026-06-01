@@ -32,9 +32,6 @@ apps/desktop/src/components/settings/panes/compute/ComputeTargetDetails.tsx 528 
 apps/desktop/src/components/workspace/chat/input/ComposerModelConfigSelector.tsx 735 existing desktop component oversized file
 apps/desktop/src/components/workspace/shell/right-panel/RightPanel.test.tsx 732 existing desktop component oversized test file
 apps/desktop/src/hooks/home/workflows/use-home-next-launch.ts 611 existing desktop hook oversized file
-apps/desktop/src/hooks/sessions/lifecycle/use-session-stream-flush.ts 666 existing desktop hook oversized file
-apps/desktop/src/hooks/sessions/workflows/use-session-creation-actions.ts 765 existing desktop hook oversized file
-apps/desktop/src/hooks/sessions/workflows/use-session-runtime-actions.ts 860 existing desktop hook oversized file
 apps/desktop/src/hooks/workspaces/cache/tabs/use-workspace-header-subagent-hierarchy.ts 643 existing desktop hook oversized file
 apps/desktop/src/hooks/workspaces/workflows/tabs/use-workspace-shell-activation.ts 671 existing desktop hook oversized file
 apps/desktop/src/hooks/workspaces/workflows/use-workspace-bootstrap-actions.ts 899 existing desktop hook oversized file

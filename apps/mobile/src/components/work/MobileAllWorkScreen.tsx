@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import {
-  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -8,23 +7,25 @@ import {
   Text,
   View,
 } from "react-native";
-import type {
-  CloudWorkOwnerFilter,
-  CloudWorkSort,
-  CloudWorkStatusFilter,
-  RecentWorkRuntimeLocation,
-  RecentWorkSourceKind,
-} from "@proliferate/product-domain/workspaces/cloud-work-inventory";
-import { useClaimCloudWorkspace } from "@proliferate/cloud-sdk-react";
 
-import { useMobileWorkInventory, type MobileWorkItem } from "../../hooks/work/derived/use-mobile-work-inventory";
+import { useMobileWorkInventory } from "../../hooks/work/derived/use-mobile-work-inventory";
+import { useMobileWorkFilters } from "../../hooks/work/ui/use-mobile-work-filters";
+import { useMobileWorkClaimActions } from "../../hooks/work/workflows/use-mobile-work-claim-actions";
+import {
+  MOBILE_WORK_STATUS_OPTIONS,
+  MOBILE_WORK_TYPE_OPTIONS,
+} from "../../lib/domain/work/mobile-work-filters";
 import type { MobileCloudChat } from "../../navigation/navigation-model";
-import { MobileIcon, type MobileIconName } from "../primitives/MobileIcon";
+import { MobileIcon } from "../primitives/MobileIcon";
 import {
   MobileEmptyState,
   MobileScreen,
 } from "../primitives/MobileLayout";
 import { MobileWorkspaceCard } from "./MobileWorkspaceCard";
+import {
+  MobileWorkFilterSheet,
+  MobileWorkSummaryPill,
+} from "./screen/MobileWorkFilterSheet";
 import { colors, radius, spacing } from "../../styles/tokens";
 
 interface MobileWorkspacesScreenProps {
@@ -33,105 +34,16 @@ interface MobileWorkspacesScreenProps {
   onNewChat: () => void;
 }
 
-type WorkTypeFilter = "all" | "cloud" | "slack" | "personal_automation" | "team_automation" | "dispatch";
-type RuntimeFilter = RecentWorkRuntimeLocation | "all";
-type StatusFilter = CloudWorkStatusFilter | "all";
-type FilterPanel = "type" | "runtime" | "ownership" | "status" | "repo" | "sort";
-
-const WORK_TYPE_OPTIONS: readonly { id: WorkTypeFilter; label: string; icon: MobileIconName }[] = [
-  { id: "all", label: "All", icon: "workspaces" },
-  { id: "cloud", label: "Cloud", icon: "cloud" },
-  { id: "slack", label: "Slack", icon: "slack" },
-  { id: "personal_automation", label: "Automation", icon: "calendar-clock" },
-  { id: "team_automation", label: "Team automation", icon: "calendar-clock" },
-  { id: "dispatch", label: "Dispatch", icon: "monitor" },
-];
-
-const RUNTIME_OPTIONS: readonly { id: RuntimeFilter; label: string; icon: MobileIconName }[] = [
-  { id: "all", label: "All runtimes", icon: "workspaces" },
-  { id: "cloud_sandbox", label: "Cloud runtime", icon: "cloud" },
-  { id: "local_desktop", label: "Desktop Mac", icon: "monitor" },
-  { id: "ssh_remote", label: "SSH", icon: "external" },
-  { id: "offline", label: "Offline", icon: "lock" },
-];
-
-const OWNER_OPTIONS: readonly { id: CloudWorkOwnerFilter; label: string }[] = [
-  { id: "all", label: "All ownership" },
-  { id: "private", label: "Mine" },
-  { id: "unclaimed", label: "Unclaimed" },
-  { id: "claimed", label: "Claimed" },
-  { id: "shared", label: "Shared" },
-];
-
-const STATUS_OPTIONS: readonly { id: StatusFilter; label: string }[] = [
-  { id: "all", label: "All status" },
-  { id: "active", label: "Live" },
-  { id: "running", label: "Running" },
-  { id: "blocked", label: "Needs input" },
-  { id: "ready", label: "Ready" },
-  { id: "error", label: "Error" },
-  { id: "archived", label: "Archived" },
-];
-
-const SORT_OPTIONS: readonly { id: CloudWorkSort; label: string }[] = [
-  { id: "recent", label: "Recent" },
-  { id: "created", label: "Created" },
-  { id: "name", label: "Name" },
-  { id: "repo", label: "Repo" },
-  { id: "status", label: "Status" },
-];
-
 export function MobileWorkspacesScreen({
   onOpenChat,
   onOpenDrawer,
   onNewChat,
 }: MobileWorkspacesScreenProps) {
-  const [workType, setWorkType] = useState<WorkTypeFilter>("all");
-  const [runtime, setRuntime] = useState<RuntimeFilter>("all");
-  const [ownership, setOwnership] = useState<CloudWorkOwnerFilter>("all");
-  const [status, setStatus] = useState<StatusFilter>("all");
-  const [attentionOnly, setAttentionOnly] = useState(false);
-  const [repo, setRepo] = useState("all");
-  const [sort, setSort] = useState<CloudWorkSort>("recent");
   const [filterOpen, setFilterOpen] = useState(false);
-  const [claimingWorkspaceId, setClaimingWorkspaceId] = useState<string | null>(null);
-  const claimWorkspace = useClaimCloudWorkspace();
-  const filters = useMemo(() => ({
-    ownership,
-    semanticSources: semanticSourcesForWorkType(workType),
-    runtimeLocations: runtime === "all" ? undefined : new Set<RecentWorkRuntimeLocation>([runtime]),
-    statuses: status === "all" ? undefined : new Set<CloudWorkStatusFilter>([status]),
-    repoLabels: repo === "all" ? undefined : new Set<string>([repo]),
-    sort,
-    needsAttention: attentionOnly,
-  }), [attentionOnly, ownership, repo, runtime, sort, status, workType]);
   const allInventory = useMobileWorkInventory();
-  const inventory = useMobileWorkInventory(filters);
-  const repoOptions = useMemo(() => {
-    return [...new Set(allInventory.items.map((item) => item.view.repoLabel))]
-      .filter(Boolean)
-      .sort((left, right) => left.localeCompare(right));
-  }, [allInventory.items]);
-  const activeFilterCount = [
-    workType !== "all",
-    runtime !== "all",
-    ownership !== "all",
-    status !== "all",
-    repo !== "all",
-    sort !== "recent",
-    attentionOnly,
-  ].filter(Boolean).length;
-  async function claimListWorkspace(item: MobileWorkItem) {
-    if (!item.view.unclaimed || claimingWorkspaceId) {
-      return;
-    }
-    setClaimingWorkspaceId(item.workspace.id);
-    try {
-      await claimWorkspace.mutateAsync({ workspaceId: item.workspace.id });
-    } finally {
-      setClaimingWorkspaceId(null);
-    }
-  }
+  const filterState = useMobileWorkFilters(allInventory.items);
+  const inventory = useMobileWorkInventory(filterState.filters);
+  const claimActions = useMobileWorkClaimActions();
 
   return (
     <MobileScreen
@@ -172,23 +84,19 @@ export function MobileWorkspacesScreen({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.pills}
       >
-        <SummaryPill label={`All ${allInventory.items.length}`} selected={activeFilterCount === 0} onPress={() => {
-          setWorkType("all");
-          setRuntime("all");
-          setOwnership("all");
-          setStatus("all");
-          setRepo("all");
-          setSort("recent");
-          setAttentionOnly(false);
-        }} />
-        {STATUS_OPTIONS.filter((option) => option.id !== "all").map((option) => (
-          <SummaryPill
+        <MobileWorkSummaryPill
+          label={`All ${allInventory.items.length}`}
+          selected={filterState.activeFilterCount === 0}
+          onPress={filterState.clearFilters}
+        />
+        {MOBILE_WORK_STATUS_OPTIONS.filter((option) => option.id !== "all").map((option) => (
+          <MobileWorkSummaryPill
             key={option.id}
             label={option.label}
-            selected={status === option.id}
+            selected={filterState.status === option.id}
             onPress={() => {
-              setAttentionOnly(false);
-              setStatus(status === option.id ? "all" : option.id);
+              filterState.setAttentionOnly(false);
+              filterState.setStatus(filterState.status === option.id ? "all" : option.id);
             }}
           />
         ))}
@@ -199,19 +107,19 @@ export function MobileWorkspacesScreen({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={[styles.pills, styles.typePills]}
       >
-        {WORK_TYPE_OPTIONS.map((option) => (
-          <SummaryPill
+        {MOBILE_WORK_TYPE_OPTIONS.map((option) => (
+          <MobileWorkSummaryPill
             key={option.id}
             label={option.label}
             icon={option.icon}
-            selected={workType === option.id}
-            onPress={() => setWorkType(option.id)}
+            selected={filterState.workType === option.id}
+            onPress={() => filterState.setWorkType(option.id)}
           />
         ))}
-        <SummaryPill
-          label={activeFilterCount ? `Filters ${activeFilterCount}` : "Filter"}
+        <MobileWorkSummaryPill
+          label={filterState.activeFilterCount ? `Filters ${filterState.activeFilterCount}` : "Filter"}
           icon="filter"
-          selected={activeFilterCount > 0}
+          selected={filterState.activeFilterCount > 0}
           onPress={() => setFilterOpen(true)}
         />
       </ScrollView>
@@ -246,10 +154,10 @@ export function MobileWorkspacesScreen({
                   <MobileWorkspaceCard
                     key={item.view.id}
                     item={item}
-                    claiming={claimingWorkspaceId === item.workspace.id}
+                    claiming={claimActions.claimingWorkspaceId === item.workspace.id}
                     onPress={() => onOpenChat(item.chat)}
                     onClaim={() => {
-                      void claimListWorkspace(item);
+                      void claimActions.claimListWorkspace(item);
                     }}
                   />
                 ))}
@@ -259,378 +167,31 @@ export function MobileWorkspacesScreen({
         </View>
       )}
 
-      <FilterSheet
+      <MobileWorkFilterSheet
         visible={filterOpen}
-        workType={workType}
-        runtime={runtime}
-        ownership={ownership}
-        status={status}
-        repo={repo}
-        sort={sort}
-        repoOptions={repoOptions}
-        onWorkType={setWorkType}
-        onRuntime={setRuntime}
+        workType={filterState.workType}
+        runtime={filterState.runtime}
+        ownership={filterState.ownership}
+        status={filterState.status}
+        repo={filterState.repo}
+        sort={filterState.sort}
+        repoOptions={filterState.repoOptions}
+        onWorkType={filterState.setWorkType}
+        onRuntime={filterState.setRuntime}
         onOwnership={(value) => {
-          setAttentionOnly(false);
-          setOwnership(value);
+          filterState.setAttentionOnly(false);
+          filterState.setOwnership(value);
         }}
         onStatus={(value) => {
-          setAttentionOnly(false);
-          setStatus(value);
+          filterState.setAttentionOnly(false);
+          filterState.setStatus(value);
         }}
-        onRepo={setRepo}
-        onSort={setSort}
-        onClear={() => {
-          setWorkType("all");
-          setRuntime("all");
-          setOwnership("all");
-          setStatus("all");
-          setRepo("all");
-          setSort("recent");
-          setAttentionOnly(false);
-        }}
+        onRepo={filterState.setRepo}
+        onSort={filterState.setSort}
+        onClear={filterState.clearFilters}
         onClose={() => setFilterOpen(false)}
       />
     </MobileScreen>
-  );
-}
-
-function SummaryPill({
-  label,
-  icon,
-  selected,
-  onPress,
-}: {
-  label: string;
-  icon?: MobileIconName;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.summaryPill,
-        selected && styles.summaryPillSelected,
-        pressed && styles.pressed,
-      ]}
-    >
-      {icon ? <MobileIcon name={icon} size={14} color={selected ? colors.fg : colors.faint} /> : null}
-      <Text style={[styles.summaryPillText, selected && styles.summaryPillTextSelected]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function FilterSheet({
-  visible,
-  workType,
-  runtime,
-  ownership,
-  status,
-  repo,
-  sort,
-  repoOptions,
-  onWorkType,
-  onRuntime,
-  onOwnership,
-  onStatus,
-  onRepo,
-  onSort,
-  onClear,
-  onClose,
-}: {
-  visible: boolean;
-  workType: WorkTypeFilter;
-  runtime: RuntimeFilter;
-  ownership: CloudWorkOwnerFilter;
-  status: StatusFilter;
-  repo: string;
-  sort: CloudWorkSort;
-  repoOptions: readonly string[];
-  onWorkType: (value: WorkTypeFilter) => void;
-  onRuntime: (value: RuntimeFilter) => void;
-  onOwnership: (value: CloudWorkOwnerFilter) => void;
-  onStatus: (value: StatusFilter) => void;
-  onRepo: (value: string) => void;
-  onSort: (value: CloudWorkSort) => void;
-  onClear: () => void;
-  onClose: () => void;
-}) {
-  const [panel, setPanel] = useState<FilterPanel | null>(null);
-
-  useEffect(() => {
-    if (!visible) {
-      setPanel(null);
-    }
-  }, [visible]);
-
-  const panelTitle = panel ? filterPanelTitle(panel) : "Filter workspaces";
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.sheetLayer}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close filters"
-          style={styles.sheetScrim}
-          onPress={onClose}
-        />
-        <View style={styles.sheet}>
-          <View style={styles.sheetHeader}>
-            {panel ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Back to filters"
-                onPress={() => setPanel(null)}
-                style={({ pressed }) => [styles.sheetHeaderIcon, pressed && styles.pressed]}
-              >
-                <MobileIcon name="chevron-left" size={18} color={colors.fg} />
-              </Pressable>
-            ) : (
-              <View style={styles.sheetHeaderIcon} />
-            )}
-            <View style={styles.sheetTitleArea}>
-              <Text style={styles.sheetTitle}>{panelTitle}</Text>
-              {!panel ? <Text style={styles.sheetSubtitle}>Choose what to show and how to sort it.</Text> : null}
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Clear filters"
-              onPress={onClear}
-              style={({ pressed }) => [styles.clearButton, pressed && styles.pressed]}
-            >
-              <Text style={styles.clearText}>Clear</Text>
-            </Pressable>
-          </View>
-          <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetScrollContent}>
-            {!panel ? (
-              <>
-                <FilterSummaryRow
-                  icon="workspaces"
-                  title="Type"
-                  value={optionLabel(WORK_TYPE_OPTIONS, workType)}
-                  onPress={() => setPanel("type")}
-                />
-                <FilterSummaryRow
-                  icon="cloud"
-                  title="Runtime"
-                  value={optionLabel(RUNTIME_OPTIONS, runtime)}
-                  onPress={() => setPanel("runtime")}
-                />
-                <FilterSummaryRow
-                  icon="users"
-                  title="Ownership"
-                  value={optionLabel(OWNER_OPTIONS, ownership)}
-                  onPress={() => setPanel("ownership")}
-                />
-                <FilterSummaryRow
-                  icon="filter"
-                  title="Status"
-                  value={optionLabel(STATUS_OPTIONS, status)}
-                  onPress={() => setPanel("status")}
-                />
-                <FilterSummaryRow
-                  icon="folder"
-                  title="Repo"
-                  value={repo === "all" ? "All repos" : repo}
-                  onPress={() => setPanel("repo")}
-                />
-                <FilterSummaryRow
-                  icon="controls"
-                  title="Sort"
-                  value={optionLabel(SORT_OPTIONS, sort)}
-                  onPress={() => setPanel("sort")}
-                />
-              </>
-            ) : null}
-            {panel === "type" ? WORK_TYPE_OPTIONS.map((option) => (
-                <FilterChoice
-                  key={option.id}
-                  label={option.label}
-                  icon={option.icon}
-                  selected={workType === option.id}
-                  onPress={() => {
-                    onWorkType(option.id);
-                    setPanel(null);
-                  }}
-                />
-              )) : null}
-            {panel === "runtime" ? RUNTIME_OPTIONS.map((option) => (
-                <FilterChoice
-                  key={option.id}
-                  label={option.label}
-                  icon={option.icon}
-                  selected={runtime === option.id}
-                  onPress={() => {
-                    onRuntime(option.id);
-                    setPanel(null);
-                  }}
-                />
-              )) : null}
-            {panel === "ownership" ? OWNER_OPTIONS.map((option) => (
-                <FilterChoice
-                  key={option.id}
-                  label={option.label}
-                  selected={ownership === option.id}
-                  onPress={() => {
-                    onOwnership(option.id);
-                    setPanel(null);
-                  }}
-                />
-              )) : null}
-            {panel === "status" ? STATUS_OPTIONS.map((option) => (
-                <FilterChoice
-                  key={option.id}
-                  label={option.label}
-                  selected={status === option.id}
-                  onPress={() => {
-                    onStatus(option.id);
-                    setPanel(null);
-                  }}
-                />
-              )) : null}
-            {panel === "repo" ? (
-              <>
-                <FilterChoice
-                  label="All repos"
-                  selected={repo === "all"}
-                  onPress={() => {
-                    onRepo("all");
-                    setPanel(null);
-                  }}
-                />
-                {repoOptions.map((option) => (
-                  <FilterChoice
-                    key={option}
-                    label={option}
-                    icon="folder"
-                    selected={repo === option}
-                    onPress={() => {
-                      onRepo(option);
-                      setPanel(null);
-                    }}
-                  />
-                ))}
-              </>
-            ) : null}
-            {panel === "sort" ? SORT_OPTIONS.map((option) => (
-                <FilterChoice
-                  key={option.id}
-                  label={option.label}
-                  selected={sort === option.id}
-                  onPress={() => {
-                    onSort(option.id);
-                    setPanel(null);
-                  }}
-                />
-              )) : null}
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-function FilterSummaryRow({
-  icon,
-  title,
-  value,
-  onPress,
-}: {
-  icon: MobileIconName;
-  title: string;
-  value: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [styles.filterSummaryRow, pressed && styles.pressed]}
-    >
-      <View style={styles.filterSummaryIcon}>
-        <MobileIcon name={icon} size={17} color={colors.fg} />
-      </View>
-      <View style={styles.filterSummaryText}>
-        <Text style={styles.filterSummaryTitle}>{title}</Text>
-        <Text style={styles.filterSummaryValue} numberOfLines={1}>{value}</Text>
-      </View>
-      <MobileIcon name="chevron-right" size={17} color={colors.faint} />
-    </Pressable>
-  );
-}
-
-function filterPanelTitle(panel: FilterPanel): string {
-  switch (panel) {
-    case "type":
-      return "Type";
-    case "runtime":
-      return "Runtime";
-    case "ownership":
-      return "Ownership";
-    case "status":
-      return "Status";
-    case "repo":
-      return "Repo";
-    case "sort":
-      return "Sort";
-  }
-}
-
-function semanticSourcesForWorkType(type: WorkTypeFilter): ReadonlySet<RecentWorkSourceKind> | undefined {
-  switch (type) {
-    case "cloud":
-      return new Set<RecentWorkSourceKind>(["cloud_sandbox", "web", "mobile", "api"]);
-    case "slack":
-      return new Set<RecentWorkSourceKind>(["slack"]);
-    case "personal_automation":
-      return new Set<RecentWorkSourceKind>(["personal_automation"]);
-    case "team_automation":
-      return new Set<RecentWorkSourceKind>(["team_automation"]);
-    case "dispatch":
-      return new Set<RecentWorkSourceKind>(["desktop_exposed"]);
-    case "all":
-      return undefined;
-  }
-}
-
-function optionLabel<T extends string>(
-  options: readonly { id: T; label: string }[],
-  value: T,
-): string {
-  return options.find((option) => option.id === value)?.label ?? value;
-}
-
-function FilterChoice({
-  label,
-  icon,
-  selected,
-  onPress,
-}: {
-  label: string;
-  icon?: MobileIconName;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.choice,
-        selected && styles.choiceSelected,
-        pressed && styles.pressed,
-      ]}
-    >
-      {icon ? <MobileIcon name={icon} size={14} color={selected ? colors.fg : colors.faint} /> : null}
-      <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{label}</Text>
-      {selected ? <MobileIcon name="check" size={15} color={colors.fg} /> : null}
-    </Pressable>
   );
 }
 
@@ -671,29 +232,6 @@ const styles = StyleSheet.create({
   typePills: {
     paddingTop: 0,
   },
-  summaryPill: {
-    minHeight: 38,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    paddingHorizontal: spacing[3],
-  },
-  summaryPillSelected: {
-    backgroundColor: colors.accent,
-    borderColor: colors.borderHeavy,
-  },
-  summaryPillText: {
-    color: colors.faint,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  summaryPillTextSelected: {
-    color: colors.fg,
-  },
   groups: {
     gap: spacing[6],
     paddingHorizontal: spacing[4],
@@ -732,120 +270,6 @@ const styles = StyleSheet.create({
   },
   cards: {
     gap: spacing[2],
-  },
-  sheetLayer: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  sheetScrim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.overlayStrong,
-  },
-  sheet: {
-    maxHeight: "84%",
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-    paddingHorizontal: spacing[5],
-    paddingTop: spacing[4],
-    paddingBottom: spacing[6],
-    gap: spacing[4],
-  },
-  sheetScroll: {
-    minHeight: 0,
-  },
-  sheetScrollContent: {
-    gap: spacing[4],
-    paddingBottom: spacing[1],
-  },
-  sheetHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing[2],
-  },
-  sheetHeaderIcon: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radius.full,
-  },
-  sheetTitleArea: {
-    flex: 1,
-    minWidth: 0,
-  },
-  sheetTitle: {
-    color: colors.fg,
-    fontSize: 17,
-    fontWeight: "600",
-  },
-  sheetSubtitle: {
-    color: colors.faint,
-    fontSize: 12,
-    lineHeight: 16,
-    marginTop: 2,
-  },
-  clearButton: {
-    borderRadius: radius.md,
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-  },
-  clearText: {
-    color: colors.faint,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  filterSummaryRow: {
-    minHeight: 58,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[3],
-    borderRadius: 18,
-    paddingHorizontal: spacing[3],
-  },
-  filterSummaryIcon: {
-    width: 30,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  filterSummaryText: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  filterSummaryTitle: {
-    color: colors.fg,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  filterSummaryValue: {
-    color: colors.faint,
-    fontSize: 13,
-    lineHeight: 17,
-  },
-  choice: {
-    minHeight: 46,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[3],
-    borderRadius: 16,
-    paddingHorizontal: spacing[3],
-  },
-  choiceSelected: {
-    backgroundColor: colors.accent,
-  },
-  choiceText: {
-    flex: 1,
-    minWidth: 0,
-    color: colors.faint,
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  choiceTextSelected: {
-    color: colors.fg,
   },
   pressed: {
     opacity: 0.7,
