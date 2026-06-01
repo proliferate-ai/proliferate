@@ -27,6 +27,8 @@ Current reality:
 Artifacts are file-backed objects inside cowork worktree workspaces.
 The manifest is .proliferate/artifacts.json.
 There is no artifact database table.
+The generic manifest, lifecycle, runtime, and protection code lives under
+domains/artifacts.
 The cowork MCP exposes artifact tools today.
 Desktop reads artifacts through normal HTTP endpoints, not through MCP.
 ```
@@ -34,7 +36,7 @@ Desktop reads artifacts through normal HTTP endpoints, not through MCP.
 Target reality:
 
 ```text
-Artifacts become their own domain.
+Artifacts own the generic lifecycle as their own domain.
 Cowork becomes one consumer of artifacts.
 Artifact tools move from cowork MCP to artifacts MCP.
 Artifact lifecycle remains manifest/file-backed unless a separate storage
@@ -46,24 +48,43 @@ change is explicitly designed.
 Current artifact lifecycle:
 
 ```text
-anyharness-lib/src/domains/cowork/manifest.rs
-  Cowork artifact manifest schema
+anyharness-lib/src/domains/artifacts/model.rs
+  Artifact type, summary/detail read models, create/update inputs, and errors
+
+anyharness-lib/src/domains/artifacts/manifest.rs
+  Artifact manifest schema
   .proliferate/artifacts.json constant
   manifest parse/validate/load
   artifact path validation
   artifact type derivation from file extension
   manifest entry enrichment into contract summaries
 
-anyharness-lib/src/domains/cowork/artifacts.rs
-  CoworkArtifactRuntime
+anyharness-lib/src/domains/artifacts/service.rs
+  durable manifest/file-backed lifecycle rules
+  create/update plan construction
+  normalized manifest/detail read models
+
+anyharness-lib/src/domains/artifacts/runtime.rs
+  ArtifactRuntime
   create_artifact
   update_artifact
   delete_artifact
   get_manifest
   get_artifact
-  protected artifact path checks
   per-workspace artifact locks
   temp-file commit/rollback helpers
+
+anyharness-lib/src/domains/artifacts/protection.rs
+  ArtifactProtectionService
+  protected artifact manifest path checks
+  protected artifact-backed path checks
+
+anyharness-lib/src/domains/cowork/manifest.rs
+  CoworkArtifact* compatibility re-exports
+
+anyharness-lib/src/domains/cowork/artifacts.rs
+  CoworkArtifactRuntime compatibility wrapper
+  cowork workspace-scope check before delegating to ArtifactRuntime
 
 anyharness-lib/src/domains/cowork/mcp/tools.rs
   artifact MCP tool definitions
@@ -71,7 +92,8 @@ anyharness-lib/src/domains/cowork/mcp/tools.rs
   current server instructions
 
 anyharness-lib/src/domains/cowork/mcp/calls.rs
-  tools/call implementation for create/update/delete/list/get artifact tools
+  tools/call implementation for create/update/delete/list/get artifact tools,
+    delegated through CoworkArtifactRuntime to ArtifactRuntime
   cowork delegation tools in the same file
 
 anyharness-lib/src/domains/cowork/mcp/mod.rs
@@ -99,10 +121,11 @@ Current app wiring:
 
 ```text
 anyharness-lib/src/app/mod.rs
+  AppState.artifact_runtime
   AppState.cowork_artifact_runtime
-  CoworkArtifactRuntime::new()
-  WorkspaceFileProtectionRegistry receives CoworkArtifactRuntime for write
-  protection
+  CoworkArtifactRuntime wrapping ArtifactRuntime for compatibility
+  WorkspaceFileProtectionRegistry receives ArtifactProtectionService for write
+    protection
 ```
 
 Current HTTP read APIs:
@@ -544,20 +567,10 @@ workspaces/files_runtime.rs
   asks registered file-protection participants about protected paths
   returns FileServiceError::ProtectedPath
 
-domains/cowork/artifacts.rs
-  CoworkArtifactRuntime implements WorkspaceFileProtection for current cowork
-  artifact paths
-```
-
-Target protection path:
-
-```text
 domains/artifacts/protection.rs
   ArtifactProtectionService::is_protected_relative_path(...)
   ArtifactProtectionService::is_protected_relative_path_or_ancestor(...)
-
-workspaces/files_runtime.rs
-  depends on ArtifactProtectionService, not CoworkArtifactRuntime
+  implements WorkspaceFileProtection for current artifact-backed surfaces
 ```
 
 Protection must cover:
@@ -613,11 +626,15 @@ Phase 1: extract artifact domain without changing behavior.
 MOVE/COPY RESPONSIBILITY
   domains/cowork/manifest.rs      -> domains/artifacts/manifest.rs
   domains/cowork/artifacts.rs     -> domains/artifacts/runtime.rs + service.rs
+  domains/cowork/artifacts.rs protection helpers -> domains/artifacts/protection.rs
   cowork artifact contract mapping remains behavior-compatible
 
 KEEP TEMPORARILY
-  cowork HTTP routes as aliases
-  cowork MCP routes as aliases
+  cowork manifest re-exports and runtime wrapper
+  cowork HTTP routes as the current compatibility surface until generic
+    artifact routes exist
+  cowork MCP routes as the current compatibility surface until generic
+    artifact MCP routes exist
   CoworkArtifact* contract names if contract rename would create too much churn
 ```
 

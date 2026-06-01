@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod artifacts;
 pub mod cowork;
 pub mod mobility;
 pub mod plans;
