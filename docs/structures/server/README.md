@@ -46,6 +46,9 @@ step is design clarity before code movement:
   for the billing reconciler worker-boundary audit.
 - [audits/phase6-cloud-runtime-background-loops.md](audits/phase6-cloud-runtime-background-loops.md)
   for the cloud runtime setup monitor and provisioning scheduler audit.
+- [audits/server-structure-hygiene.md](audits/server-structure-hygiene.md)
+  for the current multi-lane handoff plan to remove server structure
+  migration debt.
 
 Specs (when added) define product/surface contracts: lifecycle invariants,
 edge cases, and focused verification for a specific cross-cutting flow such as
@@ -72,7 +75,7 @@ server/proliferate/
   auth/
     dependencies.py
     authorization.py
-    apps/desktop/
+    desktop/
     jwt.py
     oauth.py
     pkce.py
@@ -127,20 +130,19 @@ This doc describes the **target** architecture. The codebase is migrating
 toward it; some existing patterns still need to be reshaped before every
 hard rule below holds true everywhere.
 
-Files named in the target shape that **do not yet exist** (or are partial):
+Target-shape files that exist but are still not universally adopted:
 
 - `server/proliferate/errors.py` — the shared base for `ProliferateError`,
-  `NotFoundError`, `PermissionDenied`, `Conflict`. Today error types are
-  scattered or per-domain only.
+  `NotFoundError`, `PermissionDenied`, `Conflict`, and `InvalidRequest`.
+  Some domain code still uses older local error classes or route-level HTTP
+  translation.
 - `auth/authorization.py` — shared authorization context and policy verdict
-  helpers. Today some shared authorization helpers live inside product-domain
-  services; they migrate to a dedicated auth module so domains stop
-  cross-importing for authorization infrastructure.
-- `server/<domain>/access.py` — resource-access route deps. Most domains
-  don't have one today; access checks happen inline in services.
-- `server/<domain>/domain/policy.py` — pure product-rule verdicts. Today
-  most product rules are inline `if not condition: raise HTTPException(...)`
-  blocks in services.
+  helpers. Some legacy authorization helpers and checks still live inside
+  product-domain services.
+- `server/<domain>/access.py` — resource-access route deps. Some domains still
+  do resource lookup and access checks inline in services or handlers.
+- `server/<domain>/domain/policy.py` — pure product-rule verdicts. Some
+  product rules are still inline in services.
 
 Patterns that **need migration**:
 
