@@ -27,7 +27,7 @@ installation.
 
 ## Core Runtime Objects
 
-### `LiveSessionManager` (`anyharness/crates/anyharness-lib/src/live/sessions/manager.rs`)
+### `LiveSessionManager` (`anyharness/crates/anyharness-lib/src/live/sessions/manager/**`)
 
 `LiveSessionManager` is the process-local coordinator for live sessions.
 
@@ -79,7 +79,7 @@ It includes:
 
 This is the handoff from durable orchestration into live execution.
 
-### `RuntimeClient` (`anyharness/crates/anyharness-lib/src/live/sessions/connection/runtime_client.rs`)
+### `RuntimeClient` (`anyharness/crates/anyharness-lib/src/live/sessions/connection/runtime_client/**`)
 
 `RuntimeClient` is the AnyHarness ACP client implementation.
 

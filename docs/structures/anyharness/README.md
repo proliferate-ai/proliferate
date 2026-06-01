@@ -416,14 +416,14 @@ Known transitional issues:
 - Contract request/response types leak below `api/`. Contract event payloads
   may be a deliberate durable event-log type, but other contract types should
   be mapped at the API boundary.
-- The live session runtime is split under `live/sessions/manager.rs`,
+- The live session runtime is split under `live/sessions/manager/**`,
   `live/sessions/handle.rs`, `live/sessions/actor/**`,
   `live/sessions/connection/**` (target role: `driver/**`),
   `live/sessions/event_sink/**`, `live/sessions/interactions/**`,
   `live/sessions/background_work/**`, and `live/sessions/replay/**`.
   `RuntimeClient` remains the current low-level ACP client name under
-  `connection/**`; remaining `acp/**` files are permission/payload/provider
-  error helpers, not live-session owners.
+  `live/sessions/connection/runtime_client/**`; remaining `acp/**` files are
+  permission/payload/provider error helpers, not live-session owners.
 - Some product MCP endpoint scaffolding may still be feature-local. Common
   protocol/auth scaffolding should use `integrations/mcp/`; product tool
   semantics stay with their owning domain.

@@ -8,9 +8,8 @@ use crate::live::sessions::actor::command::{InteractionResolution, SessionComman
 use crate::live::sessions::actor::config::handle::handle_idle_config_command;
 use crate::live::sessions::actor::fork::handle::handle_idle_fork_lifecycle_command;
 use crate::live::sessions::actor::interactions::cleanup::resolve_pending_interactions;
-use crate::live::sessions::actor::interactions::handle::{
-    handle_apply_plan_decision, handle_resolve_interaction,
-};
+use crate::live::sessions::actor::interactions::handle::handle_resolve_interaction;
+use crate::live::sessions::actor::interactions::plan_decisions::handle_apply_plan_decision;
 use crate::live::sessions::actor::notifications::dispatch::inject_runtime_event;
 use crate::live::sessions::actor::notifications::handle::handle_notification_with_resume_replay_filter;
 use crate::live::sessions::actor::shutdown::handle::finalize_established_actor_exit;

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::live::sessions::actor::command::InteractionResolution;
-use crate::live::sessions::actor::interactions::handle::broker_outcome_to_interaction_event;
+use crate::live::sessions::actor::interactions::outcomes::broker_outcome_to_interaction_event;
 use crate::live::sessions::event_sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::interactions::broker::{InteractionBroker, InteractionCancelOutcome};

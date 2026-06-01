@@ -22,10 +22,10 @@ Current names:
 SessionRuntime      anyharness-lib/src/sessions/runtime/
 SessionService      anyharness-lib/src/sessions/service.rs
 SessionStore        anyharness-lib/src/sessions/store/**
-LiveSessionManager  live/sessions/manager.rs
+LiveSessionManager  live/sessions/manager/**
 LiveSessionHandle   live/sessions/handle.rs
 SessionActor        live/sessions/actor/**
-RuntimeClient       live/sessions/connection/runtime_client.rs; target role: AcpClient
+RuntimeClient       live/sessions/connection/runtime_client/**; current low-level ACP client name; target role: AcpClient
 SessionEventSink    live/sessions/event_sink/**
 InteractionBroker   live/sessions/interactions/broker.rs
 ```
@@ -96,7 +96,7 @@ Live registry:
 - pending startup waiters
 - shared interaction broker
 
-Current path: `live/sessions/manager.rs`.
+Current path: `live/sessions/manager/**`.
 
 ### LiveSessionHandle
 
@@ -130,7 +130,7 @@ folder contract is specified in `specs/session-actor.md`.
 ### AcpClient
 
 Low-level ACP client wrapper. Current name: `RuntimeClient`, under
-`live/sessions/connection/runtime_client.rs`.
+`live/sessions/connection/runtime_client/**`.
 
 It sends ACP requests to the subprocess and receives ACP notifications. It does
 not own session business rules.
