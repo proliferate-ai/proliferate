@@ -36,8 +36,8 @@ import {
 } from "@/lib/infra/measurement/debug-measurement";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { ComposerSlashCommandSearch } from "./ComposerSlashCommandSearch";
-import { ComposerTextarea } from "@proliferate/product-ui/chat/composer/ComposerTextarea";
-import { ComposerTextareaFrame, type ComposerTextareaFrameTopInset } from "@proliferate/product-ui/chat/composer/ComposerTextareaFrame";
+import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
+import { ComposerTextareaFrame, type ComposerTextareaFrameTopInset } from "@proliferate/ui/primitives/ComposerTextareaFrame";
 
 interface ComposerCommandEditorProps {
   draft: ChatComposerDraft;

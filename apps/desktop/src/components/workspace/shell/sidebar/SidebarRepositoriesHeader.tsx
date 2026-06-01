@@ -7,7 +7,7 @@ import {
 } from "@proliferate/ui/icons";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { SidebarActionButton } from "@/components/workspace/shell/sidebar/SidebarActionButton";
+import { SidebarActionButton } from "@proliferate/ui/layout/SidebarActionButton";
 import { SidebarWorkspaceVariantIcon } from "@/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
 import { ProductSidebarSectionHeader } from "@proliferate/product-ui/sidebar/ProductSidebar";
 import type { SidebarWorkspaceVariant } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";

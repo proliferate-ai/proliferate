@@ -1,6 +1,7 @@
-import type { MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
 import { PillControlButton } from "@proliferate/ui/primitives/PillControlButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
   POPOVER_SURFACE_CLASS,
   PopoverButton,
@@ -339,37 +340,27 @@ function RunLocationMenuItem({
   title?: string;
 }) {
   return (
-    <button
-      type="button"
+    <PopoverMenuItem
+      density="compact"
       disabled={disabled}
       title={title}
-      className="group/menu-item flex w-full cursor-default select-none flex-col rounded-lg px-2 py-1 text-sm font-[430] leading-4 text-popover-foreground outline-none transition-colors hover:bg-popover-accent focus:bg-popover-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
-      onClick={(event: MouseEvent<HTMLButtonElement>) => {
-        event.stopPropagation();
-        onClick();
-      }}
-    >
-      <span className="flex w-full items-center gap-1.5">
-        {icon ? (
-          <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100">
-            {icon}
-          </span>
-        ) : null}
-        <span className="flex min-w-0 flex-1 items-baseline gap-1.5 text-left">
+      icon={icon}
+      label={(
+        <>
           <span className="min-w-0 truncate">{label}</span>
           {detail ? (
             <span className="min-w-0 truncate text-muted-foreground">
               {detail}
             </span>
           ) : null}
-        </span>
-        {selected ? (
-          <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100">
-            <Check className="size-3.5" />
-          </span>
-        ) : null}
-      </span>
-    </button>
+        </>
+      )}
+      labelClassName="flex items-baseline gap-1.5 text-left"
+      trailing={selected ? <Check className="size-3.5" /> : null}
+      onClick={() => {
+        onClick();
+      }}
+    />
   );
 }
 

@@ -1,5 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
+import { Button } from "./Button";
 
 export type ComposerControlTone =
   | "neutral"

@@ -1,5 +1,5 @@
 import { forwardRef, type TextareaHTMLAttributes } from "react";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
+import { Textarea } from "./Textarea";
 
 type ComposerTextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement>;
 

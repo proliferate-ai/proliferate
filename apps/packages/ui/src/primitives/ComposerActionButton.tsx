@@ -1,6 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
 import { twMerge } from "tailwind-merge";
+import { Button } from "./Button";
 
 interface ComposerActionButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children?: ReactNode;

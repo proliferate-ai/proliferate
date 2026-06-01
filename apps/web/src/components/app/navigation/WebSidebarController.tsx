@@ -28,17 +28,15 @@ import {
   type RecentWorkRuntimeLocation,
   type RecentWorkSourceKind,
 } from "@proliferate/product-domain/workspaces/cloud-work-inventory";
-import { PopoverMenuItem } from "@proliferate/product-ui/popover/PopoverMenuItem";
+import { SidebarActionButton } from "@proliferate/ui/layout/SidebarActionButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import type {
   SidebarActionEvent,
   SidebarNavItemView,
   SidebarSectionMessageView,
   SidebarWorkspaceGroupView,
 } from "@proliferate/product-ui/sidebar/ProductSidebar";
-import {
-  ProductSidebar,
-  SidebarActionButton,
-} from "@proliferate/product-ui/sidebar/ProductSidebar";
+import { ProductSidebar } from "@proliferate/product-ui/sidebar/ProductSidebar";
 import { RecentWorkStatusDot } from "@proliferate/product-ui/workspaces/RecentWorkStatusDot";
 
 import { routes } from "../../../config/routes";

@@ -16,7 +16,7 @@ import {
 } from "@/lib/domain/workspaces/sidebar/repo-context-menu";
 import { useRepoGroupNativeContextMenu } from "@/hooks/workspaces/ui/use-repo-group-native-context-menu";
 import { useNewWorkspaceCommandScopeStore } from "@/stores/workspaces/new-workspace-command-scope-store";
-import { SidebarActionButton } from "./SidebarActionButton";
+import { SidebarActionButton } from "@proliferate/ui/layout/SidebarActionButton";
 import { ProductSidebarRepoGroupHeader } from "@proliferate/product-ui/sidebar/ProductSidebar";
 
 interface RepoGroupProps {

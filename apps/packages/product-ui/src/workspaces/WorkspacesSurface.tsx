@@ -4,7 +4,6 @@ import { twMerge } from "tailwind-merge";
 
 import { ProductNotice } from "../layout/ProductNotice";
 import { ProductPageShell } from "../layout/ProductPageShell";
-import { PopoverMenuItem } from "../popover/PopoverMenuItem";
 import { WorkspaceInventory } from "./WorkspaceInventory";
 
 import type {
@@ -15,6 +14,7 @@ import type {
   WorkspaceInventoryGroupView,
 } from "@proliferate/product-domain/workspaces/inventory";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 
 export interface WorkspacesSurfaceProps {
   title?: string;

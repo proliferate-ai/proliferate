@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
 import { Copy } from "@proliferate/ui/icons";
 import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
 import type { OpenTarget } from "@/hooks/access/tauri/use-shell-actions";
 
@@ -23,24 +24,22 @@ function DropdownItem({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
+    <PopoverMenuItem
+      density="compact"
       role="menuitem"
       onClick={onClick}
-      className="group/menu-item flex w-full cursor-default select-none items-center rounded-lg px-2 py-1 text-sm font-[430] leading-4 text-popover-foreground outline-none hover:bg-popover-accent focus:bg-popover-accent"
-    >
-      <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
-        {icon}
-      </span>
-      <span className="ml-1.5 min-w-0 flex-1 truncate text-left">{label}</span>
-      {shortcut && (
-        <span className="ml-2 inline-flex shrink-0 items-center pl-1">
+      icon={icon}
+      iconClassName="size-4 opacity-100"
+      label={label}
+      trailing={shortcut ? (
+        <span className="inline-flex shrink-0 items-center pl-1">
           <span className="text-xs leading-4 text-muted-foreground/80 transition-colors group-hover/menu-item:text-muted-foreground group-focus/menu-item:text-muted-foreground">
             {shortcut}
           </span>
         </span>
-      )}
-    </button>
+      ) : null}
+      trailingClassName="ml-0 size-auto opacity-100"
+    />
   );
 }
 

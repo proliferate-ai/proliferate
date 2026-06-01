@@ -1,4 +1,5 @@
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { Copy, Fork, Undo, FileIcon } from "@proliferate/ui/icons";
 
 interface FileBadge {
@@ -60,16 +61,18 @@ export function TurnMetadata({
 
       {fileBadges &&
         fileBadges.map((badge) => (
-          <button
+          <Button
             key={badge.filename}
             type="button"
+            variant="unstyled"
+            size="unstyled"
             className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           >
             <FileIcon className="size-3" />
             <span>{badge.filename}</span>
             <span className="text-git-green">+{badge.additions}</span>
             <span className="text-git-red">-{badge.deletions}</span>
-          </button>
+          </Button>
         ))}
     </div>
   );

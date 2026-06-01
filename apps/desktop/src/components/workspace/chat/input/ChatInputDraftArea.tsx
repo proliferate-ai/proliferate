@@ -7,8 +7,8 @@ import {
   type DraftAttachmentPreviewListProps,
 } from "@/components/workspace/chat/content/PromptContentRenderer";
 import { ComposerCommandEditor } from "./ComposerCommandEditor";
-import { ComposerTextarea } from "@proliferate/product-ui/chat/composer/ComposerTextarea";
-import { ComposerTextareaFrame } from "@proliferate/product-ui/chat/composer/ComposerTextareaFrame";
+import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
+import { ComposerTextareaFrame } from "@proliferate/ui/primitives/ComposerTextareaFrame";
 import { QueuedPromptEditBanner } from "./QueuedPromptEditBanner";
 
 interface ChatInputDraftAreaProps {

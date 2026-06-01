@@ -5,8 +5,8 @@ import { ArrowRight } from "@proliferate/ui/icons";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
 import { ChatInputControlRow } from "@/components/workspace/chat/input/ChatInputControlRow";
 import { ComposerSlashCommandSearch } from "@/components/workspace/chat/input/ComposerSlashCommandSearch";
-import { ComposerTextarea } from "@proliferate/product-ui/chat/composer/ComposerTextarea";
-import { ComposerTextareaFrame } from "@proliferate/product-ui/chat/composer/ComposerTextareaFrame";
+import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
+import { ComposerTextareaFrame } from "@proliferate/ui/primitives/ComposerTextareaFrame";
 import {
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
   WORKSPACE_CHAT_COMPOSER_INPUT,

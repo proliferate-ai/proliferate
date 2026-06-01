@@ -7,6 +7,7 @@ import {
 } from "react";
 import { DiffLineContent } from "@/components/content/ui/diff/DiffLineContent";
 import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { chainVerticalWheelScroll } from "@proliferate/ui/utils/scroll-chain";
 import type {
   CollapsedContext,
@@ -211,8 +212,10 @@ function SplitCollapsedCells({
         data-separator="line-info"
         className="diff-gutter-cell sticky left-0 z-10 box-border min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] bg-[var(--diffs-bg)]"
       />
-      <button
+      <Button
         type="button"
+        variant="unstyled"
+        size="unstyled"
         data-content=""
         data-separator="line-info"
         onClick={onExpand}
@@ -225,7 +228,7 @@ function SplitCollapsedCells({
           Show {section.lineCount} unchanged line{section.lineCount === 1 ? "" : "s"}
         </span>
         <span className="h-px min-w-4 flex-1 bg-border/60" />
-      </button>
+      </Button>
     </>
   );
 }

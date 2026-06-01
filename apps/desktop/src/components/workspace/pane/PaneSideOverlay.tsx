@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from "react";
+import { Button } from "@proliferate/ui/primitives/Button";
 
 interface PaneSideOverlayProps {
   open: boolean;
@@ -48,8 +49,10 @@ export function PaneSideOverlay({
       data-pane-side-overlay
       {...dataAttributes}
     >
-      <button
+      <Button
         type="button"
+        variant="unstyled"
+        size="unstyled"
         aria-label={`Close ${label}`}
         className="pointer-events-auto absolute inset-0 cursor-default bg-transparent"
         onClick={onClose}

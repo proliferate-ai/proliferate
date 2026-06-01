@@ -1,15 +1,13 @@
 import {
-  forwardRef,
   type HTMLAttributes,
-  type MouseEventHandler,
   type ReactNode,
 } from "react";
 
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
+import { SidebarActionButton } from "@proliferate/ui/layout/SidebarActionButton";
 import { SidebarRowSurface } from "@proliferate/ui/layout/SidebarRowSurface";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { IconButton } from "@proliferate/ui/primitives/IconButton";
 
 export interface SidebarNavItemView {
   id: string;
@@ -192,53 +190,6 @@ export function ProductSidebar({
     </ProductSidebarFrame>
   );
 }
-
-export type SidebarActionButtonVariant = "default" | "section";
-
-export interface SidebarActionButtonProps {
-  children: ReactNode;
-  title: string;
-  onClick?: MouseEventHandler<HTMLButtonElement>;
-  className?: string;
-  alwaysVisible?: boolean;
-  active?: boolean;
-  disabled?: boolean;
-  variant?: SidebarActionButtonVariant;
-}
-
-export const SidebarActionButton = forwardRef<HTMLButtonElement, SidebarActionButtonProps>(
-  function SidebarActionButton({
-    children,
-    title,
-    onClick,
-    className = "",
-    alwaysVisible = false,
-    active = false,
-    disabled = false,
-    variant = "default",
-  }, ref) {
-    const isAlwaysVisible = alwaysVisible || variant === "section";
-
-    return (
-      <IconButton
-        ref={ref}
-        tone="sidebar"
-        size="sm"
-        title={title}
-        onClick={onClick}
-        disabled={disabled}
-        className={`size-6 rounded-md border border-transparent transition-all ${active ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""
-          } ${isAlwaysVisible ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-          } ${variant === "section"
-            ? "opacity-75 hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
-            : ""
-          } ${className}`}
-      >
-        {children}
-      </IconButton>
-    );
-  },
-);
 
 export function ProductSidebarFrame({
   children,

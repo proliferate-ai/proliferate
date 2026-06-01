@@ -2,6 +2,7 @@ import { AlertCircle, ArrowUp, CheckCircle2, LifeBuoy } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
+import { Label } from "@proliferate/ui/primitives/Label";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 
 export interface SupportSurfaceSubmitInput {
@@ -86,7 +87,7 @@ export function SupportSurface({ onSubmit }: SupportSurfaceProps) {
                 data-telemetry-mask
               />
               <div className="mt-3 flex items-center justify-between gap-3 border-t border-border-light pt-3">
-                <label className="flex min-w-0 cursor-pointer items-start gap-2 text-xs leading-4 text-muted-foreground">
+                <Label className="mb-0 flex min-w-0 cursor-pointer items-start gap-2 text-xs leading-4 text-muted-foreground">
                   <Checkbox
                     checked={publicContentConsent}
                     onChange={(event) => setPublicContentConsent(event.currentTarget.checked)}
@@ -96,7 +97,7 @@ export function SupportSurface({ onSubmit }: SupportSurfaceProps) {
                     Include my message in the public issue. Do not include secrets or API keys.
                     Account context stays private.
                   </span>
-                </label>
+                </Label>
                 <Button
                   type="submit"
                   size="icon"

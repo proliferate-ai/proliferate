@@ -7,7 +7,7 @@ import {
   Spinner,
 } from "@proliferate/ui/icons";
 import { SidebarWorkspaceVariantIcon } from "@/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
-import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
+import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { WorkspaceMobilityLocationPopover } from "./WorkspaceMobilityLocationPopover";
 import { WorkspaceMobilityGitPrepDialog } from "./WorkspaceMobilityGitPrepDialog";
 import { WorkspaceOpenInWebFooterControl } from "./WorkspaceOpenInWebFooterControl";

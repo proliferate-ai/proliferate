@@ -2,12 +2,17 @@ import type { ButtonHTMLAttributes, MouseEvent, ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 
 export type PopoverMenuItemVariant = "default" | "sidebar";
+export type PopoverMenuItemDensity = "default" | "compact";
 
 export interface PopoverMenuItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode;
-  label: string;
+  label: ReactNode;
   trailing?: ReactNode;
   variant?: PopoverMenuItemVariant;
+  density?: PopoverMenuItemDensity;
+  iconClassName?: string;
+  labelClassName?: string;
+  trailingClassName?: string;
 }
 
 export function PopoverMenuItem({
@@ -15,6 +20,10 @@ export function PopoverMenuItem({
   label,
   trailing,
   variant = "default",
+  density = "default",
+  iconClassName = "",
+  labelClassName = "",
+  trailingClassName = "",
   className = "",
   children,
   type = "button",
@@ -25,12 +34,24 @@ export function PopoverMenuItem({
     ? "hover:bg-sidebar-accent focus:bg-sidebar-accent"
     : "hover:bg-popover-accent focus:bg-popover-accent";
   const hasDescription = children !== undefined && children !== null && children !== false;
+  const outerClassName = density === "compact"
+    ? "group/menu-item flex w-full cursor-default select-none flex-col rounded-lg px-2 py-1 text-sm font-[430] leading-4 text-popover-foreground outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+    : "group/menu-item flex w-full cursor-default select-none flex-col rounded-lg px-2.5 py-1.5 text-sm font-[430] leading-5 text-popover-foreground outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent";
+  const rowClassName = density === "compact"
+    ? "flex w-full items-center gap-1.5"
+    : "flex w-full items-center gap-2";
+  const defaultIconClassName = density === "compact"
+    ? "flex size-3.5 shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100"
+    : "flex shrink-0 items-center justify-center text-muted-foreground";
+  const defaultTrailingClassName = density === "compact"
+    ? "flex size-5 shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100"
+    : "flex shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100 [&_*]:text-xs [&_*]:leading-4";
 
   return (
     <button
       type={type}
       className={twMerge(
-        "group/menu-item flex w-full cursor-default select-none flex-col rounded-lg px-2.5 py-1.5 text-sm font-[430] leading-5 text-popover-foreground outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent",
+        outerClassName,
         hoverClassName,
         className,
       )}
@@ -40,15 +61,15 @@ export function PopoverMenuItem({
         onClick?.(event);
       }}
     >
-      <span className="flex w-full items-center gap-2">
+      <span className={rowClassName}>
         {icon && (
-          <span className="flex shrink-0 items-center justify-center text-muted-foreground">
+          <span className={twMerge(defaultIconClassName, iconClassName)}>
             {icon}
           </span>
         )}
-        <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+        <span className={twMerge("min-w-0 flex-1 truncate text-left", labelClassName)}>{label}</span>
         {trailing && (
-          <span className="flex shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100 [&_*]:text-xs [&_*]:leading-4">
+          <span className={twMerge(defaultTrailingClassName, trailingClassName)}>
             {trailing}
           </span>
         )}

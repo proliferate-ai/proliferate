@@ -51,6 +51,14 @@
       "types": "./dist/layout/PageHeader.d.ts",
       "import": "./dist/layout/PageHeader.js"
     },
+    "./layout/PaneIconButton": {
+      "types": "./dist/layout/PaneIconButton.d.ts",
+      "import": "./dist/layout/PaneIconButton.js"
+    },
+    "./layout/PaneOptionsMenuItem": {
+      "types": "./dist/layout/PaneOptionsMenuItem.d.ts",
+      "import": "./dist/layout/PaneOptionsMenuItem.js"
+    },
     "./layout/SectionHeader": {
       "types": "./dist/layout/SectionHeader.d.ts",
       "import": "./dist/layout/SectionHeader.js"
@@ -75,6 +83,10 @@
       "types": "./dist/layout/SidebarRowSurface.d.ts",
       "import": "./dist/layout/SidebarRowSurface.js"
     },
+    "./layout/SidebarActionButton": {
+      "types": "./dist/layout/SidebarActionButton.d.ts",
+      "import": "./dist/layout/SidebarActionButton.js"
+    },
     "./layout/SizedPanel": {
       "types": "./dist/layout/SizedPanel.d.ts",
       "import": "./dist/layout/SizedPanel.js"
@@ -90,6 +102,10 @@
     "./primitives/Badge": {
       "types": "./dist/primitives/Badge.d.ts",
       "import": "./dist/primitives/Badge.js"
+    },
+    "./primitives/AuthProviderButton": {
+      "types": "./dist/primitives/AuthProviderButton.d.ts",
+      "import": "./dist/primitives/AuthProviderButton.js"
     },
     "./primitives/Button": {
       "types": "./dist/primitives/Button.d.ts",
@@ -110,6 +126,22 @@
     "./primitives/ConfirmationDialog": {
       "types": "./dist/primitives/ConfirmationDialog.d.ts",
       "import": "./dist/primitives/ConfirmationDialog.js"
+    },
+    "./primitives/ComposerActionButton": {
+      "types": "./dist/primitives/ComposerActionButton.d.ts",
+      "import": "./dist/primitives/ComposerActionButton.js"
+    },
+    "./primitives/ComposerControlButton": {
+      "types": "./dist/primitives/ComposerControlButton.d.ts",
+      "import": "./dist/primitives/ComposerControlButton.js"
+    },
+    "./primitives/ComposerTextarea": {
+      "types": "./dist/primitives/ComposerTextarea.d.ts",
+      "import": "./dist/primitives/ComposerTextarea.js"
+    },
+    "./primitives/ComposerTextareaFrame": {
+      "types": "./dist/primitives/ComposerTextareaFrame.d.ts",
+      "import": "./dist/primitives/ComposerTextareaFrame.js"
     },
     "./primitives/EnvironmentSearchSelect": {
       "types": "./dist/primitives/EnvironmentSearchSelect.d.ts",

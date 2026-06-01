@@ -72,7 +72,7 @@ vi.mock("@/hooks/workspaces/ui/use-repo-group-native-context-menu", () => ({
   useRepoGroupNativeContextMenu: () => ({ onContextMenuCapture: vi.fn() }),
 }));
 
-vi.mock("./SidebarActionButton", () => ({
+vi.mock("@proliferate/ui/layout/SidebarActionButton", () => ({
   SidebarActionButton: ({
     children,
     title,

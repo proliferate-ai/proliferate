@@ -11,6 +11,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { AppShell } from "@proliferate/ui/layout/AppShell";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 
 import { routes } from "../../../config/routes";
@@ -85,8 +86,10 @@ export function WebAppShell() {
             }}
             className="lg:hidden"
           />
-          <button
+          <Button
             type="button"
+            variant="unstyled"
+            size="unstyled"
             aria-label="Close sidebar"
             className={`fixed inset-0 z-40 bg-background/55 backdrop-blur-[1px] transition-opacity duration-200 ease-out motion-reduce:transition-none lg:hidden ${
               sidebarVisible ? "opacity-100" : "opacity-0"

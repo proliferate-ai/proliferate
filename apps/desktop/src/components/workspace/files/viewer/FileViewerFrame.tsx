@@ -12,9 +12,9 @@ import {
   Search,
   WrapText,
 } from "@proliferate/ui/icons";
+import { PaneOptionsMenuItem } from "@proliferate/ui/layout/PaneOptionsMenuItem";
 import {
   PaneOptionsMenu,
-  PaneOptionsMenuItem,
   PaneOptionsMenuSeparator,
 } from "@/components/workspace/pane/PaneOptionsMenu";
 import { SessionContentSearchOverlay } from "@/components/workspace/chat/surface/SessionContentSearchOverlay";

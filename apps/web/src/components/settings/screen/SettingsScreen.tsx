@@ -21,6 +21,7 @@ import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPag
 import { SettingsShell } from "@proliferate/product-ui/settings/SettingsShell";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { Input } from "@proliferate/ui/primitives/Input";
 import {
   useAuthViewer,
   useCurrentTeam,
@@ -260,13 +261,13 @@ function OrganizationSection() {
               </p>
             </div>
             <form className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]" onSubmit={createTeam}>
-              <input
+              <Input
                 className="min-h-9 rounded-md border border-border-light bg-background px-3 text-sm"
                 placeholder="Team name"
                 value={teamName}
                 onChange={(event) => setTeamName(event.currentTarget.value)}
               />
-              <input
+              <Input
                 className="min-h-9 rounded-md border border-border-light bg-background px-3 text-sm"
                 placeholder="Invite emails, comma separated"
                 value={inviteEmails}

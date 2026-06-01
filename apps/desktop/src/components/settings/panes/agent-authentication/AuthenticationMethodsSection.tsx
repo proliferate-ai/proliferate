@@ -113,9 +113,11 @@ export function AuthenticationMethodsSection({
             onRequestRevoke={setCredentialToRevoke}
           />
         ))}
-        <button
+        <Button
           type="button"
-          className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:bg-list-hover hover:text-foreground"
+          variant="unstyled"
+          size="unstyled"
+          className="flex w-full items-center justify-start gap-3 whitespace-normal px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:bg-list-hover hover:text-foreground"
           onClick={() => setAddingCredential((value) => !value)}
         >
           <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border-light bg-foreground/5">
@@ -130,7 +132,7 @@ export function AuthenticationMethodsSection({
           <span className="text-xs text-muted-foreground">
             {addingCredential ? "Close" : "Add"}
           </span>
-        </button>
+        </Button>
       </SettingsCard>
       {addingCredential && (
         <CloudAgentAuthCredentialForm

@@ -12,6 +12,7 @@ import {
   buildContentSearchLineMatchIds,
   normalizeContentSearchQuery,
 } from "@/lib/domain/content-search/content-search";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { chainVerticalWheelScroll } from "@proliferate/ui/utils/scroll-chain";
 import type {
   CollapsedContext,
@@ -186,8 +187,10 @@ function ChatCollapsedRow({
   onExpand: () => void;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="unstyled"
+      size="unstyled"
       data-separator="simple"
       onClick={onExpand}
       aria-label={`Show ${section.lineCount} unmodified lines`}
@@ -199,7 +202,7 @@ function ChatCollapsedRow({
         Show {section.lineCount} unchanged line{section.lineCount === 1 ? "" : "s"}
       </span>
       <span className="h-px min-w-4 flex-1 bg-border/60" />
-    </button>
+    </Button>
   );
 }
 

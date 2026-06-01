@@ -49,11 +49,13 @@ export function ModelRegistryPane({
   return (
     <div className="px-1 py-1">
       <div className="flex items-center justify-between gap-3">
-        <button
+        <Button
           type="button"
+          variant="unstyled"
+          size="unstyled"
           aria-expanded={expanded}
           aria-controls={listId}
-          className="group flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-muted-foreground hover:bg-muted/35 hover:text-foreground/80"
+          className="group flex min-w-0 flex-1 items-center justify-start gap-1.5 rounded-md px-1.5 py-1 text-left text-muted-foreground hover:bg-muted/35 hover:text-foreground/80"
           onClick={() => setExpanded((value) => !value)}
         >
           <ChevronDown
@@ -65,7 +67,7 @@ export function ModelRegistryPane({
               {visibleCount}/{models.length} shown
             </span>
           </span>
-        </button>
+        </Button>
         {refreshable ? (
           <Button
             type="button"

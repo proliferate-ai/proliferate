@@ -11,7 +11,7 @@ import { HomeTargetPicker } from "@/components/home/screen/HomeTargetPicker";
 import { ChatComposerActions } from "@/components/workspace/chat/input/ChatComposerActions";
 import { SessionConfigControls } from "@/components/workspace/chat/input/SessionConfigControls";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
-import { ComposerTextarea } from "@proliferate/product-ui/chat/composer/ComposerTextarea";
+import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
 import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { useHomeNextLaunchControls } from "@/hooks/home/derived/use-home-next-launch-controls";

@@ -2,7 +2,7 @@ import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { AddPlan, ClipboardList, Spinner } from "@proliferate/ui/icons";
-import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
+import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import { usePlanPicker } from "@/hooks/plans/ui/use-plan-picker";
 import {

@@ -10,6 +10,7 @@ import {
   Plus,
   Trash,
 } from "@proliferate/ui/icons";
+import { PaneOptionsMenuItem } from "@proliferate/ui/layout/PaneOptionsMenuItem";
 import {
   ScratchCodeMirrorEditor,
   type ScratchCodeMirrorEditorHandle,
@@ -17,7 +18,6 @@ import {
 import { PaneHeader } from "@/components/workspace/pane/PaneHeader";
 import {
   PaneOptionsMenu,
-  PaneOptionsMenuItem,
   PaneOptionsMenuSeparator,
 } from "@/components/workspace/pane/PaneOptionsMenu";
 import { useWorkspaceScratchPad } from "@/hooks/access/tauri/workspace-scratch/use-workspace-scratch-pad";

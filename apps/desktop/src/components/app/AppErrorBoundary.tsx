@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { reportReactRenderError } from "@/lib/integrations/telemetry/native-diagnostics";
 
 interface Props {
@@ -30,13 +31,15 @@ export class AppErrorBoundary extends Component<Props, State> {
           <pre className="max-w-2xl overflow-auto rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
             {this.state.error.message}
           </pre>
-          <button
+          <Button
             type="button"
+            variant="unstyled"
+            size="unstyled"
             onClick={() => this.setState({ error: null })}
             className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
           >
             Try again
-          </button>
+          </Button>
         </div>
       );
     }

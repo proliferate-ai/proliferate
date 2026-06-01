@@ -1,4 +1,5 @@
 import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
+import { Label } from "@proliferate/ui/primitives/Label";
 import { Select } from "@proliferate/ui/primitives/Select";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
@@ -119,7 +120,7 @@ export function RepoRoutingSection({
               const selected = allowedRepoSet.has(profile.cloudRepoConfigId);
               return (
                 <div key={profile.id} className="space-y-3 p-3">
-                  <label className="flex items-start gap-3">
+                  <Label className="mb-0 flex items-start gap-3">
                     <Checkbox
                       checked={selected}
                       disabled={disabled}
@@ -140,7 +141,7 @@ export function RepoRoutingSection({
                           : "No language metadata cached"}
                       </span>
                     </span>
-                  </label>
+                  </Label>
                   <Textarea
                     key={`${profile.id}:${profile.updatedAt}`}
                     defaultValue={profile.description ?? ""}

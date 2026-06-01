@@ -4,10 +4,8 @@ import {
   RefreshCw,
   WrapText,
 } from "@proliferate/ui/icons";
-import {
-  PaneOptionsMenu,
-  PaneOptionsMenuItem,
-} from "@/components/workspace/pane/PaneOptionsMenu";
+import { PaneOptionsMenuItem } from "@proliferate/ui/layout/PaneOptionsMenuItem";
+import { PaneOptionsMenu } from "@/components/workspace/pane/PaneOptionsMenu";
 
 export function GitReviewOptionsMenu({
   allFilesCollapsed,

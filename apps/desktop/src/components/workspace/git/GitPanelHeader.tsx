@@ -3,7 +3,7 @@ import { GitReviewOptionsMenu } from "./GitReviewOptionsMenu";
 import { GitReviewBaseSelector } from "./GitReviewBaseSelector";
 import { GitReviewTargetSelector } from "./GitReviewTargetSelector";
 import { FileCode, SplitPanel } from "@proliferate/ui/icons";
-import { PaneIconButton } from "@/components/workspace/pane/PaneHeader";
+import { PaneIconButton } from "@proliferate/ui/layout/PaneIconButton";
 import type { GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-diff";
 
 interface GitPanelHeaderProps {

@@ -28,14 +28,14 @@ import {
   type ReactNode,
 } from "react";
 import { twMerge } from "tailwind-merge";
-import { PopoverMenuItem } from "../popover/PopoverMenuItem";
+import { ComposerActionButton } from "@proliferate/ui/primitives/ComposerActionButton";
+import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
+import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
+import { ComposerTextareaFrame } from "@proliferate/ui/primitives/ComposerTextareaFrame";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ChatComposerControlRowFrame } from "./composer/ChatComposerControlRowFrame";
 import { ChatComposerSurface } from "./composer/ChatComposerSurface";
-import { ComposerActionButton } from "./composer/ComposerActionButton";
-import { ComposerControlButton } from "./composer/ComposerControlButton";
 import { ComposerPopoverSurface } from "./composer/ComposerPopoverSurface";
-import { ComposerTextarea } from "./composer/ComposerTextarea";
-import { ComposerTextareaFrame } from "./composer/ComposerTextareaFrame";
 import { SessionControlIcon } from "./session-controls/SessionControlIcon";
 
 export interface CloudChatComposerControlOptionView {
