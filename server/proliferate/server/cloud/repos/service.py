@@ -19,8 +19,8 @@ from proliferate.integrations.github import (
     get_github_repo_branches,
     list_github_repositories,
 )
-from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.repos.domain.catalog import (
     CloudGitRepositoriesPageRecord,
     CloudGitRepositoryRecord,

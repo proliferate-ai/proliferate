@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass, field
 from uuid import UUID
 
-from proliferate.server.cloud._logging import log_cloud_event
+from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.runtime.models import ProvisionStep, ProvisionStepMetric
 from proliferate.utils.time import duration_ms
 

@@ -15,7 +15,7 @@ from proliferate.db.store.cloud_mcp.connections import (
     list_enabled_connections_for_organization_profile,
     list_enabled_connections_for_personal_profile,
 )
-from proliferate.db.store.cloud_plugins.configured_items import (
+from proliferate.db.store.cloud_plugins import (
     list_enabled_plugins_for_organization_profile,
     list_enabled_plugins_for_personal_profile,
 )
@@ -24,7 +24,7 @@ from proliferate.db.store.cloud_runtime_config import revisions as revision_stor
 from proliferate.db.store.cloud_runtime_config.revisions import (
     SandboxProfileRuntimeConfigRevisionSnapshot,
 )
-from proliferate.db.store.cloud_skills.configured_items import (
+from proliferate.db.store.cloud_skills import (
     list_enabled_skills_for_organization_profile,
     list_enabled_skills_for_personal_profile,
 )

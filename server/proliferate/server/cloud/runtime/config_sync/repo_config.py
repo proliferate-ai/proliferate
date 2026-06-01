@@ -27,8 +27,8 @@ from proliferate.integrations.anyharness import (
     start_remote_workspace_setup,
     write_remote_workspace_file,
 )
-from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.workspaces.domain.post_ready import (
     WorkspacePostReadyStatusPatch,
     repo_config_apply_started,

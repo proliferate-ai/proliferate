@@ -25,9 +25,6 @@ apps/desktop/src-tauri/src/commands/ssh_tunnel.rs 729 existing desktop native ov
 apps/desktop/src/components/workspace/chat/input/ComposerModelConfigSelector.tsx 735 existing desktop component oversized file
 apps/desktop/src/components/workspace/shell/right-panel/RightPanel.test.tsx 732 existing desktop component oversized test file
 apps/desktop/src/hooks/home/workflows/use-home-next-launch.ts 611 existing desktop hook oversized file
-apps/desktop/src/hooks/workspaces/cache/tabs/use-workspace-header-subagent-hierarchy.ts 643 existing desktop hook oversized file
-apps/desktop/src/hooks/workspaces/workflows/tabs/use-workspace-shell-activation.ts 671 existing desktop hook oversized file
-apps/desktop/src/hooks/workspaces/workflows/use-workspace-bootstrap-actions.ts 899 existing desktop hook oversized file
 apps/desktop/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 759 existing desktop oversized test file
 apps/desktop/src/lib/workflows/mcp/connector-persistence.test.ts 704 existing desktop oversized test file
 server/proliferate/auth/identity/service.py 809 existing auth service exceeds repo max-lines threshold

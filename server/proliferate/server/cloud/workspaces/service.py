@@ -120,7 +120,6 @@ from proliferate.server.billing.service import (
     record_cloud_sandbox_usage_stopped,
     repo_limit_for_billing_snapshot,
 )
-from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kinds
 from proliferate.server.cloud.claims.access import load_workspace_exposure_and_claim
 from proliferate.server.cloud.claims.domain.policy import is_org_admin_role
@@ -130,6 +129,7 @@ from proliferate.server.cloud.commands.service import (
     mark_pending_prompt_interaction_failed_for_command,
 )
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.live.service import (
     publish_command_status_after_commit,
     publish_worker_control_after_commit,

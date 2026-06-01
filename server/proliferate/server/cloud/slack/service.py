@@ -12,9 +12,9 @@ from proliferate.auth.authorization import ActorIdentity
 from proliferate.config import settings
 from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZATION_ROLE_OWNER
 from proliferate.constants.slack import SLACK_REPO_MODE_AUTO, SLACK_REPO_MODE_FIXED
+from proliferate.db.store import cloud_agent_run_config as run_config_store
 from proliferate.db.store import cloud_repo_config as repo_store
 from proliferate.db.store import organizations as organization_store
-from proliferate.db.store.cloud_agent_run_config import configs as run_config_store
 from proliferate.db.store.cloud_slack import bot_configs as bot_config_store
 from proliferate.db.store.cloud_slack import connections as connection_store
 from proliferate.db.store.cloud_slack import events as slack_event_store

@@ -18,7 +18,7 @@ from proliferate.db.store.automations import (
     AutomationScheduleFields,
     create_due_scheduled_runs_batch,
 )
-from proliferate.db.store.cloud_agent_run_config.configs import CloudAgentRunConfigRecord
+from proliferate.db.store.cloud_agent_run_config import CloudAgentRunConfigRecord
 from proliferate.server.automations.domain.claim_lifecycle import (
     AUTOMATION_RUN_STATUS_DISPATCHING,
     dispatch_uncertain_failure,

@@ -11,7 +11,7 @@ from proliferate.constants.automations import (
     CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION,
     CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_SYSTEM,
 )
-from proliferate.db.store.cloud_agent_run_config.configs import CloudAgentRunConfigRecord
+from proliferate.db.store.cloud_agent_run_config import CloudAgentRunConfigRecord
 from proliferate.server.catalogs.service import read_agent_catalog
 from proliferate.server.cloud.agent_run_config.domain.resolve import (
     ResolvedAgentRunConfig,
