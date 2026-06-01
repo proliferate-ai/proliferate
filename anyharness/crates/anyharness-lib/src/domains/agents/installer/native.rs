@@ -3,7 +3,7 @@ use std::path::Path;
 use super::downloads::{curl_download_binary, curl_fetch_text, download_and_extract_tarball};
 use super::{InstallError, InstallOptions, InstalledArtifactResult};
 use crate::domains::agents::model::*;
-use crate::domains::agents::readiness::resolver::artifact_root;
+use crate::domains::agents::readiness::paths::artifact_root;
 use crate::integrations::agent_cli::executable::{
     find_in_path, is_valid_executable, make_executable,
 };

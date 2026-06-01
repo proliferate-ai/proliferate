@@ -23,7 +23,7 @@ use crate::domains::agents::managed_npm::{
     apply_npm_version_override, npm_package_name, npm_package_version,
 };
 #[cfg(test)]
-use crate::domains::agents::readiness::resolver::artifact_root;
+use crate::domains::agents::readiness::paths::artifact_root;
 #[cfg(test)]
 use crate::integrations::agent_cli::executable::make_executable;
 #[cfg(test)]

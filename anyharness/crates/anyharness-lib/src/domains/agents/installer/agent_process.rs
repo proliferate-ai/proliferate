@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use super::npm::install_managed_npm_package;
 use super::{InstallError, InstallOptions, InstalledArtifactResult};
 use crate::domains::agents::model::*;
-use crate::domains::agents::readiness::resolver::{
+use crate::domains::agents::readiness::paths::{
     artifact_root, has_managed_registry_binary_for_names,
 };
 use crate::domains::agents::registry::built_in_registry;

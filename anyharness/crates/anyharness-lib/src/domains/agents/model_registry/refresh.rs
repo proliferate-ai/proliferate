@@ -6,9 +6,8 @@ use crate::domains::agents::model::{
     AgentDescriptor, AgentKind, AgentProcessFallback, AgentProcessInstallSpec, ArtifactRole,
     ModelCatalogStatus, ResolvedAgentStatus,
 };
-use crate::domains::agents::readiness::resolver::{
-    artifact_root, managed_registry_binary_for_names, resolve_agent,
-};
+use crate::domains::agents::readiness::paths::{artifact_root, managed_registry_binary_for_names};
+use crate::domains::agents::readiness::resolver::resolve_agent;
 use crate::integrations::agent_cli::executable::{
     find_real_binary_in_path, is_known_agent_wrapper,
 };
@@ -219,7 +218,7 @@ fn discovered_model_to_dynamic_model(model: DiscoveredCliModel) -> DynamicModelR
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domains::agents::readiness::resolver::artifact_root;
+    use crate::domains::agents::readiness::paths::artifact_root;
     use crate::domains::agents::registry::built_in_registry;
     use crate::integrations::agent_cli::executable::make_executable;
 

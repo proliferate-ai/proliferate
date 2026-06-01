@@ -4,10 +4,10 @@ use std::sync::Arc;
 
 use super::installer::{self, InstallError, InstallOptions, InstalledArtifactResult};
 use super::model::*;
-use super::readiness::resolver::{
+use super::readiness::paths::{
     artifact_root, managed_registry_binary_for_names, managed_registry_npm_binary_for_names,
-    resolve_agent,
 };
+use super::readiness::resolver::resolve_agent;
 use super::reconcile::execution::{AgentReconcileJobSnapshot, AgentReconcileService};
 use super::registry::built_in_registry;
 use super::seed::AgentSeedStore;
@@ -426,7 +426,7 @@ fn shell_quote_display(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domains::agents::readiness::resolver::artifact_root;
+    use crate::domains::agents::readiness::paths::artifact_root;
     use crate::integrations::agent_cli::executable::make_executable;
     use std::sync::{Mutex, OnceLock};
 

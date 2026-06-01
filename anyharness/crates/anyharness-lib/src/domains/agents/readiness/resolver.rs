@@ -7,10 +7,6 @@ use super::artifacts::{
 };
 use super::compatibility::detect_runtime_compatibility_issue;
 use super::overrides::resolve_agent_process_override;
-pub(crate) use super::paths::{
-    artifact_root, has_managed_registry_binary_for_names, managed_registry_binary_for_names,
-    managed_registry_npm_binary_for_names,
-};
 use super::status::compute_readiness;
 use crate::domains::agents::credentials::{detect_credentials, detect_credentials_with_env};
 use crate::domains::agents::model::*;
@@ -23,6 +19,10 @@ use super::artifacts::{
 use super::compatibility::{claude_launch_requires_node, parse_node_version, NodeVersion};
 #[cfg(test)]
 use super::overrides::is_override_program_valid;
+#[cfg(test)]
+use super::paths::{
+    artifact_root, managed_registry_binary_for_names, managed_registry_npm_binary_for_names,
+};
 
 pub fn resolve_agent(descriptor: &AgentDescriptor, runtime_home: &Path) -> ResolvedAgent {
     resolve_agent_with_env(descriptor, runtime_home, &BTreeMap::new())

@@ -135,6 +135,12 @@ anyharness-lib/src/domains/agents/
     mod.rs
     launch_options.rs
     resolver.rs
+    artifacts.rs
+    spawn.rs
+    compatibility.rs
+    overrides.rs
+    paths.rs
+    status.rs
   model_registry/
     mod.rs
     model.rs
@@ -177,8 +183,10 @@ anyharness-lib/src/domains/agents/
     launch_options.rs
     resolver.rs
     artifacts.rs
-    spawn.rs
     compatibility.rs
+    overrides.rs
+    paths.rs
+    status.rs
   install/
     mod.rs
     native.rs

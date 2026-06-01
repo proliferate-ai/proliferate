@@ -118,7 +118,10 @@ can actually launch.
 ### Resolution Flow
 
 Resolution is owned by
-`anyharness/crates/anyharness-lib/src/domains/agents/readiness/resolver.rs`.
+`anyharness/crates/anyharness-lib/src/domains/agents/readiness/**`.
+`resolver.rs` is the side-effect-free entrypoint; artifact probing,
+compatibility checks, override parsing, managed artifact paths, and status
+calculation live in focused readiness modules beside it.
 
 The flow is:
 
