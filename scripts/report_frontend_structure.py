@@ -59,6 +59,9 @@ COMPONENT_DEFINITION_RES = [
     re.compile(r"\b(?:export\s+)?const\s+([A-Z][A-Za-z0-9_]*)\s*="),
     re.compile(r"\b(?:export\s+)?class\s+([A-Z][A-Za-z0-9_]*)\b"),
 ]
+TYPE_DEFINITION_RE = re.compile(
+    r"^\s*(?:export\s+)?(?:interface|type)\s+([A-Za-z0-9_]+)\b"
+)
 
 PRIMITIVE_EXACT_NAMES = {
     "Button",
@@ -71,6 +74,7 @@ PRIMITIVE_EXACT_NAMES = {
     "Switch",
     "Tabs",
     "Menu",
+    "MenuItem",
     "Popover",
     "Tooltip",
     "Dialog",
@@ -94,6 +98,7 @@ PRIMITIVE_SUFFIXES = (
     "Switch",
     "Tabs",
     "Menu",
+    "MenuItem",
     "Popover",
     "Tooltip",
     "Dialog",
@@ -104,6 +109,8 @@ PRIMITIVE_SUFFIXES = (
     "ScrollArea",
     "Shell",
 )
+
+PRIMITIVE_DEFINITION_CONTEXT_LINES = 14
 
 NATIVE_DOM_CONTRACT_RE = re.compile(
     r"\b("
@@ -264,10 +271,41 @@ def is_primitive_like_name(name: str) -> bool:
     return name in PRIMITIVE_EXACT_NAMES or name.endswith(PRIMITIVE_SUFFIXES)
 
 
-def has_native_dom_contract_for(name: str, text: str) -> bool:
+def native_dom_type_names(lines: list[str]) -> set[str]:
+    names: set[str] = set()
+    for index, line in enumerate(lines):
+        match = TYPE_DEFINITION_RE.match(line)
+        if not match:
+            continue
+        context = "\n".join(lines[index:index + PRIMITIVE_DEFINITION_CONTEXT_LINES + 1])
+        if NATIVE_DOM_CONTRACT_RE.search(context):
+            names.add(match.group(1))
+    return names
+
+
+def component_definition_context(lines: list[str], index: int) -> str:
+    end = min(len(lines), index + PRIMITIVE_DEFINITION_CONTEXT_LINES + 1)
+    context_lines: list[str] = []
+    for line in lines[index:end]:
+        context_lines.append(line)
+        if re.search(r"\)\s*(?:=>\s*)?\{", line):
+            break
+    return "\n".join(context_lines)
+
+
+def has_native_dom_contract_for(
+    name: str,
+    context: str,
+    native_type_names: set[str],
+) -> bool:
     if name in PRIMITIVE_EXACT_NAMES:
         return True
-    return bool(NATIVE_DOM_CONTRACT_RE.search(text) or RAW_DOM_TAG_RE.search(text))
+    if NATIVE_DOM_CONTRACT_RE.search(context):
+        return True
+    return any(
+        re.search(rf"\b{re.escape(type_name)}\b", context)
+        for type_name in native_type_names
+    )
 
 
 def find_raw_dom_controls(files: Iterable[Path]) -> list[Violation]:
@@ -298,8 +336,10 @@ def find_primitive_definitions(files: Iterable[Path]) -> list[Violation]:
         if path.suffix != ".tsx" or not any(is_under(path, root) for root in DOM_APP_AND_PACKAGE_ROOTS):
             continue
         text = path.read_text()
+        lines = text.splitlines()
+        native_type_names = native_dom_type_names(lines)
         reported_names: set[str] = set()
-        for lineno, line in enumerate(text.splitlines(), start=1):
+        for index, line in enumerate(lines):
             if line_is_comment(line):
                 continue
             for pattern in COMPONENT_DEFINITION_RES:
@@ -309,13 +349,19 @@ def find_primitive_definitions(files: Iterable[Path]) -> list[Violation]:
                 name = match.group(1)
                 if name in reported_names:
                     break
-                if is_primitive_like_name(name) and has_native_dom_contract_for(name, text):
+                context = component_definition_context(lines, index)
+                # Keep this category narrow: product components that merely render controls
+                # are reported by RAW_DOM_CONTROL instead of being labeled primitives.
+                if (
+                    is_primitive_like_name(name)
+                    and has_native_dom_contract_for(name, context, native_type_names)
+                ):
                     reported_names.add(name)
                     violations.append(
                         Violation(
                             "PRIMITIVE_DEFINITION_OUTSIDE_UI",
                             path,
-                            lineno,
+                            index + 1,
                             f"{name} looks like a DOM primitive definition outside apps/packages/ui/**",
                         )
                     )
@@ -524,17 +570,20 @@ def collect_violations() -> list[Violation]:
     )
 
 
-def print_report(violations: list[Violation], *, summary_only: bool) -> None:
+def print_report(violations: list[Violation], *, strict: bool, summary_only: bool) -> None:
     files = iter_source_files()
     counts = Counter(violation.rule_id for violation in violations)
     total = sum(counts.values())
 
     print("Frontend structure report (report-only by default)")
     print(f"Scanned {len(files)} non-test frontend source files.")
-    print(
-        "Strict mode is off; use --strict to return a non-zero exit code when "
-        "the report contains violations."
-    )
+    if strict:
+        print("Strict mode is on; the command returns a non-zero exit code when violations exist.")
+    else:
+        print(
+            "Strict mode is off; use --strict to return a non-zero exit code when "
+            "the report contains violations."
+        )
     print()
     print("Summary:")
     for rule_id in RULE_ORDER:
@@ -578,7 +627,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
     violations = collect_violations()
-    print_report(violations, summary_only=args.summary_only)
+    print_report(violations, strict=args.strict, summary_only=args.summary_only)
     if args.strict and violations:
         return 1
     return 0
