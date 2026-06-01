@@ -82,7 +82,7 @@ async def find_support_issue(
         """,
         variables={"marker": marker},
     )
-    nodes = (((payload.get("data") or {}).get("issues") or {}).get("nodes") or [])
+    nodes = ((payload.get("data") or {}).get("issues") or {}).get("nodes") or []
     if not isinstance(nodes, list):
         raise LinearIntegrationError("Linear returned an invalid issue search response.")
     for item in nodes:
@@ -133,7 +133,7 @@ async def create_issue(
     except httpx.HTTPError as exc:
         raise LinearIssueCreateAmbiguous("Linear issue creation did not complete.") from exc
 
-    result = ((payload.get("data") or {}).get("issueCreate") or {})
+    result = (payload.get("data") or {}).get("issueCreate") or {}
     if not isinstance(result, dict) or result.get("success") is not True:
         raise LinearIntegrationError("Could not create Linear support issue.")
     issue = result.get("issue")
@@ -165,7 +165,7 @@ async def update_issue_description(
         """,
         variables={"id": issue_id, "input": {"description": description}},
     )
-    result = ((payload.get("data") or {}).get("issueUpdate") or {})
+    result = (payload.get("data") or {}).get("issueUpdate") or {}
     if not isinstance(result, dict) or result.get("success") is not True:
         raise LinearIntegrationError("Could not update Linear support issue.")
     issue = result.get("issue")

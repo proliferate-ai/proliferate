@@ -465,8 +465,7 @@ def _github_configured() -> bool:
 
 def _linear_configured() -> bool:
     return bool(
-        settings.support_linear_api_key.strip()
-        and settings.support_linear_team_id.strip()
+        settings.support_linear_api_key.strip() and settings.support_linear_team_id.strip()
     )
 
 
