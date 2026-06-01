@@ -7,7 +7,14 @@ import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import { resolveEffectiveChatDefaults } from "@/lib/domain/chat/composer/preference-resolvers";
+import { createPendingWorkspaceAttemptId } from "@/lib/domain/workspaces/creation/pending-entry";
 import { createCoworkThreadWorkflow } from "@/lib/workflows/cowork/create-cowork-thread";
+import {
+  elapsedMs,
+  elapsedSince,
+  logLatency,
+  startLatencyTimer,
+} from "@/lib/infra/measurement/debug-latency";
 import { useWorkspaceCollectionsMutationCache } from "@/hooks/workspaces/cache/use-workspace-collections-mutation-cache";
 import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/facade/files/use-workspace-file-actions";
@@ -82,6 +89,13 @@ export function useCoworkThreadWorkflow() {
       coworkWorkspaceDelegationEnabled: preferences.coworkWorkspaceDelegationEnabled,
       runtimeUrl,
     }, {
+      createPendingWorkspaceAttemptId,
+      nowMs: () => Date.now(),
+      nowIso: () => new Date().toISOString(),
+      startLatencyTimer,
+      elapsedMs,
+      elapsedSince,
+      logLatency,
       getSelectedWorkspaceId: () => useSessionSelectionStore.getState().selectedWorkspaceId,
       getPendingWorkspaceEntry: () =>
         useSessionSelectionStore.getState().pendingWorkspaceEntry,

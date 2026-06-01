@@ -6,17 +6,10 @@ import type {
 import { resolveCoworkDefaultSessionModeId } from "@/lib/domain/cowork/session-mode-defaults";
 import { workspaceFileTreeStateKey } from "@/lib/domain/workspaces/cloud/collections";
 import {
-  buildSubmittingPendingWorkspaceEntry,
-  createPendingWorkspaceAttemptId,
+  buildPendingWorkspaceOriginTarget,
   type PendingCoworkRequestInput,
   type PendingWorkspaceEntry,
 } from "@/lib/domain/workspaces/creation/pending-entry";
-import {
-  elapsedMs,
-  elapsedSince,
-  logLatency,
-  startLatencyTimer,
-} from "@/lib/infra/measurement/debug-latency";
 
 export interface CreateCoworkThreadWorkflowInput {
   agentKind: string;
@@ -30,6 +23,13 @@ export interface CreateCoworkThreadWorkflowInput {
 }
 
 export interface CreateCoworkThreadWorkflowDeps {
+  createPendingWorkspaceAttemptId(): string;
+  nowMs(): number;
+  nowIso(): string;
+  startLatencyTimer(): number;
+  elapsedMs(startedAt: number): number;
+  elapsedSince(createdAt: number): number;
+  logLatency(event: string, fields?: Record<string, unknown>): void;
   getSelectedWorkspaceId(): string | null;
   getPendingWorkspaceEntry(): PendingWorkspaceEntry | null;
   isAttemptCurrent(attemptId: string): boolean;
@@ -101,7 +101,7 @@ export async function createCoworkThreadWorkflow(
   input: CreateCoworkThreadWorkflowInput,
   deps: CreateCoworkThreadWorkflowDeps,
 ): Promise<CreateCoworkThreadWorkflowResult | null> {
-  const totalStartedAt = startLatencyTimer();
+  const totalStartedAt = deps.startLatencyTimer();
   const modeId = input.modeId?.trim() || resolveCoworkDefaultSessionModeId(input.agentKind);
   const pendingRequest: PendingCoworkRequestInput = {
     agentKind: input.agentKind,
@@ -111,15 +111,23 @@ export async function createCoworkThreadWorkflow(
     sourceWorkspaceId: input.sourceWorkspaceId ?? null,
   };
 
-  const entry: PendingWorkspaceEntry = buildSubmittingPendingWorkspaceEntry({
-    attemptId: createPendingWorkspaceAttemptId(),
-    selectedWorkspaceId: deps.getSelectedWorkspaceId(),
+  const selectedWorkspaceId = deps.getSelectedWorkspaceId();
+  const entry: PendingWorkspaceEntry = {
+    attemptId: deps.createPendingWorkspaceAttemptId(),
     source: "cowork-created",
+    stage: "submitting",
     displayName: "Cowork thread",
+    repoLabel: null,
+    baseBranchName: null,
+    workspaceId: null,
     request: { kind: "cowork", input: pendingRequest },
-  });
+    originTarget: buildPendingWorkspaceOriginTarget(selectedWorkspaceId),
+    errorMessage: null,
+    setupScript: null,
+    createdAt: deps.nowMs(),
+  };
 
-  logLatency("workspace.cowork.create.pending_shell", {
+  deps.logLatency("workspace.cowork.create.pending_shell", {
     attemptId: entry.attemptId,
     agentKind: input.agentKind,
     modelId: input.modelId,
@@ -142,14 +150,14 @@ export async function createCoworkThreadWorkflow(
       return null;
     }
 
-    const createStartedAt = startLatencyTimer();
-    logLatency("workspace.cowork.create.request.start", {
+    const createStartedAt = deps.startLatencyTimer();
+    deps.logLatency("workspace.cowork.create.request.start", {
       attemptId: entry.attemptId,
       agentKind: input.agentKind,
       modelId: input.modelId,
       modeId: modeId ?? null,
       workspaceDelegationEnabled: input.coworkWorkspaceDelegationEnabled,
-      elapsedSincePendingMs: elapsedSince(entry.createdAt),
+      elapsedSincePendingMs: deps.elapsedSince(entry.createdAt),
     });
 
     const result = await deps.createCoworkThread({
@@ -159,12 +167,12 @@ export async function createCoworkThreadWorkflow(
       ...(modeId ? { modeId } : {}),
     });
 
-    logLatency("workspace.cowork.create.request.success", {
+    deps.logLatency("workspace.cowork.create.request.success", {
       attemptId: entry.attemptId,
       workspaceId: result.workspace.id,
       sessionId: result.session.id,
-      createElapsedMs: elapsedMs(createStartedAt),
-      totalElapsedMs: elapsedMs(totalStartedAt),
+      createElapsedMs: deps.elapsedMs(createStartedAt),
+      totalElapsedMs: deps.elapsedMs(totalStartedAt),
     });
 
     if (!deps.isAttemptCurrent(entry.attemptId)) {
@@ -199,7 +207,7 @@ export async function createCoworkThreadWorkflow(
       }
     }
 
-    const selectionStartedAt = startLatencyTimer();
+    const selectionStartedAt = deps.startLatencyTimer();
     deps.setPendingWorkspaceEntry({
       ...entry,
       workspaceId: result.workspace.id,
@@ -212,11 +220,11 @@ export async function createCoworkThreadWorkflow(
       initialActiveSessionId: activeSessionId,
     });
     deps.rememberLastViewedSession(result.workspace.id, launchedSession.id);
-    deps.trackWorkspaceInteraction(result.workspace.id, new Date().toISOString());
+    deps.trackWorkspaceInteraction(result.workspace.id, deps.nowIso());
     deps.markWorkspaceViewed(result.workspace.id);
     deps.markWorkspaceBootstrappedInSession(result.workspace.id);
 
-    const workspaceInitStartedAt = startLatencyTimer();
+    const workspaceInitStartedAt = deps.startLatencyTimer();
     void deps.initWorkspace({
       workspaceUiKey: result.workspace.id,
       materializedWorkspaceId: result.workspace.id,
@@ -224,23 +232,23 @@ export async function createCoworkThreadWorkflow(
       runtimeUrl: input.runtimeUrl,
       treeStateKey: workspaceFileTreeStateKey(result.workspace),
     }).then(() => {
-      logLatency("workspace.cowork.create.workspace_initialized", {
+      deps.logLatency("workspace.cowork.create.workspace_initialized", {
         attemptId: entry.attemptId,
         workspaceId: result.workspace.id,
-        elapsedMs: elapsedMs(workspaceInitStartedAt),
+        elapsedMs: deps.elapsedMs(workspaceInitStartedAt),
       });
     }).catch(() => {
-      logLatency("workspace.cowork.create.workspace_init_failed", {
+      deps.logLatency("workspace.cowork.create.workspace_init_failed", {
         attemptId: entry.attemptId,
         workspaceId: result.workspace.id,
-        elapsedMs: elapsedMs(workspaceInitStartedAt),
+        elapsedMs: deps.elapsedMs(workspaceInitStartedAt),
       });
     });
-    logLatency("workspace.cowork.create.selection.success", {
+    deps.logLatency("workspace.cowork.create.selection.success", {
       attemptId: entry.attemptId,
       workspaceId: result.workspace.id,
-      selectionElapsedMs: elapsedMs(selectionStartedAt),
-      totalElapsedMs: elapsedMs(totalStartedAt),
+      selectionElapsedMs: deps.elapsedMs(selectionStartedAt),
+      totalElapsedMs: deps.elapsedMs(totalStartedAt),
     });
     if (deps.isAttemptCurrent(entry.attemptId)) {
       deps.setPendingWorkspaceEntry(null);
@@ -251,10 +259,10 @@ export async function createCoworkThreadWorkflow(
     };
   } catch (error) {
     const message = resolveErrorMessage(error, "Couldn't start cowork thread.");
-    logLatency("workspace.cowork.create.failed", {
+    deps.logLatency("workspace.cowork.create.failed", {
       attemptId: entry.attemptId,
       errorMessage: message,
-      elapsedSincePendingMs: elapsedSince(entry.createdAt),
+      elapsedSincePendingMs: deps.elapsedSince(entry.createdAt),
     });
     if (deps.isAttemptCurrent(entry.attemptId)) {
       const currentPending = deps.getPendingWorkspaceEntry();
