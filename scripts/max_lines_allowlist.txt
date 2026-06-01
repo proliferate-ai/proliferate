@@ -9,8 +9,6 @@
 
 anyharness/crates/anyharness-contract/src/v1/events.rs 949 existing AnyHarness contract oversized file
 anyharness/crates/anyharness-contract/src/v1/sessions.rs 802 existing AnyHarness contract oversized file
-anyharness/crates/anyharness-lib/src/adapters/files/service.rs 1050 existing AnyHarness oversized file
-anyharness/crates/anyharness-lib/src/adapters/git/diff.rs 831 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/api/http/git.rs 882 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/api/http/mobility.rs 1035 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/api/http/sessions.rs 1611 existing AnyHarness oversized file

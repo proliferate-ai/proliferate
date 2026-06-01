@@ -3,7 +3,8 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use super::diff::{base_worktree_diff_files, branch_diff_files, diff_for_path_with_scope};
+use super::operations::diff::diff_for_path_with_scope;
+use super::operations::diff_files::{base_worktree_diff_files, branch_diff_files};
 use super::types::{GitDiffError, GitDiffScope, GitFileStatus};
 use uuid::Uuid;
 

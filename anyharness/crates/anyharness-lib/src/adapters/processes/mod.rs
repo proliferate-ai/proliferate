@@ -1,3 +1,4 @@
+pub mod operations;
 pub mod service;
 pub mod types;
 

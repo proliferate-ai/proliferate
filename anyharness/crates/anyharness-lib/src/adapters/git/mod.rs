@@ -1,11 +1,8 @@
-mod branch_base;
 mod default_branch;
-mod diff;
 pub mod executor;
 pub mod file_search;
-mod operation;
+pub mod operations;
 pub mod parse_status;
-mod revert_patches;
 pub mod service;
 pub mod types;
 

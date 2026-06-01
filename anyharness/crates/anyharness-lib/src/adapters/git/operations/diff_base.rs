@@ -1,8 +1,8 @@
 use std::path::Path;
 
-use super::default_branch::detect_default_branch;
-use super::executor::run_git;
-use super::types::GitDiffError;
+use super::super::default_branch::detect_default_branch;
+use super::super::executor::run_git;
+use super::super::types::GitDiffError;
 
 #[derive(Debug, Clone)]
 pub(super) struct BranchDiffBase {

@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use super::types::GitOperation;
+use super::super::types::GitOperation;
 
 pub(super) fn detect_operation(repo_root: &Path) -> GitOperation {
     let git_dir = repo_root.join(".git");

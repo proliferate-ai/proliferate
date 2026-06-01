@@ -26,6 +26,7 @@ Core model and service files:
 - `anyharness/crates/anyharness-lib/src/adapters/files/types.rs`
 - `anyharness/crates/anyharness-lib/src/adapters/files/service.rs`
 - `anyharness/crates/anyharness-lib/src/adapters/files/safety.rs`
+- `anyharness/crates/anyharness-lib/src/adapters/files/operations/**`
 
 The files types are transport-friendly internal results:
 
@@ -45,10 +46,19 @@ full contract layer.
 
 ### Path Safety
 
-Every operation begins with `resolve_safe_path(...)`
-(`anyharness/crates/anyharness-lib/src/adapters/files/safety.rs`).
+Every operation begins with the path-safety layer in
+`anyharness/crates/anyharness-lib/src/adapters/files/safety.rs`.
 
-That path-safety layer rejects:
+Use `resolve_safe_path(...)` for operations that need the resolved target path,
+such as list, read, write, create, and stat. This resolver canonicalizes an
+existing target and follows the final component when it exists.
+
+Use `resolve_safe_entry_path(...)` for entry mutations that operate on the
+entry itself, such as rename and delete. This resolver validates and
+canonicalizes parents without following the final component, so deleting or
+renaming a symlink affects the symlink entry rather than its target.
+
+Both resolvers reject:
 
 - absolute paths
 - `..` traversal
@@ -60,8 +70,8 @@ This is the main security boundary for the files subsystem.
 
 ### Listing
 
-`WorkspaceFilesService::list_entries(...)`
-(`anyharness/crates/anyharness-lib/src/adapters/files/service.rs`):
+`WorkspaceFilesService::list_entries(...)` delegates to
+`anyharness/crates/anyharness-lib/src/adapters/files/operations/list.rs`:
 
 1. resolves a safe directory path
 2. reads directory entries
@@ -72,8 +82,8 @@ This is the main security boundary for the files subsystem.
 
 ### Reading
 
-`read_file(...)`
-(`anyharness/crates/anyharness-lib/src/adapters/files/service.rs`):
+`read_file(...)` delegates to
+`anyharness/crates/anyharness-lib/src/adapters/files/operations/read.rs`:
 
 1. resolves a safe file path
 2. verifies the target exists and is not a directory
@@ -86,8 +96,8 @@ This is the main security boundary for the files subsystem.
 
 ### Writing
 
-`write_file(...)`
-(`anyharness/crates/anyharness-lib/src/adapters/files/service.rs`):
+`write_file(...)` delegates to
+`anyharness/crates/anyharness-lib/src/adapters/files/operations/write.rs`:
 
 1. resolves a safe path
 2. rejects directory targets
@@ -98,8 +108,9 @@ This is the main security boundary for the files subsystem.
 
 ### Creating
 
-`create_entry(...)`
-(`anyharness/crates/anyharness-lib/src/adapters/files/service.rs`) is create-only.
+`create_entry(...)` delegates to
+`anyharness/crates/anyharness-lib/src/adapters/files/operations/create.rs` and
+is create-only.
 It is exposed as `POST /v1/workspaces/{workspace_id}/files/entries`; the
 existing `PUT /files/file` write surface keeps its compatibility upsert
 behavior.
@@ -118,7 +129,9 @@ Create semantics:
 
 ### Renaming
 
-`rename_entry(...)` is exposed as `PATCH
+`rename_entry(...)` delegates to
+`anyharness/crates/anyharness-lib/src/adapters/files/operations/rename.rs` and
+is exposed as `PATCH
 /v1/workspaces/{workspace_id}/files/entries`.
 
 Rename semantics:
@@ -135,7 +148,9 @@ Rename semantics:
 
 ### Deleting
 
-`delete_entry(...)` is exposed as `DELETE
+`delete_entry(...)` delegates to
+`anyharness/crates/anyharness-lib/src/adapters/files/operations/delete.rs` and
+is exposed as `DELETE
 /v1/workspaces/{workspace_id}/files/entries?path=...`.
 
 Delete semantics:

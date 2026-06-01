@@ -25,6 +25,7 @@ Core model and service files:
 - `anyharness/crates/anyharness-lib/src/adapters/git/service.rs`
 - `anyharness/crates/anyharness-lib/src/adapters/git/parse_status.rs`
 - `anyharness/crates/anyharness-lib/src/adapters/git/executor.rs`
+- `anyharness/crates/anyharness-lib/src/adapters/git/operations/**`
 
 The main git models are:
 
@@ -44,8 +45,8 @@ These are runtime-owned normalized summaries built from git CLI output.
 
 ### Status Flow
 
-`GitService::status(...)`
-(`anyharness/crates/anyharness-lib/src/adapters/git/service.rs`):
+`GitService::status(...)` delegates to
+`anyharness/crates/anyharness-lib/src/adapters/git/operations/status.rs`:
 
 1. resolves the repo root
 2. runs `git status --porcelain=v2 --branch -z`
@@ -70,9 +71,7 @@ It turns raw entries into:
 - included vs excluded state
 - conflict detection
 
-`service.rs`
-(`anyharness/crates/anyharness-lib/src/adapters/git/service.rs`)
-then adds higher-level behavior like:
+`operations/status.rs` then adds higher-level git-derived behavior like:
 
 - clean vs dirty summary
 - action availability
@@ -83,8 +82,8 @@ then adds higher-level behavior like:
 `diff_for_path(...)` remains the compatibility entrypoint and delegates to
 `diff_for_path_with_scope(...)` with `GitDiffScope::WorkingTree`.
 
-`diff_for_path_with_scope(...)`
-(`anyharness/crates/anyharness-lib/src/adapters/git/service.rs`):
+`diff_for_path_with_scope(...)` delegates to
+`anyharness/crates/anyharness-lib/src/adapters/git/operations/diff.rs`:
 
 1. resolves the repo root
 2. validates scope-specific arguments
@@ -104,16 +103,18 @@ Scopes are explicit:
   index-only, unstaged, deleted, renamed, and untracked changes in one current
   comparison.
 
-`branch_diff_files(...)` lists committed files for the branch comparison using
-matching `--name-status -z` and `--numstat -z` commands. Rename/copy rows keep
-both `oldPath` and `path`; per-file branch diffs should pass both paths so git
-can preserve rename/copy detection.
+`branch_diff_files(...)` delegates to
+`anyharness/crates/anyharness-lib/src/adapters/git/operations/diff_files.rs`
+and lists committed files for the branch comparison using matching
+`--name-status -z` and `--numstat -z` commands. Rename/copy rows keep both
+`oldPath` and `path`; per-file branch diffs should pass both paths so git can
+preserve rename/copy detection.
 
-`base_worktree_diff_files(...)` lists current workspace changes relative to the
-selected base merge-base. It combines git status with diff/name-status/numstat
-comparisons so index-only staged changes are not lost, and it handles untracked
-files with add-file diffs against `/dev/null` instead of relying on plain
-`git diff <base>`.
+`base_worktree_diff_files(...)` delegates to the same diff-files operation and
+lists current workspace changes relative to the selected base merge-base. It
+combines git status with diff/name-status/numstat comparisons so index-only
+staged changes are not lost, and it handles untracked files with add-file
+diffs against `/dev/null` instead of relying on plain `git diff <base>`.
 
 Branch base refs are intentionally concrete branch refs only. The resolver
 accepts local heads and remote-tracking refs, validates them to commit OIDs, and
@@ -127,11 +128,14 @@ The git service also owns:
 - `stage_paths`
 - `unstage_paths`
 - `commit_staged`
+- `commit_all_if_dirty`
 - `push_current_branch`
 - `rename_branch`
 
-These are still git-boundary operations. They do not become higher-level
-workflow orchestration.
+These delegate to named files under
+`anyharness/crates/anyharness-lib/src/adapters/git/operations/**` and remain
+git-boundary operations. They do not become higher-level workflow
+orchestration.
 
 Command execution itself is kept in:
 
