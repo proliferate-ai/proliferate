@@ -127,7 +127,7 @@ impl WorkspaceRuntime {
             &format!("refs/heads/{requested_branch}"),
         );
 
-        GitService::create_mobility_worktree(
+        GitService::create_worktree_at_ref(
             &repo_root.path,
             &target_path_string,
             requested_branch,

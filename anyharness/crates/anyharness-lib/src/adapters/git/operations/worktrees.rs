@@ -63,14 +63,14 @@ pub fn create_worktree(
     Ok(())
 }
 
-pub fn create_mobility_worktree(
+pub fn create_worktree_at_ref(
     source_repo_root: &str,
     target_path: &str,
     branch_name: &str,
     exact_ref: &str,
 ) -> anyhow::Result<()> {
     prune_stale_worktrees_if_possible(Path::new(source_repo_root));
-    fetch_mobility_branch_if_possible(Path::new(source_repo_root), branch_name);
+    fetch_branch_if_possible(Path::new(source_repo_root), branch_name);
     ensure_ref_exists(Path::new(source_repo_root), exact_ref)?;
 
     if git_local_branch_exists(Path::new(source_repo_root), branch_name)? {
@@ -174,7 +174,7 @@ fn run_switch(workspace_path: &Path, args: &[&str], branch_name: &str) -> anyhow
     Ok(())
 }
 
-fn fetch_mobility_branch_if_possible(cwd: &Path, branch_name: &str) {
+fn fetch_branch_if_possible(cwd: &Path, branch_name: &str) {
     let _ = Command::new("git")
         .args(["fetch", "origin", branch_name])
         .current_dir(cwd)

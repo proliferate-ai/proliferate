@@ -6,6 +6,7 @@ use std::process::Command;
 use uuid::Uuid;
 
 use super::WorkspaceRuntime;
+use crate::adapters::git::GitService;
 use crate::origin::OriginContext;
 use crate::persistence::Db;
 use crate::repo_roots::service::RepoRootService;
@@ -73,7 +74,10 @@ fn create_worktree_keeps_created_branch_local() {
     let main_head = git_stdout(source.path(), ["rev-parse", "main"]);
 
     assert_eq!(local_head.trim(), main_head.trim());
-    assert_git_ref_missing(remote.path(), "refs/heads/feature/local-only");
+    assert_git_command_fails(
+        remote.path(),
+        ["rev-parse", "--verify", "refs/heads/feature/local-only"],
+    );
     assert_git_command_fails(
         worktree_path,
         [
@@ -162,7 +166,7 @@ fn create_mobility_destination_adopts_clean_existing_destination_path() {
         .join("destination-1");
     fs::create_dir_all(destination_path.parent().expect("destination parent"))
         .expect("create destination parent");
-    crate::workspaces::resolver::create_mobility_git_worktree(
+    GitService::create_worktree_at_ref(
         &source.path().display().to_string(),
         &destination_path.display().to_string(),
         "feature/adopt",
@@ -260,7 +264,7 @@ fn create_mobility_destination_rejects_dirty_existing_destination_path() {
         .join("destination-1");
     fs::create_dir_all(destination_path.parent().expect("destination parent"))
         .expect("create destination parent");
-    crate::workspaces::resolver::create_mobility_git_worktree(
+    GitService::create_worktree_at_ref(
         &source.path().display().to_string(),
         &destination_path.display().to_string(),
         "feature/dirty-adopt",
@@ -564,10 +568,6 @@ fn run_git<const N: usize>(cwd: &Path, args: [&str; N]) {
         args,
         String::from_utf8_lossy(&output.stderr)
     );
-}
-
-fn assert_git_ref_missing(cwd: &Path, ref_name: &str) {
-    assert_git_command_fails(cwd, ["rev-parse", "--verify", ref_name]);
 }
 
 fn assert_git_command_fails<const N: usize>(cwd: &Path, args: [&str; N]) {

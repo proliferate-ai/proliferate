@@ -84,13 +84,13 @@ impl GitService {
         worktrees::create_worktree(source_repo_root, target_path, new_branch, base_branch)
     }
 
-    pub fn create_mobility_worktree(
+    pub fn create_worktree_at_ref(
         source_repo_root: &str,
         target_path: &str,
         branch_name: &str,
         exact_ref: &str,
     ) -> anyhow::Result<()> {
-        worktrees::create_mobility_worktree(source_repo_root, target_path, branch_name, exact_ref)
+        worktrees::create_worktree_at_ref(source_repo_root, target_path, branch_name, exact_ref)
     }
 
     pub fn prune_stale_worktrees_if_possible(cwd: &Path) {

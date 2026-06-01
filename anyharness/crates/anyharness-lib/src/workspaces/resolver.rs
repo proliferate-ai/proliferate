@@ -3,7 +3,6 @@ use std::process::Command;
 use std::time::Instant;
 
 use super::model::{ParsedRemote, ResolvedGitContext};
-use crate::adapters::git::GitService;
 
 const GIT_CONTEXT_SLOW_STEP_MS: u128 = 25;
 
@@ -170,28 +169,6 @@ fn host_to_provider(host: &str) -> String {
     } else {
         host.to_string()
     }
-}
-
-pub fn create_git_worktree(
-    source_repo_root: &str,
-    target_path: &str,
-    new_branch: &str,
-    base_branch: Option<&str>,
-) -> anyhow::Result<()> {
-    GitService::create_worktree(source_repo_root, target_path, new_branch, base_branch)
-}
-
-pub fn create_mobility_git_worktree(
-    source_repo_root: &str,
-    target_path: &str,
-    branch_name: &str,
-    exact_ref: &str,
-) -> anyhow::Result<()> {
-    GitService::create_mobility_worktree(source_repo_root, target_path, branch_name, exact_ref)
-}
-
-pub fn prune_stale_worktrees_if_possible(cwd: &Path) {
-    GitService::prune_stale_worktrees_if_possible(cwd);
 }
 
 fn git_rev_parse(cwd: &Path, args: &str) -> anyhow::Result<String> {

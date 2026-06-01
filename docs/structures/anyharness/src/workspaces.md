@@ -37,7 +37,8 @@ Core model and runtime files:
   record construction
 - `anyharness/crates/anyharness-lib/src/workspaces/store/mod.rs` with SQL split
   into lookups, listings, mutations, and row mapping
-- `anyharness/crates/anyharness-lib/src/workspaces/resolver.rs`
+- `anyharness/crates/anyharness-lib/src/workspaces/resolver.rs` for
+  filesystem path to git-context discovery
 
 ### `WorkspaceRecord` (`anyharness/crates/anyharness-lib/src/workspaces/model.rs`)
 
@@ -169,9 +170,12 @@ It includes metadata such as:
 This is how workspace identity is carried into lower-level operations and agent
 launch env.
 
-The underlying git-context and worktree helpers live in:
+The underlying git-context discovery lives in:
 
 - `anyharness/crates/anyharness-lib/src/workspaces/resolver.rs`
+
+Generic git worktree mechanics live in:
+
 - `anyharness/crates/anyharness-lib/src/adapters/git/operations/worktrees.rs`
 
 The durable workspace rows are loaded and stored through:
