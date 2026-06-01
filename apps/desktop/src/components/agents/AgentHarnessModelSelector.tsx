@@ -1,4 +1,4 @@
-import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
+import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { Check, ChevronDown } from "@proliferate/ui/icons";

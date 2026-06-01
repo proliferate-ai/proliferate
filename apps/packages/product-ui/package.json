@@ -27,10 +27,6 @@
       "types": "./dist/auth/AuthLayout.d.ts",
       "import": "./dist/auth/AuthLayout.js"
     },
-    "./auth/AuthProviderButton": {
-      "types": "./dist/auth/AuthProviderButton.d.ts",
-      "import": "./dist/auth/AuthProviderButton.js"
-    },
     "./auth/ConnectGitHubPanel": {
       "types": "./dist/auth/ConnectGitHubPanel.d.ts",
       "import": "./dist/auth/ConnectGitHubPanel.js"
@@ -131,25 +127,9 @@
       "types": "./dist/chat/composer/ChatComposerControlRowFrame.d.ts",
       "import": "./dist/chat/composer/ChatComposerControlRowFrame.js"
     },
-    "./chat/composer/ComposerActionButton": {
-      "types": "./dist/chat/composer/ComposerActionButton.d.ts",
-      "import": "./dist/chat/composer/ComposerActionButton.js"
-    },
-    "./chat/composer/ComposerControlButton": {
-      "types": "./dist/chat/composer/ComposerControlButton.d.ts",
-      "import": "./dist/chat/composer/ComposerControlButton.js"
-    },
     "./chat/composer/ComposerPopoverSurface": {
       "types": "./dist/chat/composer/ComposerPopoverSurface.d.ts",
       "import": "./dist/chat/composer/ComposerPopoverSurface.js"
-    },
-    "./chat/composer/ComposerTextarea": {
-      "types": "./dist/chat/composer/ComposerTextarea.d.ts",
-      "import": "./dist/chat/composer/ComposerTextarea.js"
-    },
-    "./chat/composer/ComposerTextareaFrame": {
-      "types": "./dist/chat/composer/ComposerTextareaFrame.d.ts",
-      "import": "./dist/chat/composer/ComposerTextareaFrame.js"
     },
     "./chat/session-controls/SessionControlIcon": {
       "types": "./dist/chat/session-controls/SessionControlIcon.d.ts",
@@ -190,10 +170,6 @@
     "./plugins/PluginsSurface": {
       "types": "./dist/plugins/PluginsSurface.d.ts",
       "import": "./dist/plugins/PluginsSurface.js"
-    },
-    "./popover/PopoverMenuItem": {
-      "types": "./dist/popover/PopoverMenuItem.d.ts",
-      "import": "./dist/popover/PopoverMenuItem.js"
     },
     "./settings/SettingsCard": {
       "types": "./dist/settings/SettingsCard.d.ts",

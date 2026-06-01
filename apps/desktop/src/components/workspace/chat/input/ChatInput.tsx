@@ -48,9 +48,12 @@ import {
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { ChatInputControlRow } from "./ChatInputControlRow";
 import { ChatInputDraftArea } from "./ChatInputDraftArea";
-import { ChatInputHiddenFileInput } from "./ChatInputHiddenFileInput";
 import { ChatComposerSurface } from "@proliferate/product-ui/chat/composer/ChatComposerSurface";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
+
+const CHAT_INPUT_ATTACHMENT_ACCEPT =
+  "image/*,text/*,.md,.json,.ts,.tsx,.js,.jsx,.py,.rs,.go,.java,.css,.html,.xml,.yaml,.yml,.toml,.sql,.sh";
 
 /**
  * The composer surface: command-aware editor + model / session controls +
@@ -313,9 +316,14 @@ export function ChatInput({
           onPaste={handlePaste}
         >
           <form className="relative flex flex-col">
-            <ChatInputHiddenFileInput
+            <Input
               ref={fileInputRef}
+              variant="unstyled"
+              type="file"
+              multiple
+              className="hidden"
               onChange={handleFileInputChange}
+              accept={CHAT_INPUT_ATTACHMENT_ACCEPT}
             />
             <ChatInputDraftArea
               isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}

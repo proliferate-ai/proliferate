@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
+import { AuthProviderButton } from "@proliferate/ui/primitives/AuthProviderButton";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { AuthLayout } from "./AuthLayout";
-import { AuthProviderButton } from "./AuthProviderButton";
 
 interface ConnectGitHubRequiredPanelProps {
   mark?: ReactNode;

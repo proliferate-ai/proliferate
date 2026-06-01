@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { X } from "@proliferate/ui/icons";
 import { UpdateNotificationCard } from "./UpdateNotificationCard";
 
@@ -44,12 +45,15 @@ export function ToastContainer() {
           className="flex items-start gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm text-card-foreground shadow-floating-dark animate-toast-in"
         >
           <span className="flex-1">{t.message}</span>
-          <button
+          <Button
+            type="button"
+            variant="unstyled"
+            size="unstyled"
             onClick={() => dismiss(t.id)}
             className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="size-3.5" />
-          </button>
+          </Button>
         </div>
       ))}
       <UpdateNotificationCard />

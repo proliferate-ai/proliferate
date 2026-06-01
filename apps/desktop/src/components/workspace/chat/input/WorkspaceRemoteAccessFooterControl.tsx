@@ -1,6 +1,6 @@
 import { Smartphone, Spinner } from "@proliferate/ui/icons";
 import { useWorkspaceShellActions } from "@/components/workspace/shell/providers/WorkspaceShellActionsContext";
-import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
+import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 
 export function WorkspaceRemoteAccessFooterControl() {
   const shellActions = useWorkspaceShellActions();

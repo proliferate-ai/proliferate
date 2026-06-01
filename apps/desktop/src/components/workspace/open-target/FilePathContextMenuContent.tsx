@@ -1,14 +1,20 @@
 import {
   useState,
-  type ButtonHTMLAttributes,
-  type ReactNode,
 } from "react";
 import { ChevronRight, ExternalLink } from "@proliferate/ui/icons";
 import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
 import { POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import type { OpenTarget } from "@/lib/domain/open-targets/model";
 
 export type FilePathContextMenuTarget = Pick<OpenTarget, "id" | "label" | "iconId" | "kind">;
+
+const FILE_PATH_MENU_ITEM_PROPS = {
+  density: "compact",
+  role: "menuitem",
+  iconClassName: "size-4 opacity-100",
+  trailingClassName: "ml-0 size-auto",
+} as const;
 
 export function FilePathContextMenuContent({
   canOpen,
@@ -38,7 +44,8 @@ export function FilePathContextMenuContent({
 
   return (
     <div className="relative flex flex-col gap-px">
-      <FilePathContextMenuItem
+      <PopoverMenuItem
+        {...FILE_PATH_MENU_ITEM_PROPS}
         {...transcriptProps}
         icon={<OpenMenuTargetIcon target={defaultTarget ?? null} />}
         label={defaultTarget ? `Open in ${defaultTarget.label}` : "Open"}
@@ -55,7 +62,8 @@ export function FilePathContextMenuContent({
           onMouseLeave={() => setOpenWithActive(false)}
           onFocus={() => setOpenWithActive(true)}
         >
-          <FilePathContextMenuItem
+          <PopoverMenuItem
+            {...FILE_PATH_MENU_ITEM_PROPS}
             {...transcriptProps}
             label="Open with"
             disabled={!canOpen}
@@ -70,7 +78,8 @@ export function FilePathContextMenuContent({
               onMouseEnter={() => setOpenWithActive(true)}
             >
               {targets.map((target) => (
-                <FilePathContextMenuItem
+                <PopoverMenuItem
+                  {...FILE_PATH_MENU_ITEM_PROPS}
                   key={target.id}
                   {...transcriptProps}
                   icon={<OpenMenuTargetIcon target={target} />}
@@ -87,7 +96,8 @@ export function FilePathContextMenuContent({
         </div>
       )}
       <div className="my-1 h-px bg-border/70" />
-      <FilePathContextMenuItem
+      <PopoverMenuItem
+        {...FILE_PATH_MENU_ITEM_PROPS}
         {...transcriptProps}
         label="Copy path"
         onClick={() => {
@@ -95,7 +105,8 @@ export function FilePathContextMenuContent({
           close();
         }}
       />
-      <FilePathContextMenuItem
+      <PopoverMenuItem
+        {...FILE_PATH_MENU_ITEM_PROPS}
         {...transcriptProps}
         label="Reveal in Finder"
         disabled={!canOpen}
@@ -105,51 +116,6 @@ export function FilePathContextMenuContent({
         }}
       />
     </div>
-  );
-}
-
-function FilePathContextMenuItem({
-  icon,
-  label,
-  trailing,
-  disabled,
-  className = "",
-  onClick,
-  ...props
-}: {
-  icon?: ReactNode;
-  label: string;
-  trailing?: ReactNode;
-} & ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      disabled={disabled}
-      className={[
-        "group/menu-item flex w-full cursor-default select-none items-center rounded-lg px-2 py-1 text-sm font-[430] leading-4 text-popover-foreground outline-none transition-colors hover:bg-popover-accent focus:bg-popover-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent",
-        className,
-      ].filter(Boolean).join(" ")}
-      {...props}
-      onClick={(event) => {
-        event.stopPropagation();
-        onClick?.(event);
-      }}
-    >
-      {icon && (
-        <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
-          {icon}
-        </span>
-      )}
-      <span className={icon ? "ml-1.5 min-w-0 flex-1 truncate text-left" : "min-w-0 flex-1 truncate text-left"}>
-        {label}
-      </span>
-      {trailing && (
-        <span className="ml-2 flex shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100">
-          {trailing}
-        </span>
-      )}
-    </button>
   );
 }
 

@@ -5,7 +5,7 @@ import { Brain, Check, ChevronDown } from "@proliferate/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
+import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 
 interface SessionReasoningEffortControlProps {

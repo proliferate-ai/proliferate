@@ -33,7 +33,7 @@ import type {
   ModelSelectorProps,
   ModelSelectorSelection,
 } from "@/lib/domain/chat/models/model-selection";
-import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
+import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 

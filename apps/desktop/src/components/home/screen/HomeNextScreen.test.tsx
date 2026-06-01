@@ -132,7 +132,7 @@ vi.mock("@proliferate/product-ui/chat/composer/ChatComposerSurface", () => ({
   ),
 }));
 
-vi.mock("@proliferate/product-ui/chat/composer/ComposerTextarea", () => ({
+vi.mock("@proliferate/ui/primitives/ComposerTextarea", () => ({
   ComposerTextarea: (props: TextareaHTMLAttributes<HTMLTextAreaElement>) => (
     <textarea aria-label="Prompt" {...props} />
   ),

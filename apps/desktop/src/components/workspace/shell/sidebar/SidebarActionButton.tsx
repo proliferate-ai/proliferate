@@ -1,1 +1,1 @@
-export { SidebarActionButton } from "@proliferate/product-ui/sidebar/ProductSidebar";
+export { SidebarActionButton } from "@proliferate/ui/layout/SidebarActionButton";

@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
 import { ChevronDown } from "@proliferate/ui/icons";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIcon";
 import { OpenTargetMenu, TargetIcon } from "./OpenTargetMenu";
 import type { OpenTarget } from "@/hooks/access/tauri/use-shell-actions";
@@ -38,15 +39,17 @@ export function SplitButton({
 
   if (!targets || targets.length === 0 || !onTargetClick) {
     return (
-      <button
+      <Button
         type="button"
+        variant="unstyled"
+        size="unstyled"
         onClick={onClick}
         title={label}
         aria-label={label}
         className={primaryClassName}
       >
         {content}
-      </button>
+      </Button>
     );
   }
 
@@ -57,8 +60,10 @@ export function SplitButton({
       align="right"
       trigger={({ toggle, isOpen }) => (
         <div className="flex">
-          <button
+          <Button
             type="button"
+            variant="unstyled"
+            size="unstyled"
             onClick={onClick}
             title={label}
             aria-label={label}
@@ -67,9 +72,11 @@ export function SplitButton({
               : "workspace-shell-icon-button workspace-shell-split-button-left inline-flex items-center justify-center whitespace-nowrap"}
           >
             {content}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="unstyled"
+            size="unstyled"
             onClick={toggle}
             aria-haspopup="menu"
             aria-expanded={isOpen}
@@ -80,7 +87,7 @@ export function SplitButton({
               : "workspace-shell-icon-button workspace-shell-split-button-right inline-flex items-center justify-center whitespace-nowrap"}
           >
             <ChevronDown className="size-3" />
-          </button>
+          </Button>
         </div>
       )}
     />

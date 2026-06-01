@@ -1,6 +1,8 @@
 import { useRef } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
+import { Input } from "@proliferate/ui/primitives/Input";
+import { Label } from "@proliferate/ui/primitives/Label";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { CloudUpload, FileText, Folder, LifeBuoy, X } from "@proliferate/ui/icons";
 import {
@@ -61,9 +63,9 @@ export function SupportReportWindow() {
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <div className="space-y-4">
           <section className="space-y-2">
-            <label htmlFor="support-message" className="text-sm font-medium">
+            <Label htmlFor="support-message" className="mb-0 text-sm font-medium text-foreground">
               What happened?
-            </label>
+            </Label>
             <Textarea
               id="support-message"
               variant="code"
@@ -89,16 +91,19 @@ export function SupportReportWindow() {
                 Add files
               </Button>
             </div>
-            <button
+            <Button
               type="button"
+              variant="unstyled"
+              size="unstyled"
               className="flex min-h-[88px] w-full flex-col items-center justify-center rounded-lg border border-dashed border-border/80 bg-surface-control/80 px-4 py-4 text-center text-xs text-muted-foreground transition-colors hover:border-ring hover:bg-popover-accent hover:text-popover-foreground"
               onClick={() => fileInputRef.current?.click()}
             >
               <CloudUpload className="mb-2 size-5" />
               <span>Drop screenshots or files here</span>
-            </button>
-            <input
+            </Button>
+            <Input
               ref={fileInputRef}
+              variant="unstyled"
               type="file"
               multiple
               className="hidden"
@@ -146,15 +151,16 @@ export function SupportReportWindow() {
                 );
                 const description = scopeDescription(option.kind, defaultWorkspace);
                 return (
-                  <label
+                  <Label
                     key={option.kind}
-                    className={`flex min-h-10 cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 text-xs transition-colors ${
+                    className={`mb-0 flex min-h-10 cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 text-xs text-foreground transition-colors ${
                       scopeKind === option.kind
                         ? "border-ring bg-popover-accent text-popover-foreground"
                         : "border-border/70 bg-surface-control/60 hover:bg-popover-accent"
                     } ${disabled ? "cursor-not-allowed opacity-50 hover:bg-surface-control/60" : ""}`}
                   >
-                    <input
+                    <Input
+                      variant="unstyled"
                       type="radio"
                       name="support-scope"
                       disabled={disabled}
@@ -170,7 +176,7 @@ export function SupportReportWindow() {
                         </span>
                       ) : null}
                     </span>
-                  </label>
+                  </Label>
                 );
               })}
             </div>
@@ -178,12 +184,11 @@ export function SupportReportWindow() {
             {scopeKind === "choose_workspace" && snapshot?.workspaceOptions.length ? (
               <div className="space-y-1 rounded-xl border border-border/70 bg-popover p-1 shadow-popover">
                 {snapshot.workspaceOptions.map((workspace) => (
-                  <label
+                  <Label
                     key={workspace.id}
-                    className="flex min-h-10 cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-xs transition-colors hover:bg-popover-accent"
+                    className="mb-0 flex min-h-10 cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-xs text-foreground transition-colors hover:bg-popover-accent"
                   >
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       name="support-workspace"
                       checked={selectedWorkspaceIds.includes(workspace.id)}
                       onChange={() => toggleWorkspace(workspace.id)}
@@ -197,13 +202,13 @@ export function SupportReportWindow() {
                           .join(" · ")}
                       </span>
                     </span>
-                  </label>
+                  </Label>
                 ))}
               </div>
             ) : null}
           </section>
 
-          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border/70 bg-surface-control/60 px-3 py-2 text-xs">
+          <Label className="mb-0 flex cursor-pointer items-start gap-3 rounded-lg border border-border/70 bg-surface-control/60 px-3 py-2 text-xs text-foreground">
             <Checkbox
               checked={publicContentConsent}
               onChange={(event) => setPublicContentConsent(event.currentTarget.checked)}
@@ -218,7 +223,7 @@ export function SupportReportWindow() {
                 Diagnostics and files stay private.
               </span>
             </span>
-          </label>
+          </Label>
         </div>
       </div>
 

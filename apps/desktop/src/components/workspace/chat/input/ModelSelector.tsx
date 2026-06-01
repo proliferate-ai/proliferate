@@ -8,7 +8,9 @@ import type {
 } from "@/lib/domain/chat/models/model-selection";
 import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
 import { FixedPositionLayer } from "@proliferate/ui/layout/FixedPositionLayer";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { POPOVER_FRAME_CLASS, POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
   Check,
   ChevronDown,
@@ -18,7 +20,7 @@ import {
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { useModelSelectorMenu } from "@/hooks/chat/ui/use-model-selector-menu";
 import { useNativeOverlayRegistration } from "@proliferate/ui/overlays/overlay-presence";
-import { ComposerControlButton } from "@proliferate/product-ui/chat/composer/ComposerControlButton";
+import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 
 export function ModelSelector({
@@ -110,7 +112,8 @@ export function ModelSelector({
               <div className="border-b border-border px-2 pb-2 pt-2">
                 <div className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5">
                   <Search className="size-3.5 shrink-0 text-muted-foreground/60" />
-                  <input
+                  <Input
+                    variant="unstyled"
                     type="text"
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
@@ -148,30 +151,29 @@ export function ModelSelector({
               </div>
 
               <div className="border-t border-border p-1">
-                <button
-                  type="button"
+                <PopoverMenuItem
+                  density="compact"
                   onClick={toggleAddProvider}
-                  className="flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1 text-sm font-[430] leading-[18px] text-muted-foreground hover:bg-popover-accent hover:text-popover-foreground"
-                >
-                  <Plus className="size-3.5 shrink-0" />
-                  <span>{CHAT_MODEL_SELECTOR_LABELS.addProvider}</span>
-                </button>
+                  icon={<Plus className="size-3.5 shrink-0" />}
+                  label={CHAT_MODEL_SELECTOR_LABELS.addProvider}
+                  className="px-2.5 text-muted-foreground hover:text-popover-foreground"
+                />
               </div>
             </div>
 
             {addProviderOpen && notReadyAgents.length > 0 && (
               <div className={`absolute bottom-0 left-[calc(18rem+8px)] w-56 ${POPOVER_SURFACE_CLASS}`}>
                 {notReadyAgents.map((agent) => (
-                  <button
+                  <PopoverMenuItem
                     key={agent.kind}
-                    type="button"
                     onClick={() => openSetupAgent(agent)}
-                    className="flex w-full cursor-default items-center gap-1.5 rounded-lg px-2.5 py-1 text-sm font-[430] leading-[18px] text-popover-foreground hover:bg-popover-accent focus:bg-popover-accent"
-                  >
-                    <ProviderIcon kind={agent.kind} className="size-3.5 shrink-0 text-muted-foreground" />
-                    <span className="flex-1 truncate text-left">{agent.displayName}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground/60">Setup</span>
-                  </button>
+                    density="compact"
+                    icon={<ProviderIcon kind={agent.kind} className="size-3.5 shrink-0 text-muted-foreground" />}
+                    label={agent.displayName}
+                    trailing={<span className="shrink-0 text-xs text-muted-foreground/60">Setup</span>}
+                    className="px-2.5 leading-[18px]"
+                    trailingClassName="size-auto opacity-100"
+                  />
                 ))}
               </div>
             )}
@@ -235,19 +237,18 @@ function ModelRow({
   const showNewChatBadge = actionKind === "open_new_chat" && !isSelected;
 
   return (
-    <button
-      type="button"
+    <PopoverMenuItem
+      density="compact"
       onClick={onSelect}
-      className="flex w-full cursor-default items-center gap-1.5 rounded-lg px-2.5 py-1 text-sm font-[430] leading-[18px] text-popover-foreground hover:bg-popover-accent focus:bg-popover-accent"
-    >
-      <ProviderIcon kind={kind} className="size-3.5 shrink-0 text-muted-foreground" />
-      <span className="flex-1 truncate text-left">{displayName}</span>
-      {showNewChatBadge && (
+      icon={<ProviderIcon kind={kind} className="size-3.5 shrink-0 text-muted-foreground" />}
+      label={displayName}
+      trailing={showNewChatBadge ? (
         <span className="shrink-0 text-xs text-muted-foreground/60">
           {CHAT_MODEL_SELECTOR_LABELS.newChatBadge}
         </span>
-      )}
-      {isSelected && <Check className="size-3.5 shrink-0 text-foreground/60" />}
-    </button>
+      ) : isSelected ? <Check className="size-3.5 shrink-0 text-foreground/60" /> : null}
+      className="px-2.5 leading-[18px]"
+      trailingClassName="size-auto opacity-100"
+    />
   );
 }

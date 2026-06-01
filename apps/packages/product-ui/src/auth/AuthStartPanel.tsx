@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
+import { AuthProviderButton } from "@proliferate/ui/primitives/AuthProviderButton";
 import { AuthLayout } from "./AuthLayout";
-import { AuthProviderButton } from "./AuthProviderButton";
 
 export interface AuthProviderActionView {
   id: string;
