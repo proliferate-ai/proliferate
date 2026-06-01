@@ -7,8 +7,8 @@ from uuid import uuid4
 import pytest
 
 from proliferate.integrations.sandbox.base import ProviderSandboxState
-from proliferate.server.cloud.runtime import ensure_running
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError
+from proliferate.server.cloud.runtime.liveness import ensure_running, relaunch as relaunch_helpers
 
 
 def _make_workspace(*, runtime_url: str | None = "https://runtime.invalid") -> SimpleNamespace:
@@ -341,10 +341,10 @@ async def test_ensure_environment_runtime_ready_refreshes_worker_before_forced_r
     expected_sandbox_record = sandbox_record
     monkeypatch.setattr(
         ensure_running,
-        "_refresh_worker_enrollment_for_runtime",
+        "refresh_worker_enrollment_for_runtime",
         _refresh,
     )
-    monkeypatch.setattr(ensure_running, "_relaunch_runtime", _relaunch)
+    monkeypatch.setattr(ensure_running, "relaunch_runtime", _relaunch)
     monkeypatch.setattr(ensure_running, "_current_target_worker_id", _current_target_worker_id)
     monkeypatch.setattr(
         ensure_running,
@@ -397,10 +397,10 @@ async def test_worker_relaunch_cloud_base_url_falls_back_to_existing_config(
         commands.append(command)
         return SimpleNamespace(exit_code=0, stdout="https://public-worker.example\n")
 
-    monkeypatch.setattr(ensure_running, "_cloud_base_url_for_worker_config", _raise_config_error)
-    monkeypatch.setattr(ensure_running, "run_sandbox_command_logged", _run_command)
+    monkeypatch.setattr(relaunch_helpers, "cloud_base_url_for_worker_config", _raise_config_error)
+    monkeypatch.setattr(relaunch_helpers, "run_sandbox_command_logged", _run_command)
 
-    url = await ensure_running._cloud_base_url_for_worker_relaunch(
+    url = await relaunch_helpers.cloud_base_url_for_worker_relaunch(
         object(),
         object(),
         runtime_context,
@@ -464,11 +464,11 @@ async def test_refresh_worker_enrollment_stops_and_resets_sidecars_before_write(
         events.append(("command", label, command))
         return SimpleNamespace(exit_code=0, stdout="", stderr="")
 
-    monkeypatch.setattr(ensure_running, "_cloud_base_url_for_worker_relaunch", _cloud_base_url)
-    monkeypatch.setattr(ensure_running, "ensure_runtime_target_enrollment", _ensure_enrollment)
-    monkeypatch.setattr(ensure_running, "run_sandbox_command_logged", _run_command)
+    monkeypatch.setattr(relaunch_helpers, "cloud_base_url_for_worker_relaunch", _cloud_base_url)
+    monkeypatch.setattr(relaunch_helpers, "ensure_runtime_target_enrollment", _ensure_enrollment)
+    monkeypatch.setattr(relaunch_helpers, "run_sandbox_command_logged", _run_command)
 
-    await ensure_running._refresh_worker_enrollment_for_runtime(
+    await relaunch_helpers.refresh_worker_enrollment_for_runtime(
         _Provider(),
         object(),
         runtime_context,
@@ -550,15 +550,15 @@ async def test_refresh_worker_enrollment_reset_failure_stops_before_write(
         return "https://public-worker.example"
 
     monkeypatch.setattr(
-        ensure_running,
-        "_cloud_base_url_for_worker_relaunch",
+        relaunch_helpers,
+        "cloud_base_url_for_worker_relaunch",
         _cloud_base_url,
     )
-    monkeypatch.setattr(ensure_running, "ensure_runtime_target_enrollment", _ensure_enrollment)
-    monkeypatch.setattr(ensure_running, "run_sandbox_command_logged", _run_command)
+    monkeypatch.setattr(relaunch_helpers, "ensure_runtime_target_enrollment", _ensure_enrollment)
+    monkeypatch.setattr(relaunch_helpers, "run_sandbox_command_logged", _run_command)
 
     with pytest.raises(CloudRuntimeReconnectError, match="reset worker enrollment state"):
-        await ensure_running._refresh_worker_enrollment_for_runtime(
+        await relaunch_helpers.refresh_worker_enrollment_for_runtime(
             _Provider(),
             object(),
             runtime_context,
@@ -608,11 +608,11 @@ async def test_refresh_worker_enrollment_url_failure_does_not_touch_sandbox(
         commands.append(label)
         return SimpleNamespace(exit_code=0, stdout="", stderr="")
 
-    monkeypatch.setattr(ensure_running, "_cloud_base_url_for_worker_relaunch", _cloud_base_url)
-    monkeypatch.setattr(ensure_running, "run_sandbox_command_logged", _run_command)
+    monkeypatch.setattr(relaunch_helpers, "cloud_base_url_for_worker_relaunch", _cloud_base_url)
+    monkeypatch.setattr(relaunch_helpers, "run_sandbox_command_logged", _run_command)
 
     with pytest.raises(CloudRuntimeReconnectError, match="missing public URL"):
-        await ensure_running._refresh_worker_enrollment_for_runtime(
+        await relaunch_helpers.refresh_worker_enrollment_for_runtime(
             object(),
             object(),
             runtime_context,
@@ -809,7 +809,7 @@ async def test_ensure_workspace_runtime_ready_relaunches_only_after_fresh_endpoi
         "persist_runtime_reconnect_state_for_workspace",
         _persist,
     )
-    monkeypatch.setattr(ensure_running, "_relaunch_runtime", _relaunch)
+    monkeypatch.setattr(ensure_running, "relaunch_runtime", _relaunch)
 
     runtime_url = await ensure_running.ensure_workspace_runtime_ready(
         workspace,

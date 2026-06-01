@@ -55,7 +55,7 @@ from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repo_config import service as repo_config_service
 from proliferate.server.cloud.repos import service as repos_service
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError
-from proliferate.server.cloud.runtime.auth_status import RuntimeAuthStateSnapshot
+from proliferate.server.cloud.runtime.credentials.auth_status import RuntimeAuthStateSnapshot
 from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
 from proliferate.server.cloud.workspaces import service as cloud_service
 from proliferate.utils.crypto import decrypt_json, encrypt_json, encrypt_text

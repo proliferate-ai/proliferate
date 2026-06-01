@@ -21,7 +21,7 @@ from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime import bootstrap as runtime_bootstrap
 from proliferate.server.cloud.runtime import provision as runtime_provision
 from proliferate.server.cloud.runtime import sandbox_exec as runtime_sandbox_exec
-from proliferate.server.cloud.runtime.data_key import generate_anyharness_data_key
+from proliferate.server.cloud.runtime.provisioning.data_key import generate_anyharness_data_key
 from proliferate.server.cloud.runtime.models import CloudProvisionInput
 from proliferate.utils.crypto import encrypt_json
 

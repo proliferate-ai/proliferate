@@ -7,7 +7,6 @@ import logging
 import secrets
 import shlex
 import time
-from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import PurePosixPath
 from urllib.parse import urlparse
@@ -67,15 +66,6 @@ from proliferate.server.cloud.agent_auth.service import (
     request_agent_auth_refresh_for_profile_target,
 )
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.runtime.anyharness_api import (
-    apply_remote_runtime_config,
-    prepare_remote_mobility_destination,
-    reconcile_remote_agents,
-    resolve_remote_workspace,
-    verify_runtime_auth_enforced,
-    wait_for_runtime_health,
-)
-from proliferate.server.cloud.runtime.auth_status import selected_agent_auth_agent_kinds
 from proliferate.server.cloud.runtime.bootstrap import (
     build_detached_supervisor_launch_command,
     build_runtime_env,
@@ -89,7 +79,18 @@ from proliferate.server.cloud.runtime.bootstrap import (
     supervisor_config_path,
     worker_config_path,
 )
-from proliferate.server.cloud.runtime.data_key import generate_anyharness_data_key
+from proliferate.server.cloud.runtime.config_sync.repo_config import (
+    WorkspaceRuntimeAccess,
+    apply_workspace_repo_config_after_provision,
+)
+from proliferate.server.cloud.runtime.config_sync.runtime_config import apply_remote_runtime_config
+from proliferate.server.cloud.runtime.config_sync.worktree_policy import (
+    sync_cloud_worktree_policy_to_runtime,
+)
+from proliferate.server.cloud.runtime.credentials.auth_status import (
+    selected_agent_auth_agent_kinds,
+)
+from proliferate.server.cloud.runtime.credentials.remote_agents import reconcile_remote_agents
 from proliferate.server.cloud.runtime.domain.reconnect_policy import (
     SandboxReconnectAction,
     reconnect_action_for_sandbox_state,
@@ -105,16 +106,23 @@ from proliferate.server.cloud.runtime.git_operations import (
     ensure_requested_base_sha_available,
     resolve_runtime_root_head_sha,
 )
+from proliferate.server.cloud.runtime.liveness.health import (
+    verify_runtime_auth_enforced,
+    wait_for_runtime_health,
+)
 from proliferate.server.cloud.runtime.models import (
     CloudProvisionInput,
     ConnectedSandbox,
     ProvisionStep,
-    ProvisionStepMetric,
     RuntimeHandshake,
 )
-from proliferate.server.cloud.runtime.repo_config_apply import (
-    WorkspaceRuntimeAccess,
-    apply_workspace_repo_config_after_provision,
+from proliferate.server.cloud.runtime.provisioning.data_key import generate_anyharness_data_key
+from proliferate.server.cloud.runtime.provisioning.remote_workspace import (
+    prepare_remote_mobility_destination,
+    resolve_remote_workspace,
+)
+from proliferate.server.cloud.runtime.provisioning.step_tracker import (
+    ProvisionStepTracker as _StepTracker,
 )
 from proliferate.server.cloud.runtime.sandbox_exec import (
     assert_command_succeeded,
@@ -123,9 +131,6 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
 )
 from proliferate.server.cloud.runtime.target_registration import ensure_runtime_target_enrollment
 from proliferate.server.cloud.runtime.wake import run_managed_slot_wake_job
-from proliferate.server.cloud.runtime.worktree_policy_sync import (
-    sync_cloud_worktree_policy_to_runtime,
-)
 from proliferate.server.cloud.runtime_config.service import (
     refresh_profile_runtime_config,
     runtime_config_apply_request_for_revision,
@@ -134,35 +139,6 @@ from proliferate.utils.crypto import decrypt_text, encrypt_text
 from proliferate.utils.time import duration_ms, utcnow
 
 WorkspaceStatus = LegacyWorkspaceStatus
-
-
-@dataclass
-class _StepTracker:
-    workspace_id: UUID
-    metrics: list[ProvisionStepMetric] = field(default_factory=list)
-    active_step: ProvisionStep = field(default=ProvisionStep.init)
-    _step_started: float = field(default=0.0, init=False, repr=False)
-
-    def begin(self, step: ProvisionStep, **fields: object) -> None:
-        self.active_step = step
-        self._step_started = time.perf_counter()
-        payload: dict[str, object] = {
-            "workspace_id": self.workspace_id,
-            "step": step.value,
-        }
-        payload.update(fields)
-        _emit_cloud_event("cloud workspace setup step started", payload)
-
-    def complete(self, **fields: object) -> None:
-        elapsed_ms = duration_ms(self._step_started)
-        self.metrics.append(ProvisionStepMetric(step=self.active_step, elapsed_ms=elapsed_ms))
-        payload: dict[str, object] = {
-            "workspace_id": self.workspace_id,
-            "step": self.active_step.value,
-            "elapsed_ms": elapsed_ms,
-        }
-        payload.update(fields)
-        _emit_cloud_event("cloud workspace setup step complete", payload)
 
 
 def _normalize_identity_value(value: object | None) -> str | None:

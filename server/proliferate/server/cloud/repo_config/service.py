@@ -51,13 +51,13 @@ from proliferate.server.cloud.repo_config.validation import (
 )
 from proliferate.server.cloud.repos.domain.github_credentials import CloudRepoGitHubCredentials
 from proliferate.server.cloud.repos.service import get_repo_branches_for_credentials
-from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
-from proliferate.server.cloud.runtime.repo_config_apply import (
+from proliferate.server.cloud.runtime.config_sync.repo_config import (
     WorkspaceRepoApplyBusyError,
     WorkspaceRuntimeAccess,
     apply_workspace_repo_config,
     run_workspace_saved_setup,
 )
+from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
 from proliferate.server.cloud.runtime.service import get_workspace_connection
 
 
