@@ -4,19 +4,25 @@ import type { CloudSessionProjection, CloudWorkspaceSummary } from "@proliferate
 import {
   buildCloudWorkInventory,
   buildCloudWorkRecencyInventory,
-  buildRecentWorkItems,
+  filterCloudWorkItems,
+} from "./cloud-work-filters";
+import {
   cloudWorkItemForWorkspace,
+  cloudWorkSourceForWorkspace,
+  recentWorkSourceForWorkspace,
+} from "./cloud-work-items";
+import {
   cloudCommandReadiness,
   recentWorkCloudAccessState,
-  cloudWorkSourceForWorkspace,
-  cloudWorkStatusForWorkspace,
-  dedupeCloudWorkspaces,
-  filterCloudWorkItems,
   recentWorkCommandability,
   recentWorkRuntimeLocationForWorkspace,
-  recentWorkSourceForWorkspace,
+} from "./cloud-work-runtime";
+import {
+  cloudWorkStatusForWorkspace,
   recentWorkStatusIndicatorForWorkspace,
-} from "./cloud-work-inventory";
+} from "./cloud-work-status";
+import { dedupeCloudWorkspaces } from "./cloud-work-time";
+import { buildRecentWorkItems } from "./recent-work-items";
 
 const NOW = Date.parse("2026-05-23T12:00:00Z");
 

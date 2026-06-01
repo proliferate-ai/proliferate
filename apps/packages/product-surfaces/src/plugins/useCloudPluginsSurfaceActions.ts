@@ -7,8 +7,8 @@ import {
   type CloudMcpOAuthFlowStatusResponse,
 } from "@proliferate/cloud-sdk-react";
 import {
-  normalizedPluginSecretFields,
   pluginRequiresBrowserAuth,
+  pluginSecretFieldsToCloud,
   pluginSettingsToCloud,
   validatePluginSecrets,
   validatePluginSettings,
@@ -151,7 +151,7 @@ export function useCloudPluginsSurfaceActions({
       await connectionActions.putSecretAuth({
         connectionId: connection.connectionId,
         body: {
-          secretFields: normalizedPluginSecretFields(item.entry, nextDraft.secretFields),
+          secretFields: pluginSecretFieldsToCloud(item.entry, nextDraft.secretFields),
         },
       });
     }
@@ -199,7 +199,7 @@ export function useCloudPluginsSurfaceActions({
       await connectionActions.putSecretAuth({
         connectionId: item.connection.connectionId,
         body: {
-          secretFields: normalizedPluginSecretFields(item.entry, nextDraft.secretFields),
+          secretFields: pluginSecretFieldsToCloud(item.entry, nextDraft.secretFields),
         },
       });
     }

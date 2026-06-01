@@ -33,13 +33,9 @@ export type {
 } from "./cloud-plugin-inventory-types";
 export {
   createDefaultPluginDraft,
-  getPluginSecretFields,
-  normalizePluginSecretValue,
-  normalizePluginSettings,
-  normalizedPluginSecretFields,
   pluginRequiresBrowserAuth,
+  pluginSecretFieldsToCloud,
   pluginSettingsToCloud,
-  pluginSupportsSurface,
   validatePluginSecrets,
   validatePluginSettings,
 } from "./cloud-plugin-settings";

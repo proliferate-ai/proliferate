@@ -47,6 +47,13 @@ export function pluginSettingsToCloud(
   return normalizePluginSettings(entry, settings);
 }
 
+export function pluginSecretFieldsToCloud(
+  entry: PluginCatalogEntryView,
+  values: Record<string, string>,
+): Record<string, string> {
+  return normalizedPluginSecretFields(entry, values);
+}
+
 export function validatePluginSettings(
   entry: PluginCatalogEntryView,
   settings: PluginSettings | undefined,
