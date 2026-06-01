@@ -57,6 +57,10 @@ from proliferate.server.cloud.runtime.setup_monitor import (
 from proliferate.server.health import router as health_router
 from proliferate.server.organizations.api import router as organizations_router
 from proliferate.server.support.api import router as support_router
+from proliferate.server.support.reconciler import (
+    start_support_tracker_reconciler,
+    stop_support_tracker_reconciler,
+)
 from proliferate.utils.logging import configure_server_logging
 
 
@@ -102,6 +106,27 @@ def _validate_e2b_template_configuration() -> None:
     )
 
 
+def _validate_support_tracker_configuration() -> None:
+    if not settings.support_tracker_enabled or settings.debug:
+        return
+    missing = [
+        name
+        for name, value in {
+            "SUPPORT_GITHUB_APP_ID": settings.support_github_app_id,
+            "SUPPORT_GITHUB_APP_PRIVATE_KEY": settings.support_github_app_private_key,
+            "SUPPORT_GITHUB_APP_INSTALLATION_ID": settings.support_github_app_installation_id,
+            "SUPPORT_GITHUB_OWNER": settings.support_github_owner,
+            "SUPPORT_GITHUB_REPO": settings.support_github_repo,
+        }.items()
+        if not value.strip()
+    ]
+    if missing:
+        raise RuntimeError(
+            "support_tracker_enabled=true requires GitHub support tracker configuration: "
+            + ", ".join(missing)
+        )
+
+
 async def _proliferate_error_handler(
     _request: Request,
     error: ProliferateError,
@@ -124,6 +149,7 @@ async def _proliferate_error_handler(
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _validate_cloud_billing_configuration()
     _validate_e2b_template_configuration()
+    _validate_support_tracker_configuration()
     try:
         async with db_engine.engine.begin() as conn:
             await conn.run_sync(validate_database_schema)
@@ -143,11 +169,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     start_cloud_setup_monitor()
     start_agent_gateway_reconciler()
     start_mobility_cleanup_reconciler()
+    start_support_tracker_reconciler()
     anonymous_telemetry_task = await start_server_anonymous_telemetry_sender()
     try:
         yield
     finally:
         await stop_server_anonymous_telemetry_sender(anonymous_telemetry_task)
+        await stop_support_tracker_reconciler()
         await stop_mobility_cleanup_reconciler()
         await stop_agent_gateway_reconciler()
         await stop_cloud_setup_monitor()

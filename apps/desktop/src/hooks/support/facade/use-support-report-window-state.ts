@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type ChangeEvent,
   type ClipboardEvent,
@@ -32,7 +33,10 @@ export function useSupportReportWindowState() {
   const [attachments, setAttachments] = useState<StagedSupportReportAttachment[]>([]);
   const [scopeKind, setScopeKind] = useState<SupportReportScopeKind>("app_only");
   const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<string[]>([]);
+  const [publicContentConsent, setPublicContentConsent] = useState(true);
   const [stagingError, setStagingError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   const applySnapshotDefaults = useCallback((nextSnapshot: SupportReportWindowSnapshot) => {
     setSnapshot(nextSnapshot);
@@ -121,7 +125,7 @@ export function useSupportReportWindowState() {
   const canSend = (
     message.trim().length > 0
     || attachments.length > 0
-  ) && (
+  ) && !isSubmitting && (
     (!workspaceSelectionRequired || effectiveWorkspaceIds.length > 0)
     && (scopeKind !== "most_recent_workspace" || effectiveWorkspaceIds.length > 0)
   );
@@ -170,9 +174,11 @@ export function useSupportReportWindowState() {
   }
 
   async function handleSend() {
-    if (!snapshot || !canSend) {
+    if (!snapshot || !canSend || submittingRef.current) {
       return;
     }
+    submittingRef.current = true;
+    setIsSubmitting(true);
     const job: SupportReportJob = {
       jobId: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
@@ -181,11 +187,18 @@ export function useSupportReportWindowState() {
         kind: scopeKind,
         workspaceIds: effectiveWorkspaceIds,
       },
+      publicContentConsent,
       snapshot,
       attachments: attachments.map(({ id: _id, ...attachment }) => attachment),
     };
-    await submitSupportReportJob(job);
-    await closeSupportReportWindow();
+    try {
+      await submitSupportReportJob(job);
+      await closeSupportReportWindow();
+    } catch (error) {
+      submittingRef.current = false;
+      setIsSubmitting(false);
+      setStagingError(error instanceof Error ? error.message : "Failed to send report.");
+    }
   }
 
   return {
@@ -198,11 +211,14 @@ export function useSupportReportWindowState() {
     handleAttachmentPaste,
     handleCancel,
     handleSend,
+    isSubmitting,
     message,
+    publicContentConsent,
     removeAttachment,
     scopeKind,
     selectedWorkspaceIds,
     setMessage,
+    setPublicContentConsent,
     setScope,
     snapshot,
     stagingError,

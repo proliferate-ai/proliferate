@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -21,9 +22,10 @@ from proliferate.middleware.request_context import (
     set_resource_tenant_context,
     set_support_report_context,
 )
+from proliferate.server.support.domain.message import normalize_support_message
 from proliferate.server.support.domain.report_records import (
     cloud_workspace_ids_from_refs,
-    expected_manifest_keys,
+    expected_manifest_entries,
     expected_upload_keys,
     now_iso,
     object_manifest_from_targets,
@@ -36,20 +38,26 @@ from proliferate.server.support.domain.report_records import (
     workspace_refs_for_create,
 )
 from proliferate.server.support.errors import (
+    SupportMessageEmpty,
     SupportReportStorageUnavailable,
     SupportReportUploadInvalid,
 )
+from proliferate.server.support.jobs import schedule_support_tracker_after_commit
 from proliferate.server.support.models import (
+    SupportMessageRequest,
+    SupportMessageResponse,
     SupportReportAttachmentUploadTarget,
     SupportReportCompleteRequest,
     SupportReportCompleteResponse,
     SupportReportCreateRequest,
     SupportReportCreateResponse,
+    SupportReportTrackerResponse,
     SupportReportUploadRequest,
     SupportReportUploadResponse,
     SupportReportUploadTargetsRequest,
     support_report_correlation_record,
     support_report_create_response,
+    support_report_tracker_response,
 )
 from proliferate.server.support.notifications import (
     notify_support_report,
@@ -60,6 +68,53 @@ from proliferate.server.support.storage import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ExpectedCompletedObject:
+    size_bytes: int
+
+
+async def create_support_message_report(
+    *,
+    db: AsyncSession,
+    sender_user_id: UUID,
+    sender_email: str,
+    sender_display_name: str | None,
+    body: SupportMessageRequest,
+) -> SupportMessageResponse:
+    message = normalize_support_message(body.message)
+    if message is None:
+        raise SupportMessageEmpty()
+    create_response = await create_support_report(
+        db=db,
+        sender_user_id=sender_user_id,
+        sender_email=sender_email,
+        sender_display_name=sender_display_name,
+        body=SupportReportCreateRequest(
+            clientJobId=uuid4().hex,
+            message=message,
+            sourceSurface="web",
+            context=body.context,
+            scope={"kind": "app_only", "workspaceIds": []},
+            workspaceRefs=[],
+            expectedClientUploads={"diagnostics": False, "attachmentCount": 0},
+            publicContentConsent=False,
+        ),
+    )
+    report = await support_reports.get_report_by_id(db, create_response.report_id)
+    if report is None:
+        raise SupportReportUploadInvalid("Unknown support report upload.")
+    await _complete_db_backed_report(
+        db=db,
+        report=report,
+        sender_user_id=sender_user_id,
+        sender_email=sender_email,
+        sender_display_name=sender_display_name,
+        body=SupportReportCompleteRequest(),
+        notification_message=message,
+    )
+    return SupportMessageResponse()
 
 
 async def create_support_report(
@@ -117,6 +172,8 @@ async def create_support_report(
                 if body.telemetry_refs
                 else {}
             ),
+            expected_uploads=body.expected_client_uploads.model_dump(by_alias=True),
+            public_content_consent=body.public_content_consent is True,
             request_id=get_request_id(),
             cloud_diagnostics_status="pending" if authorized_cloud_refs else "not_applicable",
         )
@@ -168,6 +225,7 @@ async def create_support_report_upload_targets(
 
     _install_report_correlation(report)
     _validate_upload_target_request(body)
+    _validate_uploads_match_expected_intent(report, body)
     targets = await _create_upload_targets_for_report(report=report, body=body)
     manifest = object_manifest_from_targets(
         diagnostics=body.diagnostics,
@@ -220,6 +278,7 @@ async def create_support_report_upload(
                 "diagnostics": body.diagnostics is not None,
                 "attachmentCount": len(body.attachments),
             },
+            publicContentConsent=body.public_content_consent is True,
         ),
     )
     return await create_support_report_upload_targets(
@@ -269,6 +328,7 @@ async def _complete_db_backed_report(
     sender_email: str,
     sender_display_name: str | None,
     body: SupportReportCompleteRequest,
+    notification_message: str = "Support report submitted.",
 ) -> SupportReportCompleteResponse:
     if report.owner_user_id != sender_user_id:
         raise SupportReportUploadInvalid("Support report upload belongs to another user.")
@@ -276,13 +336,24 @@ async def _complete_db_backed_report(
         return SupportReportCompleteResponse(reportId=report.id)
 
     _install_report_correlation(report)
-    expected_keys = expected_manifest_keys(report.object_manifest)
-    if report.object_manifest.get("schemaVersion") != 1:
-        raise SupportReportUploadInvalid("Support report upload targets have not been created.")
+    manifest = report.object_manifest
+    expected_entries = expected_manifest_entries(manifest)
+    expected_keys = set(expected_entries)
+    if manifest.get("schemaVersion") != 1:
+        if _expected_uploads_allow_zero_upload(report.expected_uploads):
+            manifest = {"schemaVersion": 1, "diagnostics": None, "attachments": []}
+            expected_entries = {}
+            expected_keys = set()
+        else:
+            raise SupportReportUploadInvalid(
+                "Support report upload targets have not been created."
+            )
     completed_keys = [
         *([body.diagnostics.object_key] if body.diagnostics else []),
         *[attachment.object_key for attachment in body.attachments],
     ]
+    if len(completed_keys) != len(set(completed_keys)):
+        raise SupportReportUploadInvalid("Support report completion included duplicate objects.")
     unexpected = sorted(set(completed_keys).difference(expected_keys))
     if unexpected:
         raise SupportReportUploadInvalid("Support report completion included unknown objects.")
@@ -291,20 +362,32 @@ async def _complete_db_backed_report(
         raise SupportReportUploadInvalid("Support report completion is missing expected objects.")
 
     if body.diagnostics is not None:
+        expected = _expected_completed_object_entry(
+            expected_entries,
+            object_key=body.diagnostics.object_key,
+            size_bytes=body.diagnostics.size_bytes,
+            sha256=body.diagnostics.sha256,
+        )
         await verify_completed_support_object(
             bucket=report.s3_bucket,
             region_name=_support_report_region(),
             prefix=report.s3_prefix,
             object_key=body.diagnostics.object_key,
-            expected_size=body.diagnostics.size_bytes,
+            expected_size=expected.size_bytes,
         )
     for attachment in body.attachments:
+        expected = _expected_completed_object_entry(
+            expected_entries,
+            object_key=attachment.object_key,
+            size_bytes=attachment.size_bytes,
+            sha256=attachment.sha256,
+        )
         await verify_completed_support_object(
             bucket=report.s3_bucket,
             region_name=_support_report_region(),
             prefix=report.s3_prefix,
             object_key=attachment.object_key,
-            expected_size=attachment.size_bytes,
+            expected_size=expected.size_bytes,
         )
 
     complete_record = {
@@ -336,7 +419,8 @@ async def _complete_db_backed_report(
         db,
         report_id=report.id,
         complete_request_id=get_request_id(),
-        object_manifest={**report.object_manifest, "completed": complete_record},
+        object_manifest={**manifest, "completed": complete_record},
+        **_tracker_initial_statuses(),
     )
     logger.info(
         "Support report completed.",
@@ -352,14 +436,15 @@ async def _complete_db_backed_report(
             sender_email=sender_email,
             sender_display_name=sender_display_name,
             report_id=completed_report.id,
-            s3_prefix=completed_report.s3_prefix,
-            message="Support report submitted.",
+            message=notification_message,
             context=completed_report.source_context,
             diagnostics_included=body.diagnostics is not None,
             attachment_count=len(body.attachments),
             correlation=support_report_correlation_record(completed_report),
         )
         await support_reports.mark_report_slack_notified(db, report_id=completed_report.id)
+    if completed_report.tracker_status == "pending":
+        await schedule_support_tracker_after_commit(db, completed_report.id)
     return SupportReportCompleteResponse(reportId=report.id)
 
 
@@ -443,7 +528,6 @@ async def _complete_legacy_report(
         sender_email=sender_email,
         sender_display_name=sender_display_name,
         report_id=report_id,
-        s3_prefix=prefix,
         message=str(request_record.get("message") or "Support report submitted."),
         context=context_record if isinstance(context_record, dict) else None,
         diagnostics_included=body.diagnostics is not None,
@@ -489,6 +573,96 @@ def _validate_upload_target_request(body: SupportReportUploadTargetsRequest) -> 
         total_attachment_bytes += attachment.size_bytes
     if total_attachment_bytes > settings.support_report_total_attachment_max_bytes:
         raise SupportReportUploadInvalid("Attachments are too large.")
+
+
+def _validate_uploads_match_expected_intent(
+    report: support_reports.SupportReportSnapshot,
+    body: SupportReportUploadTargetsRequest,
+) -> None:
+    expected = report.expected_uploads
+    if not expected:
+        return
+    expected_diagnostics = expected.get("diagnostics") is True
+    expected_attachment_count = _int_or_zero(expected.get("attachmentCount"))
+    if (body.diagnostics is not None) != expected_diagnostics:
+        raise SupportReportUploadInvalid(
+            "Support report upload targets changed diagnostics intent."
+        )
+    if len(body.attachments) != expected_attachment_count:
+        raise SupportReportUploadInvalid(
+            "Support report upload targets changed attachment intent."
+        )
+
+
+def _expected_uploads_allow_zero_upload(expected: dict[str, object]) -> bool:
+    return (
+        expected.get("diagnostics") is False
+        and _int_or_zero(expected.get("attachmentCount")) == 0
+    )
+
+
+def _int_or_zero(value: object) -> int:
+    return value if isinstance(value, int) and value >= 0 else 0
+
+
+def _expected_completed_object_entry(
+    expected_entries: dict[str, dict[str, object]],
+    *,
+    object_key: str,
+    size_bytes: int,
+    sha256: str,
+) -> ExpectedCompletedObject:
+    expected = expected_entries.get(object_key)
+    expected_size = expected.get("sizeBytes") if expected else None
+    expected_sha256 = expected.get("sha256") if expected else None
+    if not isinstance(expected_size, int) or expected_size != size_bytes:
+        raise SupportReportUploadInvalid("Support report object size did not match upload intent.")
+    if not isinstance(expected_sha256, str) or expected_sha256 != sha256:
+        raise SupportReportUploadInvalid(
+            "Support report object checksum did not match upload intent."
+        )
+    return ExpectedCompletedObject(size_bytes=expected_size)
+
+
+def _tracker_initial_statuses() -> dict[str, str]:
+    if not settings.support_tracker_enabled:
+        return {
+            "tracker_status": "disabled",
+            "github_status": "disabled",
+            "linear_status": "disabled",
+            "crosslink_status": "disabled",
+        }
+    linear_status = "pending" if _support_linear_configured() else "disabled"
+    crosslink_status = "pending" if linear_status == "pending" else "disabled"
+    return {
+        "tracker_status": "pending",
+        "github_status": "pending",
+        "linear_status": linear_status,
+        "crosslink_status": crosslink_status,
+    }
+
+
+def _support_linear_configured() -> bool:
+    return bool(
+        settings.support_linear_api_key.strip()
+        and settings.support_linear_team_id.strip()
+    )
+
+
+async def ensure_support_report_tracker(
+    *,
+    db: AsyncSession,
+    sender_user_id: UUID,
+    report_id: str,
+) -> SupportReportTrackerResponse:
+    report = await support_reports.get_report_by_id(db, report_id)
+    if report is None or report.owner_user_id != sender_user_id:
+        raise SupportReportUploadInvalid("Unknown support report upload.")
+    if report.status != "completed":
+        raise SupportReportUploadInvalid("Support report upload is not completed.")
+    if report.tracker_status in {"pending", "partial", "failed_retryable"}:
+        await schedule_support_tracker_after_commit(db, report.id)
+    return support_report_tracker_response(report)
 
 
 async def _create_upload_targets_for_report(

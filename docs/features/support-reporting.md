@@ -20,6 +20,8 @@ The production window shows:
   - `Most recent workspace`
   - `Choose workspace`
   - `App only`
+- Checked-by-default public issue consent:
+  - `Include my message in the public issue`
 - `Cancel` and `Send`.
 
 `Most recent workspace` is automatic: Desktop uses the active workspace when
@@ -30,6 +32,13 @@ picker is shown only for `Choose workspace`.
 attachment. Clicking `Send` emits a support report job to the main app and
 closes the support window immediately. Progress and failure notifications are
 shown from the main app toast system.
+
+The public issue consent controls only the user's written message. Diagnostics,
+S3 object keys, presigned URLs, uploaded file bodies, and attachment contents
+remain private. If consent is unchecked, Cloud still creates the public GitHub
+issue, but the issue body says the submitter did not opt in to publishing their
+message, the issue title uses a generic support-report title, and the issue
+applies the configured private label.
 
 Upload failures distinguish retryable transfer errors from blocked setup
 states. Missing Cloud sign-in, dev auth bypass, and missing server storage
@@ -98,15 +107,17 @@ Cloud owns:
 - `POST /v1/support/reports`
 - `POST /v1/support/reports/{reportId}/upload-targets`
 - `POST /v1/support/reports/{reportId}/complete`
+- `POST /v1/support/reports/{reportId}/tracker`
 - `POST /v1/support/report-uploads` as the legacy compatibility wrapper
 
 `POST /v1/support/reports` creates or returns the durable case file for the
 authenticated user and `clientJobId`. Cloud stores a `support_report` database
 row with a stable `reportId`, S3 bucket/prefix, owner user, primary tenant,
 tenant list, source context, normalized workspace refs, telemetry refs, upload
-manifest, and cloud-diagnostics status. Idempotent retries by the same user and
-`clientJobId` return the existing report without overwriting the original user
-message or attachment intent.
+manifest, immutable expected upload intent, immutable public issue consent, and
+cloud-diagnostics status. Idempotent retries by the same user and `clientJobId`
+return the existing report without overwriting the original user message,
+consent, or attachment intent.
 
 Report creation writes `request.json` to the private support S3 prefix. This
 object contains the user message, source context, workspace refs, telemetry
@@ -122,14 +133,51 @@ payload than the original upload intent.
 
 `POST /v1/support/reports/{reportId}/complete` verifies uploaded object keys are
 inside the stored report prefix, requires every object in the stored manifest to
-be present exactly once, verifies object sizes with S3 metadata, writes
-`complete.json`, marks the report completed, and posts the internal Slack
-notification once. Slack failure is logged server-side and does not fail an
-otherwise completed report.
+be present exactly once, verifies completion object size and checksum values
+against the immutable upload manifest, verifies object sizes with S3 metadata,
+writes `complete.json`, marks the report completed, and posts the internal
+Slack notification once. Slack failure is logged server-side and does not fail
+an otherwise completed report.
+
+If the persisted expected upload intent says `diagnostics=false` and
+`attachmentCount=0`, completion is allowed without an upload-target manifest.
+This is the Web/mobile/App-only compatibility path.
 
 The legacy `POST /v1/support/report-uploads` wrapper remains for old clients. It
 uses the same Cloud-owned S3 bucket and completion behavior, but new clients
 should use the split report lifecycle.
+
+The legacy `POST /v1/support/messages` route is a zero-upload compatibility shim
+over the report lifecycle. It never opts user text into public GitHub content.
+
+## Issue Trackers
+
+Completed database-backed support reports are reconciled server-side into a
+GitHub issue and, when Linear is configured, a Linear issue. Desktop/Web may
+call `POST /v1/support/reports/{reportId}/tracker` as a status/nudge endpoint,
+but issue creation does not depend on the client staying open.
+
+GitHub is the primary public tracker. The support bot creates or updates one
+issue per `reportId`, using a hidden support-report marker for idempotency and
+the configured labels:
+
+- `SUPPORT_GITHUB_LABEL_SUPPORT` on every issue.
+- `SUPPORT_GITHUB_LABEL_PRIVATE` when public issue consent is unchecked.
+
+Linear is optional and private/internal. Linear failure leaves the GitHub issue
+intact and records a retryable partial tracker state. When both trackers exist,
+the server crosslinks them by updating the GitHub body with the Linear URL and
+the Linear description with the GitHub URL.
+
+Tracker state is stored on `support_report` with per-vendor status, IDs, URLs,
+attempt counts, retry timestamps, and Slack-notification timestamps. The server
+also writes `tracker.json` under the same private S3 prefix so S3-only backfills
+can detect reports that still need tracker reconciliation.
+
+Slack receives two best-effort notifications: the report completion receipt and,
+once available, a tracker-links update. Slack messages contain the `reportId`,
+an internal report URL when configured, and tracker URLs. They never include S3
+keys, S3 prefixes, presigned URLs, diagnostics bodies, or uploaded file content.
 
 ## Debug Correlation
 

@@ -459,6 +459,8 @@ export type SupportReportCreateResponse =
   components["schemas"]["SupportReportCreateResponse"];
 export type SupportReportServerCorrelation =
   components["schemas"]["SupportReportServerCorrelation"];
+export type SupportReportTrackerResponse =
+  components["schemas"]["SupportReportTrackerResponse"];
 export type SupportReportUploadFile =
   components["schemas"]["SupportReportUploadFile"];
 export type SupportReportUploadRequest =

@@ -39,3 +39,11 @@ class SupportReportUploadInvalid(InvalidRequest):
 
     def __init__(self, message: str) -> None:
         super().__init__(message)
+
+
+class SupportReportTrackerUnavailable(ProliferateError):
+    code = "support_report_tracker_unavailable"
+    status_code = 503
+
+    def __init__(self) -> None:
+        super().__init__("Support issue tracker creation is not configured.")

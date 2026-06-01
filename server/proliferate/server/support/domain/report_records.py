@@ -28,6 +28,8 @@ class SupportReportLike(Protocol):
     workspace_refs: tuple[dict[str, object], ...]
     telemetry_refs: dict[str, object]
     object_manifest: dict[str, object]
+    expected_uploads: dict[str, object]
+    public_content_consent: bool
 
 
 class AuthorizedCloudRefLike(Protocol):
@@ -236,10 +238,12 @@ def support_request_record(
             "displayName": sender_display_name,
         },
         "message": message.strip(),
+        "publicContentConsent": report.public_content_consent,
         "context": report.source_context,
         "scope": scope,
         "workspaceRefs": list(report.workspace_refs),
         "telemetryRefs": report.telemetry_refs,
+        "expectedClientUploads": report.expected_uploads,
         "correlation": correlation,
         "objects": report.object_manifest,
     }
@@ -290,16 +294,20 @@ def object_manifest_entry(
 
 
 def expected_manifest_keys(manifest: dict[str, object]) -> set[str]:
-    keys: set[str] = set()
+    return set(expected_manifest_entries(manifest))
+
+
+def expected_manifest_entries(manifest: dict[str, object]) -> dict[str, dict[str, object]]:
+    entries: dict[str, dict[str, object]] = {}
     diagnostics = manifest.get("diagnostics")
     if isinstance(diagnostics, dict) and isinstance(diagnostics.get("objectKey"), str):
-        keys.add(str(diagnostics["objectKey"]))
+        entries[str(diagnostics["objectKey"])] = diagnostics
     attachments = manifest.get("attachments")
     if isinstance(attachments, list):
         for item in attachments:
             if isinstance(item, dict) and isinstance(item.get("objectKey"), str):
-                keys.add(str(item["objectKey"]))
-    return keys
+                entries[str(item["objectKey"])] = item
+    return entries
 
 
 def expected_upload_keys(request_record: dict[str, object]) -> set[str]:

@@ -8,6 +8,7 @@ import type {
   SupportReportCreateResponse,
   SupportReportUploadRequest,
   SupportReportUploadResponse,
+  SupportReportTrackerResponse,
   SupportReportUploadTargetsRequest,
 } from "../types/index.js";
 
@@ -18,6 +19,7 @@ export type {
   SupportReportCompleteResponse,
   SupportReportCreateRequest,
   SupportReportCreateResponse,
+  SupportReportTrackerResponse,
   SupportReportUploadRequest,
   SupportReportUploadResponse,
   SupportReportUploadTargetsRequest,
@@ -76,4 +78,18 @@ export async function completeSupportReportUpload(
     body: input,
   });
   return response.data as SupportReportCompleteResponse;
+}
+
+export async function ensureSupportReportTracker(
+  reportId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<SupportReportTrackerResponse> {
+  const response = await client.POST("/v1/support/reports/{report_id}/tracker", {
+    params: {
+      path: {
+        report_id: reportId,
+      },
+    },
+  });
+  return response.data as SupportReportTrackerResponse;
 }

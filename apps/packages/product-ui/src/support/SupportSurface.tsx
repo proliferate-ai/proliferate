@@ -1,14 +1,27 @@
 import { AlertCircle, ArrowUp, CheckCircle2, LifeBuoy } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 
+export interface SupportSurfaceSubmitInput {
+  message: string;
+  publicContentConsent: boolean;
+}
+
+export interface SupportSurfaceSubmitResult {
+  githubIssueUrl?: string | null;
+}
+
 interface SupportSurfaceProps {
-  onSubmit?: (message: string) => Promise<void> | void;
+  onSubmit?: (
+    input: SupportSurfaceSubmitInput,
+  ) => Promise<SupportSurfaceSubmitResult | void> | SupportSurfaceSubmitResult | void;
 }
 
 export function SupportSurface({ onSubmit }: SupportSurfaceProps) {
   const [message, setMessage] = useState("");
+  const [publicContentConsent, setPublicContentConsent] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const trimmedMessage = message.trim();
@@ -21,9 +34,17 @@ export function SupportSurface({ onSubmit }: SupportSurfaceProps) {
     setSubmitting(true);
     setNotice(null);
     try {
-      await onSubmit?.(trimmedMessage);
+      const result = await onSubmit?.({
+        message: trimmedMessage,
+        publicContentConsent,
+      });
       setMessage("");
-      setNotice({ tone: "success", text: "Support message sent." });
+      setNotice({
+        tone: "success",
+        text: result?.githubIssueUrl
+          ? `Support issue sent: ${result.githubIssueUrl}`
+          : "Support issue sent.",
+      });
     } catch (error) {
       setNotice({
         tone: "error",
@@ -65,9 +86,17 @@ export function SupportSurface({ onSubmit }: SupportSurfaceProps) {
                 data-telemetry-mask
               />
               <div className="mt-3 flex items-center justify-between gap-3 border-t border-border-light pt-3">
-                <p className="min-w-0 text-xs leading-4 text-muted-foreground">
-                  Includes current app location. Do not include secrets or API keys.
-                </p>
+                <label className="flex min-w-0 cursor-pointer items-start gap-2 text-xs leading-4 text-muted-foreground">
+                  <Checkbox
+                    checked={publicContentConsent}
+                    onChange={(event) => setPublicContentConsent(event.currentTarget.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    Include my message in the public issue. Do not include secrets or API keys.
+                    Account context stays private.
+                  </span>
+                </label>
                 <Button
                   type="submit"
                   size="icon"
