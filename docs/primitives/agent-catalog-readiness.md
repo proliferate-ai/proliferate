@@ -445,7 +445,7 @@ Do not add:
 - the old launch-catalog document type
 - the legacy split launch catalog directory
 - old model/launch remote catalog URL environment variables
-- direct catalog JSON parsing from `sessions/**`, `live/**`, or `api/**`
+- direct catalog JSON parsing from `domains/sessions/**`, `live/**`, or `api/**`
 - credential detection inside `catalog/**`
 - install/update execution inside `catalog/**`
 - provider CLI mechanics inside `catalog/**`
