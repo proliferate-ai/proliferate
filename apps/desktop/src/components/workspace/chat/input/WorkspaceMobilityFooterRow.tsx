@@ -1,5 +1,5 @@
-import { useMobilityFooterContext } from "@/hooks/workspaces/mobility/use-mobility-footer-context";
-import { useWorkspaceMobilityFooterFlow } from "@/hooks/workspaces/mobility/use-workspace-mobility-footer-flow";
+import { useMobilityFooterContext } from "@/hooks/workspaces/derived/mobility/use-mobility-footer-context";
+import { useWorkspaceMobilityFooterFlow } from "@/hooks/workspaces/ui/mobility/use-workspace-mobility-footer-flow";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import {
   ChevronDown,

@@ -7,7 +7,7 @@ import { Label } from "@proliferate/ui/primitives/Label";
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
-import type { useWorkspaceMobilityGitPrepWorkflow } from "@/hooks/workspaces/mobility/use-workspace-mobility-git-prep-workflow";
+import type { useWorkspaceMobilityGitPrepWorkflow } from "@/hooks/workspaces/workflows/mobility/use-workspace-mobility-git-prep-workflow";
 
 type MobilityGitPrepWorkflow = ReturnType<typeof useWorkspaceMobilityGitPrepWorkflow>;
 

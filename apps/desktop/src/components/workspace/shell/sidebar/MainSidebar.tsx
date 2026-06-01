@@ -32,7 +32,7 @@ import { useSidebarShortcutTargets } from "@/hooks/workspaces/derived/use-sideba
 import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useWorkspaceDisplayNameActions } from "@/hooks/workspaces/use-workspace-display-name-actions";
+import { useWorkspaceDisplayNameActions } from "@/hooks/workspaces/workflows/use-workspace-display-name-actions";
 import { useWorkspaceSidebarActions } from "@/hooks/workspaces/workflows/use-workspace-sidebar-actions";
 import { useCloudWorkspaceActions } from "@/hooks/cloud/workflows/use-cloud-workspace-actions";
 import { useSidebarRepoGroupState } from "@/hooks/workspaces/facade/use-sidebar-repo-group-state";

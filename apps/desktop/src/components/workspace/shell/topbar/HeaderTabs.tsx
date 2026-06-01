@@ -18,21 +18,21 @@ import { useSessionForkActions } from "@/hooks/sessions/workflows/use-session-fo
 import { useSessionTitleActions } from "@/hooks/sessions/workflows/use-session-title-actions";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useResizeObserverWidth } from "@/hooks/ui/use-resize-observer-width";
-import { useHeaderTabsCloseActions } from "@/hooks/workspaces/tabs/use-header-tabs-close-actions";
-import { useHeaderTabsGroupEditor } from "@/hooks/workspaces/tabs/use-header-tabs-group-editor";
+import { useHeaderTabsCloseActions } from "@/hooks/workspaces/workflows/tabs/use-header-tabs-close-actions";
+import { useHeaderTabsGroupEditor } from "@/hooks/workspaces/ui/tabs/use-header-tabs-group-editor";
 import {
   useHeaderTabsLayout,
-} from "@/hooks/workspaces/tabs/use-header-tabs-layout";
-import { useHeaderTabsMultiSelect } from "@/hooks/workspaces/tabs/use-header-tabs-multi-select";
-import { useManualChatGroupActions } from "@/hooks/workspaces/tabs/use-manual-chat-group-actions";
-import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-tab-visibility-actions";
-import { useTabGroupActions } from "@/hooks/workspaces/tabs/use-tab-group-actions";
-import { useShellTabOrderActions } from "@/hooks/workspaces/tabs/use-shell-tab-order-actions";
-import { useShellTabDrag } from "@/hooks/workspaces/tabs/use-tab-drag";
+} from "@/hooks/workspaces/ui/tabs/use-header-tabs-layout";
+import { useHeaderTabsMultiSelect } from "@/hooks/workspaces/ui/tabs/use-header-tabs-multi-select";
+import { useManualChatGroupActions } from "@/hooks/workspaces/workflows/tabs/use-manual-chat-group-actions";
+import { useChatTabVisibilityActions } from "@/hooks/workspaces/workflows/tabs/use-chat-tab-visibility-actions";
+import { useTabGroupActions } from "@/hooks/workspaces/workflows/tabs/use-tab-group-actions";
+import { useShellTabOrderActions } from "@/hooks/workspaces/workflows/tabs/use-shell-tab-order-actions";
+import { useShellTabDrag } from "@/hooks/workspaces/ui/tabs/use-tab-drag";
 import {
   useOptionalWorkspaceHeaderTabsViewModelContext,
 } from "@/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
-import { useWorkspaceTabActions } from "@/hooks/workspaces/tabs/use-workspace-tab-actions";
+import { useWorkspaceTabActions } from "@/hooks/workspaces/workflows/tabs/use-workspace-tab-actions";
 import { useHeaderTabsUrgentHighlight } from "@/hooks/workspaces/ui/use-header-tabs-urgent-highlight";
 import type { ManualChatGroupId } from "@/lib/domain/workspaces/tabs/manual-groups";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";

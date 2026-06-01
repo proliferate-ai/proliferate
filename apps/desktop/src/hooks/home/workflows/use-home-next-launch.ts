@@ -2,10 +2,10 @@ import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";
-import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
+import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session-prompt-workflow";
-import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry-actions";
-import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
+import { useWorkspaceEntryActions } from "@/hooks/workspaces/workflows/use-workspace-entry-actions";
+import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
 import type {
   HomeLaunchTarget,
   HomeNextModelSelection,

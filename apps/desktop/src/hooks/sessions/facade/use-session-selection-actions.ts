@@ -1,4 +1,4 @@
-import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
+import { useSessionRuntimeActions } from "@/hooks/sessions/workflows/use-session-runtime-actions";
 import { useSessionDismissActions } from "@/hooks/sessions/workflows/use-session-dismiss-actions";
 import { useSessionRestoreActions } from "@/hooks/sessions/workflows/use-session-restore-actions";
 import { useSessionSelectionWorkflowActions } from "@/hooks/sessions/workflows/use-session-selection-actions";

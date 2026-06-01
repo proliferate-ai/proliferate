@@ -1,5 +1,5 @@
 import type { PlaygroundScenarioSelection } from "@/config/playground";
-import type { PlaygroundReplayState } from "@/hooks/playground/use-replay-session";
+import type { PlaygroundReplayState } from "@/hooks/playground/lifecycle/use-replay-session";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { PlaygroundRecordingTranscript } from "@/components/playground/transcript/PlaygroundRecordingTranscript";
 import { renderPlaygroundPlanTranscript } from "@/components/playground/transcript/PlaygroundPlanTranscript";

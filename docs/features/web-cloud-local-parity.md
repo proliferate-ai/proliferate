@@ -109,7 +109,7 @@ Use these terms consistently in code, copy, and review notes.
 ### Desktop Reference Points
 
 - `apps/desktop/src/components/workspace/shell/topbar/HeaderTabs.tsx` and
-  `apps/desktop/src/hooks/workspaces/tabs/use-workspace-header-tabs-view-model.ts`
+  `apps/desktop/src/hooks/workspaces/facade/tabs/use-workspace-header-tabs-view-model.ts`
   show how Desktop makes multiple sessions/tabs in one workspace explicit.
 - `apps/desktop/src/components/workspaces/inventory/CloudWorkspacesScreen.tsx`
   already consumes the shared `WorkspacesSurface`.

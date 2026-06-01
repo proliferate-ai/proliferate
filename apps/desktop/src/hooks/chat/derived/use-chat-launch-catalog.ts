@@ -19,7 +19,7 @@ import {
 import { filterTargetReadyLaunchAgents } from "@/lib/domain/agents/target-ready-launch-agents";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useAgentLaunchOptionsQuery } from "@anyharness/sdk-react";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
+import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/cache/use-selected-cloud-runtime-state";
 
 const EMPTY_AGENTS: DesktopAgentLaunchAgent[] = [];
 

@@ -64,11 +64,11 @@ vi.mock("@/stores/sessions/session-selection-store", () => ({
     selector(harnessMocks.state),
 }));
 
-vi.mock("@/hooks/workspaces/mobility/use-workspace-mobility-state", () => ({
+vi.mock("@/hooks/workspaces/derived/mobility/use-workspace-mobility-state", () => ({
   useWorkspaceMobilityState: () => mobilityMocks.state,
 }));
 
-vi.mock("@/hooks/workspaces/selection/use-workspace-selection", () => ({
+vi.mock("@/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
   useWorkspaceSelection: () => ({
     selectWorkspace: selectionMocks.selectWorkspace,
   }),

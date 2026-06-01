@@ -32,7 +32,7 @@ vi.mock("@/hooks/ui/use-highlighted-lines", () => ({
     code.split("\n").map((line) => [{ content: line }]),
 }));
 
-vi.mock("@/hooks/workspaces/files/use-file-reference-actions", () => ({
+vi.mock("@/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
   useFileReferenceActions: () => ({
     reference: {
       rawPath: "package.json",
@@ -54,11 +54,11 @@ vi.mock("@/hooks/workspaces/files/use-file-reference-actions", () => ({
   }),
 }));
 
-vi.mock("@/hooks/workspaces/files/derived/use-workspace-file-context", () => ({
+vi.mock("@/hooks/workspaces/derived/files/use-workspace-file-context", () => ({
   useWorkspaceFileContext: () => workspaceFileContext,
 }));
 
-vi.mock("@/hooks/workspaces/files/workflows/use-workspace-file-target-actions", () => ({
+vi.mock("@/hooks/workspaces/workflows/files/use-workspace-file-target-actions", () => ({
   useWorkspaceFileTargetActions: () => ({
     openFile: openFileMock,
     openFileDiff: vi.fn(),

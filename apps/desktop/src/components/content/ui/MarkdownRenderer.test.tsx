@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { WorkspacePathProvider } from "@/providers/WorkspacePathProvider";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 
-vi.mock("@/hooks/workspaces/files/use-file-reference-actions", () => ({
+vi.mock("@/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
   useFileReferenceActions: ({ rawPath }: { rawPath: string }) => ({
     reference: {
       rawPath,

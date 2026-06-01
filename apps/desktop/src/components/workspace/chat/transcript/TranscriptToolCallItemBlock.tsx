@@ -17,7 +17,7 @@ import { GenericToolResultRow } from "@/components/workspace/chat/tool-calls/Gen
 import { SkillsToolResultRow } from "@/components/workspace/chat/tool-calls/SkillsToolResultRow";
 import { SubagentToolActionRow } from "@/components/workspace/chat/tool-calls/SubagentToolActionRow";
 import { useOpenCoworkCodingSession } from "@/hooks/cowork/workflows/use-open-cowork-coding-session";
-import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
+import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { deriveSubagentMcpReceiptPresentation } from "@proliferate/product-domain/chats/subagents/subagent-tool-presentation";
 import { deriveSkillsToolResultPresentation } from "@proliferate/product-domain/chats/tools/skills-tool-result";
 import { describeToolCallDisplay } from "@proliferate/product-domain/chats/tools/tool-call-display";

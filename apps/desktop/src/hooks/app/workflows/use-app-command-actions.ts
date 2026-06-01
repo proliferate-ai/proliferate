@@ -8,7 +8,7 @@ import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
 import { useSelectedLogicalWorkspace } from "@/hooks/workspaces/derived/use-selected-logical-workspace";
 import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
-import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry-actions";
+import { useWorkspaceEntryActions } from "@/hooks/workspaces/workflows/use-workspace-entry-actions";
 import { useAddRepo } from "@/hooks/workspaces/workflows/use-add-repo";
 import { useWorkspaceCopyActions } from "@/hooks/workspaces/workflows/use-workspace-copy-actions";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";

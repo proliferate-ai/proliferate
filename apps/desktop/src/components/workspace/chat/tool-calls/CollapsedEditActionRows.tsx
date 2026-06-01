@@ -7,7 +7,7 @@ import { DiffViewer } from "@/components/content/ui/DiffViewer";
 import { FileChangeStats, FileDiffCard } from "@/components/content/ui/FileDiffCard";
 import { HighlightedCodePanel } from "@/components/content/ui/HighlightedCodePanel";
 import { ChevronRight } from "@proliferate/ui/icons";
-import { useFileReferenceActions } from "@/hooks/workspaces/files/use-file-reference-actions";
+import { useFileReferenceActions } from "@/hooks/workspaces/workflows/files/use-file-reference-actions";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import {
   basename,

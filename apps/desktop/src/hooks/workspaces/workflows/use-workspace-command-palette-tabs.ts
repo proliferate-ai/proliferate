@@ -1,10 +1,10 @@
 import { useCallback } from "react";
 import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
-import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
-import { useChatTabVisibilityActions } from "@/hooks/workspaces/tabs/use-chat-tab-visibility-actions";
-import { useWorkspaceHeaderTabsViewModel } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
-import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
+import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
+import { useChatTabVisibilityActions } from "@/hooks/workspaces/workflows/tabs/use-chat-tab-visibility-actions";
+import { useWorkspaceHeaderTabsViewModel } from "@/hooks/workspaces/facade/tabs/use-workspace-header-tabs-view-model";
+import { useWorkspaceShellActivation } from "@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
 import {
   resolveRelativeWorkspaceShellTab,
   type WorkspaceShellTab,

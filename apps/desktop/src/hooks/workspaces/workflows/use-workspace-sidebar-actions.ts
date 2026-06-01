@@ -2,13 +2,13 @@ import { useCallback } from "react";
 import type { WorkspacePurgeResponse, WorkspaceRetireResponse } from "@anyharness/sdk";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { APP_ROUTES } from "@/config/app-routes";
-import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
+import { useWorkspaceMobilityState } from "@/hooks/workspaces/derived/mobility/use-workspace-mobility-state";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
 import type { CloudWorkspaceRepoTarget } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import type { SidebarIndicatorAction } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { useAddRepo } from "@/hooks/workspaces/workflows/use-add-repo";
 import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-activation-workflow";
-import { useWorkspaceEntryActions } from "@/hooks/workspaces/use-workspace-entry-actions";
+import { useWorkspaceEntryActions } from "@/hooks/workspaces/workflows/use-workspace-entry-actions";
 import {
   failLatencyFlow,
   startLatencyFlow,

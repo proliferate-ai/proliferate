@@ -10,12 +10,12 @@ import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
 import { useChatLaunchCatalog } from "@/hooks/chat/derived/use-chat-launch-catalog";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
-import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
+import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
 import { useSessionDismissActions } from "@/hooks/sessions/workflows/use-session-dismiss-actions";
 import type { SessionActivationOutcome } from "@/hooks/sessions/workflows/session-activation-guard";
 import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session-prompt-workflow";
-import { useWorkspaceShellActivation } from "@/hooks/workspaces/tabs/use-workspace-shell-activation";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
+import { useWorkspaceShellActivation } from "@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
+import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/cache/use-selected-cloud-runtime-state";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
 import { buildPlanHandoffPrompt } from "@/lib/domain/plans/handoff-prompt";
 import {

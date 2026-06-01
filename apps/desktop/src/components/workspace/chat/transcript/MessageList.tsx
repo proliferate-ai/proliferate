@@ -6,7 +6,7 @@ import {
 } from "react";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { CHAT_SCROLL_BASE_BOTTOM_PADDING_PX } from "@/config/chat-layout";
-import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
+import { useWorkspaceFileActions } from "@/hooks/workspaces/facade/files/use-workspace-file-actions";
 import { useDebugRenderCount } from "@/hooks/ui/use-debug-render-count";
 import { useOpenCoworkArtifact } from "@/hooks/cowork/workflows/use-open-cowork-artifact";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";

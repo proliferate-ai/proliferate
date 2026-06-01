@@ -3,10 +3,10 @@ import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arr
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { logLatency, startLatencyTimer } from "@/lib/infra/measurement/debug-latency";
-import { useWorkspaceBootstrapActions } from "@/hooks/workspaces/use-workspace-bootstrap-actions";
+import { useWorkspaceBootstrapActions } from "@/hooks/workspaces/workflows/use-workspace-bootstrap-actions";
 import { usePendingWorkspaceSessionMaterialization } from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
 import { hasWorkspaceBootstrappedInSession } from "./workspace-bootstrap-memory";
-import type { SelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
+import type { SelectedCloudRuntimeState } from "@/hooks/workspaces/cache/use-selected-cloud-runtime-state";
 
 export function useSelectedCloudRuntimeRehydration(
   selectedCloudRuntime: SelectedCloudRuntimeState,

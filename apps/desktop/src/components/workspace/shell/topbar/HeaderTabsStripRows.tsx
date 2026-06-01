@@ -4,7 +4,7 @@ import { HeaderGroupPillTab } from "@/components/workspace/shell/topbar/HeaderGr
 import type {
   HeaderWorkspaceShellStripRow,
 } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
-import { getShellDragRowId } from "@/hooks/workspaces/tabs/use-header-tabs-layout";
+import { getShellDragRowId } from "@/hooks/workspaces/ui/tabs/use-header-tabs-layout";
 import {
   TAB_GROUP_PILL_WIDTH,
 } from "@/lib/domain/workspaces/tabs/chrome-layout";

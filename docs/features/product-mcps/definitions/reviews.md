@@ -555,8 +555,8 @@ apps/desktop/src/components/workspace/chat/input/delegated-work/**
 apps/desktop/src/components/workspace/shell/tabs/**
 apps/desktop/src/hooks/reviews/**
 apps/desktop/src/hooks/plans/**
-apps/desktop/src/hooks/chat/use-delegated-work-composer.ts
-apps/desktop/src/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy.ts
+apps/desktop/src/hooks/chat/facade/use-delegated-work-composer.ts
+apps/desktop/src/hooks/workspaces/derived/tabs/use-workspace-header-subagent-hierarchy.ts
 apps/desktop/src/lib/domain/reviews/**
 apps/desktop/src/lib/domain/plans/**
 apps/desktop/src/lib/domain/delegated-work/**

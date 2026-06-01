@@ -15,7 +15,7 @@ import { isHotSessionTargetCurrent, useSessionIngestStore } from "@/stores/sessi
 import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
+import { useSessionRuntimeActions } from "@/hooks/sessions/workflows/use-session-runtime-actions";
 
 const EMPTY_SESSION_IDS: readonly string[] = [];
 

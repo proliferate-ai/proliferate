@@ -160,7 +160,7 @@ vi.mock("@/stores/preferences/workspace-ui-store", () => ({
     selector(workspaceUiState),
 }));
 
-vi.mock("@/hooks/workspaces/use-workspace-display-name-actions", () => ({
+vi.mock("@/hooks/workspaces/workflows/use-workspace-display-name-actions", () => ({
   useWorkspaceDisplayNameActions: () => ({ updateWorkspaceDisplayName: vi.fn() }),
 }));
 

@@ -15,9 +15,9 @@ import {
   GitReviewSectionHeader,
 } from "./GitPanelReviewChrome";
 import { PaneSideOverlay } from "@/components/workspace/pane/PaneSideOverlay";
-import { useDiffReviewMeasurement } from "@/hooks/workspaces/files/use-diff-review-measurement";
-import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
-import { useWorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-workspace-file-context";
+import { useDiffReviewMeasurement } from "@/hooks/workspaces/ui/files/use-diff-review-measurement";
+import { useWorkspaceFileActions } from "@/hooks/workspaces/facade/files/use-workspace-file-actions";
+import { useWorkspaceFileContext } from "@/hooks/workspaces/derived/files/use-workspace-file-context";
 import { useGitPanelState } from "@/hooks/workspaces/derived/use-git-panel-state";
 import {
   type GitPanelMode,

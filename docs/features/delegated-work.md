@@ -9,11 +9,12 @@ Scope:
 - `apps/desktop/src/components/workspace/shell/tabs/**`
 - `apps/desktop/src/components/workspace/reviews/**`
 - `apps/desktop/src/components/workspace/chat/plans/**`
-- `apps/desktop/src/hooks/chat/use-delegated-work-composer.ts`
-- `apps/desktop/src/hooks/chat/subagents/**`
+- `apps/desktop/src/hooks/chat/facade/use-delegated-work-composer.ts`
+- `apps/desktop/src/hooks/chat/facade/subagents/**`
+- `apps/desktop/src/hooks/chat/workflows/subagents/**`
 - `apps/desktop/src/hooks/cowork/**`
 - `apps/desktop/src/hooks/reviews/**`
-- `apps/desktop/src/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy.ts`
+- `apps/desktop/src/hooks/workspaces/derived/tabs/use-workspace-header-subagent-hierarchy.ts`
 - `apps/desktop/src/lib/domain/delegated-work/**`
 - `apps/desktop/src/lib/domain/chat/subagents/**`
 - `apps/desktop/src/lib/domain/reviews/**`
@@ -526,14 +527,15 @@ apps/desktop/src/components/workspace/chat/transcript/**
 Hooks:
 
 ```text
-apps/desktop/src/hooks/chat/use-delegated-work-composer.ts
-apps/desktop/src/hooks/chat/subagents/**
+apps/desktop/src/hooks/chat/facade/use-delegated-work-composer.ts
+apps/desktop/src/hooks/chat/facade/subagents/**
+apps/desktop/src/hooks/chat/workflows/subagents/**
 apps/desktop/src/hooks/cowork/**
 apps/desktop/src/hooks/reviews/**
 apps/desktop/src/hooks/plans/**
-apps/desktop/src/hooks/workspaces/tabs/use-workspace-header-subagent-hierarchy.ts
-apps/desktop/src/hooks/workspaces/tabs/use-workspace-header-tabs-view-model.ts
-apps/desktop/src/hooks/workspaces/tabs/use-header-tabs-close-actions.ts
+apps/desktop/src/hooks/workspaces/derived/tabs/use-workspace-header-subagent-hierarchy.ts
+apps/desktop/src/hooks/workspaces/facade/tabs/use-workspace-header-tabs-view-model.ts
+apps/desktop/src/hooks/workspaces/workflows/tabs/use-header-tabs-close-actions.ts
 ```
 
 Pure domain logic:

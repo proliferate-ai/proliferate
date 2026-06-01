@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { SHORTCUTS } from "@/config/shortcuts";
-import { useWorkspaceFileActions } from "@/hooks/workspaces/files/use-workspace-file-actions";
-import { useWorkspaceFileSearch } from "@/hooks/workspaces/files/ui/use-workspace-file-search";
+import { useWorkspaceFileActions } from "@/hooks/workspaces/facade/files/use-workspace-file-actions";
+import { useWorkspaceFileSearch } from "@/hooks/workspaces/ui/files/use-workspace-file-search";
 import { useWorkspaceCommandPaletteOpenFiles } from "@/hooks/workspaces/derived/use-workspace-command-palette-open-files";
 import { useWorkspaceCommandPaletteTabs } from "@/hooks/workspaces/workflows/use-workspace-command-palette-tabs";
 import { useAppCommandActionsContext } from "@/providers/AppCommandActionsProvider";

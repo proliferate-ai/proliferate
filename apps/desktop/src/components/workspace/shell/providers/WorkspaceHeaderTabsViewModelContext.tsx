@@ -4,7 +4,7 @@ import {
   useMemo,
   type ReactNode,
 } from "react";
-import { useWorkspaceHeaderTabsViewModel } from "@/hooks/workspaces/tabs/use-workspace-header-tabs-view-model";
+import { useWorkspaceHeaderTabsViewModel } from "@/hooks/workspaces/facade/tabs/use-workspace-header-tabs-view-model";
 
 type WorkspaceHeaderTabsViewModel = ReturnType<typeof useWorkspaceHeaderTabsViewModel>;
 type WorkspaceContentTabsViewModel = Pick<

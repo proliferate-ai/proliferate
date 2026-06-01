@@ -6,7 +6,7 @@ import {
   requestRightPanelRelativeTab,
   requestRightPanelTabByIndex,
 } from "@/lib/workflows/workspaces/right-panel-shortcut-requests";
-import type { WorkspaceTabActions } from "@/hooks/workspaces/tabs/use-workspace-tab-actions";
+import type { WorkspaceTabActions } from "@/hooks/workspaces/workflows/tabs/use-workspace-tab-actions";
 
 type WorkspaceContentShortcutActions = Pick<
   WorkspaceTabActions,

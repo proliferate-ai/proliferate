@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
+import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/cache/use-selected-cloud-runtime-state";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import { useSessionCreationActions } from "@/hooks/sessions/use-session-creation-actions";
+import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
 import { useDeferredHomeLaunchStore } from "@/stores/home/deferred-home-launch-store";
 import {
   resolveChatLaunchRetryMode,

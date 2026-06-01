@@ -2,7 +2,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import {
   type WorkspaceMobilityOverlayMode,
   useWorkspaceMobilityOverlayState,
-} from "@/hooks/workspaces/mobility/use-workspace-mobility-overlay-state";
+} from "@/hooks/workspaces/ui/mobility/use-workspace-mobility-overlay-state";
 import {
   CheckCircleFilled,
   CircleAlert,

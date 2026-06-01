@@ -22,10 +22,10 @@ Use this map to decide whether this spec applies and where to look first.
 | `apps/desktop/src/lib/domain/workspaces/creation/pending-entry.ts` | Pending workspace model and path helpers. |
 | `apps/desktop/src/lib/domain/workspaces/creation/new-workspace-command.ts` | Shared target resolution for new workspace commands and shortcuts. |
 | `apps/desktop/src/lib/domain/workspaces/selection/optimistic-session-shell.ts` | Fast-open session candidate and placeholder rules. |
-| `apps/desktop/src/hooks/workspaces/selection/run-workspace-selection.ts` | Existing workspace selection and first active-session projection. |
-| `apps/desktop/src/hooks/workspaces/use-workspace-bootstrap-actions.ts` | Session-list bootstrap and optimistic session validation. |
-| `apps/desktop/src/hooks/workspaces/use-workspace-entry-flow.ts` | Begin/finalize/fail handoff workflow. |
-| `apps/desktop/src/hooks/workspaces/use-workspace-entry-actions.ts` | Local/worktree entry actions. |
+| `apps/desktop/src/hooks/workspaces/workflows/selection/run-workspace-selection.ts` | Existing workspace selection and first active-session projection. |
+| `apps/desktop/src/hooks/workspaces/workflows/use-workspace-bootstrap-actions.ts` | Session-list bootstrap and optimistic session validation. |
+| `apps/desktop/src/hooks/workspaces/workflows/use-workspace-entry-flow.ts` | Begin/finalize/fail handoff workflow. |
+| `apps/desktop/src/hooks/workspaces/workflows/use-workspace-entry-actions.ts` | Local/worktree entry actions. |
 | `apps/desktop/src/hooks/workspaces/workflows/pending-workspace-session-shell.ts` | Projected session creation. |
 | `apps/desktop/src/hooks/workspaces/workflows/use-pending-workspace-session-materialization.ts` | Projected-to-real session remap. |
 | `apps/desktop/src/hooks/home/workflows/use-home-next-launch.ts` | Home launch and first prompt flow. |

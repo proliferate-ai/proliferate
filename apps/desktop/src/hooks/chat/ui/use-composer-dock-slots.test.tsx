@@ -18,11 +18,11 @@ vi.mock("@/hooks/chat/derived/use-active-todo-tracker", () => ({
   useActiveTodoTracker: () => null,
 }));
 
-vi.mock("@/hooks/chat/use-delegated-work-composer", () => ({
+vi.mock("@/hooks/chat/facade/use-delegated-work-composer", () => ({
   useDelegatedWorkComposer: () => null,
 }));
 
-vi.mock("@/hooks/workspaces/use-selected-cloud-runtime-state", () => ({
+vi.mock("@/hooks/workspaces/cache/use-selected-cloud-runtime-state", () => ({
   useSelectedCloudRuntimeState: () => ({ state: null }),
 }));
 

@@ -2,8 +2,8 @@ import { useCallback } from "react";
 import { webWorkspaceDeepLink } from "@proliferate/cloud-sdk";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
-import { useWorkspaceMobilityState } from "@/hooks/workspaces/mobility/use-workspace-mobility-state";
-import { useWorkspaceSelection } from "@/hooks/workspaces/selection/use-workspace-selection";
+import { useWorkspaceMobilityState } from "@/hooks/workspaces/derived/mobility/use-workspace-mobility-state";
+import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { logicalWorkspaceMatchesId } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import {

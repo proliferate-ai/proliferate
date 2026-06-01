@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useGitStatusQuery } from "@anyharness/sdk-react";
-import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/use-selected-cloud-runtime-state";
+import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/cache/use-selected-cloud-runtime-state";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { resolveSessionViewState } from "@proliferate/product-domain/sessions/activity";
 import {

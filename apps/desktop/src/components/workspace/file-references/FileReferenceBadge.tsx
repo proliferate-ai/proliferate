@@ -11,8 +11,8 @@ import {
   FILE_REFERENCE_MENU_CLASS,
   FileReferenceMenuContent,
 } from "@/components/workspace/file-references/FileReferenceMenu";
-import { useFileReferenceActions } from "@/hooks/workspaces/files/use-file-reference-actions";
-import { useFileReferenceNativeContextMenu } from "@/hooks/workspaces/files/ui/use-file-reference-native-context-menu";
+import { useFileReferenceActions } from "@/hooks/workspaces/workflows/files/use-file-reference-actions";
+import { useFileReferenceNativeContextMenu } from "@/hooks/workspaces/ui/files/use-file-reference-native-context-menu";
 
 type FileReferenceBadgeVariant = "inline" | "chip";
 

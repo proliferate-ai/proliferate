@@ -10,9 +10,9 @@ import { useReadWorkspaceFileQuery } from "@anyharness/sdk-react";
 import { CenterMessage } from "@/components/workspace/files/viewer/CenterMessage";
 import { FileViewerFrame } from "@/components/workspace/files/viewer/FileViewerFrame";
 import { WorkspaceFileBrowserOverlay } from "@/components/workspace/files/viewer/WorkspaceFileBrowserOverlay";
-import { useFileReferenceActions } from "@/hooks/workspaces/files/use-file-reference-actions";
-import { useWorkspaceFileContext } from "@/hooks/workspaces/files/derived/use-workspace-file-context";
-import { useWorkspaceFileTargetActions } from "@/hooks/workspaces/files/workflows/use-workspace-file-target-actions";
+import { useFileReferenceActions } from "@/hooks/workspaces/workflows/files/use-file-reference-actions";
+import { useWorkspaceFileContext } from "@/hooks/workspaces/derived/files/use-workspace-file-context";
+import { useWorkspaceFileTargetActions } from "@/hooks/workspaces/workflows/files/use-workspace-file-target-actions";
 import { canPreviewAsRichFile } from "@/lib/domain/files/document-preview";
 import type { FileDiffTarget } from "@/lib/domain/workspaces/viewer/file-diff-options";
 import {

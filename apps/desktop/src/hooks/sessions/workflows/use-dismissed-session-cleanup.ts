@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { sessionSlotBelongsToWorkspace } from "@proliferate/product-domain/sessions/activity";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
-import { useSessionRuntimeActions } from "@/hooks/sessions/use-session-runtime-actions";
+import { useSessionRuntimeActions } from "@/hooks/sessions/workflows/use-session-runtime-actions";
 import {
   clearLastViewedSession,
   clearViewedSessionErrors,
@@ -20,7 +20,7 @@ import { invalidateSessionActivationIntent } from "@/hooks/sessions/workflows/se
 import {
   writeChatShellIntentForEmptySurface,
   writeChatShellIntentForSession,
-} from "@/hooks/workspaces/tabs/workspace-shell-intent-writer";
+} from "@/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
 import { chatWorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-tabs";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 

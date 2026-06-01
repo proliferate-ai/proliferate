@@ -4,7 +4,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { useActivePendingInteractionState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
-import { useChatUserInputActions } from "@/hooks/chat/use-chat-user-input-actions";
+import { useChatUserInputActions } from "@/hooks/chat/workflows/use-chat-user-input-actions";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
 
 const OTHER_OPTION_LABEL = "None of the above";
