@@ -33,6 +33,8 @@ from proliferate.constants.cloud import (
     CloudWorkspaceStatus,
 )
 from proliferate.db import session_ops as db_session
+from proliferate.db.models.cloud.sandboxes import CloudSandbox
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store import billing as billing_store
 from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
 from proliferate.db.store.automation_cloud_workspace_claims import (
@@ -182,9 +184,6 @@ from proliferate.server.organizations.service import (
     resolve_owner_context,
 )
 from proliferate.utils.time import duration_ms, utcnow
-
-type CloudWorkspace = object
-type CloudSandbox = object
 
 MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS = 160
 CLOUD_HUMAN_ORIGIN_JSON = '{"kind":"human","entrypoint":"cloud"}'

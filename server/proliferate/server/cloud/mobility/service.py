@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.cloud import CloudWorkspaceStatus
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_mobility import (
     CloudWorkspaceHandoffOpValue,
     CloudWorkspaceMobilityValue,
@@ -98,8 +99,6 @@ from proliferate.server.cloud.workspaces.service import (
     start_cloud_workspace,
 )
 from proliferate.utils.time import duration_ms, utcnow
-
-type CloudWorkspace = object
 
 _STALE_HANDOFF_AFTER = timedelta(seconds=120)
 _BRANCH_NOT_PUBLISHED_BLOCKER = "The branch '{branch}' was not found on GitHub."

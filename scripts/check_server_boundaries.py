@@ -35,6 +35,15 @@ ALLOWED_API_ORM_IMPORT = ("proliferate.db.models.auth", "User")
 ALLOWED_API_ENGINE_IMPORTS = {"get_async_session"}
 ALLOWED_SQLALCHEMY_TYPE_IMPORT = ("sqlalchemy.ext.asyncio", "AsyncSession")
 SERVICE_DB_METHODS = {"execute", "commit", "rollback", "add", "delete", "refresh"}
+SERVICE_DB_SESSION_OPS_METHODS = {
+    "open_async_session",
+    "open_async_transaction",
+    "commit_session",
+    "rollback_session",
+    "run_after_commit",
+    "defer_after_commit",
+    "is_integrity_error",
+}
 API_DB_METHODS = {"execute", "commit", "rollback", "add", "delete", "refresh"}
 STORE_FORBIDDEN_SESSION_METHODS = {"commit", "rollback"}
 RAW_HTTP_MODULES = {"httpx", "requests"}
@@ -317,7 +326,15 @@ class BoundaryChecker(ast.NodeVisitor):
                 "SERVICE_DB_ENGINE_IMPORT",
                 "service.py must not import DB session entrypoint helpers",
             )
-        if module == "proliferate.db" and ("engine" in names or "*" in names):
+        if module == "proliferate.db.session_ops":
+            self.add(
+                node,
+                "SERVICE_DB_ENGINE_IMPORT",
+                "service.py must not import DB session entrypoint helpers",
+            )
+        if module == "proliferate.db" and (
+            "engine" in names or "session_ops" in names or "*" in names
+        ):
             self.add(
                 node,
                 "SERVICE_DB_ENGINE_IMPORT",
@@ -483,6 +500,17 @@ class BoundaryChecker(ast.NodeVisitor):
                     node,
                     "SERVICE_DB_METHOD_CALL",
                     f"service.py must not call session method .{func.attr}()",
+                )
+            if (
+                self.kind.is_service
+                and func.attr in SERVICE_DB_SESSION_OPS_METHODS
+                and isinstance(func.value, ast.Name)
+                and func.value.id in {"db_session", "session_ops"}
+            ):
+                self.add(
+                    node,
+                    "SERVICE_DB_METHOD_CALL",
+                    f"service.py must not call session boundary helper .{func.attr}()",
                 )
             if (
                 self.kind.is_store

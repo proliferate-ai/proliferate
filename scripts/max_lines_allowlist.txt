@@ -43,13 +43,13 @@ server/proliferate/db/store/cloud_repo_config.py 719 server structure migration 
 server/proliferate/db/store/cloud_sync/commands.py 1689 server structure migration debt for oversized store file
 server/proliferate/db/store/cloud_sync/events.py 1109 server structure migration debt for oversized store file
 server/proliferate/db/store/cloud_workspaces.py 1639 server structure migration debt for oversized store file
-server/proliferate/server/billing/service.py 2464 server structure migration debt for oversized service file during billing orchestration consolidation
+server/proliferate/server/billing/service.py 2465 server structure migration debt for oversized service file during billing orchestration consolidation
 server/proliferate/server/billing/stripe_webhooks.py 623 server structure migration debt for oversized domain-adjacent file
 server/proliferate/server/cloud/agent_auth/models.py 508 server structure migration debt for oversized API models file
 server/proliferate/server/cloud/agent_auth/service.py 4909 server structure migration debt for oversized service file
 server/proliferate/server/cloud/commands/domain/rules.py 607 server structure migration debt for oversized pure-domain file
 server/proliferate/server/cloud/commands/service.py 1741 server structure migration debt for oversized service file
-server/proliferate/server/cloud/mobility/service.py 1209 server structure migration debt for oversized service file
+server/proliferate/server/cloud/mobility/service.py 1208 server structure migration debt for oversized service file
 server/proliferate/server/cloud/runtime/bootstrap.py 922 server structure migration debt for oversized domain-adjacent file
 server/proliferate/server/cloud/runtime/ensure_running.py 674 server structure migration debt for oversized domain-adjacent file
 server/proliferate/server/cloud/runtime/provision.py 1739 server structure migration debt for oversized domain-adjacent file
@@ -58,7 +58,7 @@ server/proliferate/server/cloud/runtime_config/service.py 1094 server structure 
 server/proliferate/server/cloud/slack/service.py 1591 server structure migration debt for oversized service file
 server/proliferate/server/cloud/worker/service.py 1437 server structure migration debt for oversized service file
 server/proliferate/server/cloud/workspaces/models.py 934 server structure migration debt for oversized API models file
-server/proliferate/server/cloud/workspaces/service.py 2644 server structure migration debt for oversized service file
+server/proliferate/server/cloud/workspaces/service.py 2643 server structure migration debt for oversized service file
 server/tests/integration/schema_migration_assertions.py 869 existing server oversized test helper
 server/tests/integration/test_auth_flow.py 2057 existing server oversized integration test
 server/tests/integration/test_billing_accounting.py 871 existing server oversized integration test

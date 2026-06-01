@@ -1,4 +1,8 @@
-"""Database session boundary helpers for non-HTTP orchestration entrypoints."""
+"""Database session helpers for non-HTTP entrypoints.
+
+Product services that call these helpers still own session or transaction boundaries; those
+calls are explicit boundary-check debt until moved to API, worker, or other entrypoint code.
+"""
 
 from __future__ import annotations
 

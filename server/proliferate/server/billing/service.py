@@ -60,6 +60,13 @@ from proliferate.constants.organizations import (
     ORGANIZATION_STATUS_PENDING_CHECKOUT,
 )
 from proliferate.db import session_ops as db_session
+from proliferate.db.models.billing import (
+    BillingEntitlement,
+    BillingGrant,
+    BillingHold,
+    BillingSubscription,
+    UsageSegment,
+)
 from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store import users as user_store
 from proliferate.db.store.billing import (
@@ -206,12 +213,6 @@ from proliferate.server.organizations.domain.profile import (
     derive_logo_domain_from_email,
     organization_name_issue,
 )
-
-type BillingEntitlement = object
-type BillingGrant = object
-type BillingHold = object
-type BillingSubscription = object
-type UsageSegment = object
 
 logger = logging.getLogger("proliferate.billing.service")
 

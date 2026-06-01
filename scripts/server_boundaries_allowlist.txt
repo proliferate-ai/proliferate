@@ -15,6 +15,24 @@ SINGLE_FILE_FOLDER server/proliferate/integrations/billing 1 transitional Stripe
 INTEGRATION_PRODUCT_IMPORT server/proliferate/integrations/billing/stripe.py 1 transitional integration depends on product domain types/logic
 API_STORE_IMPORT server/proliferate/server/cloud/live/api.py 1 transitional live API reads store types during cloud worker migration
 API_STORE_IMPORT server/proliferate/server/cloud/slack/api.py 2 transitional Slack API composes repo routing store records for admin settings
+SERVICE_ORM_IMPORT server/proliferate/server/billing/service.py 1 remaining service type boundary exposes billing ORM records until snapshot migration
+SERVICE_ORM_IMPORT server/proliferate/server/cloud/mobility/service.py 1 remaining service type boundary exposes workspace ORM records until snapshot migration
+SERVICE_ORM_IMPORT server/proliferate/server/cloud/runtime/service.py 1 remaining service type boundary exposes workspace ORM records until snapshot migration
+SERVICE_ORM_IMPORT server/proliferate/server/cloud/workspaces/service.py 2 remaining service type boundary exposes workspace ORM records until snapshot migration
+SERVICE_DB_ENGINE_IMPORT server/proliferate/server/billing/service.py 1 remaining service-owned non-HTTP session boundary debt through session_ops
+SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/agent_auth/service.py 1 remaining service-owned deferred materialization session boundary debt through session_ops
+SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/commands/service.py 1 remaining service-owned command transaction boundary debt through session_ops
+SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/live/service.py 1 remaining service-owned live event session boundary debt through session_ops
+SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/slack/service.py 1 remaining service-owned Slack deferred transaction boundary debt through session_ops
+SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/worker/service.py 1 remaining service-owned worker transaction boundary debt through session_ops
+SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/workspaces/service.py 1 remaining service-owned workspace lifecycle session boundary debt through session_ops
+SERVICE_DB_METHOD_CALL server/proliferate/server/billing/service.py 34 remaining billing service-owned transaction/session boundary debt through session_ops
+SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/agent_auth/service.py 4 remaining agent auth service-owned transaction/session boundary debt through session_ops
+SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/commands/service.py 4 remaining command service-owned transaction/session boundary debt through session_ops
+SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/live/service.py 4 remaining live service-owned session/deferred boundary debt through session_ops
+SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/slack/service.py 13 remaining Slack service-owned transaction/session boundary debt through session_ops
+SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/worker/service.py 2 remaining worker service-owned transaction boundary debt through session_ops
+SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/workspaces/service.py 36 remaining workspace service-owned lifecycle transaction/session boundary debt through session_ops
 DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/agent_run_config/domain/resolve.py 1 transitional agent run config resolver imports product constants
 DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/slack/domain/policy.py 1 transitional Slack policy imports product constants
 DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/target_config/domain/policy.py 1 transitional target config policy imports product config during worker migration
