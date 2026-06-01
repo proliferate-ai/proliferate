@@ -2,56 +2,76 @@ import {
   completeSupportReportUpload as completeSupportReportUploadWithClient,
   createSupportReport as createSupportReportWithClient,
   ensureSupportReportTracker as ensureSupportReportTrackerWithClient,
-  type SupportReportCompleteRequest,
-  type SupportReportCompleteResponse,
+  type SupportMessageContext,
   type SupportReportCreateRequest,
-  type SupportReportCreateResponse,
-  type SupportReportTrackerResponse,
 } from "@proliferate/cloud-sdk";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useCloudClient } from "../context/CloudClientProvider.js";
 
+export interface CloudSupportReportSubmitInput {
+  message: string;
+  publicContentConsent: boolean;
+  context: SupportMessageContext;
+  sourceSurface: SupportReportCreateRequest["sourceSurface"];
+}
+
 export interface CloudSupportReportActions {
-  createSupportReport: (
-    input: SupportReportCreateRequest,
-  ) => Promise<SupportReportCreateResponse>;
-  completeSupportReportUpload: (
-    reportId: string,
-    input: SupportReportCompleteRequest,
-  ) => Promise<SupportReportCompleteResponse>;
-  ensureSupportReportTracker: (
-    reportId: string,
-  ) => Promise<SupportReportTrackerResponse>;
+  submitSupportReport: (input: CloudSupportReportSubmitInput) => Promise<void>;
 }
 
 export function useCloudSupportReportActions(): CloudSupportReportActions {
   const client = useCloudClient();
+  const clientJobIdRef = useRef<string | null>(null);
 
-  const createSupportReport = useCallback(
-    (input: SupportReportCreateRequest) =>
-      createSupportReportWithClient(input, client),
-    [client],
-  );
-  const completeSupportReportUpload = useCallback(
-    (reportId: string, input: SupportReportCompleteRequest) =>
-      completeSupportReportUploadWithClient(reportId, input, client),
-    [client],
-  );
-  const ensureSupportReportTracker = useCallback(
-    (reportId: string) => ensureSupportReportTrackerWithClient(reportId, client),
+  const submitSupportReport = useCallback(
+    async (input: CloudSupportReportSubmitInput) => {
+      const clientJobId = clientJobIdRef.current ?? crypto.randomUUID();
+      clientJobIdRef.current = clientJobId;
+      const report = await createSupportReportWithClient(
+        {
+          clientJobId,
+          message: input.message,
+          sourceSurface: input.sourceSurface,
+          context: input.context,
+          scope: {
+            kind: "app_only",
+            workspaceIds: [],
+          },
+          workspaceRefs: [],
+          expectedClientUploads: {
+            diagnostics: false,
+            attachmentCount: 0,
+          },
+          publicContentConsent: input.publicContentConsent,
+        },
+        client,
+      );
+      if (report.status !== "completed") {
+        await completeSupportReportUploadWithClient(
+          report.reportId,
+          {
+            diagnostics: null,
+            attachments: [],
+            packageManifest: {
+              schemaVersion: 1,
+              clientJobId,
+              reportId: report.reportId,
+              sourceSurface: input.sourceSurface,
+            },
+          },
+          client,
+        );
+      }
+      clientJobIdRef.current = null;
+      void ensureSupportReportTrackerWithClient(report.reportId, client).catch(() => undefined);
+    },
     [client],
   );
 
   return useMemo(
     () => ({
-      createSupportReport,
-      completeSupportReportUpload,
-      ensureSupportReportTracker,
+      submitSupportReport,
     }),
-    [
-      completeSupportReportUpload,
-      createSupportReport,
-      ensureSupportReportTracker,
-    ],
+    [submitSupportReport],
   );
 }
