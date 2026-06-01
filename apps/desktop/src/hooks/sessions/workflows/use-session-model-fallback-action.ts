@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { useSetSessionConfigOptionMutation } from "@anyharness/sdk-react";
 import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
 import { resolveFallbackSessionModelId } from "@/lib/domain/sessions/model-fallback";
-import { getSessionClientAndWorkspace } from "@/lib/workflows/sessions/session-runtime";
+import { getSessionClientAndWorkspace } from "@/lib/access/anyharness/session-runtime";
 import {
   getSessionRecord,
   patchSessionRecord,

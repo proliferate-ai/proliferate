@@ -8,7 +8,6 @@ import {
 } from "@/hooks/sessions/workflows/session-activation-guard";
 import type { SessionLatencyFlowOptions } from "@/hooks/sessions/workflows/session-selection-options";
 import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
-import { resolveTrustedSessionSelectionRelationship } from "@/lib/domain/sessions/selection/trusted-session-selection";
 import { isHotReopenEligibleSessionSlot } from "@/lib/domain/workspaces/selection/hot-reopen";
 import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 import {
@@ -28,7 +27,6 @@ import { HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET } from "@/lib/domain/telemetry/deb
 import { annotateLatencyFlow } from "@/lib/infra/measurement/latency-flow";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import { rememberLastViewedSession } from "@/stores/preferences/workspace-ui-store";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import {
   createEmptySessionRecord,
   getSessionRecord,
@@ -37,11 +35,12 @@ import {
   putSessionRecord,
 } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import type {
-  SessionChildRelationship,
-  SessionRelationship,
-} from "@/lib/domain/sessions/directory/relationship";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
+import { classifyTrustedSessionSelection } from "@/hooks/sessions/workflows/session-selection-relationship";
+import {
+  SESSION_HOT_SWITCH_MEASUREMENT_SURFACES,
+  SESSION_SWITCH_MEASUREMENT_SURFACES,
+} from "@/hooks/sessions/workflows/session-selection-measurement";
 
 interface UseSessionSelectionWorkflowActionsOptions {
   activateSession: (sessionId: string) => void;
@@ -49,29 +48,6 @@ interface UseSessionSelectionWorkflowActionsOptions {
     workspaceId: string,
     options?: SessionLatencyFlowOptions,
   ) => Promise<WorkspaceSession[]>;
-}
-
-export function classifyTrustedSessionSelection(sessionId: string): SessionRelationship {
-  const state = useSessionDirectoryStore.getState();
-  const slot = state.entriesById[sessionId] ?? null;
-  const relationshipHint =
-    state.relationshipHintsBySessionId[sessionId] as SessionChildRelationship | undefined;
-
-  const plan = resolveTrustedSessionSelectionRelationship<
-    SessionRelationship,
-    SessionChildRelationship
-  >({
-    currentRelationship: slot?.sessionRelationship ?? null,
-    relationshipHint,
-    rootRelationship: { kind: "root" },
-  });
-
-  if (plan.commitAction === "promote_root") {
-    state.setSessionRelationship(sessionId, plan.relationship);
-  } else if (plan.commitAction === "apply_hint") {
-    state.recordRelationshipHint(sessionId, plan.relationship);
-  }
-  return plan.relationship;
 }
 
 export function useSessionSelectionWorkflowActions({
@@ -108,14 +84,7 @@ export function useSessionSelectionWorkflowActions({
       ? options.measurementOperationId ?? null
       : startMeasurementOperation({
         kind: "session_switch",
-        surfaces: [
-          "workspace-shell",
-          "chat-surface",
-          "session-transcript-pane",
-          "transcript-list",
-          "header-tabs",
-          "workspace-sidebar",
-        ],
+        surfaces: SESSION_SWITCH_MEASUREMENT_SURFACES,
         linkedLatencyFlowId: options?.latencyFlowId ?? undefined,
         maxDurationMs: 30_000,
       });
@@ -163,18 +132,7 @@ export function useSessionSelectionWorkflowActions({
           ? measurementOperationId
           : startMeasurementOperation({
             kind: "session_hot_switch",
-            surfaces: [
-              "workspace-shell",
-              "chat-surface",
-              "session-transcript-pane",
-              "transcript-list",
-              "transcript-context-providers",
-              "transcript-row-list-router",
-              "transcript-virtualized-viewport",
-              "transcript-full-list",
-              "header-tabs",
-              "workspace-sidebar",
-            ],
+            surfaces: SESSION_HOT_SWITCH_MEASUREMENT_SURFACES,
             linkedLatencyFlowId: options?.latencyFlowId ?? undefined,
             maxDurationMs: 2500,
             summaryBudget: HOT_PAINT_MEASUREMENT_SUMMARY_BUDGET,
@@ -219,14 +177,7 @@ export function useSessionSelectionWorkflowActions({
           flowId: options?.latencyFlowId ?? null,
         });
         if (hotOperationId) {
-          markOperationForNextCommit(hotOperationId, [
-            "workspace-shell",
-            "chat-surface",
-            "session-transcript-pane",
-            "transcript-list",
-            "header-tabs",
-            "workspace-sidebar",
-          ]);
+          markOperationForNextCommit(hotOperationId, SESSION_SWITCH_MEASUREMENT_SURFACES);
         }
         scheduleAfterNextPaint(() => {
           const currentState = useSessionSelectionStore.getState();
@@ -420,14 +371,7 @@ export function useSessionSelectionWorkflowActions({
       totalElapsedMs: elapsedMs(startedAt),
     });
     if (measurementOperationId) {
-      markOperationForNextCommit(measurementOperationId, [
-        "workspace-shell",
-        "chat-surface",
-        "session-transcript-pane",
-        "transcript-list",
-        "header-tabs",
-        "workspace-sidebar",
-      ]);
+      markOperationForNextCommit(measurementOperationId, SESSION_SWITCH_MEASUREMENT_SURFACES);
       finishMeasurementOperation(measurementOperationId, "completed");
     }
     if (guard) {

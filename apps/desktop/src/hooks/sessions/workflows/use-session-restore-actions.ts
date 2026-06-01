@@ -16,7 +16,7 @@ import {
   annotateLatencyFlow,
   cancelLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
-import { getWorkspaceClientAndId } from "@/lib/workflows/sessions/session-runtime";
+import { getWorkspaceClientAndId } from "@/lib/access/anyharness/session-runtime";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 

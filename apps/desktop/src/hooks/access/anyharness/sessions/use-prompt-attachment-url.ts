@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useFetchPromptAttachmentMutation } from "@anyharness/sdk-react";
-import { getSessionClientAndWorkspace } from "@/lib/workflows/sessions/session-runtime";
+import { getSessionClientAndWorkspace } from "@/lib/access/anyharness/session-runtime";
 
 export function usePromptAttachmentUrl(
   sessionId: string | null | undefined,
