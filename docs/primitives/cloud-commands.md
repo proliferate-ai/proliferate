@@ -42,8 +42,9 @@ In scope:
 - Remove all managed-cloud reads of `cloud_workspace.runtime_url`,
   `runtime_token_ciphertext`, `active_sandbox_id` (spec 00 dropped
   the columns; spec 04 closes the call sites at
-  `repo_config_apply.py`, `anyharness_api.py`, and runtime
-  `service.py`).
+  `config_sync/repo_config.py`, `liveness/ensure_running.py`, and
+  runtime `service.py`; AnyHarness protocol calls live under
+  `integrations/anyharness/**`).
 - "Passive UI" invariant: list workspace/session/transcript state
   from Cloud DB without waking the sandbox. Enforced by review +
   tests.
@@ -267,14 +268,16 @@ column today.
 **Direct-access reads on `cloud_workspace`** (call sites today):
 
 ```text
-cloud_workspace.active_sandbox_id   server/cloud/runtime/repo_config_apply.py
+cloud_workspace.active_sandbox_id   server/cloud/runtime/config_sync/repo_config.py
 cloud_workspace.runtime_url         server/cloud/runtime/service.py,
-                                    server/cloud/runtime/anyharness_api.py
+                                    server/cloud/runtime/liveness/ensure_running.py
 cloud_workspace.runtime_token_ciphertext  server/cloud/runtime/service.py
 cloud_workspace/runtime_environment direct-access fields are also read
-  through db/store/cloud_workspaces.py, runtime/ensure_running.py,
-  repo_config/service.py, runtime/credential_freshness.py,
-  runtime/provision.py, and runtime/setup_monitor.py.
+  through db/store/cloud_workspaces.py, runtime/liveness/ensure_running.py,
+  repo_config/service.py, runtime/provision.py, and runtime/setup_monitor.py.
+
+Raw AnyHarness protocol access is not owned by these product paths; it lives
+under server/proliferate/integrations/anyharness/**.
 ```
 
 These columns are dropped by spec 00. Spec 04 closes the call sites
@@ -833,7 +836,7 @@ Spec 00 drops `cloud_workspace.active_sandbox_id`, `runtime_url`,
 `runtime_token_ciphertext`. Spec 04 closes the callers:
 
 ```text
-server/proliferate/server/cloud/runtime/repo_config_apply.py
+server/proliferate/server/cloud/runtime/config_sync/repo_config.py
   - read active_sandbox_id from cloud_target_runtime_access
   - read anyharness_base_url from cloud_target_runtime_access
   - decrypt runtime_token_ciphertext from cloud_target_runtime_access
@@ -842,8 +845,10 @@ server/proliferate/server/cloud/runtime/service.py
   - same; all direct-access reads route through
     cloud_target_runtime_access
 
-server/proliferate/server/cloud/runtime/anyharness_api.py
-  - same
+server/proliferate/server/cloud/runtime/liveness/ensure_running.py
+server/proliferate/server/cloud/runtime/config_sync/runtime_config.py
+  - runtime access arrives through cloud_target_runtime_access-backed callers;
+    raw AnyHarness protocol access stays in integrations/anyharness/**
 ```
 
 Boundary rule (matches spec 00 §5.5):
@@ -1040,9 +1045,10 @@ server/proliferate/server/cloud/runtime/wake.py     (new)
   run_managed_slot_wake_job(target_id)                 (background)
   perform_proliferate_owned_e2b_resume(slot)
 
-server/proliferate/server/cloud/runtime/repo_config_apply.py
+server/proliferate/server/cloud/runtime/config_sync/repo_config.py
 server/proliferate/server/cloud/runtime/service.py
-server/proliferate/server/cloud/runtime/anyharness_api.py
+server/proliferate/server/cloud/runtime/liveness/ensure_running.py
+server/proliferate/server/cloud/runtime/config_sync/runtime_config.py
   - read from cloud_target_runtime_access instead of cloud_workspace
 
 server/proliferate/server/cloud/workspaces/api.py

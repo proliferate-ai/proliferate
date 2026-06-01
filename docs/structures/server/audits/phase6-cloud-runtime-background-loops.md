@@ -49,12 +49,13 @@ The setup-run store still self-opens sessions and commits. That violates the
 target database threading model, but it is separate migration debt. Converting
 this store should happen before or alongside any setup monitor extraction.
 
-### `cloud/runtime/repo_config_apply.py`
+### `cloud/runtime/config_sync/repo_config.py`
 
 This starts remote setup commands and persists setup-run monitor records after
 the workspace reaches post-ready setup. It is part of the cloud runtime
-materialization/config-application state machine and should be left in place for
-this audit.
+materialization/config-application state machine. Lane 5 moved the owner under
+`config_sync/`; the setup-run behavior should still be left in place for this
+audit.
 
 ## Worker Guide Fit
 
