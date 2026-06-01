@@ -94,10 +94,12 @@ describe("user preference migration", () => {
       .toBe("gpt-5.3-codex-high");
     expect(normalizeDefaultChatModelId("cursor", "gpt-5.3-codex-spark-preview-xhigh"))
       .toBe("gpt-5.3-codex-xhigh");
+    expect(normalizeDefaultChatModelId("opencode", "opencode/minimax-m2.5-free"))
+      .toBe("opencode/mimo-v2.5-free");
     expect(normalizeDefaultChatModelId("opencode", "opencode/ring-2.6-1t-free"))
-      .toBe("opencode/ring-2.6-1t-free");
+      .toBe("opencode/nemotron-3-super-free");
     expect(normalizeDefaultChatModelId("gemini", "auto-gemini-2.5"))
-      .toBe("auto-gemini-2.5");
+      .toBe("auto-gemini-3");
   });
 
   it("moves misstored Codex plan defaults into live collaboration controls", () => {

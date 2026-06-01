@@ -83,6 +83,12 @@ def test_model_aliases_validate_and_resolve_to_canonical_catalog_ids() -> None:
         ("cursor", "gpt-5.3-codex-spark-preview", "gpt-5.3-codex"),
         ("cursor", "gpt-5.3-codex-spark-preview-high", "gpt-5.3-codex-high"),
         ("cursor", "gpt-5.3-codex-spark-preview-xhigh", "gpt-5.3-codex-xhigh"),
+        ("opencode", "opencode/minimax-m2.5-free", "opencode/mimo-v2.5-free"),
+        (
+            "opencode",
+            "opencode/ring-2.6-1t-free",
+            "opencode/nemotron-3-super-free",
+        ),
     ]
 
     for agent_kind, legacy_model_id, canonical_model_id in cases:

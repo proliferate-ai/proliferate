@@ -178,6 +178,29 @@ def _backfill_automation_agent_run_configs() -> None:
                 config_name,
                 normalized_agent_kind,
                 COALESCE(
+                  CASE normalized_agent_kind
+                    WHEN 'cursor' THEN
+                      CASE legacy_model_id
+                        WHEN 'composer-2[fast=true]' THEN 'composer-2.5-fast'
+                        WHEN 'composer-2-fast' THEN 'composer-2.5-fast'
+                        WHEN 'composer-1.5[]' THEN 'composer-2.5'
+                        WHEN 'composer-2' THEN 'composer-2.5'
+                        WHEN 'gpt-5.3-codex-spark-preview-low' THEN 'gpt-5.3-codex-low'
+                        WHEN 'gpt-5.3-codex-spark-preview' THEN 'gpt-5.3-codex'
+                        WHEN 'gpt-5.3-codex-spark[reasoning=medium]' THEN 'gpt-5.3-codex'
+                        WHEN 'gpt-5.3-codex-spark-preview-high' THEN 'gpt-5.3-codex-high'
+                        WHEN 'gpt-5.3-codex-spark-preview-xhigh' THEN 'gpt-5.3-codex-xhigh'
+                      END
+                    WHEN 'opencode' THEN
+                      CASE legacy_model_id
+                        WHEN 'opencode/minimax-m2.5-free' THEN 'opencode/mimo-v2.5-free'
+                        WHEN 'opencode/ring-2.6-1t-free' THEN 'opencode/nemotron-3-super-free'
+                      END
+                    WHEN 'gemini' THEN
+                      CASE legacy_model_id
+                        WHEN 'auto-gemini-2.5' THEN 'auto-gemini-3'
+                      END
+                  END,
                   legacy_model_id,
                   CASE normalized_agent_kind
                     WHEN 'claude' THEN 'us.anthropic.claude-sonnet-4-6'
@@ -277,7 +300,32 @@ def _backfill_automation_run_agent_snapshots() -> None:
                 'config_id', config.id::text,
                 'config_name', config.name,
                 'agent_kind', COALESCE(NULLIF(run.agent_kind_snapshot, ''), config.agent_kind),
-                'model_id', COALESCE(NULLIF(run.model_id_snapshot, ''), config.model_id),
+                'model_id', COALESCE(
+                  CASE COALESCE(NULLIF(run.agent_kind_snapshot, ''), config.agent_kind)
+                    WHEN 'cursor' THEN
+                      CASE COALESCE(NULLIF(run.model_id_snapshot, ''), config.model_id)
+                        WHEN 'composer-2[fast=true]' THEN 'composer-2.5-fast'
+                        WHEN 'composer-2-fast' THEN 'composer-2.5-fast'
+                        WHEN 'composer-1.5[]' THEN 'composer-2.5'
+                        WHEN 'composer-2' THEN 'composer-2.5'
+                        WHEN 'gpt-5.3-codex-spark-preview-low' THEN 'gpt-5.3-codex-low'
+                        WHEN 'gpt-5.3-codex-spark-preview' THEN 'gpt-5.3-codex'
+                        WHEN 'gpt-5.3-codex-spark[reasoning=medium]' THEN 'gpt-5.3-codex'
+                        WHEN 'gpt-5.3-codex-spark-preview-high' THEN 'gpt-5.3-codex-high'
+                        WHEN 'gpt-5.3-codex-spark-preview-xhigh' THEN 'gpt-5.3-codex-xhigh'
+                      END
+                    WHEN 'opencode' THEN
+                      CASE COALESCE(NULLIF(run.model_id_snapshot, ''), config.model_id)
+                        WHEN 'opencode/minimax-m2.5-free' THEN 'opencode/mimo-v2.5-free'
+                        WHEN 'opencode/ring-2.6-1t-free' THEN 'opencode/nemotron-3-super-free'
+                      END
+                    WHEN 'gemini' THEN
+                      CASE COALESCE(NULLIF(run.model_id_snapshot, ''), config.model_id)
+                        WHEN 'auto-gemini-2.5' THEN 'auto-gemini-3'
+                      END
+                  END,
+                  COALESCE(NULLIF(run.model_id_snapshot, ''), config.model_id)
+                ),
                 'control_values', jsonb_strip_nulls(
                   jsonb_build_object(
                     'mode', NULLIF(run.mode_id_snapshot, ''),
