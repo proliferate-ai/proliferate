@@ -70,6 +70,7 @@ export type WorkspaceMobilityBlockerCode =
   | "session_running"
   | "session_awaiting_interaction"
   | "unsupported_session"
+  | "partial_subagent_graph"
   | "review_active"
   | "pending_prompt"
   | "archive_too_large"

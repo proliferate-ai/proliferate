@@ -27,6 +27,7 @@ const SOURCE_BLOCKER_PRIORITY: WorkspaceMobilityBlockerCode[] = [
   "session_awaiting_interaction",
   "review_active",
   "unsupported_session",
+  "partial_subagent_graph",
   "pending_prompt",
   "workspace_detached",
   "git_operation_in_progress",

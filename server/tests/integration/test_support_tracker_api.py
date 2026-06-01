@@ -1,3 +1,5 @@
+from uuid import UUID
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -161,6 +163,7 @@ class TestSupportTrackerApi:
         processed = await run_support_tracker_reconcile_pass(report_id=report_id, limit=1)
         assert processed == 1
 
+        db_session.expire_all()
         report = await support_reports.get_report_by_id(db_session, report_id)
         assert report is not None
         assert report.tracker_status == "completed"
@@ -301,9 +304,235 @@ class TestSupportTrackerApi:
         processed = await run_support_tracker_reconcile_pass(report_id=report_id, limit=1)
         assert processed == 1
 
+        db_session.expire_all()
         report = await support_reports.get_report_by_id(db_session, report_id)
         assert report is not None
         assert (
             report.github_issue_url == "https://github.com/proliferate-ai/proliferate/issues/456"
         )
         assert report.linear_issue_url == "https://linear.app/proliferate/issue/SUP-456"
+
+    @pytest.mark.asyncio
+    async def test_targeted_tracker_reconcile_claims_legacy_none_report(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        session = await _register_and_login(client, "support-tracker-legacy@example.com")
+        monkeypatch.setattr(settings, "support_tracker_enabled", True)
+        monkeypatch.setattr(settings, "support_github_app_id", "1")
+        monkeypatch.setattr(settings, "support_github_app_private_key", "private-key")
+        monkeypatch.setattr(settings, "support_github_app_installation_id", "2")
+        monkeypatch.setattr(settings, "support_github_owner", "proliferate-ai")
+        monkeypatch.setattr(settings, "support_github_repo", "proliferate")
+        monkeypatch.setattr(settings, "support_linear_api_key", "")
+        monkeypatch.setattr(settings, "support_linear_team_id", "")
+
+        report_id = "legacy-none-report"
+        report_prefix = f"support/reports/2026/05/31/{report_id}"
+        s3_records: dict[str, dict[str, object]] = {
+            f"{report_prefix}/request.json": {
+                "schemaVersion": 1,
+                "reportId": report_id,
+                "message": "Legacy customer message should stay private.",
+                "sender": {"email": "support-tracker-legacy@example.com"},
+            }
+        }
+
+        await support_reports.create_report(
+            db_session,
+            report_id=report_id,
+            client_job_id="legacy-none-job",
+            owner_user_id=UUID(session["user_id"]),
+            primary_organization_id=None,
+            primary_tenant_id=f"user:{session['user_id']}",
+            tenant_ids=(f"user:{session['user_id']}",),
+            s3_bucket="support-bucket",
+            s3_prefix=report_prefix,
+            source_surface="web",
+            source_context={},
+            workspace_refs=(),
+            telemetry_refs={},
+            expected_uploads={},
+            public_content_consent=False,
+            request_id=None,
+            cloud_diagnostics_status="not_applicable",
+        )
+        await support_reports.mark_report_completed(
+            db_session,
+            report_id=report_id,
+            complete_request_id=None,
+            object_manifest={},
+        )
+        await db_session.commit()
+
+        async def fake_get_json_object(
+            *,
+            bucket: str,
+            key: str,
+            region_name: str | None = None,
+        ) -> dict[str, object]:
+            assert bucket == "support-bucket"
+            return s3_records[key]
+
+        async def fake_put_json_object(
+            *,
+            bucket: str,
+            key: str,
+            value: dict[str, object],
+            region_name: str | None = None,
+        ) -> None:
+            assert bucket == "support-bucket"
+            s3_records[key] = value
+
+        async def fake_github_issue(**kwargs: object) -> GitHubIssue:
+            title = str(kwargs["title"])
+            body = str(kwargs["body"])
+            assert "Legacy customer message" not in title
+            assert "Legacy customer message" not in body
+            assert "did not opt in" in body
+            return GitHubIssue(
+                id="github-legacy-1",
+                number=789,
+                url="https://github.com/proliferate-ai/proliferate/issues/789",
+                body=body,
+            )
+
+        async def fake_notify_support_report_tracker(**kwargs: object) -> bool:
+            return False
+
+        monkeypatch.setattr(
+            "proliferate.server.support.tracker.get_json_object",
+            fake_get_json_object,
+        )
+        monkeypatch.setattr(
+            "proliferate.server.support.tracker.put_json_object",
+            fake_put_json_object,
+        )
+        monkeypatch.setattr(
+            "proliferate.server.support.tracker.github_issues.ensure_support_issue",
+            fake_github_issue,
+        )
+        monkeypatch.setattr(
+            "proliferate.server.support.tracker.notify_support_report_tracker",
+            fake_notify_support_report_tracker,
+        )
+
+        processed = await run_support_tracker_reconcile_pass(report_id=report_id, limit=1)
+        assert processed == 1
+
+        db_session.expire_all()
+        report = await support_reports.get_report_by_id(db_session, report_id)
+        assert report is not None
+        assert report.tracker_status == "completed"
+        assert report.github_issue_number == 789
+        assert report.linear_status == "disabled"
+        tracker_record = s3_records[f"{report_prefix}/tracker.json"]
+        assert tracker_record["trackerStatus"] == "completed"
+
+    @pytest.mark.asyncio
+    async def test_support_report_tracker_nudge_schedules_legacy_none_report(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        session = await _register_and_login(client, "support-tracker-nudge@example.com")
+        headers = {"Authorization": f"Bearer {session['access_token']}"}
+        monkeypatch.setattr(settings, "support_tracker_enabled", True)
+        scheduled_report_ids: list[str] = []
+
+        async def fake_schedule_tracker_after_commit(
+            db: AsyncSession,
+            report_id: str,
+        ) -> None:
+            scheduled_report_ids.append(report_id)
+
+        monkeypatch.setattr(
+            "proliferate.server.support.service.schedule_support_tracker_after_commit",
+            fake_schedule_tracker_after_commit,
+        )
+
+        report_id = "legacy-none-nudge-report"
+        await support_reports.create_report(
+            db_session,
+            report_id=report_id,
+            client_job_id="legacy-none-nudge-job",
+            owner_user_id=UUID(session["user_id"]),
+            primary_organization_id=None,
+            primary_tenant_id=f"user:{session['user_id']}",
+            tenant_ids=(f"user:{session['user_id']}",),
+            s3_bucket="support-bucket",
+            s3_prefix=f"support/reports/2026/05/31/{report_id}",
+            source_surface="web",
+            source_context={},
+            workspace_refs=(),
+            telemetry_refs={},
+            expected_uploads={},
+            public_content_consent=False,
+            request_id=None,
+            cloud_diagnostics_status="not_applicable",
+        )
+        await support_reports.mark_report_completed(
+            db_session,
+            report_id=report_id,
+            complete_request_id=None,
+            object_manifest={},
+        )
+        await db_session.commit()
+
+        response = await client.post(f"/v1/support/reports/{report_id}/tracker", headers=headers)
+        assert response.status_code == 200
+        assert scheduled_report_ids == [report_id]
+
+    @pytest.mark.asyncio
+    async def test_automatic_tracker_pass_does_not_claim_disabled_report(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        session = await _register_and_login(client, "support-tracker-disabled@example.com")
+        monkeypatch.setattr(settings, "support_tracker_enabled", True)
+
+        report_id = "legacy-disabled-report"
+        await support_reports.create_report(
+            db_session,
+            report_id=report_id,
+            client_job_id="legacy-disabled-job",
+            owner_user_id=UUID(session["user_id"]),
+            primary_organization_id=None,
+            primary_tenant_id=f"user:{session['user_id']}",
+            tenant_ids=(f"user:{session['user_id']}",),
+            s3_bucket="support-bucket",
+            s3_prefix=f"support/reports/2026/05/31/{report_id}",
+            source_surface="web",
+            source_context={},
+            workspace_refs=(),
+            telemetry_refs={},
+            expected_uploads={},
+            public_content_consent=False,
+            request_id=None,
+            cloud_diagnostics_status="not_applicable",
+        )
+        await support_reports.mark_report_completed(
+            db_session,
+            report_id=report_id,
+            complete_request_id=None,
+            object_manifest={},
+            tracker_status="disabled",
+            github_status="disabled",
+            linear_status="disabled",
+            crosslink_status="disabled",
+        )
+        await db_session.commit()
+
+        processed = await run_support_tracker_reconcile_pass(limit=1)
+        assert processed == 0
+
+        db_session.expire_all()
+        report = await support_reports.get_report_by_id(db_session, report_id)
+        assert report is not None
+        assert report.tracker_status == "disabled"
+        assert report.tracker_attempt_count == 0

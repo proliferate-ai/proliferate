@@ -293,6 +293,13 @@ export function mobilityBlockerCopy(args: {
         helper: "Finish or archive that session, then try again.",
         actionLabel: "Got it",
       };
+    case "partial_subagent_graph":
+      return {
+        headline: "Linked sessions need to finish first",
+        body: "A linked subagent session is outside this workspace move.",
+        helper: "Finish or archive the linked subagent session, then try again.",
+        actionLabel: "Got it",
+      };
     case "pending_prompt":
       return {
         headline: moveLabel,

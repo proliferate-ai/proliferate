@@ -22,6 +22,31 @@ describe("pickPrimaryMobilityBlocker", () => {
     expect(blocker?.body).toBe("One active session can't move yet.");
   });
 
+  it("maps partial linked subagent graphs to specific copy", () => {
+    const blocker = pickPrimaryMobilityBlocker({
+      sourcePreflight: {
+        canMove: false,
+        blockers: [
+          {
+            code: "partial_subagent_graph",
+            message: "Session graph includes linked subagent session outside this archive",
+          },
+        ],
+        warnings: [],
+        sessions: [],
+      } as never,
+      cloudPreflight: null,
+      direction: "local_to_cloud",
+      branchName: "feature/workspace-mobility",
+    });
+
+    expect(blocker?.code).toBe("partial_subagent_graph");
+    expect(blocker?.headline).toBe("Linked sessions need to finish first");
+    expect(blocker?.helper).toBe(
+      "Finish or archive the linked subagent session, then try again.",
+    );
+  });
+
   it("prioritizes in-progress Git operations over dirty prep", () => {
     const blocker = pickPrimaryMobilityBlocker({
       sourcePreflight: {

@@ -49,6 +49,7 @@ export interface CreateSessionWithResolvedConfigInput {
   latencyFlowId?: string | null;
   measurementOperationId?: MeasurementOperationId | null;
   promptId?: string | null;
+  clientSessionId?: string | null;
   preferExistingCompatibleSession?: boolean;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
 }

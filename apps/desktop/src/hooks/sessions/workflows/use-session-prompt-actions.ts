@@ -25,7 +25,8 @@ export function useSessionPromptActions() {
     }
 
     const slot = getSessionRecord(sessionId);
-    if (!isPendingSessionId(sessionId) && !slot) {
+    const sessionIsPending = isPendingSessionId(sessionId);
+    if (!sessionIsPending && !slot) {
       logLatency("session.prompt.active.blocked", {
         reason: "missing_slot",
         sessionId,
@@ -33,7 +34,27 @@ export function useSessionPromptActions() {
       });
       throw new Error("No active session");
     }
-    if (!isPendingSessionId(sessionId) && slot && !canPromptSessionSlot(slot)) {
+    if (sessionIsPending && !slot) {
+      logLatency("session.prompt.active.blocked", {
+        reason: "unmaterialized_session",
+        sessionId,
+        selectedWorkspaceId: state.selectedWorkspaceId,
+      });
+      throw new Error("Session is still starting. Try again in a moment.");
+    }
+    if (slot && !slot.materializedSessionId) {
+      logLatency("session.prompt.active.blocked", {
+        reason: "unmaterialized_session",
+        sessionId,
+        selectedWorkspaceId: state.selectedWorkspaceId,
+        slotWorkspaceId: slot.workspaceId,
+        status: slot.status,
+        streamConnectionState: slot.streamConnectionState,
+        transcriptHydrated: slot.transcriptHydrated,
+      });
+      throw new Error("Session is still starting. Try again in a moment.");
+    }
+    if (!sessionIsPending && slot && !canPromptSessionSlot(slot)) {
       logLatency("session.prompt.active.blocked", {
         reason: "transcript_not_hydrated",
         sessionId,
@@ -48,7 +69,7 @@ export function useSessionPromptActions() {
       });
       throw new Error("Session is still loading. Try again in a moment.");
     }
-    if (!isPendingSessionId(sessionId) && slot && !slot.transcriptHydrated) {
+    if (!sessionIsPending && slot && !slot.transcriptHydrated) {
       logLatency("session.prompt.active.unhydrated_open_stream_allowed", {
         sessionId,
         selectedWorkspaceId: state.selectedWorkspaceId,

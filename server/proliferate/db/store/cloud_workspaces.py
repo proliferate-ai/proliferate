@@ -321,6 +321,12 @@ async def get_existing_cloud_workspace(
                 CloudWorkspace.git_branch == git_branch,
                 CloudWorkspace.archived_at.is_(None),
             )
+            .order_by(
+                CloudWorkspace.updated_at.desc(),
+                CloudWorkspace.created_at.desc(),
+                CloudWorkspace.id.desc(),
+            )
+            .limit(1)
         )
     ).scalar_one_or_none()
 

@@ -75,6 +75,7 @@ async def _claim_tracker_report(
             db,
             report_id=report_id,
             lease_seconds=300,
+            include_uninitialized=report_id is not None,
         )
 
 

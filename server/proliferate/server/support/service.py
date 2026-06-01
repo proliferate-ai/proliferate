@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.db.store import support_diagnostics as diagnostics_store
 from proliferate.db.store import support_reports
 from proliferate.integrations.aws import (
@@ -551,7 +552,12 @@ async def ensure_support_report_tracker(
         raise SupportReportUploadInvalid("Unknown support report upload.")
     if report.status != "completed":
         raise SupportReportUploadInvalid("Support report upload is not completed.")
-    if report.tracker_status in {"pending", "partial", "failed_retryable"}:
+    if settings.support_tracker_enabled and report.tracker_status in {
+        "none",
+        "pending",
+        "partial",
+        "failed_retryable",
+    }:
         await schedule_support_tracker_after_commit(db, report.id)
     return support_report_tracker_response(report)
 

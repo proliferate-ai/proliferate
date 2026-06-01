@@ -110,6 +110,16 @@ describe("workspace mobility presentation", () => {
     });
 
     expect(mobilityBlockerCopy({
+      code: "partial_subagent_graph",
+      direction: "local_to_cloud",
+    })).toEqual({
+      headline: "Linked sessions need to finish first",
+      body: "A linked subagent session is outside this workspace move.",
+      helper: "Finish or archive the linked subagent session, then try again.",
+      actionLabel: "Got it",
+    });
+
+    expect(mobilityBlockerCopy({
       code: "owner_mismatch",
       direction: "local_to_cloud",
     })).toEqual({

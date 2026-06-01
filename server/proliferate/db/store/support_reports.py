@@ -245,15 +245,17 @@ async def claim_due_tracker_report(
     *,
     report_id: str | None = None,
     lease_seconds: int = 300,
+    include_uninitialized: bool = False,
 ) -> SupportReportSnapshot | None:
     now = utcnow()
+    claimable_statuses = ["pending", "partial", "failed_retryable", "in_progress"]
+    if report_id is not None and include_uninitialized:
+        claimable_statuses.append("none")
     query = (
         select(SupportReport)
         .where(
             SupportReport.status == "completed",
-            SupportReport.tracker_status.in_(
-                ("pending", "partial", "failed_retryable", "in_progress")
-            ),
+            SupportReport.tracker_status.in_(claimable_statuses),
             or_(
                 SupportReport.tracker_next_attempt_at.is_(None),
                 SupportReport.tracker_next_attempt_at <= now,

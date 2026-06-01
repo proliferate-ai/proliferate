@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -11,6 +12,7 @@ from proliferate.db.store.cloud_mobility import (
     backfill_cloud_workspace_mobility_from_workspace,
     ensure_cloud_workspace_mobility,
 )
+from proliferate.db.store.cloud_workspaces import get_existing_cloud_workspace
 from proliferate.server.cloud.mobility.domain.lifecycle import (
     OWNER_LOCAL,
     active_lifecycle_state,
@@ -188,3 +190,28 @@ async def test_direct_target_backfill_does_not_steal_existing_workspace_pointer(
     assert value.owner == "personal_cloud"
     assert value.lifecycle_state == "cloud_active"
     assert value.cloud_workspace_id == existing_workspace.id
+
+
+@pytest.mark.asyncio
+async def test_existing_cloud_workspace_lookup_tolerates_duplicate_active_rows(
+    db_session: AsyncSession,
+) -> None:
+    user_id = uuid4()
+    older = _cloud_workspace(user_id=user_id, branch="tern", display_name="Older")
+    newer = _cloud_workspace(user_id=user_id, branch="tern", display_name="Newer")
+    older.updated_at = datetime(2026, 1, 1, tzinfo=UTC)
+    newer.updated_at = datetime(2026, 1, 2, tzinfo=UTC)
+    db_session.add_all([older, newer])
+    await db_session.flush()
+
+    value = await get_existing_cloud_workspace(
+        db_session,
+        user_id=user_id,
+        git_provider="github",
+        git_owner="proliferate-ai",
+        git_repo_name="proliferate",
+        git_branch="tern",
+    )
+
+    assert value is not None
+    assert value.id == newer.id

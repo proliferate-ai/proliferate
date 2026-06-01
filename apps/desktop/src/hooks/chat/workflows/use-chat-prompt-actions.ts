@@ -27,10 +27,14 @@ import {
 } from "@/lib/domain/chat/composer/file-mention-draft-model";
 import {
   createEmptySessionRecord,
+  getSessionRecord,
   putSessionRecord,
 } from "@/stores/sessions/session-records";
 import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
-import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
+import {
+  buildPendingWorkspaceUiKey,
+  isPendingWorkspaceUiKey,
+} from "@/lib/domain/workspaces/creation/pending-entry";
 import { createPendingSessionId } from "@/lib/workflows/sessions/session-runtime";
 import { writeChatShellIntentForSession } from "@/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
@@ -107,6 +111,22 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
 
     const launchSelection = scopedLaunchIdentity ?? configuredLaunch.selection;
     const targetSessionId = !forceNewSession && hasSlot ? activeSessionId : null;
+    const targetSessionRecord = targetSessionId ? getSessionRecord(targetSessionId) : null;
+    const targetWorkspaceId = targetSessionRecord?.workspaceId ?? selectedWorkspaceId ?? null;
+    const shouldMaterializeTargetSession = Boolean(
+      targetSessionId
+      && targetSessionRecord
+      && !targetSessionRecord.materializedSessionId
+      && targetWorkspaceId
+      && !isPendingWorkspaceUiKey(targetWorkspaceId),
+    );
+    const shouldQueueProjectedTargetSession = Boolean(
+      targetSessionId
+      && targetSessionRecord
+      && !targetSessionRecord.materializedSessionId
+      && targetWorkspaceId
+      && isPendingWorkspaceUiKey(targetWorkspaceId),
+    );
     const promptId = createPromptId();
     const latencyFlowId = targetSessionId
       ? startLatencyFlow({
@@ -125,14 +145,47 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
       clearDraft(draftKey);
     };
 
-    // Existing-session sends can still clear immediately because there is no
-    // launch validation gate. New-session sends clear only after validation.
-    if (targetSessionId) {
+    // Materialized existing sessions and pending-workspace projections can
+    // clear immediately. Real-workspace projected sessions clear after
+    // materialization validates through createSessionWithResolvedConfig.
+    if (targetSessionId && !shouldMaterializeTargetSession) {
       clearDraftIfNeeded();
     }
 
     try {
-      if (targetSessionId) {
+      if (targetSessionId && shouldMaterializeTargetSession && targetSessionRecord) {
+        await createSessionWithResolvedConfig({
+          text,
+          blocks,
+          attachmentSnapshots,
+          optimisticContentParts: input?.optimisticContentParts,
+          agentKind: targetSessionRecord.agentKind,
+          modelId:
+            targetSessionRecord.requestedModelId
+            ?? targetSessionRecord.modelId
+            ?? launchSelection?.modelId
+            ?? targetSessionRecord.agentKind,
+          ...(targetSessionRecord.modeId ? { modeId: targetSessionRecord.modeId } : {}),
+          workspaceId: targetWorkspaceId ?? undefined,
+          latencyFlowId,
+          measurementOperationId: input?.measurementOperationId,
+          promptId,
+          clientSessionId: targetSessionId,
+          onBeforeOptimisticPrompt: clearDraftIfNeeded,
+        });
+      } else if (targetSessionId && shouldQueueProjectedTargetSession) {
+        await promptSession({
+          sessionId: targetSessionId,
+          text,
+          blocks,
+          attachmentSnapshots,
+          optimisticContentParts: input?.optimisticContentParts,
+          workspaceId: targetWorkspaceId,
+          latencyFlowId,
+          measurementOperationId: input?.measurementOperationId,
+          promptId,
+        });
+      } else if (targetSessionId) {
         await promptActiveSession(text, {
           latencyFlowId: latencyFlowId ?? undefined,
           measurementOperationId: input?.measurementOperationId,

@@ -55,6 +55,24 @@ export function useSessionFindOrCreateActions({
       ) {
         activateSession(slot.sessionId);
         writeChatShellIntentForSession({ workspaceId, sessionId: slot.sessionId });
+        if (!slot.materializedSessionId) {
+          await createSessionWithResolvedConfig({
+            text,
+            blocks,
+            attachmentSnapshots,
+            optimisticContentParts,
+            agentKind,
+            modelId: slot.requestedModelId ?? slot.modelId ?? modelId ?? agentKind,
+            ...(slot.modeId ? { modeId: slot.modeId } : {}),
+            ...(workspaceId ? { workspaceId } : {}),
+            clientSessionId: slot.sessionId,
+            onBeforeOptimisticPrompt,
+            measurementOperationId,
+            promptId,
+            preferExistingCompatibleSession: true,
+          });
+          return;
+        }
         await promptSession({
           sessionId: slot.sessionId,
           text,
@@ -115,6 +133,24 @@ export function useSessionFindOrCreateActions({
       ) {
         activateSession(slot.sessionId);
         writeChatShellIntentForSession({ workspaceId, sessionId: slot.sessionId });
+        if (!slot.materializedSessionId) {
+          await createSessionWithResolvedConfig({
+            text,
+            blocks,
+            attachmentSnapshots,
+            optimisticContentParts,
+            agentKind,
+            modelId: slot.requestedModelId ?? slot.modelId ?? modelId,
+            ...(slot.modeId ? { modeId: slot.modeId } : {}),
+            workspaceId,
+            latencyFlowId,
+            promptId,
+            clientSessionId: slot.sessionId,
+            onBeforeOptimisticPrompt,
+            preferExistingCompatibleSession: true,
+          });
+          return;
+        }
         await promptSession({
           sessionId: slot.sessionId,
           text,
