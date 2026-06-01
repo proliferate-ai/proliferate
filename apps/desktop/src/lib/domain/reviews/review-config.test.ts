@@ -5,18 +5,20 @@ import {
   createReviewSetupReviewerDraft,
   clampRounds,
   draftToStoredReviewDefaults,
-  listReviewPersonaTemplates,
   MAX_REVIEW_ROUNDS,
   nextAvailableReviewPersonaTemplate,
   nextReviewReviewerId,
   reviewerMatchesReviewPersonaTemplate,
   reviewerPersonalityLabel,
   resolveReviewDefaultReviewerRows,
-  resolveReviewPersonaTemplates,
   resolveReviewExecutionModeIdForAgent,
   type ReviewSessionDefaults,
   type ReviewSetupReviewerDraft,
 } from "./review-config";
+import {
+  listReviewPersonaTemplates,
+  resolveReviewPersonaTemplates,
+} from "./review-personas";
 
 const SESSION_DEFAULTS: ReviewSessionDefaults = {
   agentKind: "codex",

@@ -1,9 +1,7 @@
 import { useCallback, useState, type ReactNode } from "react";
 import { DiffViewer } from "@/components/content/ui/DiffViewer";
-import {
-  FileChangeInlineRow,
-  FileDiffCard,
-} from "@/components/content/ui/FileDiffCard";
+import { FileChangeInlineRow } from "@/components/content/ui/FileChangeInlineRow";
+import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
 import { HighlightedCodePanel } from "@/components/content/ui/HighlightedCodePanel";
 import {
   ArrowRight,

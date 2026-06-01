@@ -13,7 +13,7 @@ import {
   resolveReviewPersonaTemplates,
   type ReviewPersonaTemplate,
   type ReviewPersonalityPreference,
-} from "@/lib/domain/reviews/review-config";
+} from "@/lib/domain/reviews/review-personas";
 
 interface ReviewPersonalitySectionProps {
   kind: ReviewKind;

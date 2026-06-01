@@ -8,10 +8,12 @@ import {
   createReviewSetupDraft,
   DEFAULT_REVIEW_MAX_ROUNDS,
   resolveReviewExecutionModeIdForAgent,
-  resolveReviewPersonaTemplates,
   type StoredReviewDefaultsByKind,
-  type StoredReviewPersonalitiesByKind,
 } from "@/lib/domain/reviews/review-config";
+import {
+  resolveReviewPersonaTemplates,
+  type StoredReviewPersonalitiesByKind,
+} from "@/lib/domain/reviews/review-personas";
 
 export interface ReviewLaunchSessionSlot {
   agentKind: string;

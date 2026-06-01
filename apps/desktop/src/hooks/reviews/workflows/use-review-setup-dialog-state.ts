@@ -12,12 +12,14 @@ import {
   buildReviewRequest,
   createReviewSetupDraft,
   draftToStoredReviewDefaults,
-  resolveReviewPersonaTemplates,
   resolveReviewExecutionModeIdForAgent,
-  type ReviewPersonaTemplate,
   type ReviewSessionDefaults,
   type ReviewSetupDraft,
 } from "@/lib/domain/reviews/review-config";
+import {
+  resolveReviewPersonaTemplates,
+  type ReviewPersonaTemplate,
+} from "@/lib/domain/reviews/review-personas";
 import { buildStartingReview } from "@/lib/domain/reviews/review-launch";
 import {
   materializeReviewParentSession,

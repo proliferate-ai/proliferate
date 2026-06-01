@@ -1,10 +1,8 @@
 import { useMemo, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { DiffViewer } from "@/components/content/ui/DiffViewer";
-import {
-  FileChangeStats,
-  FileDiffCard,
-} from "@/components/content/ui/FileDiffCard";
+import { FileChangeStats } from "@/components/content/ui/FileChangeStats";
+import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
 import { ArrowRight, FilePen, Undo } from "@proliferate/ui/icons";
 import { collectTurnFilePatches } from "@proliferate/product-domain/chats/transcript/turn-file-patches";
 import {

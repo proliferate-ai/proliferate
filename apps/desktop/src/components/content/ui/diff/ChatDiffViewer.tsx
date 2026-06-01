@@ -14,17 +14,18 @@ import {
 } from "@/lib/domain/content-search/content-search";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { chainVerticalWheelScroll } from "@proliferate/ui/utils/scroll-chain";
-import type {
-  CollapsedContext,
-  DiffLine,
-  ParsedPatch,
-} from "@/lib/domain/files/diff-parser";
+import type { CollapsedContext, DiffLine, ParsedPatch } from "@/lib/domain/files/diff-parser";
+import {
+  getChatDiffRows,
+  getChatLineNumber,
+  getChatLineNumberDigits,
+  getChatLineType,
+  getDiffLineIndex,
+  getDiffLineNumberColumnWidth,
+  type ChatDiffRow,
+} from "@/lib/domain/files/diff-view-rows";
 import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
 import { useContentSearchStore } from "@/stores/search/content-search-store";
-
-type ChatDiffRow =
-  | { kind: "line"; key: string; line: DiffLine }
-  | { kind: "collapsed"; key: string; section: CollapsedContext };
 
 const CHAT_DIFF_PRE_STYLE = {
   color: "var(--diffs-fg)",
@@ -41,77 +42,6 @@ const CHAT_DIFF_CODE_BASE_STYLE = {
   "--diffs-column-width": "736px",
 } as CSSProperties;
 
-function getChatLineType(line: DiffLine): "context" | "change-addition" | "change-deletion" {
-  switch (line.type) {
-    case "added":
-      return "change-addition";
-    case "removed":
-      return "change-deletion";
-    case "context":
-      return "context";
-  }
-}
-
-function getChatLineNumber(line: DiffLine): number | null {
-  if (line.type === "removed") {
-    return line.oldLineNum;
-  }
-  return line.newLineNum ?? line.oldLineNum;
-}
-
-function getChatLineIndex(line: DiffLine): string {
-  return `${line.oldLineNum ?? ""},${line.newLineNum ?? ""}`;
-}
-
-function getChatRows(
-  parsed: ParsedPatch,
-  expandedCollapsedKeys: Set<string>,
-): ChatDiffRow[] {
-  const rows: ChatDiffRow[] = [];
-
-  parsed.hunks.forEach((hunk, hunkIndex) => {
-    hunk.items.forEach((item, itemIndex) => {
-      const key = `${hunkIndex}-${itemIndex}`;
-      if ("kind" in item && item.kind === "collapsed") {
-        if (expandedCollapsedKeys.has(key)) {
-          item.lines.forEach((line) => {
-            rows.push({
-              kind: "line",
-              key: `${key}-${line.tokenIndex}`,
-              line,
-            });
-          });
-        } else {
-          rows.push({ kind: "collapsed", key, section: item });
-        }
-        return;
-      }
-
-      const line = item as DiffLine;
-      rows.push({
-        kind: "line",
-        key: `${key}-${line.tokenIndex}`,
-        line,
-      });
-    });
-  });
-
-  return rows;
-}
-
-function getChatLineNumberDigits(rows: ChatDiffRow[]): number {
-  let maxLineNumber = 0;
-  for (const row of rows) {
-    if (row.kind !== "line") continue;
-    maxLineNumber = Math.max(maxLineNumber, getChatLineNumber(row.line) ?? 0);
-  }
-  return Math.max(String(maxLineNumber).length, 1);
-}
-
-function getDiffLineNumberColumnWidth(lineNumberDigits: number): string {
-  return `max(40px, calc(${lineNumberDigits}ch + 1.5rem))`;
-}
-
 function ChatGutterLine({ line }: { line: DiffLine }) {
   const lineType = getChatLineType(line);
   const lineNumber = getChatLineNumber(line);
@@ -120,7 +50,7 @@ function ChatGutterLine({ line }: { line: DiffLine }) {
     <div
       data-line-type={lineType}
       data-column-number={lineNumber ?? undefined}
-      data-line-index={getChatLineIndex(line)}
+      data-line-index={getDiffLineIndex(line)}
       className="diff-gutter-cell box-border flex min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] items-start justify-end bg-[var(--diffs-bg)] pr-2 pl-3 pt-[calc((var(--diffs-line-height)-1em)/2)] text-right tabular-nums"
     >
       <span data-line-number-content="">{lineNumber ?? ""}</span>
@@ -161,7 +91,7 @@ function ChatContentLine({
       data-line={lineNumber ?? undefined}
       data-alt-line={altLineNumber}
       data-line-type={lineType}
-      data-line-index={getChatLineIndex(line)}
+      data-line-index={getDiffLineIndex(line)}
       className={`diff-content-cell relative min-h-[var(--diffs-line-height)] pr-3 pl-2 ${
         wrapLongLines
           ? "block min-w-0 whitespace-pre-wrap break-words py-[calc((var(--diffs-line-height)-1em)/2)]"
@@ -308,7 +238,7 @@ export function ChatDiffViewer({
     new Set(),
   );
   const rows = useMemo(
-    () => getChatRows(parsed, expandedCollapsedKeys),
+    () => getChatDiffRows(parsed, expandedCollapsedKeys),
     [parsed, expandedCollapsedKeys],
   );
   const contentSearchSurface = useContentSearchStore((state) => state.surface);
