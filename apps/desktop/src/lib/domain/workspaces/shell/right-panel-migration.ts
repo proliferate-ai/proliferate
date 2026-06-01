@@ -15,7 +15,7 @@ import {
   type RightPanelMaterializedState,
   type RightPanelTool,
 } from "@/lib/domain/workspaces/shell/right-panel-model";
-import { normalizeRightPanelMaterializedState } from "@/lib/domain/workspaces/shell/right-panel-state";
+import { normalizeRightPanelMaterializedState } from "@/lib/domain/workspaces/shell/right-panel-state-normalization";
 
 export function migrateLegacyRightPanelWorkspaceState(args: {
   state: unknown;

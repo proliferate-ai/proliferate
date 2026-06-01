@@ -1,40 +1,25 @@
 import type { GitStatusSnapshot, RepoRoot } from "@anyharness/sdk";
 import type { SidebarSessionActivityState } from "@proliferate/product-domain/sessions/activity";
-import {
-  latestLogicalWorkspaceTimestamp,
-  logicalWorkspaceMatchesId,
-  logicalWorkspaceRelatedIds,
-} from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import { repoRootGroupKey } from "@/lib/domain/workspaces/cloud/collections";
 import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
-import { humanizeBranchName } from "@/lib/domain/workspaces/creation/branch-naming";
-import { workspaceDefaultDisplayName } from "@/lib/domain/workspaces/display/workspace-display";
 import { parseLogicalWorkspaceId } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
-import {
-  activeWorkspaceActivity,
-  detailIndicatorsForWorkspace,
-  logicalWorkspaceSshTargetId,
-  sidebarStatusIndicatorFromActivity,
-  sidebarWorkspaceVariantForLogicalWorkspace,
-} from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import type { ComputeTargetAppearance } from "@/lib/domain/compute/target-appearance";
-import type { SidebarCloudWorkspaceStatus } from "@/lib/domain/workspaces/sidebar/cloud-workspace";
-import { cloudSidebarEntryDefaultDisplayName } from "@/lib/domain/workspaces/sidebar/sidebar-entries";
 import type {
   SidebarGroupState,
-  SidebarWorkspaceItemState,
 } from "@/lib/domain/workspaces/sidebar/sidebar-model";
 import { buildPendingSidebarProjection } from "@/lib/domain/workspaces/sidebar/pending-sidebar-projection";
 import { resolveSidebarWorkspaceTypes } from "@/lib/domain/workspaces/sidebar/sidebar-workspace-types";
-import { isWorkspaceNeedsReview } from "@/lib/domain/workspaces/sidebar/sidebar-review";
-import { workspaceCopyMetadataForLogicalWorkspace } from "@/lib/domain/workspaces/workspace-copy-metadata";
 import {
   compareLogicalWorkspaceRecency,
   compareResolvedLogicalWorkspaceRecency,
   type LogicalWorkspaceRecency,
   resolveLogicalWorkspaceRecency,
 } from "@/lib/domain/workspaces/sidebar/recency";
+import {
+  buildSidebarWorkspaceItems,
+  pendingOwnsLogicalWorkspace,
+} from "@/lib/domain/workspaces/sidebar/sidebar-workspace-items";
 
 function logicalGroupName(workspace: LogicalWorkspace): string {
   return workspace.repoName
@@ -155,93 +140,21 @@ export function buildSidebarGroupStates(args: {
       if (repoRoot && args.hiddenRepoRootIds.has(repoRoot.id)) {
         return null;
       }
-      const workspaceItemsWithWorkspace = groupWorkspaces.map((entry) => {
-        const active = logicalWorkspaceMatchesId(entry, args.selectedLogicalWorkspaceId);
-        const cloudOnlyArchived = !entry.localWorkspace
-          && entry.cloudWorkspace?.productLifecycle === "archived";
-        const archived = cloudOnlyArchived
-          || logicalWorkspaceRelatedIds(entry).some((id) => args.archivedSet.has(id));
-        const recency = resolveLogicalWorkspaceRecency(entry, args.workspaceLastInteracted);
-        const activityLastInteracted = recency.displayAt;
-        const lastInteracted = activityLastInteracted ?? recency.recordUpdatedAt;
-        const preferredLocalWorkspace = entry.localWorkspace;
-        const preferredCloudWorkspace = entry.cloudWorkspace;
-        const variant = sidebarWorkspaceVariantForLogicalWorkspace(entry);
-        const displayNameOverride = preferredLocalWorkspace?.displayName?.trim()
-          || preferredCloudWorkspace?.displayName?.trim()
-          || null;
-        const defaultName = preferredLocalWorkspace
-          ? (
-            active && args.selectedWorkspaceId === preferredLocalWorkspace.id && args.gitStatus?.currentBranch
-              ? humanizeBranchName(args.gitStatus.currentBranch)
-              : workspaceDefaultDisplayName(preferredLocalWorkspace)
-          )
-          : preferredCloudWorkspace
-            ? cloudSidebarEntryDefaultDisplayName({
-              source: "cloud",
-              id: entry.id,
-              cloudWorkspaceId: preferredCloudWorkspace.id,
-              repoKey: entry.repoKey,
-              workspace: preferredCloudWorkspace,
-            })
-            : entry.displayName;
-        const needsReview = isWorkspaceNeedsReview({
-          isArchived: archived,
-          lastInteracted: activityLastInteracted,
-          lastViewedAt: latestLogicalWorkspaceTimestamp(args.lastViewedAt, entry),
-        });
-        const activity = activeWorkspaceActivity(entry, args.workspaceActivities);
-        const copyMetadata = workspaceCopyMetadataForLogicalWorkspace(entry);
-        const sshTargetId = variant === "ssh" ? logicalWorkspaceSshTargetId(entry) : null;
-        const targetAppearance = sshTargetId
-          ? args.targetAppearanceById?.[sshTargetId] ?? null
-          : null;
-
-        return {
-          workspace: entry,
-          item: {
-            id: entry.id,
-            localWorkspaceId: preferredLocalWorkspace?.id ?? null,
-            cloudWorkspaceId: preferredCloudWorkspace?.id ?? null,
-            name: displayNameOverride ?? defaultName,
-            defaultName,
-            hasDisplayNameOverride: displayNameOverride !== null,
-            renameSupported: !(entry.localWorkspace && entry.cloudWorkspace),
-            subtitle: active ? args.activeSessionTitle : null,
-            active,
-            archived,
-            variant,
-            statusIndicator: sidebarStatusIndicatorFromActivity({
-              activity,
-              needsReview,
-              pendingPromptCount: logicalWorkspaceRelatedCount(args.pendingPromptCounts, entry),
-              errorAction: { kind: "open_workspace", workspaceId: entry.id },
-            }),
-            detailIndicators: detailIndicatorsForWorkspace(
-              entry,
-              variant,
-              targetAppearance,
-            ),
-            cloudStatus: preferredCloudWorkspace
-              ? preferredCloudWorkspace.status as SidebarCloudWorkspaceStatus
-              : null,
-            lastInteracted,
-            needsReview,
-            workspaceLocationCopyLabel: copyMetadata.workspaceLocation?.menuLabel ?? null,
-            workspaceLocationCopyValue: copyMetadata.workspaceLocation?.value ?? null,
-            workspaceLocationCopyToastLabel: copyMetadata.workspaceLocation?.toastLabel ?? null,
-            branchName: copyMetadata.branchName,
-          },
-        };
+      const workspaceItems = buildSidebarWorkspaceItems({
+        workspaces: groupWorkspaces,
+        pendingItem,
+        pendingOwnedWorkspaceId,
+        archivedSet: args.archivedSet,
+        selectedLogicalWorkspaceId: args.selectedLogicalWorkspaceId,
+        selectedWorkspaceId: args.selectedWorkspaceId,
+        workspaceActivities: args.workspaceActivities,
+        pendingPromptCounts: args.pendingPromptCounts,
+        gitStatus: args.gitStatus,
+        activeSessionTitle: args.activeSessionTitle,
+        lastViewedAt: args.lastViewedAt,
+        workspaceLastInteracted: args.workspaceLastInteracted,
+        targetAppearanceById: args.targetAppearanceById,
       });
-      const workspaceItems = applyDuplicateLocalNameSuffixes(
-        pendingItem
-          ? workspaceItemsWithWorkspace.filter(({ workspace, item }) =>
-            item.id !== pendingItem.id
-            && !pendingOwnsLogicalWorkspace(pendingOwnedWorkspaceId, workspace)
-          )
-          : workspaceItemsWithWorkspace,
-      );
       const items = pendingItem
         ? [pendingItem, ...workspaceItems]
         : workspaceItems;
@@ -384,80 +297,4 @@ function sidebarItemMatchesId(
     return false;
   }
   return parsed.segments[0] === item.localWorkspaceId;
-}
-
-function logicalWorkspaceRelatedCount(
-  counts: Record<string, number> | undefined,
-  workspace: LogicalWorkspace,
-): number {
-  if (!counts) {
-    return 0;
-  }
-  return logicalWorkspaceRelatedIds(workspace).reduce(
-    (total, id) => total + (counts[id] ?? 0),
-    0,
-  );
-}
-
-function pendingOwnsLogicalWorkspace(
-  pendingWorkspaceId: string | null,
-  workspace: LogicalWorkspace,
-): boolean {
-  return Boolean(
-    pendingWorkspaceId
-    && logicalWorkspaceMatchesId(workspace, pendingWorkspaceId),
-  );
-}
-
-function applyDuplicateLocalNameSuffixes(
-  entries: Array<{
-    workspace: LogicalWorkspace;
-    item: SidebarWorkspaceItemState;
-  }>,
-): SidebarWorkspaceItemState[] {
-  const localEntriesByName = new Map<string, typeof entries>();
-  for (const entry of entries) {
-    if (!entry.workspace.localWorkspace) {
-      continue;
-    }
-    const byName = localEntriesByName.get(entry.item.name);
-    if (byName) {
-      byName.push(entry);
-    } else {
-      localEntriesByName.set(entry.item.name, [entry]);
-    }
-  }
-
-  const suffixById = new Map<string, number>();
-  for (const duplicateEntries of localEntriesByName.values()) {
-    if (duplicateEntries.length < 2) {
-      continue;
-    }
-    [...duplicateEntries]
-      .sort((left, right) => compareDuplicateLocalNameOrder(left.workspace, right.workspace))
-      .forEach((entry, index) => {
-        if (index > 0) {
-          suffixById.set(entry.workspace.id, index + 1);
-        }
-      });
-  }
-
-  return entries.map(({ workspace, item }) => {
-    const suffix = suffixById.get(workspace.id);
-    return suffix
-      ? { ...item, name: `${item.name} #${suffix}` }
-      : item;
-  });
-}
-
-function compareDuplicateLocalNameOrder(left: LogicalWorkspace, right: LogicalWorkspace): number {
-  const leftWorkspace = left.localWorkspace;
-  const rightWorkspace = right.localWorkspace;
-  const byCreatedAt =
-    new Date(leftWorkspace?.createdAt ?? left.updatedAt).getTime()
-    - new Date(rightWorkspace?.createdAt ?? right.updatedAt).getTime();
-  if (byCreatedAt !== 0) {
-    return byCreatedAt;
-  }
-  return left.id.localeCompare(right.id);
 }

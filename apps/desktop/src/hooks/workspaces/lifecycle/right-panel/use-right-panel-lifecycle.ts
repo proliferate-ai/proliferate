@@ -6,7 +6,7 @@ import {
 import type { TerminalRecord } from "@anyharness/sdk";
 import {
   reconcileRightPanelWorkspaceState,
-} from "@/lib/domain/workspaces/shell/right-panel-state";
+} from "@/lib/domain/workspaces/shell/right-panel-state-normalization";
 import {
   rightPanelStateEqual,
 } from "@/lib/domain/workspaces/shell/right-panel-view";

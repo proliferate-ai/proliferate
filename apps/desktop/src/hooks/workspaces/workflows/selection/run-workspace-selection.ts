@@ -19,180 +19,38 @@ import {
   trackWorkspaceInteraction,
   useWorkspaceUiStore,
 } from "@/stores/preferences/workspace-ui-store";
-import { isPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
 import { getLatestWorkspaceInteractionTimestamp } from "@/lib/domain/workspaces/selection/selection";
 import {
   logLatency,
   startLatencyTimer,
 } from "@/lib/infra/measurement/debug-latency";
 import { cancelLatencyFlow } from "@/lib/infra/measurement/latency-flow";
-import {
-  OPTIMISTIC_WORKSPACE_SESSION_AGENT_KIND,
-  OPTIMISTIC_WORKSPACE_SESSION_TITLE,
-  resolveOptimisticWorkspaceSessionId,
-} from "@/lib/domain/workspaces/selection/optimistic-session-shell";
 import { isCloudWorkspaceNotReadyError } from "@/hooks/access/cloud/use-cloud-workspace-connection";
 import { startCloudWorkspace } from "@proliferate/cloud-sdk/client/workspaces";
 import { resolveCloudWorkspaceReadiness } from "./cloud-readiness";
 import { resolveSelectionConnection } from "./connection";
 import { isWorkspaceSelectionCurrent } from "./guards";
+import {
+  prepareOptimisticWorkspaceSessionShell,
+  resolveInitialActiveSessionId,
+} from "./initial-session";
+import {
+  resolveCloudSelectionConnectionWithStartRetry,
+} from "./cloud-selection-connection";
 import type {
-  ReadyCloudReadinessResult,
-  WorkspaceSelectionOptions,
-  WorkspaceConnectionResult,
   WorkspaceSelectionContext,
   WorkspaceSelectionDeps,
   WorkspaceSelectionRequest,
 } from "./types";
 
-function resolveInitialActiveSessionId(
-  workspaceId: string,
-  workspaceUiKey: string,
-  workspaceUiKeys: readonly string[],
-  options: WorkspaceSelectionOptions | undefined,
-  workspaceUiState: {
-    lastViewedSessionByWorkspace: Record<string, string>;
-    visibleChatSessionIdsByWorkspace: Record<string, string[]>;
-  },
-): string | null {
-  const candidate = resolveOptimisticWorkspaceSessionId({
-    explicitInitialSessionId: options?.initialActiveSessionId,
-    hasExplicitInitialSessionId: !!options && "initialActiveSessionId" in options,
-    lastViewedSessionByWorkspace: workspaceUiState.lastViewedSessionByWorkspace,
-    materializedWorkspaceId: workspaceId,
-    visibleChatSessionIdsByWorkspace: workspaceUiState.visibleChatSessionIdsByWorkspace,
-    workspaceUiKey,
-    workspaceUiKeys,
-  });
-  if (!candidate) {
-    return null;
-  }
-
-  const cachedSlot = getSessionRecord(candidate);
-  if (!cachedSlot?.workspaceId || cachedSlot.workspaceId === workspaceId) {
-    return candidate;
-  }
-
-  const shouldPreservePendingProjection =
-    options?.preservePending === true
-    && isTransientClientSessionId(candidate)
-    && !cachedSlot.materializedSessionId
-    && isPendingWorkspaceUiKey(cachedSlot.workspaceId);
-  if (shouldPreservePendingProjection) {
-    logLatency("workspace.select.projected_initial_session_preserved", {
-      workspaceId,
-      workspaceUiKey,
-      sessionId: candidate,
-      existingWorkspaceId: cachedSlot.workspaceId,
-      reason: "preserve_pending_projection",
-    });
-    return candidate;
-  }
-
-  return null;
-}
-
-function prepareOptimisticWorkspaceSessionShell(input: {
-  sessionId: string | null;
-  workspaceId: string;
-  workspaceUiKey: string;
-}): void {
-  if (!input.sessionId) {
-    return;
-  }
-
-  const existing = getSessionRecord(input.sessionId);
-  if (!existing) {
-    putSessionRecord(createEmptySessionRecord(
-      input.sessionId,
-      OPTIMISTIC_WORKSPACE_SESSION_AGENT_KIND,
-      {
-        materializedSessionId: input.sessionId,
-        sessionRelationship: { kind: "root" },
-        title: OPTIMISTIC_WORKSPACE_SESSION_TITLE,
-        workspaceId: input.workspaceId,
-      },
-    ));
-  } else if (!existing.materializedSessionId && isTransientClientSessionId(input.sessionId)) {
-    if (!existing.workspaceId) {
-      patchSessionRecord(input.sessionId, { workspaceId: input.workspaceId });
-    }
-    logLatency("workspace.select.projected_session_preserved", {
-      workspaceId: input.workspaceId,
-      workspaceUiKey: input.workspaceUiKey,
-      sessionId: input.sessionId,
-      existingWorkspaceId: existing.workspaceId ?? null,
-      reason: "transient_unmaterialized_session",
-    });
-  } else if (!existing.workspaceId || !existing.materializedSessionId) {
-    patchSessionRecord(input.sessionId, {
-      materializedSessionId: existing.materializedSessionId ?? input.sessionId,
-      workspaceId: existing.workspaceId ?? input.workspaceId,
-    });
-  }
-
-  writeChatShellIntentForSession({
-    workspaceId: input.workspaceId,
-    shellWorkspaceId: input.workspaceUiKey,
-    sessionId: input.sessionId,
-    invalidateSessionIntent: false,
-  });
-  logLatency("workspace.select.optimistic_session_shell", {
-    workspaceId: input.workspaceId,
-    workspaceUiKey: input.workspaceUiKey,
-    sessionId: input.sessionId,
-    createdRecord: !existing,
-  });
-}
-
-function isTransientClientSessionId(sessionId: string): boolean {
-  return sessionId.startsWith("client-session:")
-    || sessionId.startsWith("pending-session:");
-}
-
-async function invalidateCloudWorkspaceStartState(
-  deps: WorkspaceSelectionDeps,
-  runtimeUrl: string,
-): Promise<void> {
-  await deps.cache.invalidateCloudWorkspaceStartState(runtimeUrl);
-}
-
-async function resolveCloudSelectionConnection(
-  deps: WorkspaceSelectionDeps,
-  context: WorkspaceSelectionContext,
-  cloudReadiness: ReadyCloudReadinessResult,
-  latencyFlowId: string | null | undefined,
-): Promise<WorkspaceConnectionResult | null> {
-  try {
-    return await resolveSelectionConnection(deps, context, cloudReadiness);
-  } catch (error) {
-    if (
-      cloudReadiness.kind !== "cloud-ready"
-      || !isCloudWorkspaceNotReadyError(error)
-    ) {
-      throw error;
-    }
-
-    const startedWorkspace = await startCloudWorkspace(cloudReadiness.cloudWorkspaceId);
-    await invalidateCloudWorkspaceStartState(
-      deps,
-      useHarnessConnectionStore.getState().runtimeUrl,
-    );
-    if (!isWorkspaceSelectionCurrent(context.workspaceId, context.selectionNonce)) {
-      cancelLatencyFlow(latencyFlowId, "workspace_selection_stale");
-      return null;
-    }
-    if (startedWorkspace.status !== "ready") {
-      cancelLatencyFlow(latencyFlowId, "cloud_workspace_start_pending", {
-        cloudWorkspaceId: cloudReadiness.cloudWorkspaceId,
-        status: startedWorkspace.status,
-      });
-      return null;
-    }
-
-    return await resolveSelectionConnection(deps, context, cloudReadiness);
-  }
-}
+const INITIAL_SESSION_DEPS = {
+  createEmptySessionRecord,
+  getSessionRecord,
+  logLatency,
+  patchSessionRecord,
+  putSessionRecord,
+  writeChatShellIntentForSession,
+};
 
 export async function runWorkspaceSelection(
   deps: WorkspaceSelectionDeps,
@@ -219,13 +77,13 @@ export async function runWorkspaceSelection(
       });
 
       const workspaceUiState = useWorkspaceUiStore.getState();
-      const initialActiveSessionId = resolveInitialActiveSessionId(
-        request.workspaceId,
-        request.workspaceId,
-        [request.workspaceId],
-        request.options,
+      const initialActiveSessionId = resolveInitialActiveSessionId({
+        workspaceId: request.workspaceId,
+        workspaceUiKey: request.workspaceId,
+        workspaceUiKeys: [request.workspaceId],
+        options: request.options,
         workspaceUiState,
-      );
+      }, INITIAL_SESSION_DEPS);
       deps.cache.cancelPreviousWorkspaceDisplayQueries({
         runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
         previousWorkspaceIds: [
@@ -243,7 +101,7 @@ export async function runWorkspaceSelection(
         sessionId: initialActiveSessionId,
         workspaceId: request.workspaceId,
         workspaceUiKey: request.workspaceId,
-      });
+      }, INITIAL_SESSION_DEPS);
 
       const context: WorkspaceSelectionContext = {
         workspaceId: request.workspaceId,
@@ -307,13 +165,13 @@ export async function runWorkspaceSelection(
       });
 
       const workspaceUiState = useWorkspaceUiStore.getState();
-      const initialActiveSessionId = resolveInitialActiveSessionId(
-        directWorkspace.id,
-        directWorkspace.id,
-        [directWorkspace.id],
-        request.options,
+      const initialActiveSessionId = resolveInitialActiveSessionId({
+        workspaceId: directWorkspace.id,
+        workspaceUiKey: directWorkspace.id,
+        workspaceUiKeys: [directWorkspace.id],
+        options: request.options,
         workspaceUiState,
-      );
+      }, INITIAL_SESSION_DEPS);
       deps.cache.cancelPreviousWorkspaceDisplayQueries({
         runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
         previousWorkspaceIds: [
@@ -331,7 +189,7 @@ export async function runWorkspaceSelection(
         sessionId: initialActiveSessionId,
         workspaceId: directWorkspace.id,
         workspaceUiKey: directWorkspace.id,
-      });
+      }, INITIAL_SESSION_DEPS);
 
       const context: WorkspaceSelectionContext = {
         workspaceId: directWorkspace.id,
@@ -403,13 +261,13 @@ export async function runWorkspaceSelection(
   });
 
   const workspaceUiState = useWorkspaceUiStore.getState();
-  const initialActiveSessionId = resolveInitialActiveSessionId(
-    resolvedWorkspaceId,
-    logicalWorkspace.id,
-    logicalWorkspaceRelatedIds(logicalWorkspace),
-    request.options,
+  const initialActiveSessionId = resolveInitialActiveSessionId({
+    workspaceId: resolvedWorkspaceId,
+    workspaceUiKey: logicalWorkspace.id,
+    workspaceUiKeys: logicalWorkspaceRelatedIds(logicalWorkspace),
+    options: request.options,
     workspaceUiState,
-  );
+  }, INITIAL_SESSION_DEPS);
   deps.cache.cancelPreviousWorkspaceDisplayQueries({
     runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
     previousWorkspaceIds: [
@@ -427,7 +285,7 @@ export async function runWorkspaceSelection(
     sessionId: initialActiveSessionId,
     workspaceId: resolvedWorkspaceId,
     workspaceUiKey: logicalWorkspace.id,
-  });
+  }, INITIAL_SESSION_DEPS);
 
   const baseContext: WorkspaceSelectionContext = {
     workspaceId: resolvedWorkspaceId,
@@ -466,12 +324,17 @@ export async function runWorkspaceSelection(
     return;
   }
 
-  const connectionResult = await resolveCloudSelectionConnection(
-    deps,
-    context,
+  const connectionResult = await resolveCloudSelectionConnectionWithStartRetry({
     cloudReadiness,
-    request.options?.latencyFlowId,
-  );
+    context,
+    latencyFlowId: request.options?.latencyFlowId,
+    runtimeUrl: useHarnessConnectionStore.getState().runtimeUrl,
+    selectionDeps: deps,
+  }, {
+    isCloudWorkspaceNotReadyError,
+    resolveSelectionConnection,
+    startCloudWorkspace,
+  });
   if (connectionResult === null) {
     return;
   }

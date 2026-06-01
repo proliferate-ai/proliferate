@@ -20,12 +20,14 @@ import {
 import { createRightPanelBrowserTabId } from "@/lib/domain/workspaces/shell/right-panel-browser-tabs";
 import {
   createOrActivateBrowserTabInRightPanelState,
-  reconcileRightPanelWorkspaceState,
   removeBrowserTabFromRightPanelState,
   removeTerminalFromRightPanelState,
   reorderHeaderEntryInRightPanelState,
   updateBrowserTabUrlInRightPanelState,
 } from "@/lib/domain/workspaces/shell/right-panel-state";
+import {
+  reconcileRightPanelWorkspaceState,
+} from "@/lib/domain/workspaces/shell/right-panel-state-normalization";
 import {
   type ViewerTarget,
   type ViewerTargetKey,
