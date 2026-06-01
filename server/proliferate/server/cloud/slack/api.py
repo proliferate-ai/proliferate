@@ -14,8 +14,6 @@ from proliferate.auth.dependencies import current_product_user
 from proliferate.config import settings
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
-from proliferate.db.store import cloud_repo_config as repo_store
-from proliferate.db.store.cloud_slack.records import CloudRepoRoutingProfileRecord
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.slack.models import (
     SlackBotConfigEnvelopeResponse,
@@ -31,12 +29,13 @@ from proliferate.server.cloud.slack.models import (
     repo_routing_profile_payload,
 )
 from proliferate.server.cloud.slack.service import (
+    SlackRepoRoutingProfileDetails,
     complete_oauth_install,
     disconnect,
     get_bot_config_envelope,
     ingest_slack_event,
     list_channels,
-    list_repo_routing_profiles,
+    list_repo_routing_profile_details,
     start_oauth_install,
     update_bot_config,
     upsert_repo_routing_profile,
@@ -47,29 +46,19 @@ from proliferate.server.cloud.slack.signature import verify_slack_signature
 router = APIRouter(prefix="/slack", tags=["cloud-slack"])
 
 
-async def _repo_profile_response(
-    db: AsyncSession,
-    organization_id: UUID,
-    profiles: list[CloudRepoRoutingProfileRecord],
+def _repo_profile_response(
+    profiles: list[SlackRepoRoutingProfileDetails],
 ) -> SlackRepoRoutingProfilesResponse:
-    repo_by_id = {
-        repo.id: repo
-        for repo in await repo_store.list_organization_cloud_repo_configs(
-            db,
-            organization_id=organization_id,
-        )
-    }
-    payloads = []
-    for profile in profiles:
-        repo = repo_by_id.get(profile.cloud_repo_config_id)
-        payloads.append(
+    return SlackRepoRoutingProfilesResponse(
+        profiles=[
             repo_routing_profile_payload(
-                profile,
-                git_owner=repo.git_owner if repo else None,
-                git_repo_name=repo.git_repo_name if repo else None,
+                detail.profile,
+                git_owner=detail.git_owner,
+                git_repo_name=detail.git_repo_name,
             )
-        )
-    return SlackRepoRoutingProfilesResponse(profiles=payloads)
+            for detail in profiles
+        ],
+    )
 
 
 @router.get("/oauth/start", response_model=SlackOAuthStartResponse)
@@ -185,8 +174,8 @@ async def list_slack_repo_routing_profiles_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> SlackRepoRoutingProfilesResponse:
-    profiles = await list_repo_routing_profiles(db, user, organization_id=organization_id)
-    return await _repo_profile_response(db, organization_id, profiles)
+    profiles = await list_repo_routing_profile_details(db, user, organization_id=organization_id)
+    return _repo_profile_response(profiles)
 
 
 @router.put("/repo-routing-profiles", response_model=SlackRepoRoutingProfilesResponse)
@@ -204,8 +193,8 @@ async def upsert_slack_repo_routing_profile_endpoint(
         display_name=body.display_name,
         description=body.description,
     )
-    profiles = await list_repo_routing_profiles(db, user, organization_id=organization_id)
-    return await _repo_profile_response(db, organization_id, profiles)
+    profiles = await list_repo_routing_profile_details(db, user, organization_id=organization_id)
+    return _repo_profile_response(profiles)
 
 
 @router.post("/events")

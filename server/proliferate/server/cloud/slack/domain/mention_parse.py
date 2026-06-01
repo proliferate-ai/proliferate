@@ -22,3 +22,18 @@ def parse_slack_mention_text(text: str, *, bot_user_id: str | None) -> ParsedSla
         repo_hint = match.group(1).strip()
         cleaned = (cleaned[: match.start()] + cleaned[match.end() :]).strip()
     return ParsedSlackMention(prompt=cleaned or "Help with this repository.", repo_hint=repo_hint)
+
+
+def is_human_slack_message(event: dict[str, object], *, bot_user_id: str | None) -> bool:
+    if _string_or_none(event.get("subtype")) is not None:
+        return False
+    if _string_or_none(event.get("bot_id")) is not None:
+        return False
+    if _string_or_none(event.get("app_id")) is not None:
+        return False
+    user_id = _string_or_none(event.get("user"))
+    return bool(user_id and user_id != bot_user_id)
+
+
+def _string_or_none(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None

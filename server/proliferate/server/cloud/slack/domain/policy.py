@@ -2,38 +2,58 @@
 
 from __future__ import annotations
 
-from proliferate.constants.slack import SLACK_CONNECTION_STATUS_ACTIVE
-from proliferate.db.store.cloud_slack.records import (
-    SlackBotConfigRecord,
-    SlackWorkspaceConnectionRecord,
-)
-from proliferate.server.cloud.errors import CloudApiError
+from dataclasses import dataclass
+from typing import Protocol
 
 
-def require_active_slack_bot(
+class SlackConnectionState(Protocol):
+    status: str
+
+
+class SlackBotConfigState(Protocol):
+    enabled: bool
+    allowed_slack_channel_ids: str | None
+
+
+@dataclass(frozen=True)
+class SlackBotAllowed:
+    pass
+
+
+@dataclass(frozen=True)
+class SlackBotDenied:
+    code: str
+    message: str
+    status_code: int
+
+
+SlackBotVerdict = SlackBotAllowed | SlackBotDenied
+
+
+def check_active_slack_bot(
     *,
-    connection: SlackWorkspaceConnectionRecord | None,
-    config: SlackBotConfigRecord | None,
+    connection: SlackConnectionState | None,
+    config: SlackBotConfigState | None,
     slack_channel_id: str | None = None,
-) -> tuple[SlackWorkspaceConnectionRecord, SlackBotConfigRecord]:
+) -> SlackBotVerdict:
     if connection is None:
-        raise CloudApiError("slack_not_connected", "Slack is not connected.", status_code=404)
-    if connection.status != SLACK_CONNECTION_STATUS_ACTIVE:
-        raise CloudApiError(
+        return SlackBotDenied("slack_not_connected", "Slack is not connected.", 404)
+    if connection.status != "active":
+        return SlackBotDenied(
             "slack_connection_requires_reauth",
             "Slack needs to be reconnected.",
-            status_code=409,
+            409,
         )
     if config is None or not config.enabled:
-        raise CloudApiError("slack_bot_disabled", "Slack bot is disabled.", status_code=409)
+        return SlackBotDenied("slack_bot_disabled", "Slack bot is disabled.", 409)
     if slack_channel_id and config.allowed_slack_channel_ids:
         allowed = {
             item.strip() for item in config.allowed_slack_channel_ids.split(",") if item.strip()
         }
         if slack_channel_id not in allowed:
-            raise CloudApiError(
+            return SlackBotDenied(
                 "slack_channel_not_allowed",
                 "Slack bot is not enabled for this channel.",
-                status_code=403,
+                403,
             )
-    return connection, config
+    return SlackBotAllowed()

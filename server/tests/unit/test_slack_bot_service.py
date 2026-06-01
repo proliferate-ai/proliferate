@@ -13,6 +13,7 @@ from proliferate.db.store.cloud_slack.records import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.slack import service
+from proliferate.server.cloud.slack.worker import outbound
 
 
 def _connection() -> SlackWorkspaceConnectionRecord:
@@ -166,13 +167,13 @@ async def test_outbound_send_marks_failed_when_connection_needs_reauth(
     async def fail_chat_post(*args: object, **kwargs: object) -> None:
         raise AssertionError("Slack post should not run with an undecryptable token")
 
-    monkeypatch.setattr(service.outbound_store, "mark_outbound_sending", mark_sending)
-    monkeypatch.setattr(service.connection_store, "get_connection", get_connection)
-    monkeypatch.setattr(service.connection_store, "mark_connection_reauth_required", mark_reauth)
-    monkeypatch.setattr(service.outbound_store, "mark_outbound_failed", mark_failed)
-    monkeypatch.setattr(service.slack_client, "chat_post_message", fail_chat_post)
+    monkeypatch.setattr(outbound.outbound_store, "mark_outbound_sending", mark_sending)
+    monkeypatch.setattr(outbound.connection_store, "get_connection", get_connection)
+    monkeypatch.setattr(outbound.connection_store, "mark_connection_reauth_required", mark_reauth)
+    monkeypatch.setattr(outbound.outbound_store, "mark_outbound_failed", mark_failed)
+    monkeypatch.setattr(outbound.slack_client, "chat_post_message", fail_chat_post)
 
-    await service._send_outbound_message(None, message)  # type: ignore[arg-type]
+    await outbound.send_outbound_message(None, message)  # type: ignore[arg-type]
 
     assert marked_reauth == [connection.id]
     assert failed["message_id"] == message.id
