@@ -1,17 +1,20 @@
-import type { AgentSummary, ReconcileAgentResult } from "@anyharness/sdk";
+import type { AgentSummary } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { RefreshCw } from "@proliferate/ui/icons";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AgentAuthTerminalPanel } from "@/components/agents/AgentAuthTerminalPanel";
 import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { AgentDefaultComposer } from "@/components/settings/panes/AgentDefaultComposer";
 import { ModelRegistryPane } from "@/components/settings/panes/ModelRegistryPane";
+import {
+  AgentConfigurationIssuesSection,
+  type AgentConfigurationIssueAction,
+} from "@/components/settings/panes/agent-defaults/AgentConfigurationIssuesSection";
+import { AgentDefaultsSection } from "@/components/settings/panes/agent-defaults/AgentDefaultsSection";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
-import { Badge, type BadgeTone } from "@proliferate/ui/primitives/Badge";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import { AGENT_SETUP_COPY } from "@/copy/agents/agents-copy";
@@ -25,10 +28,6 @@ import {
 import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
 import { withUpdatedModelVisibilityOverride } from "@/lib/domain/chat/models/model-visibility";
 import { isReadyAgent } from "@/lib/domain/agents/status";
-import {
-  getAgentStatusDisplay,
-  type AgentStatusTone,
-} from "@/lib/domain/agents/status-presentation";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { buildPrimaryHarnessPreferenceUpdate } from "@/lib/domain/settings/chat-defaults";
@@ -113,6 +112,56 @@ export function AgentDefaultsPane() {
         showToast(error instanceof Error ? error.message : String(error));
       });
   };
+  const configurationIssueActionsByAgentKind = useMemo<Record<string, AgentConfigurationIssueAction>>(() => {
+    const actions: Record<string, AgentConfigurationIssueAction> = {};
+
+    for (const agent of agentsNeedingSetup) {
+      const authTerminalSession = authTerminalWorkflow.sessionsByKind[agent.kind] ?? null;
+      const canOpenInlineAuth = agent.readiness === "login_required"
+        && agent.supportsLogin;
+      const usesAuthenticationPage = agent.readiness === "credentials_required"
+        || (agent.readiness === "login_required" && !agent.supportsLogin);
+      const authActionLabel = authTerminalSession?.isStarting
+        ? "Opening..."
+        : authTerminalSession?.terminal
+          ? "Restart auth"
+          : authTerminalSession?.errorMessage
+            ? "Retry auth"
+            : "Open auth";
+
+      actions[agent.kind] = {
+        label: canOpenInlineAuth
+          ? authActionLabel
+          : usesAuthenticationPage
+            ? "Open auth"
+            : "Review setup",
+        loading: authTerminalSession?.isStarting ?? false,
+        onClick: () => {
+          if (canOpenInlineAuth) {
+            void authTerminalWorkflow.openAuthTerminal(agent, {
+              restart: Boolean(authTerminalSession),
+            });
+            return;
+          }
+          if (usesAuthenticationPage) {
+            navigate(buildSettingsHref({
+              section: "agent-authentication",
+              kind: agent.kind,
+            }));
+            return;
+          }
+          setSetupAgent(agent);
+        },
+      };
+    }
+
+    return actions;
+  }, [
+    agentsNeedingSetup,
+    authTerminalWorkflow.openAuthTerminal,
+    authTerminalWorkflow.sessionsByKind,
+    navigate,
+  ]);
 
   return (
     <section className="space-y-5">
@@ -275,14 +324,18 @@ export function AgentDefaultsPane() {
           agentsLoading={agentsLoading}
           isReconciling={isReconciling}
           reconcileResultsByKind={reconcileResultsByKind}
-          authTerminalWorkflow={authTerminalWorkflow}
-          onOpenAuthentication={(agentKind) => {
-            navigate(buildSettingsHref({
-              section: "agent-authentication",
-              kind: agentKind,
-            }));
+          issueActionsByAgentKind={configurationIssueActionsByAgentKind}
+          authTerminalSessionsByKind={authTerminalWorkflow.sessionsByKind}
+          authTerminalConnection={authTerminalWorkflow.runtimeConnection}
+          onCloseAuthTerminal={(kind) => {
+            void authTerminalWorkflow.closeAuthTerminal(kind);
           }}
-          onReviewSetup={setSetupAgent}
+          onAuthTerminalExit={(kind, code) => {
+            void authTerminalWorkflow.handleTerminalExit(kind, code);
+          }}
+          onRestartAuthTerminal={(agent) => {
+            void authTerminalWorkflow.openAuthTerminal(agent, { restart: true });
+          }}
         />
       ) : null}
 
@@ -295,190 +348,5 @@ export function AgentDefaultsPane() {
         />
       ) : null}
     </section>
-  );
-}
-
-function AgentConfigurationIssuesSection({
-  agents,
-  agentsLoading,
-  isReconciling,
-  reconcileResultsByKind,
-  authTerminalWorkflow,
-  onOpenAuthentication,
-  onReviewSetup,
-}: {
-  agents: AgentSummary[];
-  agentsLoading: boolean;
-  isReconciling: boolean;
-  reconcileResultsByKind: Map<string, ReconcileAgentResult>;
-  authTerminalWorkflow: ReturnType<typeof useAgentAuthTerminalWorkflow>;
-  onOpenAuthentication: (agentKind: string) => void;
-  onReviewSetup: (agent: AgentSummary) => void;
-}) {
-  return (
-    <AgentDefaultsSection
-      title="Needs configuration"
-      description="These harnesses are installed or known, but cannot be used as launch defaults yet."
-    >
-      <SettingsCard>
-        {agentsLoading ? (
-          <div className="p-3">
-            <LoadingState
-              message="Checking agent configuration"
-              subtext="Refreshing harness readiness..."
-            />
-          </div>
-        ) : agents.map((agent) => {
-          const reconcileResult = reconcileResultsByKind.get(agent.kind);
-          const status = getAgentStatusDisplay(agent, {
-            reconcileResult,
-            isReconciling,
-          });
-          const canOpenInlineAuth = agent.readiness === "login_required"
-            && agent.supportsLogin;
-          const usesAuthenticationPage = agent.readiness === "credentials_required"
-            || (agent.readiness === "login_required" && !agent.supportsLogin);
-          const authTerminalSession = authTerminalWorkflow.sessionsByKind[agent.kind] ?? null;
-          const authActionLabel = authTerminalSession?.isStarting
-            ? "Opening..."
-            : authTerminalSession?.terminal
-              ? "Restart auth"
-              : authTerminalSession?.errorMessage
-                ? "Retry auth"
-              : "Open auth";
-
-          return (
-            <div
-              key={agent.kind}
-              className="border-b border-border/60 px-3 py-3 last:border-b-0"
-            >
-              <div className="flex items-start gap-3">
-                <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-foreground/5 text-muted-foreground">
-                  <ProviderIcon kind={agent.kind} className="size-4" />
-                </span>
-
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <span className="truncate text-sm font-medium text-foreground">
-                      {agent.displayName}
-                    </span>
-                    <Badge tone={badgeToneForAgentStatus(status.tone)}>
-                      {status.label}
-                    </Badge>
-                  </div>
-                  <p className="text-sm leading-5 text-muted-foreground">
-                    {configurationDetailForAgent(agent, reconcileResult)}
-                  </p>
-                  {agent.expectedEnvVars.length > 0 ? (
-                    <p className="text-xs text-muted-foreground/80">
-                      Expected credentials: {agent.expectedEnvVars.join(", ")}
-                    </p>
-                  ) : null}
-                </div>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0"
-                  loading={authTerminalSession?.isStarting ?? false}
-                  onClick={() => {
-                    if (canOpenInlineAuth) {
-                      void authTerminalWorkflow.openAuthTerminal(agent, {
-                        restart: Boolean(authTerminalSession),
-                      });
-                      return;
-                    }
-                    if (usesAuthenticationPage) {
-                      onOpenAuthentication(agent.kind);
-                      return;
-                    }
-                    onReviewSetup(agent);
-                  }}
-                >
-                  {canOpenInlineAuth
-                    ? authActionLabel
-                    : usesAuthenticationPage
-                      ? "Open auth"
-                      : "Review setup"}
-                </Button>
-              </div>
-
-              {authTerminalSession ? (
-                <div className="pl-11">
-                  <AgentAuthTerminalPanel
-                    session={authTerminalSession}
-                    baseUrl={authTerminalWorkflow.runtimeConnection.baseUrl}
-                    authToken={authTerminalWorkflow.runtimeConnection.authToken}
-                    onClose={(kind) => {
-                      void authTerminalWorkflow.closeAuthTerminal(kind);
-                    }}
-                    onExit={(kind, code) => {
-                      void authTerminalWorkflow.handleTerminalExit(kind, code);
-                    }}
-                    onRestart={() => {
-                      void authTerminalWorkflow.openAuthTerminal(agent, { restart: true });
-                    }}
-                  />
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
-      </SettingsCard>
-    </AgentDefaultsSection>
-  );
-}
-
-function badgeToneForAgentStatus(tone: AgentStatusTone): BadgeTone {
-  if (tone === "success") return "success";
-  if (tone === "warning") return "warning";
-  if (tone === "destructive") return "destructive";
-  return "neutral";
-}
-
-function configurationDetailForAgent(
-  agent: AgentSummary,
-  reconcileResult?: ReconcileAgentResult,
-): string {
-  if (reconcileResult?.outcome === "failed" && reconcileResult.message?.trim()) {
-    return reconcileResult.message;
-  }
-  if (agent.readiness === "credentials_required") {
-    return "Add or select credentials in Agent Authentication before using this harness as a default.";
-  }
-  if (agent.readiness === "login_required") {
-    return `Sign in with ${agent.displayName} in Proliferate.`;
-  }
-  if (agent.message?.trim()) {
-    return agent.message;
-  }
-  if (agent.readiness === "install_required") {
-    return "The managed harness install has not completed yet.";
-  }
-  if (agent.readiness === "error") {
-    return "Review setup details, then refresh the runtime once the issue is fixed.";
-  }
-  return "This harness is not ready to use as a launch default.";
-}
-
-function AgentDefaultsSection({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="space-y-0.5">
-        <h2 className="text-sm font-medium text-foreground">{title}</h2>
-        {description ? (
-          <p className="text-sm text-muted-foreground">{description}</p>
-        ) : null}
-      </div>
-      {children}
-    </div>
   );
 }

@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
 import { AutomationEditorModal } from "@/components/automations/editor/AutomationEditorModal";
 import { useAutomationActions } from "@/hooks/automations/workflows/use-automation-actions";
+import { useAutomationRunOpenActions } from "@/hooks/automations/workflows/use-automation-run-open-actions";
 import {
   useAutomationDetail,
   useAutomationRuns,
@@ -10,14 +11,10 @@ import {
 } from "@/hooks/access/cloud/automations/use-automations";
 import { useAgentRunConfig } from "@/hooks/access/cloud/agent-run-configs/use-agent-run-configs";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
-import { useCloudWorkspaceActions } from "@/hooks/cloud/workflows/use-cloud-workspace-actions";
-import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import {
   buildCloudRepoSettingsHref,
   buildSharedCloudRepoSettingsHref,
 } from "@/lib/domain/settings/navigation";
-import { targetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import type {
   AutomationRecord,
   AutomationRunRecord,
@@ -25,9 +22,6 @@ import type {
   UpdateAutomationInput,
 } from "@/lib/domain/automations/run/ui-records";
 import type { AutomationOwnerScope } from "@/lib/domain/automations/run/types";
-import { useToastStore } from "@/stores/toast/toast-store";
-import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
-import { useWorkspaceActivationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-activation-workflow";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import {
   buildAutomationCalendarWeek,
@@ -49,14 +43,8 @@ interface AutomationsScreenProps {
 
 export function AutomationsScreen({ selectedAutomationId = null }: AutomationsScreenProps) {
   const navigate = useNavigate();
-  const showToast = useToastStore((state) => state.show);
-  const { selectWorkspace } = useWorkspaceSelection();
-  const { openWorkspaceSession } = useWorkspaceActivationWorkflow();
-  const { refreshCloudWorkspace } = useCloudWorkspaceActions();
-  const { refetch: refetchWorkspaces } = useWorkspaces();
   const [editingAutomation, setEditingAutomation] = useState<AutomationRecord | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
-  const [pendingCloudWorkspaceId, setPendingCloudWorkspaceId] = useState<string | null>(null);
   const [pendingAutomationAction, setPendingAutomationAction] = useState<{
     automationId: string;
     action: AutomationListAction;
@@ -152,13 +140,6 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     [selectedAutomation],
   );
   const runRecords: AutomationRunRecord[] = runsData?.runs ?? EMPTY_AUTOMATION_RUNS;
-  const runItems = useMemo(
-    () => buildAutomationRunInventoryItems(runRecords, {
-      clientSurface: "desktop",
-      pendingCloudWorkspaceId,
-    }),
-    [pendingCloudWorkspaceId, runRecords],
-  );
   const selectedAutomationSummary = useMemo(() => {
     if (!selectedAutomation) {
       return null;
@@ -180,6 +161,14 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
   const runById = useMemo(
     () => new Map(runRecords.map((run) => [run.id, run])),
     [runRecords],
+  );
+  const { openRun, pendingCloudWorkspaceId } = useAutomationRunOpenActions(runById);
+  const runItems = useMemo(
+    () => buildAutomationRunInventoryItems(runRecords, {
+      clientSurface: "desktop",
+      pendingCloudWorkspaceId,
+    }),
+    [pendingCloudWorkspaceId, runRecords],
   );
 
   const openCreate = () => {
@@ -214,88 +203,10 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     await actions.updateAutomation({ automationId, body });
   };
 
-  const handleOpenCloudWorkspace = useCallback(async (run: AutomationRunRecord) => {
-    const cloudWorkspaceId = run.cloudWorkspaceId;
-    if (!cloudWorkspaceId) {
-      return;
-    }
-    setPendingCloudWorkspaceId(cloudWorkspaceId);
-    try {
-      const workspace = await refreshCloudWorkspace(cloudWorkspaceId);
-      const workspaceId = cloudWorkspaceSyntheticId(workspace.id);
-      navigate("/");
-      if (run.anyharnessSessionId) {
-        const result = await openWorkspaceSession({
-          workspaceId,
-          sessionId: run.anyharnessSessionId,
-        });
-        if (result.result === "stale") {
-          showToast("Workspace selection changed before the automation session opened.");
-        }
-        return;
-      }
-      await selectWorkspace(workspaceId, { force: true });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to open workspace.";
-      showToast(message);
-    } finally {
-      setPendingCloudWorkspaceId(null);
-    }
-  }, [navigate, openWorkspaceSession, refreshCloudWorkspace, selectWorkspace, showToast]);
-
-  const handleOpenLocalWorkspace = async (run: AutomationRunRecord) => {
-    if (!run.anyharnessWorkspaceId) {
-      return;
-    }
-    const targetKind = run.targetKindSnapshot ?? run.cloudTargetKindSnapshot;
-    const targetId = run.targetIdSnapshot ?? run.cloudTargetIdSnapshot;
-    const workspaceId = targetKind === "ssh" && targetId
-      ? targetWorkspaceSyntheticId(targetId, run.anyharnessWorkspaceId)
-      : run.anyharnessWorkspaceId;
-    try {
-      await refetchWorkspaces();
-      navigate("/");
-      if (run.anyharnessSessionId) {
-        const result = await openWorkspaceSession({
-          workspaceId,
-          sessionId: run.anyharnessSessionId,
-        });
-        if (result.result === "stale") {
-          showToast("Workspace selection changed before the automation session opened.");
-        }
-        return;
-      }
-      await selectWorkspace(workspaceId, { force: true });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to open workspace.";
-      showToast(message);
-    }
-  };
-
   const handleEditAutomation = (automationId: string) => {
     const automation = automations.find((item) => item.id === automationId);
     if (automation) {
       openEdit(automation);
-    }
-  };
-
-  const handleOpenRun = (runId: string) => {
-    const run = runById.get(runId);
-    if (!run) {
-      return;
-    }
-    const targetKind = run.targetKindSnapshot ?? run.cloudTargetKindSnapshot;
-    const targetId = run.targetIdSnapshot ?? run.cloudTargetIdSnapshot;
-    if (targetKind === "ssh" && targetId && run.anyharnessWorkspaceId) {
-      void handleOpenLocalWorkspace(run);
-      return;
-    }
-    if (run.cloudWorkspaceId) {
-      void handleOpenCloudWorkspace(run);
-      return;
-    }
-    if (run.anyharnessWorkspaceId) {
-      void handleOpenLocalWorkspace(run);
     }
   };
 
@@ -349,7 +260,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
             onResume={(automationId) => {
               void actions.resumeAutomation(automationId);
             }}
-            onRunSelect={handleOpenRun}
+            onRunSelect={openRun}
           />
         ) : (
           <AutomationSurface
