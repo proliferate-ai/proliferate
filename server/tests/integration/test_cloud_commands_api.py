@@ -261,7 +261,6 @@ async def _create_ready_cloud_workspace(
         git_base_branch="main",
         origin_json=None,
         template_version="test",
-        commit=False,
     )
     workspace.status = CloudWorkspaceStatus.ready.value
     workspace.anyharness_workspace_id = anyharness_workspace_id

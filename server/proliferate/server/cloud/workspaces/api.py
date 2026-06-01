@@ -153,9 +153,10 @@ async def get_cloud_workspace_endpoint(
 async def get_cloud_workspace_connection_endpoint(
     workspace_id: UUID,
     user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceConnection:
     try:
-        return await get_cloud_connection(user.id, workspace_id)
+        return await get_cloud_connection(db, user.id, workspace_id)
     except CloudApiError as error:
         raise_cloud_error(error)
 
@@ -188,9 +189,10 @@ async def disable_cloud_workspace_remote_access_endpoint(
 async def start_cloud_workspace_endpoint(
     workspace_id: UUID,
     user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceDetail:
     try:
-        payload = await start_cloud_workspace(user, workspace_id)
+        payload = await start_cloud_workspace(db, user, workspace_id)
     except CloudApiError as error:
         raise_cloud_error(error)
     return payload
@@ -200,9 +202,10 @@ async def start_cloud_workspace_endpoint(
 async def stop_cloud_workspace_endpoint(
     workspace_id: UUID,
     user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceDetail:
     try:
-        payload = await stop_cloud_workspace(user.id, workspace_id)
+        payload = await stop_cloud_workspace(db, user.id, workspace_id)
     except CloudApiError as error:
         raise_cloud_error(error)
     return payload
@@ -288,9 +291,10 @@ async def update_cloud_workspace_display_name_endpoint(
 async def delete_cloud_workspace_endpoint(
     workspace_id: UUID,
     user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> dict[str, bool]:
     try:
-        await delete_cloud_workspace(user.id, workspace_id)
+        await delete_cloud_workspace(db, user.id, workspace_id)
     except CloudApiError as error:
         raise_cloud_error(error)
     return {"ok": True}

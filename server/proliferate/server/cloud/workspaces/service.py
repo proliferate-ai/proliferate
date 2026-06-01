@@ -943,18 +943,14 @@ async def launch_workspace_on_target(
         await _wait_for_target_launch_command(send_command, workspace_id=workspace_id)
     except CloudApiError as exc:
         message = format_exception_message(exc) or exc.message
-        await mark_workspace_error_by_id(
-            workspace_id,
-            message,
-            status_detail="Desktop dispatch failed",
+        await _mark_workspace_error_tx(
+            workspace_id, message, status_detail="Desktop dispatch failed"
         )
         raise
     except (RuntimeError, TimeoutError, ValueError) as exc:
         message = format_exception_message(exc) or str(exc)
-        await mark_workspace_error_by_id(
-            workspace_id,
-            message,
-            status_detail="Desktop dispatch failed",
+        await _mark_workspace_error_tx(
+            workspace_id, message, status_detail="Desktop dispatch failed"
         )
         raise CloudApiError(
             "target_launch_failed",
@@ -1342,7 +1338,7 @@ async def _build_workspace_detail(
             target_id=workspace.target_id,
             cloud_workspace_id=workspace.id,
         )
-    runtime_environment = await load_runtime_environment_for_workspace(workspace)
+        runtime_environment = await load_runtime_environment_for_workspace(db, workspace)
     runtime_auth = await load_workspace_runtime_auth_snapshot(
         workspace=workspace,
         runtime_environment=runtime_environment,
@@ -1401,6 +1397,30 @@ async def _build_workspace_detail(
     )
 
 
+async def _load_repo_config_value_tx(user_id: UUID, git_owner: str, git_repo_name: str) -> object | None:
+    async with db_engine.async_session_factory() as db:
+        return await load_repo_config_value(
+            db, user_id=user_id, git_owner=git_owner, git_repo_name=git_repo_name
+        )
+
+
+async def _bootstrap_repo_config_tx(user_id: UUID, git_owner: str, git_repo_name: str) -> object:
+    async with db_engine.async_session_factory() as db, db.begin():
+        return await bootstrap_repo_config(
+            db, user_id=user_id, git_owner=git_owner, git_repo_name=git_repo_name
+        )
+
+
+async def _mark_workspace_error_tx(workspace_id: UUID, message: str, **kwargs: object) -> None:
+    async with db_engine.async_session_factory() as db, db.begin():
+        await mark_workspace_error_by_id(db, workspace_id, message, **kwargs)
+
+
+async def _update_sandbox_status_tx(sandbox: CloudSandbox, status: str, **kwargs: object) -> None:
+    async with db_engine.async_session_factory() as db, db.begin():
+        await update_sandbox_status(db, sandbox, status, **kwargs)
+
+
 async def _resolve_new_cloud_workspace_create(
     user: User,
     *,
@@ -1435,28 +1455,22 @@ async def _resolve_new_cloud_workspace_create(
             status_code=400,
         )
 
-    repo_config = await load_repo_config_value(
-        user_id=user.id,
-        git_owner=git_owner,
-        git_repo_name=git_repo_name,
-    )
+    repo_config = await _load_repo_config_value_tx(user.id, git_owner, git_repo_name)
     if repo_config is None or not repo_config.configured:
-        existing_repo_workspace = await load_any_cloud_workspace_for_repo(
-            user_id=user.id,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-        )
+        async with db_engine.async_session_factory() as db:
+            existing_repo_workspace = await load_any_cloud_workspace_for_repo(
+                db,
+                user_id=user.id,
+                git_owner=git_owner,
+                git_repo_name=git_repo_name,
+            )
         if existing_repo_workspace is None:
             raise CloudApiError(
                 "cloud_repo_not_configured",
                 "Configure cloud settings for this repo before creating a cloud workspace.",
                 status_code=409,
             )
-        repo_config = await bootstrap_repo_config(
-            user_id=user.id,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-        )
+        repo_config = await _bootstrap_repo_config_tx(user.id, git_owner, git_repo_name)
         log_cloud_event(
             "cloud repo config auto-bootstrapped",
             user_id=user.id,
@@ -1502,13 +1516,15 @@ async def _resolve_new_cloud_workspace_create(
             status_code=400,
         )
 
-    existing_cloud_workspace = await load_existing_cloud_workspace(
-        user_id=user.id,
-        git_provider=git_provider,
-        git_owner=git_owner,
-        git_repo_name=git_repo_name,
-        git_branch=cleaned_branch_name,
-    )
+    async with db_engine.async_session_factory() as db:
+        existing_cloud_workspace = await load_existing_cloud_workspace(
+            db,
+            user_id=user.id,
+            git_provider=git_provider,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            git_branch=cleaned_branch_name,
+        )
     if existing_cloud_workspace is not None:
         raise CloudApiError(
             "cloud_branch_already_exists",
@@ -1808,19 +1824,15 @@ async def create_cloud_workspace(
             source,
             CREATE_WORKSPACE_ORIGIN_BY_SOURCE["desktop"],
         )
-        workspace = await create_cloud_workspace_for_user(
-            user_id=user.id,
-            display_name=resolved.display_name,
-            git_provider=resolved.git_provider,
-            git_owner=resolved.git_owner,
-            git_repo_name=resolved.git_repo_name,
-            git_branch=resolved.git_branch,
-            git_base_branch=resolved.git_base_branch,
-            origin=origin,
-            origin_json=origin_json,
-            template_version=get_configured_sandbox_provider().template_version,
-            cloud_repo_limit=resolved.cloud_repo_limit,
-        )
+        async with db_engine.async_session_factory() as create_db, create_db.begin():
+            workspace = await create_cloud_workspace_for_user(
+                create_db, user_id=user.id, display_name=resolved.display_name,
+                git_provider=resolved.git_provider, git_owner=resolved.git_owner,
+                git_repo_name=resolved.git_repo_name, git_branch=resolved.git_branch,
+                git_base_branch=resolved.git_base_branch, origin=origin, origin_json=origin_json,
+                template_version=get_configured_sandbox_provider().template_version,
+                cloud_repo_limit=resolved.cloud_repo_limit,
+            )
     except CloudRepoLimitExceededError as error:
         _raise_repo_limit_exceeded(error)
     log_cloud_event(
@@ -1929,13 +1941,15 @@ async def ensure_cloud_workspace_for_existing_branch(
             "Choose a branch before provisioning a cloud workspace.",
             status_code=400,
         )
-    existing_cloud_workspace = await load_existing_cloud_workspace(
-        user_id=user.id,
-        git_provider=git_provider,
-        git_owner=git_owner,
-        git_repo_name=git_repo_name,
-        git_branch=cleaned_branch_name,
-    )
+    async with db_engine.async_session_factory() as db:
+        existing_cloud_workspace = await load_existing_cloud_workspace(
+            db,
+            user_id=user.id,
+            git_provider=git_provider,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            git_branch=cleaned_branch_name,
+        )
     if existing_cloud_workspace is not None:
         if _cloud_workspace_should_be_replaced_for_mobility_retry(existing_cloud_workspace):
             await _archive_failed_cloud_workspace_for_mobility_retry(existing_cloud_workspace.id)
@@ -1948,17 +1962,9 @@ async def ensure_cloud_workspace_for_existing_branch(
             )
         else:
             return existing_cloud_workspace
-    repo_config = await load_repo_config_value(
-        user_id=user.id,
-        git_owner=git_owner,
-        git_repo_name=git_repo_name,
-    )
+    repo_config = await _load_repo_config_value_tx(user.id, git_owner, git_repo_name)
     if repo_config is None or not repo_config.configured:
-        repo_config = await bootstrap_repo_config(
-            user_id=user.id,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-        )
+        repo_config = await _bootstrap_repo_config_tx(user.id, git_owner, git_repo_name)
         log_cloud_event(
             "cloud repo config auto-bootstrapped",
             user_id=user.id,
@@ -1972,18 +1978,16 @@ async def ensure_cloud_workspace_for_existing_branch(
     billing_snapshot = await get_billing_snapshot_for_subject(authorization.billing_subject_id)
     cloud_repo_limit = repo_limit_for_billing_snapshot(billing_snapshot)
     try:
-        workspace = await create_cloud_workspace_for_user(
-            user_id=user.id,
-            display_name=(display_name.strip() if display_name and display_name.strip() else None),
-            git_provider=git_provider,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-            git_branch=cleaned_branch_name,
-            git_base_branch=cleaned_branch_name,
-            origin_json=CLOUD_HUMAN_ORIGIN_JSON,
-            template_version=get_configured_sandbox_provider().template_version,
-            cloud_repo_limit=cloud_repo_limit,
-        )
+        async with db_engine.async_session_factory() as db, db.begin():
+            workspace = await create_cloud_workspace_for_user(
+                db, user_id=user.id,
+                display_name=display_name.strip() if display_name and display_name.strip() else None,
+                git_provider=git_provider, git_owner=git_owner, git_repo_name=git_repo_name,
+                git_branch=cleaned_branch_name, git_base_branch=cleaned_branch_name,
+                origin_json=CLOUD_HUMAN_ORIGIN_JSON,
+                template_version=get_configured_sandbox_provider().template_version,
+                cloud_repo_limit=cloud_repo_limit,
+            )
     except CloudRepoLimitExceededError as error:
         _raise_repo_limit_exceeded(error)
     log_cloud_event(
@@ -2005,40 +2009,33 @@ def _cloud_workspace_should_be_replaced_for_mobility_retry(
 
 
 async def _archive_failed_cloud_workspace_for_mobility_retry(workspace_id: UUID) -> None:
-    async with db_engine.async_session_factory() as db:
-        await archive_cloud_workspace_record_by_id(db, workspace_id=workspace_id)
-        await db.commit()
+    async with db_engine.async_session_factory() as db, db.begin(): await archive_cloud_workspace_record_by_id(db, workspace_id=workspace_id)
 
 
-async def _refresh_repo_env_snapshot_for_workspace(
-    workspace: CloudWorkspace,
-) -> CloudWorkspace:
-    repo_config = await load_repo_config_value(
-        user_id=workspace.user_id,
-        git_owner=workspace.git_owner,
-        git_repo_name=workspace.git_repo_name,
+async def _refresh_repo_env_snapshot_for_workspace(workspace: CloudWorkspace) -> CloudWorkspace:
+    repo_config = await _load_repo_config_value_tx(
+        workspace.user_id, workspace.git_owner, workspace.git_repo_name
     )
     if repo_config is None or not repo_config.configured:
-        repo_config = await bootstrap_repo_config(
-            user_id=workspace.user_id,
-            git_owner=workspace.git_owner,
-            git_repo_name=workspace.git_repo_name,
+        repo_config = await _bootstrap_repo_config_tx(
+            workspace.user_id, workspace.git_owner, workspace.git_repo_name
         )
         log_cloud_event(
             "cloud repo config auto-bootstrapped",
             user_id=workspace.user_id,
             repo=f"{workspace.git_owner}/{workspace.git_repo_name}",
         )
-    return await save_workspace(workspace)
+    async with db_engine.async_session_factory() as db, db.begin(): return await save_workspace(db, workspace)
 
 
 async def start_cloud_workspace(
+    db: AsyncSession,
     user: User,
     workspace_id: UUID,
     *,
     requested_base_sha: str | None = None,
 ) -> WorkspaceDetail:
-    workspace = await cloud_workspace_user_can_interact(user.id, workspace_id)
+    workspace = await cloud_workspace_user_can_interact_with_db(db, user.id, workspace_id)
     has_requested_revision = bool((requested_base_sha or "").strip())
     if start_request_should_return_existing(workspace.status) and not has_requested_revision:
         return await _build_workspace_detail(workspace)
@@ -2104,7 +2101,7 @@ async def start_cloud_workspace(
         if start_decision.clear_last_error:
             workspace.last_error = None
         if start_decision.persist_before_schedule:
-            await save_workspace(workspace)
+            async with db_engine.async_session_factory() as persist_db, persist_db.begin(): workspace = await save_workspace(persist_db, workspace)
         log_cloud_event(
             "cloud workspace queued",
             workspace_id=workspace.id,
@@ -2153,7 +2150,7 @@ async def start_cloud_workspace(
     if start_decision.clear_last_error:
         workspace.last_error = None
     if start_decision.persist_before_schedule:
-        await save_workspace(workspace)
+        async with db_engine.async_session_factory() as persist_db, persist_db.begin(): workspace = await save_workspace(persist_db, workspace)
     log_cloud_event(
         "cloud workspace restart queued",
         workspace_id=workspace.id,
@@ -2221,10 +2218,11 @@ async def sync_cloud_workspace_display_name(
 
 
 async def stop_cloud_workspace(
+    db: AsyncSession,
     user_id: UUID,
     workspace_id: UUID,
 ) -> WorkspaceDetail:
-    workspace = await cloud_workspace_user_can_archive(user_id, workspace_id)
+    workspace = await cloud_workspace_user_can_archive_with_db(db, user_id, workspace_id)
     await _stop_workspace_runtime(workspace)
     await _revoke_claim_tokens_for_workspace(workspace, reason="workspace_archived")
     workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
@@ -2357,13 +2355,14 @@ async def purge_cloud_workspace(
 
 
 async def delete_cloud_workspace(
+    db: AsyncSession,
     user_id: UUID,
     workspace_id: UUID,
 ) -> None:
-    workspace = await cloud_workspace_user_can_archive(user_id, workspace_id)
+    workspace = await cloud_workspace_user_can_archive_with_db(db, user_id, workspace_id)
     await _revoke_claim_tokens_for_workspace(workspace, reason="workspace_deleted")
     await _destroy_workspace_runtime(workspace)
-    await delete_cloud_workspace_records_for_workspace(workspace)
+    async with db_engine.async_session_factory() as delete_db, delete_db.begin(): await delete_cloud_workspace_records_for_workspace(delete_db, workspace)
 
 
 async def _revoke_claim_tokens_for_workspace(
@@ -2407,7 +2406,7 @@ async def _stop_workspace_runtime(workspace: CloudWorkspace) -> None:
                 await provider.pause_sandbox(sandbox.external_sandbox_id)
             except Exception:
                 failure_state = provider_failure_debug_state("stop")
-                await update_sandbox_status(sandbox, failure_state.sandbox_status)
+                await _update_sandbox_status_tx(sandbox, failure_state.sandbox_status)
                 log_cloud_event(
                     "cloud sandbox pause failed",
                     level=logging.WARNING,
@@ -2421,7 +2420,7 @@ async def _stop_workspace_runtime(workspace: CloudWorkspace) -> None:
                     ended_at=utcnow(),
                     closed_by=USAGE_SEGMENT_CLOSED_BY_MANUAL_STOP,
                 )
-                await update_sandbox_status(sandbox, "paused", stopped_at_now=True)
+                await _update_sandbox_status_tx(sandbox, "paused", stopped_at_now=True)
                 log_cloud_event(
                     "cloud sandbox paused",
                     workspace_id=workspace.id,
@@ -2429,7 +2428,7 @@ async def _stop_workspace_runtime(workspace: CloudWorkspace) -> None:
                     external_sandbox_id=sandbox.external_sandbox_id,
                 )
         else:
-            await update_sandbox_status(sandbox, "paused", stopped_at_now=True)
+            await _update_sandbox_status_tx(sandbox, "paused", stopped_at_now=True)
 
     if workspace.status != CloudWorkspaceStatus.archived.value:
         transition_workspace_status(
@@ -2439,7 +2438,7 @@ async def _stop_workspace_runtime(workspace: CloudWorkspace) -> None:
         )
     else:
         workspace.updated_at = utcnow()
-    await persist_workspace_stop_state(workspace)
+    async with db_engine.async_session_factory() as db, db.begin(): await persist_workspace_stop_state(db, workspace)
     log_cloud_event(
         "cloud workspace stopped",
         workspace_id=workspace.id,
@@ -2458,7 +2457,7 @@ async def _destroy_workspace_runtime(workspace: CloudWorkspace) -> None:
                 await provider.destroy_sandbox(sandbox.external_sandbox_id)
             except Exception:
                 failure_state = provider_failure_debug_state("destroy")
-                await update_sandbox_status(sandbox, failure_state.sandbox_status)
+                await _update_sandbox_status_tx(sandbox, failure_state.sandbox_status)
                 log_cloud_event(
                     "cloud sandbox destroy failed",
                     level=logging.WARNING,
@@ -2472,7 +2471,7 @@ async def _destroy_workspace_runtime(workspace: CloudWorkspace) -> None:
                     ended_at=utcnow(),
                     closed_by=USAGE_SEGMENT_CLOSED_BY_DESTROY,
                 )
-                await update_sandbox_status(sandbox, "destroyed", stopped_at_now=True)
+                await _update_sandbox_status_tx(sandbox, "destroyed", stopped_at_now=True)
                 log_cloud_event(
                     "cloud sandbox destroyed",
                     workspace_id=workspace.id,
@@ -2480,9 +2479,9 @@ async def _destroy_workspace_runtime(workspace: CloudWorkspace) -> None:
                     external_sandbox_id=sandbox.external_sandbox_id,
                 )
         else:
-            await update_sandbox_status(sandbox, "destroyed", stopped_at_now=True)
+            await _update_sandbox_status_tx(sandbox, "destroyed", stopped_at_now=True)
     transition_workspace_status(workspace, CloudWorkspaceStatus.archived, status_detail="Archived")
-    await persist_workspace_destroy_state(workspace)
+    async with db_engine.async_session_factory() as db, db.begin(): await persist_workspace_destroy_state(db, workspace)
     log_cloud_event(
         "cloud workspace destroyed",
         workspace_id=workspace.id,
@@ -2501,7 +2500,7 @@ async def _load_workspace_owned_runtime_sandbox(
     sandbox_id = getattr(workspace, "active_sandbox_id", None)
     if sandbox_id is None:
         return None
-    sandbox = await load_cloud_sandbox_by_id(sandbox_id)
+    async with db_engine.async_session_factory() as db: sandbox = await load_cloud_sandbox_by_id(db, sandbox_id)
     if sandbox is None:
         return None
     if sandbox.cloud_workspace_id != workspace.id:
@@ -2517,10 +2516,11 @@ async def _load_workspace_owned_runtime_sandbox(
 
 
 async def get_cloud_connection(
+    db: AsyncSession,
     user_id: UUID,
     workspace_id: UUID,
 ) -> WorkspaceConnection:
-    workspace = await cloud_workspace_user_can_interact(user_id, workspace_id)
+    workspace = await cloud_workspace_user_can_interact_with_db(db, user_id, workspace_id)
     await _reject_shared_workspace_static_connection(workspace)
     async with db_engine.async_session_factory() as db:
         automation_runs_by_workspace = await list_latest_runs_by_cloud_workspace_ids_for_user(
@@ -2541,7 +2541,7 @@ async def get_cloud_connection(
             status_code=409,
         )
     try:
-        target = await get_workspace_connection(workspace)
+        target = await get_workspace_connection(db, workspace)
     except CloudRuntimeReconnectError as exc:
         log_cloud_event(
             "cloud workspace connection still resuming",
@@ -2558,7 +2558,7 @@ async def get_cloud_connection(
     except CloudApiError:
         raise
     except Exception as exc:
-        await mark_workspace_error_by_id(
+        await _mark_workspace_error_tx(
             workspace.id,
             format_exception_message(exc),
             status_detail="Reconnect failed",
@@ -2577,7 +2577,7 @@ async def get_cloud_connection(
             status_code=409,
         ) from exc
 
-    reloaded_workspace = await load_cloud_workspace_by_id(workspace.id)
+    async with db_engine.async_session_factory() as reload_db: reloaded_workspace = await load_cloud_workspace_by_id(reload_db, workspace.id)
     if reloaded_workspace is not None:
         workspace = reloaded_workspace
     log_cloud_event(

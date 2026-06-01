@@ -106,7 +106,7 @@ def _cleanup_item(
     )
 
 
-async def _noop_expire(*, user_id):
+async def _noop_expire(*_args, user_id):
     return None
 
 
@@ -117,14 +117,14 @@ async def test_list_mobility_skips_error_cloud_workspace_backfill(
     user_id = uuid4()
     backfilled: list[object] = []
 
-    async def _list_workspaces(_user_id):
+    async def _list_workspaces(_db, _user_id):
         assert _user_id == user_id
         return [SimpleNamespace(status=CloudWorkspaceStatus.error.value)]
 
-    async def _backfill(**kwargs):
+    async def _backfill(*_args, **kwargs):
         backfilled.append(kwargs["workspace"])
 
-    async def _list_mobility(**kwargs):
+    async def _list_mobility(*_args, **kwargs):
         assert kwargs["user_id"] == user_id
         return []
 
@@ -145,7 +145,7 @@ async def test_list_mobility_skips_error_cloud_workspace_backfill(
         _list_mobility,
     )
 
-    assert await mobility_service.list_cloud_workspace_mobility_for_user(user_id) == []
+    assert await mobility_service.list_cloud_workspace_mobility_for_user(object(), user_id) == []
     assert backfilled == []
 
 
@@ -156,11 +156,11 @@ async def test_list_mobility_backfill_does_not_clear_failed_handoff_state(
     user_id = uuid4()
     predicate_results: list[bool] = []
 
-    async def _list_workspaces(_user_id):
+    async def _list_workspaces(_db, _user_id):
         assert _user_id == user_id
         return [SimpleNamespace(status=CloudWorkspaceStatus.ready.value)]
 
-    async def _backfill(**kwargs):
+    async def _backfill(*_args, **kwargs):
         predicate_results.append(
             kwargs["is_retryable_failure"](
                 lifecycle_state=LIFECYCLE_HANDOFF_FAILED,
@@ -168,7 +168,7 @@ async def test_list_mobility_backfill_does_not_clear_failed_handoff_state(
             )
         )
 
-    async def _list_mobility(**kwargs):
+    async def _list_mobility(*_args, **kwargs):
         assert kwargs["user_id"] == user_id
         return []
 
@@ -189,7 +189,7 @@ async def test_list_mobility_backfill_does_not_clear_failed_handoff_state(
         _list_mobility,
     )
 
-    assert await mobility_service.list_cloud_workspace_mobility_for_user(user_id) == []
+    assert await mobility_service.list_cloud_workspace_mobility_for_user(object(), user_id) == []
     assert predicate_results == [False]
 
 
@@ -203,13 +203,13 @@ async def test_preflight_blocks_when_workspace_handoff_is_already_active(
         active_handoff=_handoff(mobility_workspace_id=workspace_id),
     )
 
-    async def _get_detail(**_kwargs):
+    async def _get_detail(*_args, **_kwargs):
         return workspace
 
-    async def _load_active_user_handoff(*, user_id, **_kwargs):
+    async def _load_active_user_handoff(*_args, user_id, **_kwargs):
         return None
 
-    async def _load_user(_user_id):
+    async def _load_user(_db, _user_id):
         return SimpleNamespace(id=_user_id)
 
     async def _repo_branches(*_args, **_kwargs):
@@ -218,7 +218,7 @@ async def test_preflight_blocks_when_workspace_handoff_is_already_active(
             branch_heads_by_name={"feature/cloud": REQUESTED_SHA},
         )
 
-    async def _load_repo_config(**_kwargs):
+    async def _load_repo_config(*_args, **_kwargs):
         return None
 
     monkeypatch.setattr(
@@ -240,7 +240,7 @@ async def test_preflight_blocks_when_workspace_handoff_is_already_active(
     monkeypatch.setattr(mobility_service, "get_repo_branches_for_user", _repo_branches)
     monkeypatch.setattr(mobility_service, "load_cloud_repo_config_for_user", _load_repo_config)
 
-    response = await mobility_service.preflight_cloud_workspace_handoff(
+    response = await mobility_service.preflight_cloud_workspace_handoff(object(),
         user_id=uuid4(),
         mobility_workspace_id=workspace.id,
         direction="local_to_cloud",
@@ -259,13 +259,13 @@ async def test_preflight_blocks_when_github_repo_access_is_missing(
 ) -> None:
     workspace = _workspace()
 
-    async def _get_detail(**_kwargs):
+    async def _get_detail(*_args, **_kwargs):
         return workspace
 
-    async def _load_active_user_handoff(*, user_id, **_kwargs):
+    async def _load_active_user_handoff(*_args, user_id, **_kwargs):
         return None
 
-    async def _load_user(_user_id):
+    async def _load_user(_db, _user_id):
         return SimpleNamespace(id=_user_id)
 
     async def _repo_branches(*_args, **_kwargs):
@@ -275,7 +275,7 @@ async def test_preflight_blocks_when_github_repo_access_is_missing(
             status_code=400,
         )
 
-    async def _load_repo_config(**_kwargs):
+    async def _load_repo_config(*_args, **_kwargs):
         return None
 
     monkeypatch.setattr(
@@ -297,7 +297,7 @@ async def test_preflight_blocks_when_github_repo_access_is_missing(
     monkeypatch.setattr(mobility_service, "get_repo_branches_for_user", _repo_branches)
     monkeypatch.setattr(mobility_service, "load_cloud_repo_config_for_user", _load_repo_config)
 
-    response = await mobility_service.preflight_cloud_workspace_handoff(
+    response = await mobility_service.preflight_cloud_workspace_handoff(object(),
         user_id=uuid4(),
         mobility_workspace_id=workspace.id,
         direction="local_to_cloud",
@@ -319,13 +319,13 @@ async def test_preflight_blocks_when_branch_is_not_published(
 ) -> None:
     workspace = _workspace()
 
-    async def _get_detail(**_kwargs):
+    async def _get_detail(*_args, **_kwargs):
         return workspace
 
-    async def _load_active_user_handoff(*, user_id, **_kwargs):
+    async def _load_active_user_handoff(*_args, user_id, **_kwargs):
         return None
 
-    async def _load_user(_user_id):
+    async def _load_user(_db, _user_id):
         return SimpleNamespace(id=_user_id)
 
     async def _repo_branches(*_args, **_kwargs):
@@ -334,7 +334,7 @@ async def test_preflight_blocks_when_branch_is_not_published(
             branch_heads_by_name={"main": GITHUB_SHA},
         )
 
-    async def _load_repo_config(**_kwargs):
+    async def _load_repo_config(*_args, **_kwargs):
         return None
 
     monkeypatch.setattr(
@@ -356,7 +356,7 @@ async def test_preflight_blocks_when_branch_is_not_published(
     monkeypatch.setattr(mobility_service, "get_repo_branches_for_user", _repo_branches)
     monkeypatch.setattr(mobility_service, "load_cloud_repo_config_for_user", _load_repo_config)
 
-    response = await mobility_service.preflight_cloud_workspace_handoff(
+    response = await mobility_service.preflight_cloud_workspace_handoff(object(),
         user_id=uuid4(),
         mobility_workspace_id=workspace.id,
         direction="local_to_cloud",
@@ -376,13 +376,13 @@ async def test_preflight_blocks_when_github_branch_head_is_behind_requested_comm
 ) -> None:
     workspace = _workspace()
 
-    async def _get_detail(**_kwargs):
+    async def _get_detail(*_args, **_kwargs):
         return workspace
 
-    async def _load_active_user_handoff(*, user_id, **_kwargs):
+    async def _load_active_user_handoff(*_args, user_id, **_kwargs):
         return None
 
-    async def _load_user(_user_id):
+    async def _load_user(_db, _user_id):
         return SimpleNamespace(id=_user_id)
 
     async def _repo_branches(*_args, **_kwargs):
@@ -391,7 +391,7 @@ async def test_preflight_blocks_when_github_branch_head_is_behind_requested_comm
             branch_heads_by_name={"feature/cloud": GITHUB_SHA},
         )
 
-    async def _load_repo_config(**_kwargs):
+    async def _load_repo_config(*_args, **_kwargs):
         return None
 
     monkeypatch.setattr(
@@ -413,7 +413,7 @@ async def test_preflight_blocks_when_github_branch_head_is_behind_requested_comm
     monkeypatch.setattr(mobility_service, "get_repo_branches_for_user", _repo_branches)
     monkeypatch.setattr(mobility_service, "load_cloud_repo_config_for_user", _load_repo_config)
 
-    response = await mobility_service.preflight_cloud_workspace_handoff(
+    response = await mobility_service.preflight_cloud_workspace_handoff(object(),
         user_id=uuid4(),
         mobility_workspace_id=workspace.id,
         direction="local_to_cloud",
@@ -441,13 +441,13 @@ async def test_start_handoff_maps_existing_workspace_conflict_to_409(
     user_id = uuid4()
     workspace = _workspace()
 
-    async def _get_detail(**_kwargs):
+    async def _get_detail(*_args, **_kwargs):
         return workspace
 
-    async def _preflight(**_kwargs):
+    async def _preflight(*_args, **_kwargs):
         return SimpleNamespace(can_start=True, blockers=[])
 
-    async def _create(**_kwargs):
+    async def _create(*_args, **_kwargs):
         raise ValueError("handoff already in progress for workspace")
 
     monkeypatch.setattr(
@@ -464,7 +464,7 @@ async def test_start_handoff_maps_existing_workspace_conflict_to_409(
     )
 
     with pytest.raises(CloudApiError) as exc_info:
-        await mobility_service.start_cloud_workspace_handoff(
+        await mobility_service.start_cloud_workspace_handoff(object(),
             user_id=user_id,
             mobility_workspace_id=workspace.id,
             direction="local_to_cloud",
@@ -486,16 +486,16 @@ async def test_start_local_to_cloud_marks_handoff_failed_when_cloud_setup_fails(
     handoff = _handoff(mobility_workspace_id=workspace.id)
     failed_calls: list[dict[str, object]] = []
 
-    async def _get_detail(**_kwargs):
+    async def _get_detail(*_args, **_kwargs):
         return workspace
 
-    async def _preflight(**_kwargs):
+    async def _preflight(*_args, **_kwargs):
         return SimpleNamespace(can_start=True, blockers=[])
 
-    async def _create(**_kwargs):
+    async def _create(*_args, **_kwargs):
         return handoff
 
-    async def _load_user(_user_id):
+    async def _load_user(_db, _user_id):
         return SimpleNamespace(id=_user_id)
 
     async def _ensure_cloud_workspace(*_args, **_kwargs):
@@ -505,7 +505,7 @@ async def test_start_local_to_cloud_marks_handoff_failed_when_cloud_setup_fails(
             status_code=400,
         )
 
-    async def _fail_handoff(**kwargs):
+    async def _fail_handoff(*_args, **kwargs):
         failed_calls.append(kwargs)
         return handoff
 
@@ -546,7 +546,7 @@ async def test_start_local_to_cloud_marks_handoff_failed_when_cloud_setup_fails(
     )
 
     with pytest.raises(CloudApiError) as exc_info:
-        await mobility_service.start_cloud_workspace_handoff(
+        await mobility_service.start_cloud_workspace_handoff(object(),
             user_id=user_id,
             mobility_workspace_id=workspace.id,
             direction="local_to_cloud",
@@ -613,7 +613,7 @@ async def test_fail_handoff_does_not_overwrite_completed_cleanup(
     async def _get_handoff(*_args, **_kwargs):
         return handoff
 
-    async def _unexpected_fail(**_kwargs):
+    async def _unexpected_fail(*_args, **_kwargs):
         raise AssertionError("completed cleanup must not be failed")
 
     monkeypatch.setattr(

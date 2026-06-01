@@ -135,6 +135,7 @@ async def test_create_handoff_sets_active_pointer_and_moving_state(
     )
 
     refreshed = await load_cloud_workspace_mobility_for_user(
+        db_session,
         user_id=user_id,
         mobility_workspace_id=mobility.id,
     )
@@ -164,6 +165,7 @@ async def test_create_handoff_for_user_rejects_existing_active_workspace_handoff
 
     with pytest.raises(ValueError, match="handoff already in progress for workspace"):
         await create_cloud_workspace_handoff_op_for_user(
+            db_session,
             user_id=user_id,
             mobility_workspace_id=mobility.id,
             direction="local_to_cloud",
@@ -273,6 +275,7 @@ async def test_finalize_flips_owner_before_cleanup_clears_active_handoff(
     await db_session.commit()
 
     visible = await load_cloud_workspace_mobility_for_user(
+        db_session,
         user_id=user_id,
         mobility_workspace_id=mobility.id,
     )
@@ -319,6 +322,7 @@ async def test_cleanup_completion_clears_active_handoff_and_marks_completed(
     await db_session.commit()
 
     visible = await load_cloud_workspace_mobility_for_user(
+        db_session,
         user_id=user_id,
         mobility_workspace_id=mobility.id,
     )
@@ -404,6 +408,7 @@ async def test_cleanup_completion_restores_active_lifecycle_after_cleanup_failur
     await db_session.commit()
 
     visible = await load_cloud_workspace_mobility_for_user(
+        db_session,
         user_id=user_id,
         mobility_workspace_id=mobility.id,
     )
@@ -455,6 +460,7 @@ async def test_failure_clears_active_handoff_and_truncates_visible_error(
     await db_session.commit()
 
     visible = await load_cloud_workspace_mobility_for_user(
+        db_session,
         user_id=user_id,
         mobility_workspace_id=mobility.id,
     )
@@ -490,6 +496,7 @@ async def test_stale_expiry_before_finalize_marks_failed_and_clears_active_hando
     )
 
     expired = await fail_cloud_workspace_handoff_op_checkpoint_for_user(
+        db_session,
         user_id=user_id,
         mobility_workspace_id=mobility.id,
         handoff_op_id=handoff.id,
@@ -504,6 +511,7 @@ async def test_stale_expiry_before_finalize_marks_failed_and_clears_active_hando
     )
 
     visible = await load_cloud_workspace_mobility_for_user(
+        db_session,
         user_id=user_id,
         mobility_workspace_id=mobility.id,
     )
@@ -539,6 +547,7 @@ async def test_stale_expiry_after_finalize_marks_cleanup_failed_and_keeps_active
     )
 
     expired = await fail_cloud_workspace_handoff_op_checkpoint_for_user(
+        db_session,
         user_id=user_id,
         mobility_workspace_id=mobility.id,
         handoff_op_id=handoff.id,
@@ -553,6 +562,7 @@ async def test_stale_expiry_after_finalize_marks_cleanup_failed_and_keeps_active
     )
 
     visible = await load_cloud_workspace_mobility_for_user(
+        db_session,
         user_id=user_id,
         mobility_workspace_id=mobility.id,
     )

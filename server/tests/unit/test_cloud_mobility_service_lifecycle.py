@@ -71,7 +71,7 @@ def _handoff(*, mobility_workspace_id=None) -> CloudWorkspaceHandoffOpValue:
     )
 
 
-async def _noop_expire(*, user_id):
+async def _noop_expire(*_args, user_id):
     return None
 
 
@@ -81,13 +81,13 @@ def _stub_common_preflight_dependencies(
     workspace: CloudWorkspaceMobilityValue,
     active_handoff: CloudWorkspaceHandoffOpValue | None = None,
 ) -> None:
-    async def _get_detail(**_kwargs):
+    async def _get_detail(*_args, **_kwargs):
         return workspace
 
-    async def _load_active_user_handoff(*, user_id, **_kwargs):
+    async def _load_active_user_handoff(*_args, user_id, **_kwargs):
         return active_handoff
 
-    async def _load_user(_user_id):
+    async def _load_user(_db, _user_id):
         return SimpleNamespace(id=_user_id)
 
     async def _repo_branches(*_args, **_kwargs):
@@ -96,7 +96,7 @@ def _stub_common_preflight_dependencies(
             branch_heads_by_name={"feature/cloud": REQUESTED_SHA},
         )
 
-    async def _load_repo_config(**_kwargs):
+    async def _load_repo_config(*_args, **_kwargs):
         return None
 
     monkeypatch.setattr(
@@ -133,6 +133,7 @@ async def test_preflight_blocks_another_active_handoff_for_same_user(
     )
 
     response = await mobility_service.preflight_cloud_workspace_handoff(
+        object(),
         user_id=user_id,
         mobility_workspace_id=workspace.id,
         direction="local_to_cloud",
@@ -163,6 +164,7 @@ async def test_preflight_blocks_owner_direction_mismatch(
     _stub_common_preflight_dependencies(monkeypatch, workspace=workspace)
 
     response = await mobility_service.preflight_cloud_workspace_handoff(
+        object(),
         user_id=uuid4(),
         mobility_workspace_id=workspace.id,
         direction=direction,
@@ -183,6 +185,7 @@ async def test_preflight_blocks_cloud_lost_workspace(
     _stub_common_preflight_dependencies(monkeypatch, workspace=workspace)
 
     response = await mobility_service.preflight_cloud_workspace_handoff(
+        object(),
         user_id=uuid4(),
         mobility_workspace_id=workspace.id,
         direction="local_to_cloud",
@@ -205,17 +208,17 @@ async def test_start_local_to_cloud_creates_handoff_before_provisioning(
     cloud_workspace_id = uuid4()
     events: list[str] = []
 
-    async def _get_detail(**_kwargs):
+    async def _get_detail(*_args, **_kwargs):
         return workspace
 
-    async def _preflight(**_kwargs):
+    async def _preflight(*_args, **_kwargs):
         return SimpleNamespace(can_start=True, blockers=[])
 
-    async def _create(**_kwargs):
+    async def _create(*_args, **_kwargs):
         events.append("handoff_created")
         return handoff
 
-    async def _load_user(_user_id):
+    async def _load_user(_db, _user_id):
         return SimpleNamespace(id=_user_id)
 
     async def _ensure_cloud_workspace(*_args, **_kwargs):
@@ -227,7 +230,7 @@ async def test_start_local_to_cloud_creates_handoff_before_provisioning(
         assert events == ["handoff_created", "workspace_ensured"]
         events.append("workspace_started")
 
-    async def _update_phase(**kwargs):
+    async def _update_phase(*_args, **kwargs):
         events.append("phase_updated")
         assert kwargs["handoff_op_id"] == handoff.id
         assert kwargs["phase"] == "start_requested"
@@ -264,6 +267,7 @@ async def test_start_local_to_cloud_creates_handoff_before_provisioning(
     )
 
     await mobility_service.start_cloud_workspace_handoff(
+        object(),
         user_id=user_id,
         mobility_workspace_id=workspace.id,
         direction="local_to_cloud",
@@ -289,13 +293,13 @@ async def test_start_cloud_to_local_creates_handoff_without_cloud_provisioning(
     handoff = _handoff(mobility_workspace_id=workspace.id)
     events: list[str] = []
 
-    async def _get_detail(**_kwargs):
+    async def _get_detail(*_args, **_kwargs):
         return workspace
 
-    async def _preflight(**_kwargs):
+    async def _preflight(*_args, **_kwargs):
         return SimpleNamespace(can_start=True, blockers=[])
 
-    async def _create(**_kwargs):
+    async def _create(*_args, **_kwargs):
         events.append("handoff_created")
         return handoff
 
@@ -322,6 +326,7 @@ async def test_start_cloud_to_local_creates_handoff_without_cloud_provisioning(
     monkeypatch.setattr(mobility_service, "start_cloud_workspace", _unexpected)
 
     result = await mobility_service.start_cloud_workspace_handoff(
+        object(),
         user_id=user_id,
         mobility_workspace_id=workspace.id,
         direction="cloud_to_local",

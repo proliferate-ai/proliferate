@@ -24,7 +24,6 @@ from proliferate.constants.organizations import (
     ORGANIZATION_ROLE_ADMIN,
     ORGANIZATION_ROLE_OWNER,
 )
-from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.exposures import CloudWorkspaceExposure
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
@@ -387,7 +386,6 @@ async def create_cloud_workspace_record(
     origin: str = "manual_desktop",
     repo_env_vars_ciphertext: str | None = None,
     cloud_repo_limit: int | None = None,
-    commit: bool = True,
 ) -> CloudWorkspace:
     now = utcnow()
     billing_subject = await ensure_personal_billing_subject(db, user_id)
@@ -442,11 +440,8 @@ async def create_cloud_workspace_record(
         updated_at=now,
     )
     db.add(workspace)
-    if commit:
-        await db.commit()
-        await db.refresh(workspace)
-    else:
-        await db.flush()
+    await db.flush()
+    await db.refresh(workspace)
     return workspace
 
 
@@ -654,7 +649,7 @@ async def delete_cloud_workspace_records(
     workspace: CloudWorkspace,
 ) -> None:
     await archive_cloud_workspace_record(db, workspace=workspace)
-    await db.commit()
+    await db.flush()
 
 
 async def archive_cloud_workspace_record(
@@ -878,7 +873,7 @@ async def reserve_sandbox_slot_for_workspace(
     await db.flush()
     workspace.active_sandbox_id = sandbox.id
     workspace.updated_at = now
-    await db.commit()
+    await db.flush()
     await db.refresh(sandbox)
     return sandbox
 
@@ -891,14 +886,14 @@ async def persist_sandbox_status(
     stopped_at_now: bool = False,
     started_at: datetime | None = None,
 ) -> None:
-    """Update sandbox status and commit."""
+    """Update sandbox status."""
     sandbox.status = status
     sandbox.updated_at = utcnow()
     if started_at is not None:
         sandbox.started_at = started_at
     if stopped_at_now:
         sandbox.stopped_at = utcnow()
-    await db.commit()
+    await db.flush()
 
 
 async def persist_workspace_record(
@@ -906,7 +901,7 @@ async def persist_workspace_record(
     workspace: CloudWorkspace,
 ) -> CloudWorkspace:
     workspace.updated_at = utcnow()
-    await db.commit()
+    await db.flush()
     await db.refresh(workspace)
     return workspace
 
@@ -915,21 +910,20 @@ async def persist_workspace_stop(
     db: AsyncSession,
     workspace: CloudWorkspace,
 ) -> None:
-    """Commit the workspace after the service has applied the ready transition."""
-    await db.commit()
+    await db.flush()
 
 
 async def persist_workspace_destroy(
     db: AsyncSession,
     workspace: CloudWorkspace,
 ) -> None:
-    """Clear runtime metadata and commit after the service has applied the stopped transition."""
+    """Clear runtime metadata after the service has applied the stopped transition."""
     workspace.active_sandbox_id = None
     workspace.runtime_url = None
     workspace.runtime_token_ciphertext = None
     workspace.anyharness_workspace_id = None
     workspace.stopped_at = utcnow()
-    await db.commit()
+    await db.flush()
 
 
 async def persist_bound_sandbox(
@@ -945,7 +939,7 @@ async def persist_bound_sandbox(
     sandbox.started_at = started_at
     sandbox.stopped_at = None
     sandbox.updated_at = utcnow()
-    await db.commit()
+    await db.flush()
     await db.refresh(sandbox)
     return sandbox
 
@@ -986,7 +980,7 @@ async def persist_sandbox_provider_state(
             replaced_sandbox_id=sandbox.id,
             replaced_slot_generation=sandbox.slot_generation,
         )
-    await db.commit()
+    await db.flush()
     await db.refresh(sandbox)
     return sandbox
 
@@ -1020,7 +1014,7 @@ async def finalize_workspace_provision(
         workspace=workspace,
         anyharness_workspace_id=anyharness_workspace_id,
     )
-    await db.commit()
+    await db.flush()
     await db.refresh(workspace)
     await db.refresh(sandbox)
     return workspace
@@ -1125,7 +1119,7 @@ async def persist_runtime_reconnect_state(
     workspace.updated_at = utcnow()
     if restarted_runtime:
         workspace.runtime_generation = workspace.runtime_generation + 1
-    await db.commit()
+    await db.flush()
     await db.refresh(workspace)
     await db.refresh(sandbox)
     return sandbox
@@ -1153,7 +1147,7 @@ async def update_workspace_status(
     workspace.status = status.value if hasattr(status, "value") else str(status)
     workspace.status_detail = status_detail
     workspace.updated_at = utcnow()
-    await db.commit()
+    await db.flush()
 
 
 async def attach_anyharness_workspace_id(
@@ -1245,29 +1239,31 @@ async def update_workspace_repo_apply_status(
     if status_detail is not _UNSET:
         workspace.status_detail = status_detail
     workspace.updated_at = utcnow()
-    await db.commit()
+    await db.flush()
     await db.refresh(workspace)
     return workspace
 
 
 async def update_workspace_status_by_id(
+    db: AsyncSession,
     workspace_id: UUID,
     status: CloudWorkspaceStatus | WorkspaceStatus | str,
     status_detail: str,
 ) -> None:
-    async with db_engine.async_session_factory() as db:
-        await update_workspace_status(db, workspace_id, status, status_detail)
+    await update_workspace_status(db, workspace_id, status, status_detail)
 
 
 @asynccontextmanager
-async def workspace_repo_apply_lock(workspace_id: UUID) -> AsyncIterator[bool]:
-    async with db_engine.async_session_factory() as db:
-        acquired = await try_acquire_workspace_repo_apply_lock(db, workspace_id)
-        try:
-            yield acquired
-        finally:
-            if acquired:
-                await release_workspace_repo_apply_lock(db, workspace_id)
+async def workspace_repo_apply_lock(
+    db: AsyncSession,
+    workspace_id: UUID,
+) -> AsyncIterator[bool]:
+    acquired = await try_acquire_workspace_repo_apply_lock(db, workspace_id)
+    try:
+        yield acquired
+    finally:
+        if acquired:
+            await release_workspace_repo_apply_lock(db, workspace_id)
 
 
 async def mark_workspace_error(
@@ -1305,30 +1301,33 @@ async def mark_workspace_error(
         if sandbox is not None:
             sandbox.status = "error"
             sandbox.updated_at = utcnow()
-    await db.commit()
+    await db.flush()
 
 
-async def list_cloud_workspaces_for_user(user_id: UUID) -> list[CloudWorkspace]:
-    async with db_engine.async_session_factory() as db:
-        return await list_cloud_workspaces(db, user_id)
+async def list_cloud_workspaces_for_user(
+    db: AsyncSession,
+    user_id: UUID,
+) -> list[CloudWorkspace]:
+    return await list_cloud_workspaces(db, user_id)
 
 
 async def load_cloud_workspace_for_user(
+    db: AsyncSession,
     user_id: UUID,
     workspace_id: UUID,
 ) -> CloudWorkspace | None:
-    async with db_engine.async_session_factory() as db:
-        return await get_cloud_workspace_for_user(db, user_id, workspace_id)
+    return await get_cloud_workspace_for_user(db, user_id, workspace_id)
 
 
 async def load_cloud_workspace_by_id(
+    db: AsyncSession,
     workspace_id: UUID,
 ) -> CloudWorkspace | None:
-    async with db_engine.async_session_factory() as db:
-        return await get_cloud_workspace_by_id(db, workspace_id)
+    return await get_cloud_workspace_by_id(db, workspace_id)
 
 
 async def load_existing_cloud_workspace(
+    db: AsyncSession,
     *,
     user_id: UUID,
     git_provider: str,
@@ -1336,39 +1335,39 @@ async def load_existing_cloud_workspace(
     git_repo_name: str,
     git_branch: str,
 ) -> CloudWorkspace | None:
-    async with db_engine.async_session_factory() as db:
-        return await get_existing_cloud_workspace(
-            db,
-            user_id=user_id,
-            git_provider=git_provider,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-            git_branch=git_branch,
-        )
+    return await get_existing_cloud_workspace(
+        db,
+        user_id=user_id,
+        git_provider=git_provider,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        git_branch=git_branch,
+    )
 
 
 async def load_any_cloud_workspace_for_repo(
+    db: AsyncSession,
     *,
     user_id: UUID,
     git_owner: str,
     git_repo_name: str,
 ) -> CloudWorkspace | None:
-    async with db_engine.async_session_factory() as db:
-        return (
-            await db.execute(
-                select(CloudWorkspace)
-                .where(
-                    CloudWorkspace.owner_scope == "personal",
-                    CloudWorkspace.owner_user_id == user_id,
-                    CloudWorkspace.git_owner == git_owner,
-                    CloudWorkspace.git_repo_name == git_repo_name,
-                )
-                .order_by(CloudWorkspace.updated_at.desc())
+    return (
+        await db.execute(
+            select(CloudWorkspace)
+            .where(
+                CloudWorkspace.owner_scope == "personal",
+                CloudWorkspace.owner_user_id == user_id,
+                CloudWorkspace.git_owner == git_owner,
+                CloudWorkspace.git_repo_name == git_repo_name,
             )
-        ).scalar_one_or_none()
+            .order_by(CloudWorkspace.updated_at.desc())
+        )
+    ).scalar_one_or_none()
 
 
 async def create_cloud_workspace_for_user(
+    db: AsyncSession,
     *,
     user_id: UUID,
     display_name: str | None,
@@ -1383,59 +1382,58 @@ async def create_cloud_workspace_for_user(
     repo_env_vars_ciphertext: str | None = None,
     cloud_repo_limit: int | None = None,
 ) -> CloudWorkspace:
-    async with db_engine.async_session_factory() as db:
-        return await create_cloud_workspace_record(
-            db,
-            user_id=user_id,
-            display_name=display_name,
-            git_provider=git_provider,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-            git_branch=git_branch,
-            git_base_branch=git_base_branch,
-            origin=origin,
-            origin_json=origin_json,
-            template_version=template_version,
-            repo_env_vars_ciphertext=repo_env_vars_ciphertext,
-            cloud_repo_limit=cloud_repo_limit,
-        )
+    return await create_cloud_workspace_record(
+        db,
+        user_id=user_id,
+        display_name=display_name,
+        git_provider=git_provider,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        git_branch=git_branch,
+        git_base_branch=git_base_branch,
+        origin=origin,
+        origin_json=origin_json,
+        template_version=template_version,
+        repo_env_vars_ciphertext=repo_env_vars_ciphertext,
+        cloud_repo_limit=cloud_repo_limit,
+    )
 
 
 async def load_active_sandbox_for_workspace(
+    db: AsyncSession,
     workspace: CloudWorkspace,
 ) -> CloudSandbox | None:
-    async with db_engine.async_session_factory() as db:
-        return await get_active_sandbox(db, workspace)
+    return await get_active_sandbox(db, workspace)
 
 
 async def load_cloud_sandbox_by_id(
+    db: AsyncSession,
     sandbox_id: UUID,
 ) -> CloudSandbox | None:
-    async with db_engine.async_session_factory() as db:
-        return await get_cloud_sandbox_by_id(db, sandbox_id)
+    return await get_cloud_sandbox_by_id(db, sandbox_id)
 
 
 async def load_cloud_sandbox_by_external_id(
+    db: AsyncSession,
     external_sandbox_id: str,
 ) -> CloudSandbox | None:
-    async with db_engine.async_session_factory() as db:
-        return await get_cloud_sandbox_by_external_id(db, external_sandbox_id)
+    return await get_cloud_sandbox_by_external_id(db, external_sandbox_id)
 
 
-async def load_cloud_sandbox_placeholders() -> list[CloudSandbox]:
-    async with db_engine.async_session_factory() as db:
-        return await list_cloud_sandbox_placeholders(db)
+async def load_cloud_sandbox_placeholders(db: AsyncSession) -> list[CloudSandbox]:
+    return await list_cloud_sandbox_placeholders(db)
 
 
 async def save_workspace(
+    db: AsyncSession,
     workspace: CloudWorkspace,
 ) -> CloudWorkspace:
-    async with db_engine.async_session_factory() as db:
-        merged = await db.merge(workspace)
-        return await persist_workspace_record(db, merged)
+    merged = await db.merge(workspace)
+    return await persist_workspace_record(db, merged)
 
 
 async def reserve_and_attach_sandbox_for_workspace(
+    db: AsyncSession,
     workspace_id: UUID,
     *,
     external_sandbox_id: str | None,
@@ -1445,40 +1443,40 @@ async def reserve_and_attach_sandbox_for_workspace(
     started_at: datetime | None = None,
     concurrent_sandbox_limit: int | None,
 ) -> CloudSandbox | None:
-    async with db_engine.async_session_factory() as db:
-        return await reserve_sandbox_slot_for_workspace(
-            db,
-            workspace_id=workspace_id,
-            external_sandbox_id=external_sandbox_id,
-            provider=provider,
-            template_version=template_version,
-            status=status,
-            started_at=started_at,
-            concurrent_sandbox_limit=concurrent_sandbox_limit,
-        )
+    return await reserve_sandbox_slot_for_workspace(
+        db,
+        workspace_id=workspace_id,
+        external_sandbox_id=external_sandbox_id,
+        provider=provider,
+        template_version=template_version,
+        status=status,
+        started_at=started_at,
+        concurrent_sandbox_limit=concurrent_sandbox_limit,
+    )
 
 
 async def bind_allocated_sandbox(
+    db: AsyncSession,
     sandbox_id: UUID,
     *,
     external_sandbox_id: str,
     status: str = "provisioning",
     started_at: datetime | None,
 ) -> CloudSandbox:
-    async with db_engine.async_session_factory() as db:
-        sandbox = await get_cloud_sandbox_by_id(db, sandbox_id)
-        if sandbox is None:
-            raise RuntimeError("Sandbox placeholder disappeared before provider allocation.")
-        return await persist_bound_sandbox(
-            db,
-            sandbox,
-            external_sandbox_id=external_sandbox_id,
-            status=status,
-            started_at=started_at,
-        )
+    sandbox = await get_cloud_sandbox_by_id(db, sandbox_id)
+    if sandbox is None:
+        raise RuntimeError("Sandbox placeholder disappeared before provider allocation.")
+    return await persist_bound_sandbox(
+        db,
+        sandbox,
+        external_sandbox_id=external_sandbox_id,
+        status=status,
+        started_at=started_at,
+    )
 
 
 async def finalize_workspace_provision_for_ids(
+    db: AsyncSession,
     workspace_id: UUID,
     sandbox_record_id: UUID,
     *,
@@ -1487,23 +1485,23 @@ async def finalize_workspace_provision_for_ids(
     anyharness_workspace_id: str,
     template_version: str,
 ) -> CloudWorkspace:
-    async with db_engine.async_session_factory() as db:
-        workspace = await get_cloud_workspace_by_id(db, workspace_id)
-        sandbox = await db.get(CloudSandbox, sandbox_record_id)
-        if workspace is None or sandbox is None:
-            raise RuntimeError("Workspace or sandbox record disappeared before finalization.")
-        return await finalize_workspace_provision(
-            db,
-            workspace,
-            sandbox,
-            runtime_url=runtime_url,
-            runtime_token_ciphertext=runtime_token_ciphertext,
-            anyharness_workspace_id=anyharness_workspace_id,
-            template_version=template_version,
-        )
+    workspace = await get_cloud_workspace_by_id(db, workspace_id)
+    sandbox = await db.get(CloudSandbox, sandbox_record_id)
+    if workspace is None or sandbox is None:
+        raise RuntimeError("Workspace or sandbox record disappeared before finalization.")
+    return await finalize_workspace_provision(
+        db,
+        workspace,
+        sandbox,
+        runtime_url=runtime_url,
+        runtime_token_ciphertext=runtime_token_ciphertext,
+        anyharness_workspace_id=anyharness_workspace_id,
+        template_version=template_version,
+    )
 
 
 async def update_workspace_repo_apply_status_by_id(
+    db: AsyncSession,
     workspace_id: UUID,
     *,
     repo_files_applied_version: int | object = _UNSET,
@@ -1518,86 +1516,86 @@ async def update_workspace_repo_apply_status_by_id(
     repo_files_last_error: str | None | object = _UNSET,
     status_detail: str | None | object = _UNSET,
 ) -> CloudWorkspace | None:
-    async with db_engine.async_session_factory() as db:
-        return await update_workspace_repo_apply_status(
-            db,
-            workspace_id,
-            repo_files_applied_version=repo_files_applied_version,
-            repo_files_applied_at=repo_files_applied_at,
-            repo_post_ready_phase=repo_post_ready_phase,
-            repo_post_ready_files_total=repo_post_ready_files_total,
-            repo_post_ready_files_applied=repo_post_ready_files_applied,
-            repo_post_ready_apply_token=repo_post_ready_apply_token,
-            repo_post_ready_started_at=repo_post_ready_started_at,
-            repo_post_ready_completed_at=repo_post_ready_completed_at,
-            repo_files_last_failed_path=repo_files_last_failed_path,
-            repo_files_last_error=repo_files_last_error,
-            status_detail=status_detail,
-        )
+    return await update_workspace_repo_apply_status(
+        db,
+        workspace_id,
+        repo_files_applied_version=repo_files_applied_version,
+        repo_files_applied_at=repo_files_applied_at,
+        repo_post_ready_phase=repo_post_ready_phase,
+        repo_post_ready_files_total=repo_post_ready_files_total,
+        repo_post_ready_files_applied=repo_post_ready_files_applied,
+        repo_post_ready_apply_token=repo_post_ready_apply_token,
+        repo_post_ready_started_at=repo_post_ready_started_at,
+        repo_post_ready_completed_at=repo_post_ready_completed_at,
+        repo_files_last_failed_path=repo_files_last_failed_path,
+        repo_files_last_error=repo_files_last_error,
+        status_detail=status_detail,
+    )
 
 
 async def persist_workspace_stop_state(
+    db: AsyncSession,
     workspace: CloudWorkspace,
 ) -> None:
-    async with db_engine.async_session_factory() as db:
-        merged = await db.merge(workspace)
-        await persist_workspace_stop(db, merged)
+    merged = await db.merge(workspace)
+    await persist_workspace_stop(db, merged)
 
 
 async def persist_workspace_destroy_state(
+    db: AsyncSession,
     workspace: CloudWorkspace,
 ) -> None:
-    async with db_engine.async_session_factory() as db:
-        merged = await db.merge(workspace)
-        await persist_workspace_destroy(db, merged)
+    merged = await db.merge(workspace)
+    await persist_workspace_destroy(db, merged)
 
 
 async def update_sandbox_status(
+    db: AsyncSession,
     sandbox: CloudSandbox,
     status: str,
     *,
     stopped_at_now: bool = False,
     started_at: datetime | None = None,
 ) -> None:
-    async with db_engine.async_session_factory() as db:
-        merged = await db.merge(sandbox)
-        await persist_sandbox_status(
-            db,
-            merged,
-            status,
-            stopped_at_now=stopped_at_now,
-            started_at=started_at,
-        )
+    merged = await db.merge(sandbox)
+    await persist_sandbox_status(
+        db,
+        merged,
+        status,
+        stopped_at_now=stopped_at_now,
+        started_at=started_at,
+    )
 
 
 async def persist_runtime_reconnect_state_for_workspace(
+    db: AsyncSession,
     workspace: CloudWorkspace,
     sandbox: CloudSandbox,
     *,
     restarted_runtime: bool,
     runtime_url: str | None = None,
 ) -> CloudSandbox:
-    async with db_engine.async_session_factory() as db:
-        merged_workspace = await db.merge(workspace)
-        merged_sandbox = await db.merge(sandbox)
-        return await persist_runtime_reconnect_state(
-            db,
-            merged_workspace,
-            merged_sandbox,
-            restarted_runtime=restarted_runtime,
-            runtime_url=runtime_url,
-        )
+    merged_workspace = await db.merge(workspace)
+    merged_sandbox = await db.merge(sandbox)
+    return await persist_runtime_reconnect_state(
+        db,
+        merged_workspace,
+        merged_sandbox,
+        restarted_runtime=restarted_runtime,
+        runtime_url=runtime_url,
+    )
 
 
 async def delete_cloud_workspace_records_for_workspace(
+    db: AsyncSession,
     workspace: CloudWorkspace,
 ) -> None:
-    async with db_engine.async_session_factory() as db:
-        merged = await db.merge(workspace)
-        await delete_cloud_workspace_records(db, merged)
+    merged = await db.merge(workspace)
+    await delete_cloud_workspace_records(db, merged)
 
 
 async def mark_workspace_error_by_id(
+    db: AsyncSession,
     workspace_id: UUID,
     message: str,
     *,
@@ -1605,18 +1603,18 @@ async def mark_workspace_error_by_id(
     clear_runtime_metadata: bool = True,
     clear_active_sandbox: bool = False,
 ) -> None:
-    async with db_engine.async_session_factory() as db:
-        await mark_workspace_error(
-            db,
-            workspace_id,
-            message,
-            status_detail=status_detail,
-            clear_runtime_metadata=clear_runtime_metadata,
-            clear_active_sandbox=clear_active_sandbox,
-        )
+    await mark_workspace_error(
+        db,
+        workspace_id,
+        message,
+        status_detail=status_detail,
+        clear_runtime_metadata=clear_runtime_metadata,
+        clear_active_sandbox=clear_active_sandbox,
+    )
 
 
 async def save_sandbox_provider_state(
+    db: AsyncSession,
     sandbox_id: UUID,
     *,
     external_sandbox_id: str | None | object = _UNSET,
@@ -1626,17 +1624,16 @@ async def save_sandbox_provider_state(
     last_provider_event_at: datetime | None | object = _UNSET,
     last_provider_event_kind: str | None | object = _UNSET,
 ) -> CloudSandbox:
-    async with db_engine.async_session_factory() as db:
-        sandbox = await get_cloud_sandbox_by_id(db, sandbox_id)
-        if sandbox is None:
-            raise RuntimeError("Sandbox record not found.")
-        return await persist_sandbox_provider_state(
-            db,
-            sandbox,
-            external_sandbox_id=external_sandbox_id,
-            status=status,
-            started_at=started_at,
-            stopped_at=stopped_at,
-            last_provider_event_at=last_provider_event_at,
-            last_provider_event_kind=last_provider_event_kind,
-        )
+    sandbox = await get_cloud_sandbox_by_id(db, sandbox_id)
+    if sandbox is None:
+        raise RuntimeError("Sandbox record not found.")
+    return await persist_sandbox_provider_state(
+        db,
+        sandbox,
+        external_sandbox_id=external_sandbox_id,
+        status=status,
+        started_at=started_at,
+        stopped_at=stopped_at,
+        last_provider_event_at=last_provider_event_at,
+        last_provider_event_kind=last_provider_event_kind,
+    )

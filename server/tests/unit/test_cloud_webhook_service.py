@@ -114,19 +114,24 @@ async def test_killed_e2b_webhook_clears_runtime_metadata_and_increments_generat
     async def _remember_sandbox_event_receipt(*_args: object, **_kwargs: object) -> bool:
         return True
 
-    async def _load_cloud_sandbox_by_external_id(_external_sandbox_id: str) -> object:
+    async def _load_cloud_sandbox_by_external_id(_db: object, _external_sandbox_id: str) -> object:
         return sandbox
 
-    async def _load_runtime_environment_by_id(_runtime_environment_id: object) -> object:
+    async def _load_runtime_environment_by_id(_db: object, _runtime_environment_id: object) -> object:
         return runtime_environment
 
-    async def _save_sandbox_provider_state(_sandbox_id: object, **kwargs: object) -> None:
+    async def _save_sandbox_provider_state(
+        _db: object,
+        _sandbox_id: object,
+        **kwargs: object,
+    ) -> None:
         sandbox_state_updates.append(kwargs)
 
     async def _close_usage_segment_for_sandbox(*_args: object, **_kwargs: object) -> None:
         return None
 
     async def _save_runtime_environment_state(
+        _db: object,
         _runtime_environment_id: object,
         **kwargs: object,
     ) -> None:
@@ -218,19 +223,24 @@ async def test_timeout_e2b_webhook_closes_usage_as_paused(
     async def _remember_sandbox_event_receipt(*_args: object, **_kwargs: object) -> bool:
         return True
 
-    async def _load_cloud_sandbox_by_external_id(_external_sandbox_id: str) -> object:
+    async def _load_cloud_sandbox_by_external_id(_db: object, _external_sandbox_id: str) -> object:
         return sandbox
 
-    async def _load_runtime_environment_by_id(_runtime_environment_id: object) -> object:
+    async def _load_runtime_environment_by_id(_db: object, _runtime_environment_id: object) -> object:
         return runtime_environment
 
-    async def _save_sandbox_provider_state(_sandbox_id: object, **kwargs: object) -> None:
+    async def _save_sandbox_provider_state(
+        _db: object,
+        _sandbox_id: object,
+        **kwargs: object,
+    ) -> None:
         sandbox_state_updates.append(kwargs)
 
     async def _close_usage_segment_for_sandbox(*_args: object, **kwargs: object) -> None:
         closed_segments.append(kwargs)
 
     async def _save_runtime_environment_state(
+        _db: object,
         _runtime_environment_id: object,
         **kwargs: object,
     ) -> None:

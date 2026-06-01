@@ -178,53 +178,60 @@ async def _mark_environment_unavailable(
 ) -> None:
     if runtime_environment_id is None:
         return
-    environment = await load_runtime_environment_by_id(runtime_environment_id)
-    if environment is None:
-        return
-    if destroyed:
-        await save_runtime_environment_state(
-            environment.id,
-            status=CloudRuntimeEnvironmentStatus.error.value,
-            runtime_url=None,
-            runtime_token_ciphertext=None,
-            active_sandbox_id=None,
-            increment_runtime_generation=True,
-            last_error="Provider sandbox was destroyed.",
-        )
-    else:
-        await save_runtime_environment_state(
-            environment.id,
-            status=CloudRuntimeEnvironmentStatus.paused.value,
-        )
+    async with db_engine.async_session_factory() as db, db.begin():
+        environment = await load_runtime_environment_by_id(db, runtime_environment_id)
+        if environment is None:
+            return
+        if destroyed:
+            await save_runtime_environment_state(
+                db,
+                environment.id,
+                status=CloudRuntimeEnvironmentStatus.error.value,
+                runtime_url=None,
+                runtime_token_ciphertext=None,
+                active_sandbox_id=None,
+                increment_runtime_generation=True,
+                last_error="Provider sandbox was destroyed.",
+            )
+        else:
+            await save_runtime_environment_state(
+                db,
+                environment.id,
+                status=CloudRuntimeEnvironmentStatus.paused.value,
+            )
 
 
 async def _repair_placeholders(
     *,
     states_by_placeholder_id: dict[str, ProviderSandboxState],
 ) -> None:
-    placeholders = await load_cloud_sandbox_placeholders()
+    async with db_engine.async_session_factory() as db:
+        placeholders = await load_cloud_sandbox_placeholders(db)
     for placeholder in placeholders:
         state = states_by_placeholder_id.get(str(placeholder.id))
         if state is None:
             continue
-        environment = (
-            await load_runtime_environment_by_id(placeholder.runtime_environment_id)
-            if placeholder.runtime_environment_id is not None
-            else None
-        )
-        workspace = (
-            await load_cloud_workspace_by_id(placeholder.cloud_workspace_id)
-            if placeholder.cloud_workspace_id is not None
-            else None
-        )
+        async with db_engine.async_session_factory() as db:
+            environment = (
+                await load_runtime_environment_by_id(db, placeholder.runtime_environment_id)
+                if placeholder.runtime_environment_id is not None
+                else None
+            )
+            workspace = (
+                await load_cloud_workspace_by_id(db, placeholder.cloud_workspace_id)
+                if placeholder.cloud_workspace_id is not None
+                else None
+            )
         if environment is None and workspace is None:
             continue
-        await save_sandbox_provider_state(
-            placeholder.id,
-            external_sandbox_id=state.external_sandbox_id,
-            status="running" if _is_running_state(state.state) else state.state,
-            started_at=state.started_at,
-        )
+        async with db_engine.async_session_factory() as db, db.begin():
+            await save_sandbox_provider_state(
+                db,
+                placeholder.id,
+                external_sandbox_id=state.external_sandbox_id,
+                status="running" if _is_running_state(state.state) else state.state,
+                started_at=state.started_at,
+            )
         if _is_running_state(state.state):
             await open_usage_segment_for_sandbox(
                 user_id=environment.user_id if environment is not None else workspace.user_id,
@@ -245,7 +252,8 @@ async def _enforce_or_reconcile_segment(
     state: ProviderSandboxState | None,
     billing_snapshot: BillingSnapshot,
 ) -> None:
-    sandbox = await load_cloud_sandbox_by_id(segment.sandbox_id)
+    async with db_engine.async_session_factory() as db:
+        sandbox = await load_cloud_sandbox_by_id(db, segment.sandbox_id)
     if sandbox is None:
         return
 
@@ -278,11 +286,13 @@ async def _enforce_or_reconcile_segment(
             ended_at=state.end_at or state.observed_at,
             closed_by=USAGE_SEGMENT_CLOSED_BY_RECONCILER,
         )
-        await save_sandbox_provider_state(
-            sandbox.id,
-            status="paused",
-            stopped_at=state.end_at or state.observed_at,
-        )
+        async with db_engine.async_session_factory() as db, db.begin():
+            await save_sandbox_provider_state(
+                db,
+                sandbox.id,
+                status="paused",
+                stopped_at=state.end_at or state.observed_at,
+            )
         await _mark_environment_unavailable(sandbox.runtime_environment_id, destroyed=False)
         return
 
@@ -292,11 +302,13 @@ async def _enforce_or_reconcile_segment(
             ended_at=state.end_at or state.observed_at,
             closed_by=USAGE_SEGMENT_CLOSED_BY_RECONCILER,
         )
-        await save_sandbox_provider_state(
-            sandbox.id,
-            status="destroyed",
-            stopped_at=state.end_at or state.observed_at,
-        )
+        async with db_engine.async_session_factory() as db, db.begin():
+            await save_sandbox_provider_state(
+                db,
+                sandbox.id,
+                status="destroyed",
+                stopped_at=state.end_at or state.observed_at,
+            )
         await _mark_environment_unavailable(sandbox.runtime_environment_id, destroyed=True)
         return
 
@@ -320,11 +332,13 @@ async def _enforce_or_reconcile_segment(
             ended_at=ended_at,
             closed_by=USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
         )
-        await save_sandbox_provider_state(
-            sandbox.id,
-            status="paused",
-            stopped_at=ended_at,
-        )
+        async with db_engine.async_session_factory() as db, db.begin():
+            await save_sandbox_provider_state(
+                db,
+                sandbox.id,
+                status="paused",
+                stopped_at=ended_at,
+            )
         await _mark_environment_unavailable(sandbox.runtime_environment_id, destroyed=False)
 
 

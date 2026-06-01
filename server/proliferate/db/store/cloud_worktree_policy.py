@@ -76,10 +76,7 @@ async def save_cloud_worktree_policy(
 
 
 async def load_cloud_worktree_policy_for_user(
+    db: AsyncSession,
     user_id: UUID,
 ) -> CloudWorktreePolicyValue | None:
-    # Transitional runtime-sync read; Phase 8 should thread this session boundary.
-    from proliferate.db import engine as db_engine
-
-    async with db_engine.async_session_factory() as db:
-        return await get_cloud_worktree_policy(db, user_id)
+    return await get_cloud_worktree_policy(db, user_id)

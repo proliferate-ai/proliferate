@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -16,7 +14,6 @@ from proliferate.constants.cloud import (
     CloudRuntimeEnvironmentStatus,
     CloudRuntimeIsolationPolicy,
 )
-from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
@@ -282,70 +279,47 @@ async def persist_runtime_environment_state(
 
 
 async def ensure_runtime_environment_for_workspace_id(
+    db: AsyncSession,
     workspace_id: UUID,
 ) -> CloudRuntimeEnvironment | None:
-    async with db_engine.async_session_factory() as db:
-        workspace = await db.get(CloudWorkspace, workspace_id)
-        if workspace is None:
-            return None
-        environment = await ensure_runtime_environment_for_workspace(db, workspace)
-        await db.commit()
-        await db.refresh(environment)
-        return environment
+    workspace = await db.get(CloudWorkspace, workspace_id)
+    if workspace is None:
+        return None
+    environment = await ensure_runtime_environment_for_workspace(db, workspace)
+    await db.flush()
+    await db.refresh(environment)
+    return environment
 
 
 async def load_runtime_environment_by_id(
+    db: AsyncSession,
     runtime_environment_id: UUID,
 ) -> CloudRuntimeEnvironment | None:
-    async with db_engine.async_session_factory() as db:
-        return await db.get(CloudRuntimeEnvironment, runtime_environment_id)
-
-
-@asynccontextmanager
-async def runtime_environment_credential_apply_lock(
-    runtime_environment_id: UUID,
-) -> AsyncIterator[None]:
-    """Serialize credential apply operations for a runtime environment."""
-
-    async with db_engine.async_session_factory() as db:
-        dialect_name = db.get_bind().dialect.name
-        lock_key = f"runtime-credentials:{runtime_environment_id}"
-        if dialect_name == "postgresql":
-            await db.execute(
-                text("SELECT pg_advisory_lock(hashtextextended(:lock_key, 0))"),
-                {"lock_key": lock_key},
-            )
-        try:
-            yield
-        finally:
-            if dialect_name == "postgresql":
-                await db.execute(
-                    text("SELECT pg_advisory_unlock(hashtextextended(:lock_key, 0))"),
-                    {"lock_key": lock_key},
-                )
+    return await db.get(CloudRuntimeEnvironment, runtime_environment_id)
 
 
 async def load_runtime_environment_for_workspace(
+    db: AsyncSession,
     workspace: CloudWorkspace,
 ) -> CloudRuntimeEnvironment | None:
     if workspace.runtime_environment_id is None:
         return None
-    async with db_engine.async_session_factory() as db:
-        return await db.get(CloudRuntimeEnvironment, workspace.runtime_environment_id)
+    return await db.get(CloudRuntimeEnvironment, workspace.runtime_environment_id)
 
 
 async def load_runtime_environment_with_sandbox(
+    db: AsyncSession,
     runtime_environment_id: UUID,
 ) -> RuntimeEnvironmentWithSandbox | None:
-    async with db_engine.async_session_factory() as db:
-        environment = await db.get(CloudRuntimeEnvironment, runtime_environment_id)
-        if environment is None:
-            return None
-        sandbox = await get_active_sandbox_for_environment(db, environment)
-        return RuntimeEnvironmentWithSandbox(environment=environment, sandbox=sandbox)
+    environment = await db.get(CloudRuntimeEnvironment, runtime_environment_id)
+    if environment is None:
+        return None
+    sandbox = await get_active_sandbox_for_environment(db, environment)
+    return RuntimeEnvironmentWithSandbox(environment=environment, sandbox=sandbox)
 
 
 async def reserve_and_attach_sandbox_for_environment(
+    db: AsyncSession,
     runtime_environment_id: UUID,
     *,
     external_sandbox_id: str | None,
@@ -357,34 +331,33 @@ async def reserve_and_attach_sandbox_for_environment(
     sandbox_profile_id: UUID | None = None,
     target_id: UUID | None = None,
 ) -> CloudSandbox | None:
-    async with db_engine.async_session_factory() as db:
-        sandbox = await reserve_sandbox_slot_for_environment(
-            db,
-            runtime_environment_id=runtime_environment_id,
-            external_sandbox_id=external_sandbox_id,
-            provider=provider,
-            template_version=template_version,
-            status=status,
-            started_at=started_at,
-            concurrent_sandbox_limit=concurrent_sandbox_limit,
-            sandbox_profile_id=sandbox_profile_id,
-            target_id=target_id,
-        )
-        await db.commit()
-        if sandbox is not None:
-            await db.refresh(sandbox)
-        return sandbox
+    sandbox = await reserve_sandbox_slot_for_environment(
+        db,
+        runtime_environment_id=runtime_environment_id,
+        external_sandbox_id=external_sandbox_id,
+        provider=provider,
+        template_version=template_version,
+        status=status,
+        started_at=started_at,
+        concurrent_sandbox_limit=concurrent_sandbox_limit,
+        sandbox_profile_id=sandbox_profile_id,
+        target_id=target_id,
+    )
+    await db.flush()
+    if sandbox is not None:
+        await db.refresh(sandbox)
+    return sandbox
 
 
 async def save_runtime_environment_state(
+    db: AsyncSession,
     runtime_environment_id: UUID,
     **kwargs: object,
 ) -> CloudRuntimeEnvironment:
-    async with db_engine.async_session_factory() as db:
-        environment = await db.get(CloudRuntimeEnvironment, runtime_environment_id)
-        if environment is None:
-            raise RuntimeError("Runtime environment not found.")
-        updated = await persist_runtime_environment_state(db, environment, **kwargs)
-        await db.commit()
-        await db.refresh(updated)
-        return updated
+    environment = await db.get(CloudRuntimeEnvironment, runtime_environment_id)
+    if environment is None:
+        raise RuntimeError("Runtime environment not found.")
+    updated = await persist_runtime_environment_state(db, environment, **kwargs)
+    await db.flush()
+    await db.refresh(updated)
+    return updated

@@ -143,7 +143,7 @@ async def close_usage_segment_for_sandbox(
 
 
 async def handle_e2b_webhook(
-    _db: AsyncSession,
+    db: AsyncSession,
     *,
     payload: bytes,
     signature: str | None,
@@ -165,11 +165,11 @@ async def handle_e2b_webhook(
     metadata = event.event_data.sandbox_metadata
     sandbox = None
     if event.sandbox_id:
-        sandbox = await load_cloud_sandbox_by_external_id(event.sandbox_id)
+        sandbox = await load_cloud_sandbox_by_external_id(db, event.sandbox_id)
     if sandbox is None:
         metadata_sandbox_id = _metadata_sandbox_id(metadata)
         if metadata_sandbox_id is not None:
-            sandbox = await load_cloud_sandbox_by_id(metadata_sandbox_id)
+            sandbox = await load_cloud_sandbox_by_id(db, metadata_sandbox_id)
     if sandbox is None:
         return E2BWebhookReceipt()
 
@@ -182,12 +182,12 @@ async def handle_e2b_webhook(
         return E2BWebhookReceipt()
 
     runtime_environment = (
-        await load_runtime_environment_by_id(sandbox.runtime_environment_id)
+        await load_runtime_environment_by_id(db, sandbox.runtime_environment_id)
         if sandbox.runtime_environment_id is not None
         else None
     )
     workspace = (
-        await load_cloud_workspace_by_id(sandbox.cloud_workspace_id)
+        await load_cloud_workspace_by_id(db, sandbox.cloud_workspace_id)
         if sandbox.cloud_workspace_id is not None
         else None
     )
@@ -195,6 +195,7 @@ async def handle_e2b_webhook(
         return E2BWebhookReceipt()
 
     await save_sandbox_provider_state(
+        db,
         sandbox.id,
         external_sandbox_id=event.sandbox_id if event.sandbox_id else sandbox.external_sandbox_id,
         last_provider_event_at=event.timestamp,
@@ -219,6 +220,7 @@ async def handle_e2b_webhook(
                 event_id=event.id,
             )
             await save_sandbox_provider_state(
+                db,
                 sandbox.id,
                 status="paused",
                 stopped_at=event.timestamp,
@@ -227,6 +229,7 @@ async def handle_e2b_webhook(
             )
             if runtime_environment is not None:
                 await save_runtime_environment_state(
+                    db,
                     runtime_environment.id,
                     **runtime_provider_paused_update(),
                 )
@@ -254,6 +257,7 @@ async def handle_e2b_webhook(
             event_id=event.id,
         )
         await save_sandbox_provider_state(
+            db,
             sandbox.id,
             status="running",
             started_at=event.timestamp,
@@ -263,6 +267,7 @@ async def handle_e2b_webhook(
         )
         if runtime_environment is not None:
             await save_runtime_environment_state(
+                db,
                 runtime_environment.id,
                 **runtime_provider_running_update(),
             )
@@ -280,6 +285,7 @@ async def handle_e2b_webhook(
             event_id=event.id,
         )
         await save_sandbox_provider_state(
+            db,
             sandbox.id,
             status="paused",
             stopped_at=event.timestamp,
@@ -288,6 +294,7 @@ async def handle_e2b_webhook(
         )
         if runtime_environment is not None:
             await save_runtime_environment_state(
+                db,
                 runtime_environment.id,
                 **runtime_provider_paused_update(),
             )
@@ -301,6 +308,7 @@ async def handle_e2b_webhook(
             event_id=event.id,
         )
         await save_sandbox_provider_state(
+            db,
             sandbox.id,
             status="destroyed",
             stopped_at=event.timestamp,
@@ -309,6 +317,7 @@ async def handle_e2b_webhook(
         )
         if runtime_environment is not None:
             await save_runtime_environment_state(
+                db,
                 runtime_environment.id,
                 **runtime_provider_destroyed_update(),
             )

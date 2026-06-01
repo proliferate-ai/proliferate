@@ -91,9 +91,10 @@ async def set_worktree_retention_policy(
 
 
 async def load_worktree_retention_policy_for_runtime(
+    db: AsyncSession,
     user_id: UUID,
 ) -> CloudWorktreeRetentionPolicy:
-    value = await load_cloud_worktree_policy_for_user(user_id)
+    value = await load_cloud_worktree_policy_for_user(db, user_id)
     if value is None:
         return _default_worktree_policy()
     return _worktree_policy_result(value)

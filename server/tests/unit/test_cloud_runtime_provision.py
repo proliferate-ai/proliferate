@@ -14,7 +14,6 @@ from proliferate.constants.cloud import AGENT_GATEWAY_CIPHERTEXT_KEY_ID
 from proliferate.db.models.auth import OAuthAccount, User
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
-from proliferate.db.store import cloud_workspaces, users
 from proliferate.integrations.anyharness import ResolvedRemoteWorkspace
 from proliferate.integrations.sandbox import SandboxProviderKind
 from proliferate.server.cloud.agent_auth import session_loader as agent_auth_session_loader
@@ -100,9 +99,7 @@ def _patched_session_factory(monkeypatch: pytest.MonkeyPatch, test_engine) -> No
         "async_session_factory",
         factory,
     )
-    monkeypatch.setattr(cloud_workspaces.db_engine, "async_session_factory", factory)
     monkeypatch.setattr(runtime_provision.db_engine, "async_session_factory", factory)
-    monkeypatch.setattr(users.db_engine, "async_session_factory", factory)
 
 
 class TestLoadProvisionInput:
@@ -299,6 +296,7 @@ class TestWorkspaceStatusLogging:
         workspace_id = uuid.uuid4()
 
         async def _update_workspace_status_by_id(
+            _db: object,
             _workspace_id: uuid.UUID,
             status: object,
             detail: str,
@@ -1018,6 +1016,7 @@ class TestProvisionWorkspaceGitSetup:
             )
 
         async def _mark_workspace_error_by_id(
+            _db: object,
             _workspace_id,
             message: str,
             **_kwargs: object,
@@ -1072,7 +1071,7 @@ class TestProvisionWorkspaceGitSetup:
             allocation_attempts.append("ensure_profile_slot")
             return SimpleNamespace(id=uuid.uuid4(), slot_generation=1, external_sandbox_id=None)
 
-        async def _mark_workspace_error_by_id(_workspace_id, message: str, **_kwargs):
+        async def _mark_workspace_error_by_id(_db: object, _workspace_id, message: str, **_kwargs):
             errors.append(message)
 
         async def _set_workspace_status(*args, **kwargs) -> None:
@@ -1503,6 +1502,7 @@ class TestProvisionWorkspaceGitSetup:
             return None
 
         async def _mark_workspace_error_by_id(
+            _db: object,
             _workspace_id,
             message: str,
             **_kwargs: object,
@@ -1594,16 +1594,16 @@ class TestProvisionWorkspaceGitSetup:
         async def _set_workspace_status(*args, **kwargs) -> None:
             return None
 
-        async def _load_cloud_sandbox_by_id(_sandbox_id):
+        async def _load_cloud_sandbox_by_id(_db: object, _sandbox_id):
             return sandbox_record
 
         async def _close_usage_segment_for_sandbox(**kwargs):
             closed_usage.append(kwargs)
 
-        async def _update_sandbox_status(sandbox, status: str, **_kwargs):
+        async def _update_sandbox_status(_db: object, sandbox, status: str, **_kwargs):
             sandbox_statuses.append((sandbox, status))
 
-        async def _mark_workspace_error_by_id(_workspace_id, message: str, **kwargs):
+        async def _mark_workspace_error_by_id(_db: object, _workspace_id, message: str, **kwargs):
             workspace_errors.append({"message": message, **kwargs})
 
         monkeypatch.setattr(runtime_provision, "_load_provision_input", _load_provision_input)
@@ -1733,13 +1733,13 @@ class TestProvisionWorkspaceGitSetup:
         async def _set_workspace_status(*args, **kwargs) -> None:
             return None
 
-        async def _load_cloud_sandbox_by_id(_sandbox_id):
+        async def _load_cloud_sandbox_by_id(_db: object, _sandbox_id):
             return sandbox_record
 
-        async def _update_sandbox_status(sandbox, status: str, **_kwargs):
+        async def _update_sandbox_status(_db: object, sandbox, status: str, **_kwargs):
             sandbox_statuses.append((sandbox, status))
 
-        async def _mark_workspace_error_by_id(_workspace_id, message: str, **kwargs):
+        async def _mark_workspace_error_by_id(_db: object, _workspace_id, message: str, **kwargs):
             workspace_errors.append({"message": message, **kwargs})
 
         monkeypatch.setattr(runtime_provision, "_load_provision_input", _load_provision_input)

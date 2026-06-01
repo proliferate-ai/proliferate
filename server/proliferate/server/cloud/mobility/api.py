@@ -52,8 +52,9 @@ router = APIRouter(prefix="/mobility", tags=["cloud-mobility"])
 @router.get("/workspaces", response_model=list[MobilityWorkspaceSummary])
 async def list_mobility_workspaces_endpoint(
     user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> list[MobilityWorkspaceSummary]:
-    values = await list_cloud_workspace_mobility_for_user(user.id)
+    values = await list_cloud_workspace_mobility_for_user(db, user.id)
     return [mobility_workspace_summary_payload(value) for value in values]
 
 
@@ -61,9 +62,11 @@ async def list_mobility_workspaces_endpoint(
 async def ensure_mobility_workspace_endpoint(
     body: EnsureMobilityWorkspaceRequest,
     user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> MobilityWorkspaceDetail:
     try:
         value = await ensure_cloud_workspace_mobility(
+            db,
             user_id=user.id,
             git_provider=body.git_provider,
             git_owner=body.git_owner,
@@ -102,9 +105,11 @@ async def preflight_mobility_handoff_endpoint(
     mobility_workspace_id: UUID,
     body: WorkspaceMobilityPreflightRequest,
     user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceMobilityPreflightResponse:
     try:
         return await preflight_cloud_workspace_handoff(
+            db,
             user_id=user.id,
             mobility_workspace_id=mobility_workspace_id,
             direction=body.direction,
@@ -123,9 +128,11 @@ async def start_mobility_handoff_endpoint(
     mobility_workspace_id: UUID,
     body: StartWorkspaceMobilityHandoffRequest,
     user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> MobilityHandoffSummary:
     try:
         value = await start_cloud_workspace_handoff(
+            db,
             user_id=user.id,
             mobility_workspace_id=mobility_workspace_id,
             direction=body.direction,

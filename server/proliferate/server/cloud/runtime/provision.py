@@ -196,18 +196,20 @@ async def _load_provision_input(
     *,
     requested_base_sha: str | None = None,
 ) -> CloudProvisionInput | None:
-    workspace = await load_cloud_workspace_by_id(workspace_id)
+    async with db_engine.async_session_factory() as db:
+        workspace = await load_cloud_workspace_by_id(db, workspace_id)
     if workspace is None:
         return None
 
-    runtime_environment = await ensure_runtime_environment_for_workspace_id(workspace_id)
+    async with db_engine.async_session_factory() as db, db.begin():
+        runtime_environment = await ensure_runtime_environment_for_workspace_id(db, workspace_id)
+        if runtime_environment and not runtime_environment.anyharness_data_key_ciphertext:
+            runtime_environment = await save_runtime_environment_state(
+                db, runtime_environment.id,
+                anyharness_data_key_ciphertext=encrypt_text(generate_anyharness_data_key()),
+            )
     if runtime_environment is None:
         return None
-    if not runtime_environment.anyharness_data_key_ciphertext:
-        runtime_environment = await save_runtime_environment_state(
-            runtime_environment.id,
-            anyharness_data_key_ciphertext=encrypt_text(generate_anyharness_data_key()),
-        )
     anyharness_data_key_ciphertext = runtime_environment.anyharness_data_key_ciphertext
     if anyharness_data_key_ciphertext is None:
         raise CloudApiError(
@@ -216,12 +218,11 @@ async def _load_provision_input(
             status_code=500,
         )
 
-    user = await load_user_with_oauth_accounts_by_id(workspace.user_id)
+    async with db_engine.async_session_factory() as db:
+        user = await load_user_with_oauth_accounts_by_id(db, workspace.user_id)
+        github_grant = await get_ready_github_grant_for_user(db, user_id=workspace.user_id)
     if user is None:
         return None
-
-    async with db_engine.async_session_factory() as db:
-        github_grant = await get_ready_github_grant_for_user(db, user_id=workspace.user_id)
     if github_grant is None:
         raise CloudApiError(
             "github_link_required",
@@ -320,11 +321,13 @@ async def _load_provision_input(
                 git_repo_name=workspace.git_repo_name,
             )
     else:
-        repo_config = await load_cloud_repo_config_for_user(
-            user_id=workspace.user_id,
-            git_owner=workspace.git_owner,
-            git_repo_name=workspace.git_repo_name,
-        )
+        async with db_engine.async_session_factory() as db:
+            repo_config = await load_cloud_repo_config_for_user(
+                db,
+                user_id=workspace.user_id,
+                git_owner=workspace.git_owner,
+                git_repo_name=workspace.git_repo_name,
+            )
 
     if repo_config is not None and repo_config.configured:
         repo_env_vars = repo_config.env_vars
@@ -437,11 +440,13 @@ async def _set_workspace_status(
     detail: str | None = None,
 ) -> None:
     resolved_detail = detail or str(status).replace("_", " ").title()
-    await update_workspace_status_by_id(
-        workspace_id,
-        status,
-        resolved_detail,
-    )
+    async with db_engine.async_session_factory() as db, db.begin():
+        await update_workspace_status_by_id(
+            db,
+            workspace_id,
+            status,
+            resolved_detail,
+        )
     log_cloud_event(
         "cloud workspace status updated",
         workspace_id=workspace_id,
@@ -493,12 +498,14 @@ async def _create_and_connect_sandbox(
     )
     tracker.complete(sandbox_id=handle.sandbox_id)
     started_at = utcnow()
-    await bind_allocated_sandbox(
-        sandbox_record_id,
-        external_sandbox_id=handle.sandbox_id,
-        status="provisioning",
-        started_at=started_at,
-    )
+    async with db_engine.async_session_factory() as db, db.begin():
+        await bind_allocated_sandbox(
+            db,
+            sandbox_record_id,
+            external_sandbox_id=handle.sandbox_id,
+            status="provisioning",
+            started_at=started_at,
+        )
     await record_cloud_sandbox_usage_started(
         user_id=ctx.user_id,
         runtime_environment_id=ctx.runtime_environment_id,
@@ -553,6 +560,18 @@ async def _persist_target_runtime_access(
         )
         if runtime_access is None:
             raise RuntimeError("Managed target runtime access rejected stale sandbox slot state.")
+
+
+async def _mark_sandbox_running(sandbox_id: UUID, started_at: object) -> None:
+    async with db_engine.async_session_factory() as db, db.begin():
+        await save_sandbox_provider_state(
+            db, sandbox_id, status="running", started_at=started_at or utcnow(), stopped_at=None
+        )
+
+
+async def _save_runtime_environment_updates(runtime_environment_id: UUID, updates: dict[str, object]) -> None:
+    async with db_engine.async_session_factory() as db, db.begin():
+        await save_runtime_environment_state(db, runtime_environment_id, **updates)
 
 
 async def _connect_existing_profile_slot(
@@ -619,12 +638,7 @@ async def _connect_existing_profile_slot(
         tracker.complete(reused_sandbox=False, reason="connect_failed")
         return None
 
-    await save_sandbox_provider_state(
-        slot.id,
-        status="running",
-        started_at=provider_state.started_at or utcnow(),
-        stopped_at=None,
-    )
+    await _mark_sandbox_running(slot.id, provider_state.started_at)
     await _persist_target_runtime_access(
         ctx,
         sandbox_record_id=slot.id,
@@ -633,13 +647,8 @@ async def _connect_existing_profile_slot(
         runtime_token_ciphertext=runtime_access.runtime_token_ciphertext,
         anyharness_data_key_ciphertext=runtime_access.anyharness_data_key_ciphertext,
     )
-    await save_runtime_environment_state(
-        ctx.runtime_environment_id,
-        **runtime_connected_sandbox_update(
-            runtime_url=endpoint.runtime_url,
-            active_sandbox_id=slot.id,
-        ),
-    )
+    update = runtime_connected_sandbox_update(runtime_url=endpoint.runtime_url, active_sandbox_id=slot.id)
+    await _save_runtime_environment_updates(ctx.runtime_environment_id, update)
     tracker.complete(runtime_url=endpoint.runtime_url, reused_sandbox=True)
 
     return (
@@ -664,7 +673,8 @@ async def _connect_existing_environment_sandbox(
     ctx: CloudProvisionInput,
     provider: SandboxProvider,
 ) -> tuple[ConnectedSandbox, UUID, int, str] | None:
-    runtime = await load_runtime_environment_with_sandbox(ctx.runtime_environment_id)
+    async with db_engine.async_session_factory() as db:
+        runtime = await load_runtime_environment_with_sandbox(db, ctx.runtime_environment_id)
     sandbox_record = runtime.sandbox if runtime is not None else None
     if sandbox_record is None or not sandbox_record.external_sandbox_id:
         return None
@@ -714,12 +724,7 @@ async def _connect_existing_environment_sandbox(
         tracker.complete(reused_sandbox=False, reason="connect_failed")
         return None
 
-    await save_sandbox_provider_state(
-        sandbox_record.id,
-        status="running",
-        started_at=provider_state.started_at or utcnow(),
-        stopped_at=None,
-    )
+    await _mark_sandbox_running(sandbox_record.id, provider_state.started_at)
     await _persist_target_runtime_access(
         ctx,
         sandbox_record_id=sandbox_record.id,
@@ -728,13 +733,10 @@ async def _connect_existing_environment_sandbox(
         runtime_token_ciphertext=runtime.environment.runtime_token_ciphertext,
         anyharness_data_key_ciphertext=runtime.environment.anyharness_data_key_ciphertext,
     )
-    await save_runtime_environment_state(
-        ctx.runtime_environment_id,
-        **runtime_connected_sandbox_update(
-            runtime_url=endpoint.runtime_url,
-            active_sandbox_id=sandbox_record.id,
-        ),
+    update = runtime_connected_sandbox_update(
+        runtime_url=endpoint.runtime_url, active_sandbox_id=sandbox_record.id
     )
+    await _save_runtime_environment_updates(ctx.runtime_environment_id, update)
     tracker.complete(runtime_url=endpoint.runtime_url, reused_sandbox=True)
 
     return (
@@ -1609,14 +1611,16 @@ async def provision_workspace(
 
         runtime_token_ciphertext = encrypt_text(handshake.runtime_token)
         anyharness_data_key_ciphertext = encrypt_text(ctx.anyharness_data_key)
-        await finalize_workspace_provision_for_ids(
-            workspace_id,
-            sandbox_record_id,
-            runtime_url=connected.endpoint.runtime_url,
-            runtime_token_ciphertext=runtime_token_ciphertext,
-            anyharness_workspace_id=handshake.anyharness_workspace_id,
-            template_version=connected.handle.template_version,
-        )
+        async with db_engine.async_session_factory() as db, db.begin():
+            await finalize_workspace_provision_for_ids(
+                db,
+                workspace_id,
+                sandbox_record_id,
+                runtime_url=connected.endpoint.runtime_url,
+                runtime_token_ciphertext=runtime_token_ciphertext,
+                anyharness_workspace_id=handshake.anyharness_workspace_id,
+                template_version=connected.handle.template_version,
+            )
         await _persist_target_runtime_access(
             ctx,
             sandbox_record_id=sandbox_record_id,
@@ -1634,11 +1638,9 @@ async def provision_workspace(
             launched_runtime=launched_runtime_this_attempt,
             repo_env_applied_version=ctx.repo_env_version,
         )
-        await save_runtime_environment_state(
-            ctx.runtime_environment_id,
-            **runtime_state_updates,
-        )
-        provisioned_workspace = await load_cloud_workspace_by_id(workspace_id)
+        await _save_runtime_environment_updates(ctx.runtime_environment_id, runtime_state_updates)
+        async with db_engine.async_session_factory() as db:
+            provisioned_workspace = await load_cloud_workspace_by_id(db, workspace_id)
         if provisioned_workspace is not None:
             await apply_workspace_repo_config_after_provision(
                 provisioned_workspace,
@@ -1668,9 +1670,11 @@ async def provision_workspace(
         )
     except Exception as exc:
         error_message = format_exception_message(exc)
-        sandbox_record = (
-            await load_cloud_sandbox_by_id(sandbox_record_id) if sandbox_record_id else None
-        )
+        if sandbox_record_id:
+            async with db_engine.async_session_factory() as db:
+                sandbox_record = await load_cloud_sandbox_by_id(db, sandbox_record_id)
+        else:
+            sandbox_record = None
         external_sandbox_id = (
             connected.handle.sandbox_id
             if connected is not None
@@ -1695,13 +1699,12 @@ async def provision_workspace(
                 closed_by=USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE,
                 is_billable=False,
             )
-            await update_sandbox_status(sandbox_record, "destroyed", stopped_at_now=True)
-        await mark_workspace_error_by_id(
-            workspace_id,
-            error_message,
-            clear_runtime_metadata=True,
-            clear_active_sandbox=True,
-        )
+            async with db_engine.async_session_factory() as db, db.begin():
+                await update_sandbox_status(db, sandbox_record, "destroyed", stopped_at_now=True)
+        async with db_engine.async_session_factory() as db, db.begin():
+            await mark_workspace_error_by_id(
+                db, workspace_id, error_message, clear_runtime_metadata=True, clear_active_sandbox=True
+            )
         total_elapsed_ms = duration_ms(provision_started)
         log_cloud_event(
             "cloud workspace provisioning failed",

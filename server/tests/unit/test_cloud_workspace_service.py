@@ -15,6 +15,14 @@ from proliferate.server.billing.models import SandboxStartAuthorization
 from proliferate.server.automations.worker.cloud_executor_commands import AutomationCommandResult
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workspaces import service as workspace_service
+from tests.unit.db_session_helpers import NoopDb, patch_async_session_factory
+
+INTERACT_WITH_DB = "cloud_workspace_user_can_interact_with_db"
+ARCHIVE_WITH_DB = "cloud_workspace_user_can_archive_with_db"
+
+
+def _patch_session_factory(monkeypatch: pytest.MonkeyPatch) -> NoopDb:
+    return patch_async_session_factory(monkeypatch, workspace_service.db_engine)
 
 
 def _denied_start_authorization(*, blocked_reason: str) -> SandboxStartAuthorization:
@@ -116,7 +124,7 @@ async def test_create_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     async def _repo_branches(*_args, **_kwargs) -> SimpleNamespace:
         return SimpleNamespace(branches=["main"])
 
-    async def _existing_workspace(**_kwargs):
+    async def _existing_workspace(*_args, **_kwargs):
         return None
 
     async def _authorization(**_kwargs) -> SandboxStartAuthorization:
@@ -127,7 +135,7 @@ async def test_create_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     async def _unexpected(*_args, **_kwargs) -> None:
         raise AssertionError("downstream workspace creation should not run when billing blocks")
 
-    async def _repo_config_value(**_kwargs):
+    async def _repo_config_value(*_args, **_kwargs):
         return SimpleNamespace(configured=True, env_vars={}, default_branch=None)
 
     monkeypatch.setattr(workspace_service, "get_linked_github_account", lambda _user: object())
@@ -137,6 +145,7 @@ async def test_create_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
     monkeypatch.setattr(workspace_service, "_load_personal_agent_auth_agent_kinds", _unexpected)
     monkeypatch.setattr(workspace_service, "create_cloud_workspace_for_user", _unexpected)
+    _patch_session_factory(monkeypatch)
 
     with pytest.raises(CloudApiError) as exc_info:
         await workspace_service.create_cloud_workspace(
@@ -163,7 +172,7 @@ async def test_automation_workspace_requires_selected_agent_credentials(
     async def _repo_branches(*_args, **_kwargs) -> SimpleNamespace:
         return SimpleNamespace(branches=["main"], default_branch="main")
 
-    async def _existing_workspace(**_kwargs):
+    async def _existing_workspace(*_args, **_kwargs):
         return None
 
     async def _authorization(**_kwargs) -> SandboxStartAuthorization:
@@ -172,7 +181,7 @@ async def test_automation_workspace_requires_selected_agent_credentials(
     async def _billing_snapshot(_billing_subject_id):
         return SimpleNamespace()
 
-    async def _repo_config_value(**_kwargs):
+    async def _repo_config_value(*_args, **_kwargs):
         return SimpleNamespace(configured=True, default_branch="main")
 
     async def _agent_auth_agent_kinds(_user_id):
@@ -190,6 +199,7 @@ async def test_automation_workspace_requires_selected_agent_credentials(
         "_load_personal_agent_auth_agent_kinds",
         _agent_auth_agent_kinds,
     )
+    _patch_session_factory(monkeypatch)
 
     with pytest.raises(CloudApiError) as exc_info:
         await workspace_service._resolve_new_cloud_workspace_create(
@@ -267,7 +277,7 @@ async def test_create_cloud_workspace_returns_pending_after_queueing_provision(
             cloud_repo_limit=4,
         )
 
-    async def _create_cloud_workspace_for_user(**_kwargs):
+    async def _create_cloud_workspace_for_user(*_args, **_kwargs):
         create_kwargs.update(_kwargs)
         return workspace
 
@@ -284,6 +294,7 @@ async def test_create_cloud_workspace_returns_pending_after_queueing_provision(
         "create_cloud_workspace_for_user",
         _create_cloud_workspace_for_user,
     )
+    _patch_session_factory(monkeypatch)
     monkeypatch.setattr(
         workspace_service,
         "get_configured_sandbox_provider",
@@ -295,6 +306,7 @@ async def test_create_cloud_workspace_returns_pending_after_queueing_provision(
         lambda workspace_id: scheduled.append(workspace_id),
     )
     monkeypatch.setattr(workspace_service, "_build_workspace_detail", _build_workspace_detail)
+    _patch_session_factory(monkeypatch)
 
     payload = await workspace_service.create_cloud_workspace(
         user,
@@ -586,7 +598,7 @@ async def test_delete_cloud_workspace_destroys_runtime_before_archiving(
     workspace = SimpleNamespace(id=workspace_id)
     calls: list[tuple[str, object]] = []
 
-    async def _cloud_workspace_user_can_archive(_user_id, _workspace_id):
+    async def _cloud_workspace_user_can_archive(_db, _user_id, _workspace_id):
         assert _user_id == user_id
         assert _workspace_id == workspace_id
         calls.append(("load", _workspace_id))
@@ -600,15 +612,11 @@ async def test_delete_cloud_workspace_destroys_runtime_before_archiving(
         assert _workspace is workspace
         calls.append(("destroy", _workspace.id))
 
-    async def _delete_cloud_workspace_records_for_workspace(_workspace) -> None:
+    async def _delete_cloud_workspace_records_for_workspace(_db, _workspace) -> None:
         assert _workspace is workspace
         calls.append(("archive", _workspace.id))
 
-    monkeypatch.setattr(
-        workspace_service,
-        "cloud_workspace_user_can_archive",
-        _cloud_workspace_user_can_archive,
-    )
+    monkeypatch.setattr(workspace_service, ARCHIVE_WITH_DB, _cloud_workspace_user_can_archive)
     monkeypatch.setattr(
         workspace_service,
         "_revoke_claim_tokens_for_workspace",
@@ -624,8 +632,9 @@ async def test_delete_cloud_workspace_destroys_runtime_before_archiving(
         "delete_cloud_workspace_records_for_workspace",
         _delete_cloud_workspace_records_for_workspace,
     )
+    db = _patch_session_factory(monkeypatch)
 
-    await workspace_service.delete_cloud_workspace(user_id, workspace_id)
+    await workspace_service.delete_cloud_workspace(db, user_id, workspace_id)
 
     assert calls == [
         ("load", workspace_id),
@@ -700,11 +709,7 @@ async def test_restore_cloud_workspace_uses_lifecycle_permission(
 
     db.commit = _commit
 
-    monkeypatch.setattr(
-        workspace_service,
-        "cloud_workspace_user_can_archive_with_db",
-        _cloud_workspace_user_can_archive_with_db,
-    )
+    monkeypatch.setattr(workspace_service, ARCHIVE_WITH_DB, _cloud_workspace_user_can_archive_with_db)
     monkeypatch.setattr(
         workspace_service,
         "restore_cloud_workspace_record",
@@ -744,7 +749,7 @@ async def test_purge_cloud_workspace_is_idempotent_when_record_is_missing(
     )
     monkeypatch.setattr(
         workspace_service,
-        "cloud_workspace_user_can_archive_with_db",
+        ARCHIVE_WITH_DB,
         _unexpected,
     )
 
@@ -781,11 +786,7 @@ async def test_purge_cloud_workspace_requires_archived_workspace(
         "get_cloud_workspace_by_id",
         _get_cloud_workspace_by_id,
     )
-    monkeypatch.setattr(
-        workspace_service,
-        "cloud_workspace_user_can_archive_with_db",
-        _cloud_workspace_user_can_archive_with_db,
-    )
+    monkeypatch.setattr(workspace_service, ARCHIVE_WITH_DB, _cloud_workspace_user_can_archive_with_db)
     monkeypatch.setattr(
         workspace_service,
         "_revoke_claim_tokens_for_workspace",
@@ -825,7 +826,7 @@ async def test_destroy_workspace_runtime_skips_shared_profile_slot(
     async def _load_cloud_sandbox_by_id(_sandbox_id):
         raise AssertionError("shared profile slot should not be loaded from workspace destroy")
 
-    async def _persist_workspace_destroy_state(_workspace) -> None:
+    async def _persist_workspace_destroy_state(_db, _workspace) -> None:
         assert _workspace is workspace
         calls.append("persist")
 
@@ -839,6 +840,7 @@ async def test_destroy_workspace_runtime_skips_shared_profile_slot(
         "persist_workspace_destroy_state",
         _persist_workspace_destroy_state,
     )
+    _patch_session_factory(monkeypatch)
 
     await workspace_service._destroy_workspace_runtime(workspace)
 
@@ -861,13 +863,13 @@ async def test_ensure_cloud_workspace_replaces_failed_unmaterialized_retry_targe
     archived: list[object] = []
     created: list[dict[str, object]] = []
 
-    async def _load_existing_cloud_workspace(**_kwargs):
+    async def _load_existing_cloud_workspace(*_args, **_kwargs):
         return failed_workspace
 
     async def _archive_failed(workspace_id):
         archived.append(workspace_id)
 
-    async def _load_repo_config_value(**_kwargs):
+    async def _load_repo_config_value(*_args, **_kwargs):
         return SimpleNamespace(configured=True)
 
     async def _authorization(**_kwargs) -> SandboxStartAuthorization:
@@ -879,7 +881,7 @@ async def test_ensure_cloud_workspace_replaces_failed_unmaterialized_retry_targe
     def _repo_limit_for_billing_snapshot(_snapshot):
         return 10
 
-    async def _create_cloud_workspace_for_user(**kwargs):
+    async def _create_cloud_workspace_for_user(*_args, **kwargs):
         created.append(kwargs)
         return created_workspace
 
@@ -944,7 +946,7 @@ async def test_ensure_cloud_workspace_reuses_materialized_error_workspace(
         last_error="agent runtime failed",
     )
 
-    async def _load_existing_cloud_workspace(**_kwargs):
+    async def _load_existing_cloud_workspace(*_args, **_kwargs):
         return existing_workspace
 
     async def _unexpected(*_args, **_kwargs) -> None:
@@ -970,6 +972,7 @@ async def test_ensure_cloud_workspace_reuses_materialized_error_workspace(
         "create_cloud_workspace_for_user",
         _unexpected,
     )
+    _patch_session_factory(monkeypatch)
 
     result = await workspace_service.ensure_cloud_workspace_for_existing_branch(
         user,
@@ -997,7 +1000,7 @@ async def test_start_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
         git_base_branch="main",
     )
 
-    async def _require_workspace(_user_id, _workspace_id):
+    async def _require_workspace(_db, _user_id, _workspace_id):
         return workspace
 
     async def _repo_branches(*_args, **_kwargs) -> SimpleNamespace:
@@ -1011,14 +1014,14 @@ async def test_start_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     async def _unexpected(*_args, **_kwargs) -> None:
         raise AssertionError("workspace start should stop before credential/runtime work")
 
-    monkeypatch.setattr(workspace_service, "cloud_workspace_user_can_interact", _require_workspace)
+    monkeypatch.setattr(workspace_service, INTERACT_WITH_DB, _require_workspace)
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
     monkeypatch.setattr(workspace_service, "_load_personal_agent_auth_agent_kinds", _unexpected)
     monkeypatch.setattr(workspace_service, "save_workspace", _unexpected)
 
     with pytest.raises(CloudApiError) as exc_info:
-        await workspace_service.start_cloud_workspace(user, uuid4())
+        await workspace_service.start_cloud_workspace(NoopDb(), user, uuid4())
 
     assert exc_info.value.code == "quota_exceeded"
     assert exc_info.value.status_code == 403
@@ -1049,7 +1052,7 @@ async def test_start_cloud_workspace_requeues_error_workspace(
     saved_statuses: list[tuple[object, object]] = []
     scheduled: list[object] = []
 
-    async def _require_workspace(_user_id, _workspace_id):
+    async def _require_workspace(_db, _user_id, _workspace_id):
         return workspace
 
     async def _repo_branches(*_args, **_kwargs) -> SimpleNamespace:
@@ -1061,17 +1064,14 @@ async def test_start_cloud_workspace_requeues_error_workspace(
     async def _agent_auth_agent_kinds(_user_id):
         return ("claude",)
 
-    async def _save_workspace(_workspace):
+    async def _save_workspace(_db, _workspace):
         saved_statuses.append((_workspace.status, _workspace.last_error))
+        return _workspace
 
     async def _build_workspace_detail(_workspace):
         return SimpleNamespace(status=_workspace.status)
 
-    monkeypatch.setattr(
-        workspace_service,
-        "cloud_workspace_user_can_interact",
-        _require_workspace,
-    )
+    monkeypatch.setattr(workspace_service, INTERACT_WITH_DB, _require_workspace)
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
     monkeypatch.setattr(
@@ -1081,13 +1081,14 @@ async def test_start_cloud_workspace_requeues_error_workspace(
     )
     monkeypatch.setattr(workspace_service, "save_workspace", _save_workspace)
     monkeypatch.setattr(workspace_service, "_build_workspace_detail", _build_workspace_detail)
+    _patch_session_factory(monkeypatch)
     monkeypatch.setattr(
         workspace_service,
         "schedule_workspace_provision",
         lambda workspace_id, **_kwargs: scheduled.append(workspace_id),
     )
 
-    payload = await workspace_service.start_cloud_workspace(user, workspace.id)
+    payload = await workspace_service.start_cloud_workspace(NoopDb(), user, workspace.id)
 
     assert payload.status == workspace_service.CloudWorkspaceStatus.materializing.value
     assert workspace.status == workspace_service.CloudWorkspaceStatus.materializing.value
@@ -1116,7 +1117,7 @@ async def test_start_cloud_workspace_requeues_queued_workspace_for_mobility(
     saved_statuses: list[tuple[object, object]] = []
     refreshed_env_snapshots: list[object] = []
 
-    async def _require_workspace(_user_id, _workspace_id):
+    async def _require_workspace(_db, _user_id, _workspace_id):
         return workspace
 
     async def _repo_branches(*_args, **_kwargs) -> SimpleNamespace:
@@ -1132,18 +1133,14 @@ async def test_start_cloud_workspace_requeues_queued_workspace_for_mobility(
         refreshed_env_snapshots.append(_workspace.id)
         return _workspace
 
-    async def _save_workspace(_workspace):
+    async def _save_workspace(_db, _workspace):
         saved_statuses.append((_workspace.status, _workspace.last_error))
         return _workspace
 
     async def _build_workspace_detail(_workspace):
         return SimpleNamespace(status=_workspace.status)
 
-    monkeypatch.setattr(
-        workspace_service,
-        "cloud_workspace_user_can_interact",
-        _require_workspace,
-    )
+    monkeypatch.setattr(workspace_service, INTERACT_WITH_DB, _require_workspace)
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
     monkeypatch.setattr(
@@ -1158,6 +1155,7 @@ async def test_start_cloud_workspace_requeues_queued_workspace_for_mobility(
     )
     monkeypatch.setattr(workspace_service, "save_workspace", _save_workspace)
     monkeypatch.setattr(workspace_service, "_build_workspace_detail", _build_workspace_detail)
+    _patch_session_factory(monkeypatch)
     monkeypatch.setattr(
         workspace_service,
         "schedule_workspace_provision",
@@ -1167,6 +1165,7 @@ async def test_start_cloud_workspace_requeues_queued_workspace_for_mobility(
     )
 
     payload = await workspace_service.start_cloud_workspace(
+        NoopDb(),
         user,
         workspace.id,
         requested_base_sha="abc123",
@@ -1200,7 +1199,7 @@ async def test_start_cloud_workspace_returns_ready_workspace_without_requeue(
         ready_at=datetime.now(UTC),
     )
 
-    async def _require_workspace(_user_id, _workspace_id):
+    async def _require_workspace(_db, _user_id, _workspace_id):
         return workspace
 
     async def _repo_branches(*_args, **_kwargs) -> SimpleNamespace:
@@ -1218,11 +1217,7 @@ async def test_start_cloud_workspace_returns_ready_workspace_without_requeue(
     async def _build_workspace_detail(_workspace):
         return SimpleNamespace(status=_workspace.status)
 
-    monkeypatch.setattr(
-        workspace_service,
-        "cloud_workspace_user_can_interact",
-        _require_workspace,
-    )
+    monkeypatch.setattr(workspace_service, INTERACT_WITH_DB, _require_workspace)
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
     monkeypatch.setattr(
@@ -1234,7 +1229,7 @@ async def test_start_cloud_workspace_returns_ready_workspace_without_requeue(
     monkeypatch.setattr(workspace_service, "schedule_workspace_provision", _unexpected)
     monkeypatch.setattr(workspace_service, "_build_workspace_detail", _build_workspace_detail)
 
-    payload = await workspace_service.start_cloud_workspace(user, workspace.id)
+    payload = await workspace_service.start_cloud_workspace(NoopDb(), user, workspace.id)
 
     assert payload.status == workspace_service.CloudWorkspaceStatus.ready.value
     assert workspace.status == workspace_service.CloudWorkspaceStatus.ready.value
@@ -1264,7 +1259,7 @@ async def test_start_cloud_workspace_requeues_ready_workspace_for_requested_revi
     scheduled: list[tuple[object, object]] = []
     saved_statuses: list[tuple[object, object, object]] = []
 
-    async def _require_workspace(_user_id, _workspace_id):
+    async def _require_workspace(_db, _user_id, _workspace_id):
         return workspace
 
     async def _repo_branches(*_args, **_kwargs) -> SimpleNamespace:
@@ -1276,18 +1271,14 @@ async def test_start_cloud_workspace_requeues_ready_workspace_for_requested_revi
     async def _agent_auth_agent_kinds(_user_id):
         return ("claude",)
 
-    async def _save_workspace(_workspace):
+    async def _save_workspace(_db, _workspace):
         saved_statuses.append((_workspace.status, _workspace.status_detail, _workspace.last_error))
         return _workspace
 
     async def _build_workspace_detail(_workspace):
         return SimpleNamespace(status=_workspace.status)
 
-    monkeypatch.setattr(
-        workspace_service,
-        "cloud_workspace_user_can_interact",
-        _require_workspace,
-    )
+    monkeypatch.setattr(workspace_service, INTERACT_WITH_DB, _require_workspace)
     monkeypatch.setattr(workspace_service, "get_github_repo_branches", _repo_branches)
     monkeypatch.setattr(workspace_service, "authorize_sandbox_start", _authorization)
     monkeypatch.setattr(
@@ -1297,6 +1288,7 @@ async def test_start_cloud_workspace_requeues_ready_workspace_for_requested_revi
     )
     monkeypatch.setattr(workspace_service, "save_workspace", _save_workspace)
     monkeypatch.setattr(workspace_service, "_build_workspace_detail", _build_workspace_detail)
+    _patch_session_factory(monkeypatch)
     monkeypatch.setattr(
         workspace_service,
         "schedule_workspace_provision",
@@ -1306,6 +1298,7 @@ async def test_start_cloud_workspace_requeues_ready_workspace_for_requested_revi
     )
 
     payload = await workspace_service.start_cloud_workspace(
+        NoopDb(),
         user,
         workspace.id,
         requested_base_sha="a" * 40,

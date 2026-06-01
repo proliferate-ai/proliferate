@@ -35,7 +35,7 @@ async def test_ensure_workspace_runtime_ready_reuses_healthy_existing_runtime_ur
         assert runtime_url == workspace.runtime_url
         assert access_token == "runtime-token"
 
-    async def _load_active_sandbox(_workspace: object) -> object:
+    async def _load_active_sandbox(_db: object, _workspace: object) -> object:
         raise AssertionError(
             "active sandbox should not be loaded when the cached runtime is healthy"
         )
@@ -105,11 +105,11 @@ async def test_ensure_workspace_runtime_ready_rotates_to_fresh_endpoint_without_
         assert access_token == "runtime-token"
         provider_calls.append("verify")
 
-    async def _load_active_sandbox(_workspace: object) -> object:
+    async def _load_active_sandbox(_db: object, _workspace: object) -> object:
         return sandbox_record
 
     async def _persist(
-        _workspace: object,
+        _db: object, _workspace: object,
         _sandbox: object,
         *,
         restarted_runtime: bool,
@@ -188,10 +188,10 @@ async def test_ensure_environment_runtime_ready_rotates_url_without_generation_i
         assert runtime_url == "https://fresh.invalid"
         assert access_token == "runtime-token"
 
-    async def _load_cloud_sandbox_by_id(_sandbox_id: object) -> object:
+    async def _load_cloud_sandbox_by_id(_db: object, _sandbox_id: object) -> object:
         return sandbox_record
 
-    async def _save_runtime_environment_state(_environment_id: object, **kwargs: object) -> None:
+    async def _save_runtime_environment_state(_db: object, _environment_id: object, **kwargs: object) -> None:
         saved.append(kwargs)
 
     monkeypatch.setattr(ensure_running, "wait_for_runtime_health", _wait)
@@ -283,7 +283,7 @@ async def test_ensure_environment_runtime_ready_refreshes_worker_before_forced_r
         assert access_token == "runtime-token"
         events.append("verify")
 
-    async def _load_cloud_sandbox_by_id(_sandbox_id: object) -> object:
+    async def _load_cloud_sandbox_by_id(_db: object, _sandbox_id: object) -> object:
         return sandbox_record
 
     async def _refresh(
@@ -325,7 +325,7 @@ async def test_ensure_environment_runtime_ready_refreshes_worker_before_forced_r
         events.append("wait-worker")
         return object()
 
-    async def _save_runtime_environment_state(_environment_id: object, **_kwargs: object) -> None:
+    async def _save_runtime_environment_state(_db: object, _environment_id: object, **_kwargs: object) -> None:
         events.append("save")
 
     monkeypatch.setattr(ensure_running, "wait_for_runtime_health", _wait)
@@ -678,11 +678,11 @@ async def test_ensure_workspace_runtime_ready_resumes_paused_sandbox(
         assert access_token == "runtime-token"
         provider_calls.append("verify")
 
-    async def _load_active_sandbox(_workspace: object) -> object:
+    async def _load_active_sandbox(_db: object, _workspace: object) -> object:
         return sandbox_record
 
     async def _persist(
-        _workspace: object,
+        _db: object, _workspace: object,
         _sandbox: object,
         *,
         restarted_runtime: bool,
@@ -773,11 +773,11 @@ async def test_ensure_workspace_runtime_ready_relaunches_only_after_fresh_endpoi
         assert access_token == "runtime-token"
         events.append("verify")
 
-    async def _load_active_sandbox(_workspace: object) -> object:
+    async def _load_active_sandbox(_db: object, _workspace: object) -> object:
         return sandbox_record
 
     async def _persist(
-        _workspace: object,
+        _db: object, _workspace: object,
         _sandbox: object,
         *,
         restarted_runtime: bool,
@@ -853,7 +853,7 @@ async def test_ensure_workspace_runtime_ready_raises_when_restart_is_disallowed(
     async def _verify(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("auth verification should not run when health never succeeds")
 
-    async def _load_active_sandbox(_workspace: object) -> object:
+    async def _load_active_sandbox(_db: object, _workspace: object) -> object:
         return sandbox_record
 
     monkeypatch.setattr(ensure_running, "wait_for_runtime_health", _wait)
