@@ -157,7 +157,7 @@ async def _ensure_vendor_issues(
                 api_key=settings.support_linear_api_key.strip(),
                 team_id=settings.support_linear_team_id.strip(),
                 project_id=_blank_to_none(settings.support_linear_project_id),
-                label_ids=_linear_label_ids(),
+                label_ids=_linear_label_ids(report),
                 report_id=report.id,
                 title=_issue_title(report, request_record),
                 description=_linear_issue_description(
@@ -438,12 +438,16 @@ def _github_labels(report: support_reports.SupportReportSnapshot) -> tuple[str, 
     return tuple(label for label in labels if label)
 
 
-def _linear_label_ids() -> tuple[str, ...]:
-    return tuple(
+def _linear_label_ids(report: support_reports.SupportReportSnapshot) -> tuple[str, ...]:
+    label_ids = [
         label_id.strip()
         for label_id in settings.support_linear_label_ids.split(",")
         if label_id.strip()
-    )
+    ]
+    private_details_label_id = settings.support_linear_private_details_label_id.strip()
+    if not report.public_content_consent and private_details_label_id:
+        label_ids.append(private_details_label_id)
+    return tuple(dict.fromkeys(label_ids))
 
 
 def _github_configured() -> bool:

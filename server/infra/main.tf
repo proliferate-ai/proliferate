@@ -212,11 +212,11 @@ variable "support_github_repo" {
 }
 
 variable "support_github_label_support" {
-  default = "support issue"
+  default = "support"
 }
 
 variable "support_github_label_private" {
-  default = "private"
+  default = "private-details"
 }
 
 variable "support_linear_api_key" {
@@ -237,6 +237,10 @@ variable "support_linear_project_id" {
 }
 
 variable "support_linear_label_ids" {
+  default = ""
+}
+
+variable "support_linear_private_details_label_id" {
   default = ""
 }
 
@@ -669,6 +673,7 @@ resource "aws_ecs_task_definition" "server" {
         { name = "SUPPORT_LINEAR_TEAM_ID", value = var.support_linear_team_id },
         { name = "SUPPORT_LINEAR_PROJECT_ID", value = var.support_linear_project_id },
         { name = "SUPPORT_LINEAR_LABEL_IDS", value = var.support_linear_label_ids },
+        { name = "SUPPORT_LINEAR_PRIVATE_DETAILS_LABEL_ID", value = var.support_linear_private_details_label_id },
       ]
 
       secrets = concat(

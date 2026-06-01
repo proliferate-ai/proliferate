@@ -64,13 +64,14 @@ jobs:
       SUPPORT_GITHUB_APP_INSTALLATION_ID: ${{ vars.SUPPORT_GITHUB_APP_INSTALLATION_ID }}
       SUPPORT_GITHUB_OWNER: ${{ vars.SUPPORT_GITHUB_OWNER }}
       SUPPORT_GITHUB_REPO: ${{ vars.SUPPORT_GITHUB_REPO }}
-      SUPPORT_GITHUB_LABEL_SUPPORT: ${{ vars.SUPPORT_GITHUB_LABEL_SUPPORT || 'support issue' }}
-      SUPPORT_GITHUB_LABEL_PRIVATE: ${{ vars.SUPPORT_GITHUB_LABEL_PRIVATE || 'private' }}
+      SUPPORT_GITHUB_LABEL_SUPPORT: ${{ vars.SUPPORT_GITHUB_LABEL_SUPPORT || 'support' }}
+      SUPPORT_GITHUB_LABEL_PRIVATE: ${{ vars.SUPPORT_GITHUB_LABEL_PRIVATE || 'private-details' }}
       SUPPORT_LINEAR_API_KEY: ${{ secrets.SUPPORT_LINEAR_API_KEY }}
       SUPPORT_LINEAR_API_KEY_PARAMETER_NAME: ${{ vars.SUPPORT_LINEAR_API_KEY_PARAMETER_NAME }}
       SUPPORT_LINEAR_TEAM_ID: ${{ vars.SUPPORT_LINEAR_TEAM_ID }}
       SUPPORT_LINEAR_PROJECT_ID: ${{ vars.SUPPORT_LINEAR_PROJECT_ID }}
       SUPPORT_LINEAR_LABEL_IDS: ${{ vars.SUPPORT_LINEAR_LABEL_IDS }}
+      SUPPORT_LINEAR_PRIVATE_DETAILS_LABEL_ID: ${{ vars.SUPPORT_LINEAR_PRIVATE_DETAILS_LABEL_ID }}
       DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
       GIT_SHA: ${{ inputs.git_sha }}
     steps:
@@ -205,6 +206,7 @@ jobs:
             --arg support_linear_team_id "$SUPPORT_LINEAR_TEAM_ID" \
             --arg support_linear_project_id "$SUPPORT_LINEAR_PROJECT_ID" \
             --arg support_linear_label_ids "$SUPPORT_LINEAR_LABEL_IDS" \
+            --arg support_linear_private_details_label_id "$SUPPORT_LINEAR_PRIVATE_DETAILS_LABEL_ID" \
             '[
               {"name":"API_URL","value":$api_url},
               {"name":"API_BASE_URL","value":$api_base},
@@ -242,7 +244,8 @@ jobs:
               {"name":"SUPPORT_GITHUB_LABEL_PRIVATE","value":$support_github_label_private},
               {"name":"SUPPORT_LINEAR_TEAM_ID","value":$support_linear_team_id},
               {"name":"SUPPORT_LINEAR_PROJECT_ID","value":$support_linear_project_id},
-              {"name":"SUPPORT_LINEAR_LABEL_IDS","value":$support_linear_label_ids}
+              {"name":"SUPPORT_LINEAR_LABEL_IDS","value":$support_linear_label_ids},
+              {"name":"SUPPORT_LINEAR_PRIVATE_DETAILS_LABEL_ID","value":$support_linear_private_details_label_id}
             ]' > env-updates.json
 
           jq -n \

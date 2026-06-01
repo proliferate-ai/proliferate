@@ -725,6 +725,7 @@ SUPPORT_GITHUB_APP_PRIVATE_KEY_PARAMETER_NAME
 SUPPORT_LINEAR_TEAM_ID
 SUPPORT_LINEAR_PROJECT_ID
 SUPPORT_LINEAR_LABEL_IDS
+SUPPORT_LINEAR_PRIVATE_DETAILS_LABEL_ID
 SUPPORT_LINEAR_API_KEY_PARAMETER_NAME
 
 # server support tracker secrets
@@ -816,12 +817,13 @@ SUPPORT_GITHUB_APP_ID=<support-github-app-id>
 SUPPORT_GITHUB_APP_INSTALLATION_ID=<support-github-app-installation-id>
 SUPPORT_GITHUB_OWNER=proliferate-ai
 SUPPORT_GITHUB_REPO=proliferate
-SUPPORT_GITHUB_LABEL_SUPPORT=support issue
-SUPPORT_GITHUB_LABEL_PRIVATE=private
+SUPPORT_GITHUB_LABEL_SUPPORT=support
+SUPPORT_GITHUB_LABEL_PRIVATE=private-details
 SUPPORT_GITHUB_APP_PRIVATE_KEY_PARAMETER_NAME=/proliferate/staging/support/github-app-private-key
 SUPPORT_LINEAR_TEAM_ID=<support-linear-team-id>
 SUPPORT_LINEAR_PROJECT_ID=<optional-support-linear-project-id>
 SUPPORT_LINEAR_LABEL_IDS=<optional-comma-separated-linear-label-ids>
+SUPPORT_LINEAR_PRIVATE_DETAILS_LABEL_ID=<optional-private-details-linear-label-id>
 SUPPORT_LINEAR_API_KEY_PARAMETER_NAME=/proliferate/staging/support/linear-api-key
 VERCEL_ENVIRONMENT=staging
 VERCEL_TARGET=staging

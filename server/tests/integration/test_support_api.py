@@ -611,6 +611,8 @@ class TestSupportApi:
         monkeypatch.setattr(settings, "support_github_repo", "proliferate")
         monkeypatch.setattr(settings, "support_linear_api_key", "lin_api")
         monkeypatch.setattr(settings, "support_linear_team_id", "team-1")
+        monkeypatch.setattr(settings, "support_linear_label_ids", "triage-label")
+        monkeypatch.setattr(settings, "support_linear_private_details_label_id", "private-label")
 
         s3_records: dict[str, dict[str, object]] = {}
 
@@ -652,7 +654,9 @@ class TestSupportApi:
 
         async def fake_linear_issue(**kwargs: object) -> LinearIssue:
             description = str(kwargs["description"])
+            label_ids = tuple(kwargs["label_ids"])
             assert "https://github.com/proliferate-ai/proliferate/issues/123" in description
+            assert label_ids == ("triage-label",)
             return LinearIssue(
                 id="linear-issue-1",
                 identifier="SUP-123",
@@ -738,6 +742,9 @@ class TestSupportApi:
         monkeypatch.setattr(settings, "support_github_repo", "proliferate")
         monkeypatch.setattr(settings, "support_github_label_support", "support issue")
         monkeypatch.setattr(settings, "support_github_label_private", "private")
+        monkeypatch.setattr(settings, "support_linear_api_key", "lin_api")
+        monkeypatch.setattr(settings, "support_linear_team_id", "team-1")
+        monkeypatch.setattr(settings, "support_linear_private_details_label_id", "private-label")
 
         s3_records: dict[str, dict[str, object]] = {}
 
@@ -782,6 +789,19 @@ class TestSupportApi:
                 body=body,
             )
 
+        async def fake_linear_issue(**kwargs: object) -> LinearIssue:
+            description = str(kwargs["description"])
+            label_ids = tuple(kwargs["label_ids"])
+            assert "Sensitive customer text" not in description
+            assert "did not opt in" in description
+            assert label_ids == ("private-label",)
+            return LinearIssue(
+                id="linear-private-1",
+                identifier="SUP-456",
+                url="https://linear.app/proliferate/issue/SUP-456",
+                description=description,
+            )
+
         monkeypatch.setattr(
             "proliferate.server.support.service.put_json_object",
             fake_put_json_object,
@@ -801,6 +821,10 @@ class TestSupportApi:
         monkeypatch.setattr(
             "proliferate.server.support.tracker.github_issues.ensure_support_issue",
             fake_github_issue,
+        )
+        monkeypatch.setattr(
+            "proliferate.server.support.tracker.ensure_linear_support_issue",
+            fake_linear_issue,
         )
 
         create = await client.post(
@@ -831,3 +855,4 @@ class TestSupportApi:
         report = await support_reports.get_report_by_id(db_session, report_id)
         assert report is not None
         assert report.github_issue_url == "https://github.com/proliferate-ai/proliferate/issues/456"
+        assert report.linear_issue_url == "https://linear.app/proliferate/issue/SUP-456"
