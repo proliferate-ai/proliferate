@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use super::artifacts::{
-    resolve_agent_process_artifact, resolve_agent_process_fallback,
+    found_artifact, resolve_agent_process_artifact, resolve_agent_process_fallback,
     resolve_agent_process_path_fallback, resolve_native_artifact,
 };
 use super::compatibility::detect_runtime_compatibility_issue;
@@ -13,7 +13,7 @@ use crate::domains::agents::model::*;
 
 #[cfg(test)]
 use super::artifacts::{
-    found_artifact, managed_launcher_candidates, managed_npm_executable_relpath, not_found_artifact,
+    managed_launcher_candidates, managed_npm_executable_relpath, not_found_artifact,
 };
 #[cfg(test)]
 use super::compatibility::{claude_launch_requires_node, parse_node_version, NodeVersion};
