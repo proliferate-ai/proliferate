@@ -9,7 +9,7 @@ Scope:
   artifact manifest, lifecycle, and write-protection logic
 - `anyharness/crates/anyharness-lib/src/domains/cowork/**` for cowork artifact
   compatibility, session policy, and the current cowork MCP surface
-- `anyharness/crates/anyharness-lib/src/workspaces/files_runtime.rs` for
+- `anyharness/crates/anyharness-lib/src/domains/workspaces/files_runtime.rs` for
   consulting artifact write protection before generic file mutations
 - `anyharness/sdk/**` and `anyharness/sdk-react/**` for cowork artifact client access
 - desktop consumers of cowork artifact HTTP endpoints
@@ -91,7 +91,7 @@ Keep ownership split the same way the rest of the runtime is split:
     cowork compatibility wrapper
 - `api/http/cowork.rs`
   - cowork artifact HTTP handlers only
-- `workspaces/files_runtime.rs`
+- `domains/workspaces/files_runtime.rs`
   - generic file operations consult artifact-owned write protection for
     manifest and artifact-backed paths
 

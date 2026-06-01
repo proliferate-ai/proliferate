@@ -1236,13 +1236,13 @@ anyharness/crates/anyharness-lib/src/api/router.rs               wire routes
 anyharness/crates/anyharness-lib/src/domains/runtime_config/**   (new)
   model.rs, store.rs, service.rs, artifact_cache.rs, credentials.rs,
   resolution.rs
-anyharness/crates/anyharness-lib/src/sessions/runtime/creation.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/runtime/creation.rs
   if expected_runtime_config_revision present: build mcp_servers from
   runtime_config_current; if absent, permit only explicit local/test legacy
   callers
-anyharness/crates/anyharness-lib/src/sessions/mcp_bindings/assembly.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/assembly.rs
   branch on runtime_config vs legacy bundle
-anyharness/crates/anyharness-lib/src/live/sessions/connection/start.rs
+anyharness/crates/anyharness-lib/src/live/sessions/driver/start.rs
   apply same preflight to live session start
 
 anyharness/crates/anyharness-lib/src/domains/plugins/skills.rs
@@ -1499,7 +1499,7 @@ anyharness/crates/anyharness-lib/src/domains/runtime_config/store.rs#tests
   - resolve persists credentials in memory only
   - restart loses credential_cache; recomputes requests
 
-anyharness/crates/anyharness-lib/src/sessions/runtime/creation.rs#tests
+anyharness/crates/anyharness-lib/src/domains/sessions/runtime/creation.rs#tests
   - expected_runtime_config_revision present + applied -> session launches
     with manifest-built MCP servers
   - expected_runtime_config_revision stale -> RUNTIME_CONFIG_RESOLUTION_REQUIRED

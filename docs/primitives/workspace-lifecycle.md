@@ -270,7 +270,7 @@ Useful current lines:
 95   /worktrees/retention/run
 ```
 
-`anyharness/crates/anyharness-lib/src/workspaces/retention.rs`
+`anyharness/crates/anyharness-lib/src/domains/workspaces/retention.rs`
 
 - Current retention groups standard active worktree workspaces by repo.
 - It enforces the materialized-worktree limit.
@@ -284,7 +284,7 @@ Useful current lines:
 347  retire_worktree_materialization call
 ```
 
-`anyharness/crates/anyharness-lib/src/workspaces/retire_preflight.rs`
+`anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs`
 
 - Current preflight blocks unsafe cleanup for dirty work, conflicts, live
   sessions, active terminals, pending prompts, pending interactions, and running
@@ -299,7 +299,7 @@ Useful current lines:
 403  running operation blockers
 ```
 
-`anyharness/crates/anyharness-lib/src/workspaces/runtime/materialization.rs`
+`anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/materialization.rs`
 
 - `retire_worktree_materialization(...)` is the current safe materialization
   deletion workflow and delegates `git worktree remove --force` to the git

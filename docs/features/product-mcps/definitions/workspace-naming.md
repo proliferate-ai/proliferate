@@ -7,7 +7,7 @@ Status: authoritative target definition for the Workspace Naming product MCP.
 ```text
 id: workspace_naming
 owner domain: domains/sessions/workspace_naming
-implementation: sessions/workspace_naming/mcp/**
+implementation: domains/sessions/workspace_naming/mcp/**
 visibility: internal
 route slug: workspace_naming
 server name: proliferate-workspace-naming
@@ -142,12 +142,11 @@ Required tests:
 - workspace mutability is enforced
 - call updates workspace display name through workspace runtime
 
-## Migration Acceptance
+## Ownership
 
-Done when:
+Current implementation shape:
 
-- `sessions/workspace_naming/mcp_server/**` is replaced by
-  `domains/sessions/workspace_naming/mcp/**`.
+- `domains/sessions/workspace_naming/mcp/**` owns the tool server.
 - eligibility/context logic lives in `context.rs`.
 - prompt-sensitive instructions live in injection/definition, not actor code.
 - `calls.rs` delegates to workspace runtime/access gate and naming policy.

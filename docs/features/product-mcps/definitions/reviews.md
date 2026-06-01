@@ -506,7 +506,7 @@ anyharness/crates/anyharness-lib/src/domains/plans/
   service.rs
   store.rs
 
-anyharness/crates/anyharness-lib/src/sessions/runtime/plans.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/runtime/plans.rs
 anyharness/crates/anyharness-lib/src/live/sessions/event_sink/plans.rs
 anyharness/crates/anyharness-lib/src/live/sessions/actor/notifications/plans.rs
 ```
@@ -514,8 +514,8 @@ anyharness/crates/anyharness-lib/src/live/sessions/actor/notifications/plans.rs
 Shared delegated-session primitives:
 
 ```text
-anyharness/crates/anyharness-lib/src/sessions/delegation.rs
-anyharness/crates/anyharness-lib/src/sessions/subagents/store.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/delegation.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/subagents/store.rs
 anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/**
 anyharness/crates/anyharness-lib/src/integrations/mcp/product_server/**
 ```

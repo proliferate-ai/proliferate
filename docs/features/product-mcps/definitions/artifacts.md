@@ -107,12 +107,12 @@ anyharness-lib/src/domains/cowork/mcp/auth.rs
 Current injection and prompt text:
 
 ```text
-anyharness-lib/src/sessions/mcp_bindings/selection.rs
+anyharness-lib/src/domains/sessions/mcp_bindings/selection.rs
   cowork MCP selection for cowork-surface sessions
   cowork artifact system prompt append
   cowork binding summary
 
-anyharness-lib/src/sessions/mcp_bindings/injection.rs
+anyharness-lib/src/domains/sessions/mcp_bindings/injection.rs
   cowork HTTP MCP server config
   cowork product capability-token minting
 ```
@@ -152,7 +152,7 @@ anyharness-lib/src/api/http/product_mcp.rs
 Current file-write protection:
 
 ```text
-anyharness-lib/src/workspaces/files_runtime.rs
+anyharness-lib/src/domains/workspaces/files_runtime.rs
   blocks generic file writes/creates/renames/deletes for cowork artifact
   manifest paths and artifact-backed paths
 
@@ -562,7 +562,7 @@ Required invariants:
 Current protection path:
 
 ```text
-workspaces/files_runtime.rs
+domains/workspaces/files_runtime.rs
   owns WorkspaceFileProtection and WorkspaceFileProtectionRegistry
   asks registered file-protection participants about protected paths
   returns FileServiceError::ProtectedPath

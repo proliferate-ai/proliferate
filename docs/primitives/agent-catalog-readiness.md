@@ -352,7 +352,7 @@ Provider/vendor mechanics:
 
 No product readiness decisions live here.
 
-### `sessions/runtime/**`
+### `domains/sessions/runtime/**`
 
 Session runtime uses agents as an input:
 

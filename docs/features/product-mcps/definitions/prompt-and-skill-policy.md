@@ -199,8 +199,8 @@ apps/desktop/src/lib/domain/plugins/session-plugin-bundle.ts
 Product prompts:
 
 ```text
-anyharness/crates/anyharness-lib/src/sessions/subagents/hooks.rs
-anyharness/crates/anyharness-lib/src/sessions/subagents/mcp/definition.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/subagents/hooks.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/subagents/mcp/definition.rs
 anyharness/crates/anyharness-lib/src/domains/reviews/runtime_helpers.rs
 anyharness/crates/anyharness-lib/src/domains/reviews/service_detail.rs
 anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs
@@ -210,8 +210,8 @@ anyharness/crates/anyharness-lib/src/domains/cowork/mcp/definition.rs
 Prompt provenance and delegated child-session metadata:
 
 ```text
-anyharness/crates/anyharness-lib/src/sessions/delegation.rs
-anyharness/crates/anyharness-lib/src/sessions/subagents/store.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/delegation.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/subagents/store.rs
 anyharness/crates/anyharness-lib/src/persistence/sql/0029_session_links_prompt_provenance.sql
 anyharness/crates/anyharness-lib/src/persistence/sql/0030_subagent_links_and_completions.sql
 ```
