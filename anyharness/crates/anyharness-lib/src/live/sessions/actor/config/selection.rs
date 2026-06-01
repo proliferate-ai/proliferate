@@ -1,11 +1,11 @@
 use agent_client_protocol as acp;
 
-use crate::live::sessions::actor::config::types::ConfigPurpose;
-use crate::live::sessions::actor::state::SessionStartupState;
-use crate::sessions::live_config::controls::option_matches_key;
-use crate::sessions::live_config::{
+use crate::domains::sessions::live_config::controls::option_matches_key;
+use crate::domains::sessions::live_config::{
     normalized_key_rank, NormalizedControlKind, LEGACY_MODE_COMPAT_CONFIG_ID,
 };
+use crate::live::sessions::actor::config::types::ConfigPurpose;
+use crate::live::sessions::actor::state::SessionStartupState;
 pub(in crate::live::sessions::actor) fn pending_config_rank(
     startup_state: &SessionStartupState,
     config_id: &str,

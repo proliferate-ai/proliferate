@@ -23,9 +23,9 @@ use crate::domains::cowork::runtime::{
     CoworkCodingCompletion, CoworkCodingSessionContext, CoworkCreateThreadError,
     CoworkManagedWorkspaceContext, CoworkManagedWorkspacesContext, CoworkThreadSummary,
 };
-use crate::repo_roots::model::RepoRootRecord;
-use crate::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
-use crate::workspaces::model::WorkspaceRecord;
+use crate::domains::repo_roots::model::RepoRootRecord;
+use crate::domains::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
+use crate::domains::workspaces::model::WorkspaceRecord;
 
 #[utoipa::path(
     get,
@@ -215,42 +215,42 @@ fn map_create_cowork_thread_error(error: CoworkCreateThreadError) -> ApiError {
             ApiError::internal(format!("cowork setup failed: {error}"))
         }
         CoworkCreateThreadError::CreateSession(error) => match error {
-            crate::sessions::runtime::CreateAndStartSessionError::WorkspaceSingleSession {
+            crate::domains::sessions::runtime::CreateAndStartSessionError::WorkspaceSingleSession {
                 session_id,
             } => ApiError::conflict(
                 format!("workspace only allows a single session; existing session: {session_id}"),
                 "WORKSPACE_SINGLE_SESSION",
             ),
-            crate::sessions::runtime::CreateAndStartSessionError::WorkspaceNotFound => {
+            crate::domains::sessions::runtime::CreateAndStartSessionError::WorkspaceNotFound => {
                 ApiError::bad_request("workspace not found", "WORKSPACE_NOT_FOUND")
             }
-            crate::sessions::runtime::CreateAndStartSessionError::Invalid(detail) => {
+            crate::domains::sessions::runtime::CreateAndStartSessionError::Invalid(detail) => {
                 ApiError::bad_request(detail, "SESSION_CREATE_FAILED")
             }
-            crate::sessions::runtime::CreateAndStartSessionError::ModelUnsupported {
+            crate::domains::sessions::runtime::CreateAndStartSessionError::ModelUnsupported {
                 agent_kind,
                 model_id,
             } => ApiError::bad_request(
                 format!("model '{model_id}' is not supported for agent '{agent_kind}'"),
                 "SESSION_MODEL_UNSUPPORTED",
             ),
-            crate::sessions::runtime::CreateAndStartSessionError::ModeUnsupported {
+            crate::domains::sessions::runtime::CreateAndStartSessionError::ModeUnsupported {
                 agent_kind,
                 mode_id,
             } => ApiError::bad_request(
                 format!("mode '{mode_id}' is not supported for agent '{agent_kind}'"),
                 "SESSION_MODE_UNSUPPORTED",
             ),
-            crate::sessions::runtime::CreateAndStartSessionError::AgentAuthSelectionRequired(
+            crate::domains::sessions::runtime::CreateAndStartSessionError::AgentAuthSelectionRequired(
                 required,
             ) => ApiError::agent_auth_selection_required(required),
-            crate::sessions::runtime::CreateAndStartSessionError::MissingDataKey => {
+            crate::domains::sessions::runtime::CreateAndStartSessionError::MissingDataKey => {
                 ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
             }
-            crate::sessions::runtime::CreateAndStartSessionError::StartFailed(error) => {
+            crate::domains::sessions::runtime::CreateAndStartSessionError::StartFailed(error) => {
                 ApiError::internal(format!("ACP session start failed: {error}"))
             }
-            crate::sessions::runtime::CreateAndStartSessionError::Internal(error) => {
+            crate::domains::sessions::runtime::CreateAndStartSessionError::Internal(error) => {
                 ApiError::internal(error.to_string())
             }
         },

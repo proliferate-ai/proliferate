@@ -1,7 +1,7 @@
 use crate::api::auth::{require_workspace_scope, AuthContext, AuthError};
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
-use crate::workspaces::access_gate::WorkspaceAccessError;
+use crate::domains::workspaces::access_gate::WorkspaceAccessError;
 
 pub fn map_access_error(error: WorkspaceAccessError) -> ApiError {
     match error {

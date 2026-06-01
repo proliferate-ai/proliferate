@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use super::manifest::{load_manifest_if_present, ARTIFACT_MANIFEST_RELATIVE_PATH};
 use super::model::ArtifactError;
-use crate::workspaces::files_runtime::WorkspaceFileProtection;
-use crate::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::files_runtime::WorkspaceFileProtection;
+use crate::domains::workspaces::model::WorkspaceRecord;
 
 #[derive(Clone)]
 pub struct ArtifactProtectionService {

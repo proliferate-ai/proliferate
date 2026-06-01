@@ -26,6 +26,8 @@ use crate::domains::plans::runtime::PlanRuntime;
 use crate::domains::plans::service::PlanService;
 use crate::domains::plans::store::PlanStore;
 use crate::domains::plugins::mcp::auth::SkillsMcpAuth;
+use crate::domains::repo_roots::service::RepoRootService;
+use crate::domains::repo_roots::store::RepoRootStore;
 use crate::domains::reviews::hooks::ReviewSessionHooks;
 use crate::domains::reviews::mcp::auth::ReviewMcpAuth;
 use crate::domains::reviews::runtime::ReviewRuntime;
@@ -34,45 +36,43 @@ use crate::domains::reviews::store::{ReviewDeleteParticipant, ReviewStore};
 use crate::domains::runtime_config::service::RuntimeConfigService;
 use crate::domains::runtime_config::session_extension::RuntimeConfigSessionLaunchExtension;
 use crate::domains::runtime_config::store::RuntimeConfigStore;
+use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
+use crate::domains::sessions::deletion::SessionDeleteWorkflow;
+use crate::domains::sessions::links::completions::LinkCompletionStore;
+use crate::domains::sessions::links::service::SessionLinkService;
+use crate::domains::sessions::links::store::SessionLinkStore;
+use crate::domains::sessions::mcp_bindings::crypto::{load_data_cipher_from_env, DATA_KEY_ENV_VAR};
+use crate::domains::sessions::mcp_bindings::product_registry::ProductMcpEndpointRegistry;
+use crate::domains::sessions::runtime::SessionRuntime;
+use crate::domains::sessions::service::SessionService;
+use crate::domains::sessions::store::SessionStore;
+use crate::domains::sessions::subagents::hooks::SubagentSessionHooks;
+use crate::domains::sessions::subagents::mcp::auth::SubagentMcpAuth;
+use crate::domains::sessions::subagents::service::SubagentService;
+use crate::domains::sessions::subagents::store::SubagentStore;
+use crate::domains::sessions::workspace_naming::mcp::auth::WorkspaceNamingMcpAuth;
 use crate::domains::terminals::store::TerminalStore;
+use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
+use crate::domains::workspaces::access_store::WorkspaceAccessStore;
+use crate::domains::workspaces::checkout_gate::CheckoutDeletionGate;
+use crate::domains::workspaces::deletion::WorkspaceDeleteWorkflow;
+use crate::domains::workspaces::files_runtime::{
+    WorkspaceFileProtection, WorkspaceFileProtectionRegistry, WorkspaceFilesRuntime,
+};
+use crate::domains::workspaces::inventory::WorktreeInventoryService;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
+use crate::domains::workspaces::purge::WorkspacePurgeService;
+use crate::domains::workspaces::retention::WorkspaceRetentionService;
+use crate::domains::workspaces::retention_policy::WorktreeRetentionPolicyStore;
+use crate::domains::workspaces::retire_preflight::RetirePreflightChecker;
+use crate::domains::workspaces::runtime::WorkspaceRuntime;
+use crate::domains::workspaces::service::WorkspaceService;
+use crate::domains::workspaces::setup_runtime::WorkspaceSetupRuntime;
+use crate::domains::workspaces::store::WorkspaceStore;
+use crate::domains::workspaces::worktree_runtime::WorkspaceWorktreeRuntime;
 use crate::live::sessions::LiveSessionManager;
 use crate::live::terminals::{AgentLoginTerminalService, TerminalService};
 use crate::persistence::Db;
-use crate::repo_roots::service::RepoRootService;
-use crate::repo_roots::store::RepoRootStore;
-use crate::sessions::attachment_storage::PromptAttachmentStorage;
-use crate::sessions::deletion::SessionDeleteWorkflow;
-use crate::sessions::links::completions::LinkCompletionStore;
-use crate::sessions::links::service::SessionLinkService;
-use crate::sessions::links::store::SessionLinkStore;
-use crate::sessions::mcp_bindings::crypto::{load_data_cipher_from_env, DATA_KEY_ENV_VAR};
-use crate::sessions::mcp_bindings::product_registry::ProductMcpEndpointRegistry;
-use crate::sessions::runtime::SessionRuntime;
-use crate::sessions::service::SessionService;
-use crate::sessions::store::SessionStore;
-use crate::sessions::subagents::hooks::SubagentSessionHooks;
-use crate::sessions::subagents::mcp::auth::SubagentMcpAuth;
-use crate::sessions::subagents::service::SubagentService;
-use crate::sessions::subagents::store::SubagentStore;
-use crate::sessions::workspace_naming::mcp::auth::WorkspaceNamingMcpAuth;
-use crate::workspaces::access_gate::WorkspaceAccessGate;
-use crate::workspaces::access_store::WorkspaceAccessStore;
-use crate::workspaces::checkout_gate::CheckoutDeletionGate;
-use crate::workspaces::deletion::WorkspaceDeleteWorkflow;
-use crate::workspaces::files_runtime::{
-    WorkspaceFileProtection, WorkspaceFileProtectionRegistry, WorkspaceFilesRuntime,
-};
-use crate::workspaces::inventory::WorktreeInventoryService;
-use crate::workspaces::operation_gate::WorkspaceOperationGate;
-use crate::workspaces::purge::WorkspacePurgeService;
-use crate::workspaces::retention::WorkspaceRetentionService;
-use crate::workspaces::retention_policy::WorktreeRetentionPolicyStore;
-use crate::workspaces::retire_preflight::RetirePreflightChecker;
-use crate::workspaces::runtime::WorkspaceRuntime;
-use crate::workspaces::service::WorkspaceService;
-use crate::workspaces::setup_runtime::WorkspaceSetupRuntime;
-use crate::workspaces::store::WorkspaceStore;
-use crate::workspaces::worktree_runtime::WorkspaceWorktreeRuntime;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppStateInitError {
@@ -313,7 +313,9 @@ impl AppState {
                 subagent_service: subagent_service.clone(),
                 session_store: SessionStore::new(db.clone()),
             });
-        let session_extensions: Vec<Arc<dyn crate::sessions::extensions::SessionExtension>> = vec![
+        let session_extensions: Vec<
+            Arc<dyn crate::domains::sessions::extensions::SessionExtension>,
+        > = vec![
             cowork_session_hooks.clone(),
             subagent_session_hooks.clone(),
             review_session_hooks.clone(),

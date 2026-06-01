@@ -10,7 +10,9 @@ use super::error::ApiError;
 use super::sessions_errors::map_resolve_interaction_error;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
-use crate::sessions::runtime::{InteractionPermissionDecision, InteractionResolutionRequest};
+use crate::domains::sessions::runtime::{
+    InteractionPermissionDecision, InteractionResolutionRequest,
+};
 
 #[utoipa::path(
     post,

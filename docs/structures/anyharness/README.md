@@ -294,9 +294,9 @@ which guide to read and where the code belongs.
 | HTTP handlers, routers, auth headers, SSE/WS transport, OpenAPI wiring | `anyharness-lib/src/api/**` | `api/**` | [guides/api.md](guides/api.md) |
 | AppState, dependency construction, wiring extension implementations, product MCP endpoint registration | `anyharness-lib/src/app/**` | `app/**` | [guides/app.md](guides/app.md) |
 | SQLite engine setup, migrations, DB pool wiring | `anyharness-lib/src/persistence/**` | `persistence/**` | [guides/persistence.md](guides/persistence.md) |
-| Session durable records, event rows, session config, pending prompts | `anyharness-lib/src/sessions/**` | `domains/sessions/**` | [guides/domains.md](guides/domains.md), [specs/session-engine.md](specs/session-engine.md), [src/sessions.md](src/sessions.md) |
+| Session durable records, event rows, session config, pending prompts | `anyharness-lib/src/domains/sessions/**` | `domains/sessions/**` | [guides/domains.md](guides/domains.md), [specs/session-engine.md](specs/session-engine.md), [src/sessions.md](src/sessions.md) |
 | Live running agent process, session actor loop, ACP client, event sink, interactions | `anyharness-lib/src/live/sessions/**`, with remaining ACP helpers in `anyharness-lib/src/acp/**` | `live/sessions/**` plus earned `integrations/acp/**` | [guides/live-runtime.md](guides/live-runtime.md), [specs/session-engine.md](specs/session-engine.md), [src/acp.md](src/acp.md) |
-| Workspace durable lifecycle, materialization, purge/retire, retention policy | `anyharness-lib/src/workspaces/**` | `domains/workspaces/**` | [guides/domains.md](guides/domains.md), [src/workspaces.md](src/workspaces.md) |
+| Workspace durable lifecycle, materialization, purge/retire, retention policy | `anyharness-lib/src/domains/workspaces/**` | `domains/workspaces/**` | [guides/domains.md](guides/domains.md), [src/workspaces.md](src/workspaces.md) |
 | Agent catalog, install, credentials, readiness, supported-agent meaning | `anyharness-lib/src/domains/agents/**` | `domains/agents/**` | [guides/domains.md](guides/domains.md), [../../primitives/agent-catalog-readiness.md](../../primitives/agent-catalog-readiness.md), [src/agents.md](src/agents.md) |
 | Provider CLI install/probe/path/version mechanics | `anyharness-lib/src/integrations/agent_cli/**`, provider-specific ACP code | `integrations/agent_cli/**` | [guides/integrations.md](guides/integrations.md), [guides/harnesses.md](guides/harnesses.md) |
 | Provider-specific behavior such as Claude/Codex extension support or live controls | `anyharness-lib/src/live/sessions/**`, `anyharness-lib/src/acp/**`, `docs/structures/anyharness/harnesses/**` | harness doc plus owning live runtime/integration module | [guides/harnesses.md](guides/harnesses.md), provider doc under `harnesses/**` |
@@ -304,11 +304,11 @@ which guide to read and where the code belongs.
 | Git status/diff/branch operations and git command parsing | `anyharness-lib/src/adapters/git/**` | `adapters/git/**` | [guides/adapters.md](guides/adapters.md), [src/git.md](src/git.md) |
 | Hosting and process helpers around local workspace capabilities | `anyharness-lib/src/adapters/hosting/**`, `anyharness-lib/src/adapters/processes/**` | `adapters/hosting/**`, `adapters/processes/**` | [guides/adapters.md](guides/adapters.md) |
 | Terminal durable records, PTY lifecycle, terminal stream handles, terminal registry | `anyharness-lib/src/domains/terminals/**`, `anyharness-lib/src/live/terminals/**` | durable `domains/terminals/**` plus live `live/terminals/**` | [guides/live-runtime.md](guides/live-runtime.md) |
-| MCP user bindings attached to a session | `anyharness-lib/src/sessions/mcp_bindings/**` | current `sessions/mcp_bindings/**`; final `domains/sessions/mcp_bindings/**` | [../../primitives/mcp-runtime.md](../../primitives/mcp-runtime.md), [guides/domains.md](guides/domains.md) |
-| Product MCP tool servers for artifacts, reviews, subagents, workspace naming | `domains/cowork/**`, `domains/reviews/**`, `sessions/subagents/**`, `sessions/workspace_naming/**` | owning product domain | [../../features/product-mcps/servers.md](../../features/product-mcps/servers.md), [../../features/product-mcps/definitions/README.md](../../features/product-mcps/definitions/README.md), [guides/domains.md](guides/domains.md) |
+| MCP user bindings attached to a session | `anyharness-lib/src/domains/sessions/mcp_bindings/**` | `domains/sessions/mcp_bindings/**` | [../../primitives/mcp-runtime.md](../../primitives/mcp-runtime.md), [guides/domains.md](guides/domains.md) |
+| Product MCP tool servers for artifacts, reviews, subagents, workspace naming | `domains/cowork/**`, `domains/reviews/**`, `domains/sessions/subagents/**`, `domains/sessions/workspace_naming/**` | owning product domain | [../../features/product-mcps/servers.md](../../features/product-mcps/servers.md), [../../features/product-mcps/definitions/README.md](../../features/product-mcps/definitions/README.md), [guides/domains.md](guides/domains.md) |
 | Shared MCP JSON-RPC, capability-token, tool-formatting scaffolding | `anyharness-lib/src/integrations/mcp/**` plus any remaining feature-local wrappers | `integrations/mcp/**` | [guides/integrations.md](guides/integrations.md), [../../primitives/mcp-runtime.md](../../primitives/mcp-runtime.md) |
 | Cowork artifacts, delegation, or cowork-owned tools | `anyharness-lib/src/domains/cowork/**` | `domains/cowork/**` | [guides/domains.md](guides/domains.md), [../../features/cowork-artifacts.md](../../features/cowork-artifacts.md) |
-| Reviews, plans, mobility, or repo-root product behavior | `domains/reviews/**`, `domains/plans/**`, `domains/mobility/**`, `repo_roots/**` | owning `domains/<domain>/**` | [guides/domains.md](guides/domains.md) |
+| Reviews, plans, mobility, or repo-root product behavior | `domains/reviews/**`, `domains/plans/**`, `domains/mobility/**`, `domains/repo_roots/**` | owning `domains/<domain>/**` | [guides/domains.md](guides/domains.md) |
 | Latency tracing, request measurement, diagnostic ids | `observability/latency.rs` and scattered measurement helpers | `observability/**` | [guides/observability.md](guides/observability.md) |
 | Splitting large files, moving modules, or creating new folders | any AnyHarness path | target layer from this table | [guides/repo-shape.md](guides/repo-shape.md) |
 
@@ -378,15 +378,15 @@ The target shape is not fully implemented yet.
 Current high-level mappings:
 
 ```text
-current sessions/      -> target domains/sessions/
-current workspaces/    -> target domains/workspaces/
+domains/sessions/      -> target domains/sessions/
+domains/workspaces/    -> target domains/workspaces/
 current domains/agents/ -> target domains/agents/ plus integrations/agent_cli/
-current repo_roots/    -> target domains/repo_roots/
+domains/repo_roots/    -> target domains/repo_roots/
 current cowork/        -> target domains/cowork/
 domains/reviews/      -> target domains/reviews/
 domains/plans/        -> target domains/plans/
 current mobility/      -> target domains/mobility/
-current live/sessions/ -> current live session runtime; target live/sessions/ with connection/ -> driver/
+current live/sessions/ -> current and target live session runtime
 current acp/           -> remaining ACP permission/payload/error helpers; target integrations/acp only if reusable protocol mechanics earn it
 current domains/terminals/ + live/terminals/ -> current and target terminal durable/live split
 current observability/latency.rs -> current and target latency request context
@@ -399,16 +399,14 @@ Known transitional issues:
   capabilities live under `adapters/**`, shared MCP helpers live under
   `integrations/mcp/**`, and provider CLI mechanics live under
   `integrations/agent_cli/**`.
-- Product domain cleanup is partially present: agents, cowork, reviews, plans,
-  mobility, and terminals live under `domains/**`; sessions, workspaces, and
-  repo roots still use transitional top-level paths until the final topology
-  rename phase.
-- Session MCP assembly is split under `sessions/mcp_bindings/**`, including
-  `assembly.rs`. The final `domains/sessions/**` path is still a target.
-- `SessionRuntime` is split under `sessions/runtime/**`. The public
+- Product domains, including sessions, workspaces, agents, repo roots, cowork,
+  reviews, plans, mobility, and terminals, live under `domains/**`.
+- Session MCP assembly is split under `domains/sessions/mcp_bindings/**`,
+  including `assembly.rs`.
+- `SessionRuntime` is split under `domains/sessions/runtime/**`. The public
   `SessionRuntime` type remains the API-facing use-case surface.
-- `SessionStore` is split under `sessions/store/**`. The public `SessionStore`
-  type remains the caller-facing store surface.
+- `SessionStore` is split under `domains/sessions/store/**`. The public
+  `SessionStore` type remains the caller-facing store surface.
 - `SessionEventSink` is split under `live/sessions/event_sink/**`.
 - Latency request context and trace-field helpers are already owned by
   `observability/latency.rs`; lower layers should not import API transport
@@ -418,11 +416,11 @@ Known transitional issues:
   be mapped at the API boundary.
 - The live session runtime is split under `live/sessions/manager/**`,
   `live/sessions/handle.rs`, `live/sessions/actor/**`,
-  `live/sessions/connection/**` (target role: `driver/**`),
-  `live/sessions/event_sink/**`, `live/sessions/interactions/**`,
+  `live/sessions/driver/**`, `live/sessions/event_sink/**`,
+  `live/sessions/interactions/**`,
   `live/sessions/background_work/**`, and `live/sessions/replay/**`.
   `RuntimeClient` remains the current low-level ACP client name under
-  `live/sessions/connection/runtime_client/**`; remaining `acp/**` files are
+  `live/sessions/driver/runtime_client/**`; remaining `acp/**` files are
   permission/payload/provider error helpers, not live-session owners.
 - Some product MCP endpoint scaffolding may still be feature-local. Common
   protocol/auth scaffolding should use `integrations/mcp/`; product tool

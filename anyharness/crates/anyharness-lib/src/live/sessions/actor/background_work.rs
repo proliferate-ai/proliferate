@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
+use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::background_work::BackgroundWorkUpdate;
 use crate::live::sessions::event_sink::SessionEventSink;
-use crate::sessions::store::SessionStore;
 pub(in crate::live::sessions::actor) async fn handle_background_work_update(
     event_sink: &Arc<Mutex<SessionEventSink>>,
     store: &SessionStore,

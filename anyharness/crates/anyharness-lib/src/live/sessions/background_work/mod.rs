@@ -4,11 +4,11 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
-use crate::live::sessions::event_sink::AcpToolPayload;
-use crate::sessions::model::{
+use crate::domains::sessions::model::{
     SessionBackgroundWorkRecord, SessionBackgroundWorkState, SessionBackgroundWorkTrackerKind,
 };
-use crate::sessions::store::SessionStore;
+use crate::domains::sessions::store::SessionStore;
+use crate::live::sessions::event_sink::AcpToolPayload;
 
 mod claude;
 
@@ -209,10 +209,10 @@ mod tests {
     use tokio::sync::mpsc;
 
     use super::{BackgroundWorkOptions, BackgroundWorkRegistry};
+    use crate::domains::sessions::model::SessionRecord;
+    use crate::domains::sessions::store::SessionStore;
     use crate::live::sessions::event_sink::AcpToolPayload;
     use crate::persistence::Db;
-    use crate::sessions::model::SessionRecord;
-    use crate::sessions::store::SessionStore;
 
     #[tokio::test(flavor = "current_thread")]
     async fn registry_merges_split_claude_async_launch_updates() {
@@ -326,7 +326,7 @@ mod tests {
                 mcp_bindings_ciphertext: None,
                 mcp_binding_summaries_json: None,
                 mcp_binding_policy:
-                    crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
+                    crate::domains::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
                 system_prompt_append: None,
                 subagents_enabled: true,
                 action_capabilities_json: None,

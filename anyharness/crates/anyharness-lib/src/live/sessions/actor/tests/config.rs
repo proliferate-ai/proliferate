@@ -37,7 +37,8 @@ fn load_startup_restore_snapshot_captures_pre_restart_controls_before_overwrite(
             dismissed_at: None,
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
-            mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
+            mcp_binding_policy:
+                crate::domains::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
             action_capabilities_json: None,

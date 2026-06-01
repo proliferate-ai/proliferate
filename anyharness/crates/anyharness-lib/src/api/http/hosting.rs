@@ -15,10 +15,10 @@ use crate::adapters::hosting::types::{
 };
 use crate::adapters::hosting::HostingService;
 use crate::app::AppState;
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 
 fn resolve_workspace_path(
-    workspace_runtime: &crate::workspaces::runtime::WorkspaceRuntime,
+    workspace_runtime: &crate::domains::workspaces::runtime::WorkspaceRuntime,
     workspace_id: &str,
 ) -> Result<std::path::PathBuf, ApiError> {
     let workspace = workspace_runtime

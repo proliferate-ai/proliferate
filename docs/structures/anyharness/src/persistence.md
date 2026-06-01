@@ -15,7 +15,7 @@ It owns:
 - exposing the shared `Db` handle used by stores
 
 It does not own domain-specific SQL. That stays in the owning domain store such
-as `sessions/store/**` or `workspaces/store/**`.
+as `domains/sessions/store/**` or `domains/workspaces/store/**`.
 
 ## Core Models
 
@@ -80,8 +80,8 @@ Persistence should be thought of as a two-layer boundary:
 
 That means:
 
-- `sessions/store/**` owns session/event/config SQL
-- `workspaces/store/**` owns workspace SQL
+- `domains/sessions/store/**` owns session/event/config SQL
+- `domains/workspaces/store/**` owns workspace SQL
 - `persistence/**` does not become a giant shared query bucket
 
 ## Durable Models
@@ -95,11 +95,11 @@ Instead:
 
 Examples:
 
-- `anyharness/crates/anyharness-lib/src/sessions/model.rs`
+- `anyharness/crates/anyharness-lib/src/domains/sessions/model.rs`
   - `SessionRecord`
   - `SessionEventRecord`
   - live-config and pending-change records
-- `anyharness/crates/anyharness-lib/src/workspaces/model.rs`
+- `anyharness/crates/anyharness-lib/src/domains/workspaces/model.rs`
   - `WorkspaceRecord`
   - git-context discovery records
 

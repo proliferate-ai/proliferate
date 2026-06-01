@@ -1,9 +1,9 @@
 use tokio::sync::broadcast;
 
 use super::SessionEventSink;
-use crate::sessions::model::SessionEventRecord;
-use crate::sessions::runtime_event::RuntimeEventInjectionError;
-use crate::sessions::store::SessionStore;
+use crate::domains::sessions::model::SessionEventRecord;
+use crate::domains::sessions::runtime_event::RuntimeEventInjectionError;
+use crate::domains::sessions::store::SessionStore;
 use anyharness_contract::v1::{SessionEvent, SessionEventEnvelope};
 
 impl SessionEventSink {

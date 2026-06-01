@@ -6,7 +6,7 @@ use crate::adapters::processes::types::{ProcessServiceError, RunProcessRequest, 
 use crate::api::http::access::assert_workspace_mutable;
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[utoipa::path(
     post,

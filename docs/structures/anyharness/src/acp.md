@@ -79,7 +79,7 @@ It includes:
 
 This is the handoff from durable orchestration into live execution.
 
-### `RuntimeClient` (`anyharness/crates/anyharness-lib/src/live/sessions/connection/runtime_client/**`)
+### `RuntimeClient` (`anyharness/crates/anyharness-lib/src/live/sessions/driver/runtime_client/**`)
 
 `RuntimeClient` is the AnyHarness ACP client implementation.
 
@@ -137,8 +137,8 @@ It resolves requests by:
 
 The live start flow is:
 
-1. `sessions/runtime/startup.rs` decides a session should be live.
-   - code: `anyharness/crates/anyharness-lib/src/sessions/runtime/startup.rs`
+1. `domains/sessions/runtime/startup.rs` decides a session should be live.
+   - code: `anyharness/crates/anyharness-lib/src/domains/sessions/runtime/startup.rs`
 2. It resolves workspace and agent dependencies.
 3. It calls `LiveSessionManager::start_session(...)`.
 4. `LiveSessionManager` enters the start/inject critical section, deduplicates by

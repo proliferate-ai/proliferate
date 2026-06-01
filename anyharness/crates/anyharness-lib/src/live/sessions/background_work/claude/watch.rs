@@ -5,8 +5,8 @@ use tokio::task::JoinHandle;
 
 use super::output::{inspect_output_file, parse_timestamp, resolve_output_path};
 use super::{BackgroundWorkOptions, BackgroundWorkUpdate, BACKGROUND_WORK_FALLBACK_RESULT};
-use crate::sessions::model::{SessionBackgroundWorkRecord, SessionBackgroundWorkState};
-use crate::sessions::store::SessionStore;
+use crate::domains::sessions::model::{SessionBackgroundWorkRecord, SessionBackgroundWorkState};
+use crate::domains::sessions::store::SessionStore;
 
 pub(super) fn spawn_async_agent_tracker(
     record: SessionBackgroundWorkRecord,

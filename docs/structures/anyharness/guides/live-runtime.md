@@ -3,12 +3,11 @@
 Status: authoritative for long-lived in-memory runtime systems under
 `anyharness-lib/src/live/**`.
 
-The current code is transitional. Session manager, handle, actor, event sink,
-interaction broker, background work, replay, and the current driver role already
-live under `live/sessions/**`; session driver code still uses the current
-`live/sessions/connection/**` name. Remaining `acp/**` files are shared
-permission, payload, and provider-error helpers, not live-session owners. Treat
-this guide as the target grammar for new work and cleanup passes.
+Session manager, handle, actor, driver, event sink, interaction broker,
+background work, and replay live under `live/sessions/**`. Remaining `acp/**`
+files are shared permission, payload, and provider-error helpers, not
+live-session owners. Treat this guide as the grammar for new work and cleanup
+passes.
 
 ## Purpose
 
@@ -229,9 +228,8 @@ Driver non-responsibilities:
 - no direct domain service orchestration
 - no ownership of the live actor loop
 
-Current session code uses `connection/**` for this role. The target name is
-`driver/**` because it fits processes, PTYs, protocol clients, browser drivers,
-and remote providers better than `connection`.
+Session code uses `driver/**` for this role because it fits processes, PTYs,
+protocol clients, browser drivers, and remote providers.
 
 ## Event And Output Sinks
 
@@ -455,16 +453,16 @@ driver/
   shutdown.rs
 ```
 
-Use concrete names for the external mechanism. For session ACP, current
-`connection/**` files map this way:
+Use concrete names for the external mechanism. For session ACP, the driver
+files are:
 
 ```text
-connection/types.rs          -> driver/types.rs
-connection/start.rs          -> driver/start.rs
-connection/process.rs        -> driver/process.rs
-connection/native_session.rs -> driver/native_session.rs
-connection/stderr.rs         -> driver/stderr.rs
-connection/shutdown.rs       -> driver/shutdown.rs
+driver/types.rs
+driver/start.rs
+driver/process.rs
+driver/native_session.rs
+driver/stderr.rs
+driver/shutdown.rs
 ```
 
 For terminals, target driver files would likely be:
@@ -582,18 +580,17 @@ live/sessions/handle.rs
 live/sessions/actor/**
   target actor
 
-live/sessions/connection/**
-  current name for target driver
+live/sessions/driver/**
+  current and target session driver
 
 live/sessions/manager/**
   current LiveSessionManager split by manager surface, startup, replay, and
   runtime-event injection
 
-live/sessions/connection/runtime_client/**
-  current low-level ACP client name inside the connection-as-driver role;
-  final connection/** -> driver/** topology move remains deferred, and
-  reusable protocol pieces belong under integrations/acp only when they are
-  genuinely protocol-neutral
+live/sessions/driver/runtime_client/**
+  current low-level ACP client name inside the driver role; reusable protocol
+  pieces belong under integrations/acp only when they are genuinely
+  protocol-neutral
 
 live/sessions/event_sink/**
   current and target session event sink

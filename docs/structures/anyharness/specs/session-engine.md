@@ -19,27 +19,26 @@ api/http/sessions
 Current names:
 
 ```text
-SessionRuntime      anyharness-lib/src/sessions/runtime/
-SessionService      anyharness-lib/src/sessions/service/
-SessionStore        anyharness-lib/src/sessions/store/**
+SessionRuntime      anyharness-lib/src/domains/sessions/runtime/
+SessionService      anyharness-lib/src/domains/sessions/service/
+SessionStore        anyharness-lib/src/domains/sessions/store/**
 LiveSessionManager  live/sessions/manager/**
 LiveSessionHandle   live/sessions/handle.rs
 SessionActor        live/sessions/actor/**
-RuntimeClient       live/sessions/connection/runtime_client/**; current low-level ACP client name; target role: AcpClient
+RuntimeClient       live/sessions/driver/runtime_client/**; current low-level ACP client name; target role: AcpClient
 SessionEventSink    live/sessions/event_sink/**
 InteractionBroker   live/sessions/interactions/broker.rs
 ```
 
 Implementation reality after the completed migration phases:
 
-- session MCP assembly lives under `sessions/mcp_bindings/**`.
-- `SessionStore` is split under `sessions/store/**`.
-- `SessionService` is split under `sessions/service/**`.
-- `SessionRuntime` is split under `sessions/runtime/**`.
+- session MCP assembly lives under `domains/sessions/mcp_bindings/**`.
+- `SessionStore` is split under `domains/sessions/store/**`.
+- `SessionService` is split under `domains/sessions/service/**`.
+- `SessionRuntime` is split under `domains/sessions/runtime/**`.
 - `SessionEventSink` is split under `live/sessions/event_sink/**`.
-- `SessionActor` is split under `live/sessions/actor/**`; connection mechanics
-  are split under `live/sessions/connection/**`, the current name for the
-  target `driver/**` role.
+- `SessionActor` is split under `live/sessions/actor/**`; driver mechanics are
+  split under `live/sessions/driver/**`.
 
 ## Role Map
 
@@ -85,7 +84,7 @@ High-level session use cases:
 - inject/replay events
 
 This is the bridge between durable sessions and live execution. The
-implementation is split under `sessions/runtime/**` by API-facing operation
+implementation is split under `domains/sessions/runtime/**` by API-facing operation
 family; callers should continue to use the public `SessionRuntime` type.
 
 ### LiveSessionManager
@@ -131,7 +130,7 @@ folder contract is specified in `specs/session-actor.md`.
 ### AcpClient
 
 Low-level ACP client wrapper. Current name: `RuntimeClient`, under
-`live/sessions/connection/runtime_client/**`.
+`live/sessions/driver/runtime_client/**`.
 
 It sends ACP requests to the subprocess and receives ACP notifications. It does
 not own session business rules.

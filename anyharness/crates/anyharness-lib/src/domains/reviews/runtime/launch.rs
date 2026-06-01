@@ -2,7 +2,7 @@ use super::super::model::{
     ReviewAssignmentRecord, ReviewKind, ReviewModeVerificationStatus, ReviewRunRecord,
 };
 use super::super::service::ReviewError;
-use crate::sessions::runtime::CreateAndStartSessionError;
+use crate::domains::sessions::runtime::CreateAndStartSessionError;
 
 pub(super) fn verify_mode(
     requested_mode_id: Option<&str>,

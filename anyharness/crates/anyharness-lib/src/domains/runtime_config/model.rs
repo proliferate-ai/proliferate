@@ -3,7 +3,7 @@ use anyharness_contract::v1::{
     RuntimeConfigManifest, RuntimeConfigRevision, RuntimeCredentialValue, SessionMcpBindingSummary,
 };
 
-use crate::sessions::mcp_bindings::model::SessionMcpServer;
+use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeConfigSessionContext {

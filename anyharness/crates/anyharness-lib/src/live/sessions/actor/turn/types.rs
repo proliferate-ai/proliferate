@@ -1,6 +1,6 @@
 use anyharness_contract::v1::ErrorEventDetails;
 
-use crate::sessions::extensions::SessionTurnOutcome;
+use crate::domains::sessions::extensions::SessionTurnOutcome;
 pub struct SessionTurnFinishResult {
     pub session_id: String,
     pub turn_id: String,

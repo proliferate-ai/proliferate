@@ -246,7 +246,7 @@ The end-to-end placement:
 api/http/product_mcp.rs
   incoming HTTP endpoint
 
-sessions/mcp_bindings/product_registry.rs
+domains/sessions/mcp_bindings/product_registry.rs
   serving-side route_slug -> product MCP handler map
 
 integrations/mcp/product_server
@@ -255,9 +255,9 @@ integrations/mcp/product_server
 domains/<feature>/mcp
   product tool behavior
 
-sessions/mcp_bindings/product_catalog.rs
-sessions/mcp_bindings/selection.rs
-sessions/mcp_bindings/injection.rs
+domains/sessions/mcp_bindings/product_catalog.rs
+domains/sessions/mcp_bindings/selection.rs
+domains/sessions/mcp_bindings/injection.rs
   launch-side selection and materialization
 ```
 

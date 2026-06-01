@@ -2,10 +2,10 @@ use rusqlite::{params, OptionalExtension};
 use uuid::Uuid;
 
 use super::model::{CoworkManagedWorkspaceRecord, CoworkRootRecord, CoworkThreadRecord};
+use crate::domains::sessions::deletion::SessionDeleteParticipant;
+use crate::domains::sessions::links::model::SessionLinkRecord;
+use crate::domains::workspaces::deletion::WorkspaceDeleteParticipant;
 use crate::persistence::Db;
-use crate::sessions::deletion::SessionDeleteParticipant;
-use crate::sessions::links::model::SessionLinkRecord;
-use crate::workspaces::deletion::WorkspaceDeleteParticipant;
 
 #[derive(Clone)]
 pub struct CoworkStore {

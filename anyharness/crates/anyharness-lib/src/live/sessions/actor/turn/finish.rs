@@ -5,6 +5,8 @@ use anyharness_contract::v1::{SessionExecutionPhase, StopReason};
 use tokio::sync::{mpsc, Mutex};
 
 use crate::acp::provider_errors::{classify_provider_rate_limit_error, PROVIDER_RATE_LIMIT_CODE};
+use crate::domains::sessions::extensions::SessionTurnOutcome;
+use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::background_work::handle_background_work_update;
 use crate::live::sessions::actor::config::queue::apply_pending_config_changes_if_idle;
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
@@ -17,8 +19,6 @@ use crate::live::sessions::background_work::{BackgroundWorkRegistry, BackgroundW
 use crate::live::sessions::event_sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
-use crate::sessions::extensions::SessionTurnOutcome;
-use crate::sessions::store::SessionStore;
 
 pub(in crate::live::sessions::actor) const EMPTY_TURN_ERROR_CODE: &str = "empty_turn";
 pub(in crate::live::sessions::actor) const EMPTY_TURN_ERROR_MESSAGE: &str = "The agent ended the turn without producing a response. The selected model or provider may need additional configuration or credentials.";

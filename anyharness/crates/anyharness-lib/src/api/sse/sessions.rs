@@ -252,7 +252,7 @@ fn live_receiver_stream(
 }
 
 fn event_record_to_envelope(
-    record: crate::sessions::model::SessionEventRecord,
+    record: crate::domains::sessions::model::SessionEventRecord,
 ) -> Option<SessionEventEnvelope> {
     let event = serde_json::from_str::<SessionEvent>(&record.payload_json).ok()?;
     Some(SessionEventEnvelope {

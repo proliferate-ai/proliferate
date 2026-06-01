@@ -19,9 +19,9 @@ use super::workspaces_contract::{detection_result_to_contract, workspace_to_cont
 use crate::adapters::files::service::WorkspaceFilesService;
 use crate::adapters::git::GitService;
 use crate::app::AppState;
+use crate::domains::repo_roots::model::RepoRootRecord;
+use crate::domains::workspaces::types::ResolveRepoRootError;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
-use crate::repo_roots::model::RepoRootRecord;
-use crate::workspaces::types::ResolveRepoRootError;
 
 #[utoipa::path(
     get,

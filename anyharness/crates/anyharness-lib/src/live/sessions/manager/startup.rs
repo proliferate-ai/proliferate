@@ -8,6 +8,10 @@ use tokio::sync::{broadcast, watch, RwLock};
 
 use super::{LiveSessionManager, StartupReadinessState};
 use crate::domains::agents::model::ResolvedAgent;
+use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
+use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
+use crate::domains::sessions::model::SessionRecord;
+use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::spawn::{
     spawn_session_actor_pending, ActorReadyResult, PendingSessionActor,
 };
@@ -15,10 +19,6 @@ use crate::live::sessions::actor::state::{SessionActorConfig, SessionStartupStra
 use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
-use crate::sessions::attachment_storage::PromptAttachmentStorage;
-use crate::sessions::mcp_bindings::model::SessionMcpServer;
-use crate::sessions::model::SessionRecord;
-use crate::sessions::store::SessionStore;
 
 impl LiveSessionManager {
     pub async fn start_session(

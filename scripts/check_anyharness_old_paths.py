@@ -7,15 +7,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 BLOCKED_PATHS = [
-    "anyharness/crates/anyharness-lib/src/sessions/mcp.rs",
-    "anyharness/crates/anyharness-lib/src/sessions/live_config.rs",
-    "anyharness/crates/anyharness-lib/src/sessions/prompt.rs",
-    "anyharness/crates/anyharness-lib/src/sessions/runtime.rs",
-    "anyharness/crates/anyharness-lib/src/sessions/service.rs",
-    "anyharness/crates/anyharness-lib/src/sessions/store.rs",
-    "anyharness/crates/anyharness-lib/src/workspaces/runtime.rs",
-    "anyharness/crates/anyharness-lib/src/workspaces/service.rs",
-    "anyharness/crates/anyharness-lib/src/workspaces/store.rs",
+    "anyharness/crates/anyharness-lib/src/sessions",
+    "anyharness/crates/anyharness-lib/src/workspaces",
+    "anyharness/crates/anyharness-lib/src/repo_roots",
+    "anyharness/crates/anyharness-lib/src/live/sessions/connection",
     "anyharness/crates/anyharness-lib/src/adapters/git/branch_base.rs",
     "anyharness/crates/anyharness-lib/src/adapters/git/diff.rs",
     "anyharness/crates/anyharness-lib/src/adapters/git/operation.rs",

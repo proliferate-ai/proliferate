@@ -28,15 +28,15 @@ use crate::{
     domains::{
         agents::seed::AgentSeedStore,
         cowork::mcp::auth::{LEGACY_CAPABILITY_HEADER_NAME, SECRET_FILE_NAME},
+        sessions::{model::SessionRecord, store::SessionStore},
+        workspaces::{
+            access_model::{WorkspaceAccessMode, WorkspaceAccessRecord},
+            access_store::WorkspaceAccessStore,
+        },
     },
     integrations::agent_cli::executable::make_executable,
     integrations::mcp::capability_token::{McpCapabilityTokenIssuer, McpCapabilityTokenSignature},
     persistence::Db,
-    sessions::{model::SessionRecord, store::SessionStore},
-    workspaces::{
-        access_model::{WorkspaceAccessMode, WorkspaceAccessRecord},
-        access_store::WorkspaceAccessStore,
-    },
 };
 
 struct TempDirGuard {
@@ -1093,7 +1093,8 @@ async fn raw_notification_history_route_returns_persisted_notifications() {
             dismissed_at: None,
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
-            mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
+            mcp_binding_policy:
+                crate::domains::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
             action_capabilities_json: None,
@@ -1174,7 +1175,8 @@ async fn restore_route_returns_cold_visible_session_without_live_handle() {
             dismissed_at: Some("2026-03-25T01:00:00Z".to_string()),
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
-            mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
+            mcp_binding_policy:
+                crate::domains::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
             action_capabilities_json: None,

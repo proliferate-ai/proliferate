@@ -1,11 +1,11 @@
 use super::error::ApiError;
-use crate::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
-use crate::sessions::runtime::{
+use crate::domains::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
+use crate::domains::sessions::runtime::{
     CreateAndStartSessionError, EnsureLiveSessionError, ForkSessionError,
     PendingPromptMutationError, ResolveInteractionError, SendPromptError, SessionLifecycleError,
     SetSessionConfigOptionError,
 };
-use crate::sessions::service::{GetLiveConfigSnapshotError, UpdateSessionTitleError};
+use crate::domains::sessions::service::{GetLiveConfigSnapshotError, UpdateSessionTitleError};
 
 pub(super) fn map_resolve_interaction_error(error: ResolveInteractionError) -> ApiError {
     match error {

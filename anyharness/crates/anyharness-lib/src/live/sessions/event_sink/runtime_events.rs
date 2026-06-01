@@ -1,6 +1,8 @@
 use super::publish::publish_session_event_strict;
 use super::SessionEventSink;
-use crate::sessions::runtime_event::{RuntimeEventInjectionError, RuntimeInjectedSessionEvent};
+use crate::domains::sessions::runtime_event::{
+    RuntimeEventInjectionError, RuntimeInjectedSessionEvent,
+};
 use anyharness_contract::v1::SessionEventEnvelope;
 
 impl SessionEventSink {

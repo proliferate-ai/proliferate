@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::service::ReviewService;
-use crate::sessions::extensions::{
+use crate::domains::sessions::extensions::{
     SessionClosingActions, SessionClosingContext, SessionExtension, SessionTurnFinishedContext,
 };
 

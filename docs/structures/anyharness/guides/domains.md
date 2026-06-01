@@ -2,18 +2,16 @@
 
 Status: authoritative for durable/product code under `anyharness-lib/src/domains/**`.
 
-The current code is transitional. Product domains such as `agents`, `cowork`,
-`reviews`, `plans`, `mobility`, and `terminals` live under `domains/**`. Core
-session, workspace, and repo-root paths still use top-level transitional
-folders until the final topology rename.
+Product domains live under `domains/**`. Core session, workspace, agent, and
+repo-root domains use the same root as product surfaces, with dependency
+direction enforced by domain tier.
 
 Current session-domain reality:
 
 - user MCP bindings and session MCP launch assembly live under
-  `sessions/mcp_bindings/**`.
-- session persistence is split under `sessions/store/**`.
-- session runtime orchestration is split under `sessions/runtime/**`, while the
-  final `domains/sessions/**` topology remains deferred.
+  `domains/sessions/mcp_bindings/**`.
+- session persistence is split under `domains/sessions/store/**`.
+- session runtime orchestration is split under `domains/sessions/runtime/**`.
 
 ## Purpose
 
@@ -122,9 +120,9 @@ rather than becoming top-level domains.
 Examples:
 
 ```text
-sessions/subagents/
-sessions/workspace_naming/
-sessions/links/
+domains/sessions/subagents/
+domains/sessions/workspace_naming/
+domains/sessions/links/
 ```
 
 Use this shape when the concept has durable state or tool behavior, but its
@@ -261,12 +259,12 @@ Promote a named concern into its own folder when it has any of:
 Examples:
 
 ```text
-sessions/links/
-sessions/subagents/
-sessions/workspace_naming/
-workspaces/materialization/
-workspaces/retention/
-workspaces/purge/
+domains/sessions/links/
+domains/sessions/subagents/
+domains/sessions/workspace_naming/
+domains/workspaces/materialization/
+domains/workspaces/retention/
+domains/workspaces/purge/
 ```
 
 ## Extension Points
@@ -292,7 +290,7 @@ domains/sessions/workspace_naming/session_extension.rs
 
 Current implementations are still transitional in places:
 `domains/cowork/runtime.rs`, `domains/reviews/hooks.rs`,
-`sessions/subagents/hooks.rs`, and `sessions/workspace_naming/hooks.rs`.
+`domains/sessions/subagents/hooks.rs`, and `domains/sessions/workspace_naming/hooks.rs`.
 
 `app/` wires implementations into the core. The core domain depends only on the
 trait.
@@ -345,8 +343,8 @@ Examples:
 domains/cowork/mcp/
 domains/reviews/mcp/
 domains/plugins/mcp/
-sessions/subagents/mcp/
-sessions/workspace_naming/mcp/
+domains/sessions/subagents/mcp/
+domains/sessions/workspace_naming/mcp/
 ```
 
 Generic MCP protocol/server mechanics do not belong in domains:
@@ -361,11 +359,11 @@ integrations/mcp/capability_token.rs
 Session launch assembly does not belong in product domains either:
 
 ```text
-sessions/mcp_bindings/assembly.rs
-sessions/mcp_bindings/product_catalog.rs
-sessions/mcp_bindings/selection.rs
-sessions/mcp_bindings/injection.rs
-sessions/mcp_bindings/product_registry.rs
+domains/sessions/mcp_bindings/assembly.rs
+domains/sessions/mcp_bindings/product_catalog.rs
+domains/sessions/mcp_bindings/selection.rs
+domains/sessions/mcp_bindings/injection.rs
+domains/sessions/mcp_bindings/product_registry.rs
 ```
 
 The distinctions:
@@ -377,20 +375,20 @@ domains/<feature>/mcp
 integrations/mcp/product_server
   how every product MCP speaks MCP/JSON-RPC consistently
 
-sessions/mcp_bindings/product_registry.rs
+domains/sessions/mcp_bindings/product_registry.rs
   serving-side registry: incoming route slug -> product MCP handler
 
-sessions/mcp_bindings/product_catalog.rs
+domains/sessions/mcp_bindings/product_catalog.rs
   launch-side facade: asks selection + injection for product MCP launch extras
 
-sessions/mcp_bindings/selection.rs
+domains/sessions/mcp_bindings/selection.rs
   policy: which product MCPs should this session get?
 
-sessions/mcp_bindings/injection.rs
+domains/sessions/mcp_bindings/injection.rs
   materialization: what HTTP MCP server config/token/prompt extras are handed
   to the agent?
 
-sessions/mcp_bindings/assembly.rs
+domains/sessions/mcp_bindings/assembly.rs
   whole-session composer: user MCPs + product MCPs + session extensions +
   prompt extras + summaries
 
@@ -408,8 +406,8 @@ forking transport or protocol machinery:
 1. Add domains/<feature>/mcp/{definition,auth,context,tools,calls}.rs.
 2. Implement ProductMcpServer in domains/<feature>/mcp/mod.rs.
 3. Register the server in app's ProductMcpEndpointRegistry wiring.
-4. Add launch selection policy in sessions/mcp_bindings/selection.rs.
-5. Add launch materialization in sessions/mcp_bindings/injection.rs.
+4. Add launch selection policy in domains/sessions/mcp_bindings/selection.rs.
+5. Add launch materialization in domains/sessions/mcp_bindings/injection.rs.
 6. Add tests for auth, selection, injection, tools/list, tools/call, and
    endpoint dispatch.
 ```

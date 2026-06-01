@@ -6,7 +6,7 @@ use crate::origin::OriginContext;
 
 pub(super) async fn session_to_contract(
     state: &AppState,
-    record: &crate::sessions::model::SessionRecord,
+    record: &crate::domains::sessions::model::SessionRecord,
 ) -> Result<Session, ApiError> {
     state
         .session_runtime

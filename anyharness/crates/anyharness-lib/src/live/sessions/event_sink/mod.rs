@@ -5,7 +5,7 @@ use tokio::sync::broadcast;
 
 use self::state::{PlanItemState, StreamingItemState, ToolItemState};
 use crate::domains::plans::service::PlanEventContext;
-use crate::sessions::store::SessionStore;
+use crate::domains::sessions::store::SessionStore;
 use anyharness_contract::v1::SessionEventEnvelope;
 
 mod assistant;

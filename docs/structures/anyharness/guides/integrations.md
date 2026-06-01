@@ -446,21 +446,12 @@ integrations/acp/
   conversions.rs
 ```
 
-But session-stateful ACP code belongs under live session roles. The current
-session driver role still uses `live/sessions/connection/**`; the target role
-name is `live/sessions/driver/**`.
+But session-stateful ACP code belongs under live session roles:
 
 ```text
-live/sessions/connection/   # current session driver role
+live/sessions/driver/
   process.rs
   runtime_client.rs
-  start.rs
-  native_session.rs
-  shutdown.rs
-
-live/sessions/driver/       # target name for the same role
-  process.rs
-  acp_client.rs
   start.rs
   native_session.rs
   shutdown.rs

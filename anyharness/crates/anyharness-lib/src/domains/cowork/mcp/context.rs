@@ -1,6 +1,6 @@
 use crate::domains::cowork::runtime::{CoworkCanonicalThreadError, CoworkRuntime};
+use crate::domains::workspaces::model::WorkspaceRecord;
 use crate::integrations::mcp::product_server::{ProductMcpContextError, ProductMcpRequestContext};
-use crate::workspaces::model::WorkspaceRecord;
 
 #[derive(Debug, Clone)]
 pub struct CoworkMcpContext {

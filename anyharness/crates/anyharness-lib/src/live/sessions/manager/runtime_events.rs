@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use super::LiveSessionManager;
-use crate::sessions::runtime_event::{
+use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionError, RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
-use crate::sessions::store::SessionStore;
+use crate::domains::sessions::store::SessionStore;
 
 impl LiveSessionManager {
     #[cfg_attr(not(test), allow(dead_code))]

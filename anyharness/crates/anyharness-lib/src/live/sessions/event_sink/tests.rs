@@ -6,8 +6,10 @@ use tokio::sync::broadcast;
 mod support;
 
 use super::{AcpChunkPayload, SessionEventSink};
-use crate::sessions::model::SessionBackgroundWorkState;
-use crate::sessions::runtime_event::{RuntimeEventInjectionError, RuntimeInjectedSessionEvent};
+use crate::domains::sessions::model::SessionBackgroundWorkState;
+use crate::domains::sessions::runtime_event::{
+    RuntimeEventInjectionError, RuntimeInjectedSessionEvent,
+};
 use anyharness_contract::v1::{
     ContentPart, SessionEvent, StopReason, TranscriptItemKind, TranscriptItemStatus,
 };

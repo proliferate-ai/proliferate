@@ -11,8 +11,8 @@ mod reconcile;
 mod workflow;
 
 use super::service::ReviewService;
-use crate::sessions::runtime::SessionRuntime;
-use crate::workspaces::runtime::WorkspaceRuntime;
+use crate::domains::sessions::runtime::SessionRuntime;
+use crate::domains::workspaces::runtime::WorkspaceRuntime;
 
 #[derive(Debug, Clone)]
 pub struct StartPlanReviewRuntimeInput {

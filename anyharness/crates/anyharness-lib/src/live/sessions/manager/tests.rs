@@ -15,14 +15,14 @@ use crate::domains::agents::model::{
 };
 use crate::domains::agents::registry::built_in_registry;
 use crate::domains::plans::{service::PlanService, store::PlanStore};
+use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
+use crate::domains::sessions::model::{SessionEventRecord, SessionRecord};
+use crate::domains::sessions::runtime_event::RuntimeInjectedSessionEvent;
+use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::command::SessionCommand;
 use crate::live::sessions::actor::state::SessionStartupStrategy;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::persistence::Db;
-use crate::sessions::attachment_storage::PromptAttachmentStorage;
-use crate::sessions::model::{SessionEventRecord, SessionRecord};
-use crate::sessions::runtime_event::RuntimeInjectedSessionEvent;
-use crate::sessions::store::SessionStore;
 
 fn resolved_agent(kind: AgentKind) -> ResolvedAgent {
     let descriptor = built_in_registry()
@@ -77,7 +77,8 @@ fn session_record() -> SessionRecord {
         dismissed_at: None,
         mcp_bindings_ciphertext: None,
         mcp_binding_summaries_json: None,
-        mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
+        mcp_binding_policy:
+            crate::domains::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
         system_prompt_append: None,
         subagents_enabled: true,
         action_capabilities_json: None,

@@ -15,17 +15,19 @@ use crate::domains::mobility::model::{
     MobilityFileData, MobilityPromptAttachmentData, WorkspaceMobilityArchiveData,
     WorkspaceMobilitySessionBundleData, MAX_MOBILITY_FILE_BYTES,
 };
-use crate::sessions::attachment_storage::PromptAttachmentStorage;
-use crate::sessions::extensions::SessionTurnOutcome;
-use crate::sessions::links::model::{
+use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
+use crate::domains::sessions::extensions::SessionTurnOutcome;
+use crate::domains::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
 };
-use crate::sessions::model::{
+use crate::domains::sessions::model::{
     serialize_action_capabilities, PendingConfigChangeRecord, PendingPromptRecord,
     PromptAttachmentKind, PromptAttachmentRecord, PromptAttachmentState, SessionEventRecord,
     SessionLiveConfigSnapshotRecord, SessionRawNotificationRecord, SessionRecord,
 };
-use crate::sessions::subagents::model::{SubagentCompletionRecord, SubagentWakeScheduleRecord};
+use crate::domains::sessions::subagents::model::{
+    SubagentCompletionRecord, SubagentWakeScheduleRecord,
+};
 
 pub(super) fn from_contract_archive(
     archive: WorkspaceMobilityArchive,
@@ -184,7 +186,8 @@ fn from_contract_session_record(
         // MCP bindings are workspace-local encrypted state; sessions rebind after handoff.
         mcp_bindings_ciphertext: None,
         mcp_binding_summaries_json: None,
-        mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
+        mcp_binding_policy:
+            crate::domains::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
         system_prompt_append: record.system_prompt_append,
         subagents_enabled: record.subagents_enabled,
         action_capabilities_json,
@@ -325,7 +328,7 @@ fn from_contract_prompt_attachment(
             session_id: record.session_id,
             state: PromptAttachmentState::parse(&record.state),
             kind: PromptAttachmentKind::parse(&record.kind),
-            source: crate::sessions::model::PromptAttachmentSource::parse(&record.source),
+            source: crate::domains::sessions::model::PromptAttachmentSource::parse(&record.source),
             mime_type: record.mime_type,
             display_name: record.display_name,
             source_uri: record.source_uri,

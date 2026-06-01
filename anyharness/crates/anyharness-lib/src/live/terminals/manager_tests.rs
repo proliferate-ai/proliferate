@@ -2,9 +2,9 @@ use std::path::PathBuf;
 
 use super::*;
 use crate::domains::terminals::model::{CreateTerminalOptions, TerminalPurpose};
+use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::store::WorkspaceStore;
 use crate::persistence::Db;
-use crate::workspaces::model::WorkspaceRecord;
-use crate::workspaces::store::WorkspaceStore;
 
 fn insert_test_workspace(db: &Db, id: &str, path: &str) {
     WorkspaceStore::new(db.clone())

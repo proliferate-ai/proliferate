@@ -4,6 +4,8 @@ use agent_client_protocol as acp;
 use tokio::sync::{mpsc, Mutex};
 
 use crate::domains::agents::model::AgentKind;
+use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
+use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::command::SessionCommand;
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
 use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilter;
@@ -15,8 +17,6 @@ use crate::live::sessions::actor::turn::active::{
 use crate::live::sessions::background_work::{BackgroundWorkRegistry, BackgroundWorkUpdate};
 use crate::live::sessions::event_sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
-use crate::sessions::attachment_storage::PromptAttachmentStorage;
-use crate::sessions::store::SessionStore;
 
 pub(in crate::live::sessions::actor) struct IdlePromptContext<'a> {
     pub config: &'a SessionActorConfig,

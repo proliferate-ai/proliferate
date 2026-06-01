@@ -14,9 +14,9 @@ use super::sessions_errors::map_send_prompt_error;
 use super::sessions_leases::acquire_session_operation_lease;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
+use crate::domains::sessions::runtime::SendPromptOutcome;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
-use crate::sessions::runtime::SendPromptOutcome;
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 const PROMPT_ID_MAX_BYTES: usize = 256;
 

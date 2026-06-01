@@ -6,6 +6,9 @@ use anyharness_contract::v1::{SessionActionCapabilities, SessionExecutionPhase};
 use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
+use crate::domains::sessions::model::serialize_action_capabilities;
+use crate::domains::sessions::prompt::capabilities::capabilities_from_acp;
+use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::command::SessionCommand;
 use crate::live::sessions::actor::config::apply::restore_persisted_live_config_if_needed;
 use crate::live::sessions::actor::config::handle::apply_requested_session_preferences;
@@ -18,19 +21,16 @@ use crate::live::sessions::actor::state::{SessionActorConfig, SessionStartupStat
 use crate::live::sessions::background_work::{
     BackgroundWorkOptions, BackgroundWorkRegistry, BackgroundWorkUpdate,
 };
-use crate::live::sessions::connection::native_session::{
+use crate::live::sessions::driver::native_session::{
     has_anyharness_targeted_fork_extension, start_native_session,
 };
-use crate::live::sessions::connection::process::spawn_agent_process;
-use crate::live::sessions::connection::runtime_client::RuntimeClient;
-use crate::live::sessions::connection::start::initialize_connection;
-use crate::live::sessions::connection::types::NativeSessionStartupDisposition;
+use crate::live::sessions::driver::process::spawn_agent_process;
+use crate::live::sessions::driver::runtime_client::RuntimeClient;
+use crate::live::sessions::driver::start::initialize_connection;
+use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
 use crate::live::sessions::event_sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::observability::latency::latency_trace_fields;
-use crate::sessions::model::serialize_action_capabilities;
-use crate::sessions::prompt::capabilities::capabilities_from_acp;
-use crate::sessions::store::SessionStore;
 
 pub(in crate::live::sessions::actor) struct StartedActor {
     pub child: tokio::process::Child,

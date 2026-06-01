@@ -17,8 +17,8 @@ use crate::domains::terminals::model::{
     TerminalPurpose as InternalTerminalPurpose, TerminalRecord as InternalTerminalRecord,
     TerminalStatus as InternalTerminalStatus,
 };
-use crate::workspaces::model::WorkspaceRecord;
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
+use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 use anyharness_contract::v1::terminals::{
     CreateTerminalRequest, ResizeTerminalRequest, StartTerminalCommandRequest,
     StartTerminalCommandResponse, TerminalCommandOutputMode as ContractTerminalCommandOutputMode,

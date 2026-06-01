@@ -19,24 +19,26 @@ use super::delegation::service::{CoworkDelegationError, CoworkDelegationService}
 use super::model::{CoworkManagedWorkspaceRecord, CoworkRootRecord, CoworkThreadRecord};
 use super::service::CoworkService;
 use crate::adapters::git::GitService;
-use crate::live::sessions::LiveSessionManager;
-use crate::origin::OriginContext;
-use crate::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
-use crate::repo_roots::service::RepoRootService;
-use crate::sessions::extensions::{
+use crate::domains::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
+use crate::domains::repo_roots::service::RepoRootService;
+use crate::domains::sessions::extensions::{
     SessionClosingActions, SessionClosingContext, SessionExtension, SessionTurnFinishedContext,
 };
-use crate::sessions::links::completions::LinkCompletionRecord;
-use crate::sessions::links::model::{SessionLinkRecord, SessionLinkRelation};
-use crate::sessions::model::SessionRecord;
-use crate::sessions::prompt::{provenance::PromptProvenance, PromptPayload};
-use crate::sessions::runtime::{CreateAndStartSessionError, SendPromptOutcome, SessionRuntime};
-use crate::sessions::runtime_event::RuntimeInjectedSessionEvent;
-use crate::sessions::service::SessionService;
-use crate::sessions::store::SessionStore;
-use crate::workspaces::creator_context::WorkspaceCreatorContext;
-use crate::workspaces::model::WorkspaceRecord;
-use crate::workspaces::runtime::WorkspaceRuntime;
+use crate::domains::sessions::links::completions::LinkCompletionRecord;
+use crate::domains::sessions::links::model::{SessionLinkRecord, SessionLinkRelation};
+use crate::domains::sessions::model::SessionRecord;
+use crate::domains::sessions::prompt::{provenance::PromptProvenance, PromptPayload};
+use crate::domains::sessions::runtime::{
+    CreateAndStartSessionError, SendPromptOutcome, SessionRuntime,
+};
+use crate::domains::sessions::runtime_event::RuntimeInjectedSessionEvent;
+use crate::domains::sessions::service::SessionService;
+use crate::domains::sessions::store::SessionStore;
+use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
+use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::runtime::WorkspaceRuntime;
+use crate::live::sessions::LiveSessionManager;
+use crate::origin::OriginContext;
 
 #[derive(Debug)]
 pub enum CoworkCreateThreadError {
@@ -97,7 +99,7 @@ pub struct CreateCodingWorkspaceResult {
 
 #[derive(Debug, Clone)]
 pub struct CreateCodingSessionResult {
-    pub session_link: crate::sessions::links::model::SessionLinkRecord,
+    pub session_link: crate::domains::sessions::links::model::SessionLinkRecord,
     pub session: SessionRecord,
     pub prompt_status: String,
     pub wake_schedule_created: bool,
@@ -116,7 +118,7 @@ pub struct SendCodingMessageResult {
 pub struct CoworkCodingStatusResult {
     pub session: SessionRecord,
     pub execution: anyharness_contract::v1::SessionExecutionSummary,
-    pub session_link: crate::sessions::links::model::SessionLinkRecord,
+    pub session_link: crate::domains::sessions::links::model::SessionLinkRecord,
     pub wake_scheduled: bool,
     pub latest_completion: Option<LinkCompletionRecord>,
 }
@@ -376,7 +378,7 @@ async fn deliver_cowork_coding_completion(
 fn cowork_coding_wake_prompt_text(
     label: Option<&str>,
     cowork_agent_id: Option<&str>,
-    outcome: crate::sessions::extensions::SessionTurnOutcome,
+    outcome: crate::domains::sessions::extensions::SessionTurnOutcome,
 ) -> String {
     let label = label.unwrap_or("cowork agent");
     let cowork_agent_id = cowork_agent_id.unwrap_or("unknown");
@@ -387,14 +389,16 @@ fn cowork_coding_wake_prompt_text(
 }
 
 fn to_contract_outcome(
-    outcome: crate::sessions::extensions::SessionTurnOutcome,
+    outcome: crate::domains::sessions::extensions::SessionTurnOutcome,
 ) -> SubagentTurnOutcome {
     match outcome {
-        crate::sessions::extensions::SessionTurnOutcome::Completed => {
+        crate::domains::sessions::extensions::SessionTurnOutcome::Completed => {
             SubagentTurnOutcome::Completed
         }
-        crate::sessions::extensions::SessionTurnOutcome::Failed => SubagentTurnOutcome::Failed,
-        crate::sessions::extensions::SessionTurnOutcome::Cancelled => {
+        crate::domains::sessions::extensions::SessionTurnOutcome::Failed => {
+            SubagentTurnOutcome::Failed
+        }
+        crate::domains::sessions::extensions::SessionTurnOutcome::Cancelled => {
             SubagentTurnOutcome::Cancelled
         }
     }
@@ -530,7 +534,7 @@ impl CoworkRuntime {
             None,
             Vec::new(),
             None,
-            crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
+            crate::domains::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             false,
             None,
             None,
@@ -1031,7 +1035,8 @@ impl CoworkRuntime {
         parent_session_id: &str,
         cowork_agent_id: Option<&str>,
         coding_session_id: Option<&str>,
-    ) -> Result<crate::sessions::links::model::SessionLinkRecord, CoworkDelegationError> {
+    ) -> Result<crate::domains::sessions::links::model::SessionLinkRecord, CoworkDelegationError>
+    {
         self.delegation_service.resolve_coding_session_target(
             parent_session_id,
             cowork_agent_id,
@@ -1044,8 +1049,13 @@ impl CoworkRuntime {
         &self,
         parent_session_id: &str,
         coding_session_id: &str,
-    ) -> Result<(crate::sessions::links::model::SessionLinkRecord, bool), CoworkDelegationError>
-    {
+    ) -> Result<
+        (
+            crate::domains::sessions::links::model::SessionLinkRecord,
+            bool,
+        ),
+        CoworkDelegationError,
+    > {
         self.delegation_service
             .schedule_coding_wake(parent_session_id, coding_session_id)
     }
@@ -1055,8 +1065,13 @@ impl CoworkRuntime {
         parent_session_id: &str,
         cowork_agent_id: Option<&str>,
         coding_session_id: Option<&str>,
-    ) -> Result<(crate::sessions::links::model::SessionLinkRecord, bool), CoworkDelegationError>
-    {
+    ) -> Result<
+        (
+            crate::domains::sessions::links::model::SessionLinkRecord,
+            bool,
+        ),
+        CoworkDelegationError,
+    > {
         self.delegation_service.schedule_coding_wake_for_target(
             parent_session_id,
             cowork_agent_id,
@@ -1125,7 +1140,7 @@ impl CoworkRuntime {
         coding_session_id: Option<&str>,
     ) -> Result<
         (
-            crate::sessions::links::model::SessionLinkRecord,
+            crate::domains::sessions::links::model::SessionLinkRecord,
             bool,
             String,
         ),
@@ -1171,7 +1186,8 @@ impl CoworkRuntime {
         coding_session_id: &str,
         since_seq: Option<i64>,
         limit: Option<usize>,
-    ) -> Result<crate::sessions::delegation::DelegatedEventSlice, CoworkDelegationError> {
+    ) -> Result<crate::domains::sessions::delegation::DelegatedEventSlice, CoworkDelegationError>
+    {
         self.delegation_service.read_coding_events(
             parent_session_id,
             coding_session_id,
@@ -1187,7 +1203,8 @@ impl CoworkRuntime {
         coding_session_id: Option<&str>,
         since_seq: Option<i64>,
         limit: Option<usize>,
-    ) -> Result<crate::sessions::delegation::DelegatedEventSlice, CoworkDelegationError> {
+    ) -> Result<crate::domains::sessions::delegation::DelegatedEventSlice, CoworkDelegationError>
+    {
         let link = self.delegation_service.resolve_coding_session_target(
             parent_session_id,
             cowork_agent_id,
@@ -1382,7 +1399,7 @@ impl CoworkRuntime {
             None,
             Vec::new(),
             None,
-            crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
+            crate::domains::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             false,
             None,
             None,
@@ -1506,7 +1523,9 @@ fn normalized_session_status(status: &str) -> &'static str {
     }
 }
 
-fn cowork_transcript_search_text(record: &crate::sessions::model::SessionEventRecord) -> String {
+fn cowork_transcript_search_text(
+    record: &crate::domains::sessions::model::SessionEventRecord,
+) -> String {
     let Ok(event) = serde_json::from_str::<SessionEvent>(&record.payload_json) else {
         return String::new();
     };
@@ -1819,7 +1838,7 @@ mod tests {
         coding_workspace_label, coding_workspace_name_from_branch, coding_workspace_slug,
         cowork_transcript_search_text, workspace_name_with_suffix,
     };
-    use crate::sessions::model::SessionEventRecord;
+    use crate::domains::sessions::model::SessionEventRecord;
 
     #[test]
     fn normalizes_coding_workspace_names() {

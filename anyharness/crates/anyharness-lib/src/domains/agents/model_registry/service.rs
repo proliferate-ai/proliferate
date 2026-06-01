@@ -10,7 +10,7 @@ use crate::domains::agents::model::ModelRegistryMetadata;
 use crate::domains::agents::readiness::launch_options::{
     workspace_session_launch_options_with_dynamic_registry, ResolvedWorkspaceLaunchOptions,
 };
-use crate::workspaces::store::WorkspaceStore;
+use crate::domains::workspaces::store::WorkspaceStore;
 
 #[derive(Clone)]
 pub struct DynamicModelRegistryService {

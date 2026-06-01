@@ -391,9 +391,9 @@ mod tests {
     use super::*;
     use crate::domains::terminals::model::{TerminalCommandOutputMode, TerminalPurpose};
     use crate::domains::terminals::store::TerminalStore;
+    use crate::domains::workspaces::model::WorkspaceRecord;
+    use crate::domains::workspaces::store::WorkspaceStore;
     use crate::persistence::Db;
-    use crate::workspaces::model::WorkspaceRecord;
-    use crate::workspaces::store::WorkspaceStore;
 
     fn insert_test_workspace(db: &Db, id: &str, path: &str) {
         WorkspaceStore::new(db.clone())

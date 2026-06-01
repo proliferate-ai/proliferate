@@ -19,7 +19,7 @@ pub async fn get_health(
         version: env!("CARGO_PKG_VERSION").into(),
         runtime_home: state.runtime_home.display().to_string(),
         capabilities: RuntimeCapabilities {
-            replay: crate::sessions::replay::replay_enabled(),
+            replay: crate::domains::sessions::replay::replay_enabled(),
         },
         agent_seed: state.agent_seed_store.health(),
     })

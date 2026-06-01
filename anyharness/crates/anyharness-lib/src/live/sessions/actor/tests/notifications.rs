@@ -58,7 +58,8 @@ async fn handle_notification_persists_raw_acp_notifications() {
             dismissed_at: None,
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
-            mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
+            mcp_binding_policy:
+                crate::domains::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
             action_capabilities_json: None,
@@ -257,7 +258,8 @@ async fn replay_filter_keeps_raw_notifications_but_skips_normalized_transcript_e
             dismissed_at: None,
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
-            mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
+            mcp_binding_policy:
+                crate::domains::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
             action_capabilities_json: None,

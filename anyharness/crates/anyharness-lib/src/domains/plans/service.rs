@@ -8,10 +8,10 @@ use serde_json::json;
 
 use super::document;
 use super::model::{
-    MAX_PLAN_BODY_BYTES, NewPlan, PlanCreateOutcome, PlanInteractionLinkRecord, PlanRecord,
+    NewPlan, PlanCreateOutcome, PlanInteractionLinkRecord, PlanRecord, MAX_PLAN_BODY_BYTES,
 };
 use super::store::PlanStore;
-use crate::sessions::model::SessionEventRecord;
+use crate::domains::sessions::model::SessionEventRecord;
 
 #[derive(Debug, thiserror::Error)]
 pub enum PlanCreateError {

@@ -9,6 +9,10 @@ use tokio::sync::Mutex;
 
 use crate::domains::plans::service::PlanService;
 use crate::domains::reviews::service::ReviewService;
+use crate::domains::sessions::runtime_event::{
+    RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
+};
+use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::config::apply::set_select_option_current_value_for_purpose;
 use crate::live::sessions::actor::config::persist::{
     emit_live_config_update, persist_current_config_state_from_startup,
@@ -22,8 +26,6 @@ use crate::live::sessions::actor::state::SessionStartupState;
 use crate::live::sessions::background_work::BackgroundWorkRegistry;
 use crate::live::sessions::event_sink::{AcpChunkPayload, AcpToolPayload, SessionEventSink};
 use crate::live::sessions::handle::LiveSessionHandle;
-use crate::sessions::runtime_event::{RuntimeEventInjectionResult, RuntimeInjectedSessionEvent};
-use crate::sessions::store::SessionStore;
 pub(in crate::live::sessions::actor) async fn inject_runtime_event(
     event_sink: &Arc<Mutex<SessionEventSink>>,
     handle: &Arc<LiveSessionHandle>,

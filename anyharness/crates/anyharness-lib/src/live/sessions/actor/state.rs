@@ -7,16 +7,16 @@ use tokio::sync::broadcast;
 use crate::domains::agents::model::ResolvedAgent;
 use crate::domains::plans::service::PlanService;
 use crate::domains::reviews::service::ReviewService;
+use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
+use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
+use crate::domains::sessions::model::SessionRecord;
+use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::config::selection::find_select_option_by_purpose;
 use crate::live::sessions::actor::config::types::ConfigPurpose;
 use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
-use crate::live::sessions::connection::types::NativeSessionStartupState;
+use crate::live::sessions::driver::types::NativeSessionStartupState;
 use crate::live::sessions::interactions::broker::InteractionBroker;
 use crate::observability::latency::LatencyRequestContext;
-use crate::sessions::attachment_storage::PromptAttachmentStorage;
-use crate::sessions::mcp_bindings::model::SessionMcpServer;
-use crate::sessions::model::SessionRecord;
-use crate::sessions::store::SessionStore;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SessionStartupStrategy {
@@ -77,7 +77,7 @@ pub struct SessionActorConfig {
 pub(in crate::live::sessions) struct SessionStartupState {
     pub(in crate::live::sessions) current_mode_id: Option<String>,
     pub(in crate::live::sessions) legacy_mode_state:
-        Option<crate::sessions::live_config::LegacyModeState>,
+        Option<crate::domains::sessions::live_config::LegacyModeState>,
     pub(in crate::live::sessions) config_options: Vec<acp::SessionConfigOption>,
     pub(in crate::live::sessions) current_model_id: Option<String>,
     pub(in crate::live::sessions) available_model_ids: Vec<String>,

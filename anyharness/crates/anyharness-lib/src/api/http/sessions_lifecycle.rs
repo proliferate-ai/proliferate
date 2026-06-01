@@ -13,8 +13,8 @@ use super::sessions_contract::session_to_contract;
 use super::sessions_errors::map_session_lifecycle_error;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[utoipa::path(
     post,

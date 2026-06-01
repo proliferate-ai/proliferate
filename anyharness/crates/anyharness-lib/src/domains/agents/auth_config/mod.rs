@@ -8,7 +8,9 @@ use anyharness_contract::v1::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::sessions::mcp_bindings::crypto::{decrypt_bytes, encrypt_bytes, SessionDataCipher};
+use crate::domains::sessions::mcp_bindings::crypto::{
+    decrypt_bytes, encrypt_bytes, SessionDataCipher,
+};
 
 mod codex_config;
 mod launch;

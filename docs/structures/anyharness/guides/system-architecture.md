@@ -361,32 +361,32 @@ Inside a feature folder, use the same domain grammar when it applies:
 Choose layer promotion when a file is large but still one layer:
 
 ```text
-sessions/store.rs is large because it owns sessions, events, attachments,
+domains/sessions/store.rs is large because it owns sessions, events, attachments,
 pending prompts, and live config SQL.
 
 Promote to:
-  sessions/store/{sessions,events,attachments,pending_prompts,live_config}.rs
+  domains/sessions/store/{sessions,events,attachments,pending_prompts,live_config}.rs
 ```
 
 Choose feature promotion when the concept has its own product identity:
 
 ```text
-sessions/links owns link records, link service behavior, completions, and
+domains/sessions/links owns link records, link service behavior, completions, and
 tests.
 
 Promote to:
-  sessions/links/{model,store,service,completions}.rs
+  domains/sessions/links/{model,store,service,completions}.rs
 ```
 
 Do not create a feature folder just to shrink a file:
 
 ```text
 Bad:
-  sessions/title/{store,service}.rs
+  domains/sessions/title/{store,service}.rs
 
 Better:
-  sessions/service/titles.rs
-  sessions/store/sessions.rs
+  domains/sessions/service/titles.rs
+  domains/sessions/store/sessions.rs
 ```
 
 Do not add:
@@ -403,7 +403,7 @@ Put pure logic next to the concept it serves:
 
 ```text
 workspaces/retirement/policy.rs
-sessions/config/selection.rs
+domains/sessions/config/selection.rs
 agents/catalog/validation.rs
 ```
 
@@ -595,8 +595,7 @@ background_work/
   long-running tool/background task tracking
 ```
 
-The current tree still uses `live/sessions/connection/**` for the driver role.
-Prefer `driver/**` for new target documentation and topology passes.
+The current tree uses `live/sessions/driver/**` for the driver role.
 
 The actor coordinates these collaborators, but it should not own all their
 implementation code. Actor handlers are thin: they decide ordering, validate

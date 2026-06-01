@@ -5,12 +5,14 @@ use crate::domains::plugins::skills::{
     context_has_skills, render_skill_index, SKILLS_MCP_CONNECTION_ID, SKILLS_MCP_SERVER_NAME,
 };
 use crate::domains::runtime_config::service::RuntimeConfigService;
-use crate::integrations::mcp::product_server::PRODUCT_MCP_TOKEN_HEADER_NAME;
-use crate::sessions::extensions::{SessionExtension, SessionLaunchContext, SessionLaunchExtras};
-use crate::sessions::mcp_bindings::model::{
+use crate::domains::sessions::extensions::{
+    SessionExtension, SessionLaunchContext, SessionLaunchExtras,
+};
+use crate::domains::sessions::mcp_bindings::model::{
     SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
 };
-use crate::sessions::model::SessionMcpBindingPolicy;
+use crate::domains::sessions::model::SessionMcpBindingPolicy;
+use crate::integrations::mcp::product_server::PRODUCT_MCP_TOKEN_HEADER_NAME;
 
 #[derive(Clone)]
 pub struct RuntimeConfigSessionLaunchExtension {
@@ -119,11 +121,11 @@ mod tests {
     use crate::domains::runtime_config::model::RuntimeConfigApplyInput;
     use crate::domains::runtime_config::service::RuntimeConfigService;
     use crate::domains::runtime_config::store::RuntimeConfigStore;
+    use crate::domains::sessions::extensions::{SessionExtension, SessionLaunchContext};
+    use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
+    use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
+    use crate::domains::workspaces::model::WorkspaceRecord;
     use crate::persistence::Db;
-    use crate::sessions::extensions::{SessionExtension, SessionLaunchContext};
-    use crate::sessions::mcp_bindings::model::SessionMcpServer;
-    use crate::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
-    use crate::workspaces::model::WorkspaceRecord;
 
     #[test]
     fn launch_extras_come_from_bound_runtime_config_context() {
