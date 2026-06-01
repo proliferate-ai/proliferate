@@ -1,4 +1,4 @@
-import type { ShortcutDef } from "@/config/shortcuts";
+import type { ShortcutDef } from "@/config/shortcuts/types";
 import {
   getShortcutDisplayLabel,
   type ShortcutDigit,

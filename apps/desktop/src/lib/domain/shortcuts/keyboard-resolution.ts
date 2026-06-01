@@ -1,4 +1,4 @@
-import { SHORTCUTS, type ShortcutId } from "@/config/shortcuts";
+import { SHORTCUTS, type ShortcutId } from "@/config/shortcuts/registry";
 import { matchShortcutDef } from "@/lib/domain/shortcuts/matching";
 import type { ShortcutTrigger } from "@/lib/domain/shortcuts/registry";
 

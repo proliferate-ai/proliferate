@@ -270,6 +270,7 @@ export function useWorkspaceBootstrapActions() {
       const emptyBootstrap = await handleEmptyWorkspaceBootstrap({
         agentsByKind,
         latencyFlowId,
+        logicalWorkspaceId,
         measurementOperationId,
         preferences,
         requestOptions: sessionRequestOptions,
@@ -295,7 +296,7 @@ export function useWorkspaceBootstrapActions() {
         return { sessions };
       }
     } else {
-      await handleRememberedWorkspaceSessionBootstrap({
+      const rememberedBootstrap = await handleRememberedWorkspaceSessionBootstrap({
         lastViewedSessionByWorkspace,
         latencyFlowId,
         logicalWorkspaceId,
@@ -315,6 +316,9 @@ export function useWorkspaceBootstrapActions() {
         setActiveSessionId: (sessionId) =>
           useSessionSelectionStore.getState().setActiveSessionId(sessionId),
       });
+      if (rememberedBootstrap.shouldReturn) {
+        return { sessions };
+      }
     }
 
     if (isCurrent()) {

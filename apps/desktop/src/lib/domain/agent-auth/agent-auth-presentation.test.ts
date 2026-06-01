@@ -1,17 +1,19 @@
 import { describe, expect, it } from "vitest";
 import type { AgentAuthCredential, AgentGatewayCapabilities } from "@proliferate/cloud-sdk";
+import { isAgentAuthAdminRole } from "./agent-auth-agent-presentation";
 import {
-  agentAuthCanCreateGatewayCredentialForAgent,
   agentAuthCredentialAvailability,
   agentAuthCredentialDisplayLabel,
   agentAuthCredentialSection,
   agentAuthCredentialShareLabel,
-  agentAuthManagedCreditsCapabilityLabel,
   credentialSelectableReason,
   isHostedCloudV1AgentAuthCredential,
-  isAgentAuthAdminRole,
   isProliferateManagedCreditsCredential,
-} from "./agent-auth-presentation";
+} from "./agent-auth-credential-presentation";
+import {
+  agentAuthCanCreateGatewayCredentialForAgent,
+  agentAuthManagedCreditsCapabilityLabel,
+} from "./agent-auth-gateway-capabilities";
 
 function credential(
   overrides: Partial<AgentAuthCredential>,

@@ -31,6 +31,7 @@ export async function handleEmptyWorkspaceBootstrap(
   input: {
     agentsByKind: Parameters<typeof orderBootstrapLaunchAgents>[1];
     latencyFlowId?: string | null;
+    logicalWorkspaceId: string;
     measurementOperationId: MeasurementOperationId | null;
     preferences: ChatLaunchPreferences;
     requestOptions: Parameters<ReturnType<typeof useWorkspaceBootstrapCache>["fetchWorkspaceSessions"]>[0]["requestOptions"];
@@ -57,7 +58,7 @@ export async function handleEmptyWorkspaceBootstrap(
   },
 ): Promise<{ shouldReturn: boolean }> {
   if (input.shouldClearLastViewedSession) {
-    deps.clearLastViewedSession(input.workspaceId);
+    deps.clearLastViewedSession(input.logicalWorkspaceId);
   }
   const dismissedCheckStartedAt = startLatencyTimer();
   const sessionsIncludingDismissed = await deps.fetchWorkspaceSessions({

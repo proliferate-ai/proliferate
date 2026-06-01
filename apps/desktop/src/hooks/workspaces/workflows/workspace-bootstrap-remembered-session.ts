@@ -42,7 +42,7 @@ export async function handleRememberedWorkspaceSessionBootstrap(
     selectSession: ReturnType<typeof useSessionSelectionActions>["selectSession"];
     setActiveSessionId: (sessionId: string | null) => void;
   },
-): Promise<void> {
+): Promise<{ shouldReturn: boolean }> {
   const rememberedSession = resolveLastViewedSessionForWorkspace(
     input.lastViewedSessionByWorkspace,
     input.logicalWorkspaceId,
@@ -58,7 +58,7 @@ export async function handleRememberedWorkspaceSessionBootstrap(
   }
 
   if (!targetSession || !input.isCurrent()) {
-    return;
+    return { shouldReturn: false };
   }
 
   const currentActiveSessionId = deps.getActiveSessionId();
@@ -82,7 +82,7 @@ export async function handleRememberedWorkspaceSessionBootstrap(
         reason: "active_session_changed",
         totalElapsedMs: elapsedMs(input.startedAt),
       });
-      return;
+      return { shouldReturn: false };
     }
   }
   logLatency("workspace.select.session_select.start", {
@@ -98,7 +98,7 @@ export async function handleRememberedWorkspaceSessionBootstrap(
     selectSession: deps.selectSession,
   });
   if (selectionOutcome?.result === "stale" || !input.isCurrent()) {
-    return;
+    return { shouldReturn: true };
   }
   recordMeasurementWorkflowStep({
     operationId: input.measurementOperationId,
@@ -115,7 +115,7 @@ export async function handleRememberedWorkspaceSessionBootstrap(
       && deps.getActiveSessionId() === targetSession.id,
   });
   if (!input.isCurrent()) {
-    return;
+    return { shouldReturn: true };
   }
   deps.patchSessionRecord(targetSession.id, { transcriptHydrated: true });
   recordMeasurementWorkflowStep({
@@ -129,4 +129,5 @@ export async function handleRememberedWorkspaceSessionBootstrap(
     sessionCount: input.sessions.length,
     totalElapsedMs: elapsedMs(input.startedAt),
   });
+  return { shouldReturn: false };
 }

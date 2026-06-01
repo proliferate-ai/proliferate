@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
-import type { ShortcutId } from "@/config/shortcuts";
+import type { ShortcutId } from "@/config/shortcuts/registry";
 import {
   registerShortcutHandler,
   type ShortcutHandler,

@@ -1,4 +1,4 @@
-import { SHORTCUTS } from "@/config/shortcuts";
+import { SHORTCUTS } from "@/config/shortcuts/registry";
 import { type SettingsSection } from "@/config/settings";
 import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import { resolveShortcutRangeDigitTarget } from "@/lib/domain/shortcuts/range";

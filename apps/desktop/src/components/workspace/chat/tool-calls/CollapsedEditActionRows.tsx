@@ -4,7 +4,8 @@ import type {
   ToolCallItem,
 } from "@anyharness/sdk";
 import { DiffViewer } from "@/components/content/ui/DiffViewer";
-import { FileChangeStats, FileDiffCard } from "@/components/content/ui/FileDiffCard";
+import { FileChangeStats } from "@/components/content/ui/FileChangeStats";
+import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
 import { HighlightedCodePanel } from "@/components/content/ui/HighlightedCodePanel";
 import { ChevronRight } from "@proliferate/ui/icons";
 import { useFileReferenceActions } from "@/hooks/workspaces/workflows/files/use-file-reference-actions";

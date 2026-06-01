@@ -5,15 +5,9 @@ import {
   useUnstageGitPathsMutation,
 } from "@anyharness/sdk-react";
 import { GitPanelHeader } from "./GitPanelHeader";
-import { GitReviewFileRow } from "./GitReviewFileRow";
 import { GitReviewFileTree } from "./GitReviewFileTree";
-import {
-  formatGitPanelUndoError,
-  GitLastTurnUndoAction,
-  GitReviewDiffPolicyNotice,
-  GitReviewNoChangesState,
-  GitReviewSectionHeader,
-} from "./GitPanelReviewChrome";
+import { GitPanelReviewBody } from "./GitPanelReviewBody";
+import { formatGitPanelUndoError } from "./GitPanelReviewChrome";
 import { PaneSideOverlay } from "@/components/workspace/pane/PaneSideOverlay";
 import { useDiffReviewMeasurement } from "@/hooks/workspaces/ui/files/use-diff-review-measurement";
 import { useWorkspaceFileActions } from "@/hooks/workspaces/facade/files/use-workspace-file-actions";
@@ -22,18 +16,23 @@ import { useGitPanelState } from "@/hooks/workspaces/derived/use-git-panel-state
 import {
   type GitPanelMode,
   type GitPanelReviewScope,
-  type GitPanelSection,
 } from "@/lib/domain/workspaces/changes/git-panel-diff";
 import {
-  GIT_DIFF_FETCH_CONCURRENCY_LIMIT,
   resolveDiffDisplayPolicy,
   summarizeDiffDisplayPolicies,
 } from "@/lib/domain/workspaces/changes/diff-display-policy";
 import {
   buildGitReviewFileEntries,
-  gitReviewEntryForFile,
   type GitReviewFileEntry,
 } from "@/lib/domain/workspaces/changes/git-review-entries";
+import {
+  buildGitPanelDiffFetchScopeKey,
+  countUniqueReviewPatchPaths,
+  resolveLastTurnUndoDisabledReason,
+  resolvePermittedGitPanelDiffFetchKeys,
+  summarizeGitPanelSectionStats,
+  toggleReviewSetValue,
+} from "@/lib/domain/workspaces/changes/git-panel-review-model";
 import { useGitPanelUiStore } from "@/stores/editor/git-panel-ui-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 
@@ -107,6 +106,10 @@ function GitPanelContent({
   const effectiveLastTurnRevertPatches =
     lastTurnRevertPatches ?? EMPTY_LAST_TURN_REVERT_PATCHES;
   const lastTurnUndoCompleted = Boolean(lastTurn?.turnId && undoneTurnIds.has(lastTurn.turnId));
+  const lastTurnPatchFileCount = useMemo(
+    () => countUniqueReviewPatchPaths(effectiveLastTurnRevertPatches.entries),
+    [effectiveLastTurnRevertPatches.entries],
+  );
   const reviewEntries = useMemo(
     () => buildGitReviewFileEntries(sections),
     [sections],
@@ -164,43 +167,24 @@ function GitPanelContent({
     [reviewEntries],
   );
   const diffFetchScopeKey = useMemo(
-    () => [
-      activeWorkspaceId ?? "",
-      baseRef ?? "",
-      changesFilter,
-      reviewEntries.map((entry) => entry.key).join("\n"),
-    ].join("\u001f"),
+    () => buildGitPanelDiffFetchScopeKey({
+      activeWorkspaceId,
+      baseRef,
+      mode: changesFilter,
+      reviewEntries,
+    }),
     [activeWorkspaceId, baseRef, changesFilter, reviewEntries],
   );
   useEffect(() => {
     setSettledDiffFetchKeys(new Set());
   }, [diffFetchScopeKey]);
   const permittedDiffFetchKeys = useMemo<ReadonlySet<string>>(() => {
-    const permitted = new Set(settledDiffFetchKeys);
-    let activeFetchCount = 0;
-    for (const entry of reviewEntries) {
-      if (activeFetchCount >= GIT_DIFF_FETCH_CONCURRENCY_LIMIT) {
-        break;
-      }
-      if (permitted.has(entry.key) || !visibleSectionScopes.has(entry.sectionScope)) {
-        continue;
-      }
-      const currentDiff = entry.file.currentDiff;
-      if (!currentDiff || effectiveCollapsedFiles.has(entry.key)) {
-        continue;
-      }
-      const displayPolicy = resolveDiffDisplayPolicy({
-        path: currentDiff.path,
-        additions: currentDiff.additions,
-        deletions: currentDiff.deletions,
-      });
-      if (!displayPolicy.canFetchInline) {
-        continue;
-      }
-      permitted.add(entry.key);
-      activeFetchCount += 1;
-    }
-    return permitted;
+    return resolvePermittedGitPanelDiffFetchKeys({
+      reviewEntries,
+      visibleSectionScopes,
+      effectiveCollapsedFiles,
+      settledDiffFetchKeys,
+    });
   }, [effectiveCollapsedFiles, reviewEntries, settledDiffFetchKeys, visibleSectionScopes]);
   const allFilesCollapsed = reviewEntries.length > 0
     && reviewEntries.every((entry) => effectiveCollapsedFiles.has(entry.key));
@@ -233,12 +217,12 @@ function GitPanelContent({
   }, [allFilesCollapsed, reviewEntries]);
 
   const toggleSectionCollapsed = useCallback((scope: GitPanelReviewScope) => {
-    setCollapsedSections((current) => toggleSetValue(current, scope));
+    setCollapsedSections((current) => toggleReviewSetValue(current, scope));
   }, []);
 
   const toggleFileCollapsed = useCallback((key: string) => {
     setFileCollapseTouched(true);
-    setCollapsedFiles(() => toggleSetValue(new Set(effectiveCollapsedFiles), key));
+    setCollapsedFiles(() => toggleReviewSetValue(new Set(effectiveCollapsedFiles), key));
   }, [effectiveCollapsedFiles]);
 
   const markDiffFetchSettled = useCallback((key: string) => {
@@ -278,15 +262,19 @@ function GitPanelContent({
     });
   }, [effectiveCollapsedFiles]);
 
-  const lastTurnUndoDisabledReason = changesFilter === "last_turn"
-    ? lastTurnUndoCompleted
-      ? "Undo has already been applied for this turn."
-      : effectiveLastTurnRevertPatches.blockedReason
-      ?? (!activeWorkspaceId ? "Undo is unavailable until a workspace is selected." : null)
-      ?? (effectiveLastTurnRevertPatches.entries.length === 0
-        ? "Undo is unavailable because this turn has no complete file patches."
-        : null)
-    : null;
+  const lastTurnUndoDisabledReason = resolveLastTurnUndoDisabledReason({
+    mode: changesFilter,
+    lastTurnUndoCompleted,
+    blockedReason: effectiveLastTurnRevertPatches.blockedReason,
+    activeWorkspaceId,
+    patchCount: effectiveLastTurnRevertPatches.entries.length,
+  });
+  const stagePath = useCallback((path: string) => {
+    return stageMutation.mutateAsync([path]);
+  }, [stageMutation]);
+  const unstagePath = useCallback((path: string) => {
+    return unstageMutation.mutateAsync([path]);
+  }, [unstageMutation]);
   const handleUndoLastTurn = useCallback(() => {
     if (
       changesFilter !== "last_turn"
@@ -295,9 +283,8 @@ function GitPanelContent({
     ) {
       return;
     }
-    const fileCount = new Set(effectiveLastTurnRevertPatches.entries.map((entry) => entry.path)).size;
     const confirmed = typeof window === "undefined"
-      || window.confirm(`Undo file changes from the last turn? This will reverse ${fileCount} file${fileCount === 1 ? "" : "s"} as one operation.`);
+      || window.confirm(`Undo file changes from the last turn? This will reverse ${lastTurnPatchFileCount} file${lastTurnPatchFileCount === 1 ? "" : "s"} as one operation.`);
     if (!confirmed) {
       return;
     }
@@ -323,6 +310,7 @@ function GitPanelContent({
     changesFilter,
     effectiveLastTurnRevertPatches.entries,
     lastTurn?.turnId,
+    lastTurnPatchFileCount,
     lastTurnUndoDisabledReason,
     revertPatchesMutation,
     showToast,
@@ -352,95 +340,37 @@ function GitPanelContent({
       />
 
       <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-        <div
-          id="review-diffs-collapsed"
-          data-app-action-review-scroll=""
-          data-thread-find-target="review"
-          className="h-full min-h-0 min-w-0 overflow-y-auto overflow-x-hidden px-2 pb-3"
-        >
-          <div className="relative flex min-h-full flex-col pt-2">
-            <span
-              aria-hidden="true"
-              data-app-action-review-metrics-probe=""
-              className="pointer-events-none absolute left-0 top-0 size-px opacity-0"
-            />
-            {isLoading && (
-              <div className="space-y-2 px-2 py-4">
-                <div className="h-3 w-32 animate-pulse rounded bg-sidebar-accent" />
-                <div className="h-3 w-48 animate-pulse rounded bg-sidebar-accent" />
-                <div className="h-3 w-40 animate-pulse rounded bg-sidebar-accent" />
-              </div>
-            )}
-            {errorMessage && (
-              <p className="px-2 py-4 text-xs text-destructive">{errorMessage}</p>
-            )}
-            {!errorMessage && runtimeBlockedReason && (
-              <p className="px-2 py-4 text-xs text-sidebar-muted-foreground">
-                {runtimeBlockedReason}
-              </p>
-            )}
-            {!isLoading && !errorMessage && !runtimeBlockedReason && !hasReviewEntries && (
-              <GitReviewNoChangesState
-                mode={changesFilter}
-                baseRef={baseRef}
-                onRefresh={() => void refetch()}
-              />
-            )}
-
-            {!isLoading && !errorMessage && !runtimeBlockedReason && hasReviewEntries && (
-              <div className="flex flex-col gap-1.5">
-                {changesFilter === "last_turn" && (
-                  <GitLastTurnUndoAction
-                    fileCount={new Set(effectiveLastTurnRevertPatches.entries.map((entry) => entry.path)).size}
-                    disabledReason={lastTurnUndoDisabledReason}
-                    busy={revertPatchesMutation.isPending}
-                    onUndo={handleUndoLastTurn}
-                  />
-                )}
-                {diffPolicySummary.total > 0 && (
-                  <GitReviewDiffPolicyNotice summary={diffPolicySummary} />
-                )}
-                {sections.map((section) => (
-                  <div key={section.scope} className="flex flex-col gap-1">
-                    {changesFilter === "working_tree_composite" && (
-                      <GitReviewSectionHeader
-                        section={section}
-                        collapsed={collapsedSections.has(section.scope)}
-                        onToggle={() => toggleSectionCollapsed(section.scope)}
-                      />
-                    )}
-                    {visibleSections.some((visibleSection) => visibleSection.scope === section.scope)
-                      && section.files.map((file) => {
-                        const entry = gitReviewEntryForFile(section.scope, file);
-                        return (
-                          <GitReviewFileRow
-                            key={entry.key}
-                            id={entry.id}
-                            workspaceId={activeWorkspaceId}
-                            sectionScope={section.scope}
-                            file={file}
-                            baseRef={baseRef}
-                            layout={layout}
-                            wrapLongLines={wrapLongLines}
-                            collapsed={effectiveCollapsedFiles.has(entry.key)}
-                            isRuntimeReady={isRuntimeReady}
-                            fetchDiff={permittedDiffFetchKeys.has(entry.key)}
-                            onToggleCollapsed={() => toggleFileCollapsed(entry.key)}
-                            onDiffFetchSettled={() => markDiffFetchSettled(entry.key)}
-                            openFile={openFile}
-                            stagePath={(path) => stageMutation.mutateAsync([path])}
-                            unstagePath={(path) => unstageMutation.mutateAsync([path])}
-                            diffTimingOptions={diffReviewMeasurement.diffTimingOptions}
-                            measurementOperationId={diffReviewMeasurement.operationId}
-                          />
-                        );
-                      })}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        <GitPanelReviewBody
+          changesFilter={changesFilter}
+          baseRef={baseRef}
+          isLoading={isLoading}
+          errorMessage={errorMessage}
+          runtimeBlockedReason={runtimeBlockedReason}
+          hasReviewEntries={hasReviewEntries}
+          lastTurnPatchFileCount={lastTurnPatchFileCount}
+          lastTurnUndoDisabledReason={lastTurnUndoDisabledReason}
+          lastTurnUndoBusy={revertPatchesMutation.isPending}
+          diffPolicySummary={diffPolicySummary}
+          sections={sections}
+          visibleSectionScopes={visibleSectionScopes}
+          collapsedSections={collapsedSections}
+          activeWorkspaceId={activeWorkspaceId}
+          layout={layout}
+          wrapLongLines={wrapLongLines}
+          effectiveCollapsedFiles={effectiveCollapsedFiles}
+          isRuntimeReady={isRuntimeReady}
+          permittedDiffFetchKeys={permittedDiffFetchKeys}
+          openFile={openFile}
+          stagePath={stagePath}
+          unstagePath={unstagePath}
+          onRefresh={() => void refetch()}
+          onUndoLastTurn={handleUndoLastTurn}
+          onToggleSectionCollapsed={toggleSectionCollapsed}
+          onToggleFileCollapsed={toggleFileCollapsed}
+          onDiffFetchSettled={markDiffFetchSettled}
+          diffTimingOptions={diffReviewMeasurement.diffTimingOptions}
+          measurementOperationId={diffReviewMeasurement.operationId}
+        />
         <PaneSideOverlay
           open={canShowFileTree}
           label="Changed files"
@@ -457,30 +387,4 @@ function GitPanelContent({
       </div>
     </div>
   );
-}
-
-function summarizeGitPanelSectionStats(sections: readonly GitPanelSection[]): {
-  additions: number;
-  deletions: number;
-} {
-  return sections.reduce(
-    (stats, section) => {
-      for (const file of section.files) {
-        stats.additions += file.currentDiff?.additions ?? 0;
-        stats.deletions += file.currentDiff?.deletions ?? 0;
-      }
-      return stats;
-    },
-    { additions: 0, deletions: 0 },
-  );
-}
-
-function toggleSetValue<T>(set: Set<T>, value: T): Set<T> {
-  const next = new Set(set);
-  if (next.has(value)) {
-    next.delete(value);
-  } else {
-    next.add(value);
-  }
-  return next;
 }

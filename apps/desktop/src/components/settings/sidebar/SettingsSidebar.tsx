@@ -20,7 +20,7 @@ import {
 } from "@proliferate/ui/icons";
 import { SidebarNavRow } from "@proliferate/ui/layout/SidebarNavRow";
 import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
-import { SHORTCUTS } from "@/config/shortcuts";
+import { SHORTCUTS } from "@/config/shortcuts/registry";
 import {
   SETTINGS_SHORTCUT_SECTION_ORDER,
   type SettingsSection,

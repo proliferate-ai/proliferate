@@ -1,5 +1,5 @@
-import { SHORTCUTS } from "@/config/shortcuts";
-import type { AppCommandActions } from "@/hooks/app/workflows/use-app-command-actions";
+import { SHORTCUTS } from "@/config/shortcuts/registry";
+import type { AppCommandActions } from "@/hooks/app/workflows/app-command-action-types";
 import {
   commandPaletteCommandValue,
   type CommandPaletteEntry,

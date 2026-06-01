@@ -1,4 +1,4 @@
-import type { ShortcutDef, ShortcutMatch } from "@/config/shortcuts";
+import type { ShortcutDef, ShortcutMatch } from "@/config/shortcuts/types";
 
 const NATIVE_KEY_NAMES: Record<string, string> = {
   ",": "Comma",

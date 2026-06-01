@@ -4,9 +4,9 @@ import {
   reviewerMatchesReviewPersonaTemplate,
   reviewerPersonalityLabel,
   resolveReviewExecutionModeIdForAgent,
-  type ReviewPersonaTemplate,
   type ReviewSetupDraft,
 } from "@/lib/domain/reviews/review-config";
+import type { ReviewPersonaTemplate } from "@/lib/domain/reviews/review-personas";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import {
