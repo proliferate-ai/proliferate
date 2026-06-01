@@ -58,6 +58,7 @@ env:
   VITE_PROLIFERATE_SENTRY_ENABLE_LOGS: ${{ vars.VITE_PROLIFERATE_SENTRY_ENABLE_LOGS }}
   VITE_PROLIFERATE_POSTHOG_KEY: ${{ vars.VITE_PROLIFERATE_POSTHOG_KEY }}
   VITE_PROLIFERATE_POSTHOG_HOST: ${{ vars.VITE_PROLIFERATE_POSTHOG_HOST }}
+  SENTRY_DESKTOP_RENDERER_PROJECT: ${{ vars.SENTRY_DESKTOP_RENDERER_PROJECT || vars.SENTRY_PROJECT }}
   PROLIFERATE_DESKTOP_SENTRY_DSN: ${{ vars.PROLIFERATE_DESKTOP_SENTRY_DSN || vars.VITE_PROLIFERATE_SENTRY_DSN }}
   PROLIFERATE_DESKTOP_SENTRY_ENVIRONMENT: ${{ vars.PROLIFERATE_DESKTOP_SENTRY_ENVIRONMENT || vars.VITE_PROLIFERATE_ENVIRONMENT || 'production' }}
   PROLIFERATE_DESKTOP_SENTRY_TRACES_SAMPLE_RATE: ${{ vars.PROLIFERATE_DESKTOP_SENTRY_TRACES_SAMPLE_RATE || vars.VITE_PROLIFERATE_SENTRY_TRACES_SAMPLE_RATE }}
@@ -258,9 +259,28 @@ jobs:
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_DESKTOP_RENDERER_PROJECT || vars.SENTRY_PROJECT }}
           SENTRY_URL: ${{ vars.SENTRY_URL }}
         run: |
+          if [[ -n "$VITE_PROLIFERATE_SENTRY_DSN" ]]; then
+            : "${SENTRY_AUTH_TOKEN:?Set SENTRY_AUTH_TOKEN secret for desktop renderer Sentry sourcemaps.}"
+            : "${SENTRY_ORG:?Set SENTRY_ORG GitHub variable for desktop renderer Sentry sourcemaps.}"
+            : "${SENTRY_PROJECT:?Set SENTRY_DESKTOP_RENDERER_PROJECT or SENTRY_PROJECT GitHub variable for desktop renderer Sentry sourcemaps.}"
+
+            sentry_url="${SENTRY_URL:-https://sentry.io/}"
+            sentry_status="$(
+              curl -sS -o /tmp/sentry-desktop-renderer-project.json -w "%{http_code}" \
+                -H "Authorization: Bearer $SENTRY_AUTH_TOKEN" \
+                "${sentry_url%/}/api/0/projects/${SENTRY_ORG}/${SENTRY_PROJECT}/" \
+                || true
+            )"
+
+            if [[ "$sentry_status" != "200" ]]; then
+              echo "::error::Sentry desktop renderer project '$SENTRY_PROJECT' is not accessible in org '$SENTRY_ORG' (HTTP $sentry_status). Update SENTRY_DESKTOP_RENDERER_PROJECT before releasing."
+              exit 1
+            fi
+          fi
+
           export VITE_PROLIFERATE_RELEASE="proliferate-desktop@${PROLIFERATE_RELEASE_VERSION}"
           pnpm run build
 

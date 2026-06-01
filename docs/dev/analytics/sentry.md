@@ -46,7 +46,8 @@ Upload targets:
 - `SENTRY_ORG`
 - `SENTRY_PROJECT`
 - `SENTRY_URL` when using a non-Sentry.io host
-- optional overrides: `SENTRY_WEB_PROJECT`, `SENTRY_MOBILE_PROJECT`,
+- optional overrides: `SENTRY_DESKTOP_RENDERER_PROJECT`,
+  `SENTRY_WEB_PROJECT`, `SENTRY_MOBILE_PROJECT`,
   `SENTRY_DESKTOP_NATIVE_PROJECT`, `SENTRY_ANYHARNESS_PROJECT`
 
 ## Privacy

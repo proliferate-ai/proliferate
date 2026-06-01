@@ -40,6 +40,9 @@ export default defineConfig({
           org: sentryOrg!,
           project: sentryProject!,
           telemetry: false,
+          errorHandler(error) {
+            throw error;
+          },
           release: {
             name: sentryRelease!,
           },
