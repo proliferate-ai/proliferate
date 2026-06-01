@@ -1,12 +1,14 @@
 import {
   clampRounds,
   MAX_REVIEWERS_PER_RUN,
-  type ReviewPersonalityPreference,
   type StoredReviewDefaultsByKind,
   type StoredReviewKindDefaults,
   type StoredReviewKindReviewers,
-  type StoredReviewPersonalitiesByKind,
 } from "@/lib/domain/reviews/review-config";
+import type {
+  ReviewPersonalityPreference,
+  StoredReviewPersonalitiesByKind,
+} from "@/lib/domain/reviews/review-personas";
 
 type ReviewDefaultKind = "plan" | "code";
 

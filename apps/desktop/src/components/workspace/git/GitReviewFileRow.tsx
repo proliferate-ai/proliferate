@@ -1,28 +1,25 @@
-import { useEffect, useMemo, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, type CSSProperties } from "react";
 import {
   type AnyHarnessQueryTimingOptions,
   useGitDiffQuery,
 } from "@anyharness/sdk-react";
-import { Button } from "@proliferate/ui/primitives/Button";
 import { DiffViewer } from "@/components/content/ui/DiffViewer";
 import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
 import {
   CircleAlert,
-  FileCode,
   FileIcon,
-  Minus,
-  Plus,
   RefreshCw,
 } from "@proliferate/ui/icons";
 import {
-  GitReviewEmptyState,
-  GitReviewEmptyStateAction,
-} from "./GitReviewEmptyState";
-import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
+  DiffDisplayPolicyPlaceholder,
+  formatEmptyDiffState,
+  GitReviewInlineEmptyState,
+} from "@/components/workspace/git/GitReviewInlineState";
+import { GitReviewStageAction } from "@/components/workspace/git/GitReviewStageAction";
+import { GitReviewStatusBadge } from "@/components/workspace/git/GitReviewStatusBadge";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { resolveDiffDisplayPolicy } from "@/lib/domain/workspaces/changes/diff-display-policy";
 import type {
-  GitPanelFile,
   GitPanelReviewFile,
   GitPanelReviewScope,
 } from "@/lib/domain/workspaces/changes/git-panel-diff";
@@ -166,34 +163,14 @@ export function GitReviewFileRow({
         onOpenFile={() => void openFile(file.path)}
         surface="sidebar"
         actions={!isBranchMode && !isLastTurnMode && (
-          <Tooltip content={shouldUnstage ? "Unstage file" : "Stage file"}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={(event) => {
-                event.stopPropagation();
-                if (shouldUnstage) {
-                  void unstagePath(file.path);
-                } else {
-                  void stagePath(file.path);
-                }
-              }}
-              disabled={!isRuntimeReady}
-              aria-label={shouldUnstage ? `Unstage ${file.displayPath}` : `Stage ${file.displayPath}`}
-              className={`size-6 rounded-full border-0 bg-transparent p-0 ${
-                shouldUnstage
-                  ? "text-git-green hover:bg-sidebar-accent"
-                  : "text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-              }`}
-            >
-              {shouldUnstage ? (
-                <Minus className="size-3.5" />
-              ) : (
-                <Plus className="size-3.5" />
-              )}
-            </Button>
-          </Tooltip>
+          <GitReviewStageAction
+            displayPath={file.displayPath}
+            path={file.path}
+            shouldUnstage={shouldUnstage}
+            disabled={!isRuntimeReady}
+            stagePath={stagePath}
+            unstagePath={unstagePath}
+          />
         )}
       >
         {!currentDiff ? (
@@ -269,85 +246,6 @@ export function GitReviewFileRow({
   );
 }
 
-function GitReviewStatusBadge({ status }: { status: GitPanelFile["status"] }) {
-  const meta = fileStatusMeta(status);
-  return (
-    <span
-      className={`inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded px-1 text-[9px] font-medium leading-none ${meta.className}`}
-      title={meta.title}
-      aria-label={meta.title}
-    >
-      {meta.label}
-    </span>
-  );
-}
-
-function fileStatusMeta(status: GitPanelFile["status"]): {
-  label: string;
-  title: string;
-  className: string;
-} {
-  switch (status) {
-    case "added":
-    case "untracked":
-      return {
-        label: "A",
-        title: "Added",
-        className: "bg-git-green/10 text-git-green",
-      };
-    case "deleted":
-      return {
-        label: "D",
-        title: "Deleted",
-        className: "bg-git-red/10 text-git-red",
-      };
-    case "renamed":
-      return {
-        label: "R",
-        title: "Renamed",
-        className: "bg-sidebar-accent text-sidebar-foreground",
-      };
-    case "copied":
-      return {
-        label: "C",
-        title: "Copied",
-        className: "bg-sidebar-accent text-sidebar-foreground",
-      };
-    case "conflicted":
-      return {
-        label: "!",
-        title: "Conflicted",
-        className: "bg-destructive/10 text-destructive",
-      };
-    case "modified":
-    default:
-      return {
-        label: "M",
-        title: "Modified",
-        className: "bg-sidebar-accent text-sidebar-muted-foreground",
-      };
-  }
-}
-
-function DiffDisplayPolicyPlaceholder({
-  title,
-  description,
-  onOpenFile,
-}: {
-  title: string;
-  description: string;
-  onOpenFile: () => void;
-}) {
-  return (
-    <GitReviewInlineEmptyState
-      icon={<CircleAlert className="size-3.5" />}
-      title={title}
-      description={description}
-      onOpenFile={onOpenFile}
-    />
-  );
-}
-
 function formatDiffErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim()) {
     return error.message;
@@ -356,58 +254,4 @@ function formatDiffErrorMessage(error: unknown): string {
     return error;
   }
   return "Failed to load diff";
-}
-
-function GitReviewInlineEmptyState({
-  icon,
-  title,
-  description,
-  onOpenFile,
-}: {
-  icon: ReactNode;
-  title: string;
-  description?: string;
-  onOpenFile?: () => void;
-}) {
-  return (
-    <GitReviewEmptyState
-      variant="inline"
-      icon={icon}
-      title={title}
-      description={description}
-      action={onOpenFile ? (
-        <GitReviewEmptyStateAction onClick={onOpenFile}>
-          Open file
-        </GitReviewEmptyStateAction>
-      ) : null}
-    />
-  );
-}
-
-function formatEmptyDiffState({
-  binary,
-  truncated,
-}: {
-  binary: boolean;
-  truncated: boolean;
-}): {
-  title: string;
-  description: string;
-  icon: ReactNode;
-} | null {
-  if (binary) {
-    return {
-      title: "Binary file changed",
-      description: "Open the file to inspect this change.",
-      icon: <FileCode className="size-3.5" />,
-    };
-  }
-  if (truncated) {
-    return {
-      title: "Diff too large",
-      description: "Open the file to inspect the full change.",
-      icon: <CircleAlert className="size-3.5" />,
-    };
-  }
-  return null;
 }

@@ -11,10 +11,10 @@ import {
   nextReviewReviewerId,
   resolveReviewDefaultReviewerRows,
   resolveReviewExecutionModeIdForAgent,
-  type ReviewPersonaTemplate,
   type ReviewSetupReviewerDraft,
   type StoredReviewKindDefaults,
 } from "@/lib/domain/reviews/review-config";
+import type { ReviewPersonaTemplate } from "@/lib/domain/reviews/review-personas";
 import {
   ReviewDefaultModeMenu,
   ReviewDefaultModelMenu,

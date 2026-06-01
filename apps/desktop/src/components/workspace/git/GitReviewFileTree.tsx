@@ -10,11 +10,11 @@ import {
   type ChangedFileTreeNode,
 } from "@/lib/domain/workspaces/changes/changed-file-tree";
 import type {
-  GitPanelFile,
   GitPanelReviewFile,
   GitPanelSection,
   GitPanelReviewScope,
 } from "@/lib/domain/workspaces/changes/git-panel-diff";
+import { getGitFileStatusPresentation } from "@/lib/domain/workspaces/changes/git-file-status-presentation";
 import type { GitReviewFileEntry } from "@/lib/domain/workspaces/changes/git-review-entries";
 
 interface GitReviewFileTreeProps {
@@ -126,7 +126,7 @@ function GitReviewFileMeta({ file }: { file: GitPanelReviewFile }) {
   if (!currentDiff) {
     return <PaneFileTreeBadge className="bg-sidebar-accent text-sidebar-muted-foreground">-</PaneFileTreeBadge>;
   }
-  const status = fileStatusMeta(currentDiff.status);
+  const status = getGitFileStatusPresentation(currentDiff.status);
   return (
     <span className="inline-flex shrink-0 items-center gap-1">
       {(currentDiff.additions > 0 || currentDiff.deletions > 0) && (
@@ -196,23 +196,4 @@ function filesStats(files: readonly GitPanelReviewFile[]): TreeStats {
     deletions: stats.deletions + (file.currentDiff?.deletions ?? 0),
     files: stats.files + 1,
   }), { additions: 0, deletions: 0, files: 0 });
-}
-
-function fileStatusMeta(status: GitPanelFile["status"]): { label: string; className: string } {
-  switch (status) {
-    case "added":
-    case "untracked":
-      return { label: "A", className: "bg-git-green/10 text-git-green" };
-    case "deleted":
-      return { label: "D", className: "bg-git-red/10 text-git-red" };
-    case "renamed":
-      return { label: "R", className: "bg-sidebar-accent text-sidebar-foreground" };
-    case "copied":
-      return { label: "C", className: "bg-sidebar-accent text-sidebar-foreground" };
-    case "conflicted":
-      return { label: "!", className: "bg-destructive/10 text-destructive" };
-    case "modified":
-    default:
-      return { label: "M", className: "bg-sidebar-accent text-sidebar-muted-foreground" };
-  }
 }
