@@ -6,6 +6,19 @@
 # This is migration debt, not permission for new code. If a cleanup reduces a
 # count, update this file in the same PR.
 
+SERVICE_SUFFIX_MODULE server/proliferate/server/automations/local_executor_service.py 1 transitional automation executor service naming cleanup belongs to folder hygiene lane
+UNDERSCORE_PREFIXED_MODULE server/proliferate/server/cloud/_logging.py 1 transitional cloud logging helper naming cleanup belongs to folder hygiene lane
+SINGLE_FILE_FOLDER server/proliferate/db/store/cloud_agent_run_config 1 transitional store folder has not yet been flattened or promoted
+SINGLE_FILE_FOLDER server/proliferate/db/store/cloud_plugins 1 transitional store folder has not yet been flattened or promoted
+SINGLE_FILE_FOLDER server/proliferate/db/store/cloud_skills 1 transitional store folder has not yet been flattened or promoted
+SINGLE_FILE_FOLDER server/proliferate/integrations/billing 1 transitional Stripe integration folder will move to canonical stripe package
+SINGLE_FILE_FOLDER server/proliferate/server/catalogs/domain 1 transitional pure-domain folder has not yet been flattened or expanded
+SINGLE_FILE_FOLDER server/proliferate/server/cloud/agent_run_config/domain 1 transitional pure-domain folder has not yet been flattened or expanded
+SINGLE_FILE_FOLDER server/proliferate/server/cloud/commands/domain 1 transitional pure-domain folder has not yet been flattened or expanded
+SINGLE_FILE_FOLDER server/proliferate/server/cloud/mcp_connections/domain 1 transitional pure-domain folder has not yet been flattened or expanded
+SINGLE_FILE_FOLDER server/proliferate/server/cloud/mobility/domain 1 transitional pure-domain folder has not yet been flattened or expanded
+SINGLE_FILE_FOLDER server/proliferate/server/cloud/plugins/catalog/domain 1 transitional pure-domain folder has not yet been flattened or expanded
+SINGLE_FILE_FOLDER server/proliferate/server/cloud/repo_config/domain 1 transitional pure-domain folder has not yet been flattened or expanded
 INTEGRATION_PRODUCT_IMPORT server/proliferate/integrations/billing/stripe.py 1 transitional integration depends on product domain types/logic
 API_STORE_IMPORT server/proliferate/server/cloud/live/api.py 1 transitional live API reads store types during cloud worker migration
 API_STORE_IMPORT server/proliferate/server/cloud/slack/api.py 2 transitional Slack API composes repo routing store records for admin settings

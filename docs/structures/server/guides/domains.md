@@ -302,7 +302,9 @@ A top-level sibling file in `server/<domain>/` that:
   store + service.
 - Has REST handlers. Those go in `api.py`.
 - Mixes business orchestration with vendor specifics. Split.
-- Is named `helpers.py`, `misc.py`, `utils.py`, or `common.py`. Junk-drawer.
+- Is named `helper.py`, `helpers.py`, `misc.py`, `common.py`, or `utils.py`,
+  or uses `_helper.py`, `_helpers.py`, or `_utils.py` as a suffix.
+  Junk-drawer.
 
 ## Subdomain Promotion
 

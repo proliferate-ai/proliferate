@@ -179,9 +179,20 @@ STORE_SESSION_FACTORY_IMPORT 16 findings across 16 files
 ```
 
 The max-lines checker also passes through an allowlist. Server-specific hard
-thresholds in `docs/structures/server/README.md` are stricter than the repo-wide
-600-line guardrail, so oversized server files should be treated as real
-decomposition work even when CI is green.
+thresholds in `docs/structures/server/README.md` are enforced for the server
+layers they cover, with the repo-wide 600-line guardrail as the fallback for
+other files. The allowlist records observed line counts, so oversized files
+cannot grow without updating the explicit exception and files that shrink must
+lower or remove their exception.
+
+The structure checker also tracks folder and naming migration debt through the
+same count-based allowlist:
+
+```text
+SERVICE_SUFFIX_MODULE         1 finding  across 1 file
+SINGLE_FILE_FOLDER           11 findings across 11 folders
+UNDERSCORE_PREFIXED_MODULE    1 finding  across 1 file
+```
 
 ## Lane 1: Docs Truth And Guardrails
 
@@ -210,10 +221,11 @@ Target result:
 
 - Canonical docs describe the current target shape without stale claims.
 - Shape checks cover the server-specific rules that can be enforced safely:
-  single-file folders, underscore-prefixed modules, `_service.py` names,
-  server-specific line thresholds, and existing boundary allowlist shrinkage.
-- Allowlist format remains count-based so cleanup PRs can shrink debt
-  incrementally.
+  single-file folders, single-underscore-prefixed modules, `_service.py`
+  names, helper/misc/common junk-drawer names, server-specific line
+  thresholds, and existing boundary allowlist shrinkage.
+- Boundary and max-lines allowlists remain count-based so cleanup PRs can
+  shrink debt incrementally.
 
 Do not change:
 
@@ -676,8 +688,8 @@ Target result:
 - Single-file folders are inlined or promoted into meaningful multi-file
   folders.
 - No underscore-prefixed modules at module scope.
-- No `_service.py`, `_helper.py`, `_utils.py`, `helpers.py`, `misc.py`, or
-  `common.py` domain files.
+- No `_service.py`, `_helper.py`, `_helpers.py`, `_utils.py`, `helper.py`,
+  `helpers.py`, `misc.py`, `common.py`, or `utils.py` domain files.
 - Parent-level sibling files either become `domain/<concern>.py`, legal
   `worker/` files, legal integrations, or promoted subdomains.
 
