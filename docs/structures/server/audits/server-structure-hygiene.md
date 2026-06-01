@@ -486,7 +486,7 @@ Scope:
 
 - `server/proliferate/server/cloud/agent_auth/**`
 - `server/proliferate/db/store/cloud_agent_auth/**`
-- `server/proliferate/db/models/cloud/agent_auth.py`
+- `server/proliferate/db/models/cloud/agent_auth*.py`
 - `docs/primitives/agent-auth.md`
 - `docs/primitives/agent-auth-bifrost-byok.md`
 
@@ -500,14 +500,19 @@ Canonical docs:
 
 Current debt:
 
-- `cloud/agent_auth/service.py` is the largest server service file.
-- `db/store/cloud_agent_auth/store.py` and
-  `db/models/cloud/agent_auth.py` exceed structure thresholds.
-- Agent gateway language in primitive docs sometimes references
-  `agent_gateway/**`, while the tracked implementation lives under
-  `cloud/agent_auth/**`.
-- Service-level session/SQLAlchemy debt remains around deferred
-  materialization.
+- Max-lines debt for `cloud/agent_auth/service.py`,
+  `db/store/cloud_agent_auth/store.py`,
+  `db/models/cloud/agent_auth.py`, and `cloud/agent_auth/models.py` has been
+  split below the enforced thresholds; those files now preserve stable import
+  surfaces.
+- Agent gateway language in primitive docs has been normalized toward
+  `cloud/agent_auth/**`, the tracked implementation owner.
+- Service-level session boundary debt remains in agent-auth service concern
+  modules, currently `managed_credits.py`, `refresh.py`, and
+  `session_loader.py`. The boundary checker classifies top-level
+  `cloud/agent_auth` concern modules as service-layer files and allowlists
+  those exact remaining violations until session ownership moves to an API,
+  worker, or named orchestration entry point.
 
 Target result:
 
@@ -544,7 +549,9 @@ Done when:
 - Agent-auth service/store/model hard-threshold files are split by documented
   ownership.
 - Agent-auth and gateway docs point to the same canonical code owner.
-- Agent-auth boundary allowlist entries are gone or reduced per PR.
+- Agent-auth max-lines allowlist entries are gone, and remaining session
+  boundary allowlist entries are visible by service concern module until a
+  later session-ownership migration removes them.
 
 ## Lane 7: Workspaces, Commands, And Worker Control
 

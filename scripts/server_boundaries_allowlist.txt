@@ -18,14 +18,17 @@ SERVICE_ORM_IMPORT server/proliferate/server/cloud/mobility/service.py 1 remaini
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/runtime/service.py 1 remaining service type boundary exposes workspace ORM records until snapshot migration
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/workspaces/service.py 2 remaining service type boundary exposes workspace ORM records until snapshot migration
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/billing/service.py 1 remaining service-owned non-HTTP session boundary debt through session_ops
-SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/agent_auth/service.py 1 remaining service-owned deferred materialization session boundary debt through session_ops
+SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/agent_auth/managed_credits.py 1 remaining agent-auth service concern managed-credit sync session boundary debt through session_ops
+SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/agent_auth/refresh.py 1 remaining agent-auth service concern refresh wake/error session boundary debt through session_ops
+SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/agent_auth/session_loader.py 1 remaining agent-auth service concern read-loader session boundary debt through db engine
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/commands/service.py 1 remaining service-owned command transaction boundary debt through session_ops
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/live/service.py 1 remaining service-owned live event session boundary debt through session_ops
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/slack/service.py 1 remaining service-owned Slack deferred transaction boundary debt through session_ops
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/worker/service.py 1 remaining service-owned worker transaction boundary debt through session_ops
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/workspaces/service.py 1 remaining service-owned workspace lifecycle session boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/billing/service.py 34 remaining billing service-owned transaction/session boundary debt through session_ops
-SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/agent_auth/service.py 4 remaining agent auth service-owned transaction/session boundary debt through session_ops
+SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/agent_auth/managed_credits.py 2 remaining agent-auth service concern managed-credit sync session boundary debt through session_ops
+SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/agent_auth/refresh.py 2 remaining agent-auth service concern refresh wake/error session boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/commands/service.py 4 remaining command service-owned transaction/session boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/live/service.py 4 remaining live service-owned session/deferred boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/slack/service.py 13 remaining Slack service-owned transaction/session boundary debt through session_ops

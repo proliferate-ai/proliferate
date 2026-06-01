@@ -47,6 +47,16 @@ SERVICE_DB_SESSION_OPS_METHODS = {
 API_DB_METHODS = {"execute", "commit", "rollback", "add", "delete", "refresh"}
 STORE_FORBIDDEN_SESSION_METHODS = {"commit", "rollback"}
 RAW_HTTP_MODULES = {"httpx", "requests"}
+# Lane 6 split service.py into top-level agent-auth concern modules. Until those
+# concerns move to documented subdomains or entry points, keep service boundary
+# debt visible for the same layer law that applies to service.py.
+AGENT_AUTH_SERVICE_CONCERN_EXCLUDED_FILES = {
+    "__init__.py",
+    "api.py",
+    "errors.py",
+    "models.py",
+    "reconciler.py",
+}
 
 
 @dataclass(frozen=True)
@@ -145,10 +155,21 @@ def classify_path(path: Path) -> SourceKind:
     is_orm_model = _starts_with(parts, ("server", "proliferate", "db", "models"))
     is_integration = _starts_with(parts, ("server", "proliferate", "integrations"))
     name = path.name
+    is_agent_auth_service_concern = (
+        _starts_with(
+            parts,
+            ("server", "proliferate", "server", "cloud", "agent_auth"),
+        )
+        and len(parts) == 6
+        and path.suffix == ".py"
+        and name not in AGENT_AUTH_SERVICE_CONCERN_EXCLUDED_FILES
+    )
 
     return SourceKind(
         is_api=is_product and name == "api.py",
-        is_service=is_product and name == "service.py",
+        is_service=(
+            is_product and (name == "service.py" or is_agent_auth_service_concern)
+        ),
         is_domain=is_product and "domain" in path.parts,
         is_product_models=is_product and name == "models.py",
         is_store=is_store,

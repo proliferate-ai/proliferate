@@ -134,8 +134,10 @@ Verified against the current repository worktree on 2026-05-20.
 
 ### 4.1 What is shipped and working
 
-**All ten agent-auth tables exist** in
-`server/proliferate/db/models/cloud/agent_auth.py`:
+**All ten agent-auth tables exist** under
+`server/proliferate/db/models/cloud/agent_auth*.py`, with
+`server/proliferate/db/models/cloud/agent_auth.py` preserving the stable import
+surface:
 
 ```text
 SandboxProfile
@@ -247,10 +249,11 @@ POST /v1/cloud/worker/agent-auth-configs/{sandbox_profile_id}/status
 ```
 
 **Service**:
-`server/proliferate/server/cloud/agent_auth/service.py` covers
-ensure-profile, create-credential, share, revoke, select, issue runtime
-grant, list selections/target-states, materialization plan build, worker
-status apply, Bifrost reconciliation and usage import
+`server/proliferate/server/cloud/agent_auth/` is the canonical owner. The
+stable `service.py` surface delegates to concern modules for ensure-profile,
+create-credential, share, revoke, select, runtime grants, list
+selections/target-states, materialization plan build, worker status apply,
+Bifrost reconciliation, and usage import
 (`reconciler.py:reconcile_agent_gateway_bifrost_router`).
 
 **Bifrost Gateway**
@@ -1319,8 +1322,8 @@ Manual smoke cases:
 3. **Where does the freshness framework run for provider 401 detection?**
 
    Deferred to a follow-up PR after this spec ships. When added, the
-   integration point will be the gateway response layer
-   (`agent_gateway/service.py:forward_gateway_request`) feeding back via
+   integration point will be the cloud agent-auth gateway response layer
+   (`server/proliferate/server/cloud/agent_auth/`) feeding back via
    `freshness.apply_signal` on the credential. Spec 02 ships the
    framework + Desktop sync signals only; the 401 path is a clean
    addition with no rework needed.
