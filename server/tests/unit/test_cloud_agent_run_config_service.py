@@ -86,17 +86,23 @@ def test_model_aliases_validate_and_resolve_to_canonical_catalog_ids() -> None:
     ]
 
     for agent_kind, legacy_model_id, canonical_model_id in cases:
-        assert validate_config_values(
-            catalog,
-            agent_kind=agent_kind,
-            model_id=legacy_model_id,
-            control_values={},
-        ) is None
-        assert canonical_model_id_for_config(
-            catalog,
-            agent_kind=agent_kind,
-            model_id=legacy_model_id,
-        ) == canonical_model_id
+        assert (
+            validate_config_values(
+                catalog,
+                agent_kind=agent_kind,
+                model_id=legacy_model_id,
+                control_values={},
+            )
+            is None
+        )
+        assert (
+            canonical_model_id_for_config(
+                catalog,
+                agent_kind=agent_kind,
+                model_id=legacy_model_id,
+            )
+            == canonical_model_id
+        )
 
         resolved = resolve_runtime_values(
             catalog,

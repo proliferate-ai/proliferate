@@ -65,11 +65,14 @@ def validate_config_values(
     agent = _catalog_agent(catalog, agent_kind)
     if agent is None:
         return AgentRunConfigIssue("agent_kind_unavailable", "Agent kind is not available.")
-    if canonical_model_id_for_config(
-        catalog,
-        agent_kind=agent_kind,
-        model_id=model_id,
-    ) is None:
+    if (
+        canonical_model_id_for_config(
+            catalog,
+            agent_kind=agent_kind,
+            model_id=model_id,
+        )
+        is None
+    ):
         return AgentRunConfigIssue("model_unavailable", "Model is not available for this agent.")
     allowed_controls = {
         control.key: control
