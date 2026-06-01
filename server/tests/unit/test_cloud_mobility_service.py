@@ -106,7 +106,7 @@ def _cleanup_item(
     )
 
 
-async def _noop_expire(*_args, user_id):
+async def _noop_expire(*_args, **_kwargs):
     return None
 
 
@@ -454,11 +454,7 @@ async def test_start_handoff_maps_existing_workspace_conflict_to_409(
     async def _create(*_args, **_kwargs):
         raise ValueError("handoff already in progress for workspace")
 
-    monkeypatch.setattr(
-        mobility_service,
-        "expire_stale_cloud_workspace_handoffs_for_user",
-        _noop_expire,
-    )
+    monkeypatch.setattr(mobility_service.mobility_tx, "expire_stale_handoffs_tx", _noop_expire)
     monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
     monkeypatch.setattr(mobility_service, "preflight_cloud_workspace_handoff", _preflight)
     monkeypatch.setattr(
@@ -517,11 +513,7 @@ async def test_start_local_to_cloud_marks_handoff_failed_when_cloud_setup_fails(
     async def _unexpected_start_cloud_workspace(*_args, **_kwargs):
         raise AssertionError("cloud workspace start should not run after ensure failure")
 
-    monkeypatch.setattr(
-        mobility_service,
-        "expire_stale_cloud_workspace_handoffs_for_user",
-        _noop_expire,
-    )
+    monkeypatch.setattr(mobility_service.mobility_tx, "expire_stale_handoffs_tx", _noop_expire)
     monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
     monkeypatch.setattr(mobility_service, "preflight_cloud_workspace_handoff", _preflight)
     monkeypatch.setattr(

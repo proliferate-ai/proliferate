@@ -84,6 +84,7 @@ def _metadata_sandbox_id(metadata: dict[str, str]) -> UUID | None:
 
 
 async def remember_sandbox_event_receipt(
+    db: AsyncSession,
     *,
     event_id: str,
     provider: str,
@@ -91,6 +92,7 @@ async def remember_sandbox_event_receipt(
     external_sandbox_id: str | None,
 ) -> bool:
     return await remember_cloud_sandbox_event_receipt(
+        db,
         event_id=event_id,
         provider=provider,
         event_type=event_type,
@@ -155,6 +157,7 @@ async def handle_e2b_webhook(
         return E2BWebhookReceipt()
 
     if not await remember_sandbox_event_receipt(
+        db,
         event_id=event.id,
         provider="e2b",
         event_type=event.type,

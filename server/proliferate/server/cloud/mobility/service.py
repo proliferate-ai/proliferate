@@ -586,7 +586,7 @@ async def start_cloud_workspace_handoff(
     requested_base_sha: str | None,
     exclude_paths: list[str],
 ) -> CloudWorkspaceHandoffOpValue:
-    await expire_stale_cloud_workspace_handoffs_for_user(db, user_id=user_id)
+    await mobility_tx.expire_stale_handoffs_tx(user_id=user_id, stale_after=_STALE_HANDOFF_AFTER)
     workspace = await get_cloud_workspace_mobility_detail(
         db,
         user_id=user_id,

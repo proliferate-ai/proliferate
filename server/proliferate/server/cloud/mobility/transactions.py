@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from uuid import UUID
 
 from proliferate.db import engine as db_engine
@@ -9,8 +10,48 @@ from proliferate.db.store.cloud_mobility import (
     CloudWorkspaceHandoffOpValue,
     create_cloud_workspace_handoff_op_for_user,
     fail_cloud_workspace_handoff_op_checkpoint_for_user,
+    list_cloud_workspace_mobility_for_user,
     update_cloud_workspace_handoff_phase_checkpoint_for_user,
 )
+from proliferate.server.cloud.mobility.domain.lifecycle import (
+    stale_handoff_outcome,
+    visible_failure_last_error,
+    visible_failure_status_detail,
+)
+from proliferate.utils.time import utcnow
+
+
+async def expire_stale_handoffs_tx(
+    *,
+    user_id: UUID,
+    stale_after: timedelta,
+) -> None:
+    stale_before = utcnow() - stale_after
+    async with db_engine.async_session_factory() as db, db.begin():
+        workspaces = await list_cloud_workspace_mobility_for_user(db, user_id=user_id)
+        for workspace in workspaces:
+            active_handoff = workspace.active_handoff
+            if active_handoff is None or active_handoff.heartbeat_at >= stale_before:
+                continue
+            outcome = stale_handoff_outcome(
+                finalized_at=active_handoff.finalized_at,
+                cleanup_completed_at=active_handoff.cleanup_completed_at,
+                canonical_side=active_handoff.canonical_side,
+            )
+            await fail_cloud_workspace_handoff_op_checkpoint_for_user(
+                db,
+                user_id=user_id,
+                mobility_workspace_id=workspace.id,
+                handoff_op_id=active_handoff.id,
+                phase=outcome.phase,
+                lifecycle_state=outcome.lifecycle_state,
+                failure_code=outcome.failure_code,
+                failure_detail=outcome.failure_detail,
+                status_detail=visible_failure_status_detail(outcome.failure_detail),
+                last_error=visible_failure_last_error(outcome.failure_detail),
+                keep_active_handoff=outcome.keep_active_handoff,
+                event_type="handoff_stale",
+            )
 
 
 async def create_cloud_workspace_handoff_op_checkpoint_tx(

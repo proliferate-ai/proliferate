@@ -69,7 +69,7 @@ server/tests/integration/test_cloud_commands_api.py 5139 existing server oversiz
 server/tests/integration/test_sandbox_profile_foundation.py 1400 existing server oversized integration test
 server/tests/integration/test_schema_migrations.py 925 existing server oversized integration test
 server/tests/integration/test_stripe_webhooks.py 1456 existing server oversized integration test
-server/tests/unit/test_cloud_mobility_service.py 814 existing server oversized unit test
+server/tests/unit/test_cloud_mobility_service.py 806 existing server oversized unit test
 server/tests/unit/test_cloud_runtime_ensure_running.py 876 existing server oversized unit test
 server/tests/unit/test_cloud_runtime_provision.py 1803 existing server oversized unit test
 server/tests/unit/test_cloud_workspace_service.py 1319 existing server oversized unit test

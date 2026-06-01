@@ -2541,9 +2541,9 @@ async def get_cloud_connection(
 ) -> WorkspaceConnection:
     workspace = await cloud_workspace_user_can_interact_with_db(db, user_id, workspace_id)
     await _reject_shared_workspace_static_connection(workspace)
-    async with db_engine.async_session_factory() as db:
+    async with db_engine.async_session_factory() as lookup_db:
         automation_runs_by_workspace = await list_latest_runs_by_cloud_workspace_ids_for_user(
-            db,
+            lookup_db,
             user_id=user_id,
             cloud_workspace_ids=[workspace.id],
         )

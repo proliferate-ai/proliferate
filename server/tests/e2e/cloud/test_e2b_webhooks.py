@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 import uuid
 
 import httpx
@@ -9,8 +10,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
+from proliferate.constants.billing import BILLING_MODE_ENFORCE
 from proliferate.db.models.billing import UsageSegment
 from proliferate.db.store.billing import open_usage_segment_for_sandbox
+from proliferate.server.cloud.webhooks import service as webhook_service
 from proliferate.server.billing.models import utcnow
 from tests.e2e.cloud.helpers import (
     CloudE2ETestError,
@@ -129,6 +132,67 @@ async def test_e2b_webhook_duplicate_ignored(
     assert refreshed_workspace.status == "ready"
     assert refreshed_environment.status == "paused"
     assert refreshed_sandbox.status == "paused"
+
+
+@pytest.mark.asyncio
+async def test_e2b_webhook_failed_quota_pause_keeps_receipt_retryable(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "e2b_webhook_signature_secret", "test-secret")
+    auth = await create_user_and_login(client, db_session, email_prefix="webhook-retry")
+    workspace, sandbox = await create_seeded_workspace_and_sandbox(
+        db_session,
+        user_id=auth.user_id,
+        provider="e2b",
+        workspace_status="ready",
+        sandbox_status="running",
+    )
+    workspace_id = str(workspace.id)
+    event_id = f"evt-{uuid.uuid4()}"
+    body, signature = build_signed_e2b_webhook(
+        event_id=event_id,
+        event_type="sandbox.lifecycle.resumed",
+        sandbox_id=sandbox.external_sandbox_id or "",
+        metadata={"cloud_sandbox_id": str(sandbox.id)},
+    )
+    pause_calls = 0
+
+    class _Provider:
+        async def pause_sandbox(self, sandbox_id: str) -> None:
+            nonlocal pause_calls
+            assert sandbox_id == sandbox.external_sandbox_id
+            pause_calls += 1
+            if pause_calls == 1:
+                raise RuntimeError("pause failed")
+
+    async def _billing_snapshot(_billing_subject_id):
+        return SimpleNamespace(billing_mode=BILLING_MODE_ENFORCE, active_spend_hold=True)
+
+    monkeypatch.setattr(webhook_service, "get_sandbox_provider", lambda _provider: _Provider())
+    monkeypatch.setattr(webhook_service, "get_billing_snapshot_for_subject", _billing_snapshot)
+
+    with pytest.raises(RuntimeError, match="pause failed"):
+        await client.post(
+            "/v1/cloud/webhooks/e2b",
+            content=body,
+            headers={"e2b-signature": signature},
+        )
+    assert await event_receipt_count(db_session, event_id=event_id) == 0
+    assert (await load_active_sandbox_record(db_session, workspace_id)).status == "running"
+
+    retry = await client.post(
+        "/v1/cloud/webhooks/e2b",
+        content=body,
+        headers={"e2b-signature": signature},
+    )
+    assert retry.status_code == 200
+    assert pause_calls == 2
+    assert await event_receipt_count(db_session, event_id=event_id) == 1
+    assert (await load_active_sandbox_record(db_session, workspace_id)).status == "paused"
+    environment = await load_runtime_environment_record(db_session, workspace_id)
+    assert environment.status == "paused"
 
 
 @pytest.mark.asyncio

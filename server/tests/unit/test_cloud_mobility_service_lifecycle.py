@@ -71,7 +71,7 @@ def _handoff(*, mobility_workspace_id=None) -> CloudWorkspaceHandoffOpValue:
     )
 
 
-async def _noop_expire(*_args, user_id):
+async def _noop_expire(*_args, **_kwargs):
     return None
 
 
@@ -218,16 +218,19 @@ async def test_start_local_to_cloud_creates_handoff_before_provisioning(
         events.append("handoff_created")
         return handoff
 
+    async def _checkpoint_expire(*_args, **_kwargs):
+        events.append("stale_expired_checkpoint")
+
     async def _load_user(_db, _user_id):
         return SimpleNamespace(id=_user_id)
 
     async def _ensure_cloud_workspace(*_args, **_kwargs):
-        assert events == ["handoff_created"]
+        assert events == ["stale_expired_checkpoint", "handoff_created"]
         events.append("workspace_ensured")
         return SimpleNamespace(id=cloud_workspace_id)
 
     async def _start_cloud_workspace(*_args, **_kwargs):
-        assert events == ["handoff_created", "workspace_ensured"]
+        assert events == ["stale_expired_checkpoint", "handoff_created", "workspace_ensured"]
         events.append("workspace_started")
 
     async def _update_phase(*_args, **kwargs):
@@ -238,9 +241,9 @@ async def test_start_local_to_cloud_creates_handoff_before_provisioning(
         return handoff
 
     monkeypatch.setattr(
-        mobility_service,
-        "expire_stale_cloud_workspace_handoffs_for_user",
-        _noop_expire,
+        mobility_service.mobility_tx,
+        "expire_stale_handoffs_tx",
+        _checkpoint_expire,
     )
     monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
     monkeypatch.setattr(mobility_service, "preflight_cloud_workspace_handoff", _preflight)
@@ -277,6 +280,7 @@ async def test_start_local_to_cloud_creates_handoff_before_provisioning(
     )
 
     assert events == [
+        "stale_expired_checkpoint",
         "handoff_created",
         "workspace_ensured",
         "workspace_started",
@@ -307,8 +311,8 @@ async def test_start_cloud_to_local_creates_handoff_without_cloud_provisioning(
         raise AssertionError("cloud provisioning should not run for cloud_to_local")
 
     monkeypatch.setattr(
-        mobility_service,
-        "expire_stale_cloud_workspace_handoffs_for_user",
+        mobility_service.mobility_tx,
+        "expire_stale_handoffs_tx",
         _noop_expire,
     )
     monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
