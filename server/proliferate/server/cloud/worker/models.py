@@ -135,6 +135,11 @@ class WorkerCommandLeaseRequest(BaseModel):
     lease_timeout_seconds: int | None = Field(default=None, alias="leaseTimeoutSeconds")
 
 
+class WorkerControlWaitRequest(WorkerCommandLeaseRequest):
+    control_cursor: str | None = Field(default=None, alias="controlCursor")
+    wait_seconds: int | None = Field(default=None, alias="waitSeconds")
+
+
 class WorkerCommandEnvelope(BaseModel):
     command_id: str = Field(serialization_alias="commandId")
     idempotency_key: str = Field(serialization_alias="idempotencyKey")
@@ -205,6 +210,14 @@ class WorkerExposureSnapshotResponse(BaseModel):
 
 class WorkerExposureListResponse(BaseModel):
     exposures: list[WorkerExposureSnapshotResponse]
+
+
+class WorkerControlWaitResponse(BaseModel):
+    command: WorkerCommandEnvelope | None = None
+    exposures: list[WorkerExposureSnapshotResponse] | None = None
+    control_cursor: str = Field(serialization_alias="controlCursor")
+    reason: str
+    server_time: str = Field(serialization_alias="serverTime")
 
 
 class WorkerProjectionGapRequest(BaseModel):

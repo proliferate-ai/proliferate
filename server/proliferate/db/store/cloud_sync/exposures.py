@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.exposures import CloudWorkspaceExposure
+from proliferate.db.store.cloud_sync import worker_control
 from proliferate.utils.time import utcnow
 
 
@@ -140,6 +141,7 @@ async def upsert_workspace_exposure(
         )
         db.add(row)
         await db.flush()
+        await worker_control.bump_exposure_revision(db, target_id=target_id, now=now)
         return _snapshot(row)
 
     changed = False
@@ -162,6 +164,8 @@ async def upsert_workspace_exposure(
         row.revision += 1
         row.updated_at = now
     await db.flush()
+    if changed:
+        await worker_control.bump_exposure_revision(db, target_id=target_id, now=now)
     return _snapshot(row)
 
 
@@ -188,6 +192,7 @@ async def archive_workspace_exposure(
         row.archived_at = now
         row.updated_at = now
         await db.flush()
+        await worker_control.bump_exposure_revision(db, target_id=row.target_id, now=now)
     return _snapshot(row)
 
 
@@ -212,11 +217,13 @@ async def clear_workspace_exposure_materialization(
     ):
         return _snapshot(row)
     if row.anyharness_workspace_id is not None or row.commandable:
+        now = utcnow()
         row.anyharness_workspace_id = None
         row.commandable = False
         row.revision += 1
-        row.updated_at = utcnow()
+        row.updated_at = now
         await db.flush()
+        await worker_control.bump_exposure_revision(db, target_id=target_id, now=now)
     return _snapshot(row)
 
 
@@ -243,6 +250,7 @@ async def claim_workspace_exposure(
     row.revision += 1
     row.updated_at = now
     await db.flush()
+    await worker_control.bump_exposure_revision(db, target_id=row.target_id, now=now)
     return _snapshot(row)
 
 

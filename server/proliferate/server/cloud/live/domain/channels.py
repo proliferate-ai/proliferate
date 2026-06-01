@@ -15,3 +15,7 @@ def workspace_channel(*, workspace_id: UUID) -> str:
 
 def target_channel(*, target_id: UUID) -> str:
     return f"target:{target_id}"
+
+
+def worker_control_channel(*, target_id: UUID) -> str:
+    return f"worker-control:{target_id}"

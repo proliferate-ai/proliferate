@@ -9,6 +9,7 @@ use crate::{
     error::WorkerError,
     identity::{credentials::WorkerIdentity, enrollment},
     inventory,
+    process_lock::WorkerProcessLock,
     store::WorkerStore,
     sync, updates, versions,
 };
@@ -20,6 +21,7 @@ struct RuntimeHealth {
 }
 
 pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
+    let _process_lock = WorkerProcessLock::acquire(&config.worker_db_path)?;
     let store = WorkerStore::open(config.worker_db_path.clone())?;
     let cloud = CloudClient::new(&config)?;
     let identity = ensure_identity(&config, &store, &cloud).await?;

@@ -15,6 +15,7 @@ anyhow.workspace = true
 chrono.workspace = true
 clap.workspace = true
 dirs.workspace = true
+fs2.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 rusqlite.workspace = true
 serde.workspace = true

@@ -133,7 +133,10 @@ from proliferate.server.cloud.commands.service import (
     mark_pending_prompt_interaction_failed_for_command,
 )
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.live.service import publish_command_status_after_commit
+from proliferate.server.cloud.live.service import (
+    publish_command_status_after_commit,
+    publish_worker_control_after_commit,
+)
 from proliferate.server.cloud.repo_config.service import (
     bootstrap_repo_config,
     load_repo_config_value,
@@ -712,6 +715,7 @@ async def bootstrap_workspace_remote_access(
         status="active",
         origin="manual_desktop",
     )
+    await publish_worker_control_after_commit(db, target_id=target.id, reason="exposures")
     await enqueue_command(
         db,
         user=user,
@@ -1215,6 +1219,11 @@ async def enable_cloud_workspace_remote_access(
         status="active",
         origin=workspace.origin,
     )
+    await publish_worker_control_after_commit(
+        db,
+        target_id=workspace.target_id,
+        reason="exposures",
+    )
     await enqueue_command(
         db,
         user=user,
@@ -1250,6 +1259,11 @@ async def disable_cloud_workspace_remote_access(
     )
     if exposure is not None:
         await exposures_store.archive_workspace_exposure(db, exposure_id=exposure.id)
+        await publish_worker_control_after_commit(
+            db,
+            target_id=workspace.target_id,
+            reason="exposures",
+        )
     return await _build_workspace_detail_for_request(db, workspace)
 
 

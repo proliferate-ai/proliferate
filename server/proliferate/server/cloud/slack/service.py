@@ -78,6 +78,7 @@ from proliferate.server.cloud.commands.service import (
     stamp_and_validate_command_preflight,
 )
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.live.service import publish_worker_control_after_commit
 from proliferate.server.cloud.slack.domain.mention_parse import (
     ParsedSlackMention,
     parse_slack_mention_text,
@@ -853,7 +854,7 @@ async def _create_and_materialize_workspace(
     workspace.origin = "slack"
     workspace.updated_at = utcnow()
     await db.flush()
-    await exposures_store.upsert_workspace_exposure(
+    exposure = await exposures_store.upsert_workspace_exposure(
         db,
         target_id=target.id,
         cloud_workspace_id=workspace.id,
@@ -867,6 +868,11 @@ async def _create_and_materialize_workspace(
         commandable=True,
         status="active",
         origin="slack",
+    )
+    await publish_worker_control_after_commit(
+        db,
+        target_id=exposure.target_id,
+        reason="exposures",
     )
     checkout = await _enqueue_command(
         db,

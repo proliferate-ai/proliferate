@@ -1,14 +1,18 @@
 use std::{
     fmt,
+    fs::OpenOptions,
+    io,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
+use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use tokio::{
     process::{Child, Command},
     sync::Mutex,
+    time::{sleep, Duration},
 };
 
 use crate::{
@@ -30,9 +34,19 @@ struct CloudWorkerProcess {
     config_path: PathBuf,
 }
 
+struct WorkerDatabaseLock {
+    file: std::fs::File,
+}
+
 impl Drop for CloudWorkerProcess {
     fn drop(&mut self) {
         let _ = self.child.start_kill();
+    }
+}
+
+impl Drop for WorkerDatabaseLock {
+    fn drop(&mut self) {
+        let _ = self.file.unlock();
     }
 }
 
@@ -91,19 +105,24 @@ pub async fn ensure_desktop_dispatch_worker(
     let launcher = find_proliferate_worker_launcher()
         .ok_or_else(|| "Proliferate Worker binary was not found.".to_string())?;
     let paths = worker_paths(&target_id)?;
-    if enrollment_token.is_none() && !worker_identity_exists(&paths.database)? {
-        return Err(
-            "Desktop dispatch worker is missing local credentials and needs a fresh enrollment token."
-                .to_string(),
-        );
+    let mut mutation_lock = None;
+    if enrollment_token.is_some() {
+        mutation_lock = Some(acquire_worker_database_lock(&paths.database)?);
+    } else {
+        if worker_database_lock_is_held(&paths.database)? {
+            return Ok(EnsureDesktopDispatchWorkerResult {
+                target_id,
+                status: "already_running_elsewhere",
+                config_path: paths.config.to_string_lossy().into_owned(),
+            });
+        }
+        if !worker_identity_exists(&paths.database)? {
+            return Err(
+                "Desktop dispatch worker is missing local credentials and needs a fresh enrollment token."
+                    .to_string(),
+            );
+        }
     }
-    write_worker_config(
-        &paths.config,
-        &cloud_base_url,
-        enrollment_token.as_deref(),
-        &anyharness_base_url,
-        &paths.database,
-    )?;
     if enrollment_token.is_some() && paths.database.exists() {
         std::fs::remove_file(&paths.database).map_err(|error| {
             format!(
@@ -112,6 +131,14 @@ pub async fn ensure_desktop_dispatch_worker(
             )
         })?;
     }
+    write_worker_config(
+        &paths.config,
+        &cloud_base_url,
+        enrollment_token.as_deref(),
+        &anyharness_base_url,
+        &paths.database,
+    )?;
+    drop(mutation_lock);
 
     let mut command = launcher.command(&paths.config);
     command
@@ -123,9 +150,18 @@ pub async fn ensure_desktop_dispatch_worker(
         command.env("PATH", path);
     }
 
-    let child = command
+    let mut child = command
         .spawn()
         .map_err(|error| format!("Failed to start Proliferate Worker with {launcher}: {error}"))?;
+    sleep(Duration::from_millis(150)).await;
+    if let Some(status) = child
+        .try_wait()
+        .map_err(|error| format!("Failed to inspect Proliferate Worker startup: {error}"))?
+    {
+        return Err(format!(
+            "Proliferate Worker exited during startup with {status}."
+        ));
+    }
 
     let result = EnsureDesktopDispatchWorkerResult {
         target_id: target_id.clone(),
@@ -216,6 +252,70 @@ fn worker_identity_exists(path: &Path) -> Result<bool, String> {
             "Failed to inspect worker identity at {}: {error}",
             path.display()
         )),
+    }
+}
+
+fn worker_database_lock_is_held(database_path: &Path) -> Result<bool, String> {
+    match acquire_worker_database_lock(database_path) {
+        Ok(_lock) => Ok(false),
+        Err(error) if error.contains("still running") => Ok(true),
+        Err(error) => Err(error),
+    }
+}
+
+fn acquire_worker_database_lock(database_path: &Path) -> Result<WorkerDatabaseLock, String> {
+    let lock_path = worker_lock_path(database_path);
+    if let Some(parent) = lock_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create {}: {error}", parent.display()))?;
+    }
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(&lock_path)
+        .map_err(|error| {
+            format!(
+                "Failed to inspect worker lock at {}: {error}",
+                lock_path.display()
+            )
+        })?;
+    match file.try_lock_exclusive() {
+        Ok(()) => Ok(WorkerDatabaseLock { file }),
+        Err(error) if error.kind() == io::ErrorKind::WouldBlock => Err(
+            "Cannot replace worker credentials while a Proliferate Worker is still running."
+                .to_string(),
+        ),
+        Err(error) => Err(format!(
+            "Failed to inspect worker lock at {}: {error}",
+            lock_path.display()
+        )),
+    }
+}
+
+fn worker_lock_path(database_path: &Path) -> PathBuf {
+    let database_path = canonical_database_path(database_path);
+    let extension = database_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| format!("{value}.lock"))
+        .unwrap_or_else(|| "lock".to_string());
+    database_path.with_extension(extension)
+}
+
+fn canonical_database_path(database_path: &Path) -> PathBuf {
+    if let Ok(path) = database_path.canonicalize() {
+        return path;
+    }
+    let Some(parent) = database_path.parent() else {
+        return database_path.to_path_buf();
+    };
+    let Ok(parent) = parent.canonicalize() else {
+        return database_path.to_path_buf();
+    };
+    match database_path.file_name() {
+        Some(file_name) => parent.join(file_name),
+        None => database_path.to_path_buf(),
     }
 }
 

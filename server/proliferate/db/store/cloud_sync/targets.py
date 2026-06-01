@@ -28,6 +28,7 @@ from proliferate.db.store.cloud_profile_target_guard import (
     ProfileTargetInvariantError,
     require_primary_managed_profile_target,
 )
+from proliferate.db.store.cloud_sync import worker_control
 from proliferate.utils.time import utcnow
 
 
@@ -632,6 +633,7 @@ async def update_target_runtime_access(
         )
     ).scalar_one_or_none()
     now = utcnow()
+    should_bump_control = row is None
     if row is None:
         row = CloudTargetRuntimeAccess(
             target_id=target_id,
@@ -651,6 +653,7 @@ async def update_target_runtime_access(
         slot_changed = (
             row.active_sandbox_id != active_sandbox_id or row.slot_generation != slot_generation
         )
+        should_bump_control = slot_changed
         if row.active_sandbox_id not in {None, active_sandbox_id}:
             previous_slot = await db.get(CloudSandbox, row.active_sandbox_id)
             previous_slot_is_current = (
@@ -681,6 +684,8 @@ async def update_target_runtime_access(
         row.last_heartbeat_at = heartbeat_at
         row.updated_at = now
     await db.flush()
+    if should_bump_control:
+        await worker_control.bump_control_revision(db, target_id=target_id, now=now)
     return _runtime_access_snapshot(row)
 
 

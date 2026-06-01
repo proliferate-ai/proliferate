@@ -21,8 +21,12 @@ from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.cloud_sync import inventory as inventory_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
+from proliferate.db.store.cloud_sync import worker_control as worker_control_store
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.live.service import publish_target_patch_after_commit
+from proliferate.server.cloud.live.service import (
+    publish_target_patch_after_commit,
+    publish_worker_control_after_commit,
+)
 from proliferate.server.cloud.target_git_identity.service import require_user_github_auth
 from proliferate.server.cloud.targets.domain.policy import require_target_admin_membership
 from proliferate.server.cloud.targets.domain.rules import (
@@ -256,5 +260,11 @@ async def archive_target(
         target_id=target.id,
         now=utcnow(),
     )
+    await worker_control_store.bump_control_revision(db, target_id=target.id)
     await publish_target_patch_after_commit(db, archived)
+    await publish_worker_control_after_commit(
+        db,
+        target_id=target.id,
+        reason="state_changed",
+    )
     return archived

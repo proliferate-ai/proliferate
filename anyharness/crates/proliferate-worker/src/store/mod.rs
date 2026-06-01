@@ -5,8 +5,10 @@ use serde_json::Value;
 
 use crate::{error::WorkerError, identity::credentials::WorkerIdentity};
 
+mod exposures;
 mod projection_cursors;
 
+pub use exposures::WorkerExposureSnapshot;
 pub use projection_cursors::{ProjectionCursor, ProjectionCursorUpsert};
 
 pub struct WorkerStore {
@@ -117,6 +119,32 @@ impl WorkerStore {
                 exposure_id TEXT PRIMARY KEY,
                 anyharness_workspace_id TEXT NOT NULL,
                 last_checked_unix_ms INTEGER NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS worker_exposure_snapshot (
+                snapshot_key TEXT PRIMARY KEY,
+                exposure_id TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                cloud_workspace_id TEXT NOT NULL,
+                session_projection_id TEXT,
+                anyharness_workspace_id TEXT NOT NULL,
+                anyharness_session_id TEXT,
+                projection_level TEXT NOT NULL,
+                commandable INTEGER NOT NULL CHECK (commandable IN (0, 1)),
+                status TEXT NOT NULL,
+                revision INTEGER,
+                last_uploaded_seq INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS ix_worker_exposure_snapshot_workspace
+                ON worker_exposure_snapshot(status, anyharness_workspace_id);
+            CREATE TABLE IF NOT EXISTS worker_control_state (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                control_cursor TEXT,
+                exposure_cache_initialized INTEGER NOT NULL DEFAULT 0
+                    CHECK (exposure_cache_initialized IN (0, 1)),
+                legacy_exposure_polling_enabled INTEGER NOT NULL DEFAULT 0
+                    CHECK (legacy_exposure_polling_enabled IN (0, 1)),
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             "#,

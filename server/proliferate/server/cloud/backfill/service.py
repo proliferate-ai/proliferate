@@ -25,6 +25,7 @@ from proliferate.server.cloud.backfill.models import (
     WorkerBackfillWorkspaceMapping,
 )
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.live.service import publish_worker_control_after_commit
 from proliferate.server.cloud.worker.domain.rules import compact_json
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
 from proliferate.server.cloud.worker.slot_guard import require_current_managed_worker_slot
@@ -224,6 +225,12 @@ async def record_worker_backfill(
         skipped_session_missing_cloud_workspace=skipped_session_missing_cloud_workspace,
         skipped_session_inactive_exposure=skipped_session_inactive_exposure,
     )
+    if mapped_sessions:
+        await publish_worker_control_after_commit(
+            db,
+            target_id=auth.target_id,
+            reason="exposures",
+        )
     return WorkerBackfillResponse(
         mapped_workspaces=mapped_workspaces,
         mapped_sessions=mapped_sessions,
