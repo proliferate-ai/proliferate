@@ -12,7 +12,14 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
+def _has_table(table_name: str) -> bool:
+    return sa.inspect(op.get_bind()).has_table(table_name)
+
+
 def upgrade() -> None:
+    if _has_table("cloud_worker_target_control_state"):
+        return
+
     op.create_table(
         "cloud_worker_target_control_state",
         sa.Column("target_id", sa.UUID(), nullable=False),
@@ -36,4 +43,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_table("cloud_worker_target_control_state")
+    if _has_table("cloud_worker_target_control_state"):
+        op.drop_table("cloud_worker_target_control_state")
