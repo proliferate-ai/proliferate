@@ -91,6 +91,10 @@
       "types": "./dist/billing/BillingSettingsPane.d.ts",
       "import": "./dist/billing/BillingSettingsPane.js"
     },
+    "./billing/BillingOwnerCard": {
+      "types": "./dist/billing/BillingOwnerCard.d.ts",
+      "import": "./dist/billing/BillingOwnerCard.js"
+    },
     "./brand/ProliferateMark": {
       "types": "./dist/brand/ProliferateMark.d.ts",
       "import": "./dist/brand/ProliferateMark.js"

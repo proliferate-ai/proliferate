@@ -4,7 +4,6 @@ export type {
   CloudCommandReadinessState,
   CloudCommandReadinessView,
   CloudWorkFilters,
-  CloudWorkGroupView,
   CloudWorkItemView,
   CloudWorkOpenTarget,
   CloudWorkOwnerFilter,

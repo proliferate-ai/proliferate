@@ -6,9 +6,11 @@ import {
 } from "@proliferate/cloud-sdk-react";
 import {
   BillingOwnerCard,
+  type BillingOwnerCardView,
+} from "@proliferate/product-ui/billing/BillingOwnerCard";
+import {
   BillingSettingsPane,
   type BillingActionView,
-  type BillingOwnerCardView,
   type BillingPlanView,
 } from "@proliferate/product-ui/billing/BillingSettingsPane";
 import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";

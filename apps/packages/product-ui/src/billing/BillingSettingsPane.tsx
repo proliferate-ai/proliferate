@@ -7,10 +7,8 @@ import { CheckoutReturnNotice, PlanComparisonCard } from "./BillingPlanCompariso
 export type {
   BillingActionView,
   BillingGrantAllocationView,
-  BillingOwnerCardView,
   BillingPlanView,
 } from "./billing-types";
-export { BillingOwnerCard } from "./BillingOwnerCard";
 
 export interface BillingSettingsPaneProps {
   children: ReactNode;

@@ -17,6 +17,8 @@ import {
 } from "./billing-presentation";
 import { BillingButton, Metric, Notice } from "./BillingUiParts";
 
+export type { BillingOwnerCardView } from "./billing-types";
+
 export function BillingOwnerCard({ view }: { view: BillingOwnerCardView }) {
   const { plan } = view;
 
