@@ -34,6 +34,9 @@ path explicit. A process is not documented enough until it names:
 - the user permissions required, such as GitHub environment approval, repo
   write access, AWS deploy role access, Vercel team access, Expo/App Store
   Connect access, Stripe access, or analytics admin access
+- the configuration and environment variables the process depends on, with a
+  link to `docs/dev/reference/env-vars.yaml` when the values are canonical
+  deployment variables
 - the normal happy path from request to verification
 - the exact verification commands or dashboards that prove the process worked
 - the failure modes that are common enough to have a first response

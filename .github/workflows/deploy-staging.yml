@@ -125,6 +125,7 @@ jobs:
           --branch main
           --head "${{ steps.meta.outputs.head_sha }}"
           --fallback "${{ steps.meta.outputs.fallback_sha }}"
+          --required-artifact deploy-summary-staging
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
@@ -257,5 +258,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: deploy-summary-staging
+          name: ${{ needs.plan.outputs.dry_run == 'true' && 'deploy-plan-staging' || 'deploy-summary-staging' }}
           path: deploy-summary/staging.json
