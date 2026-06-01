@@ -70,34 +70,22 @@ jobs:
         env:
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
 
-      - name: Verify staging success
-        if: ${{ github.event.inputs.require_staging_success == 'true' }}
+      - name: Verify promoted commit is on main
         run: |
           set -euo pipefail
-          mapfile -t runs < <(
-            gh run list \
-              --workflow deploy-staging.yml \
-              --commit "${{ steps.meta.outputs.head_sha }}" \
-              --status success \
-              --limit 20 \
-              --json databaseId,url \
-              --jq '.[] | [.databaseId, .url] | @tsv'
-          )
-          for run in "${runs[@]}"; do
-            IFS=$'\t' read -r run_id url <<< "$run"
-            artifact_count="$(
-              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" \
-                --jq '[.artifacts[] | select(.name == "deploy-summary-staging" and .expired == false)] | length'
-            )"
-            if [[ "$artifact_count" != "0" ]]; then
-              echo "Found successful non-dry-run Deploy Staging run for ${{ steps.meta.outputs.head_sha }}: $url"
-              exit 0
-            fi
-          done
-          echo "No successful non-dry-run Deploy Staging run found for ${{ steps.meta.outputs.head_sha }}." >&2
-          exit 1
+          git fetch origin main --prune
+          git merge-base --is-ancestor "${{ steps.meta.outputs.head_sha }}" refs/remotes/origin/main
+
+      - name: Verify staging success
+        if: ${{ github.event.inputs.require_staging_success == 'true' }}
+        run: >
+          node scripts/ci-cd/find-deploy-run.mjs
+          --workflow deploy-staging.yml
+          --branch main
+          --head "${{ steps.meta.outputs.head_sha }}"
+          --artifact deploy-summary-staging
         env:
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Resolve previous successful production deploy
         id: base
