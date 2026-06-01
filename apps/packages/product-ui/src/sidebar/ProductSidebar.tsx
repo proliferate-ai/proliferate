@@ -23,25 +23,6 @@ export type {
   SidebarWorkspaceGroupView,
   SidebarWorkspaceRowView,
 } from "./ProductSidebarModel";
-export { ProductSidebarFooter } from "./ProductSidebarFooter";
-export {
-  ProductSidebarBody,
-  ProductSidebarFrame,
-  ProductSidebarScrollableContent,
-  ProductSidebarSectionHeader,
-} from "./ProductSidebarLayout";
-export { ProductSidebarNavRow, ProductSidebarPrimaryNavigation } from "./ProductSidebarNavigation";
-export {
-  ProductSidebarRepoGroupHeader,
-  ProductSidebarWorkspaceRow,
-} from "./ProductSidebarRepositories";
-export type {
-  ProductSidebarRepoGroupHeaderProps,
-  ProductSidebarWorkspaceRowProps,
-} from "./ProductSidebarRepositories";
-export { ProductSidebarShowToggleRow } from "./ProductSidebarShowToggleRow";
-export { ProductSidebarThreadRow } from "./ProductSidebarThreads";
-export type { ProductSidebarThreadRowProps } from "./ProductSidebarThreads";
 
 export function ProductSidebar({
   className = "",

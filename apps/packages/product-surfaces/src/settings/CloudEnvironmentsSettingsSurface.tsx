@@ -8,8 +8,6 @@ import { CloudEnvironmentList } from "@proliferate/product-ui/environments/Cloud
 import { AddCloudEnvironmentDialogController } from "./cloud-environments/AddCloudEnvironmentDialogController";
 import { CloudEnvironmentDetail } from "./cloud-environments/CloudEnvironmentDetail";
 
-export { AddCloudEnvironmentDialogController } from "./cloud-environments/AddCloudEnvironmentDialogController";
-
 export interface LocalCheckoutView {
   id: string;
   name: string;
