@@ -210,6 +210,7 @@ pub(in crate::live::sessions) async fn start_new_session(
             Ok(resp)
         }
         Err(error) => {
+            let start_error = add_claude_permission_mode_remediation(error);
             tracing::warn!(
                 session_id = %session_id,
                 workspace_id = %workspace_id,
@@ -217,13 +218,23 @@ pub(in crate::live::sessions) async fn start_new_session(
                 startup_event = failed_event,
                 detail = "ACP new_session failed",
                 elapsed_ms = new_session_started.elapsed().as_millis(),
-                error = %error,
+                error = %start_error,
                 "{}",
                 failed_event
             );
-            Err(anyhow::anyhow!("{error}"))
+            Err(start_error)
         }
     }
+}
+
+fn add_claude_permission_mode_remediation(error: impl std::fmt::Display) -> anyhow::Error {
+    let message = error.to_string();
+    if message.contains("Invalid permissions.defaultMode: auto") {
+        return anyhow::anyhow!(
+            "{message}. Claude could not start because the installed Claude ACP adapter does not support the global Claude permission mode `auto`. Reinstall or update the Claude agent setup, or change `permissions.defaultMode` in Claude settings to `default`, `acceptEdits`, `plan`, `dontAsk`, or `bypassPermissions`."
+        );
+    }
+    anyhow::anyhow!("{message}")
 }
 
 #[cfg(test)]
@@ -307,6 +318,15 @@ mod tests {
     fn advertised_auth_is_preserved_for_non_codex_agents() {
         assert!(should_attempt_advertised_auth(AgentKind::Claude.as_str()));
         assert!(should_attempt_advertised_auth(AgentKind::Gemini.as_str()));
+    }
+
+    #[test]
+    fn permission_mode_auto_start_error_includes_repair_hint() {
+        let error = add_claude_permission_mode_remediation("Invalid permissions.defaultMode: auto");
+        let message = error.to_string();
+
+        assert!(message.contains("Reinstall or update the Claude agent setup"));
+        assert!(message.contains("permissions.defaultMode"));
     }
 
     fn resolved_agent_with_source(kind: AgentKind, source: &str) -> ResolvedAgent {

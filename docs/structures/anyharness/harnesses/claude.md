@@ -77,6 +77,14 @@ managed adapter supports it. Gateway-backed Claude launches set a
 runtime-owned `CLAUDE_CONFIG_DIR` so hosted sessions do not inherit a user's
 global Claude settings default that the adapter cannot start with.
 
+Older user-owned managed Claude adapters can predate adapter support for
+`auto`. Readiness treats a managed npm package whose installed metadata does
+not match the bundled package spec as `install_required`, so the visible setup
+flow and startup reconcile can refresh the adapter. If an adapter still reaches
+session creation and fails on `permissions.defaultMode: auto`, the start error
+must include a repair hint to update/reinstall Claude setup or change the
+unsupported global Claude setting.
+
 ## Restart Semantics
 
 Pending interactions are live broker state. Durable events and session

@@ -1,5 +1,6 @@
 import type { AgentSummary, ReconcileAgentResult } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { RefreshCw } from "@proliferate/ui/icons";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { AgentAuthTerminalPanel } from "@/components/agents/AgentAuthTerminalPanel";
@@ -13,8 +14,10 @@ import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHea
 import { Badge, type BadgeTone } from "@proliferate/ui/primitives/Badge";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
+import { AGENT_SETUP_COPY } from "@/copy/agents/agents-copy";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { useAgentAuthTerminalWorkflow } from "@/hooks/agents/workflows/use-agent-auth-terminal-workflow";
+import { useAgentInstallationActions } from "@/hooks/agents/workflows/use-agent-installation-actions";
 import { useModelRegistrySettings } from "@/hooks/settings/workflows/use-model-registry-settings";
 import {
   mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,
@@ -35,6 +38,7 @@ export function AgentDefaultsPane() {
   const [setupAgent, setSetupAgent] = useState<AgentSummary | null>(null);
   const showToast = useToastStore((state) => state.show);
   const authTerminalWorkflow = useAgentAuthTerminalWorkflow();
+  const { reconcileAgents } = useAgentInstallationActions();
   const {
     connectionState,
     runtimeError,
@@ -53,6 +57,7 @@ export function AgentDefaultsPane() {
     reconcileResultsByKind,
   } = useModelRegistrySettings();
   const cloudAgentCatalogQuery = useCloudAgentCatalog(connectionState !== "failed");
+  const canUpdateLocalInstalls = connectionState === "healthy" && !isReconciling;
   const launchAgents = useMemo(
     () => mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
       cloudAgentCatalogQuery.data?.agents ?? [],
@@ -99,11 +104,36 @@ export function AgentDefaultsPane() {
     showToast,
   ]);
 
+  const handleUpdateLocalInstalls = () => {
+    void reconcileAgents({ reinstall: true })
+      .then(() => {
+        showToast(AGENT_SETUP_COPY.updateInstallsStarted);
+      })
+      .catch((error) => {
+        showToast(error instanceof Error ? error.message : String(error));
+      });
+  };
+
   return (
     <section className="space-y-5">
       <SettingsPageHeader
         title="Agent Defaults"
         description="Configure default harness launch behavior. Local installs and sign-in repair live here; shared credentials live in Agent Authentication."
+        action={
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            disabled={!canUpdateLocalInstalls}
+            onClick={handleUpdateLocalInstalls}
+            className="gap-2"
+          >
+            <RefreshCw className={`size-3.5 ${isReconciling ? "animate-spin" : ""}`} />
+            {isReconciling
+              ? AGENT_SETUP_COPY.updatingInstalls
+              : AGENT_SETUP_COPY.updateInstalls}
+          </Button>
+        }
       />
 
       <AgentDefaultsSection title="Default harness">
