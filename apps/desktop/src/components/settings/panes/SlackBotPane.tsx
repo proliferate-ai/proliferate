@@ -1,12 +1,16 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Select } from "@proliferate/ui/primitives/Select";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { BotStatusSection } from "@/components/settings/panes/slack/BotStatusSection";
 import { ChannelsSection } from "@/components/settings/panes/slack/ChannelsSection";
 import { ConnectionSection } from "@/components/settings/panes/slack/ConnectionSection";
+import {
+  OrganizationSelector,
+  SlackBotAdminLoadingState,
+  SlackBotAdminRequiredState,
+  SlackBotNoOrganizationState,
+  SlackBotOrganizationsLoadingState,
+  SlackBotShell,
+} from "@/components/settings/panes/slack/SlackBotShell";
 import { RepoRoutingSection } from "@/components/settings/panes/slack/RepoRoutingSection";
 import { SessionDefaultsSection } from "@/components/settings/panes/slack/SessionDefaultsSection";
 import { SharedReadinessSection } from "@/components/settings/panes/slack/SharedReadinessSection";
@@ -28,15 +32,18 @@ import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-o
 import {
   buildLaunchControlDescriptors,
 } from "@/lib/domain/chat/models/launch-control-descriptors";
-import type {
-  LiveSessionControlDescriptor,
-  SupportedLiveControlKey,
-} from "@/lib/domain/chat/session-controls/session-controls";
+import type { SupportedLiveControlKey } from "@/lib/domain/chat/session-controls/session-controls";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
-import type {
-  DesktopAgentLaunchAgent,
-  DesktopAgentLaunchModel,
-} from "@/lib/domain/agents/cloud-launch-catalog";
+import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
+import {
+  resolveSlackLaunchAgent,
+  resolveSlackLaunchModel,
+  selectedSlackSessionControlValues,
+  slackRunConfigName,
+  slackSessionDraftsEqual,
+  stringControlValues,
+  type SlackSessionDefaultsDraft,
+} from "@/lib/domain/settings/slack-session-defaults";
 import type {
   SlackChannel,
   SlackRepoRoutingProfile,
@@ -46,12 +53,6 @@ import type {
 const EMPTY_AGENTS: DesktopAgentLaunchAgent[] = [];
 const EMPTY_CHANNELS: SlackChannel[] = [];
 const EMPTY_PROFILES: SlackRepoRoutingProfile[] = [];
-
-interface SlackSessionDefaultsDraft {
-  agentKind: string | null;
-  modelId: string | null;
-  controlValues: Record<string, string>;
-}
 
 export function SlackBotPane() {
   const navigate = useNavigate();
@@ -132,7 +133,7 @@ export function SlackBotPane() {
     [selectedAgent, selectedModel, sessionDraft.controlValues],
   );
   const selectedSessionControlValues = useMemo(
-    () => selectedControlValues(sessionControls),
+    () => selectedSlackSessionControlValues(sessionControls),
     [sessionControls],
   );
   const savingSessionDefaults =
@@ -271,59 +272,30 @@ export function SlackBotPane() {
   }
 
   if (organizationsQuery.isLoading) {
-    return (
-      <SlackBotShell>
-        <SettingsCard>
-          <div className="p-3 text-sm text-muted-foreground">Loading organizations...</div>
-        </SettingsCard>
-      </SlackBotShell>
-    );
+    return <SlackBotOrganizationsLoadingState />;
   }
 
   if (!activeOrganization) {
-    return (
-      <SlackBotShell>
-        <SettingsCard>
-          <div className="p-3 text-sm text-muted-foreground">
-            Join or create an organization before configuring Slack.
-          </div>
-        </SettingsCard>
-      </SlackBotShell>
-    );
+    return <SlackBotNoOrganizationState />;
   }
 
   if (admin.isLoading) {
     return (
-      <SlackBotShell>
-        <OrganizationSelector
-          organizationId={activeOrganizationId}
-          organizations={organizations}
-          onSelect={setActiveOrganizationId}
-        />
-        <SettingsCard>
-          <div className="p-3 text-sm text-muted-foreground">Checking admin access...</div>
-        </SettingsCard>
-      </SlackBotShell>
+      <SlackBotAdminLoadingState
+        organizationId={activeOrganizationId}
+        organizations={organizations}
+        onSelect={setActiveOrganizationId}
+      />
     );
   }
 
   if (!canManage) {
     return (
-      <SlackBotShell>
-        <OrganizationSelector
-          organizationId={activeOrganizationId}
-          organizations={organizations}
-          onSelect={setActiveOrganizationId}
-        />
-        <SettingsCard>
-          <div className="space-y-1 p-3">
-            <p className="text-sm font-medium text-foreground">Admin access required</p>
-            <p className="text-sm text-muted-foreground">
-              Slack bot settings are available to organization owners and admins.
-            </p>
-          </div>
-        </SettingsCard>
-      </SlackBotShell>
+      <SlackBotAdminRequiredState
+        organizationId={activeOrganizationId}
+        organizations={organizations}
+        onSelect={setActiveOrganizationId}
+      />
     );
   }
 
@@ -422,124 +394,5 @@ export function SlackBotPane() {
         onOpenCompute={() => navigate(buildSettingsHref({ section: "compute" }))}
       />
     </SlackBotShell>
-  );
-}
-
-function resolveSlackLaunchAgent(
-  agents: DesktopAgentLaunchAgent[],
-  agentKind: string | null,
-): DesktopAgentLaunchAgent | null {
-  return agents.find((agent) => agent.kind === agentKind)
-    ?? agents.find((agent) => agent.models.length > 0)
-    ?? null;
-}
-
-function resolveSlackLaunchModel(
-  agent: DesktopAgentLaunchAgent | null,
-  modelId: string | null,
-): DesktopAgentLaunchModel | null {
-  if (!agent) {
-    return null;
-  }
-  return agent.models.find((model) => model.id === modelId)
-    ?? agent.models.find((model) => model.id === agent.defaultModelId)
-    ?? agent.models.find((model) => model.isDefault)
-    ?? agent.models[0]
-    ?? null;
-}
-
-function selectedControlValues(
-  controls: LiveSessionControlDescriptor[],
-): Record<string, string> {
-  const values: Record<string, string> = {};
-  for (const control of controls) {
-    const selected = control.options.find((option) => option.selected);
-    if (selected?.value) {
-      values[control.rawConfigId] = selected.value;
-    }
-  }
-  return values;
-}
-
-function stringControlValues(values: Record<string, unknown>): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(values).flatMap(([key, value]) =>
-      typeof value === "string" && value.trim().length > 0
-        ? [[key, value]]
-        : []
-    ),
-  );
-}
-
-function slackSessionDraftsEqual(
-  left: SlackSessionDefaultsDraft,
-  right: SlackSessionDefaultsDraft,
-): boolean {
-  return left.agentKind === right.agentKind
-    && left.modelId === right.modelId
-    && controlValuesEqual(left.controlValues, right.controlValues);
-}
-
-function controlValuesEqual(
-  left: Record<string, string>,
-  right: Record<string, string>,
-): boolean {
-  const leftEntries = Object.entries(left).filter(([, value]) => value.trim().length > 0);
-  const rightEntries = Object.entries(right).filter(([, value]) => value.trim().length > 0);
-  if (leftEntries.length !== rightEntries.length) {
-    return false;
-  }
-  return leftEntries.every(([key, value]) => right[key] === value);
-}
-
-function slackRunConfigName(agentDisplayName: string): string {
-  return `Slack bot - ${agentDisplayName}`;
-}
-
-function SlackBotShell({ children }: { children: ReactNode }) {
-  return (
-    <section className="space-y-6">
-      <SettingsPageHeader
-        title="Slack bot"
-        description="Install and configure Slack as a team automation entrypoint."
-      />
-      {children}
-    </section>
-  );
-}
-
-function OrganizationSelector({
-  organizationId,
-  organizations,
-  onSelect,
-}: {
-  organizationId: string | null;
-  organizations: Array<{ id: string; name: string }>;
-  onSelect: (organizationId: string | null) => void;
-}) {
-  if (organizations.length <= 1) {
-    return null;
-  }
-
-  return (
-    <SettingsCard>
-      <SettingsCardRow
-        label="Active organization"
-        description="Slack bot configuration is scoped to one organization."
-      >
-        <Select
-          value={organizationId ?? ""}
-          aria-label="Active organization"
-          className="min-w-48"
-          onChange={(event) => onSelect(event.currentTarget.value || null)}
-        >
-          {organizations.map((organization) => (
-            <option key={organization.id} value={organization.id}>
-              {organization.name}
-            </option>
-          ))}
-        </Select>
-      </SettingsCardRow>
-    </SettingsCard>
   );
 }
