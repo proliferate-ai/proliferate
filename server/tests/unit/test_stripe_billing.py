@@ -5,7 +5,36 @@ from typing import Any
 import pytest
 
 from proliferate.config import settings
-from proliferate.integrations.billing import stripe
+from proliferate.integrations import stripe
+from proliferate.integrations.stripe import client as stripe_client
+from proliferate.server.billing import service as billing_service
+from proliferate.server.billing.models import BillingServiceError
+
+
+def _price_details(payload: dict[str, Any]) -> stripe.StripePriceDetails:
+    recurring = payload.get("recurring")
+    recurring_payload = recurring if isinstance(recurring, dict) else {}
+    return stripe.StripePriceDetails(
+        currency=payload.get("currency") if isinstance(payload.get("currency"), str) else None,
+        unit_amount=payload.get("unit_amount")
+        if isinstance(payload.get("unit_amount"), int)
+        else None,
+        recurring_interval=(
+            recurring_payload.get("interval")
+            if isinstance(recurring_payload.get("interval"), str)
+            else None
+        ),
+        recurring_usage_type=(
+            recurring_payload.get("usage_type")
+            if isinstance(recurring_payload.get("usage_type"), str)
+            else None
+        ),
+        recurring_meter=(
+            recurring_payload.get("meter")
+            if isinstance(recurring_payload.get("meter"), str)
+            else None
+        ),
+    )
 
 
 @pytest.mark.asyncio
@@ -33,7 +62,7 @@ async def test_subscription_checkout_session_is_flat_monthly_with_promotion_code
         )
         return {"url": "https://checkout.stripe.test/session"}
 
-    monkeypatch.setattr(stripe, "_request", _request)
+    monkeypatch.setattr(stripe_client, "_request", _request)
 
     response = await stripe.create_subscription_checkout_session(
         stripe_customer_id="cus_test",
@@ -84,7 +113,7 @@ async def test_pro_subscription_checkout_session_includes_overage_item_and_seat_
         )
         return {"url": "https://checkout.stripe.test/pro-session"}
 
-    monkeypatch.setattr(stripe, "_request", _request)
+    monkeypatch.setattr(stripe_client, "_request", _request)
 
     response = await stripe.create_subscription_checkout_session(
         stripe_customer_id="cus_test",
@@ -122,15 +151,15 @@ async def test_cloud_subscription_price_validation_only_requires_monthly_price(
 ) -> None:
     requested_price_ids: list[str] = []
 
-    async def _retrieve_price(price_id: str) -> dict[str, Any]:
+    async def _retrieve_price_details(price_id: str) -> stripe.StripePriceDetails:
         requested_price_ids.append(price_id)
-        return {"unit_amount": 20000, "recurring": {"interval": "month"}}
+        return _price_details({"unit_amount": 20000, "recurring": {"interval": "month"}})
 
     monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "price_cloud_monthly")
     monkeypatch.setattr(settings, "stripe_sandbox_overage_price_id", "")
-    monkeypatch.setattr(stripe, "retrieve_price", _retrieve_price)
+    monkeypatch.setattr(stripe, "retrieve_price_details", _retrieve_price_details)
 
-    await stripe.validate_cloud_subscription_price_configuration()
+    await billing_service.validate_cloud_subscription_price_configuration()
 
     assert requested_price_ids == ["price_cloud_monthly"]
 
@@ -139,17 +168,17 @@ async def test_cloud_subscription_price_validation_only_requires_monthly_price(
 async def test_pro_price_validation_requires_overage_price_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _retrieve_price(_price_id: str) -> dict[str, Any]:
+    async def _retrieve_price_details(_price_id: str) -> stripe.StripePriceDetails:
         raise AssertionError("validation should fail before retrieving prices")
 
     monkeypatch.setattr(settings, "stripe_pro_monthly_price_id", "price_pro_monthly")
     monkeypatch.setattr(settings, "stripe_cloud_monthly_price_id", "")
     monkeypatch.setattr(settings, "stripe_legacy_cloud_monthly_price_id", "")
     monkeypatch.setattr(settings, "stripe_managed_cloud_overage_price_id", "")
-    monkeypatch.setattr(stripe, "retrieve_price", _retrieve_price)
+    monkeypatch.setattr(stripe, "retrieve_price_details", _retrieve_price_details)
 
-    with pytest.raises(stripe.StripeBillingError) as exc_info:
-        await stripe.validate_pro_subscription_price_configuration()
+    with pytest.raises(BillingServiceError) as exc_info:
+        await billing_service.validate_pro_subscription_price_configuration()
 
     assert exc_info.value.code == "stripe_price_unconfigured"
 
@@ -209,11 +238,11 @@ async def test_pro_price_validation_rejects_misconfigured_prices(
     meter_id: str,
     message: str,
 ) -> None:
-    async def _retrieve_price(price_id: str) -> dict[str, Any]:
+    async def _retrieve_price_details(price_id: str) -> stripe.StripePriceDetails:
         if price_id == "price_pro_monthly":
-            return pro_price
+            return _price_details(pro_price)
         if price_id == "price_overage":
-            return overage_price
+            return _price_details(overage_price)
         raise AssertionError(f"unexpected price id {price_id}")
 
     monkeypatch.setattr(settings, "stripe_pro_monthly_price_id", "price_pro_monthly")
@@ -221,10 +250,10 @@ async def test_pro_price_validation_rejects_misconfigured_prices(
     monkeypatch.setattr(settings, "stripe_legacy_cloud_monthly_price_id", "")
     monkeypatch.setattr(settings, "stripe_managed_cloud_overage_price_id", "price_overage")
     monkeypatch.setattr(settings, "stripe_managed_cloud_overage_meter_id", meter_id)
-    monkeypatch.setattr(stripe, "retrieve_price", _retrieve_price)
+    monkeypatch.setattr(stripe, "retrieve_price_details", _retrieve_price_details)
 
-    with pytest.raises(stripe.StripeBillingError) as exc_info:
-        await stripe.validate_pro_subscription_price_configuration()
+    with pytest.raises(BillingServiceError) as exc_info:
+        await billing_service.validate_pro_subscription_price_configuration()
 
     assert exc_info.value.code == "stripe_price_misconfigured"
     assert exc_info.value.message == message
@@ -234,13 +263,13 @@ async def test_pro_price_validation_rejects_misconfigured_prices(
 async def test_refill_price_validation_is_separate_from_subscription_validation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _retrieve_price(_price_id: str) -> dict[str, Any]:
+    async def _retrieve_price_details(_price_id: str) -> stripe.StripePriceDetails:
         raise AssertionError("refill validation should fail before calling Stripe")
 
     monkeypatch.setattr(settings, "stripe_refill_10h_price_id", "")
-    monkeypatch.setattr(stripe, "retrieve_price", _retrieve_price)
+    monkeypatch.setattr(stripe, "retrieve_price_details", _retrieve_price_details)
 
-    with pytest.raises(stripe.StripeBillingError) as exc_info:
-        await stripe.validate_refill_price_configuration()
+    with pytest.raises(BillingServiceError) as exc_info:
+        await billing_service.validate_refill_price_configuration()
 
     assert exc_info.value.code == "stripe_refill_price_unconfigured"

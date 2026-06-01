@@ -273,8 +273,6 @@ service owns "what to do when the event arrives."
 
 Existing code has these integration-boundary exceptions:
 
-- `billing/stripe.py` is a single-file folder anti-pattern. Flatten it to
-  `integrations/stripe.py` unless it earns a multi-file vendor folder.
 - `integrations/mcp_oauth.py` is large enough to earn `mcp_oauth/` with
   `client.py`, `flows.py`, `models.py`, and `errors.py`.
 - `cloud/runtime/anyharness_api.py`, `session_api.py`, and

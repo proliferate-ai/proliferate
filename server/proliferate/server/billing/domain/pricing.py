@@ -8,9 +8,12 @@ from proliferate.constants.billing import (
     BILLING_PRICE_CLASS_LEGACY_CLOUD,
     BILLING_PRICE_CLASS_PRO,
     BILLING_PRICE_CLASS_UNKNOWN,
+    PRO_SEAT_MONTHLY_AMOUNT_CENTS,
 )
 
 BillingPriceClass = str
+LEGACY_CLOUD_MONTHLY_AMOUNT_CENTS = 20_000
+REFILL_10H_AMOUNT_CENTS = 2_000
 
 
 @dataclass(frozen=True)
@@ -23,6 +26,15 @@ class BillingPriceIds:
     managed_cloud_overage_meter_id: str = ""
     sandbox_meter_id: str = ""
     managed_cloud_overage_meter_event_name: str = ""
+
+
+@dataclass(frozen=True)
+class BillingPriceShape:
+    currency: str | None = None
+    unit_amount: int | None = None
+    recurring_interval: str | None = None
+    recurring_usage_type: str | None = None
+    recurring_meter: str | None = None
 
 
 def clean_price_id(price_id: str | None) -> str:
@@ -106,3 +118,45 @@ def monthly_price_is_pro(price_id: str | None, *, price_ids: BillingPriceIds) ->
 
 def monthly_price_is_paid(price_id: str | None, *, price_ids: BillingPriceIds) -> bool:
     return price_class_is_paid(classify_monthly_price_id(price_id, price_ids=price_ids))
+
+
+def validate_legacy_cloud_monthly_price_shape(price: BillingPriceShape) -> str | None:
+    if price.unit_amount != LEGACY_CLOUD_MONTHLY_AMOUNT_CENTS:
+        return "Cloud monthly price must be $200/month."
+    if price.recurring_interval != "month":
+        return "Cloud monthly price must recur monthly."
+    return None
+
+
+def validate_pro_monthly_price_shape(price: BillingPriceShape) -> str | None:
+    if price.currency != "usd":
+        return "Pro monthly price must be USD."
+    if price.unit_amount != PRO_SEAT_MONTHLY_AMOUNT_CENTS:
+        return "Pro monthly price must be $20/month."
+    if price.recurring_interval != "month":
+        return "Pro price must recur monthly."
+    return None
+
+
+def validate_managed_cloud_overage_price_shape(
+    price: BillingPriceShape,
+    *,
+    meter_id: str,
+) -> str | None:
+    if price.currency != "usd":
+        return "Overage price must be USD."
+    if price.unit_amount != 1:
+        return "Overage price must be 1 cent per unit."
+    if price.recurring_interval != "month":
+        return "Overage price must recur monthly."
+    if price.recurring_usage_type != "metered":
+        return "Overage price must be a metered recurring price."
+    if meter_id and price.recurring_meter != meter_id:
+        return "Overage price must use the configured managed cloud meter."
+    return None
+
+
+def validate_refill_price_shape(price: BillingPriceShape) -> str | None:
+    if price.unit_amount != REFILL_10H_AMOUNT_CENTS:
+        return "Refill price must be $20."
+    return None

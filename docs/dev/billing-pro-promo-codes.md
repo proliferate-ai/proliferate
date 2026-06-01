@@ -17,7 +17,7 @@ there is no app-side "make this account Pro" toggle.
 - **Script** [`server/scripts/mint_pro_promo_codes.py`](../../server/scripts/mint_pro_promo_codes.py):
   mints one unique, single-use code per person off the coupon.
 - Checkout already passes `allow_promotion_codes=true`
-  (`server/proliferate/integrations/billing/stripe.py`), so codes are
+  (`server/proliferate/integrations/stripe/client.py`), so codes are
   redeemable in the "Add promotion code" box at upgrade.
 
 ## Mint codes

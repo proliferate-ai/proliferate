@@ -57,7 +57,7 @@ from proliferate.db.store.cloud_runtime_environments import (
     ensure_runtime_environment_for_workspace,
 )
 from proliferate.integrations import resend
-from proliferate.integrations.billing import stripe as stripe_billing
+from proliferate.integrations import stripe as stripe_billing
 from proliferate.integrations.github import GitHubRepoBranches
 from proliferate.server.billing.service import (
     activate_team_checkout_from_stripe_session,
@@ -368,8 +368,7 @@ class TestBillingApi:
             return stripe_billing.StripeUrlResponse(url="https://portal.test/active")
 
         monkeypatch.setattr(
-            stripe_billing,
-            "validate_cloud_subscription_price_configuration",
+            "proliferate.server.billing.service.validate_cloud_subscription_price_configuration",
             fake_validate_cloud_subscription_price_configuration,
         )
         monkeypatch.setattr(
@@ -464,8 +463,7 @@ class TestBillingApi:
             )
 
         monkeypatch.setattr(
-            stripe_billing,
-            "validate_pro_subscription_price_configuration",
+            "proliferate.server.billing.service.validate_pro_subscription_price_configuration",
             fake_validate_pro_subscription_price_configuration,
         )
         monkeypatch.setattr(stripe_billing, "create_customer", fake_create_customer)
@@ -573,8 +571,7 @@ class TestBillingApi:
             )
 
         monkeypatch.setattr(
-            stripe_billing,
-            "validate_pro_subscription_price_configuration",
+            "proliferate.server.billing.service.validate_pro_subscription_price_configuration",
             fake_validate_pro_subscription_price_configuration,
         )
         monkeypatch.setattr(stripe_billing, "create_customer", fake_create_customer)
@@ -839,8 +836,7 @@ class TestBillingApi:
             return stripe_billing.StripeUrlResponse(url="https://checkout.test/org")
 
         monkeypatch.setattr(
-            stripe_billing,
-            "validate_pro_subscription_price_configuration",
+            "proliferate.server.billing.service.validate_pro_subscription_price_configuration",
             fake_validate_pro_subscription_price_configuration,
         )
         monkeypatch.setattr(stripe_billing, "create_customer", fake_create_customer)

@@ -1,21 +1,22 @@
-"""Billing price classification helpers.
-
-These helpers are intentionally env-only. Stripe HTTP validation stays in the
-Stripe integration adapter; billing policy only needs a stable local
-classification for already-synced price ids.
-"""
+"""Billing price configuration helpers."""
 
 from __future__ import annotations
 
 from proliferate.config import settings
+from proliferate.integrations import stripe as stripe_billing
 from proliferate.server.billing.domain.pricing import (
     BillingPriceClass,
     BillingPriceIds,
+    BillingPriceShape,
     effective_legacy_cloud_monthly_price_id,
     effective_managed_cloud_meter_event_name,
     effective_managed_cloud_meter_id,
     effective_managed_cloud_overage_price_id,
     effective_pro_monthly_price_id,
+    validate_legacy_cloud_monthly_price_shape,
+    validate_managed_cloud_overage_price_shape,
+    validate_pro_monthly_price_shape,
+    validate_refill_price_shape,
 )
 from proliferate.server.billing.domain.pricing import (
     classify_monthly_price_id as classify_monthly_price_id_for_config,
@@ -23,6 +24,7 @@ from proliferate.server.billing.domain.pricing import (
 from proliferate.server.billing.domain.pricing import (
     price_class_is_paid as price_class_is_paid_for_config,
 )
+from proliferate.server.billing.models import BillingServiceError
 
 
 def billing_price_ids_from_settings() -> BillingPriceIds:
@@ -75,3 +77,73 @@ def classify_monthly_price_id(price_id: str | None) -> BillingPriceClass:
 
 def price_class_is_paid(price_class: BillingPriceClass) -> bool:
     return price_class_is_paid_for_config(price_class)
+
+
+def _map_stripe_error(error: stripe_billing.StripeBillingError) -> BillingServiceError:
+    return BillingServiceError(error.code, error.message, status_code=error.status_code)
+
+
+def _stripe_price_configuration_error(code: str, message: str) -> BillingServiceError:
+    return BillingServiceError(code, message, status_code=503)
+
+
+async def _retrieve_billing_price_shape(price_id: str) -> BillingPriceShape:
+    try:
+        price = await stripe_billing.retrieve_price_details(price_id)
+    except stripe_billing.StripeBillingError as error:
+        raise _map_stripe_error(error) from error
+    return BillingPriceShape(
+        currency=price.currency,
+        unit_amount=price.unit_amount,
+        recurring_interval=price.recurring_interval,
+        recurring_usage_type=price.recurring_usage_type,
+        recurring_meter=price.recurring_meter,
+    )
+
+
+async def validate_cloud_subscription_price_configuration() -> None:
+    if not settings.stripe_cloud_monthly_price_id:
+        raise _stripe_price_configuration_error(
+            "stripe_price_unconfigured",
+            "Stripe Cloud monthly price ID is not configured.",
+        )
+    cloud_price = await _retrieve_billing_price_shape(settings.stripe_cloud_monthly_price_id)
+    if message := validate_legacy_cloud_monthly_price_shape(cloud_price):
+        raise _stripe_price_configuration_error("stripe_price_misconfigured", message)
+
+
+async def validate_pro_subscription_price_configuration() -> None:
+    pro_price_id = configured_pro_monthly_price_id()
+    overage_price_id = configured_managed_cloud_overage_price_id()
+    if not pro_price_id:
+        raise _stripe_price_configuration_error(
+            "stripe_price_unconfigured",
+            "Stripe Pro monthly price ID is not configured.",
+        )
+    if not overage_price_id:
+        raise _stripe_price_configuration_error(
+            "stripe_price_unconfigured",
+            "Stripe managed cloud overage price ID is not configured.",
+        )
+
+    pro_price = await _retrieve_billing_price_shape(pro_price_id)
+    if message := validate_pro_monthly_price_shape(pro_price):
+        raise _stripe_price_configuration_error("stripe_price_misconfigured", message)
+
+    overage_price = await _retrieve_billing_price_shape(overage_price_id)
+    if message := validate_managed_cloud_overage_price_shape(
+        overage_price,
+        meter_id=configured_managed_cloud_meter_id(),
+    ):
+        raise _stripe_price_configuration_error("stripe_price_misconfigured", message)
+
+
+async def validate_refill_price_configuration() -> None:
+    if not settings.stripe_refill_10h_price_id:
+        raise _stripe_price_configuration_error(
+            "stripe_refill_price_unconfigured",
+            "Stripe refill price is not configured.",
+        )
+    refill_price = await _retrieve_billing_price_shape(settings.stripe_refill_10h_price_id)
+    if message := validate_refill_price_shape(refill_price):
+        raise _stripe_price_configuration_error("stripe_price_misconfigured", message)
