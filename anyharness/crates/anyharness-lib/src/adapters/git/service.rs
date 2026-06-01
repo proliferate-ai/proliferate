@@ -1,9 +1,11 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use super::default_branch;
 use super::executor::resolve_git_repo_root;
 use super::operations::{
     branches, commit, commit_all, diff, diff_files, push, revert_patches, staging, status,
+    worktrees,
 };
 use super::types::{
     CommitError, GitBranch, GitBranchDiffFilesResult, GitDiffError, GitDiffResult, GitDiffScope,
@@ -67,6 +69,62 @@ impl GitService {
 
     pub fn resolve_ref_oid(workspace_path: &Path, ref_name: &str) -> anyhow::Result<String> {
         branches::resolve_ref_oid(workspace_path, ref_name)
+    }
+
+    pub fn detect_default_branch(repo_root: &Path) -> Option<String> {
+        default_branch::detect_default_branch(repo_root)
+    }
+
+    pub fn create_worktree(
+        source_repo_root: &str,
+        target_path: &str,
+        new_branch: &str,
+        base_branch: Option<&str>,
+    ) -> anyhow::Result<()> {
+        worktrees::create_worktree(source_repo_root, target_path, new_branch, base_branch)
+    }
+
+    pub fn create_worktree_at_ref(
+        source_repo_root: &str,
+        target_path: &str,
+        branch_name: &str,
+        exact_ref: &str,
+    ) -> anyhow::Result<()> {
+        worktrees::create_worktree_at_ref(source_repo_root, target_path, branch_name, exact_ref)
+    }
+
+    pub fn prune_stale_worktrees_if_possible(cwd: &Path) {
+        worktrees::prune_stale_worktrees_if_possible(cwd)
+    }
+
+    pub fn remove_worktree_force(
+        repo_root_path: &str,
+        worktree_path: &str,
+    ) -> anyhow::Result<worktrees::GitWorktreeRemoveOutput> {
+        worktrees::remove_worktree_force(repo_root_path, worktree_path)
+    }
+
+    pub fn ref_exists(repo_root: &Path, ref_name: &str) -> bool {
+        worktrees::ref_exists(repo_root, ref_name)
+    }
+
+    pub fn stdout_result(repo_root: &Path, args: &[&str]) -> anyhow::Result<String> {
+        worktrees::stdout_result(repo_root, args)
+    }
+
+    pub fn switch_to_existing_branch(
+        workspace_path: &Path,
+        branch_name: &str,
+    ) -> anyhow::Result<()> {
+        worktrees::switch_to_existing_branch(workspace_path, branch_name)
+    }
+
+    pub fn switch_to_tracking_branch(
+        workspace_path: &Path,
+        branch_name: &str,
+        upstream: &str,
+    ) -> anyhow::Result<()> {
+        worktrees::switch_to_tracking_branch(workspace_path, branch_name, upstream)
     }
 
     pub fn rename_branch(

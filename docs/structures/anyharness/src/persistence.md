@@ -15,7 +15,7 @@ It owns:
 - exposing the shared `Db` handle used by stores
 
 It does not own domain-specific SQL. That stays in the owning domain store such
-as `sessions/store/**` or `workspaces/store.rs`.
+as `sessions/store/**` or `workspaces/store/**`.
 
 ## Core Models
 
@@ -81,7 +81,7 @@ Persistence should be thought of as a two-layer boundary:
 That means:
 
 - `sessions/store/**` owns session/event/config SQL
-- `workspaces/store.rs` owns workspace SQL
+- `workspaces/store/**` owns workspace SQL
 - `persistence/**` does not become a giant shared query bucket
 
 ## Durable Models
@@ -91,7 +91,7 @@ AnyHarness does not centralize all durable records in one global models module.
 Instead:
 
 - each durable domain owns its own record structs in `model.rs`
-- each durable domain owns its own SQL in `store.rs`
+- each durable domain owns its own SQL in `store.rs` or `store/**`
 
 Examples:
 

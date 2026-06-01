@@ -12,13 +12,15 @@ pub(super) fn detect_default_branch(repo_root: &Path) -> Option<String> {
     }
 
     for candidate in &["main", "master", "develop"] {
-        let check = run_git(
-            repo_root,
-            &["rev-parse", "--verify", &format!("refs/heads/{candidate}")],
-        );
-        if let Ok(o) = check {
-            if o.success {
-                return Some((*candidate).to_string());
+        for ref_name in [
+            format!("refs/remotes/origin/{candidate}"),
+            format!("refs/heads/{candidate}"),
+        ] {
+            let check = run_git(repo_root, &["rev-parse", "--verify", &ref_name]);
+            if let Ok(o) = check {
+                if o.success {
+                    return Some((*candidate).to_string());
+                }
             }
         }
     }

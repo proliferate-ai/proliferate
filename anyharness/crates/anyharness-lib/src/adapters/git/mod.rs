@@ -13,3 +13,5 @@ pub use service::GitService;
 mod diff_tests;
 #[cfg(test)]
 mod service_tests;
+#[cfg(test)]
+mod worktrees_tests;

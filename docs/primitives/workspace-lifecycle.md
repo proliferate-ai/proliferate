@@ -299,10 +299,11 @@ Useful current lines:
 403  running operation blockers
 ```
 
-`anyharness/crates/anyharness-lib/src/workspaces/runtime.rs`
+`anyharness/crates/anyharness-lib/src/workspaces/runtime/materialization.rs`
 
-- `retire_worktree_materialization(...)` is the current filesystem deletion
-  path at line 514 and uses `git worktree remove --force`.
+- `retire_worktree_materialization(...)` is the current safe materialization
+  deletion workflow and delegates `git worktree remove --force` to the git
+  adapter.
 
 ### Current Desktop Archive Gap
 
