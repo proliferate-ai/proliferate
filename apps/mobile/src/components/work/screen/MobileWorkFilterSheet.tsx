@@ -26,7 +26,11 @@ import {
   type MobileWorkTypeFilter,
 } from "../../../lib/domain/work/mobile-work-filters";
 import { colors, radius, spacing } from "../../../styles/tokens";
-import { MobileIcon, type MobileIconName } from "../../primitives/MobileIcon";
+import { MobileIcon } from "../../primitives/MobileIcon";
+import {
+  MobileWorkFilterChoice,
+  MobileWorkFilterSummaryRow,
+} from "./MobileWorkFilterRows";
 
 interface MobileWorkFilterSheetProps {
   visible: boolean;
@@ -45,36 +49,6 @@ interface MobileWorkFilterSheetProps {
   onSort: (value: CloudWorkSort) => void;
   onClear: () => void;
   onClose: () => void;
-}
-
-export function MobileWorkSummaryPill({
-  label,
-  icon,
-  selected,
-  onPress,
-}: {
-  label: string;
-  icon?: MobileIconName;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.summaryPill,
-        selected && styles.summaryPillSelected,
-        pressed && styles.pressed,
-      ]}
-    >
-      {icon ? <MobileIcon name={icon} size={14} color={selected ? colors.fg : colors.faint} /> : null}
-      <Text style={[styles.summaryPillText, selected && styles.summaryPillTextSelected]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
 }
 
 export function MobileWorkFilterSheet({
@@ -144,37 +118,37 @@ export function MobileWorkFilterSheet({
           <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetScrollContent}>
             {!panel ? (
               <>
-                <FilterSummaryRow
+                <MobileWorkFilterSummaryRow
                   icon="workspaces"
                   title="Type"
                   value={mobileWorkOptionLabel(MOBILE_WORK_TYPE_OPTIONS, workType)}
                   onPress={() => setPanel("type")}
                 />
-                <FilterSummaryRow
+                <MobileWorkFilterSummaryRow
                   icon="cloud"
                   title="Runtime"
                   value={mobileWorkOptionLabel(MOBILE_WORK_RUNTIME_OPTIONS, runtime)}
                   onPress={() => setPanel("runtime")}
                 />
-                <FilterSummaryRow
+                <MobileWorkFilterSummaryRow
                   icon="users"
                   title="Ownership"
                   value={mobileWorkOptionLabel(MOBILE_WORK_OWNER_OPTIONS, ownership)}
                   onPress={() => setPanel("ownership")}
                 />
-                <FilterSummaryRow
+                <MobileWorkFilterSummaryRow
                   icon="filter"
                   title="Status"
                   value={mobileWorkOptionLabel(MOBILE_WORK_STATUS_OPTIONS, status)}
                   onPress={() => setPanel("status")}
                 />
-                <FilterSummaryRow
+                <MobileWorkFilterSummaryRow
                   icon="folder"
                   title="Repo"
                   value={repo === "all" ? "All repos" : repo}
                   onPress={() => setPanel("repo")}
                 />
-                <FilterSummaryRow
+                <MobileWorkFilterSummaryRow
                   icon="controls"
                   title="Sort"
                   value={mobileWorkOptionLabel(MOBILE_WORK_SORT_OPTIONS, sort)}
@@ -183,7 +157,7 @@ export function MobileWorkFilterSheet({
               </>
             ) : null}
             {panel === "type" ? MOBILE_WORK_TYPE_OPTIONS.map((option) => (
-              <FilterChoice
+              <MobileWorkFilterChoice
                 key={option.id}
                 label={option.label}
                 icon={option.icon}
@@ -195,7 +169,7 @@ export function MobileWorkFilterSheet({
               />
             )) : null}
             {panel === "runtime" ? MOBILE_WORK_RUNTIME_OPTIONS.map((option) => (
-              <FilterChoice
+              <MobileWorkFilterChoice
                 key={option.id}
                 label={option.label}
                 icon={option.icon}
@@ -207,7 +181,7 @@ export function MobileWorkFilterSheet({
               />
             )) : null}
             {panel === "ownership" ? MOBILE_WORK_OWNER_OPTIONS.map((option) => (
-              <FilterChoice
+              <MobileWorkFilterChoice
                 key={option.id}
                 label={option.label}
                 selected={ownership === option.id}
@@ -218,7 +192,7 @@ export function MobileWorkFilterSheet({
               />
             )) : null}
             {panel === "status" ? MOBILE_WORK_STATUS_OPTIONS.map((option) => (
-              <FilterChoice
+              <MobileWorkFilterChoice
                 key={option.id}
                 label={option.label}
                 selected={status === option.id}
@@ -230,7 +204,7 @@ export function MobileWorkFilterSheet({
             )) : null}
             {panel === "repo" ? (
               <>
-                <FilterChoice
+                <MobileWorkFilterChoice
                   label="All repos"
                   selected={repo === "all"}
                   onPress={() => {
@@ -239,7 +213,7 @@ export function MobileWorkFilterSheet({
                   }}
                 />
                 {repoOptions.map((option) => (
-                  <FilterChoice
+                  <MobileWorkFilterChoice
                     key={option}
                     label={option}
                     icon="folder"
@@ -253,7 +227,7 @@ export function MobileWorkFilterSheet({
               </>
             ) : null}
             {panel === "sort" ? MOBILE_WORK_SORT_OPTIONS.map((option) => (
-              <FilterChoice
+              <MobileWorkFilterChoice
                 key={option.id}
                 label={option.label}
                 selected={sort === option.id}
@@ -270,88 +244,7 @@ export function MobileWorkFilterSheet({
   );
 }
 
-function FilterSummaryRow({
-  icon,
-  title,
-  value,
-  onPress,
-}: {
-  icon: MobileIconName;
-  title: string;
-  value: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [styles.filterSummaryRow, pressed && styles.pressed]}
-    >
-      <View style={styles.filterSummaryIcon}>
-        <MobileIcon name={icon} size={17} color={colors.fg} />
-      </View>
-      <View style={styles.filterSummaryText}>
-        <Text style={styles.filterSummaryTitle}>{title}</Text>
-        <Text style={styles.filterSummaryValue} numberOfLines={1}>{value}</Text>
-      </View>
-      <MobileIcon name="chevron-right" size={17} color={colors.faint} />
-    </Pressable>
-  );
-}
-
-function FilterChoice({
-  label,
-  icon,
-  selected,
-  onPress,
-}: {
-  label: string;
-  icon?: MobileIconName;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.choice,
-        selected && styles.choiceSelected,
-        pressed && styles.pressed,
-      ]}
-    >
-      {icon ? <MobileIcon name={icon} size={14} color={selected ? colors.fg : colors.faint} /> : null}
-      <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{label}</Text>
-      {selected ? <MobileIcon name="check" size={15} color={colors.fg} /> : null}
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  summaryPill: {
-    minHeight: 38,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    paddingHorizontal: spacing[3],
-  },
-  summaryPillSelected: {
-    backgroundColor: colors.accent,
-    borderColor: colors.borderHeavy,
-  },
-  summaryPillText: {
-    color: colors.faint,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  summaryPillTextSelected: {
-    color: colors.fg,
-  },
   sheetLayer: {
     flex: 1,
     justifyContent: "flex-end",
@@ -416,55 +309,6 @@ const styles = StyleSheet.create({
     color: colors.faint,
     fontSize: 13,
     fontWeight: "600",
-  },
-  filterSummaryRow: {
-    minHeight: 58,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[3],
-    borderRadius: 18,
-    paddingHorizontal: spacing[3],
-  },
-  filterSummaryIcon: {
-    width: 30,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  filterSummaryText: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  filterSummaryTitle: {
-    color: colors.fg,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  filterSummaryValue: {
-    color: colors.faint,
-    fontSize: 13,
-    lineHeight: 17,
-  },
-  choice: {
-    minHeight: 46,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing[3],
-    borderRadius: 16,
-    paddingHorizontal: spacing[3],
-  },
-  choiceSelected: {
-    backgroundColor: colors.accent,
-  },
-  choiceText: {
-    flex: 1,
-    minWidth: 0,
-    color: colors.faint,
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  choiceTextSelected: {
-    color: colors.fg,
   },
   pressed: {
     opacity: 0.7,

@@ -24,8 +24,8 @@ import {
 import { MobileWorkspaceCard } from "./MobileWorkspaceCard";
 import {
   MobileWorkFilterSheet,
-  MobileWorkSummaryPill,
 } from "./screen/MobileWorkFilterSheet";
+import { MobileWorkSummaryPill } from "./screen/MobileWorkFilterRows";
 import { colors, radius, spacing } from "../../styles/tokens";
 
 interface MobileWorkspacesScreenProps {

@@ -12,13 +12,10 @@ import {
   useEnqueueCloudCommand,
 } from "@proliferate/cloud-sdk-react";
 import {
-  buildLaunchSessionConfigUpdates,
   pendingConfigChangeKey,
-  resolveCloudLaunchSelection,
   type CloudLaunchComposerSelection,
   type PendingConfigChange,
 } from "@proliferate/product-domain/chats/cloud/composer-controls";
-import { latestCloudTranscriptSeq } from "@proliferate/product-domain/chats/cloud/transcript-view";
 import type { CloudChatTranscriptRowView } from "@proliferate/product-domain/chats/cloud/transcript-view";
 import { cloudCommandReadiness } from "@proliferate/product-domain/workspaces/cloud-work-inventory";
 
@@ -27,7 +24,6 @@ import type {
 } from "../../../navigation/navigation-model";
 import {
   clearPendingMobilePrompt,
-  savePendingMobilePrompt,
 } from "../../../lib/access/cloud/pending-mobile-prompt-store";
 import {
   ensureMobileWorkspaceReadyForCloudCommands,
@@ -40,6 +36,7 @@ import { buildMobileChatComposerControlsModel } from "../../../lib/domain/chat/m
 import { resolveAgentKind } from "../../../lib/domain/chat/mobile-chat-presentation";
 import { useMobileCloudAgentResources } from "../../access/cloud/agents/use-mobile-cloud-agent-resources";
 import { useMobileCloudWorkspaceCache } from "../../access/cloud/workspaces/use-mobile-cloud-workspace-cache";
+import { useMobileChatPromptActions } from "./use-mobile-chat-prompt-actions";
 
 type UpdateSessionConfigPayload = {
   configId: string;
@@ -135,9 +132,6 @@ export function useMobileChatActions({
   const agentResources = useMobileCloudAgentResources();
   const [latestCommandId, setLatestCommandId] = useState<string | null>(null);
   const [latestConfigCommandId, setLatestConfigCommandId] = useState<string | null>(null);
-  const [directPromptDispatching, setLocalDirectPromptDispatching] = useState(false);
-  const directPromptDispatchingRef = useRef(false);
-  const sessionPromptDispatchingRef = useRef(false);
   const pendingDispatchRunRef = useRef<{ key: string; active: boolean } | null>(null);
   const pendingConfigMutationIdRef = useRef(0);
   const commandStatus = useCommandStatus(pendingPromptCommandId ?? latestCommandId);
@@ -166,134 +160,37 @@ export function useMobileChatActions({
     },
     onStartNewSession: startNewSession,
   });
-
-  function setDirectDispatching(value: boolean) {
-    setLocalDirectPromptDispatching(value);
-  }
-
-  async function submitPrompt() {
-    const text = draft.trim();
-    if (!text || !workspace) {
-      return;
-    }
-    if (isUnclaimed) {
-      setPendingPromptStatus("Claim this workspace before sending prompts from mobile.");
-      return;
-    }
-    const readiness = cloudCommandReadiness(workspace);
-    if (!readiness.commandable) {
-      setPendingPromptStatus(readiness.message ?? "This workspace cannot accept cloud commands right now.");
-      return;
-    }
-    if (!session) {
-      if (!ownerUserId) {
-        setPendingPromptStatus("Account is still loading. Try again in a moment.");
-        return;
-      }
-      if (directPromptDispatchingRef.current || (pendingPrompt && !pendingPromptFailed)) {
-        return;
-      }
-      if (!canStartNewSession) {
-        setPendingPromptStatus(
-          workspaceHarnessAvailability.message ?? "No cloud agent is ready for a new session.",
-        );
-        return;
-      }
-      const promptSelection = resolveCloudLaunchSelection({
-        catalog: agentResources.agentCatalog.data,
-        launchableAgentKinds: workspaceLaunchableAgentKinds,
-        selection: resolvedLaunchSelection,
-      });
-      directPromptDispatchingRef.current = true;
-      const prompt: MobilePendingPrompt = {
-        id: `mobile-chat:${workspace.id}:${Date.now().toString(36)}`,
-        text,
-        agentKind: promptSelection.agentKind,
-        modelId: promptSelection.modelId,
-        modeId: promptSelection.modeId,
-        sessionConfigUpdates: buildLaunchSessionConfigUpdates({
-          catalog: agentResources.agentCatalog.data,
-          launchableAgentKinds: workspaceLaunchableAgentKinds,
-          selection: promptSelection,
-        }),
-        createdAt: Date.now(),
-      };
-      setDraft("");
-      setPendingPrompt(prompt);
-      setPendingPromptStatus("Starting a session for this prompt.");
-      setPendingPromptFailed(false);
-      setDirectDispatching(true);
-      try {
-        await savePendingMobilePrompt(workspace.id, ownerUserId, prompt);
-      } catch (error) {
-        setPendingPromptStatus(
-          error instanceof Error
-            ? `Prompt will send while this chat stays open. Storage failed: ${error.message}`
-            : "Prompt will send while this chat stays open, but could not be saved.",
-        );
-      } finally {
-        directPromptDispatchingRef.current = false;
-        setDirectDispatching(false);
-      }
-      return;
-    }
-
-    if (sessionPromptDispatchingRef.current || hasActiveOptimisticPrompt) {
-      return;
-    }
-    sessionPromptDispatchingRef.current = true;
-    const optimisticPrompt: OptimisticPrompt = {
-      id: `mobile:${workspace.id}:${session.sessionId}:${Date.now()}`,
-      sessionId: session.sessionId,
-      text,
-      baseTranscriptSeq: latestCloudTranscriptSeq(transcriptItems, transcriptRows),
-      status: "sending",
-    };
-    setOptimisticPrompts((current) => [...current, optimisticPrompt]);
-    setDraft("");
-    setPendingPromptStatus(null);
-    try {
-      await ensureMobileWorkspaceReadyForCloudCommands({
-        client,
-        workspace,
-        agentKind: session.sourceAgentKind ?? resolveAgentKind(workspace),
-        modelId: sessionModelId,
-        idempotencyKey: `${optimisticPrompt.id}:target-config`,
-        setLatestCommandId,
-        onStatus: setPendingPromptStatus,
-        shouldContinue: () => sessionPromptDispatchingRef.current,
-      });
-      const command = await enqueuePrompt.mutateAsync({
-        idempotencyKey: optimisticPrompt.id,
-        targetId: session.targetId,
-        workspaceId: session.workspaceId,
-        cloudWorkspaceId: workspace.id,
-        sessionId: session.sessionId,
-        kind: "send_prompt",
-        source: "mobile",
-        payload: { text, promptId: optimisticPrompt.id },
-      });
-      setLatestCommandId(command.commandId);
-      setOptimisticPrompts((current) =>
-        current.map((prompt) =>
-          prompt.id === optimisticPrompt.id
-            ? { ...prompt, commandId: command.commandId, status: "queued" }
-            : prompt
-        )
-      );
-      void transcriptRefetch();
-      void sessionEventsRefetch();
-    } catch (error) {
-      setOptimisticPrompts((current) =>
-        current.map((prompt) =>
-          prompt.id === optimisticPrompt.id ? { ...prompt, status: "failed" } : prompt
-        )
-      );
-      setPendingPromptStatus(error instanceof Error ? error.message : "Prompt could not be sent.");
-    } finally {
-      sessionPromptDispatchingRef.current = false;
-    }
-  }
+  const {
+    promptSubmitting,
+    submitPrompt,
+  } = useMobileChatPromptActions({
+    ownerUserId,
+    client,
+    enqueuePrompt,
+    workspace,
+    session,
+    draft,
+    pendingPrompt,
+    pendingPromptFailed,
+    hasActiveOptimisticPrompt,
+    isUnclaimed,
+    canStartNewSession,
+    workspaceHarnessAvailabilityMessage: workspaceHarnessAvailability.message,
+    workspaceLaunchableAgentKinds,
+    resolvedLaunchSelection,
+    catalog: agentResources.agentCatalog.data,
+    sessionModelId,
+    transcriptItems,
+    transcriptRows,
+    setDraft,
+    setPendingPrompt,
+    setPendingPromptStatus,
+    setPendingPromptFailed,
+    setOptimisticPrompts,
+    setLatestCommandId,
+    transcriptRefetch,
+    sessionEventsRefetch,
+  });
 
   async function submitSessionConfig(rawConfigId: string, value: string) {
     if (!workspace || !session) {
@@ -487,11 +384,7 @@ export function useMobileChatActions({
     canStartNewSession,
     workspaceHarnessAvailability,
     claimPending: claimWorkspace.isPending,
-    promptSubmitting:
-      enqueuePrompt.isPending
-      || directPromptDispatching
-      || (Boolean(pendingPrompt) && !pendingPromptFailed)
-      || hasActiveOptimisticPrompt,
+    promptSubmitting,
     submitPrompt,
     submitSessionConfig,
     resolvePermissionInteraction,
