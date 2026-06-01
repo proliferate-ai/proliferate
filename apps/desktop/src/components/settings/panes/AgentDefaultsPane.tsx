@@ -7,7 +7,10 @@ import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { AgentDefaultComposer } from "@/components/settings/panes/AgentDefaultComposer";
 import { ModelRegistryPane } from "@/components/settings/panes/ModelRegistryPane";
-import { AgentConfigurationIssuesSection } from "@/components/settings/panes/agent-defaults/AgentConfigurationIssuesSection";
+import {
+  AgentConfigurationIssuesSection,
+  type AgentConfigurationIssueAction,
+} from "@/components/settings/panes/agent-defaults/AgentConfigurationIssuesSection";
 import { AgentDefaultsSection } from "@/components/settings/panes/agent-defaults/AgentDefaultsSection";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
@@ -109,6 +112,56 @@ export function AgentDefaultsPane() {
         showToast(error instanceof Error ? error.message : String(error));
       });
   };
+  const configurationIssueActionsByAgentKind = useMemo<Record<string, AgentConfigurationIssueAction>>(() => {
+    const actions: Record<string, AgentConfigurationIssueAction> = {};
+
+    for (const agent of agentsNeedingSetup) {
+      const authTerminalSession = authTerminalWorkflow.sessionsByKind[agent.kind] ?? null;
+      const canOpenInlineAuth = agent.readiness === "login_required"
+        && agent.supportsLogin;
+      const usesAuthenticationPage = agent.readiness === "credentials_required"
+        || (agent.readiness === "login_required" && !agent.supportsLogin);
+      const authActionLabel = authTerminalSession?.isStarting
+        ? "Opening..."
+        : authTerminalSession?.terminal
+          ? "Restart auth"
+          : authTerminalSession?.errorMessage
+            ? "Retry auth"
+            : "Open auth";
+
+      actions[agent.kind] = {
+        label: canOpenInlineAuth
+          ? authActionLabel
+          : usesAuthenticationPage
+            ? "Open auth"
+            : "Review setup",
+        loading: authTerminalSession?.isStarting ?? false,
+        onClick: () => {
+          if (canOpenInlineAuth) {
+            void authTerminalWorkflow.openAuthTerminal(agent, {
+              restart: Boolean(authTerminalSession),
+            });
+            return;
+          }
+          if (usesAuthenticationPage) {
+            navigate(buildSettingsHref({
+              section: "agent-authentication",
+              kind: agent.kind,
+            }));
+            return;
+          }
+          setSetupAgent(agent);
+        },
+      };
+    }
+
+    return actions;
+  }, [
+    agentsNeedingSetup,
+    authTerminalWorkflow.openAuthTerminal,
+    authTerminalWorkflow.sessionsByKind,
+    navigate,
+  ]);
 
   return (
     <section className="space-y-5">
@@ -271,14 +324,18 @@ export function AgentDefaultsPane() {
           agentsLoading={agentsLoading}
           isReconciling={isReconciling}
           reconcileResultsByKind={reconcileResultsByKind}
-          authTerminalWorkflow={authTerminalWorkflow}
-          onOpenAuthentication={(agentKind) => {
-            navigate(buildSettingsHref({
-              section: "agent-authentication",
-              kind: agentKind,
-            }));
+          issueActionsByAgentKind={configurationIssueActionsByAgentKind}
+          authTerminalSessionsByKind={authTerminalWorkflow.sessionsByKind}
+          authTerminalConnection={authTerminalWorkflow.runtimeConnection}
+          onCloseAuthTerminal={(kind) => {
+            void authTerminalWorkflow.closeAuthTerminal(kind);
           }}
-          onReviewSetup={setSetupAgent}
+          onAuthTerminalExit={(kind, code) => {
+            void authTerminalWorkflow.handleTerminalExit(kind, code);
+          }}
+          onRestartAuthTerminal={(agent) => {
+            void authTerminalWorkflow.openAuthTerminal(agent, { restart: true });
+          }}
         />
       ) : null}
 

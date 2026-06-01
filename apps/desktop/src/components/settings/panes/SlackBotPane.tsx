@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { BotStatusSection } from "@/components/settings/panes/slack/BotStatusSection";
 import { ChannelsSection } from "@/components/settings/panes/slack/ChannelsSection";
 import { ConnectionSection } from "@/components/settings/panes/slack/ConnectionSection";
-import { OrganizationSelector, SlackBotShell } from "@/components/settings/panes/slack/SlackBotShell";
+import {
+  OrganizationSelector,
+  SlackBotAdminLoadingState,
+  SlackBotAdminRequiredState,
+  SlackBotNoOrganizationState,
+  SlackBotOrganizationsLoadingState,
+  SlackBotShell,
+} from "@/components/settings/panes/slack/SlackBotShell";
 import { RepoRoutingSection } from "@/components/settings/panes/slack/RepoRoutingSection";
 import { SessionDefaultsSection } from "@/components/settings/panes/slack/SessionDefaultsSection";
 import { SharedReadinessSection } from "@/components/settings/panes/slack/SharedReadinessSection";
@@ -28,9 +34,7 @@ import {
 } from "@/lib/domain/chat/models/launch-control-descriptors";
 import type { SupportedLiveControlKey } from "@/lib/domain/chat/session-controls/session-controls";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
-import type {
-  DesktopAgentLaunchAgent,
-} from "@/lib/domain/agents/cloud-launch-catalog";
+import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
 import {
   resolveSlackLaunchAgent,
   resolveSlackLaunchModel,
@@ -268,59 +272,30 @@ export function SlackBotPane() {
   }
 
   if (organizationsQuery.isLoading) {
-    return (
-      <SlackBotShell>
-        <SettingsCard>
-          <div className="p-3 text-sm text-muted-foreground">Loading organizations...</div>
-        </SettingsCard>
-      </SlackBotShell>
-    );
+    return <SlackBotOrganizationsLoadingState />;
   }
 
   if (!activeOrganization) {
-    return (
-      <SlackBotShell>
-        <SettingsCard>
-          <div className="p-3 text-sm text-muted-foreground">
-            Join or create an organization before configuring Slack.
-          </div>
-        </SettingsCard>
-      </SlackBotShell>
-    );
+    return <SlackBotNoOrganizationState />;
   }
 
   if (admin.isLoading) {
     return (
-      <SlackBotShell>
-        <OrganizationSelector
-          organizationId={activeOrganizationId}
-          organizations={organizations}
-          onSelect={setActiveOrganizationId}
-        />
-        <SettingsCard>
-          <div className="p-3 text-sm text-muted-foreground">Checking admin access...</div>
-        </SettingsCard>
-      </SlackBotShell>
+      <SlackBotAdminLoadingState
+        organizationId={activeOrganizationId}
+        organizations={organizations}
+        onSelect={setActiveOrganizationId}
+      />
     );
   }
 
   if (!canManage) {
     return (
-      <SlackBotShell>
-        <OrganizationSelector
-          organizationId={activeOrganizationId}
-          organizations={organizations}
-          onSelect={setActiveOrganizationId}
-        />
-        <SettingsCard>
-          <div className="space-y-1 p-3">
-            <p className="text-sm font-medium text-foreground">Admin access required</p>
-            <p className="text-sm text-muted-foreground">
-              Slack bot settings are available to organization owners and admins.
-            </p>
-          </div>
-        </SettingsCard>
-      </SlackBotShell>
+      <SlackBotAdminRequiredState
+        organizationId={activeOrganizationId}
+        organizations={organizations}
+        onSelect={setActiveOrganizationId}
+      />
     );
   }
 

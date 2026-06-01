@@ -6,29 +6,44 @@ import { AgentAuthTerminalPanel } from "@/components/agents/AgentAuthTerminalPan
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { AgentDefaultsSection } from "@/components/settings/panes/agent-defaults/AgentDefaultsSection";
-import { useAgentAuthTerminalWorkflow } from "@/hooks/agents/workflows/use-agent-auth-terminal-workflow";
+import type { AgentAuthTerminalSession } from "@/hooks/agents/workflows/use-agent-auth-terminal-workflow";
 import {
   badgeToneForAgentStatus,
   configurationDetailForAgent,
 } from "@/lib/domain/agents/configuration-issues-presentation";
 import { getAgentStatusDisplay } from "@/lib/domain/agents/status-presentation";
 
+export interface AgentConfigurationIssueAction {
+  label: string;
+  loading: boolean;
+  onClick: () => void;
+}
+
 export function AgentConfigurationIssuesSection({
   agents,
   agentsLoading,
   isReconciling,
   reconcileResultsByKind,
-  authTerminalWorkflow,
-  onOpenAuthentication,
-  onReviewSetup,
+  issueActionsByAgentKind,
+  authTerminalSessionsByKind,
+  authTerminalConnection,
+  onCloseAuthTerminal,
+  onAuthTerminalExit,
+  onRestartAuthTerminal,
 }: {
   agents: AgentSummary[];
   agentsLoading: boolean;
   isReconciling: boolean;
   reconcileResultsByKind: Map<string, ReconcileAgentResult>;
-  authTerminalWorkflow: ReturnType<typeof useAgentAuthTerminalWorkflow>;
-  onOpenAuthentication: (agentKind: string) => void;
-  onReviewSetup: (agent: AgentSummary) => void;
+  issueActionsByAgentKind: Record<string, AgentConfigurationIssueAction>;
+  authTerminalSessionsByKind: Record<string, AgentAuthTerminalSession>;
+  authTerminalConnection: {
+    baseUrl: string;
+    authToken?: string;
+  };
+  onCloseAuthTerminal: (kind: string) => void;
+  onAuthTerminalExit: (kind: string, code: number | null) => void;
+  onRestartAuthTerminal: (agent: AgentSummary) => void;
 }) {
   return (
     <AgentDefaultsSection
@@ -49,18 +64,8 @@ export function AgentConfigurationIssuesSection({
             reconcileResult,
             isReconciling,
           });
-          const canOpenInlineAuth = agent.readiness === "login_required"
-            && agent.supportsLogin;
-          const usesAuthenticationPage = agent.readiness === "credentials_required"
-            || (agent.readiness === "login_required" && !agent.supportsLogin);
-          const authTerminalSession = authTerminalWorkflow.sessionsByKind[agent.kind] ?? null;
-          const authActionLabel = authTerminalSession?.isStarting
-            ? "Opening..."
-            : authTerminalSession?.terminal
-              ? "Restart auth"
-              : authTerminalSession?.errorMessage
-                ? "Retry auth"
-                : "Open auth";
+          const authTerminalSession = authTerminalSessionsByKind[agent.kind] ?? null;
+          const issueAction = issueActionsByAgentKind[agent.kind];
 
           return (
             <div
@@ -95,26 +100,11 @@ export function AgentConfigurationIssuesSection({
                   variant="outline"
                   size="sm"
                   className="shrink-0"
-                  loading={authTerminalSession?.isStarting ?? false}
-                  onClick={() => {
-                    if (canOpenInlineAuth) {
-                      void authTerminalWorkflow.openAuthTerminal(agent, {
-                        restart: Boolean(authTerminalSession),
-                      });
-                      return;
-                    }
-                    if (usesAuthenticationPage) {
-                      onOpenAuthentication(agent.kind);
-                      return;
-                    }
-                    onReviewSetup(agent);
-                  }}
+                  disabled={!issueAction}
+                  loading={issueAction?.loading ?? false}
+                  onClick={issueAction?.onClick}
                 >
-                  {canOpenInlineAuth
-                    ? authActionLabel
-                    : usesAuthenticationPage
-                      ? "Open auth"
-                      : "Review setup"}
+                  {issueAction?.label ?? "Review setup"}
                 </Button>
               </div>
 
@@ -122,16 +112,16 @@ export function AgentConfigurationIssuesSection({
                 <div className="pl-11">
                   <AgentAuthTerminalPanel
                     session={authTerminalSession}
-                    baseUrl={authTerminalWorkflow.runtimeConnection.baseUrl}
-                    authToken={authTerminalWorkflow.runtimeConnection.authToken}
+                    baseUrl={authTerminalConnection.baseUrl}
+                    authToken={authTerminalConnection.authToken}
                     onClose={(kind) => {
-                      void authTerminalWorkflow.closeAuthTerminal(kind);
+                      onCloseAuthTerminal(kind);
                     }}
                     onExit={(kind, code) => {
-                      void authTerminalWorkflow.handleTerminalExit(kind, code);
+                      onAuthTerminalExit(kind, code);
                     }}
                     onRestart={() => {
-                      void authTerminalWorkflow.openAuthTerminal(agent, { restart: true });
+                      onRestartAuthTerminal(agent);
                     }}
                   />
                 </div>

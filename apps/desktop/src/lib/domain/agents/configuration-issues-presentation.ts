@@ -1,8 +1,13 @@
 import type { AgentSummary, ReconcileAgentResult } from "@anyharness/sdk";
-import type { BadgeTone } from "@proliferate/ui/primitives/Badge";
 import type { AgentStatusTone } from "@/lib/domain/agents/status-presentation";
 
-export function badgeToneForAgentStatus(tone: AgentStatusTone): BadgeTone {
+export type AgentConfigurationBadgeTone =
+  | "success"
+  | "warning"
+  | "destructive"
+  | "neutral";
+
+export function badgeToneForAgentStatus(tone: AgentStatusTone): AgentConfigurationBadgeTone {
   if (tone === "success") return "success";
   if (tone === "warning") return "warning";
   if (tone === "destructive") return "destructive";
