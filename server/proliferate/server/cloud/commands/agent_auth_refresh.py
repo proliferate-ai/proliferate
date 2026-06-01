@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from uuid import UUID
 
 from proliferate.db import session_ops as db_session
@@ -34,5 +35,5 @@ async def queue_agent_auth_refresh_for_not_ready_preflight(
             sandbox_profile_id=sandbox_profile_id,
             actor_user_id=actor_user_id,
             error_type=exc.__class__.__name__,
-            level="warning",
+            level=logging.WARNING,
         )
