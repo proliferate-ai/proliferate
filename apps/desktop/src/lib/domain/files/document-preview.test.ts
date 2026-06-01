@@ -3,9 +3,9 @@ import { canPreviewAsMarkdown } from "@/lib/domain/files/document-preview";
 
 describe("canPreviewAsMarkdown", () => {
   it("supports markdown extensions", () => {
-    expect(canPreviewAsMarkdown("docs/README.md")).toBe(true);
-    expect(canPreviewAsMarkdown("docs/guide.markdown")).toBe(true);
-    expect(canPreviewAsMarkdown("docs/page.mdx")).toBe(true);
+    expect(canPreviewAsMarkdown("specs/README.md")).toBe(true);
+    expect(canPreviewAsMarkdown("specs/guide.markdown")).toBe(true);
+    expect(canPreviewAsMarkdown("specs/page.mdx")).toBe(true);
   });
 
   it("supports common extensionless documentation files", () => {

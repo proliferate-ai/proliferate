@@ -8,7 +8,7 @@ interface RunCommandHelpProps {
 }
 
 const COMMAND_ENVIRONMENT_DOCS_URL =
-  "https://github.com/proliferate-ai/proliferate/blob/main/docs/dev/reference/workspace-command-environment.md";
+  "https://github.com/proliferate-ai/proliferate/blob/main/specs/developing/reference/workspace-command-environment.md";
 
 export function RunCommandHelp({
   scope,

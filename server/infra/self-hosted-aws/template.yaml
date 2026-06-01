@@ -996,7 +996,7 @@ Resources:
                 CORS_ALLOW_ORIGINS=http://localhost:1420,http://127.0.0.1:1420,http://localhost:3000,http://127.0.0.1:3000,http://tauri.localhost,tauri://localhost
                 # For advanced auth-flow overrides such as DESKTOP_GITHUB_AUTH_ENABLED,
                 # DESKTOP_REDIRECT_SCHEME, or token lifetimes, see
-                # docs/dev/reference/env-secrets-matrix.md.
+                # specs/developing/reference/env-secrets-matrix.md.
                 GITHUB_OAUTH_CLIENT_ID=
                 GITHUB_OAUTH_CLIENT_SECRET=
                 AGENT_GATEWAY_ENABLED=false

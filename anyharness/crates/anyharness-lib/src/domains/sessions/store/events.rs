@@ -43,7 +43,7 @@ impl SessionStore {
     /// # Invariants
     ///
     /// Callers must hold the ACP start/inject critical section described in
-    /// `docs/structures/anyharness/src/acp.md#startinject-sequence-invariant` and must
+    /// `specs/codebase/structures/anyharness/src/acp.md#startinject-sequence-invariant` and must
     /// have confirmed that no live actor owns event sequencing for this
     /// session. Live actors assign seq from memory, so calling this while an
     /// actor is live can race that actor's `SessionEventSink`.

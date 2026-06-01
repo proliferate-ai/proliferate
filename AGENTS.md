@@ -49,15 +49,15 @@ make dev PROFILE=<name> STRIPE=1
 Profile state lives under
 `~/.proliferate-local/dev/profiles/<name>/`; AnyHarness runtime state lives
 under `~/.proliferate-local/runtimes/<name>/`. Read
-`docs/dev/reference/dev-profiles.md` before changing profile launch behavior,
+`specs/developing/local/dev-profiles.md` before changing profile launch behavior,
 ports, generated Tauri config, or dev app identity.
 
 ## Read This First
 
-Start with `docs/README.md`.
+Start with `specs/README.md`.
 
-Docs under `docs/**` are authoritative for their area. If this file overlaps
-with an area doc, the area doc wins.
+Specs under `specs/**` are authoritative for their area. If this file overlaps
+with an area spec, the area spec wins.
 
 You must read the relevant area doc before touching code in that area. Do this
 at the start of the task, not halfway through implementation.
@@ -66,64 +66,64 @@ at the start of the task, not halfway through implementation.
 
 ### Frontend (`apps/desktop/src/**`, `apps/web/src/**`, `apps/mobile/src/**`, `apps/packages/**`)
 
-1. `docs/structures/frontend/README.md`
+1. `specs/codebase/structures/frontend/README.md`
 2. The focused frontend doc for the layer being changed:
-   - `docs/structures/frontend/guides/components.md`
-   - `docs/structures/frontend/guides/hooks.md`
-   - `docs/structures/frontend/guides/state.md`
-   - `docs/structures/frontend/guides/lib.md`
-   - `docs/structures/frontend/guides/config.md`
-   - `docs/structures/frontend/guides/copy.md`
-   - `docs/structures/frontend/guides/access.md`
-   - `docs/structures/frontend/packages/README.md` for shared frontend packages, package
+   - `specs/codebase/structures/frontend/guides/components.md`
+   - `specs/codebase/structures/frontend/guides/hooks.md`
+   - `specs/codebase/structures/frontend/guides/state.md`
+   - `specs/codebase/structures/frontend/guides/lib.md`
+   - `specs/codebase/structures/frontend/guides/config.md`
+   - `specs/codebase/structures/frontend/guides/copy.md`
+   - `specs/codebase/structures/frontend/guides/access.md`
+   - `specs/codebase/structures/frontend/packages/README.md` for shared frontend packages, package
      dependency direction, shared product rules, product UI, or connected
      product surfaces
 3. Specialized docs when relevant:
-   - `docs/structures/frontend/guides/styling.md` for styling, primitives, tokens, or
+   - `specs/codebase/structures/frontend/guides/styling.md` for styling, primitives, tokens, or
      theme usage
-   - `docs/structures/frontend/guides/telemetry.md` for analytics, Sentry, replay
+   - `specs/codebase/structures/frontend/guides/telemetry.md` for analytics, Sentry, replay
      masking, or telemetry payloads
-   - `docs/features/chat-composer.md` for the composer, composer-adjacent
+   - `specs/codebase/features/chat-composer.md` for the composer, composer-adjacent
      panels, workspace review panels/defaults, or Claude plan card
-   - `docs/features/chat-transcript.md` for transcript streaming,
+   - `specs/codebase/features/chat-transcript.md` for transcript streaming,
      replay, transcript row models, or long-history rendering
-   - `docs/features/pending-workspace-shell.md` for pending workspace
+   - `specs/codebase/features/pending-workspace-shell.md` for pending workspace
      entry, projected session shell, optimistic prompts, or
      workspace/session materialization handoff
-   - `docs/features/workspace-files.md` for workspace file browsing,
+   - `specs/codebase/features/workspace-files.md` for workspace file browsing,
      file viewing, diff viewing, Changes, or all-changes review
 
 ### SDK (`anyharness/sdk/**`, `anyharness/sdk-react/**`)
 
-1. `docs/structures/sdk/README.md`
+1. `specs/codebase/structures/sdk/README.md`
 
 ### Desktop Native (`apps/desktop/src-tauri/**`)
 
-1. `docs/structures/desktop-native/README.md`
+1. `specs/codebase/structures/desktop-native/README.md`
 2. The focused desktop native spec when relevant:
-   - `docs/structures/desktop-native/specs/anyharness-sidecar.md` for AnyHarness sidecar
+   - `specs/codebase/structures/desktop-native/specs/anyharness-sidecar.md` for AnyHarness sidecar
      packaging, lookup, launch, health, restart, or runtime-info behavior
-   - `docs/structures/desktop-native/specs/agent-seeds.md` for bundled agent seed resources,
+   - `specs/codebase/structures/desktop-native/specs/agent-seeds.md` for bundled agent seed resources,
      launch env, hydration, ownership state, or seed/reconcile interaction
-3. `docs/dev/reference/dev-profiles.md` when changing profile launch behavior,
+3. `specs/developing/local/dev-profiles.md` when changing profile launch behavior,
    ports, generated Tauri config, app identity, or profile runtime homes.
-4. `docs/dev/ci-cd.md` when changing packaging, release, updater, or
+4. `specs/developing/deploying/ci-cd.md` when changing packaging, release, updater, or
    bundled desktop resources.
 
 ### Server (`server/**`)
 
-1. `docs/structures/server/README.md`
+1. `specs/codebase/structures/server/README.md`
 
 ### Proliferate Worker (`anyharness/crates/proliferate-worker/**`)
 
-1. `docs/structures/proliferate-worker/README.md`
+1. `specs/codebase/structures/proliferate-worker/README.md`
 
 ### Proliferate Supervisor (`anyharness/crates/proliferate-supervisor/**`)
 
-1. `docs/structures/proliferate-supervisor/README.md`
+1. `specs/codebase/structures/proliferate-supervisor/README.md`
 2. `install/README.md` when changing SSH installer config, service generation,
    target install layout, or target smoke-test behavior.
-3. `docs/structures/server/README.md` when changing managed-cloud bootstrap
+3. `specs/codebase/structures/server/README.md` when changing managed-cloud bootstrap
    code that writes supervisor config or launches supervisor.
 
 ### AnyHarness Runtime
@@ -133,16 +133,16 @@ Applies to `anyharness/crates/anyharness/**`,
 `anyharness/crates/anyharness-contract/**`, and
 `anyharness/crates/anyharness-credential-discovery/**`.
 
-1. `docs/structures/anyharness/README.md`
-2. The focused guide under `docs/structures/anyharness/guides/**` for the layer being
+1. `specs/codebase/structures/anyharness/README.md`
+2. The focused guide under `specs/codebase/structures/anyharness/guides/**` for the layer being
    changed, such as API, domains, live runtime, adapters, integrations,
    harnesses, persistence, observability, repo shape, or crate ownership.
-3. The focused spec under `docs/structures/anyharness/specs/**` when changing a covered
+3. The focused spec under `specs/codebase/structures/anyharness/specs/**` when changing a covered
    subsystem such as the session actor or session engine.
-4. `docs/primitives/mcp-runtime.md` for MCP runtime behavior, and
-   `docs/features/product-mcps/servers.md` for product MCP server behavior.
-5. `docs/structures/anyharness/contract.md` if the change touches contract schemas.
-6. The relevant legacy subsystem doc under `docs/structures/anyharness/src/**` when the
+4. `specs/codebase/primitives/mcp-runtime.md` for MCP runtime behavior, and
+   `specs/codebase/features/agent-features/servers.md` for product MCP server behavior.
+5. `specs/codebase/structures/anyharness/contract.md` if the change touches contract schemas.
+6. The relevant legacy subsystem doc under `specs/codebase/structures/anyharness/src/**` when the
    change touches runtime logic not yet covered by a newer guide or spec.
 
 ### CI/CD, Release, And Deployment
@@ -150,7 +150,7 @@ Applies to `anyharness/crates/anyharness/**`,
 Applies to `.github/workflows/**`, `apps/desktop/infra/**`, `server/infra/**`,
 updater publishing, and the desktop updater flow.
 
-1. `docs/dev/ci-cd.md`
+1. `specs/developing/deploying/ci-cd.md`
 
 If a release or deployment change also touches frontend, server, SDK, or
 AnyHarness code, read the relevant area doc too.
@@ -169,7 +169,7 @@ AnyHarness code, read the relevant area doc too.
 - Delete dead code when replacing an implementation.
 - Do not use destructive git commands such as `git reset --hard` or
   `git checkout --` unless the user explicitly asks for that operation.
-- PR titles and labels must follow `docs/dev/ci-cd.md`. Use exactly one
+- PR titles and labels must follow `specs/developing/deploying/ci-cd.md`. Use exactly one
   `release:*` label and at least one `area:*` label before marking a PR ready
   for review.
 
@@ -194,6 +194,6 @@ These are repo-level invariants. Area docs explain the concrete folder rules.
 ## Desktop Release Procedure
 
 If you are releasing a new version of the product, read
-`docs/dev/ci-cd.md` first. That document is the source of truth for desktop
+`specs/developing/deploying/ci-cd.md` first. That document is the source of truth for desktop
 version bumps, `desktop-v*` tags, draft GitHub releases, updater publishing,
 release dry runs, and PR release-note metadata.
