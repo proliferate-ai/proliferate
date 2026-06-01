@@ -63,6 +63,9 @@ from proliferate.server.billing.service import (
 from proliferate.server.cloud.agent_run_config.domain.resolve import (
     validate_config_execution_scope,
 )
+from proliferate.server.cloud.agent_run_config.service import (
+    snapshot_json as agent_run_config_snapshot_json,
+)
 from proliferate.server.organizations.domain.policy import organization_admin_roles
 from proliferate.utils.time import utcnow
 
@@ -516,7 +519,7 @@ async def run_automation_now(
         git_owner=existing.git_owner,
         git_repo_name=existing.git_repo_name,
     )
-    await _load_run_config_for_owner(
+    run_config = await _load_run_config_for_owner(
         db,
         actor_user_id=user_id,
         owner_scope=existing.owner_scope,
@@ -530,6 +533,7 @@ async def run_automation_now(
         automation_id=automation_id,
         owner_scope=existing.owner_scope,
         organization_id=existing.organization_id,
+        agent_run_config_snapshot_json=agent_run_config_snapshot_json(run_config),
     )
     if value is None:
         raise AutomationNotFound()

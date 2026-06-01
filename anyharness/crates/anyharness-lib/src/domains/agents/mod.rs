@@ -4,6 +4,7 @@ pub mod credentials;
 pub mod install_lock;
 pub mod installer;
 pub mod login_terminal;
+mod managed_npm;
 pub mod model;
 pub mod model_registry;
 pub mod portability;

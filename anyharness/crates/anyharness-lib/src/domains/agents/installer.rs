@@ -3,6 +3,10 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use super::install_lock::AgentInstallLock;
+use super::managed_npm::{
+    apply_npm_version_override, installed_npm_package_version, managed_npm_install_issue,
+    npm_package_name, npm_package_version,
+};
 use super::model::*;
 use super::readiness::resolver::{artifact_root, has_managed_registry_binary_for_names};
 use super::registry::built_in_registry;
@@ -331,21 +335,21 @@ fn install_agent_process_artifact(
     let launcher_path_prefixes = launcher_path_prefixes(runtime_home, kind);
     let launcher_env = managed_launcher_env(kind);
 
-    if should_skip_existing_agent_process_install(
-        &spec.install,
-        kind,
-        runtime_home,
-        &launcher_path,
-        options.reinstall,
-    ) {
-        return Ok(None);
-    }
-
     match &spec.install {
         AgentProcessInstallSpec::RegistryBacked {
             registry_id,
             fallback,
         } => {
+            if should_skip_existing_agent_process_install(
+                &spec.install,
+                kind,
+                runtime_home,
+                &launcher_path,
+                options.reinstall,
+            ) {
+                return Ok(None);
+            }
+
             match install_from_registry(
                 registry_id,
                 kind,
@@ -586,6 +590,7 @@ fn install_managed_npm_package(
     launcher_env: &HashMap<String, String>,
     source: &str,
 ) -> Result<Option<InstalledArtifactResult>, InstallError> {
+    let versioned_package = apply_npm_version_override(package, version_override);
     let exec_path = if let Some(binary_name) = source_build_binary_name {
         managed_dir.join(platform_binary_filename(binary_name))
     } else {
@@ -593,8 +598,22 @@ fn install_managed_npm_package(
     };
     std::fs::create_dir_all(managed_dir)?;
 
-    if force_reinstall || !exec_path.exists() || !launcher_path.exists() {
-        let versioned_package = apply_npm_version_override(package, version_override);
+    let package_issue = if source_build_binary_name.is_none() {
+        managed_npm_install_issue(&versioned_package, managed_dir)
+    } else {
+        None
+    };
+
+    if force_reinstall || !exec_path.exists() || !launcher_path.exists() || package_issue.is_some()
+    {
+        if let Some(issue) = package_issue.as_ref() {
+            tracing::info!(
+                package = %versioned_package,
+                managed_dir = %managed_dir.display(),
+                issue = %issue,
+                "refreshing managed npm agent package"
+            );
+        }
         tracing::info!(
             package = %versioned_package,
             package_subdir = ?package_subdir.map(|path| path.display().to_string()),
@@ -632,7 +651,6 @@ fn install_managed_npm_package(
 
     generate_launcher_script(launcher_path, &exec_path, &[], launcher_env, path_prefixes)?;
 
-    let versioned_package = apply_npm_version_override(package, version_override);
     let version = installed_npm_package_version(&versioned_package, managed_dir)
         .or_else(|| npm_package_version(&versioned_package));
 
@@ -964,92 +982,6 @@ fn read_dir_entry_names(dir: &Path) -> Vec<String> {
         .collect();
     entries.sort();
     entries
-}
-
-fn apply_npm_version_override(package: &str, version_override: Option<&str>) -> String {
-    if let Some(version) = version_override {
-        if is_npm_non_registry_spec(package) {
-            let base = package
-                .split_once('#')
-                .map_or(package, |(specifier, _)| specifier);
-            return format!("{base}#{version}");
-        }
-    }
-
-    match version_override {
-        Some(version) => format!("{}@{version}", strip_npm_version(package)),
-        None => package.to_string(),
-    }
-}
-
-fn strip_npm_version(package: &str) -> &str {
-    if let Some(scoped_package) = package.strip_prefix('@') {
-        if let Some(version_separator) = scoped_package.rfind('@') {
-            return &package[..version_separator + 1];
-        }
-        return package;
-    }
-
-    package.split_once('@').map_or(package, |(name, _)| name)
-}
-
-fn npm_package_version(package: &str) -> Option<String> {
-    if is_npm_non_registry_spec(package) {
-        return package
-            .split_once('#')
-            .map(|(_, version_or_ref)| version_or_ref.to_string());
-    }
-
-    if let Some(scoped_package) = package.strip_prefix('@') {
-        return scoped_package
-            .rsplit_once('@')
-            .map(|(_, version)| version.to_string());
-    }
-
-    package
-        .split_once('@')
-        .map(|(_, version)| version.to_string())
-}
-
-fn installed_npm_package_version(package: &str, managed_dir: &Path) -> Option<String> {
-    let package_name = npm_package_name(package)?;
-    let package_json = managed_dir
-        .join("node_modules")
-        .join(PathBuf::from(package_name))
-        .join("package.json");
-    let text = std::fs::read_to_string(package_json).ok()?;
-    let json: serde_json::Value = serde_json::from_str(&text).ok()?;
-    json.get("version")?.as_str().map(ToString::to_string)
-}
-
-fn npm_package_name(package: &str) -> Option<&str> {
-    if is_npm_non_registry_spec(package) {
-        return None;
-    }
-
-    let package = package.split_once('#').map_or(package, |(name, _)| name);
-    if package.starts_with('@') {
-        let mut at_positions = package.match_indices('@').map(|(index, _)| index);
-        at_positions.next();
-        return at_positions.next().map_or(Some(package), |index| {
-            let candidate = &package[..index];
-            if candidate.contains('/') {
-                Some(candidate)
-            } else {
-                Some(package)
-            }
-        });
-    }
-
-    Some(package.split_once('@').map_or(package, |(name, _)| name))
-}
-
-fn is_npm_non_registry_spec(package: &str) -> bool {
-    package.starts_with("git+")
-        || package.starts_with("github:")
-        || package.starts_with("file:")
-        || package.starts_with("http://")
-        || package.starts_with("https://")
 }
 
 fn install_agent_process_fallback(

@@ -22,6 +22,9 @@ from proliferate.server.automations.domain.claim_lifecycle import (
     dispatch_uncertain_failure,
 )
 from proliferate.server.automations.domain.schedule import due_and_next_occurrences
+from proliferate.server.cloud.agent_run_config.service import (
+    snapshot_json as agent_run_config_snapshot_json,
+)
 from proliferate.utils.time import utcnow
 
 
@@ -70,6 +73,7 @@ async def _create_due_scheduled_runs_batch(
             now=utcnow(),
             limit=max(1, batch_size),
             schedule_advance_resolver=_resolve_due_schedule,
+            agent_run_config_snapshot_builder=agent_run_config_snapshot_json,
         )
 
 

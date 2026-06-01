@@ -9,6 +9,12 @@ export type DefaultLiveSessionControlValuesByAgentKind = Record<
 >;
 export type ChatModelVisibilityOverridesByAgentKind = Record<string, Record<string, boolean>>;
 
+const MODEL_VISIBILITY_RESET_AGENT_KINDS = new Set([
+  "cursor",
+  "gemini",
+  "opencode",
+]);
+
 const LEGACY_CLAUDE_MODEL_IDS: Record<string, string> = {
   "claude-sonnet-4-5": "sonnet",
   "claude-sonnet-4-6": "sonnet",
@@ -27,9 +33,15 @@ const LEGACY_CLAUDE_MODEL_IDS: Record<string, string> = {
 
 const LEGACY_CURSOR_MODEL_IDS: Record<string, string> = {
   "default[]": "auto",
-  "composer-2[fast=true]": "composer-2-fast",
-  "composer-1.5[]": "composer-2",
+  "composer-2[fast=true]": "composer-2.5-fast",
+  "composer-2-fast": "composer-2.5-fast",
+  "composer-1.5[]": "composer-2.5",
+  "composer-2": "composer-2.5",
   "gpt-5.3-codex[reasoning=medium,fast=false]": "gpt-5.3-codex",
+  "gpt-5.3-codex-spark-preview-low": "gpt-5.3-codex-low",
+  "gpt-5.3-codex-spark-preview": "gpt-5.3-codex",
+  "gpt-5.3-codex-spark-preview-high": "gpt-5.3-codex-high",
+  "gpt-5.3-codex-spark-preview-xhigh": "gpt-5.3-codex-xhigh",
   "claude-sonnet-4-6[thinking=true,context=200k,effort=medium]": "claude-4.6-sonnet-medium-thinking",
   "gpt-5.5[context=272k,reasoning=medium,fast=false]": "gpt-5.5-medium",
   "claude-opus-4-7[thinking=true,context=300k,effort=xhigh]": "claude-opus-4-7-thinking-xhigh",
@@ -41,7 +53,7 @@ const LEGACY_CURSOR_MODEL_IDS: Record<string, string> = {
   "gpt-5.4-mini[reasoning=medium]": "gpt-5.4-mini-medium",
   "gpt-5.4-nano[reasoning=medium]": "gpt-5.4-nano-medium",
   "claude-haiku-4-5[thinking=true]": "claude-4.5-sonnet",
-  "gpt-5.3-codex-spark[reasoning=medium]": "gpt-5.3-codex-spark-preview",
+  "gpt-5.3-codex-spark[reasoning=medium]": "gpt-5.3-codex",
   "grok-4.3[context=200k]": "grok-4.3",
   "grok-4-20[thinking=true]": "grok-4.3",
   "claude-sonnet-4-5[thinking=true,context=200k]": "claude-4.5-sonnet-thinking",
@@ -162,6 +174,26 @@ export function sanitizeChatModelVisibilityOverridesByAgentKind(
         : [];
     }),
   );
+}
+
+export function resetFrontierModelVisibilityOverrides(
+  value: ChatModelVisibilityOverridesByAgentKind,
+): {
+  chatModelVisibilityOverridesByAgentKind: ChatModelVisibilityOverridesByAgentKind;
+  changed: boolean;
+} {
+  const next = { ...value };
+  let changed = false;
+  for (const agentKind of MODEL_VISIBILITY_RESET_AGENT_KINDS) {
+    if (agentKind in next) {
+      delete next[agentKind];
+      changed = true;
+    }
+  }
+  return {
+    chatModelVisibilityOverridesByAgentKind: next,
+    changed,
+  };
 }
 
 export function normalizeDefaultChatModelId(agentKind: string, modelId: string): string {

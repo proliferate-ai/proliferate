@@ -214,8 +214,43 @@ function validateCatalog(catalog) {
     if (!modelIds.has(session.defaultModelId)) {
       fail(`${agent.kind}.session.defaultModelId does not match a model id`);
     }
+    const defaultModel = session.models.find((model) => model.id === session.defaultModelId);
+    if (defaultModel?.status !== "active") {
+      fail(`${agent.kind}.session.defaultModelId must reference an active model`);
+    }
+    if (defaultModel?.defaultOptIn !== true) {
+      fail(`${agent.kind}.session.defaultModelId must have defaultOptIn true`);
+    }
     if (defaultCount !== 1) {
       fail(`${agent.kind}.session.models must contain exactly one default`);
+    }
+    const activeModelIds = new Set(
+      session.models.filter((model) => model.status === "active").map((model) => model.id),
+    );
+    const defaultOptInModelIds = new Set(
+      session.models.filter((model) => model.defaultOptIn === true).map((model) => model.id),
+    );
+    for (const modelId of session.modelDisplayPolicy?.defaultVisibleModelIds ?? []) {
+      if (!activeModelIds.has(modelId)) {
+        fail(
+          `${agent.kind}.session.modelDisplayPolicy.defaultVisibleModelIds `
+          + `'${modelId}' is not an active model`,
+        );
+      }
+      if (!defaultOptInModelIds.has(modelId)) {
+        fail(
+          `${agent.kind}.session.modelDisplayPolicy.defaultVisibleModelIds `
+          + `'${modelId}' must have defaultOptIn true`,
+        );
+      }
+    }
+    for (const modelId of defaultOptInModelIds) {
+      if (!session.modelDisplayPolicy?.defaultVisibleModelIds.includes(modelId)) {
+        fail(
+          `${agent.kind}.${modelId}.defaultOptIn true must be listed in `
+          + "defaultVisibleModelIds",
+        );
+      }
     }
 
     const controlKeys = new Set();

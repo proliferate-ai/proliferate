@@ -266,6 +266,75 @@ mod tests {
     }
 
     #[test]
+    fn bundled_frontier_agent_defaults_are_current() {
+        use std::collections::BTreeSet;
+
+        let registries = bundled_model_registries();
+        let cursor = registries
+            .iter()
+            .find(|config| config.kind == "cursor")
+            .expect("cursor registry");
+        assert_eq!(
+            cursor.default_model_id.as_deref(),
+            Some("composer-2.5-fast")
+        );
+        assert!(cursor.models.iter().any(|model| {
+            model.id == "claude-opus-4-8-thinking-high"
+                && model.default_opt_in == Some(true)
+        }));
+        let cursor_default_opt_in_ids = cursor
+            .models
+            .iter()
+            .filter(|model| model.default_opt_in == Some(true))
+            .map(|model| model.id.as_str())
+            .collect::<BTreeSet<_>>();
+        let expected_cursor_default_opt_in_ids = BTreeSet::from([
+            "auto",
+            "claude-opus-4-8-high",
+            "claude-opus-4-8-max",
+            "claude-opus-4-8-thinking-high",
+            "claude-opus-4-8-thinking-max",
+            "claude-opus-4-8-thinking-xhigh",
+            "claude-opus-4-8-xhigh",
+            "composer-2.5",
+            "composer-2.5-fast",
+            "gemini-3.1-pro",
+            "gemini-3.5-flash",
+            "gpt-5.5-extra-high",
+            "gpt-5.5-high",
+            "gpt-5.5-medium",
+            "grok-build-0.1",
+            "kimi-k2.5",
+        ]);
+        assert_eq!(
+            cursor_default_opt_in_ids,
+            expected_cursor_default_opt_in_ids
+        );
+
+        let gemini = registries
+            .iter()
+            .find(|config| config.kind == "gemini")
+            .expect("gemini registry");
+        assert_eq!(
+            gemini.default_model_id.as_deref(),
+            Some("auto-gemini-3")
+        );
+
+        let opencode = registries
+            .iter()
+            .find(|config| config.kind == "opencode")
+            .expect("opencode registry");
+        assert!(opencode
+            .models
+            .iter()
+            .any(|model| model.id == "opencode/mimo-v2.5-free"));
+        assert!(!opencode
+            .models
+            .iter()
+            .any(|model| model.id == "opencode/ring-2.6-1t-free"));
+    }
+
+    #[test]
     fn hidden_candidate_and_too_new_models_are_not_selectable() {
         let mut catalog = bundled_agent_catalog_document().clone();
         let codex = catalog

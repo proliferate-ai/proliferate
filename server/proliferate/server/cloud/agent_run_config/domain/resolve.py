@@ -38,6 +38,23 @@ def _catalog_agent(catalog: AgentCatalogResponse, agent_kind: str) -> AgentCatal
     return None
 
 
+def canonical_model_id_for_config(
+    catalog: AgentCatalogResponse,
+    *,
+    agent_kind: str,
+    model_id: str,
+) -> str | None:
+    agent = _catalog_agent(catalog, agent_kind)
+    if agent is None:
+        return None
+    for model in agent.session.models:
+        if model.status not in {"active", "candidate"}:
+            continue
+        if model.id == model_id or model_id in model.aliases:
+            return model.id
+    return None
+
+
 def validate_config_values(
     catalog: AgentCatalogResponse,
     *,
@@ -48,10 +65,14 @@ def validate_config_values(
     agent = _catalog_agent(catalog, agent_kind)
     if agent is None:
         return AgentRunConfigIssue("agent_kind_unavailable", "Agent kind is not available.")
-    active_model_ids = {
-        model.id for model in agent.session.models if model.status in {"active", "candidate"}
-    }
-    if model_id not in active_model_ids:
+    if (
+        canonical_model_id_for_config(
+            catalog,
+            agent_kind=agent_kind,
+            model_id=model_id,
+        )
+        is None
+    ):
         return AgentRunConfigIssue("model_unavailable", "Model is not available for this agent.")
     allowed_controls = {
         control.key: control
@@ -169,6 +190,13 @@ def resolve_runtime_values(
     agent = _catalog_agent(catalog, config.agent_kind)
     if agent is None:
         return AgentRunConfigIssue("agent_kind_unavailable", "Agent kind is not available.")
+    model_id = canonical_model_id_for_config(
+        catalog,
+        agent_kind=config.agent_kind,
+        model_id=config.model_id,
+    )
+    if model_id is None:
+        return AgentRunConfigIssue("model_unavailable", "Model is not available for this agent.")
     allowed_controls = {
         control.key: control
         for control in agent.session.controls
@@ -188,7 +216,7 @@ def resolve_runtime_values(
         config_id=str(config.id),
         config_name=config.name,
         agent_kind=config.agent_kind,
-        model_id=config.model_id,
+        model_id=model_id,
         control_values=resolved,
         ignored_keys=tuple(sorted(ignored)),
     )

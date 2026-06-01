@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::domains::agents::credentials::{detect_credentials, detect_credentials_with_env};
+use crate::domains::agents::managed_npm::managed_npm_install_issue;
 use crate::domains::agents::model::*;
 use crate::domains::agents::seed;
 use crate::integrations::agent_cli::executable::{
@@ -168,12 +169,27 @@ fn resolve_agent_process_artifact(
             )
         }
         AgentProcessInstallSpec::ManagedNpmPackage {
-            executable_relpath, ..
+            package,
+            source_build_binary_name,
+            executable_relpath,
+            ..
         } => {
             let managed_candidates =
                 managed_launcher_candidates(&managed_dir, kind, Some(executable_relpath.as_path()));
             for path in &managed_candidates {
                 if path.exists() {
+                    if source_build_binary_name.is_none() {
+                        if let Some(message) = managed_npm_install_issue(package, &managed_dir) {
+                            return ResolvedArtifact {
+                                role: ArtifactRole::AgentProcess,
+                                installed: false,
+                                source: Some("managed".into()),
+                                version: None,
+                                path: Some(path.clone()),
+                                message: Some(message),
+                            };
+                        }
+                    }
                     return found_artifact(ArtifactRole::AgentProcess, path.clone(), "managed");
                 }
             }
@@ -796,6 +812,43 @@ mod tests {
                 PathBuf::from("/tmp/claude/node_modules/.bin/claude-agent-acp"),
             ]
         );
+    }
+
+    #[test]
+    fn managed_npm_package_ref_mismatch_requires_reinstall() {
+        let registry = built_in_registry();
+        let claude = registry
+            .into_iter()
+            .find(|descriptor| descriptor.kind == AgentKind::Claude)
+            .expect("missing Claude descriptor");
+        let runtime_home = make_temp_dir("anyharness-claude-stale-managed-npm-test");
+        let managed_dir = artifact_root(
+            &runtime_home,
+            &AgentKind::Claude,
+            &ArtifactRole::AgentProcess,
+        );
+        let launcher_path = managed_dir.join("claude-launcher");
+        std::fs::create_dir_all(launcher_path.parent().expect("launcher parent"))
+            .expect("create launcher dir");
+        std::fs::write(&launcher_path, "#!/bin/sh\nexit 0\n").expect("write launcher");
+        make_executable(&launcher_path).expect("make launcher executable");
+        std::fs::write(
+            managed_dir.join("package.json"),
+            r#"{"dependencies":{"@agentclientprotocol/claude-agent-acp":"github:proliferate-ai/claude-agent-acp#old-ref"}}"#,
+        )
+        .expect("write package metadata");
+
+        let resolved = resolve_agent(&claude, &runtime_home);
+
+        assert_eq!(resolved.status, ResolvedAgentStatus::InstallRequired);
+        assert!(!resolved.agent_process.installed);
+        assert!(resolved
+            .agent_process
+            .message
+            .as_deref()
+            .is_some_and(|message| message.contains("out of date")));
+
+        let _ = std::fs::remove_dir_all(runtime_home);
     }
 
     #[test]

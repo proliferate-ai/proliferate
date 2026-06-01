@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "catalogVersion": "2026-05-29.1",
-  "generatedAt": "2026-05-29T00:00:00Z",
+  "catalogVersion": "2026-05-31.1",
+  "generatedAt": "2026-05-31T00:00:00Z",
   "compatibility": {
     "minRuntimeVersion": "0.1.0",
     "maxRuntimeVersion": null,
@@ -938,15 +938,15 @@
         "docsUrl": "https://github.com/google-gemini/gemini-cli"
       },
       "session": {
-        "defaultModelId": "auto-gemini-2.5",
+        "defaultModelId": "auto-gemini-3",
         "defaultModeId": "default",
         "dynamicModels": false,
         "modelDisplayPolicy": {
           "defaultVisibleModelIds": [
-            "auto-gemini-2.5",
-            "gemini-3-flash-preview",
+            "auto-gemini-3",
             "gemini-3.1-pro-preview",
             "gemini-3-pro-preview",
+            "gemini-3-flash-preview",
             "gemini-2.5-pro"
           ],
           "allowUserVisibleModelSelection": true,
@@ -964,10 +964,10 @@
             "description": null,
             "aliases": [],
             "status": "active",
-            "isDefault": true,
+            "isDefault": false,
             "provider": "google",
             "tags": [
-              "recommended"
+              "previous"
             ],
             "capabilities": {
               "image": true,
@@ -976,7 +976,7 @@
             },
             "compatibility": {},
             "launchRemediation": null,
-            "defaultOptIn": true
+            "defaultOptIn": false
           },
           {
             "id": "gemini-2.5-pro",
@@ -1042,10 +1042,10 @@
             "description": null,
             "aliases": [],
             "status": "active",
-            "isDefault": false,
+            "isDefault": true,
             "provider": "google",
             "tags": [
-              "candidate"
+              "recommended"
             ],
             "capabilities": {
               "image": true,
@@ -1054,7 +1054,7 @@
             },
             "compatibility": {},
             "launchRemediation": null,
-            "defaultOptIn": false
+            "defaultOptIn": true
           },
           {
             "id": "gemini-3-pro-preview",
@@ -1148,7 +1148,7 @@
             "description": "Gemini model to use. If ACP does not expose a raw model config option, AnyHarness synthesizes this from direct ACP model state and applies it with set_session_model.",
             "type": "select",
             "category": "model",
-            "defaultValue": "auto-gemini-2.5",
+            "defaultValue": "auto-gemini-3",
             "apply": {
               "createField": "modelId",
               "liveConfigId": "model",
@@ -1270,17 +1270,27 @@
         "docsUrl": "https://docs.cursor.com/cli/acp"
       },
       "session": {
-        "defaultModelId": "composer-2-fast",
+        "defaultModelId": "composer-2.5-fast",
         "defaultModeId": "agent",
         "dynamicModels": true,
         "modelDisplayPolicy": {
           "defaultVisibleModelIds": [
             "auto",
-            "composer-2-fast",
-            "gpt-5.3-codex",
-            "gpt-5.3-codex-high",
-            "claude-4.6-sonnet-medium",
-            "claude-opus-4-7-xhigh"
+            "composer-2.5-fast",
+            "composer-2.5",
+            "gpt-5.5-medium",
+            "gpt-5.5-high",
+            "gpt-5.5-extra-high",
+            "claude-opus-4-8-high",
+            "claude-opus-4-8-xhigh",
+            "claude-opus-4-8-max",
+            "claude-opus-4-8-thinking-high",
+            "claude-opus-4-8-thinking-xhigh",
+            "claude-opus-4-8-thinking-max",
+            "gemini-3.1-pro",
+            "gemini-3.5-flash",
+            "grok-build-0.1",
+            "kimi-k2.5"
           ],
           "allowUserVisibleModelSelection": true,
           "moreModelsSource": "lastKnownLiveSnapshot"
@@ -1302,28 +1312,14 @@
             ]
           },
           {
-            "id": "composer-2-fast",
-            "displayName": "Composer 2 Fast",
-            "status": "active",
-            "isDefault": true,
-            "defaultOptIn": true,
-            "aliases": [
-              "composer-2[fast=true]"
-            ]
-          },
-          {
-            "id": "composer-2",
-            "displayName": "Composer 2",
-            "status": "active",
-            "isDefault": false,
-            "defaultOptIn": false
-          },
-          {
             "id": "gpt-5.3-codex-low",
             "displayName": "Codex 5.3 Low",
             "status": "active",
             "isDefault": false,
-            "defaultOptIn": false
+            "defaultOptIn": false,
+            "aliases": [
+              "gpt-5.3-codex-spark-preview-low"
+            ]
           },
           {
             "id": "gpt-5.3-codex-low-fast",
@@ -1337,9 +1333,10 @@
             "displayName": "Codex 5.3",
             "status": "active",
             "isDefault": false,
-            "defaultOptIn": true,
+            "defaultOptIn": false,
             "aliases": [
-              "gpt-5.3-codex[reasoning=medium,fast=false]"
+              "gpt-5.3-codex[reasoning=medium,fast=false]",
+              "gpt-5.3-codex-spark-preview"
             ]
           },
           {
@@ -1354,7 +1351,10 @@
             "displayName": "Codex 5.3 High",
             "status": "active",
             "isDefault": false,
-            "defaultOptIn": true
+            "defaultOptIn": false,
+            "aliases": [
+              "gpt-5.3-codex-spark-preview-high"
+            ]
           },
           {
             "id": "gpt-5.3-codex-high-fast",
@@ -1368,7 +1368,10 @@
             "displayName": "Codex 5.3 Extra High",
             "status": "active",
             "isDefault": false,
-            "defaultOptIn": false
+            "defaultOptIn": false,
+            "aliases": [
+              "gpt-5.3-codex-spark-preview-xhigh"
+            ]
           },
           {
             "id": "gpt-5.3-codex-xhigh-fast",
@@ -1380,34 +1383,6 @@
           {
             "id": "gpt-5.2",
             "displayName": "GPT-5.2",
-            "status": "active",
-            "isDefault": false,
-            "defaultOptIn": false
-          },
-          {
-            "id": "gpt-5.3-codex-spark-preview-low",
-            "displayName": "Codex 5.3 Spark Low",
-            "status": "active",
-            "isDefault": false,
-            "defaultOptIn": false
-          },
-          {
-            "id": "gpt-5.3-codex-spark-preview",
-            "displayName": "Codex 5.3 Spark",
-            "status": "active",
-            "isDefault": false,
-            "defaultOptIn": false
-          },
-          {
-            "id": "gpt-5.3-codex-spark-preview-high",
-            "displayName": "Codex 5.3 Spark High",
-            "status": "active",
-            "isDefault": false,
-            "defaultOptIn": false
-          },
-          {
-            "id": "gpt-5.3-codex-spark-preview-xhigh",
-            "displayName": "Codex 5.3 Spark Extra High",
             "status": "active",
             "isDefault": false,
             "defaultOptIn": false
@@ -1525,11 +1500,36 @@
             "defaultOptIn": false
           },
           {
+            "id": "composer-2.5",
+            "displayName": "Composer 2.5",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": true,
+            "aliases": [
+              "composer-2",
+              "composer-1.5[]"
+            ]
+          },
+          {
+            "id": "claude-opus-4-8-thinking-high",
+            "displayName": "Opus 4.8 1M Thinking",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": true
+          },
+          {
+            "id": "claude-opus-4-8-thinking-high-fast",
+            "displayName": "Opus 4.8 1M Thinking Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
             "id": "gpt-5.5-high",
             "displayName": "GPT-5.5 1M High",
             "status": "active",
             "isDefault": false,
-            "defaultOptIn": false
+            "defaultOptIn": true
           },
           {
             "id": "gpt-5.5-high-fast",
@@ -1541,6 +1541,13 @@
           {
             "id": "claude-opus-4-7-thinking-high",
             "displayName": "Opus 4.7 1M High Thinking",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-opus-4-7-thinking-high-fast",
+            "displayName": "Opus 4.7 1M High Thinking Fast",
             "status": "active",
             "isDefault": false,
             "defaultOptIn": false
@@ -1567,8 +1574,138 @@
             "defaultOptIn": false
           },
           {
-            "id": "claude-4.6-opus-high-thinking-fast",
-            "displayName": "Opus 4.6 1M Thinking Fast",
+            "id": "composer-2.5-fast",
+            "displayName": "Composer 2.5 Fast",
+            "status": "active",
+            "isDefault": true,
+            "defaultOptIn": true,
+            "aliases": [
+              "composer-2[fast=true]",
+              "composer-2-fast"
+            ]
+          },
+          {
+            "id": "claude-opus-4-8-low",
+            "displayName": "Opus 4.8 1M Low",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-opus-4-8-low-fast",
+            "displayName": "Opus 4.8 1M Low Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-opus-4-8-medium",
+            "displayName": "Opus 4.8 1M Medium",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-opus-4-8-medium-fast",
+            "displayName": "Opus 4.8 1M Medium Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-opus-4-8-high",
+            "displayName": "Opus 4.8 1M",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": true
+          },
+          {
+            "id": "claude-opus-4-8-high-fast",
+            "displayName": "Opus 4.8 1M Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-opus-4-8-xhigh",
+            "displayName": "Opus 4.8 1M Extra High",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": true
+          },
+          {
+            "id": "claude-opus-4-8-xhigh-fast",
+            "displayName": "Opus 4.8 1M Extra High Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-opus-4-8-max",
+            "displayName": "Opus 4.8 1M Max",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": true
+          },
+          {
+            "id": "claude-opus-4-8-max-fast",
+            "displayName": "Opus 4.8 1M Max Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-opus-4-8-thinking-low",
+            "displayName": "Opus 4.8 1M Low Thinking",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-opus-4-8-thinking-low-fast",
+            "displayName": "Opus 4.8 1M Low Thinking Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-opus-4-8-thinking-medium",
+            "displayName": "Opus 4.8 1M Medium Thinking",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-opus-4-8-thinking-medium-fast",
+            "displayName": "Opus 4.8 1M Medium Thinking Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-opus-4-8-thinking-xhigh",
+            "displayName": "Opus 4.8 1M Extra High Thinking",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": true
+          },
+          {
+            "id": "claude-opus-4-8-thinking-xhigh-fast",
+            "displayName": "Opus 4.8 1M Extra High Thinking Fast",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-opus-4-8-thinking-max",
+            "displayName": "Opus 4.8 1M Max Thinking",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": true
+          },
+          {
+            "id": "claude-opus-4-8-thinking-max-fast",
+            "displayName": "Opus 4.8 1M Max Thinking Fast",
             "status": "active",
             "isDefault": false,
             "defaultOptIn": false
@@ -1606,7 +1743,7 @@
             "displayName": "GPT-5.5 1M",
             "status": "active",
             "isDefault": false,
-            "defaultOptIn": false,
+            "defaultOptIn": true,
             "launchRemediation": {
               "kind": "external_update",
               "message": "Update Cursor tools from Agent Settings, then retry."
@@ -1624,7 +1761,7 @@
             "displayName": "GPT-5.5 1M Extra High",
             "status": "active",
             "isDefault": false,
-            "defaultOptIn": false
+            "defaultOptIn": true
           },
           {
             "id": "gpt-5.5-extra-high-fast",
@@ -1638,7 +1775,7 @@
             "displayName": "Sonnet 4.6 1M",
             "status": "active",
             "isDefault": false,
-            "defaultOptIn": true,
+            "defaultOptIn": false,
             "aliases": [
               "claude-sonnet-4-6[thinking=true,context=200k,effort=medium]"
             ]
@@ -1697,7 +1834,7 @@
             "displayName": "Opus 4.7 1M",
             "status": "active",
             "isDefault": false,
-            "defaultOptIn": true,
+            "defaultOptIn": false,
             "aliases": [
               "claude-opus-4-7[thinking=true,context=300k,effort=xhigh]"
             ]
@@ -1752,13 +1889,6 @@
             "defaultOptIn": false
           },
           {
-            "id": "claude-opus-4-7-thinking-high-fast",
-            "displayName": "Opus 4.7 1M High Thinking Fast",
-            "status": "active",
-            "isDefault": false,
-            "defaultOptIn": false
-          },
-          {
             "id": "claude-opus-4-7-thinking-xhigh",
             "displayName": "Opus 4.7 1M Thinking",
             "status": "active",
@@ -1787,11 +1917,11 @@
             "defaultOptIn": false
           },
           {
-            "id": "grok-4.3",
-            "displayName": "Grok 4.3 1M",
+            "id": "grok-build-0.1",
+            "displayName": "Grok Build 0.1 1M",
             "status": "active",
             "isDefault": false,
-            "defaultOptIn": false
+            "defaultOptIn": true
           },
           {
             "id": "gpt-5.4-low",
@@ -1838,6 +1968,13 @@
           {
             "id": "claude-4.6-opus-max",
             "displayName": "Opus 4.6 1M Max",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
+            "id": "claude-4.6-opus-high-thinking-fast",
+            "displayName": "Opus 4.6 1M Thinking Fast",
             "status": "active",
             "isDefault": false,
             "defaultOptIn": false
@@ -1924,7 +2061,7 @@
             "displayName": "Gemini 3.1 Pro",
             "status": "active",
             "isDefault": false,
-            "defaultOptIn": false
+            "defaultOptIn": true
           },
           {
             "id": "gpt-5.4-mini-none",
@@ -1997,6 +2134,13 @@
             "defaultOptIn": false
           },
           {
+            "id": "grok-4.3",
+            "displayName": "Grok 4.3 1M",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": false
+          },
+          {
             "id": "claude-4.5-sonnet",
             "displayName": "Sonnet 4.5",
             "status": "active",
@@ -2037,6 +2181,13 @@
             "status": "active",
             "isDefault": false,
             "defaultOptIn": false
+          },
+          {
+            "id": "gemini-3.5-flash",
+            "displayName": "Gemini 3.5 Flash",
+            "status": "active",
+            "isDefault": false,
+            "defaultOptIn": true
           },
           {
             "id": "gpt-5.1-codex-mini-low",
@@ -2085,7 +2236,7 @@
             "displayName": "Kimi K2.5",
             "status": "active",
             "isDefault": false,
-            "defaultOptIn": false
+            "defaultOptIn": true
           }
         ],
         "controls": [
@@ -2095,7 +2246,7 @@
             "description": "Controls which model is used for responses",
             "type": "select",
             "category": "model",
-            "defaultValue": "composer-2-fast",
+            "defaultValue": "composer-2.5-fast",
             "apply": {
               "createField": "modelId",
               "liveConfigId": "model",
@@ -2203,9 +2354,8 @@
           "defaultVisibleModelIds": [
             "opencode/big-pickle",
             "opencode/deepseek-v4-flash-free",
-            "opencode/minimax-m2.5-free",
-            "opencode/nemotron-3-super-free",
-            "opencode/ring-2.6-1t-free"
+            "opencode/mimo-v2.5-free",
+            "opencode/nemotron-3-super-free"
           ],
           "allowUserVisibleModelSelection": true,
           "moreModelsSource": "lastKnownLiveSnapshot"
@@ -2230,7 +2380,7 @@
             "capabilities": {
               "image": true,
               "audio": false,
-              "contextWindow": null
+              "contextWindow": 200000
             },
             "compatibility": {},
             "launchRemediation": null,
@@ -2251,27 +2401,28 @@
             "capabilities": {
               "image": true,
               "audio": false,
-              "contextWindow": null
+              "contextWindow": 200000
             },
             "compatibility": {},
             "launchRemediation": null,
             "defaultOptIn": true
           },
           {
-            "id": "opencode/minimax-m2.5-free",
-            "displayName": "MiniMax M2.5 Free",
+            "id": "opencode/mimo-v2.5-free",
+            "displayName": "MiMo V2.5 Free",
             "description": null,
             "aliases": [],
             "status": "active",
             "isDefault": false,
             "provider": "opencode",
             "tags": [
-              "free"
+              "free",
+              "multimodal"
             ],
             "capabilities": {
               "image": true,
-              "audio": false,
-              "contextWindow": null
+              "audio": true,
+              "contextWindow": 200000
             },
             "compatibility": {},
             "launchRemediation": null,
@@ -2291,27 +2442,7 @@
             "capabilities": {
               "image": true,
               "audio": false,
-              "contextWindow": null
-            },
-            "compatibility": {},
-            "launchRemediation": null,
-            "defaultOptIn": true
-          },
-          {
-            "id": "opencode/ring-2.6-1t-free",
-            "displayName": "Ring 2.6 1T Free",
-            "description": null,
-            "aliases": [],
-            "status": "active",
-            "isDefault": false,
-            "provider": "opencode",
-            "tags": [
-              "free"
-            ],
-            "capabilities": {
-              "image": true,
-              "audio": false,
-              "contextWindow": null
+              "contextWindow": 204800
             },
             "compatibility": {},
             "launchRemediation": null,

@@ -11,13 +11,18 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from alembic import command
 from proliferate.db import engine as engine_module
 from proliferate.db.migrations import build_alembic_config, get_head_revision
+from proliferate.db.models.automations import Automation, AutomationRun
+from proliferate.db.models.auth import User
 from proliferate.db.models.base import Base
+from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
+from proliferate.db.models.cloud.repo_config import CloudRepoConfig
 from proliferate.main import create_app
 from tests.integration.schema_migration_assertions import assert_current_schema
 from tests.postgres import run_migrations_async, temporary_database
 
 HEAD_REVISION = get_head_revision()
 PRE_AUTOMATION_RUN_CONFIG_REVISION = "b2c3d4e5f6a7"
+PRE_AGENT_RUN_CONFIG_MODEL_ALIAS_REVISION = "4d5e6f708192"
 
 
 def _set_alembic_revision(sync_conn, revision: str) -> None:  # type: ignore[no-untyped-def]
@@ -304,8 +309,8 @@ async def test_automation_run_config_migration_backfills_existing_rows() -> None
                           'UTC',
                           'Daily at 09:00 UTC',
                           'cloud',
-                          'codex',
-                          'gpt-5.5',
+                          'cursor',
+                          'composer-2-fast',
                           'code',
                           'high',
                           true,
@@ -363,8 +368,8 @@ async def test_automation_run_config_migration_backfills_existing_rows() -> None
                           'proliferate-ai',
                           'proliferate',
                           :repo_config_id,
-                          'codex',
-                          'gpt-5.4',
+                          'cursor',
+                          'gpt-5.3-codex[reasoning=medium,fast=false]',
                           'review',
                           'medium',
                           NULL,
@@ -427,8 +432,8 @@ async def test_automation_run_config_migration_backfills_existing_rows() -> None
                 assert config_row.owner_user_id == user_id
                 assert config_row.created_by_user_id == user_id
                 assert config_row.name == "Legacy automation config: Legacy config"
-                assert config_row.agent_kind == "codex"
-                assert config_row.model_id == "gpt-5.5"
+                assert config_row.agent_kind == "cursor"
+                assert config_row.model_id == "composer-2.5-fast"
                 assert config_row.control_values_json == {"mode": "code", "effort": "high"}
 
                 run_snapshot = await conn.scalar(
@@ -444,8 +449,8 @@ async def test_automation_run_config_migration_backfills_existing_rows() -> None
                 assert run_snapshot == {
                     "config_id": str(config_id),
                     "config_name": "Legacy automation config: Legacy config",
-                    "agent_kind": "codex",
-                    "model_id": "gpt-5.4",
+                    "agent_kind": "cursor",
+                    "model_id": "gpt-5.3-codex",
                     "control_values": {"mode": "review", "effort": "medium"},
                     "owner_scope_at_snapshot": "personal",
                 }
@@ -459,6 +464,206 @@ async def test_automation_run_config_migration_backfills_existing_rows() -> None
                 assert "model_id" not in automation_columns
                 assert "mode_id" not in automation_columns
                 assert "reasoning_effort" not in automation_columns
+        finally:
+            await inspection_engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_agent_run_config_model_alias_migration_updates_current_schema_rows() -> None:
+    async with temporary_database("agent_alias") as (
+        _database_name,
+        database_url,
+    ):
+        await _upgrade_database_to_revision(
+            database_url,
+            PRE_AGENT_RUN_CONFIG_MODEL_ALIAS_REVISION,
+        )
+        user_id = uuid.uuid4()
+        repo_config_id = uuid.uuid4()
+        cursor_config_id = uuid.uuid4()
+        gemini_config_id = uuid.uuid4()
+        automation_id = uuid.uuid4()
+        run_id = uuid.uuid4()
+        now = datetime(2026, 5, 31, 12, 0, tzinfo=UTC)
+
+        setup_engine = create_async_engine(database_url, echo=False)
+        session_factory = async_sessionmaker(setup_engine, expire_on_commit=False)
+        try:
+            async with session_factory() as session, session.begin():
+                session.add(
+                    User(
+                        id=user_id,
+                        email="current-alias@example.com",
+                        hashed_password="!",
+                        is_active=True,
+                        is_superuser=False,
+                        is_verified=True,
+                        created_at=now,
+                    )
+                )
+                session.add(
+                    CloudRepoConfig(
+                        id=repo_config_id,
+                        owner_scope="personal",
+                        user_id=user_id,
+                        organization_id=None,
+                        git_owner="proliferate-ai",
+                        git_repo_name="proliferate",
+                        configured=True,
+                        configured_at=now,
+                        default_branch="main",
+                        env_vars_ciphertext="",
+                        env_vars_version=0,
+                        setup_script="",
+                        setup_script_version=0,
+                        run_command="",
+                        files_version=0,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+                session.add_all(
+                    [
+                        CloudAgentRunConfig(
+                            id=cursor_config_id,
+                            owner_scope="personal",
+                            owner_user_id=user_id,
+                            organization_id=None,
+                            created_by_user_id=user_id,
+                            name="Cursor alias",
+                            agent_kind="cursor",
+                            model_id="default[]",
+                            control_values_json={},
+                            usable_in_personal_sandboxes=True,
+                            usable_in_shared_sandboxes=False,
+                            seed_key=None,
+                            system_default_rank=None,
+                            status="active",
+                            created_at=now,
+                            updated_at=now,
+                        ),
+                        CloudAgentRunConfig(
+                            id=gemini_config_id,
+                            owner_scope="personal",
+                            owner_user_id=user_id,
+                            organization_id=None,
+                            created_by_user_id=user_id,
+                            name="Gemini 2.5 pin",
+                            agent_kind="gemini",
+                            model_id="auto-gemini-2.5",
+                            control_values_json={},
+                            usable_in_personal_sandboxes=True,
+                            usable_in_shared_sandboxes=False,
+                            seed_key=None,
+                            system_default_rank=None,
+                            status="active",
+                            created_at=now,
+                            updated_at=now,
+                        ),
+                    ]
+                )
+                await session.flush()
+                session.add(
+                    Automation(
+                        id=automation_id,
+                        owner_scope="personal",
+                        owner_user_id=user_id,
+                        organization_id=None,
+                        created_by_user_id=user_id,
+                        cloud_repo_config_id=repo_config_id,
+                        title="Alias config",
+                        prompt="Check aliases.",
+                        schedule_rrule="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0",
+                        schedule_timezone="UTC",
+                        schedule_summary="Daily at 09:00 UTC",
+                        target_mode="personal_cloud",
+                        cloud_agent_run_config_id=cursor_config_id,
+                        enabled=True,
+                        paused_at=None,
+                        next_run_at=None,
+                        last_scheduled_at=None,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+                await session.flush()
+                session.add(
+                    AutomationRun(
+                        id=run_id,
+                        automation_id=automation_id,
+                        owner_scope="personal",
+                        owner_user_id=user_id,
+                        organization_id=None,
+                        created_by_user_id=user_id,
+                        trigger_kind="manual",
+                        scheduled_for=None,
+                        target_mode="personal_cloud",
+                        status="queued",
+                        title_snapshot="Alias config",
+                        prompt_snapshot="Check aliases.",
+                        git_provider_snapshot="github",
+                        git_owner_snapshot="proliferate-ai",
+                        git_repo_name_snapshot="proliferate",
+                        cloud_repo_config_id_snapshot=repo_config_id,
+                        cloud_target_id_snapshot=None,
+                        cloud_target_kind_snapshot=None,
+                        sandbox_profile_id=None,
+                        cloud_workspace_exposure_id=None,
+                        agent_run_config_snapshot_json={
+                            "config_id": str(cursor_config_id),
+                            "config_name": "Cursor alias",
+                            "agent_kind": "cursor",
+                            "model_id": "gpt-5.3-codex-spark-preview",
+                            "control_values": {},
+                            "owner_scope_at_snapshot": "personal",
+                        },
+                        cascade_attempt=0,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                )
+        finally:
+            await setup_engine.dispose()
+
+        await run_migrations_async(database_url)
+
+        inspection_engine = create_async_engine(database_url, echo=False)
+        try:
+            async with inspection_engine.begin() as conn:
+                cursor_model_id = await conn.scalar(
+                    text(
+                        """
+                        SELECT model_id
+                        FROM cloud_agent_run_config
+                        WHERE id = :config_id
+                        """
+                    ),
+                    {"config_id": cursor_config_id},
+                )
+                gemini_model_id = await conn.scalar(
+                    text(
+                        """
+                        SELECT model_id
+                        FROM cloud_agent_run_config
+                        WHERE id = :config_id
+                        """
+                    ),
+                    {"config_id": gemini_config_id},
+                )
+                run_snapshot = await conn.scalar(
+                    text(
+                        """
+                        SELECT agent_run_config_snapshot_json
+                        FROM automation_run
+                        WHERE id = :run_id
+                        """
+                    ),
+                    {"run_id": run_id},
+                )
+
+                assert cursor_model_id == "auto"
+                assert gemini_model_id == "auto-gemini-2.5"
+                assert run_snapshot["model_id"] == "gpt-5.3-codex"
         finally:
             await inspection_engine.dispose()
 

@@ -184,6 +184,12 @@ Important install cases:
 - registry-backed installs fall back to local npm/native-subcommand/binary-hint
   rules when needed
 - managed npm installs create a managed launcher surface under runtime home
+- managed npm readiness compares the installed package metadata against the
+  bundled package spec; stale managed packages report `install_required` so
+  normal setup/reconcile can update user-owned older ACP adapters
+- manual reinstall/reconcile is the update path for every installable agent
+  process recipe, including registry-backed Gemini, Cursor, and OpenCode
+  installs whose latest version is only knowable by consulting the ACP registry
 - installer mutations are serialized by runtime-home file locks under
   `agents/<kind>/.install.lock` so desktop, CLI, and seed hydration do not
   write the same agent at the same time

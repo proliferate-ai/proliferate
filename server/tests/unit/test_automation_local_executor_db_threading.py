@@ -25,6 +25,17 @@ from proliferate.server.automations.models import (
 )
 
 
+def _agent_snapshot(config: CloudAgentRunConfig) -> dict[str, object]:
+    return {
+        "config_id": str(config.id),
+        "config_name": config.name,
+        "agent_kind": config.agent_kind,
+        "model_id": config.model_id,
+        "control_values": dict(config.control_values_json or {}),
+        "owner_scope_at_snapshot": config.owner_scope,
+    }
+
+
 async def _create_local_automation(user_id: uuid.UUID, now: datetime) -> uuid.UUID:
     async with engine_module.async_session_factory() as session:
         session.add(
@@ -103,10 +114,15 @@ async def _create_local_automation(user_id: uuid.UUID, now: datetime) -> uuid.UU
 
 async def _create_manual_run(user_id: uuid.UUID, automation_id: uuid.UUID):
     async with engine_module.async_session_factory() as session:
+        automation = await session.get(Automation, automation_id)
+        assert automation is not None
+        run_config = await session.get(CloudAgentRunConfig, automation.cloud_agent_run_config_id)
+        assert run_config is not None
         run = await create_manual_run_for_user(
             session,
             user_id=user_id,
             automation_id=automation_id,
+            agent_run_config_snapshot_json=_agent_snapshot(run_config),
         )
         await session.commit()
         return run

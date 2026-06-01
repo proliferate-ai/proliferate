@@ -44,17 +44,6 @@ def _execution_target_for_target_mode(target_mode: str) -> str:
     )
 
 
-def _agent_snapshot(config: CloudAgentRunConfig) -> dict[str, object]:
-    return {
-        "config_id": str(config.id),
-        "config_name": config.name,
-        "agent_kind": config.agent_kind,
-        "model_id": config.model_id,
-        "control_values": dict(config.control_values_json or {}),
-        "owner_scope_at_snapshot": config.owner_scope,
-    }
-
-
 def _snapshot_value(
     snapshot: dict[str, object] | None,
     key: str,
@@ -213,6 +202,7 @@ ScheduleAdvanceResolver = Callable[
     [AutomationScheduleFields, datetime],
     AutomationScheduleAdvance,
 ]
+AgentRunConfigSnapshotBuilder = Callable[[CloudAgentRunConfig], dict[str, object]]
 
 
 def _automation_value(record: Automation, repo_config: CloudRepoConfig) -> AutomationValue:
@@ -510,6 +500,7 @@ async def create_manual_run_for_user(
     *,
     user_id: UUID,
     automation_id: UUID,
+    agent_run_config_snapshot_json: dict[str, object],
     owner_scope: str = AUTOMATION_OWNER_SCOPE_PERSONAL,
     organization_id: UUID | None = None,
 ) -> AutomationRunValue | None:
@@ -533,7 +524,7 @@ async def create_manual_run_for_user(
     ).one_or_none()
     if row is None:
         return None
-    automation, repo_config, run_config = row
+    automation, repo_config, _run_config = row
     now = utcnow()
     run = AutomationRun(
         automation_id=automation.id,
@@ -555,7 +546,7 @@ async def create_manual_run_for_user(
         cloud_target_kind_snapshot=None,
         sandbox_profile_id=None,
         cloud_workspace_exposure_id=None,
-        agent_run_config_snapshot_json=_agent_snapshot(run_config),
+        agent_run_config_snapshot_json=agent_run_config_snapshot_json,
         cascade_attempt=0,
         last_cascade_command_id=None,
         last_cascade_reason=None,
@@ -658,6 +649,7 @@ async def create_due_scheduled_runs_batch(
     now: datetime,
     limit: int,
     schedule_advance_resolver: ScheduleAdvanceResolver,
+    agent_run_config_snapshot_builder: AgentRunConfigSnapshotBuilder,
 ) -> int:
     rows = list(
         (
@@ -709,6 +701,7 @@ async def create_due_scheduled_runs_batch(
             record.updated_at = now
             continue
         if advance.scheduled_for is not None:
+            snapshot = agent_run_config_snapshot_builder(run_config)
             result = await db.execute(
                 pg_insert(AutomationRun)
                 .values(
@@ -731,7 +724,7 @@ async def create_due_scheduled_runs_batch(
                     cloud_target_kind_snapshot=None,
                     sandbox_profile_id=None,
                     cloud_workspace_exposure_id=None,
-                    agent_run_config_snapshot_json=_agent_snapshot(run_config),
+                    agent_run_config_snapshot_json=snapshot,
                     cascade_attempt=0,
                     last_cascade_command_id=None,
                     last_cascade_reason=None,

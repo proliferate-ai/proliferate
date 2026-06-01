@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { THEME_PRESETS } from "@/config/theme";
 import {
   clearWorktreeAutoDeleteLimitAdoption,
+  hasAppliedModelVisibilityDefaultsReset,
   hasPendingWorktreeAutoDeleteLimitAdoption,
   selectPersistedUserPreferencesSlice,
 } from "@/lib/domain/preferences/persisted-metadata";
@@ -197,14 +198,16 @@ describe("user preference migration", () => {
     expect(persisted.onboardingPrimaryGoalId).toBeUndefined();
   });
 
-  it("does not rewrite records only because they contain unrelated unknown keys", async () => {
+  it("preserves unrelated unknown keys while marking model visibility defaults reset", async () => {
     storeMocks.values.set("user_preferences", {
       ...USER_PREFERENCE_DEFAULTS,
       futurePreference: true,
     } as unknown as UserPreferences);
 
     await bootstrapUserPreferencesForTest();
-    expect(storeMocks.set).not.toHaveBeenCalled();
+    const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    expect(persisted.futurePreference).toBe(true);
+    expect(hasAppliedModelVisibilityDefaultsReset(persisted)).toBe(true);
   });
 
   it("preserves unrelated unknown keys when hydration rewrites known preferences", async () => {

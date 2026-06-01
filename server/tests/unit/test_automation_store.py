@@ -40,6 +40,8 @@ async def _create_run_config(  # type: ignore[no-untyped-def]
     session,
     *,
     user_id: uuid.UUID,
+    agent_kind: str = "codex",
+    model_id: str = "gpt-5.4",
 ) -> CloudAgentRunConfig:
     config = CloudAgentRunConfig(
         owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
@@ -47,8 +49,8 @@ async def _create_run_config(  # type: ignore[no-untyped-def]
         organization_id=None,
         created_by_user_id=user_id,
         name="Automation store config",
-        agent_kind="codex",
-        model_id="gpt-5.4",
+        agent_kind=agent_kind,
+        model_id=model_id,
         control_values_json={},
         usable_in_personal_sandboxes=True,
         usable_in_shared_sandboxes=False,
@@ -183,6 +185,7 @@ async def test_due_scheduler_disables_bad_schedule_and_continues_batch(
                 now=now,
                 limit=10,
                 schedule_advance_resolver=_advance,
+                agent_run_config_snapshot_builder=_agent_snapshot,
             )
 
         async with engine_module.async_session_factory() as session:
@@ -213,6 +216,74 @@ async def test_due_scheduler_disables_bad_schedule_and_continues_batch(
         assert runs[0].git_repo_name_snapshot == "good"
         assert runs[0].agent_run_config_snapshot_json is not None
         assert runs[0].agent_run_config_snapshot_json["agent_kind"] == "codex"
+    finally:
+        engine_module.async_session_factory = original_factory
+
+
+@pytest.mark.asyncio
+async def test_due_scheduler_uses_precomputed_agent_run_config_snapshot(
+    test_engine,  # type: ignore[no-untyped-def]
+) -> None:
+    original_factory = engine_module.async_session_factory
+    engine_module.async_session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
+    now = datetime(2026, 4, 20, 12, 0, tzinfo=UTC)
+    user_id = uuid.uuid4()
+
+    try:
+        async with engine_module.async_session_factory() as session:
+            await _create_user(session, user_id=user_id)
+            run_config = await _create_run_config(
+                session,
+                user_id=user_id,
+                agent_kind="cursor",
+                model_id="gpt-5.3-codex-spark-preview",
+            )
+            repo = _repo_row(user_id=user_id, git_repo_name="canonical", now=now)
+            session.add(repo)
+            await session.flush()
+            automation = _automation_row(
+                user_id=user_id,
+                repo_id=repo.id,
+                run_config_id=run_config.id,
+                title="Canonical snapshot",
+                prompt="Run canonical",
+                schedule_rrule="RRULE:FREQ=HOURLY;INTERVAL=1;BYMINUTE=0",
+                next_run_at=now,
+            )
+            session.add(automation)
+            await session.commit()
+            automation_id = automation.id
+
+        def _advance(fields, _now):  # type: ignore[no-untyped-def]
+            return AutomationScheduleAdvance(
+                scheduled_for=fields.next_run_at,
+                next_run_at=now + timedelta(hours=1),
+            )
+
+        def _canonical_snapshot(config: CloudAgentRunConfig) -> dict[str, object]:
+            snapshot = _agent_snapshot(config)
+            snapshot["model_id"] = "gpt-5.3-codex"
+            return snapshot
+
+        async with engine_module.async_session_factory() as session, session.begin():
+            created = await create_due_scheduled_runs_batch(
+                session,
+                now=now,
+                limit=10,
+                schedule_advance_resolver=_advance,
+                agent_run_config_snapshot_builder=_canonical_snapshot,
+            )
+
+        async with engine_module.async_session_factory() as session:
+            run = (
+                await session.execute(
+                    select(AutomationRun).where(AutomationRun.automation_id == automation_id)
+                )
+            ).scalar_one()
+
+        assert created == 1
+        assert run.agent_run_config_snapshot_json is not None
+        assert run.agent_run_config_snapshot_json["model_id"] == "gpt-5.3-codex"
     finally:
         engine_module.async_session_factory = original_factory
 
@@ -302,6 +373,7 @@ async def test_due_scheduler_advances_after_duplicate_scheduled_slot(
                 now=now,
                 limit=10,
                 schedule_advance_resolver=_advance,
+                agent_run_config_snapshot_builder=_agent_snapshot,
             )
 
         async with engine_module.async_session_factory() as session:
@@ -372,6 +444,7 @@ async def test_due_scheduler_skips_personal_cloud_automation_without_repo_config
                 now=now,
                 limit=10,
                 schedule_advance_resolver=_advance,
+                agent_run_config_snapshot_builder=_agent_snapshot,
             )
 
         async with engine_module.async_session_factory() as session:

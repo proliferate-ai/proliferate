@@ -183,8 +183,8 @@ def _backfill_automation_agent_run_configs() -> None:
                     WHEN 'claude' THEN 'us.anthropic.claude-sonnet-4-6'
                     WHEN 'codex' THEN 'gpt-5.5'
                     WHEN 'opencode' THEN 'opencode/big-pickle'
-                    WHEN 'gemini' THEN 'auto-gemini-2.5'
-                    WHEN 'cursor' THEN 'composer-2-fast'
+                    WHEN 'gemini' THEN 'auto-gemini-3'
+                    WHEN 'cursor' THEN 'composer-2.5-fast'
                     ELSE 'us.anthropic.claude-sonnet-4-6'
                   END
                 ) AS model_id,

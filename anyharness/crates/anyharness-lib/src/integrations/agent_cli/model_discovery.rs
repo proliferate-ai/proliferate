@@ -252,13 +252,13 @@ mod tests {
 
     #[test]
     fn parses_cursor_models_with_default_marker_and_ansi() {
-        let output = "\u{1b}[2KAvailable models\n\nauto - Auto\ncomposer-2-fast - Composer 2 Fast  (current, default)\nTip: use --model <id>\n";
+        let output = "\u{1b}[2KAvailable models\n\nauto - Auto\ncomposer-2.5-fast - Composer 2.5 Fast  (current, default)\nTip: use --model <id>\n";
 
         let models = parse_cursor_models(output);
 
         assert_eq!(models.len(), 2);
         assert_eq!(models[0].id, "auto");
-        assert_eq!(models[1].display_name, "Composer 2 Fast");
+        assert_eq!(models[1].display_name, "Composer 2.5 Fast");
         assert!(models[1].is_default);
     }
 
