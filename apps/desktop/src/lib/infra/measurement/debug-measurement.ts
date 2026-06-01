@@ -28,7 +28,6 @@ import type {
   MeasurementOperationKind,
   MeasurementSampleKey,
   MeasurementSurface,
-  MeasurementTimingCategory,
   MeasurementWorkflowOutcome,
   MeasurementWorkflowStep,
 } from "./debug-measurement-catalog-types";
@@ -41,6 +40,16 @@ import type {
   MeasurementSummaryBudget,
 } from "./debug-measurement-registry-types";
 import { now } from "./debug-measurement-utils";
+import {
+  cleanupOperation,
+  clearOperationTimers,
+  notifyOperationFinish,
+  scheduleOperationIdleTimer,
+  scheduleOperationTimers,
+} from "./debug-measurement-operation-lifecycle";
+import {
+  resolveMetricOperationIds,
+} from "./debug-measurement-metric-routing";
 
 // Dev-only measurement plumbing. Collection is disabled unless the Vite dev
 // build sets VITE_PROLIFERATE_DEBUG_MAIN_THREAD=1 or
@@ -96,7 +105,7 @@ export function startMeasurementOperation(input: {
     activeSampleOperations.set(sampleMapKey, id);
   }
   recordOperationEvent(operation, "start");
-  scheduleOperationTimers(operation);
+  scheduleOperationTimers(operation, finishMeasurementOperation);
   return id;
 }
 
@@ -105,7 +114,7 @@ export function touchMeasurementOperation(id: MeasurementOperationId): void {
   if (!operation) {
     return;
   }
-  scheduleOperationIdleTimer(operation);
+  scheduleOperationIdleTimer(operation, finishMeasurementOperation);
 }
 
 export function beginMeasurementRequest(
@@ -137,7 +146,7 @@ export function beginMeasurementRequest(
       return;
     }
     current.inFlightRequestCount = Math.max(0, current.inFlightRequestCount - 1);
-    scheduleOperationIdleTimer(current);
+    scheduleOperationIdleTimer(current, finishMeasurementOperation);
   };
 }
 
@@ -364,170 +373,4 @@ export function resetDebugMeasurementForTest(): void {
   clearDebugJankBuffers();
   resetMeasurementSequencesForTest();
   resetLongTaskObserverSupportForTest();
-}
-
-function resolveMetricOperationIds(input: MeasurementMetricInput): MeasurementOperationId[] {
-  if (input.operationId) {
-    return operations.has(input.operationId) ? [input.operationId] : [];
-  }
-
-  if (input.type === "main_thread") {
-    return resolveMainThreadOperationIds(input);
-  }
-
-  if (input.type === "diagnostic") {
-    // Diagnostics describe ambient render/store work, so attach them to every
-    // active operation unless the caller provided a specific operation id.
-    return [...operations.keys()];
-  }
-
-  if ("category" in input) {
-    return resolveBoundOperationIds(
-      input.category,
-      "runtimeUrlHash" in input ? input.runtimeUrlHash : undefined,
-    );
-  }
-
-  return [];
-}
-
-function resolveMainThreadOperationIds(
-  input: Extract<MeasurementMetricInput, { type: "main_thread" }>,
-): MeasurementOperationId[] {
-  const ids = new Set<MeasurementOperationId>();
-
-  for (const [operationId, surfaces] of pendingCommitMarks) {
-    if (surfaces.has(input.surface)) {
-      ids.add(operationId);
-      surfaces.delete(input.surface);
-      if (surfaces.size === 0) {
-        pendingCommitMarks.delete(operationId);
-      }
-    }
-  }
-
-  for (const operation of operations.values()) {
-    if (
-      input.metric === "long_task"
-      || input.metric === "frame_gap"
-      || operation.surfaces.has(input.surface)
-    ) {
-      ids.add(operation.id);
-    }
-  }
-
-  return [...ids];
-}
-
-function resolveBoundOperationIds(
-  category: MeasurementTimingCategory,
-  runtimeUrlHash: string | undefined,
-): MeasurementOperationId[] {
-  let matched: MeasurementCategoryBinding | null = null;
-  const currentTime = now();
-
-  for (const binding of categoryBindings.values()) {
-    if (binding.expiresAt <= currentTime) {
-      categoryBindings.delete(binding.id);
-      continue;
-    }
-    if (!binding.categories.has(category)) {
-      continue;
-    }
-    if (
-      binding.runtimeUrlHash
-      && runtimeUrlHash
-      && binding.runtimeUrlHash !== runtimeUrlHash
-    ) {
-      continue;
-    }
-    if (binding.runtimeUrlHash && !runtimeUrlHash) {
-      continue;
-    }
-    matched = binding;
-  }
-
-  return matched && operations.has(matched.operationId) ? [matched.operationId] : [];
-}
-
-function scheduleOperationTimers(operation: MeasurementOperationRecord): void {
-  scheduleOperationIdleTimer(operation);
-  if (operation.maxDurationMs !== null) {
-    operation.maxTimer = setTimeout(() => {
-      finishMeasurementOperation(operation.id, "max_duration");
-    }, operation.maxDurationMs);
-  }
-}
-
-function scheduleOperationIdleTimer(operation: MeasurementOperationRecord): void {
-  if (operation.idleTimer) {
-    clearTimeout(operation.idleTimer);
-    operation.idleTimer = null;
-  }
-  if (operation.idleTimeoutMs === null || operation.inFlightRequestCount > 0) {
-    return;
-  }
-  operation.idleTimer = setTimeout(() => {
-    finishMeasurementOperation(operation.id, "idle");
-  }, operation.idleTimeoutMs);
-}
-
-function notifyOperationFinish(
-  operation: MeasurementOperationRecord,
-  reason: MeasurementFinishReason,
-): void {
-  const listeners = operationFinishListeners.get(operation.id);
-  if (!listeners) {
-    return;
-  }
-  operationFinishListeners.delete(operation.id);
-  for (const listener of [...listeners]) {
-    try {
-      listener({ operationId: operation.id, reason });
-    } catch {
-      console.error("[debug-measurement] operation finish listener failed", {
-        operationId: operation.id,
-        operationKind: operation.kind,
-      });
-    }
-  }
-}
-
-function cleanupOperation(
-  operation: MeasurementOperationRecord,
-  reason: MeasurementFinishReason,
-): void {
-  clearOperationTimers(operation);
-  operations.delete(operation.id);
-  pendingCommitMarks.delete(operation.id);
-  operationFinishListeners.delete(operation.id);
-  if (operation.sampleKey) {
-    const sampleMapKey = `${operation.kind}:${operation.sampleKey}`;
-    if (activeSampleOperations.get(sampleMapKey) === operation.id) {
-      activeSampleOperations.delete(sampleMapKey);
-    }
-    if (operation.cooldownMs > 0 && reason !== "unmount") {
-      cooldownUntilBySample.set(sampleMapKey, now() + operation.cooldownMs);
-    }
-  }
-  for (const binding of categoryBindings.values()) {
-    if (binding.operationId !== operation.id) {
-      continue;
-    }
-    if (binding.timer) {
-      clearTimeout(binding.timer);
-    }
-    categoryBindings.delete(binding.id);
-  }
-}
-
-function clearOperationTimers(operation: MeasurementOperationRecord): void {
-  if (operation.idleTimer) {
-    clearTimeout(operation.idleTimer);
-    operation.idleTimer = null;
-  }
-  if (operation.maxTimer) {
-    clearTimeout(operation.maxTimer);
-    operation.maxTimer = null;
-  }
 }

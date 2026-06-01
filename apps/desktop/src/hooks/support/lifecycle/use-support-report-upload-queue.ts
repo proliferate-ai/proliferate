@@ -4,7 +4,6 @@ import {
   type AnyHarnessResolvedConnection,
 } from "@anyharness/sdk-react";
 import { useEffect, useMemo, useRef } from "react";
-import type { MutableRefObject } from "react";
 import {
   completeSupportReportUpload,
   createSupportReport,
@@ -13,10 +12,6 @@ import {
 } from "@proliferate/cloud-sdk/client/support";
 import type {
   SupportReportCompleteRequest,
-  SupportReportCreateRequest,
-  SupportReportCreateResponse,
-  SupportReportUploadFile,
-  SupportReportUploadResponse,
   SupportReportUploadTargetsRequest,
 } from "@proliferate/cloud-sdk/types";
 import {
@@ -24,25 +19,15 @@ import {
   logRendererEvent,
 } from "@/lib/access/tauri/diagnostics";
 import {
-  deleteStagedSupportReportAttachment,
   listenSupportReportJobs,
-  readStagedSupportReportAttachment,
 } from "@/lib/access/tauri/support";
 import { createSessionDebugClient } from "@/lib/access/anyharness/debug-client";
 import type {
   SupportReportJob,
-  SupportReportServerCorrelation,
-  SupportReportWorkspaceOption,
 } from "@/lib/domain/support/report-types";
-import {
-  getSupportReportTelemetryRefs,
-  trackProductEvent,
-} from "@/lib/integrations/telemetry/client";
 import {
   describeSupportReportUploadFailure,
   shouldShowSupportReportUploadFailureToast,
-  type SupportReportUploadFailure,
-  type SupportReportUploadFailureKind,
 } from "@/lib/domain/support/report-upload-failure";
 import {
   buildSupportReportPackage,
@@ -50,21 +35,27 @@ import {
 } from "@/lib/workflows/support/support-report-upload-workflows";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-
-const STORAGE_KEY = "proliferate.supportReportJobs.v1";
-const DIAGNOSTICS_MAX_BYTES = 25 * 1024 * 1024;
-const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
-const TOTAL_ATTACHMENT_MAX_BYTES = 100 * 1024 * 1024;
-
-interface PersistedSupportReportJob {
-  job: SupportReportJob;
-  attemptCount: number;
-  nextAttemptAt?: string | null;
-  lastError?: string | null;
-  lastFailureKind?: SupportReportUploadFailureKind | null;
-  lastFailureToastAt?: string | null;
-  lastFailureToastKind?: SupportReportUploadFailureKind | null;
-}
+import {
+  deleteSupportReportJobAttachments,
+  markPersistedJobFailed,
+  persistSupportReportJob,
+  readPersistedJobs,
+  removePersistedJob,
+  scheduleNextRetry,
+} from "./support-report-upload-persistence";
+import {
+  attachmentUploadFiles,
+  buildCreateReportRequest,
+  completeRequestForUpload,
+  DIAGNOSTICS_MAX_BYTES,
+  jsonBlob,
+  loadAttachmentBlob,
+  putPresignedObject,
+  sha256Hex,
+  toLocalServerCorrelation,
+  trackSupportReportSubmitted,
+  validateAttachmentSizes,
+} from "./support-report-upload-payload";
 
 interface SupportReportUploadResult {
   reportId: string;
@@ -235,7 +226,7 @@ async function uploadSupportReport(
   }
   await putPresignedObject(upload.diagnostics, diagnosticsBlob);
 
-  const completedAttachments = [];
+  const completedAttachments: NonNullable<SupportReportCompleteRequest["attachments"]> = [];
   for (const [index, item] of attachmentBlobs.entries()) {
     const target = (upload.attachments ?? []).find((candidate) =>
       candidate.clientFileId === item.attachment.clientFileId
@@ -251,23 +242,16 @@ async function uploadSupportReport(
     });
   }
 
-  const completeRequest: SupportReportCompleteRequest = {
-    diagnostics: {
-      objectKey: upload.diagnostics.objectKey,
-      sha256: diagnosticsSha256,
-      sizeBytes: diagnosticsBlob.size,
-    },
+  const completeRequest = completeRequestForUpload({
+    job,
+    reportId: report.reportId,
+    diagnosticsObjectKey: upload.diagnostics.objectKey,
+    diagnosticsSha256,
+    diagnosticsBytes: diagnosticsBlob.size,
+    generatedAt: reportPackage.generatedAt,
+    cloudDiagnosticsStatus: report.cloudDiagnosticsStatus,
     attachments: completedAttachments,
-    packageManifest: {
-      schemaVersion: 2,
-      jobId: job.jobId,
-      reportId: report.reportId,
-      generatedAt: reportPackage.generatedAt,
-      diagnosticsBytes: diagnosticsBlob.size,
-      attachmentCount: completedAttachments.length,
-      cloudDiagnosticsStatus: report.cloudDiagnosticsStatus,
-    },
-  };
+  });
   await completeSupportReportUpload(upload.reportId, completeRequest);
   void nudgeSupportReportTracker(upload.reportId);
   trackSupportReportSubmitted(job, serverCorrelation, completedAttachments.length);
@@ -279,284 +263,4 @@ async function uploadSupportReport(
 
 async function nudgeSupportReportTracker(reportId: string): Promise<void> {
   await ensureSupportReportTracker(reportId).catch(() => null);
-}
-
-function buildCreateReportRequest(
-  job: SupportReportJob,
-  attachmentCount: number,
-): SupportReportCreateRequest {
-  return {
-    clientJobId: job.jobId,
-    message: job.message,
-    sourceSurface: "desktop",
-    context: job.snapshot.context,
-    scope: job.scope,
-    workspaceRefs: workspaceRefsForJob(job),
-    telemetryRefs: getSupportReportTelemetryRefs(),
-    expectedClientUploads: {
-      diagnostics: true,
-      attachmentCount,
-    },
-    publicContentConsent: job.publicContentConsent !== false,
-  };
-}
-
-function workspaceRefsForJob(
-  job: SupportReportJob,
-): NonNullable<SupportReportCreateRequest["workspaceRefs"]> {
-  const selectedIds = workspaceIdsForJob(job);
-  const byId = new Map(job.snapshot.workspaceOptions.map((workspace) => [workspace.id, workspace]));
-  return selectedIds.map((workspaceId) => workspaceRefFromOption(
-    byId.get(workspaceId) ?? fallbackWorkspaceOption(workspaceId),
-  ));
-}
-
-function workspaceRefFromOption(
-  workspace: SupportReportWorkspaceOption,
-): NonNullable<SupportReportCreateRequest["workspaceRefs"]>[number] {
-  return {
-    id: workspace.id,
-    location: workspace.location,
-    cloudWorkspaceId: workspace.cloudWorkspaceId ?? undefined,
-    cloudTargetId: workspace.cloudTargetId ?? undefined,
-    sandboxProfileId: workspace.sandboxProfileId ?? undefined,
-    anyharnessWorkspaceId: workspace.anyharnessWorkspaceId ?? undefined,
-    exposureId: workspace.exposureId ?? undefined,
-    materializationId: workspace.materializationId ?? undefined,
-    sessionIds: workspace.sessionIds ?? [],
-    status: workspace.status ?? undefined,
-    visibility: workspace.visibility ?? undefined,
-    sandboxType: workspace.sandboxType ?? undefined,
-  };
-}
-
-function fallbackWorkspaceOption(workspaceId: string): SupportReportWorkspaceOption {
-  const isCloud = workspaceId.startsWith("cloud:");
-  return {
-    id: workspaceId,
-    label: workspaceId,
-    location: isCloud ? "cloud" : "local",
-    cloudWorkspaceId: isCloud ? workspaceId.slice("cloud:".length) : null,
-  };
-}
-
-function workspaceIdsForJob(job: SupportReportJob): string[] {
-  if (job.scope.kind === "app_only") {
-    return [];
-  }
-  if (job.scope.workspaceIds.length > 0) {
-    return job.scope.workspaceIds;
-  }
-  return job.snapshot.defaultWorkspaceId ? [job.snapshot.defaultWorkspaceId] : [];
-}
-
-function attachmentUploadFiles(
-  attachmentBlobs: Array<{
-    attachment: SupportReportJob["attachments"][number];
-    blob: Blob;
-  }>,
-  attachmentHashes: string[],
-): SupportReportUploadFile[] {
-  return attachmentBlobs.map(({ attachment, blob }, index) => ({
-    clientFileId: attachment.clientFileId,
-    fileName: attachment.fileName,
-    contentType: attachment.contentType || "application/octet-stream",
-    sizeBytes: blob.size,
-    sha256: attachmentHashes[index] ?? "",
-  }));
-}
-
-function toLocalServerCorrelation(
-  response: SupportReportCreateResponse,
-): SupportReportServerCorrelation {
-  return {
-    reportId: response.serverCorrelation.reportId,
-    requestId: response.serverCorrelation.requestId ?? null,
-    ownerUserId: response.serverCorrelation.ownerUserId,
-    primaryOrganizationId: response.serverCorrelation.primaryOrganizationId ?? null,
-    primaryTenantId: response.serverCorrelation.primaryTenantId,
-    tenantIds: response.serverCorrelation.tenantIds ?? [],
-    cloudWorkspaceIds: response.serverCorrelation.cloudWorkspaceIds ?? [],
-    cloudTargetIds: response.serverCorrelation.cloudTargetIds ?? [],
-    anyharnessWorkspaceIds: response.serverCorrelation.anyharnessWorkspaceIds ?? [],
-    sessionIds: response.serverCorrelation.sessionIds ?? [],
-  };
-}
-
-function trackSupportReportSubmitted(
-  job: SupportReportJob,
-  correlation: SupportReportServerCorrelation,
-  attachmentCount: number,
-): void {
-  const workspaceIds = workspaceIdsForJob(job);
-  trackProductEvent("support_report_submitted", {
-    source_surface: "desktop",
-    scope_kind: job.scope.kind,
-    public_content_consent: job.publicContentConsent !== false,
-    diagnostics_included: true,
-    attachment_count: attachmentCount,
-    workspace_count: workspaceIds.length,
-    cloud_workspace_count: correlation.cloudWorkspaceIds.length,
-  });
-}
-
-async function putPresignedObject(
-  target: SupportReportUploadResponse["diagnostics"],
-  blob: Blob,
-): Promise<void> {
-  if (!target) {
-    throw new Error("Missing upload target.");
-  }
-  const response = await fetch(target.putUrl, {
-    method: "PUT",
-    headers: {
-      "content-type": target.contentType,
-      ...(target.headers ?? {}),
-    },
-    body: blob,
-  });
-  if (!response.ok) {
-    throw new Error(`Upload failed with ${response.status}.`);
-  }
-}
-
-function validateAttachmentSizes(job: SupportReportJob): void {
-  let total = 0;
-  for (const attachment of job.attachments) {
-    if (attachment.sizeBytes > ATTACHMENT_MAX_BYTES) {
-      throw new Error(`Attachment is too large: ${attachment.fileName}`);
-    }
-    total += attachment.sizeBytes;
-  }
-  if (total > TOTAL_ATTACHMENT_MAX_BYTES) {
-    throw new Error("Attachments are too large.");
-  }
-}
-
-function jsonBlob(value: unknown): Blob {
-  return new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
-}
-
-function base64Blob(dataBase64: string, contentType: string): Blob {
-  const binary = atob(dataBase64);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return new Blob([bytes], { type: contentType || "application/octet-stream" });
-}
-
-async function loadAttachmentBlob(
-  attachment: SupportReportJob["attachments"][number],
-): Promise<Blob> {
-  const dataBase64 = attachment.dataBase64
-    ?? (
-      attachment.stagedPath
-        ? await readStagedSupportReportAttachment(attachment.stagedPath)
-        : null
-    );
-  if (!dataBase64) {
-    throw new Error(`Attachment data is missing: ${attachment.fileName}`);
-  }
-  return base64Blob(dataBase64, attachment.contentType);
-}
-
-async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", buffer);
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function persistSupportReportJob(job: SupportReportJob): boolean {
-  const current = readPersistedJobs();
-  if (current.some((entry) => entry.job.jobId === job.jobId)) {
-    return false;
-  }
-  writePersistedJobs([
-    ...current,
-    {
-      job,
-      attemptCount: 0,
-      nextAttemptAt: null,
-      lastError: null,
-    },
-  ]);
-  return true;
-}
-
-function removePersistedJob(jobId: string): void {
-  writePersistedJobs(readPersistedJobs().filter((entry) => entry.job.jobId !== jobId));
-}
-
-function markPersistedJobFailed(
-  jobId: string,
-  failure: SupportReportUploadFailure,
-  failedAt: Date,
-  markedToastShown: boolean,
-): void {
-  writePersistedJobs(readPersistedJobs().map((entry) => {
-    if (entry.job.jobId !== jobId) {
-      return entry;
-    }
-    const attemptCount = Math.max(entry.attemptCount + 1, 1);
-    return {
-      ...entry,
-      attemptCount,
-      lastError: failure.message,
-      lastFailureKind: failure.kind,
-      lastFailureToastAt: markedToastShown
-        ? failedAt.toISOString()
-        : entry.lastFailureToastAt ?? null,
-      lastFailureToastKind: markedToastShown
-        ? failure.kind
-        : entry.lastFailureToastKind ?? null,
-      nextAttemptAt: failure.retryDelayMs == null
-        ? null
-        : new Date(failedAt.getTime() + failure.retryDelayMs).toISOString(),
-    };
-  }));
-}
-
-function scheduleNextRetry(
-  processQueue: () => void,
-  retryTimerRef: MutableRefObject<number | null>,
-): void {
-  if (retryTimerRef.current != null) {
-    window.clearTimeout(retryTimerRef.current);
-    retryTimerRef.current = null;
-  }
-  const next = readPersistedJobs()
-    .map((entry) => entry.nextAttemptAt ? Date.parse(entry.nextAttemptAt) : Date.now())
-    .filter(Number.isFinite)
-    .sort((a, b) => a - b)[0];
-  if (next == null) {
-    return;
-  }
-  retryTimerRef.current = window.setTimeout(processQueue, Math.max(1000, next - Date.now()));
-}
-
-function readPersistedJobs(): PersistedSupportReportJob[] {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function writePersistedJobs(jobs: PersistedSupportReportJob[]): void {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs.slice(-10)));
-}
-
-async function deleteSupportReportJobAttachments(job: SupportReportJob): Promise<void> {
-  await Promise.all(job.attachments.map(async (attachment) => {
-    if (attachment.stagedPath) {
-      await deleteStagedSupportReportAttachment(attachment.stagedPath).catch(() => {});
-    }
-  }));
 }
