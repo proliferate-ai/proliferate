@@ -787,8 +787,8 @@ anyharness/crates/anyharness-lib/src/domains/cowork/
 Shared delegated-session primitives:
 
 ```text
-anyharness/crates/anyharness-lib/src/sessions/delegation.rs
-anyharness/crates/anyharness-lib/src/sessions/subagents/store.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/delegation.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/subagents/store.rs
 anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/**
 anyharness/crates/anyharness-lib/src/integrations/mcp/product_server/**
 ```

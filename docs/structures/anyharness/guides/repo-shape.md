@@ -25,19 +25,18 @@ Existing files above these limits are migration debt, not precedent.
 
 Current migration reality:
 
-- `sessions/store/**` is the current split session store shape.
-- `sessions/mcp_bindings/**` is the current split session MCP binding and
+- `domains/sessions/store/**` is the current split session store shape.
+- `domains/sessions/mcp_bindings/**` is the current split session MCP binding and
   launch assembly shape.
 - `live/sessions/event_sink/**` is the current split session event sink shape.
-- `sessions/runtime/**` is the current split session runtime shape.
+- `domains/sessions/runtime/**` is the current split session runtime shape.
 - `live/sessions/manager/**`, `live/sessions/handle.rs`,
-  `live/sessions/actor/**`, `live/sessions/connection/**`,
+  `live/sessions/actor/**`, `live/sessions/driver/**`,
   `live/sessions/event_sink/**`, `live/sessions/interactions/**`,
   `live/sessions/background_work/**`, and `live/sessions/replay/**` are the
-  current split live session shape. `connection/**` is the current name for the
-  target `driver/**` role, and `RuntimeClient` is split under
-  `live/sessions/connection/runtime_client/**` as the current low-level ACP
-  client name inside that role.
+  current split live session shape. `RuntimeClient` is split under
+  `live/sessions/driver/runtime_client/**` as the current low-level ACP client
+  name inside the driver role.
 - Remaining `acp/**` files are shared ACP permission/payload/provider-error
   helpers, not current owners for live session manager, event sink,
   interactions, background work, or replay behavior.

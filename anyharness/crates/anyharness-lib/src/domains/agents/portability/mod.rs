@@ -3,7 +3,7 @@ use std::path::{Component, Path, PathBuf};
 
 use anyhow::Context;
 
-use crate::sessions::model::SessionRecord;
+use crate::domains::sessions::model::SessionRecord;
 
 const CLAUDE_SANITIZED_PATH_LIMIT: usize = 200;
 #[cfg(unix)]
@@ -440,7 +440,7 @@ fn to_base36(mut value: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sessions::model::SessionMcpBindingPolicy;
+    use crate::domains::sessions::model::SessionMcpBindingPolicy;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     struct TempDirGuard {

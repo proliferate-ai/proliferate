@@ -5,6 +5,9 @@ use agent_client_protocol::{self as acp, Agent};
 use anyharness_contract::v1::SessionExecutionPhase;
 use tokio::sync::{mpsc, oneshot, Mutex};
 
+use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
+use crate::domains::sessions::prompt::PromptPayload;
+use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::background_work::handle_background_work_update;
 use crate::live::sessions::actor::command::{
     ForkSessionCommandError, InteractionResolution, PromptAcceptError, PromptAcceptance,
@@ -32,9 +35,6 @@ use crate::live::sessions::background_work::{BackgroundWorkRegistry, BackgroundW
 use crate::live::sessions::event_sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
-use crate::sessions::attachment_storage::PromptAttachmentStorage;
-use crate::sessions::prompt::PromptPayload;
-use crate::sessions::store::SessionStore;
 
 pub(in crate::live::sessions::actor) struct ActivePromptRequest {
     pub payload: PromptPayload,

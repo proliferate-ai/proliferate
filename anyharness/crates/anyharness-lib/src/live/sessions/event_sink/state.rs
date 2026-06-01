@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::sessions::model::SessionBackgroundWorkState;
+use crate::domains::sessions::model::SessionBackgroundWorkState;
 use anyharness_contract::v1::{ContentPart, FileReadScope, PlanEntry, TranscriptItemPayload};
 
 #[derive(Debug, Clone, Default)]

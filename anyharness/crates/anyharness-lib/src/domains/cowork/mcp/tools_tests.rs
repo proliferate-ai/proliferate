@@ -4,15 +4,15 @@ use std::sync::Arc;
 use serde_json::{json, Value};
 
 use super::tools::{build_tool_list, MUTATING_TOOL_NAMES, READ_ONLY_TOOL_NAMES};
+use crate::domains::sessions::mcp_bindings::product_registry::{
+    ProductMcpEndpointHandler, ProductMcpEndpointHandlerAdapter,
+};
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 use crate::integrations::mcp::product_server::{
     ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDefinition,
     ProductMcpEndpointOperation, ProductMcpRequestContext, ProductMcpServer,
     ProductMcpTokenValidation,
 };
-use crate::sessions::mcp_bindings::product_registry::{
-    ProductMcpEndpointHandler, ProductMcpEndpointHandlerAdapter,
-};
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 struct TestProductMcpServer;
 

@@ -1,9 +1,9 @@
 # Workspaces
 
-`anyharness-lib/src/workspaces/**` owns execution-surface identity, workspace
+`anyharness-lib/src/domains/workspaces/**` owns execution-surface identity, workspace
 registration from paths, worktree creation, and workspace-derived environment.
 
-`anyharness-lib/src/repo_roots/**` owns repo-root identity and repo-level
+`anyharness-lib/src/domains/repo_roots/**` owns repo-root identity and repo-level
 metadata.
 
 ## Core Concepts
@@ -28,19 +28,19 @@ The workspaces area owns:
 
 Core model and runtime files:
 
-- `anyharness/crates/anyharness-lib/src/workspaces/model.rs`
-- `anyharness/crates/anyharness-lib/src/workspaces/runtime/mod.rs` with
+- `anyharness/crates/anyharness-lib/src/domains/workspaces/model.rs`
+- `anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/mod.rs` with
   workflow files for identity, worktree creation, materialization, lifecycle,
   env, access, repo metadata, and mobility-destination preparation
-- `anyharness/crates/anyharness-lib/src/workspaces/service/mod.rs` with
+- `anyharness/crates/anyharness-lib/src/domains/workspaces/service/mod.rs` with
   durable rule files for identity, worktree registration, metadata, env, and
   record construction
-- `anyharness/crates/anyharness-lib/src/workspaces/store/mod.rs` with SQL split
+- `anyharness/crates/anyharness-lib/src/domains/workspaces/store/mod.rs` with SQL split
   into lookups, listings, mutations, and row mapping
-- `anyharness/crates/anyharness-lib/src/workspaces/resolver.rs` for
+- `anyharness/crates/anyharness-lib/src/domains/workspaces/resolver.rs` for
   filesystem path to git-context discovery
 
-### `WorkspaceRecord` (`anyharness/crates/anyharness-lib/src/workspaces/model.rs`)
+### `WorkspaceRecord` (`anyharness/crates/anyharness-lib/src/domains/workspaces/model.rs`)
 
 `WorkspaceRecord` is the durable workspace row.
 
@@ -65,9 +65,9 @@ Repo-level metadata such as:
 - remote URL
 - default branch
 
-now lives on `RepoRootRecord` in `repo_roots/**`, not on `WorkspaceRecord`.
+now lives on `RepoRootRecord` in `domains/repo_roots/**`, not on `WorkspaceRecord`.
 
-### `ResolvedGitContext` (`anyharness/crates/anyharness-lib/src/workspaces/model.rs`)
+### `ResolvedGitContext` (`anyharness/crates/anyharness-lib/src/domains/workspaces/model.rs`)
 
 `ResolvedGitContext` is the discovery result from an arbitrary input path.
 
@@ -86,7 +86,7 @@ This is the bridge from raw filesystem path to durable workspace record.
 ### Resolve From Path
 
 `resolve_from_path(...)`
-(`anyharness/crates/anyharness-lib/src/workspaces/runtime/identity.rs`)
+(`anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/identity.rs`)
 is the idempotent lookup-or-create path.
 
 It:
@@ -113,7 +113,7 @@ workspace rows.
 ### Create Workspace
 
 `create_workspace(...)`
-(`anyharness/crates/anyharness-lib/src/workspaces/runtime/identity.rs`)
+(`anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/identity.rs`)
 is the explicit create path.
 
 For `kind=local`, create is intentionally non-idempotent by path: creating a
@@ -129,7 +129,7 @@ retired cleanup for the same worktree path still block creation.
 ### Create Worktree
 
 `create_worktree(...)`
-(`anyharness/crates/anyharness-lib/src/workspaces/runtime/worktrees.rs`):
+(`anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/worktrees.rs`):
 
 1. loads the repo root and requires it to resolve to a managed repo path
 2. runs `git worktree add -b ...`
@@ -150,7 +150,7 @@ path and accepting only matching worktree identity.
 ### Workspace Environment
 
 `workspace_env(...)`
-(`anyharness/crates/anyharness-lib/src/workspaces/runtime/env.rs`)
+(`anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/env.rs`)
 derives the runtime env for workspace-scoped operations from the durable
 workspace row plus its owning repo root.
 
@@ -172,7 +172,7 @@ launch env.
 
 The underlying git-context discovery lives in:
 
-- `anyharness/crates/anyharness-lib/src/workspaces/resolver.rs`
+- `anyharness/crates/anyharness-lib/src/domains/workspaces/resolver.rs`
 
 Generic git worktree mechanics live in:
 
@@ -180,7 +180,7 @@ Generic git worktree mechanics live in:
 
 The durable workspace rows are loaded and stored through:
 
-- `anyharness/crates/anyharness-lib/src/workspaces/store/**`
+- `anyharness/crates/anyharness-lib/src/domains/workspaces/store/**`
 
 ## Boundaries
 
@@ -231,7 +231,7 @@ example:
 - different setup-script policy
 - new worktree creation behavior
 
-Add behavior to `repo_roots/**` instead when it changes repo-level durable
+Add behavior to `domains/repo_roots/**` instead when it changes repo-level durable
 metadata or repo-root lookup semantics.
 
 Do not add behavior here when it belongs to git status, file safety, repo-root

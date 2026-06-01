@@ -7,32 +7,32 @@ use anyhow::Context;
 
 use crate::adapters::git::executor::run_git_ok;
 use crate::domains::agents::portability::{
-    AgentArtifactFileData, collect_agent_artifacts, delete_session_agent_artifacts,
-    install_session_agent_artifacts, validate_session_agent_artifacts,
+    collect_agent_artifacts, delete_session_agent_artifacts, install_session_agent_artifacts,
+    validate_session_agent_artifacts, AgentArtifactFileData,
 };
 use crate::domains::mobility::model::{
-    DestroyedWorkspaceSourceSummary, ImportedWorkspaceArchiveSummary,
-    MAX_MOBILITY_ARCHIVE_BODY_BYTES, MAX_MOBILITY_FILE_BYTES, MobilityBlocker, MobilityFileData,
-    MobilitySessionCandidate, WorkspaceMobilityArchiveData, WorkspaceMobilityExportOptions,
-    WorkspaceMobilityPreflightResult, WorkspaceMobilitySessionBundleData,
+    DestroyedWorkspaceSourceSummary, ImportedWorkspaceArchiveSummary, MobilityBlocker,
+    MobilityFileData, MobilitySessionCandidate, WorkspaceMobilityArchiveData,
+    WorkspaceMobilityExportOptions, WorkspaceMobilityPreflightResult,
+    WorkspaceMobilitySessionBundleData, MAX_MOBILITY_ARCHIVE_BODY_BYTES, MAX_MOBILITY_FILE_BYTES,
 };
 use crate::domains::mobility::store::MobilityStore;
 use crate::domains::mobility::workspace_delta::{collect_workspace_delta, current_branch_name};
 use crate::domains::reviews::store::ReviewStore;
+use crate::domains::sessions::runtime::SessionRuntime;
+use crate::domains::sessions::service::SessionService;
+use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::terminals::model::{TerminalRecord, TerminalStatus};
+use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
+use crate::domains::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
+use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::runtime::WorkspaceRuntime;
+use crate::domains::workspaces::service::WorkspaceService;
+use crate::domains::workspaces::types::PreparedWorkspaceMobilityDestination;
 use crate::live::terminals::TerminalService;
-use crate::sessions::runtime::SessionRuntime;
-use crate::sessions::service::SessionService;
-use crate::sessions::subagents::service::SubagentService;
-use crate::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
-use crate::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
-use crate::workspaces::model::WorkspaceRecord;
-use crate::workspaces::runtime::WorkspaceRuntime;
-use crate::workspaces::service::WorkspaceService;
-use crate::workspaces::types::PreparedWorkspaceMobilityDestination;
 use crate::{
     adapters::files::safety::resolve_safe_path,
-    adapters::git::{GitService, types::GitOperation},
+    adapters::git::{types::GitOperation, GitService},
 };
 
 const INCLUDE_RAW_NOTIFICATIONS_ENV: &str = "ANYHARNESS_MOBILITY_INCLUDE_RAW_NOTIFICATIONS";
@@ -598,7 +598,7 @@ impl MobilityService {
             session.mcp_bindings_ciphertext = None;
             session.mcp_binding_summaries_json = None;
             session.mcp_binding_policy =
-                crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace;
+                crate::domains::sessions::model::SessionMcpBindingPolicy::InheritWorkspace;
             install_session_agent_artifacts(&session, &workspace_path, &bundle.agent_artifacts)
                 .map_err(|error| MobilityError::Invalid(error.to_string()))?;
             imported_agent_artifact_count += bundle.agent_artifacts.len();
@@ -866,7 +866,7 @@ impl MobilityService {
         &self,
         destination_workspace: &WorkspaceRecord,
         archive: &WorkspaceMobilityArchiveData,
-        existing_session: &crate::sessions::model::SessionRecord,
+        existing_session: &crate::domains::sessions::model::SessionRecord,
     ) -> Result<bool, MobilityError> {
         if existing_session.workspace_id == destination_workspace.id {
             return Ok(false);
@@ -1478,7 +1478,7 @@ fn session_bundle_size_bytes(bundle: &WorkspaceMobilitySessionBundleData) -> u64
         )
 }
 
-fn encoded_session_size_bytes(session: &crate::sessions::model::SessionRecord) -> u64 {
+fn encoded_session_size_bytes(session: &crate::domains::sessions::model::SessionRecord) -> u64 {
     string_size(&session.id)
         + string_size(&session.workspace_id)
         + string_size(&session.agent_kind)
@@ -1500,7 +1500,7 @@ fn encoded_session_size_bytes(session: &crate::sessions::model::SessionRecord) -
 }
 
 fn encoded_live_config_size_bytes(
-    record: &crate::sessions::model::SessionLiveConfigSnapshotRecord,
+    record: &crate::domains::sessions::model::SessionLiveConfigSnapshotRecord,
 ) -> u64 {
     string_size(&record.session_id)
         + record.source_seq as u64

@@ -12,13 +12,13 @@ use super::access::{assert_session_auth_scope, assert_workspace_mutable};
 use super::error::ApiError;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
-use crate::sessions::extensions::SessionTurnOutcome;
-use crate::sessions::subagents::model::{
+use crate::domains::sessions::extensions::SessionTurnOutcome;
+use crate::domains::sessions::subagents::model::{
     ChildSubagentContext, ParentSubagentLinkContext, SessionSubagentsContext,
     SubagentCompletionSummary,
 };
-use crate::sessions::subagents::service::SubagentError;
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
+use crate::domains::sessions::subagents::service::SubagentError;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[utoipa::path(
     get,

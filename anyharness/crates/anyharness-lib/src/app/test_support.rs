@@ -1,7 +1,7 @@
 use std::ffi::OsString;
 use std::sync::{Mutex, OnceLock};
 
-use crate::sessions::mcp_bindings::crypto::DATA_KEY_ENV_VAR;
+use crate::domains::sessions::mcp_bindings::crypto::DATA_KEY_ENV_VAR;
 
 pub(crate) static ENV_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
 

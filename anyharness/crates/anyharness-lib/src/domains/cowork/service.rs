@@ -1,6 +1,6 @@
 use super::model::{CoworkManagedWorkspaceRecord, CoworkRootRecord, CoworkThreadRecord};
 use super::store::CoworkStore;
-use crate::sessions::links::model::SessionLinkRecord;
+use crate::domains::sessions::links::model::SessionLinkRecord;
 
 #[derive(Clone)]
 pub struct CoworkService {

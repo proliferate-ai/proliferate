@@ -13,19 +13,17 @@ LIB_SRC = REPO_ROOT / "anyharness" / "crates" / "anyharness-lib" / "src"
 ALLOWLIST_PATH = REPO_ROOT / "scripts" / "anyharness_boundaries_allowlist.txt"
 
 HTTP_TRANSPORT_ROOTS = {"axum", "headers", "http", "http_body", "tower", "utoipa"}
-PRODUCT_DOMAIN_ROOTS = {"domains", "repo_roots", "sessions", "workspaces"}
+PRODUCT_DOMAIN_ROOTS = {"domains"}
 LIVE_RUNTIME_ROOTS = {"acp", "live"}
 PRODUCT_SURFACE_DOMAINS = {"cowork", "mobility", "plans", "plugins", "reviews"}
 DOMAIN_PATH_PREFIXES = (
     "anyharness/crates/anyharness-lib/src/domains/",
-    "anyharness/crates/anyharness-lib/src/repo_roots/",
-    "anyharness/crates/anyharness-lib/src/sessions/",
-    "anyharness/crates/anyharness-lib/src/workspaces/",
 )
 CORE_DOMAIN_PATH_PREFIXES = (
-    "anyharness/crates/anyharness-lib/src/repo_roots/",
-    "anyharness/crates/anyharness-lib/src/sessions/",
-    "anyharness/crates/anyharness-lib/src/workspaces/",
+    "anyharness/crates/anyharness-lib/src/domains/agents/",
+    "anyharness/crates/anyharness-lib/src/domains/repo_roots/",
+    "anyharness/crates/anyharness-lib/src/domains/sessions/",
+    "anyharness/crates/anyharness-lib/src/domains/workspaces/",
 )
 LIVE_SESSIONS_PREFIX = "anyharness/crates/anyharness-lib/src/live/sessions/"
 LIVE_SESSIONS_ACTOR_PREFIX = "anyharness/crates/anyharness-lib/src/live/sessions/actor/"
@@ -33,7 +31,7 @@ LIVE_SESSIONS_HANDLE = "anyharness/crates/anyharness-lib/src/live/sessions/handl
 LIVE_SESSIONS_PRIVATE_MODULES = {
     "actor",
     "background_work",
-    "connection",
+    "driver",
     "event_sink",
     "interactions",
     "replay",
@@ -472,7 +470,7 @@ def check_session_store_import(
         "SESSION_STORE_API_IMPORT",
         path,
         import_path.crate_root_line,
-        "sessions/store/** must not import api/**",
+        "domains/sessions/store/** must not import api/**",
     )
     add_if(
         violations,
@@ -480,7 +478,7 @@ def check_session_store_import(
         "SESSION_STORE_LIVE_IMPORT",
         path,
         import_path.crate_root_line,
-        "sessions/store/** must not import live runtime modules",
+        "domains/sessions/store/** must not import live runtime modules",
     )
 
 
@@ -551,7 +549,7 @@ def check_live_session_private_import(
         "LIVE_SESSION_PRIVATE_IMPORT",
         path,
         import_path.crate_root_line,
-        "live session actor/connection internals must stay inside live/sessions/**",
+        "live session actor/driver internals must stay inside live/sessions/**",
     )
     add_if(
         violations,
@@ -650,7 +648,10 @@ def check_file(path: Path) -> list[Violation]:
     in_core_domain = is_core_domain_path(rel)
     in_adapters = is_under(rel, "anyharness/crates/anyharness-lib/src/adapters/")
     in_integrations = is_under(rel, "anyharness/crates/anyharness-lib/src/integrations/")
-    in_session_store = is_under(rel, "anyharness/crates/anyharness-lib/src/sessions/store/")
+    in_session_store = is_under(
+        rel,
+        "anyharness/crates/anyharness-lib/src/domains/sessions/store/",
+    )
     in_event_sink = in_session_event_sink(rel)
     in_persistence = is_under(rel, "anyharness/crates/anyharness-lib/src/persistence/")
 

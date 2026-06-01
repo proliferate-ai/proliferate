@@ -4,14 +4,14 @@ use agent_client_protocol::{self as acp, Agent};
 use anyharness_contract::v1::{SessionActionCapabilities, SessionExecutionPhase};
 use tokio::sync::oneshot;
 
+use crate::domains::sessions::mcp_bindings::acp::to_acp_servers;
+use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
+use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::command::{
     ForkSessionCommandError, ForkSessionCommandResult, SessionCommand,
 };
-use crate::live::sessions::connection::shutdown::close_native_session;
+use crate::live::sessions::driver::shutdown::close_native_session;
 use crate::live::sessions::handle::LiveSessionHandle;
-use crate::sessions::mcp_bindings::acp::to_acp_servers;
-use crate::sessions::mcp_bindings::model::SessionMcpServer;
-use crate::sessions::store::SessionStore;
 pub(in crate::live::sessions::actor) async fn fork_native_session(
     conn: &acp::ClientSideConnection,
     native_session_id: &str,

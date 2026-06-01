@@ -2,9 +2,9 @@ use super::model::{ReviewCodeTargetManifest, ReviewRunRecord, ReviewRunStatus};
 use super::store::ReviewStore;
 use crate::domains::plans::model::PlanRecord;
 use crate::domains::plans::service::PlanService;
-use crate::sessions::deletion::SessionDeleteWorkflow;
-use crate::sessions::links::service::SessionLinkService;
-use crate::sessions::store::SessionStore;
+use crate::domains::sessions::deletion::SessionDeleteWorkflow;
+use crate::domains::sessions::links::service::SessionLinkService;
+use crate::domains::sessions::store::SessionStore;
 
 mod completion;
 mod detail;

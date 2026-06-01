@@ -11,8 +11,8 @@ use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::workspaces_contract::workspace_to_contract;
 use crate::app::AppState;
-use crate::workspaces::model::WorkspaceRecord;
-use crate::workspaces::retire_preflight::RetirePreflightMode;
+use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::retire_preflight::RetirePreflightMode;
 
 #[utoipa::path(
     get,

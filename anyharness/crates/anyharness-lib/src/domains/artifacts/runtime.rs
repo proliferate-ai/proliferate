@@ -12,7 +12,7 @@ use super::model::{
     UpdateArtifactInput,
 };
 use super::service::ArtifactService;
-use crate::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::WorkspaceRecord;
 
 #[derive(Clone, Default)]
 pub struct ArtifactRuntime {

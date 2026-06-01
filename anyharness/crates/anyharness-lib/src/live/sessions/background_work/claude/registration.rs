@@ -1,9 +1,9 @@
 use serde::Deserialize;
 
-use crate::live::sessions::event_sink::AcpToolPayload;
-use crate::sessions::model::{
+use crate::domains::sessions::model::{
     SessionBackgroundWorkRecord, SessionBackgroundWorkState, SessionBackgroundWorkTrackerKind,
 };
+use crate::live::sessions::event_sink::AcpToolPayload;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 struct ClaudeToolMetaEnvelope {

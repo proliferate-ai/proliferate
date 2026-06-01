@@ -21,8 +21,8 @@ use crate::domains::cowork::delegation::model::{
     MAX_CODING_SESSIONS_PER_MANAGED_WORKSPACE, MAX_MANAGED_WORKSPACES_PER_COWORK_SESSION,
 };
 use crate::domains::cowork::runtime::{default_cowork_coding_mode_for_agent, CoworkRuntime};
+use crate::domains::workspaces::model::WorkspaceRecord;
 use crate::integrations::mcp::json_rpc::deserialize_args;
-use crate::workspaces::model::WorkspaceRecord;
 
 pub async fn call_tool(
     artifact_runtime: &CoworkArtifactRuntime,

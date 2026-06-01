@@ -1,6 +1,6 @@
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::workspaces::operation_gate::{WorkspaceOperationKind, WorkspaceOperationLease};
+use crate::domains::workspaces::operation_gate::{WorkspaceOperationKind, WorkspaceOperationLease};
 
 pub(super) async fn acquire_session_operation_lease(
     state: &AppState,
@@ -27,7 +27,8 @@ pub(super) async fn acquire_session_exclusive_operation_lease(
     state: &AppState,
     session_id: &str,
     kind: WorkspaceOperationKind,
-) -> Result<crate::workspaces::operation_gate::WorkspaceExclusiveOperationLease, ApiError> {
+) -> Result<crate::domains::workspaces::operation_gate::WorkspaceExclusiveOperationLease, ApiError>
+{
     let session = state
         .session_service
         .get_session(session_id)

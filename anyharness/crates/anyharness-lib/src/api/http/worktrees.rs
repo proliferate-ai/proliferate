@@ -13,7 +13,7 @@ use axum::{extract::State, Json};
 
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::workspaces::inventory::{
+use crate::domains::workspaces::inventory::{
     WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
     WorktreeInventory, WorktreeInventoryAction, WorktreeInventoryRow, WorktreeInventoryState,
     WorktreeInventoryWorkspaceSummary,
@@ -116,7 +116,7 @@ pub async fn run_worktree_retention(
 }
 
 fn policy_to_contract(
-    policy: crate::workspaces::retention_policy::WorktreeRetentionPolicyRecord,
+    policy: crate::domains::workspaces::retention_policy::WorktreeRetentionPolicyRecord,
 ) -> WorktreeRetentionPolicy {
     WorktreeRetentionPolicy {
         max_materialized_worktrees_per_repo: policy.max_materialized_worktrees_per_repo,
@@ -125,7 +125,7 @@ fn policy_to_contract(
 }
 
 fn run_result_to_contract(
-    result: crate::workspaces::retention::WorktreeRetentionRunResult,
+    result: crate::domains::workspaces::retention::WorktreeRetentionRunResult,
 ) -> RunWorktreeRetentionResponse {
     RunWorktreeRetentionResponse {
         policy: policy_to_contract(result.policy),

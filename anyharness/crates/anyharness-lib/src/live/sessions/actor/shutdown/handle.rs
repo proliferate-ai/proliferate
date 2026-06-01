@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
+use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::interactions::cleanup::resolve_pending_interactions;
 use crate::live::sessions::actor::shutdown::cleanup::interaction_resolution_for_exit;
 use crate::live::sessions::actor::shutdown::persist::persist_exit_disposition;
@@ -9,7 +10,6 @@ use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
 use crate::live::sessions::event_sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::interactions::broker::InteractionBroker;
-use crate::sessions::store::SessionStore;
 pub(in crate::live::sessions::actor) async fn finalize_established_actor_exit(
     handle: &Arc<LiveSessionHandle>,
     event_sink: &Arc<Mutex<SessionEventSink>>,

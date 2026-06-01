@@ -6,6 +6,7 @@ use tokio::sync::Mutex;
 
 use crate::domains::plans::service::PlanService;
 use crate::domains::reviews::service::ReviewService;
+use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
 use crate::live::sessions::actor::notifications::dispatch::{
     normalize_notification, persist_raw_notification,
@@ -13,9 +14,8 @@ use crate::live::sessions::actor::notifications::dispatch::{
 use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilter;
 use crate::live::sessions::actor::state::SessionStartupState;
 use crate::live::sessions::background_work::BackgroundWorkRegistry;
-use crate::live::sessions::connection::runtime_client;
+use crate::live::sessions::driver::runtime_client;
 use crate::live::sessions::event_sink::SessionEventSink;
-use crate::sessions::store::SessionStore;
 #[cfg(test)]
 pub(in crate::live::sessions::actor) async fn handle_notification(
     notif: &acp::SessionNotification,

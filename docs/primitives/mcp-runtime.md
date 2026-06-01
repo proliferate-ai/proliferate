@@ -11,13 +11,7 @@ thing.
 
 MCP servers explicitly attached to a session by a client/user.
 
-Current implementation owner:
-
-```text
-sessions/mcp_bindings/
-```
-
-Target owner:
+Implementation owner:
 
 ```text
 domains/sessions/mcp_bindings/
@@ -32,28 +26,20 @@ Responsibilities:
 - conversion to ACP MCP server config
 
 This folder also owns the central session MCP assembly path described below.
-The current path is still under transitional `sessions/**` topology; the final
-`domains/sessions/**` rename is a later topology phase.
 
 ### 2. Session Extensions
 
 Product features can inject MCP servers into a session launch.
 
-Current trait: `sessions/extensions.rs::SessionExtension`.
-
-Target owner:
-
-```text
-domains/sessions/extensions/
-```
+Current trait: `domains/sessions/extensions.rs::SessionExtension`.
 
 Current implementations:
 
 ```text
 domains/cowork/runtime.rs
 domains/reviews/hooks.rs
-sessions/subagents/hooks.rs
-sessions/workspace_naming/hooks.rs
+domains/sessions/subagents/hooks.rs
+domains/sessions/workspace_naming/hooks.rs
 ```
 
 The extension returns launch extras:
@@ -79,8 +65,8 @@ Current implementation shape:
 ```text
 domains/cowork/mcp/
 domains/reviews/mcp/
-sessions/subagents/mcp/
-sessions/workspace_naming/mcp/
+domains/sessions/subagents/mcp/
+domains/sessions/workspace_naming/mcp/
 ```
 
 Product tool behavior stays with the product domain.
@@ -121,13 +107,7 @@ SessionRuntime starts a session
 Session launch needs one central assembly boundary. Do not spread MCP launch
 composition across session runtime, product domains, and actor startup.
 
-Current implementation owner:
-
-```text
-sessions/mcp_bindings/assembly.rs
-```
-
-Target owner:
+Implementation owner:
 
 ```text
 domains/sessions/mcp_bindings/assembly.rs
@@ -140,10 +120,10 @@ Which MCP servers, prompt additions, and binding summaries should this session
 launch with?
 ```
 
-Current transitional shape:
+Current shape:
 
 ```text
-sessions/mcp_bindings/
+domains/sessions/mcp_bindings/
   model.rs       # SessionMcpServer, headers/env, policies, summaries
   crypto.rs      # binding encryption/decryption and data-key loading
   contract.rs    # contract <-> domain mapping
@@ -151,9 +131,6 @@ sessions/mcp_bindings/
   acp.rs         # SessionMcpServer -> ACP MCP server config
   assembly.rs    # assemble_session_mcp_launch(...)
 ```
-
-The final topology target keeps the same files under
-`domains/sessions/mcp_bindings/`.
 
 The assembly function owns:
 
@@ -285,7 +262,7 @@ Those stay in the owning domain.
 
 ```text
 domains/<feature>/mcp -> integrations/mcp/product_server
-api/http/product_mcp -> sessions/mcp_bindings/product_registry
+api/http/product_mcp -> domains/sessions/mcp_bindings/product_registry
 integrations/mcp -> no product domains
 ```
 

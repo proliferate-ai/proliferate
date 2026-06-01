@@ -5,17 +5,17 @@ use anyharness_contract::v1::{PromptInputBlock, ProposedPlanDecisionState, Propo
 
 use super::document;
 use super::model::{
-    DEFAULT_IMPLEMENT_INSTRUCTION, PlanDecisionOutcome, PlanDocument, PlanHandoffInput,
-    PlanHandoffOutcome, PlanHandoffPromptOutcome, PlanHandoffRecord, PlanRecord,
+    PlanDecisionOutcome, PlanDocument, PlanHandoffInput, PlanHandoffOutcome,
+    PlanHandoffPromptOutcome, PlanHandoffRecord, PlanRecord, DEFAULT_IMPLEMENT_INSTRUCTION,
 };
-use super::service::{PlanDecisionError, PlanService, plan_to_detail};
-use crate::live::sessions::{LiveSessionCommandError, LiveSessionManager};
-use crate::origin::OriginContext;
-use crate::sessions::runtime::{
+use super::service::{plan_to_detail, PlanDecisionError, PlanService};
+use crate::domains::sessions::runtime::{
     CreateAndStartSessionError, SendPromptError, SendPromptOutcome, SessionRuntime,
 };
-use crate::sessions::service::SessionService;
-use crate::workspaces::access_gate::WorkspaceAccessGate;
+use crate::domains::sessions::service::SessionService;
+use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
+use crate::live::sessions::{LiveSessionCommandError, LiveSessionManager};
+use crate::origin::OriginContext;
 
 #[derive(Debug, thiserror::Error)]
 pub enum GetPlanError {

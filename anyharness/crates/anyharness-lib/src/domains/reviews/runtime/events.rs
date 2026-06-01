@@ -4,9 +4,9 @@ use super::super::hooks::ReviewHookEvent;
 use super::super::model::{ReviewFeedbackJobRecord, ReviewRunStatus};
 use super::super::service::ReviewError;
 use super::ReviewRuntime;
-use crate::sessions::extensions::SessionTurnOutcome;
-use crate::sessions::prompt::provenance::PromptProvenance;
-use crate::sessions::runtime_event::RuntimeInjectedSessionEvent;
+use crate::domains::sessions::extensions::SessionTurnOutcome;
+use crate::domains::sessions::prompt::provenance::PromptProvenance;
+use crate::domains::sessions::runtime_event::RuntimeInjectedSessionEvent;
 
 impl ReviewRuntime {
     pub(super) async fn emit_review_run_updated_for_job(&self, job: &ReviewFeedbackJobRecord) {
@@ -94,7 +94,7 @@ impl ReviewRuntime {
 
     pub(super) async fn handle_reviewer_turn_finished(
         &self,
-        ctx: &crate::sessions::extensions::SessionTurnFinishedContext,
+        ctx: &crate::domains::sessions::extensions::SessionTurnFinishedContext,
     ) -> Result<(), ReviewError> {
         let Some(assignment) = self
             .service

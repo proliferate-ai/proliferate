@@ -12,13 +12,13 @@ use crate::domains::reviews::service::{
 };
 use crate::domains::reviews::store::feedback::PendingPromptExecutionLookup;
 use crate::domains::reviews::store::ReviewStore;
+use crate::domains::sessions::deletion::SessionDeleteWorkflow;
+use crate::domains::sessions::links::model::SessionLinkRelation;
+use crate::domains::sessions::links::service::SessionLinkService;
+use crate::domains::sessions::links::store::SessionLinkStore;
+use crate::domains::sessions::model::{SessionEventRecord, SessionMcpBindingPolicy, SessionRecord};
+use crate::domains::sessions::store::SessionStore;
 use crate::persistence::Db;
-use crate::sessions::deletion::SessionDeleteWorkflow;
-use crate::sessions::links::model::SessionLinkRelation;
-use crate::sessions::links::service::SessionLinkService;
-use crate::sessions::links::store::SessionLinkStore;
-use crate::sessions::model::{SessionEventRecord, SessionMcpBindingPolicy, SessionRecord};
-use crate::sessions::store::SessionStore;
 
 fn seed_workspace(db: &Db) {
     db.with_conn(|conn| {

@@ -21,10 +21,10 @@ use super::mobility_contract::{
 use crate::app::AppState;
 use crate::domains::mobility::model::WorkspaceMobilityExportOptions;
 use crate::domains::mobility::service::MobilityError;
+use crate::domains::workspaces::access_gate::WorkspaceAccessError;
+use crate::domains::workspaces::access_model::WorkspaceAccessMode;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
-use crate::workspaces::access_gate::WorkspaceAccessError;
-use crate::workspaces::access_model::WorkspaceAccessMode;
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 pub const MAX_MOBILITY_ARCHIVE_BODY_BYTES: usize =
     crate::domains::mobility::model::MAX_MOBILITY_ARCHIVE_BODY_BYTES;

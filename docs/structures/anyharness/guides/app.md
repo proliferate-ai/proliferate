@@ -178,12 +178,12 @@ api/http/product_mcp.rs
 domains/<feature>/mcp
   product tool behavior
 
-sessions/mcp_bindings/product_registry.rs
+domains/sessions/mcp_bindings/product_registry.rs
   serving-side registry shape
 
-sessions/mcp_bindings/product_catalog.rs
-sessions/mcp_bindings/selection.rs
-sessions/mcp_bindings/injection.rs
+domains/sessions/mcp_bindings/product_catalog.rs
+domains/sessions/mcp_bindings/selection.rs
+domains/sessions/mcp_bindings/injection.rs
   launch-side selection and materialization
 
 integrations/mcp/product_server

@@ -2,7 +2,7 @@ use super::state::{
     BackgroundWorkMetadata, ParsedMeta, ANYHARNESS_META_KEY, BACKGROUND_WORK_TRACKER_KIND,
 };
 use super::SessionEventSink;
-use crate::sessions::model::SessionBackgroundWorkState;
+use crate::domains::sessions::model::SessionBackgroundWorkState;
 use anyharness_contract::v1::{
     ContentPart, ItemCompletedEvent, ItemDeltaEvent, SessionEvent, TranscriptItemDeltaPayload,
     TranscriptItemKind, TranscriptItemPayload, TranscriptItemStatus,

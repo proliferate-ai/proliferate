@@ -20,9 +20,9 @@ use super::workspaces_contract::{
 };
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
+use crate::domains::sessions::execution_summary::idle_workspace_execution_summary;
+use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
-use crate::sessions::execution_summary::idle_workspace_execution_summary;
-use crate::workspaces::creator_context::WorkspaceCreatorContext;
 
 #[utoipa::path(
     post,

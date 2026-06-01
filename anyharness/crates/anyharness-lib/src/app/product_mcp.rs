@@ -11,27 +11,27 @@ use crate::domains::reviews::mcp::{
 };
 use crate::domains::reviews::runtime::ReviewRuntime;
 use crate::domains::runtime_config::service::RuntimeConfigService;
-use crate::persistence::Db;
-use crate::sessions::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
-use crate::sessions::mcp_bindings::product_launch::{
+use crate::domains::sessions::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
+use crate::domains::sessions::mcp_bindings::product_launch::{
     ProductMcpLaunchRegistration, ProductMcpSelectionContext,
 };
-use crate::sessions::mcp_bindings::product_registry::{
+use crate::domains::sessions::mcp_bindings::product_registry::{
     legacy_route_aliases, ProductMcpEndpointHandlerAdapter, ProductMcpEndpointRegistration,
     ProductMcpEndpointRegistry,
 };
-use crate::sessions::runtime::SessionRuntime;
-use crate::sessions::store::SessionStore;
-use crate::sessions::subagents::mcp::{
+use crate::domains::sessions::runtime::SessionRuntime;
+use crate::domains::sessions::store::SessionStore;
+use crate::domains::sessions::subagents::mcp::{
     auth::SubagentMcpAuth, tools as subagent_mcp_tools, SubagentProductMcpServer,
 };
-use crate::sessions::subagents::service::SubagentService;
-use crate::sessions::workspace_naming::mcp::{
+use crate::domains::sessions::subagents::service::SubagentService;
+use crate::domains::sessions::workspace_naming::mcp::{
     auth::WorkspaceNamingMcpAuth, WorkspaceNamingProductMcpServer,
 };
-use crate::workspaces::access_gate::WorkspaceAccessGate;
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
-use crate::workspaces::runtime::WorkspaceRuntime;
+use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
+use crate::domains::workspaces::runtime::WorkspaceRuntime;
+use crate::persistence::Db;
 
 pub(super) struct LaunchCatalogDeps {
     pub(super) runtime_base_url: String,
@@ -80,7 +80,7 @@ pub(super) fn build_product_mcp_launch_catalog(deps: LaunchCatalogDeps) -> Produ
     let subagent_selector_service = subagent_service.clone();
     let workspace_naming_session_store = session_store.clone();
     let workspace_naming_prompts =
-        crate::sessions::workspace_naming::mcp::definition::system_prompt_append();
+        crate::domains::sessions::workspace_naming::mcp::definition::system_prompt_append();
 
     ProductMcpLaunchCatalog::new(
         runtime_base_url,
@@ -100,7 +100,7 @@ pub(super) fn build_product_mcp_launch_catalog(deps: LaunchCatalogDeps) -> Produ
             )
             .with_binding_summary(review_mcp::definition::binding_summary()),
             ProductMcpLaunchRegistration::new(
-                &crate::sessions::subagents::mcp::definition::DEFINITION,
+                &crate::domains::sessions::subagents::mcp::definition::DEFINITION,
                 Arc::new(move |ctx: ProductMcpSelectionContext<'_>| {
                     if ctx.workspace.surface != "standard" || !ctx.session.subagents_enabled {
                         return Ok(false);
@@ -113,11 +113,13 @@ pub(super) fn build_product_mcp_launch_catalog(deps: LaunchCatalogDeps) -> Produ
                     subagent_auth.mint_capability_token(workspace_id, session_id)
                 }),
             )
-            .with_binding_summary(crate::sessions::subagents::mcp::definition::binding_summary()),
+            .with_binding_summary(
+                crate::domains::sessions::subagents::mcp::definition::binding_summary(),
+            ),
             ProductMcpLaunchRegistration::new(
-                &crate::sessions::workspace_naming::mcp::definition::DEFINITION,
+                &crate::domains::sessions::workspace_naming::mcp::definition::DEFINITION,
                 Arc::new(move |ctx: ProductMcpSelectionContext<'_>| {
-                    crate::sessions::workspace_naming::eligibility::eligible_for_launch(
+                    crate::domains::sessions::workspace_naming::eligibility::eligible_for_launch(
                         &workspace_naming_session_store,
                         ctx.workspace,
                         ctx.session,
@@ -130,7 +132,7 @@ pub(super) fn build_product_mcp_launch_catalog(deps: LaunchCatalogDeps) -> Produ
             .with_system_prompt_append(workspace_naming_prompts.clone())
             .with_first_prompt_system_prompt_append(workspace_naming_prompts)
             .with_binding_summary(
-                crate::sessions::workspace_naming::mcp::definition::binding_summary(),
+                crate::domains::sessions::workspace_naming::mcp::definition::binding_summary(),
             ),
             ProductMcpLaunchRegistration::new(
                 &cowork_mcp::definition::DEFINITION,

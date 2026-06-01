@@ -8,20 +8,20 @@ use super::model::{
 };
 use crate::domains::cowork::model::{CoworkManagedWorkspaceRecord, CoworkThreadRecord};
 use crate::domains::cowork::service::CoworkService;
-use crate::sessions::delegation::{self, DelegatedEventSlice};
-use crate::sessions::links::completions::{
+use crate::domains::sessions::delegation::{self, DelegatedEventSlice};
+use crate::domains::sessions::links::completions::{
     LinkCompletionRecord, LinkCompletionStore, LinkWakeScheduleRecord,
 };
-use crate::sessions::links::model::{
+use crate::domains::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
 };
-use crate::sessions::links::service::{new_public_id, SessionLinkService};
-use crate::sessions::model::SessionRecord;
-use crate::sessions::prompt::provenance::PromptProvenance;
-use crate::sessions::store::SessionStore;
-use crate::workspaces::access_gate::WorkspaceAccessGate;
-use crate::workspaces::model::WorkspaceRecord;
-use crate::workspaces::runtime::WorkspaceRuntime;
+use crate::domains::sessions::links::service::{new_public_id, SessionLinkService};
+use crate::domains::sessions::model::SessionRecord;
+use crate::domains::sessions::prompt::provenance::PromptProvenance;
+use crate::domains::sessions::store::SessionStore;
+use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
+use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::runtime::WorkspaceRuntime;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CoworkDelegationError {
@@ -400,8 +400,9 @@ impl CoworkDelegationService {
         &self,
         record: &LinkCompletionRecord,
         parent_session_id: &str,
-        wake_prompt: &crate::sessions::prompt::PromptPayload,
-    ) -> anyhow::Result<Option<crate::sessions::links::completions::LinkCompletionInsert>> {
+        wake_prompt: &crate::domains::sessions::prompt::PromptPayload,
+    ) -> anyhow::Result<Option<crate::domains::sessions::links::completions::LinkCompletionInsert>>
+    {
         self.completion_store
             .insert_completion_and_consume_schedule(record, parent_session_id, wake_prompt)
     }

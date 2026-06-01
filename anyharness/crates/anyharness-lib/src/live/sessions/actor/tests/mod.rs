@@ -29,16 +29,16 @@ use super::turn::handle::first_prompt_system_prompt_append_for_codex_prompt;
 use super::turn::start::prepend_system_prompt_append_to_acp_blocks;
 use crate::domains::agents::model::AgentKind;
 use crate::domains::plans::{service::PlanService, store::PlanStore};
+use crate::domains::sessions::live_config::{
+    normalized_key_rank, snapshot_to_record, NormalizedControlKind,
+};
+use crate::domains::sessions::{model::SessionRecord, store::SessionStore};
 use crate::live::sessions::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
-use crate::live::sessions::connection::types::NativeSessionStartupDisposition;
+use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
 use crate::live::sessions::event_sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
 use crate::live::sessions::handle::{LiveSessionExecutionSnapshot, LiveSessionHandle};
 use crate::live::sessions::interactions::broker::{InteractionBroker, PermissionOutcome};
 use crate::persistence::Db;
-use crate::sessions::live_config::{
-    normalized_key_rank, snapshot_to_record, NormalizedControlKind,
-};
-use crate::sessions::{model::SessionRecord, store::SessionStore};
 use agent_client_protocol as acp;
 use anyharness_contract::v1::{
     InteractionKind, NormalizedSessionControl, NormalizedSessionControlValue,
@@ -100,7 +100,8 @@ async fn actor_exit_test_context(
             dismissed_at: None,
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
-            mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
+            mcp_binding_policy:
+                crate::domains::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
             action_capabilities_json: None,

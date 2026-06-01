@@ -3,10 +3,10 @@ use std::time::Instant;
 use super::access::{assert_workspace_mutable, assert_workspace_not_retired};
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 
 fn resolve_workspace_path(
-    workspace_runtime: &crate::workspaces::runtime::WorkspaceRuntime,
+    workspace_runtime: &crate::domains::workspaces::runtime::WorkspaceRuntime,
     workspace_id: &str,
 ) -> Result<std::path::PathBuf, ApiError> {
     let workspace = workspace_runtime

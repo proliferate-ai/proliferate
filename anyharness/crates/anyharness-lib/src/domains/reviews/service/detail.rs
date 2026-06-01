@@ -12,8 +12,8 @@ use super::{
     MAX_REVIEW_CRITIQUE_BYTES, MAX_REVIEW_ROUNDS, MAX_REVIEW_SUMMARY_BYTES,
     REVIEWER_DEADLINE_MINUTES,
 };
-use crate::sessions::links::service::CreateSessionLinkError;
-use crate::sessions::model::SessionRecord;
+use crate::domains::sessions::links::service::CreateSessionLinkError;
+use crate::domains::sessions::model::SessionRecord;
 
 impl ReviewService {
     pub(super) fn detail_for_run(

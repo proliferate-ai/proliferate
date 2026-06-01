@@ -8,8 +8,8 @@ use crate::domains::reviews::model::{
     ReviewModeVerificationStatus, ReviewRoundRecord, ReviewRoundStatus, ReviewRunRecord,
     ReviewRunStatus,
 };
-use crate::sessions::links::model::{SessionLinkRelation, SessionLinkWorkspaceRelation};
-use crate::sessions::links::service::CreateSessionLinkInput;
+use crate::domains::sessions::links::model::{SessionLinkRelation, SessionLinkWorkspaceRelation};
+use crate::domains::sessions::links::service::CreateSessionLinkInput;
 
 impl ReviewService {
     pub fn start_review(&self, input: StartReviewInput) -> Result<ReviewRunRecord, ReviewError> {

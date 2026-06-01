@@ -1,6 +1,6 @@
 use super::model::PlanRecord;
 use super::service::PlanService;
-use crate::sessions::plan_references::{
+use crate::domains::sessions::plan_references::{
     PlanInteractionLinkResolver, PlanReferenceResolver, ResolvedPlanReference,
 };
 

@@ -17,8 +17,8 @@ use crate::domains::plans::model::{
 };
 use crate::domains::plans::runtime::{GetPlanError, HandoffPlanError};
 use crate::domains::plans::service::{plan_to_summary, PlanDecisionError};
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 use crate::origin::OriginContext;
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[derive(Debug, Deserialize)]
 pub struct PlanDocumentQuery {

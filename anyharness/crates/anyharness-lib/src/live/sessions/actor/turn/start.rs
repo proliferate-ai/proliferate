@@ -4,14 +4,14 @@ use agent_client_protocol as acp;
 use anyharness_contract::v1::{PendingPromptRemovalReason, PendingPromptRemovedPayload};
 use tokio::sync::Mutex;
 
+use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
+use crate::domains::sessions::model::PromptAttachmentState;
+use crate::domains::sessions::prompt::PromptPayload;
+use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::command::PromptAcceptError;
 use crate::live::sessions::actor::state::SessionActorConfig;
 use crate::live::sessions::actor::turn::handle::first_prompt_system_prompt_append_for_codex_prompt;
 use crate::live::sessions::event_sink::SessionEventSink;
-use crate::sessions::attachment_storage::PromptAttachmentStorage;
-use crate::sessions::model::PromptAttachmentState;
-use crate::sessions::prompt::PromptPayload;
-use crate::sessions::store::SessionStore;
 
 pub(in crate::live::sessions::actor) struct StartedPromptTurn {
     pub acp_blocks: Vec<acp::ContentBlock>,

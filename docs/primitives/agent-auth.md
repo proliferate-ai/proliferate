@@ -530,7 +530,7 @@ AGENT_AUTH_SELECTION_REQUIRED
 ```
 
 AnyHarness session-launch rules
-(`anyharness-lib/src/sessions/runtime/creation.rs`):
+(`anyharness-lib/src/domains/sessions/runtime/creation.rs`):
 
 ```text
 if agent_auth_scope is present:
@@ -975,7 +975,7 @@ anyharness/crates/anyharness-lib/src/domains/agents/auth_config.rs
   - load_selection_for_scope_and_kind(scope, kind) -> Option<Selection>
   - returns missing | expired | invalid | needs_resync reason
 
-anyharness/crates/anyharness-lib/src/sessions/runtime/creation.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/runtime/creation.rs
   - implement no-selection fail-closed                          (5.3)
   - emit AGENT_AUTH_SELECTION_REQUIRED with structured reason
 ```
@@ -1196,7 +1196,7 @@ anyharness/crates/anyharness-contract/src/v1/agent_auth_config.rs#tests
   - AGENT_AUTH_SELECTION_REQUIRED error round-trip
   - no_selection_kinds in ApplyAgentAuthConfigResponse
 
-anyharness/crates/anyharness-lib/src/sessions/runtime/creation.rs#tests
+anyharness/crates/anyharness-lib/src/domains/sessions/runtime/creation.rs#tests
   - scope set + selection present + applied -> launches
   - scope set + selection missing           -> AGENT_AUTH_SELECTION_REQUIRED missing
   - scope set + selection expired           -> AGENT_AUTH_SELECTION_REQUIRED expired

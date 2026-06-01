@@ -8,11 +8,11 @@ use super::error::ApiError;
 use super::workspaces_contract::{request_origin_or_api_default, workspace_to_contract};
 use super::workspaces_setup::map_workspace_setup_error;
 use crate::app::AppState;
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
-use crate::workspaces::creator_context::WorkspaceCreatorContext;
-use crate::workspaces::worktree_runtime::{
+use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
+use crate::domains::workspaces::worktree_runtime::{
     CreateWorktreeWorkflowError, CreateWorktreeWorkflowInput,
 };
+use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 
 #[utoipa::path(
     post,

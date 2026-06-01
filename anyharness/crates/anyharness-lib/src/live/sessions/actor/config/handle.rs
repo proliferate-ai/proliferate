@@ -4,6 +4,8 @@ use agent_client_protocol as acp;
 use anyharness_contract::v1::ConfigApplyState;
 use tokio::sync::Mutex;
 
+use crate::domains::sessions::model::SessionRecord;
+use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::config::apply::{
     apply_mode_via_direct_setter_legacy, apply_specific_config_option, try_apply_config_option,
     try_apply_model_preference,
@@ -16,8 +18,6 @@ use crate::live::sessions::actor::config::types::{
 };
 use crate::live::sessions::actor::state::SessionStartupState;
 use crate::live::sessions::event_sink::SessionEventSink;
-use crate::sessions::model::SessionRecord;
-use crate::sessions::store::SessionStore;
 pub(in crate::live::sessions::actor) async fn apply_requested_session_preferences(
     conn: &acp::ClientSideConnection,
     native_session_id: &str,

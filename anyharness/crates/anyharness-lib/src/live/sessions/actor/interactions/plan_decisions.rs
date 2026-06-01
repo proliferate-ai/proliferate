@@ -220,12 +220,12 @@ mod tests {
     use crate::domains::plans::model::{NewPlan, PlanCreateOutcome};
     use crate::domains::plans::service::{PlanEventContext, PlanService};
     use crate::domains::plans::store::PlanStore;
+    use crate::domains::sessions::store::SessionStore;
     use crate::live::sessions::actor::command::SessionCommand;
     use crate::live::sessions::event_sink::SessionEventSink;
     use crate::live::sessions::handle::LiveSessionHandle;
     use crate::live::sessions::interactions::broker::{InteractionBroker, PermissionOutcome};
     use crate::persistence::Db;
-    use crate::sessions::store::SessionStore;
 
     fn seed_plan_service_with_link(
         option_mappings: serde_json::Value,

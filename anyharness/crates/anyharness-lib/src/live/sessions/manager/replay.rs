@@ -4,11 +4,11 @@ use anyharness_contract::v1::SessionEventEnvelope;
 use tokio::sync::broadcast;
 
 use super::LiveSessionManager;
+use crate::domains::sessions::model::SessionRecord;
+use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::spawn::ActorReadyResult;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::replay::{spawn_replay_actor, ReplayActorConfig};
-use crate::sessions::model::SessionRecord;
-use crate::sessions::store::SessionStore;
 
 impl LiveSessionManager {
     pub async fn start_replay_session(

@@ -21,7 +21,7 @@ use crate::domains::reviews::runtime::{
 };
 use crate::domains::reviews::service::ReviewError;
 use crate::domains::reviews::service::ReviewPersonaInput;
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[utoipa::path(
     post,

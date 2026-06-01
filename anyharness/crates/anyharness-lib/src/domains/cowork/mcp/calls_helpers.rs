@@ -2,8 +2,8 @@ use serde_json::{json, Value};
 
 use crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions;
 use crate::domains::cowork::runtime::{default_cowork_coding_mode_for_agent, CoworkRuntime};
-use crate::sessions::links::model::SessionLinkRecord;
-use crate::sessions::runtime::SendPromptOutcome;
+use crate::domains::sessions::links::model::SessionLinkRecord;
+use crate::domains::sessions::runtime::SendPromptOutcome;
 
 pub(super) fn launch_agents_to_json(catalog: ResolvedWorkspaceLaunchOptions) -> Vec<Value> {
     catalog

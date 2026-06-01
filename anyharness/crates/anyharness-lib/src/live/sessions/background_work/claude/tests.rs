@@ -7,14 +7,14 @@ use tokio::sync::mpsc;
 use super::output::extract_terminal_result_text;
 use super::watch::watch_async_agent;
 use super::{detect_async_agent_registration, BACKGROUND_WORK_FALLBACK_RESULT};
-use crate::live::sessions::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
-use crate::live::sessions::event_sink::AcpToolPayload;
-use crate::persistence::Db;
-use crate::sessions::model::{
+use crate::domains::sessions::model::{
     SessionBackgroundWorkRecord, SessionBackgroundWorkState, SessionBackgroundWorkTrackerKind,
     SessionRecord,
 };
-use crate::sessions::store::SessionStore;
+use crate::domains::sessions::store::SessionStore;
+use crate::live::sessions::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
+use crate::live::sessions::event_sink::AcpToolPayload;
+use crate::persistence::Db;
 
 #[test]
 fn detects_async_agent_launch_from_claude_tool_payload() {
@@ -321,7 +321,8 @@ fn seeded_store() -> SessionStore {
             dismissed_at: None,
             mcp_bindings_ciphertext: None,
             mcp_binding_summaries_json: None,
-            mcp_binding_policy: crate::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
+            mcp_binding_policy:
+                crate::domains::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
             system_prompt_append: None,
             subagents_enabled: true,
             action_capabilities_json: None,

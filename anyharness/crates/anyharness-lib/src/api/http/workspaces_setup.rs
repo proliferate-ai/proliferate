@@ -11,8 +11,8 @@ use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::workspaces_contract::{detection_result_to_contract, setup_command_run_to_contract};
 use crate::app::AppState;
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
-use crate::workspaces::setup_runtime::{StartWorkspaceSetupInput, WorkspaceSetupError};
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
+use crate::domains::workspaces::setup_runtime::{StartWorkspaceSetupInput, WorkspaceSetupError};
 
 #[utoipa::path(
     get,

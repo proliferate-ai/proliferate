@@ -9,12 +9,12 @@ use serde_json::Value;
 use super::access::assert_workspace_mutable;
 use super::error::ApiError;
 use crate::app::AppState;
+use crate::domains::sessions::mcp_bindings::product_registry::{
+    legacy_route_aliases, ProductMcpEndpointHandler,
+};
 use crate::integrations::mcp::product_server::{
     ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDispatchError,
     ProductMcpEndpointOperation, ProductMcpRequestContext, PRODUCT_MCP_TOKEN_HEADER_NAME,
-};
-use crate::sessions::mcp_bindings::product_registry::{
-    legacy_route_aliases, ProductMcpEndpointHandler,
 };
 
 pub async fn get_product_mcp_endpoint(

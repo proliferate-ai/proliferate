@@ -1,28 +1,28 @@
 # Sessions
 
-`anyharness-lib/src/sessions/**` owns durable session truth, session-domain
+`anyharness-lib/src/domains/sessions/**` owns durable session truth, session-domain
 validation, event persistence, live-config persistence, and the runtime-level
 orchestration that bridges durable sessions into live ACP execution.
 
 This is a legacy subsystem doc updated for current implementation paths.
-Session MCP binding assembly lives under `sessions/mcp_bindings/**`, and the
-session store is split under `sessions/store/**`. The runtime implementation is
-split under `sessions/runtime/**`.
+Session MCP binding assembly lives under `domains/sessions/mcp_bindings/**`, and the
+session store is split under `domains/sessions/store/**`. The runtime implementation is
+split under `domains/sessions/runtime/**`.
 
 ## Core Concepts
 
 The sessions area has two layers:
 
 - durable session domain
-  - `anyharness/crates/anyharness-lib/src/sessions/model.rs`
-  - `anyharness/crates/anyharness-lib/src/sessions/store/**`
-  - `anyharness/crates/anyharness-lib/src/sessions/service/**`
-  - `anyharness/crates/anyharness-lib/src/sessions/prompt/**`
-  - `anyharness/crates/anyharness-lib/src/sessions/live_config/**`
-  - `anyharness/crates/anyharness-lib/src/sessions/mcp_bindings/**`
-  - `anyharness/crates/anyharness-lib/src/sessions/links/**`
+  - `anyharness/crates/anyharness-lib/src/domains/sessions/model.rs`
+  - `anyharness/crates/anyharness-lib/src/domains/sessions/store/**`
+  - `anyharness/crates/anyharness-lib/src/domains/sessions/service/**`
+  - `anyharness/crates/anyharness-lib/src/domains/sessions/prompt/**`
+  - `anyharness/crates/anyharness-lib/src/domains/sessions/live_config/**`
+  - `anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/**`
+  - `anyharness/crates/anyharness-lib/src/domains/sessions/links/**`
 - live orchestration bridge
-  - `anyharness/crates/anyharness-lib/src/sessions/runtime/**`
+  - `anyharness/crates/anyharness-lib/src/domains/sessions/runtime/**`
 
 The durable layer owns:
 
@@ -45,7 +45,7 @@ The runtime layer owns:
 
 ## Core Models
 
-### `SessionRecord` (`anyharness/crates/anyharness-lib/src/sessions/model.rs`)
+### `SessionRecord` (`anyharness/crates/anyharness-lib/src/domains/sessions/model.rs`)
 
 `SessionRecord` is the durable session row.
 
@@ -61,7 +61,7 @@ It includes:
 
 This is the durable identity surface for a session.
 
-### `SessionEventRecord` (`anyharness/crates/anyharness-lib/src/sessions/model.rs`)
+### `SessionEventRecord` (`anyharness/crates/anyharness-lib/src/domains/sessions/model.rs`)
 
 `SessionEventRecord` is the durable event log row.
 
@@ -75,7 +75,7 @@ It stores:
 
 This is the backlog source for session history and SSE replay.
 
-### `SessionRawNotificationRecord` (`anyharness/crates/anyharness-lib/src/sessions/model.rs`)
+### `SessionRawNotificationRecord` (`anyharness/crates/anyharness-lib/src/domains/sessions/model.rs`)
 
 `SessionRawNotificationRecord` is the durable raw ACP notification row.
 
@@ -89,7 +89,7 @@ It stores:
 This is a debug and regression-capture surface. It does not replace normalized
 session events as the runtime truth for replay or rendering.
 
-### `SessionLinkRecord` (`anyharness/crates/anyharness-lib/src/sessions/links/model.rs`)
+### `SessionLinkRecord` (`anyharness/crates/anyharness-lib/src/domains/sessions/links/model.rs`)
 
 `SessionLinkRecord` is the durable session graph row.
 
@@ -114,7 +114,7 @@ Session links are durable product state, but their creator turn/tool metadata is
 provenance only. It must not be used as an authorization, billing, or trust
 boundary.
 
-### Live Config Records (`anyharness/crates/anyharness-lib/src/sessions/model.rs`)
+### Live Config Records (`anyharness/crates/anyharness-lib/src/domains/sessions/model.rs`)
 
 There are two durable config-related record types:
 
@@ -128,7 +128,7 @@ periods.
 
 ### Internal Prompt Provenance
 
-`PromptPayload` (`anyharness/crates/anyharness-lib/src/sessions/prompt/**`)
+`PromptPayload` (`anyharness/crates/anyharness-lib/src/domains/sessions/prompt/**`)
 can carry internal prompt provenance while it moves through the runtime.
 
 Current producers are internal only. Public prompt requests do not expose a
@@ -192,7 +192,7 @@ The model is intentionally small:
   policy and does not silently re-enable disabled sessions.
 
 The subagent domain lives under
-`anyharness/crates/anyharness-lib/src/sessions/subagents/**`.
+`anyharness/crates/anyharness-lib/src/domains/sessions/subagents/**`.
 
 It owns:
 
@@ -299,7 +299,7 @@ or completion ids.
 turn-finished notifications.
 
 The extension trait lives in
-`anyharness/crates/anyharness-lib/src/sessions/extensions.rs`.
+`anyharness/crates/anyharness-lib/src/domains/sessions/extensions.rs`.
 
 Extensions may:
 
@@ -317,7 +317,7 @@ make the completed turn fail.
 ### Create
 
 `SessionService::create_session(...)`
-(`anyharness/crates/anyharness-lib/src/sessions/service/create.rs`)
+(`anyharness/crates/anyharness-lib/src/domains/sessions/service/create.rs`)
 does the durable validation path.
 
 It:
@@ -345,13 +345,13 @@ merging live events.
 
 ## Runtime Flow
 
-The runtime flow is implemented across `sessions/runtime/**`, split by
+The runtime flow is implemented across `domains/sessions/runtime/**`, split by
 API-facing session operation family.
 
 ### Create and Start
 
 `SessionRuntime::create_and_start_session(...)`
-(`anyharness/crates/anyharness-lib/src/sessions/runtime/creation.rs`)
+(`anyharness/crates/anyharness-lib/src/domains/sessions/runtime/creation.rs`)
 is the eager live-start path.
 
 It:
@@ -369,7 +369,7 @@ This is the bridge from durable session creation into live ACP execution.
 ### Resume
 
 `ensure_live_session(...)`
-(`anyharness/crates/anyharness-lib/src/sessions/runtime/startup.rs`)
+(`anyharness/crates/anyharness-lib/src/domains/sessions/runtime/startup.rs`)
 is the idempotent cold-start path for an existing session.
 
 It:
@@ -422,7 +422,7 @@ The session domain owns:
 - normalized control metadata exposed back to clients
 
 `live_config/**`
-(`anyharness/crates/anyharness-lib/src/sessions/live_config/**`)
+(`anyharness/crates/anyharness-lib/src/domains/sessions/live_config/**`)
 is the normalization layer from ACP config options into the runtime-owned
 `SessionLiveConfigSnapshot` shape.
 
@@ -463,7 +463,7 @@ The runtime tries:
 
 That is why model configuration spans both:
 
-- `anyharness/crates/anyharness-lib/src/sessions/live_config/**`
+- `anyharness/crates/anyharness-lib/src/domains/sessions/live_config/**`
 - `anyharness/crates/anyharness-lib/src/live/sessions/actor/config/**`
 
 ## SSE and Event Flow

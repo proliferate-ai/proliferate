@@ -9,6 +9,9 @@ use anyharness_contract::v1::{
 use tokio::sync::{broadcast, mpsc};
 
 use crate::domains::plans::service::PlanDecisionError;
+use crate::domains::sessions::model::SessionRecord;
+use crate::domains::sessions::runtime_event::RuntimeEventInjectionError;
+use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::command::{
     ForkSessionCommandError, PromptAcceptError, QueueMutationError, ResolveInteractionCommandError,
     SessionCommand, SetConfigOptionCommandError,
@@ -16,9 +19,6 @@ use crate::live::sessions::actor::command::{
 use crate::live::sessions::actor::spawn::ActorReadyResult;
 use crate::live::sessions::event_sink::publish::publish_session_event;
 use crate::live::sessions::handle::LiveSessionHandle;
-use crate::sessions::model::SessionRecord;
-use crate::sessions::runtime_event::RuntimeEventInjectionError;
-use crate::sessions::store::SessionStore;
 
 const MAX_REPLAY_GAP: Duration = Duration::from_millis(1500);
 
@@ -483,7 +483,7 @@ fn pending_payload_summary(payload: &InteractionPayload) -> PendingInteractionPa
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sessions::runtime_event::RuntimeInjectedSessionEvent;
+    use crate::domains::sessions::runtime_event::RuntimeInjectedSessionEvent;
 
     fn ts(value: &str) -> chrono::DateTime<chrono::FixedOffset> {
         chrono::DateTime::parse_from_rfc3339(value).expect("valid timestamp")

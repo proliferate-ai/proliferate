@@ -16,7 +16,7 @@ use super::model::{
     RuntimeConfigStatus,
 };
 use super::store::RuntimeConfigStore;
-use crate::sessions::mcp_bindings::model::{
+use crate::domains::sessions::mcp_bindings::model::{
     SessionMcpEnvVar, SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
     SessionMcpStdioServer,
 };

@@ -10,7 +10,7 @@ Current implementation:
 
 ```text
 anyharness-lib/src/live/sessions/actor/
-anyharness-lib/src/live/sessions/connection/
+anyharness-lib/src/live/sessions/driver/
 anyharness-lib/src/live/sessions/handle.rs
 ```
 
@@ -33,7 +33,7 @@ live/sessions/actor/ owns the actor command protocol, state, event loop, turn,
 config, notification, interaction-command, fork policy, background-work update,
 and shutdown behavior.
 
-live/sessions/connection/ owns ACP process/native-session startup and shutdown
+live/sessions/driver/ owns ACP process/native-session startup and shutdown
 mechanics currently embedded in actor startup paths.
 
 live/sessions/handle.rs owns the public command/subscription port into one
@@ -71,7 +71,7 @@ It does not own the whole session product. It is one live component inside:
 domains/sessions/runtime
   -> live/sessions/handle
     -> live/sessions/actor
-      -> live/sessions/connection
+      -> live/sessions/driver
       -> live/sessions/event_sink
       -> live/sessions/interactions
       -> live/sessions/background_work
@@ -106,7 +106,7 @@ The actor coordinates collaborators; it does not absorb their code.
 live/sessions/handle
   public command/subscription port used by SessionRuntime and stream code
 
-live/sessions/connection
+live/sessions/driver
   ACP process/session lifecycle: spawn, initialize, authenticate, load/new/fork,
   stderr, graceful close
 
@@ -152,7 +152,7 @@ The actor may own state required to serialize one live session:
 
 ```text
 native ACP session id
-current ACP connection/client handle
+current ACP driver/client handle
 current phase: starting, idle, busy, closing, closed
 active turn id and active prompt metadata
 current live config snapshot needed for protocol calls
@@ -347,7 +347,7 @@ interactions/
 
 fork/
   actor command handling for verify-fork-ready, fork, and native child-session
-  close; raw ACP capability parsing stays with connection/protocol code
+  close; raw ACP capability parsing stays with driver/protocol code
 
 diagnostics/
   stuck-turn and state diagnostics if it outgrows turn/diagnostics.rs
@@ -536,7 +536,7 @@ handle.rs
   Close, Dismiss, Cancel, provider-error, and actor-error entrypoints
 
 cleanup.rs
-  stop/cancel provider work, close connection, resolve pending interactions,
+  stop/cancel provider work, close the driver, resolve pending interactions,
   clear phase
 
 persist.rs
@@ -553,7 +553,7 @@ ACP process startup does not belong inside `actor/` concern folders.
 Target:
 
 ```text
-live/sessions/connection/
+live/sessions/driver/
   mod.rs
   types.rs
   start.rs
@@ -582,14 +582,14 @@ shutdown.rs
   provider/process close behavior that is not actor state-machine policy
 ```
 
-The actor calls connection code during startup and shutdown, but connection code
+The actor calls driver code during startup and shutdown, but driver code
 owns the process/protocol resource mechanics.
 
-For a full actor cleanup, connection extraction is in scope when the code is
+For a full actor cleanup, driver extraction is in scope when the code is
 currently embedded in `session_actor.rs`. The actor may keep policy decisions
 such as "start a new native session vs load an existing native session" only
 when that decision depends on actor phase or ordering. The process/protocol
-mechanics belong in `live/sessions/connection/`.
+mechanics belong in `live/sessions/driver/`.
 
 Reusable ACP protocol or provider mechanics should move lower:
 
@@ -690,9 +690,9 @@ Recommended order:
 4. Extract notification dispatch/replay filtering.
 5. Extract interaction resolution/cleanup commands.
 6. Extract shutdown finalization.
-7. Move process startup mechanics to live/sessions/connection.
-8. Rename remaining RuntimeClient/connection paths only after
-   behavior-preserving driver/client splits are stable.
+7. Move process startup mechanics to live/sessions/driver.
+8. Rename remaining RuntimeClient types only after behavior-preserving
+   driver/client splits are stable.
 ```
 
 Each slice should:
@@ -737,7 +737,7 @@ A full actor migration is accepted only when all of these are true:
 9. Cancel/close/dismiss/error finalization lives under actor/shutdown/.
 
 10. ACP process/native-session startup mechanics no longer live in actor
-   concern files; they live under live/sessions/connection/.
+   concern files; they live under live/sessions/driver/.
 
 11. Product prompt preparation remains in domains/sessions/prompt.
 

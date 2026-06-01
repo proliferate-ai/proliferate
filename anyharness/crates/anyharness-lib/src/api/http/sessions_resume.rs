@@ -13,9 +13,9 @@ use super::sessions_errors::map_ensure_live_session_error;
 use super::sessions_leases::acquire_session_operation_lease;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
+use crate::domains::sessions::runtime::SessionMcpRefresh;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 use crate::observability::latency::LatencyRequestContext;
-use crate::sessions::runtime::SessionMcpRefresh;
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[utoipa::path(
     post,

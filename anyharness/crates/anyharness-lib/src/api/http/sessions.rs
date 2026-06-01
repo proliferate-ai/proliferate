@@ -14,9 +14,9 @@ use super::sessions_contract::{request_origin_or_api_default, session_to_contrac
 use super::sessions_errors::map_create_session_error;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
+use crate::domains::sessions::mcp_bindings::summaries::validate_binding_summaries;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
-use crate::sessions::mcp_bindings::summaries::validate_binding_summaries;
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[derive(Debug, Deserialize)]
 pub struct ListSessionsQuery {

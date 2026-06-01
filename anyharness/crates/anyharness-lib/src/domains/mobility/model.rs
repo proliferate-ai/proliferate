@@ -1,12 +1,14 @@
 use crate::domains::agents::portability::AgentArtifactFileData;
-use crate::sessions::links::model::SessionLinkRecord;
-use crate::sessions::model::{
+use crate::domains::sessions::links::model::SessionLinkRecord;
+use crate::domains::sessions::model::{
     PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentRecord,
     SessionBundlePromptAttachment, SessionEventRecord, SessionLiveConfigSnapshotRecord,
     SessionRawNotificationRecord, SessionRecord,
 };
-use crate::sessions::subagents::model::{SubagentCompletionRecord, SubagentWakeScheduleRecord};
-use crate::workspaces::access_model::WorkspaceAccessRecord;
+use crate::domains::sessions::subagents::model::{
+    SubagentCompletionRecord, SubagentWakeScheduleRecord,
+};
+use crate::domains::workspaces::access_model::WorkspaceAccessRecord;
 
 pub const MAX_MOBILITY_ARCHIVE_BODY_BYTES: usize = 128 * 1024 * 1024;
 pub const MAX_MOBILITY_FILE_BYTES: usize = 16 * 1024 * 1024;

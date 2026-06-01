@@ -28,7 +28,7 @@ use crate::app::AppState;
 
 use super::access::{assert_workspace_mutable, assert_workspace_not_retired};
 use super::error::ApiError;
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[derive(Deserialize)]
 pub struct FilePathQuery {

@@ -7,14 +7,14 @@ use anyharness_contract::v1::{
 use tokio::sync::Mutex;
 
 use crate::domains::agents::model::AgentKind;
-use crate::live::sessions::actor::config::types::{ConfigPurpose, PersistedSessionConfigState};
-use crate::live::sessions::actor::state::SessionStartupState;
-use crate::live::sessions::event_sink::SessionEventSink;
-use crate::sessions::live_config::{
+use crate::domains::sessions::live_config::{
     build_live_config_snapshot, normalized_key_rank, snapshot_from_record, snapshot_to_record,
     NormalizedControlKind,
 };
-use crate::sessions::store::SessionStore;
+use crate::domains::sessions::store::SessionStore;
+use crate::live::sessions::actor::config::types::{ConfigPurpose, PersistedSessionConfigState};
+use crate::live::sessions::actor::state::SessionStartupState;
+use crate::live::sessions::event_sink::SessionEventSink;
 pub(in crate::live::sessions::actor) async fn persist_session_config_state_if_changed(
     store: &SessionStore,
     event_sink: &Arc<Mutex<SessionEventSink>>,

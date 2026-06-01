@@ -6,8 +6,8 @@ use serde_json::json;
 use super::calls::{call_artifact_tool, ensure_tool_available};
 use super::context::CoworkMcpContext;
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
+use crate::domains::workspaces::model::WorkspaceRecord;
 use crate::origin::OriginContext;
-use crate::workspaces::model::WorkspaceRecord;
 
 struct TempDirGuard {
     path: PathBuf,

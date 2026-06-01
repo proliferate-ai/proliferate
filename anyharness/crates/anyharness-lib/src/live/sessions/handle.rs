@@ -15,12 +15,12 @@ pub use crate::live::sessions::actor::command::{
 
 use crate::domains::plans::model::PlanRecord;
 use crate::domains::plans::service::PlanDecisionError;
-use crate::live::sessions::actor::command::SessionCommand;
-use crate::observability::latency::LatencyRequestContext;
-use crate::sessions::prompt::PromptPayload;
-use crate::sessions::runtime_event::{
+use crate::domains::sessions::prompt::PromptPayload;
+use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionError, RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
+use crate::live::sessions::actor::command::SessionCommand;
+use crate::observability::latency::LatencyRequestContext;
 
 #[derive(Debug)]
 pub enum LiveSessionCommandError<E> {

@@ -184,7 +184,7 @@ pub async fn list_session_raw_notifications(
 }
 
 fn raw_notification_record_to_envelope(
-    record: crate::sessions::model::SessionRawNotificationRecord,
+    record: crate::domains::sessions::model::SessionRawNotificationRecord,
 ) -> Option<SessionRawNotificationEnvelope> {
     let notification = serde_json::from_str(&record.payload_json).ok()?;
     Some(SessionRawNotificationEnvelope {

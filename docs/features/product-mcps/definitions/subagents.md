@@ -67,8 +67,8 @@ example `api-surface-check` -> `API Surface Check`.
 
 ```text
 id: subagents
-owner: sessions/subagents
-implementation: anyharness-lib/src/sessions/subagents/mcp/**
+owner: domains/sessions/subagents
+implementation: anyharness-lib/src/domains/sessions/subagents/mcp/**
 route slug: subagents
 server name: proliferate-subagents
 visibility: internal
@@ -101,7 +101,7 @@ anyharness/crates/anyharness-lib/src/integrations/mcp/product_server/**
 Subagent-specific scope construction and validation belongs in:
 
 ```text
-anyharness/crates/anyharness-lib/src/sessions/subagents/mcp/auth.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/subagents/mcp/auth.rs
 ```
 
 ## Tool Contract
@@ -718,7 +718,7 @@ not a second set of lifecycle concepts. The target cowork cleanup is defined in
 Runtime/domain:
 
 ```text
-anyharness/crates/anyharness-lib/src/sessions/subagents/
+anyharness/crates/anyharness-lib/src/domains/sessions/subagents/
   mod.rs
   model.rs
   service.rs
@@ -735,7 +735,7 @@ anyharness/crates/anyharness-lib/src/sessions/subagents/
     calls.rs
     calls_helpers.rs
 
-anyharness/crates/anyharness-lib/src/sessions/delegation.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/delegation.rs
 anyharness/crates/anyharness-lib/src/domains/cowork/delegation/**
 anyharness/crates/anyharness-lib/src/domains/sessions/mcp_bindings/**
 anyharness/crates/anyharness-lib/src/integrations/mcp/product_server/**

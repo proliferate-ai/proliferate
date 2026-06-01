@@ -5,8 +5,8 @@ mod rounds;
 mod rows;
 mod runs;
 
+use crate::domains::sessions::deletion::SessionDeleteParticipant;
 use crate::persistence::Db;
-use crate::sessions::deletion::SessionDeleteParticipant;
 
 #[derive(Clone)]
 pub struct ReviewStore {

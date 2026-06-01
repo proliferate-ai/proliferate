@@ -9,8 +9,8 @@ use axum::{
 
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::sessions::replay::ReplayError;
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
+use crate::domains::sessions::replay::ReplayError;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[utoipa::path(
     get,

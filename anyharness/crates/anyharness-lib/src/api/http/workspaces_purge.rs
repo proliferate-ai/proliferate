@@ -12,8 +12,8 @@ use super::workspaces_contract::{
     workspace_kind_to_contract, workspace_lifecycle_to_contract, workspace_to_contract,
 };
 use crate::app::AppState;
-use crate::workspaces::purge::WorkspacePurgeServiceOutcome;
-use crate::workspaces::retire_preflight::RetirePreflightMode;
+use crate::domains::workspaces::purge::WorkspacePurgeServiceOutcome;
+use crate::domains::workspaces::retire_preflight::RetirePreflightMode;
 
 #[utoipa::path(
     get,
@@ -217,10 +217,10 @@ mod tests {
     use super::*;
     use crate::app::test_support;
     use crate::domains::agents::seed::AgentSeedStore;
+    use crate::domains::workspaces::model::WorkspaceRecord;
+    use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
+    use crate::domains::workspaces::store::WorkspaceStore;
     use crate::persistence::Db;
-    use crate::workspaces::model::WorkspaceRecord;
-    use crate::workspaces::operation_gate::WorkspaceOperationKind;
-    use crate::workspaces::store::WorkspaceStore;
     use anyharness_contract::v1::WorkspaceRetireBlockerCode;
 
     #[tokio::test(flavor = "current_thread")]

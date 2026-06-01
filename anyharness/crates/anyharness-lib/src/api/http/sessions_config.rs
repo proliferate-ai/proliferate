@@ -17,7 +17,7 @@ use super::sessions_errors::{
 use super::sessions_leases::acquire_session_operation_lease;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[utoipa::path(
     patch,

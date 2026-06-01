@@ -7,15 +7,15 @@ use anyharness_contract::v1::{
 
 use super::error::ApiError;
 use crate::app::AppState;
+use crate::domains::repo_roots::model::RepoRootRecord;
 use crate::domains::terminals::model::{TerminalCommandRunRecord, TerminalCommandRunStatus};
-use crate::origin::OriginContext;
-use crate::repo_roots::model::RepoRootRecord;
-use crate::workspaces::model::WorkspaceRecord;
-use crate::workspaces::runtime::WorkspaceResolution;
-use crate::workspaces::types::{
+use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::runtime::WorkspaceResolution;
+use crate::domains::workspaces::types::{
     DetectedHintCategory, DetectedSetupHint, ProjectSetupDetectionResult,
     SetWorkspaceDisplayNameError,
 };
+use crate::origin::OriginContext;
 
 pub(super) fn setup_command_run_to_contract(
     run: TerminalCommandRunRecord,
@@ -147,7 +147,7 @@ pub(super) fn workspace_to_contract_with_summary(
         creator_context: record
             .creator_context
             .as_ref()
-            .map(crate::workspaces::creator_context::WorkspaceCreatorContext::to_contract),
+            .map(crate::domains::workspaces::creator_context::WorkspaceCreatorContext::to_contract),
         created_at: record.created_at,
         updated_at: record.updated_at,
     }

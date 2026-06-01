@@ -12,9 +12,9 @@ use super::sessions_errors::map_fork_session_error;
 use super::sessions_leases::acquire_session_exclusive_operation_lease;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
-use crate::sessions::runtime::contract::session_link_to_summary;
-use crate::sessions::runtime::ForkSessionError;
-use crate::workspaces::operation_gate::WorkspaceOperationKind;
+use crate::domains::sessions::runtime::contract::session_link_to_summary;
+use crate::domains::sessions::runtime::ForkSessionError;
+use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 
 #[utoipa::path(
     post,

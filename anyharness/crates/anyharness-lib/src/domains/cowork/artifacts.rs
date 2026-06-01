@@ -5,7 +5,7 @@ use crate::domains::artifacts::model::{
     UpdateArtifactInput,
 };
 use crate::domains::artifacts::runtime::ArtifactRuntime;
-use crate::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::WorkspaceRecord;
 
 pub type CreateCoworkArtifactInput = CreateArtifactInput;
 pub type UpdateCoworkArtifactInput = UpdateArtifactInput;

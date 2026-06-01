@@ -1,6 +1,6 @@
 mod actor;
 mod background_work;
-mod connection;
+mod driver;
 mod event_sink;
 pub mod handle;
 mod interactions;

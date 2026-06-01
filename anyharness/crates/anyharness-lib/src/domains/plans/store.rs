@@ -2,8 +2,8 @@ use anyharness_contract::v1::{ProposedPlanDecisionState, ProposedPlanNativeResol
 use rusqlite::{params, types::Type, Connection, OptionalExtension, Row};
 
 use super::model::{PlanHandoffRecord, PlanInteractionLinkRecord, PlanRecord};
+use crate::domains::sessions::model::SessionEventRecord;
 use crate::persistence::Db;
-use crate::sessions::model::SessionEventRecord;
 
 #[derive(Clone)]
 pub struct PlanStore {

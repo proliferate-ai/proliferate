@@ -1,4 +1,4 @@
-use crate::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::WorkspaceRecord;
 
 pub const MAX_MANAGED_WORKSPACES_PER_COWORK_SESSION: usize = 8;
 pub const MAX_CODING_SESSIONS_PER_MANAGED_WORKSPACE: usize = 8;
