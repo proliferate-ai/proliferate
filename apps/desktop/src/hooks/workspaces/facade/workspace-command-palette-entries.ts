@@ -26,18 +26,6 @@ export interface WorkspaceRemoteAccessActionState {
   syncToWebDisabledReason: string | null;
 }
 
-export interface WorkspaceCommandPaletteTabActions {
-  activeSessionId: string | null;
-  activateRelativeTab: (delta: number) => unknown;
-  canActivateRelativeTab: boolean;
-  canOpenNewSessionTab: boolean;
-  newSessionDisabledReason: string | null;
-  openNewSessionTab: () => unknown;
-  relativeTabDisabledReason: string | null;
-  restoreLastDismissedTab: () => unknown;
-  restoreTabDisabledReason: string | null;
-}
-
 export function buildWorkspaceCommandPaletteEntries(args: {
   activeSessionId: string | null;
   appActions: AppCommandActions;
