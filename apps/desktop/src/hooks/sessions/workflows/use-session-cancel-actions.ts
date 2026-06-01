@@ -3,7 +3,7 @@ import { useCallback } from "react";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import {
   getSessionClientAndWorkspace,
-} from "@/lib/workflows/sessions/session-runtime";
+} from "@/lib/access/anyharness/session-runtime";
 import {
   getSessionRecord,
   patchSessionRecord,

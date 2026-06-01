@@ -6,7 +6,7 @@ import {
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { classifyTrustedSessionSelection } from "@/hooks/sessions/workflows/use-session-selection-actions";
+import { classifyTrustedSessionSelection } from "@/hooks/sessions/workflows/session-selection-relationship";
 
 describe("classifyTrustedSessionSelection", () => {
   beforeEach(() => {

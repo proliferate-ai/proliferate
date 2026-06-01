@@ -21,9 +21,7 @@ import {
   promptIntentsForSession,
   sessionIntentsForSession,
 } from "@proliferate/product-domain/sessions/intents/session-intent-state";
-import {
-  finishLatencyFlow,
-} from "@/lib/infra/measurement/latency-flow";
+import { finishLatencyFlow } from "@/lib/infra/measurement/latency-flow";
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
@@ -31,17 +29,17 @@ import {
 } from "@/lib/infra/measurement/debug-measurement";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
-import {
-  getSessionRecord,
-} from "@/stores/sessions/session-records";
+import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 import { useWorkspaceRuntimeBlock } from "@/hooks/workspaces/derived/use-workspace-runtime-block";
 import type { SessionConfigOptionUpdateOptions } from "@/hooks/sessions/workflows/session-control-contract";
 import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
+import { getSessionClientAndWorkspace } from "@/lib/access/anyharness/session-runtime";
 import {
-  getSessionClientAndWorkspace,
-} from "@/lib/workflows/sessions/session-runtime";
+  logInteractionDebug,
+  type InteractionAction,
+} from "@/hooks/sessions/workflows/session-interaction-debug";
 
 interface SendPromptInput {
   sessionId: string;
@@ -55,8 +53,6 @@ interface SendPromptInput {
   promptId?: string | null;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
 }
-
-type InteractionAction = "permission" | "user_input" | "mcp_elicitation";
 
 export function useSessionIntentActions() {
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
@@ -401,38 +397,4 @@ export function useSessionIntentActions() {
     resolveUserInput,
     revealMcpElicitationUrl,
   };
-}
-
-function logInteractionDebug(
-  event: string,
-  input: {
-    action: InteractionAction;
-    sessionId: string | null;
-    selectedWorkspaceId: string | null;
-    slot: SessionRuntimeRecord | null;
-    requestId?: string | null;
-    extra?: Record<string, unknown>;
-  },
-): void {
-  logLatency(`session.interaction.${event}`, {
-    action: input.action,
-    sessionId: input.sessionId,
-    selectedWorkspaceId: input.selectedWorkspaceId,
-    requestId: input.requestId ?? null,
-    slotWorkspaceId: input.slot?.workspaceId ?? null,
-    slotMaterializedSessionId: input.slot?.materializedSessionId ?? null,
-    slotStatus: input.slot?.status ?? null,
-    transcriptHydrated: input.slot?.transcriptHydrated ?? null,
-    streamConnectionState: input.slot?.streamConnectionState ?? null,
-    transcriptLastSeq: input.slot?.transcript.lastSeq ?? null,
-    pendingInteractions: input.slot?.transcript.pendingInteractions.map((interaction) => ({
-      requestId: interaction.requestId,
-      kind: interaction.kind,
-      toolCallId: interaction.toolCallId ?? null,
-      toolKind: interaction.toolKind ?? null,
-      toolStatus: interaction.toolStatus ?? null,
-      linkedPlanId: interaction.linkedPlanId ?? null,
-    })) ?? [],
-    ...(input.extra ?? {}),
-  });
 }

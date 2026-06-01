@@ -29,7 +29,7 @@ import type {
   ModelSelectorSelection,
 } from "@/lib/domain/chat/models/model-selection";
 import { resolveModelDisplayName } from "@/lib/domain/chat/models/model-display";
-import { getSessionClientAndWorkspace } from "@/lib/workflows/sessions/session-runtime";
+import { getSessionClientAndWorkspace } from "@/lib/access/anyharness/session-runtime";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
