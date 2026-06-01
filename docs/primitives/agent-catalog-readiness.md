@@ -23,9 +23,11 @@ It does not answer:
 The current migration establishes one supported catalog input and removes the
 old split model/launch catalog paths. It promotes the cheap ownership folders
 for registry, credentials, readiness resolution, and reconcile execution.
-Install files remain transitional until the install/update boundary is split
-cleanly. All install, credentials, registry, reconcile, readiness, and seed
-code must live outside `catalog/**`.
+Install files remain transitional until the install/update boundary is promoted
+cleanly. The current `installer.rs` facade delegates to focused child modules
+for native artifacts, agent-process artifacts, npm/source-build mechanics, and
+download helpers. All install, credentials, registry, reconcile, readiness, and
+seed code must live outside `catalog/**`.
 
 ## Truth Sources
 
@@ -133,6 +135,12 @@ anyharness-lib/src/domains/agents/
     mod.rs
     launch_options.rs
     resolver.rs
+    artifacts.rs
+    spawn.rs
+    compatibility.rs
+    overrides.rs
+    paths.rs
+    status.rs
   model_registry/
     mod.rs
     model.rs
@@ -143,7 +151,12 @@ anyharness-lib/src/domains/agents/
     service.rs
   credentials/
     mod.rs
-  installer.rs                # transitional: outside catalog/**
+  installer.rs                # transitional facade: outside catalog/**
+  installer/
+    agent_process.rs
+    downloads.rs
+    native.rs
+    npm.rs
   install_lock.rs             # transitional: outside catalog/**
   registry/
     mod.rs
@@ -170,8 +183,10 @@ anyharness-lib/src/domains/agents/
     launch_options.rs
     resolver.rs
     artifacts.rs
-    spawn.rs
     compatibility.rs
+    overrides.rs
+    paths.rs
+    status.rs
   install/
     mod.rs
     native.rs
@@ -458,9 +473,7 @@ The catalog migration is done only when:
 
 Agents-domain topology promotion is a separate cleanup. It is not complete
 until transitional files such as `installer.rs` and `install_lock.rs` are
-either promoted into focused folders or documented as intentionally flat, and
-until readiness internals such as artifacts, spawn, and compatibility are split
-out of `readiness/resolver.rs`.
+either promoted into final focused folders or documented as intentionally flat.
 
 Verification examples:
 

@@ -22,7 +22,7 @@ use crate::{
     app::{test_support, AppState},
     domains::agents::{
         model::{AgentKind, ArtifactRole},
-        readiness::resolver::artifact_root,
+        readiness::paths::artifact_root,
     },
     domains::terminals::model::{CreateTerminalOptions, TerminalPurpose},
     domains::{
