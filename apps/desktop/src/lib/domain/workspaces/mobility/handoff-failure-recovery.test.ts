@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveHandoffFailureRecovery } from "./handoff-failure-recovery";
+import { deriveHandoffFailureRecovery } from "@/lib/domain/workspaces/mobility/handoff-failure-recovery";
 
 describe("deriveHandoffFailureRecovery", () => {
   it("does nothing when a handoff never started", () => {
