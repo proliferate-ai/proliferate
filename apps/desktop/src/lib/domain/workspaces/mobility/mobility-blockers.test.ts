@@ -27,6 +27,7 @@ describe("pickPrimaryMobilityBlocker", () => {
       sourcePreflight: {
         canMove: false,
         blockers: [
+          { code: "unsupported_session", message: "Session cannot move" },
           {
             code: "partial_subagent_graph",
             message: "Session graph includes linked subagent session outside this archive",
@@ -41,9 +42,9 @@ describe("pickPrimaryMobilityBlocker", () => {
     });
 
     expect(blocker?.code).toBe("partial_subagent_graph");
-    expect(blocker?.headline).toBe("Linked sessions need to finish first");
+    expect(blocker?.headline).toBe("Linked sessions need to move together");
     expect(blocker?.helper).toBe(
-      "Finish or archive the linked subagent session, then try again.",
+      "Archive or unlink the related subagent sessions, or move the complete linked workspace graph, then try again.",
     );
   });
 

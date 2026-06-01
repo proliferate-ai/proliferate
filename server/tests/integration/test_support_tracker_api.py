@@ -313,7 +313,7 @@ class TestSupportTrackerApi:
         assert report.linear_issue_url == "https://linear.app/proliferate/issue/SUP-456"
 
     @pytest.mark.asyncio
-    async def test_targeted_tracker_reconcile_claims_legacy_none_report(
+    async def test_tracker_reconcile_claims_legacy_none_report(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
@@ -419,7 +419,7 @@ class TestSupportTrackerApi:
             fake_notify_support_report_tracker,
         )
 
-        processed = await run_support_tracker_reconcile_pass(report_id=report_id, limit=1)
+        processed = await run_support_tracker_reconcile_pass(limit=1)
         assert processed == 1
 
         db_session.expire_all()

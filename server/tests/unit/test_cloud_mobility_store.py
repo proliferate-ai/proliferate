@@ -215,3 +215,39 @@ async def test_existing_cloud_workspace_lookup_tolerates_duplicate_active_rows(
 
     assert value is not None
     assert value.id == newer.id
+
+
+@pytest.mark.asyncio
+async def test_existing_cloud_workspace_lookup_prefers_failed_cloud_retry_target(
+    db_session: AsyncSession,
+) -> None:
+    user_id = uuid4()
+    failed_destination = _cloud_workspace(
+        user_id=user_id,
+        branch="mist",
+        display_name="Failed cloud",
+    )
+    direct_projection = _cloud_workspace(
+        user_id=user_id,
+        branch="mist",
+        display_name="Direct projection",
+    )
+    failed_destination.status = "error"
+    failed_destination.anyharness_workspace_id = None
+    failed_destination.updated_at = datetime(2026, 1, 1, tzinfo=UTC)
+    direct_projection.worktree_path = "/workspace/mist"
+    direct_projection.updated_at = datetime(2026, 1, 2, tzinfo=UTC)
+    db_session.add_all([failed_destination, direct_projection])
+    await db_session.flush()
+
+    value = await get_existing_cloud_workspace(
+        db_session,
+        user_id=user_id,
+        git_provider="github",
+        git_owner="proliferate-ai",
+        git_repo_name="proliferate",
+        git_branch="mist",
+    )
+
+    assert value is not None
+    assert value.id == failed_destination.id

@@ -55,7 +55,7 @@ export function useSessionFindOrCreateActions({
       ) {
         activateSession(slot.sessionId);
         writeChatShellIntentForSession({ workspaceId, sessionId: slot.sessionId });
-        if (!slot.materializedSessionId) {
+        if (!slot.materializedSessionId && slot.status !== "starting") {
           await createSessionWithResolvedConfig({
             text,
             blocks,
@@ -133,7 +133,7 @@ export function useSessionFindOrCreateActions({
       ) {
         activateSession(slot.sessionId);
         writeChatShellIntentForSession({ workspaceId, sessionId: slot.sessionId });
-        if (!slot.materializedSessionId) {
+        if (!slot.materializedSessionId && slot.status !== "starting") {
           await createSessionWithResolvedConfig({
             text,
             blocks,

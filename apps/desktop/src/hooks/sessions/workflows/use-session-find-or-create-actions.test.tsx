@@ -133,6 +133,88 @@ describe("useSessionFindOrCreateActions", () => {
     expect(mocks.promptSession).not.toHaveBeenCalled();
     expect(deps.ensureWorkspaceSessions).not.toHaveBeenCalled();
   });
+
+  it("queues prompts against an already-starting projected session", async () => {
+    putSessionRecord({
+      ...createEmptySessionRecord("client-session:codex:3", "codex", {
+        workspaceId: "workspace-1",
+        materializedSessionId: null,
+        modelId: "gpt-5.5",
+      }),
+      status: "starting",
+    });
+    const deps = actionDeps();
+    const { result } = renderHook(() => useSessionFindOrCreateActions(deps));
+
+    await act(async () => {
+      await result.current.findOrCreateSession(
+        "codex",
+        "hello again",
+        "gpt-5.5",
+        [{ type: "text", text: "hello again" }],
+        undefined,
+        undefined,
+        undefined,
+        null,
+        "prompt-3",
+      );
+    });
+
+    expect(deps.activateSession).toHaveBeenCalledWith("client-session:codex:3");
+    expect(deps.createSessionWithResolvedConfig).not.toHaveBeenCalled();
+    expect(mocks.promptSession).toHaveBeenCalledWith({
+      sessionId: "client-session:codex:3",
+      text: "hello again",
+      blocks: [{ type: "text", text: "hello again" }],
+      attachmentSnapshots: undefined,
+      optimisticContentParts: undefined,
+      workspaceId: "workspace-1",
+      onBeforeOptimisticPrompt: undefined,
+      measurementOperationId: null,
+      promptId: "prompt-3",
+    });
+    expect(deps.ensureWorkspaceSessions).not.toHaveBeenCalled();
+  });
+
+  it("queues launch prompts against an already-starting projected session", async () => {
+    putSessionRecord({
+      ...createEmptySessionRecord("client-session:codex:4", "codex", {
+        workspaceId: "workspace-1",
+        materializedSessionId: null,
+        modelId: "gpt-5.5",
+      }),
+      status: "starting",
+    });
+    const deps = actionDeps();
+    const { result } = renderHook(() => useSessionFindOrCreateActions(deps));
+
+    await act(async () => {
+      await result.current.findOrCreateSessionForLaunch({
+        workspaceId: "workspace-1",
+        agentKind: "codex",
+        modelId: "gpt-5.5",
+        text: "launch again",
+        blocks: [{ type: "text", text: "launch again" }],
+        latencyFlowId: "latency-2",
+        promptId: "prompt-4",
+      });
+    });
+
+    expect(deps.activateSession).toHaveBeenCalledWith("client-session:codex:4");
+    expect(deps.createSessionWithResolvedConfig).not.toHaveBeenCalled();
+    expect(mocks.promptSession).toHaveBeenCalledWith({
+      sessionId: "client-session:codex:4",
+      text: "launch again",
+      blocks: [{ type: "text", text: "launch again" }],
+      attachmentSnapshots: undefined,
+      optimisticContentParts: undefined,
+      workspaceId: "workspace-1",
+      latencyFlowId: "latency-2",
+      promptId: "prompt-4",
+      onBeforeOptimisticPrompt: undefined,
+    });
+    expect(deps.ensureWorkspaceSessions).not.toHaveBeenCalled();
+  });
 });
 
 function actionDeps() {

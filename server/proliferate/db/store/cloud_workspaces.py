@@ -1,5 +1,3 @@
-"""Persistence helpers for cloud workspaces."""
-
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
@@ -93,10 +91,7 @@ async def _enforce_cloud_repo_limit(
         git_repo_name=git_repo_name,
     ):
         return
-    active_repo_count = await count_active_cloud_repo_environments(
-        db,
-        billing_subject_id,
-    )
+    active_repo_count = await count_active_cloud_repo_environments(db, billing_subject_id)
     if active_repo_count >= cloud_repo_limit:
         raise CloudRepoLimitExceededError(
             active_repo_count=active_repo_count,
@@ -301,6 +296,12 @@ async def get_cloud_workspace_by_id(
     ).scalar_one_or_none()
 
 
+def _existing_workspace_priority(row: CloudWorkspace) -> tuple[object, ...]:
+    projected = row.target_id or row.sandbox_profile_id or row.worktree_path
+    rank = 3 if row.status != "error" else 2 - int(row.anyharness_workspace_id is not None)
+    return (0 if projected else rank), row.updated_at, row.created_at, str(row.id)
+
+
 async def get_existing_cloud_workspace(
     db: AsyncSession,
     *,
@@ -310,7 +311,7 @@ async def get_existing_cloud_workspace(
     git_repo_name: str,
     git_branch: str,
 ) -> CloudWorkspace | None:
-    return (
+    rows = (
         await db.execute(
             select(CloudWorkspace).where(
                 CloudWorkspace.owner_scope == "personal",
@@ -321,14 +322,9 @@ async def get_existing_cloud_workspace(
                 CloudWorkspace.git_branch == git_branch,
                 CloudWorkspace.archived_at.is_(None),
             )
-            .order_by(
-                CloudWorkspace.updated_at.desc(),
-                CloudWorkspace.created_at.desc(),
-                CloudWorkspace.id.desc(),
-            )
-            .limit(1)
         )
-    ).scalar_one_or_none()
+    ).scalars()
+    return max(rows, key=_existing_workspace_priority, default=None)
 
 
 async def get_existing_managed_cloud_workspace_for_profile(
@@ -774,7 +770,6 @@ async def get_active_sandbox(
     db: AsyncSession,
     workspace: CloudWorkspace,
 ) -> CloudSandbox | None:
-    """Load the active sandbox for *workspace*, if one exists."""
     if workspace.active_sandbox_id:
         sandbox = (
             await db.execute(
@@ -897,7 +892,6 @@ async def persist_sandbox_status(
     stopped_at_now: bool = False,
     started_at: datetime | None = None,
 ) -> None:
-    """Update sandbox status and commit."""
     sandbox.status = status
     sandbox.updated_at = utcnow()
     if started_at is not None:
@@ -921,7 +915,6 @@ async def persist_workspace_stop(
     db: AsyncSession,
     workspace: CloudWorkspace,
 ) -> None:
-    """Commit the workspace after the service has applied the ready transition."""
     await db.commit()
 
 
@@ -929,7 +922,6 @@ async def persist_workspace_destroy(
     db: AsyncSession,
     workspace: CloudWorkspace,
 ) -> None:
-    """Clear runtime metadata and commit after the service has applied the stopped transition."""
     workspace.active_sandbox_id = None
     workspace.runtime_url = None
     workspace.runtime_token_ciphertext = None
@@ -1150,7 +1142,6 @@ async def update_workspace_status(
     status: CloudWorkspaceStatus | WorkspaceStatus | str,
     status_detail: str,
 ) -> None:
-    """Update workspace status by ID without requiring an attached ORM object."""
     workspace = (
         await db.execute(select(CloudWorkspace).where(CloudWorkspace.id == workspace_id))
     ).scalar_one_or_none()
@@ -1285,7 +1276,6 @@ async def mark_workspace_error(
     clear_runtime_metadata: bool = True,
     clear_active_sandbox: bool = False,
 ) -> None:
-    """Persist an error status on the workspace and its active sandbox."""
     workspace = (
         await db.execute(select(CloudWorkspace).where(CloudWorkspace.id == workspace_id))
     ).scalar_one_or_none()

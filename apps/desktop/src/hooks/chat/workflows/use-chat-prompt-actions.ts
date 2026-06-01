@@ -113,19 +113,21 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     const targetSessionId = !forceNewSession && hasSlot ? activeSessionId : null;
     const targetSessionRecord = targetSessionId ? getSessionRecord(targetSessionId) : null;
     const targetWorkspaceId = targetSessionRecord?.workspaceId ?? selectedWorkspaceId ?? null;
+    const targetSessionIsStarting = targetSessionRecord?.status === "starting";
     const shouldMaterializeTargetSession = Boolean(
       targetSessionId
       && targetSessionRecord
       && !targetSessionRecord.materializedSessionId
       && targetWorkspaceId
-      && !isPendingWorkspaceUiKey(targetWorkspaceId),
+      && !isPendingWorkspaceUiKey(targetWorkspaceId)
+      && !targetSessionIsStarting
     );
     const shouldQueueProjectedTargetSession = Boolean(
       targetSessionId
       && targetSessionRecord
       && !targetSessionRecord.materializedSessionId
       && targetWorkspaceId
-      && isPendingWorkspaceUiKey(targetWorkspaceId),
+      && (isPendingWorkspaceUiKey(targetWorkspaceId) || targetSessionIsStarting),
     );
     const promptId = createPromptId();
     const latencyFlowId = targetSessionId
@@ -145,9 +147,9 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
       clearDraft(draftKey);
     };
 
-    // Materialized existing sessions and pending-workspace projections can
-    // clear immediately. Real-workspace projected sessions clear after
-    // materialization validates through createSessionWithResolvedConfig.
+    // Materialized existing sessions and queued projected sessions can clear
+    // immediately. Fresh real-workspace projections clear after materialization
+    // validates through createSessionWithResolvedConfig.
     if (targetSessionId && !shouldMaterializeTargetSession) {
       clearDraftIfNeeded();
     }

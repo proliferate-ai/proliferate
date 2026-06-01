@@ -295,9 +295,9 @@ export function mobilityBlockerCopy(args: {
       };
     case "partial_subagent_graph":
       return {
-        headline: "Linked sessions need to finish first",
-        body: "A linked subagent session is outside this workspace move.",
-        helper: "Finish or archive the linked subagent session, then try again.",
+        headline: "Linked sessions need to move together",
+        body: "This workspace move only includes part of a linked subagent session graph.",
+        helper: "Archive or unlink the related subagent sessions, or move the complete linked workspace graph, then try again.",
         actionLabel: "Got it",
       };
     case "pending_prompt":
