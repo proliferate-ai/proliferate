@@ -403,6 +403,7 @@ async def _workspace_summaries_for_request(
     workspaces: list[CloudWorkspace],
 ) -> list[WorkspaceSummary]:
     automation_runs_by_workspace = await list_latest_runs_by_cloud_workspace_ids_for_user(
+        db,
         user_id=user_id,
         cloud_workspace_ids=[workspace.id for workspace in workspaces],
     )
@@ -1301,6 +1302,7 @@ async def _build_workspace_detail_for_request(
     )
     action_block_kind, action_block_reason = _workspace_action_block(workspace, billing)
     automation_runs_by_workspace = await list_latest_runs_by_cloud_workspace_ids_for_user(
+        db,
         user_id=workspace.user_id,
         cloud_workspace_ids=[workspace.id],
     )
@@ -1350,6 +1352,7 @@ async def _build_workspace_detail(
     ready_agent_kind_values = await _load_agent_auth_agent_kinds_for_workspace(workspace)
     latest_sessions = ()
     target = None
+    automation_runs_by_workspace = {}
     async with db_engine.async_session_factory() as db:
         latest_sessions = await events_store.list_session_projections_for_workspace(
             db,
@@ -1362,16 +1365,17 @@ async def _build_workspace_detail(
             if workspace.target_id is not None
             else None
         )
+        automation_runs_by_workspace = await list_latest_runs_by_cloud_workspace_ids_for_user(
+            db,
+            user_id=workspace.user_id,
+            cloud_workspace_ids=[workspace.id],
+        )
     billing = await get_billing_snapshot_for_subject(
         runtime_environment.billing_subject_id
         if runtime_environment is not None
         else workspace.billing_subject_id
     )
     action_block_kind, action_block_reason = _workspace_action_block(workspace, billing)
-    automation_runs_by_workspace = await list_latest_runs_by_cloud_workspace_ids_for_user(
-        user_id=workspace.user_id,
-        cloud_workspace_ids=[workspace.id],
-    )
     direct_target_context = _direct_target_context_for_workspace(
         workspace,
         target.kind if target is not None else None,
@@ -1865,25 +1869,27 @@ async def create_cloud_workspace_for_automation_run(
         required_agent_kind=required_agent_kind,
     )
     try:
-        workspace = await create_managed_cloud_workspace_for_claimed_run(
-            run_id=run_id,
-            claim_id=claim_id,
-            sandbox_profile_id=sandbox_profile_id,
-            target_id=target_id,
-            user_id=user.id,
-            display_name=resolved.display_name,
-            git_provider=resolved.git_provider,
-            git_owner=resolved.git_owner,
-            git_repo_name=resolved.git_repo_name,
-            git_branch=resolved.git_branch,
-            git_base_branch=resolved.git_base_branch,
-            worktree_path=worktree_path,
-            origin_json=CLOUD_SYSTEM_ORIGIN_JSON,
-            template_version=get_configured_sandbox_provider().template_version,
-            now=utcnow(),
-            transition=CLOUD_WORKSPACE_CREATION_TRANSITION,
-            claim_is_active=claim_is_active,
-        )
+        async with db_engine.async_session_factory() as db, db.begin():
+            workspace = await create_managed_cloud_workspace_for_claimed_run(
+                db,
+                run_id=run_id,
+                claim_id=claim_id,
+                sandbox_profile_id=sandbox_profile_id,
+                target_id=target_id,
+                user_id=user.id,
+                display_name=resolved.display_name,
+                git_provider=resolved.git_provider,
+                git_owner=resolved.git_owner,
+                git_repo_name=resolved.git_repo_name,
+                git_branch=resolved.git_branch,
+                git_base_branch=resolved.git_base_branch,
+                worktree_path=worktree_path,
+                origin_json=CLOUD_SYSTEM_ORIGIN_JSON,
+                template_version=get_configured_sandbox_provider().template_version,
+                now=utcnow(),
+                transition=CLOUD_WORKSPACE_CREATION_TRANSITION,
+                claim_is_active=claim_is_active,
+            )
     except CloudRepoLimitExceededError as error:
         _raise_repo_limit_exceeded(error)
     if workspace is not None:
@@ -1912,14 +1918,12 @@ async def ensure_cloud_workspace_for_existing_branch(
             "Only GitHub repositories are supported for cloud workspaces.",
             status_code=400,
         )
-
     if get_linked_github_account(user) is None:
         raise CloudApiError(
             "github_link_required",
             "Connect a GitHub account before provisioning a cloud workspace.",
             status_code=400,
         )
-
     cleaned_branch_name = branch_name.strip()
     if not cleaned_branch_name:
         raise CloudApiError(
@@ -1927,7 +1931,6 @@ async def ensure_cloud_workspace_for_existing_branch(
             "Choose a branch before provisioning a cloud workspace.",
             status_code=400,
         )
-
     existing_cloud_workspace = await load_existing_cloud_workspace(
         user_id=user.id,
         git_provider=git_provider,
@@ -1947,7 +1950,6 @@ async def ensure_cloud_workspace_for_existing_branch(
             )
         else:
             return existing_cloud_workspace
-
     repo_config = await load_repo_config_value(
         user_id=user.id,
         git_owner=git_owner,
@@ -1964,7 +1966,6 @@ async def ensure_cloud_workspace_for_existing_branch(
             user_id=user.id,
             repo=f"{git_owner}/{git_repo_name}",
         )
-
     authorization = await authorize_sandbox_start(
         user_id=user.id,
         workspace_id=None,
@@ -1972,7 +1973,6 @@ async def ensure_cloud_workspace_for_existing_branch(
     _raise_if_cloud_workspace_start_denied(authorization)
     billing_snapshot = await get_billing_snapshot_for_subject(authorization.billing_subject_id)
     cloud_repo_limit = repo_limit_for_billing_snapshot(billing_snapshot)
-
     try:
         workspace = await create_cloud_workspace_for_user(
             user_id=user.id,
@@ -2186,7 +2186,6 @@ async def sync_cloud_workspace_branch(
             "Branch name is required.",
             status_code=400,
         )
-
     workspace = await cloud_workspace_user_can_interact_with_db(db, user_id, workspace_id)
     workspace = await update_workspace_branch(db, workspace, cleaned_branch_name)
     return await _build_workspace_detail_for_request(db, workspace)
@@ -2204,7 +2203,6 @@ async def sync_cloud_workspace_display_name(
     `display_name=None` (or an empty/whitespace string) clears the override
     and restores the default branch- or repo-derived label in the sidebar.
     """
-
     cleaned: str | None
     if display_name is None or not display_name.strip():
         cleaned = None
@@ -2219,7 +2217,6 @@ async def sync_cloud_workspace_display_name(
                 ),
                 status_code=400,
             )
-
     workspace = await cloud_workspace_user_can_interact_with_db(db, user_id, workspace_id)
     workspace = await update_workspace_display_name(db, workspace, cleaned)
     return await _build_workspace_detail_for_request(db, workspace)
@@ -2486,7 +2483,6 @@ async def _destroy_workspace_runtime(workspace: CloudWorkspace) -> None:
                 )
         else:
             await update_sandbox_status(sandbox, "destroyed", stopped_at_now=True)
-
     transition_workspace_status(workspace, CloudWorkspaceStatus.archived, status_detail="Archived")
     await persist_workspace_destroy_state(workspace)
     log_cloud_event(
@@ -2504,7 +2500,6 @@ async def _load_workspace_owned_runtime_sandbox(
     Managed cloud slots are shared by all workspaces on a sandbox profile and
     target. Workspace stop/delete must not pause or destroy that shared slot.
     """
-
     sandbox_id = getattr(workspace, "active_sandbox_id", None)
     if sandbox_id is None:
         return None
@@ -2529,10 +2524,12 @@ async def get_cloud_connection(
 ) -> WorkspaceConnection:
     workspace = await cloud_workspace_user_can_interact(user_id, workspace_id)
     await _reject_shared_workspace_static_connection(workspace)
-    automation_runs_by_workspace = await list_latest_runs_by_cloud_workspace_ids_for_user(
-        user_id=user_id,
-        cloud_workspace_ids=[workspace.id],
-    )
+    async with db_engine.async_session_factory() as db:
+        automation_runs_by_workspace = await list_latest_runs_by_cloud_workspace_ids_for_user(
+            db,
+            user_id=user_id,
+            cloud_workspace_ids=[workspace.id],
+        )
     latest_run = automation_runs_by_workspace.get(workspace.id)
     if (
         latest_run is not None

@@ -4,10 +4,6 @@ from __future__ import annotations
 
 from typing import cast
 
-from proliferate.db.store.automation_run_claim_transitions import (
-    mark_run_dispatched,
-    mark_run_dispatching,
-)
 from proliferate.db.store.automation_run_claims import (
     ClaimTransitionRule as StoreClaimTransitionRule,
 )
@@ -16,6 +12,10 @@ from proliferate.server.automations.domain.claim_lifecycle import (
     DISPATCHED_TRANSITION,
     DISPATCHING_TRANSITION,
     claim_is_active,
+)
+from proliferate.server.automations.worker.claim_transactions import (
+    mark_run_dispatched,
+    mark_run_dispatching,
 )
 from proliferate.server.automations.worker.cloud_execution.command_models import (
     SendPromptPayload,

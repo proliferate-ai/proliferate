@@ -52,7 +52,7 @@ apps/desktop/src/lib/workflows/mcp/connector-persistence.test.ts 704 existing de
 apps/desktop/src/lib/workflows/mcp/connector-persistence.ts 638 existing desktop oversized file
 server/proliferate/auth/identity/service.py 809 existing auth service exceeds repo max-lines threshold
 server/proliferate/db/models/cloud/agent_auth.py 1030 server structure migration debt for oversized ORM model file
-server/proliferate/db/store/automations.py 802 server structure migration debt for oversized store file
+server/proliferate/db/store/automations.py 801 server structure migration debt for oversized store file
 server/proliferate/db/store/billing.py 2851 server structure migration debt for oversized store file
 server/proliferate/db/store/cloud_agent_auth/store.py 2607 server structure migration debt for oversized store file
 server/proliferate/db/store/cloud_mobility.py 1411 server structure migration debt for oversized store file
@@ -75,7 +75,7 @@ server/proliferate/server/cloud/runtime_config/service.py 1094 server structure 
 server/proliferate/server/cloud/slack/service.py 1591 server structure migration debt for oversized service file
 server/proliferate/server/cloud/worker/service.py 1436 server structure migration debt for oversized service file
 server/proliferate/server/cloud/workspaces/models.py 934 server structure migration debt for oversized API models file
-server/proliferate/server/cloud/workspaces/service.py 2626 server structure migration debt for oversized service file
+server/proliferate/server/cloud/workspaces/service.py 2623 server structure migration debt for oversized service file
 server/tests/integration/schema_migration_assertions.py 869 existing server oversized test helper
 server/tests/integration/test_auth_flow.py 2057 existing server oversized integration test
 server/tests/integration/test_billing_accounting.py 873 existing server oversized integration test

@@ -5,7 +5,6 @@ from datetime import datetime
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.mcp import CloudMcpOAuthClient
 from proliferate.db.store.cloud_mcp.types import CloudMcpOAuthClientRecord
 from proliferate.utils.time import utcnow
@@ -46,23 +45,6 @@ async def get_oauth_client(
         )
     ).scalar_one_or_none()
     return _record(client) if client is not None else None
-
-
-async def get_oauth_client_standalone(
-    *,
-    issuer: str,
-    redirect_uri: str,
-    catalog_entry_id: str,
-) -> CloudMcpOAuthClientRecord | None:
-    # Materialization token refreshes run concurrently; keep OAuth client reads
-    # isolated from the request session used to list candidate connections.
-    async with db_engine.async_session_factory() as db:
-        return await get_oauth_client(
-            db,
-            issuer=issuer,
-            redirect_uri=redirect_uri,
-            catalog_entry_id=catalog_entry_id,
-        )
 
 
 async def upsert_oauth_client(

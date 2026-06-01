@@ -6,7 +6,6 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.mcp import CloudMcpConnection, CloudMcpConnectionAuth
 from proliferate.db.store.cloud_mcp.types import CloudMcpAuthRecord
 from proliferate.utils.time import utcnow
@@ -162,57 +161,3 @@ async def mark_connection_auth_status_if_version(
     await db.flush()
     await db.refresh(auth)
     return _record(auth)
-
-
-async def load_connection_auth_standalone(
-    *,
-    connection_db_id: UUID,
-) -> CloudMcpAuthRecord | None:
-    # Materialization refresh work runs concurrently; each refresh read/write
-    # gets its own session instead of sharing the request session across tasks.
-    async with db_engine.async_session_factory() as db:
-        return await load_connection_auth(db, connection_db_id=connection_db_id)
-
-
-async def update_connection_auth_if_version_standalone(
-    *,
-    connection_db_id: UUID,
-    expected_auth_version: int,
-    auth_kind: str,
-    auth_status: str,
-    payload_ciphertext: str | None,
-    payload_format: str,
-    token_expires_at: datetime | None = None,
-    last_error_code: str | None = None,
-) -> CloudMcpAuthRecord | None:
-    async with db_engine.async_session_factory() as db, db.begin():
-        return await update_connection_auth_if_version(
-            db,
-            connection_db_id=connection_db_id,
-            expected_auth_version=expected_auth_version,
-            auth_kind=auth_kind,
-            auth_status=auth_status,
-            payload_ciphertext=payload_ciphertext,
-            payload_format=payload_format,
-            token_expires_at=token_expires_at,
-            last_error_code=last_error_code,
-        )
-
-
-async def mark_connection_auth_status_if_version_standalone(
-    *,
-    connection_db_id: UUID,
-    expected_auth_version: int,
-    auth_kind: str,
-    auth_status: str,
-    last_error_code: str | None,
-) -> CloudMcpAuthRecord | None:
-    async with db_engine.async_session_factory() as db, db.begin():
-        return await mark_connection_auth_status_if_version(
-            db,
-            connection_db_id=connection_db_id,
-            expected_auth_version=expected_auth_version,
-            auth_kind=auth_kind,
-            auth_status=auth_status,
-            last_error_code=last_error_code,
-        )

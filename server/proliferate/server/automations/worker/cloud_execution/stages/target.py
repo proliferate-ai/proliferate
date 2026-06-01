@@ -10,13 +10,13 @@ from proliferate.constants.automations import (
 )
 from proliferate.constants.cloud import CloudTargetKind, CloudTargetStatus
 from proliferate.db import engine as db_engine
-from proliferate.db.store.automation_run_claim_transitions import (
-    attach_cloud_target_snapshot_to_run,
-)
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.automations.domain.claim_lifecycle import (
     CLOUD_WORKSPACE_ATTACHMENT_TRANSITION,
     claim_is_active,
+)
+from proliferate.server.automations.worker.claim_transactions import (
+    attach_cloud_target_snapshot_to_run,
 )
 from proliferate.server.automations.worker.cloud_execution.context import (
     AutomationExecutionContext,

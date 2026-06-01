@@ -11,11 +11,6 @@ from proliferate.constants.automations import (
 )
 from proliferate.constants.cloud import CloudWorkspaceStatus
 from proliferate.db import engine as db_engine
-from proliferate.db.store.automation_run_claim_transitions import (
-    attach_anyharness_workspace_to_run,
-    mark_run_creating_workspace,
-    mark_run_provisioning_workspace,
-)
 from proliferate.db.store.automation_run_claims import (
     ClaimTransitionRule as StoreClaimTransitionRule,
 )
@@ -29,6 +24,11 @@ from proliferate.server.automations.domain.claim_lifecycle import (
     CREATING_WORKSPACE_TRANSITION,
     claim_is_active,
     provisioning_workspace_transition,
+)
+from proliferate.server.automations.worker.claim_transactions import (
+    attach_anyharness_workspace_to_run,
+    mark_run_creating_workspace,
+    mark_run_provisioning_workspace,
 )
 from proliferate.server.automations.worker.cloud_execution.command_models import (
     EnsureRepoCheckoutPayload,
