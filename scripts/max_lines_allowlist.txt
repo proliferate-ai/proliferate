@@ -50,8 +50,7 @@ server/proliferate/server/cloud/commands/domain/rules.py 607 server structure mi
 server/proliferate/server/cloud/commands/service.py 1741 server structure migration debt for oversized service file
 server/proliferate/server/cloud/mobility/service.py 1208 server structure migration debt for oversized service file
 server/proliferate/server/cloud/runtime/bootstrap.py 922 server structure migration debt for oversized domain-adjacent file
-server/proliferate/server/cloud/runtime/ensure_running.py 674 server structure migration debt for oversized domain-adjacent file
-server/proliferate/server/cloud/runtime/provision.py 1739 server structure migration debt for oversized domain-adjacent file
+server/proliferate/server/cloud/runtime/provision.py 1715 server structure migration debt for oversized domain-adjacent file
 server/proliferate/server/cloud/runtime_config/domain/resolver.py 611 server structure migration debt for oversized pure-domain file
 server/proliferate/server/cloud/runtime_config/service.py 1094 server structure migration debt for oversized service file
 server/proliferate/server/cloud/slack/service.py 1591 server structure migration debt for oversized service file

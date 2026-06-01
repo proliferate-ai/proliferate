@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import pytest
 
-from proliferate.server.cloud.runtime import worktree_policy_sync
+from proliferate.server.cloud.runtime.config_sync import worktree_policy
 
 
 @pytest.mark.asyncio
@@ -32,19 +32,19 @@ async def test_sync_policy_can_trigger_deferred_cleanup_without_awaiting(
         calls.append("run_retention_finished")
         cleanup_finished.set()
 
-    monkeypatch.setattr(worktree_policy_sync, "get_worktree_retention_policy", _get_policy)
+    monkeypatch.setattr(worktree_policy, "get_worktree_retention_policy", _get_policy)
     monkeypatch.setattr(
-        worktree_policy_sync.anyharness,
+        worktree_policy.anyharness,
         "update_runtime_worktree_retention_policy",
         _update_policy,
     )
     monkeypatch.setattr(
-        worktree_policy_sync.anyharness,
+        worktree_policy.anyharness,
         "run_runtime_worktree_retention",
         _run_retention,
     )
 
-    limit = await worktree_policy_sync.sync_cloud_worktree_policy_to_runtime(
+    limit = await worktree_policy.sync_cloud_worktree_policy_to_runtime(
         user_id=uuid4(),
         runtime_url="https://runtime.invalid",
         access_token="token",

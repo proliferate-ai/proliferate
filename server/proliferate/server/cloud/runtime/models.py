@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 from proliferate.integrations.sandbox import RuntimeEndpoint, SandboxHandle, SandboxRuntimeContext
 
 if TYPE_CHECKING:
-    from proliferate.server.cloud.runtime.auth_status import RuntimeAuthStateSnapshot
+    from proliferate.server.cloud.runtime.credentials.auth_status import RuntimeAuthStateSnapshot
 
 
 class ProvisionStep(StrEnum):

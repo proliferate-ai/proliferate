@@ -8,12 +8,14 @@ from proliferate.integrations.anyharness import (
     ResolvedRemoteWorkspace,
     RuntimeAuthProbe,
 )
-from proliferate.server.cloud.runtime import anyharness_api
-from proliferate.server.cloud.runtime.anyharness_api import (
+from proliferate.server.cloud.runtime.credentials import remote_agents
+from proliferate.server.cloud.runtime.credentials.remote_agents import (
     _auth_overlay_ready_agent_kinds,
     _install_required_agent_kinds,
     _ready_required_agent_kinds,
 )
+from proliferate.server.cloud.runtime.liveness import health as runtime_health
+from proliferate.server.cloud.runtime.provisioning import remote_workspace
 
 
 @pytest.mark.asyncio
@@ -30,12 +32,12 @@ async def test_verify_runtime_auth_enforced_accepts_authenticated_and_rejects_un
         )
 
     monkeypatch.setattr(
-        anyharness_api.anyharness,
+        runtime_health.anyharness,
         "check_runtime_auth_enforcement",
         _check_runtime_auth_enforcement,
     )
 
-    await anyharness_api.verify_runtime_auth_enforced(
+    await runtime_health.verify_runtime_auth_enforced(
         "https://runtime.invalid",
         "runtime-token",
     )
@@ -55,13 +57,13 @@ async def test_verify_runtime_auth_enforced_raises_when_bearer_token_is_rejected
         )
 
     monkeypatch.setattr(
-        anyharness_api.anyharness,
+        runtime_health.anyharness,
         "check_runtime_auth_enforcement",
         _check_runtime_auth_enforcement,
     )
 
     with pytest.raises(CloudRuntimeReconnectError, match="stored bearer token"):
-        await anyharness_api.verify_runtime_auth_enforced(
+        await runtime_health.verify_runtime_auth_enforced(
             "https://runtime.invalid",
             "runtime-token",
         )
@@ -81,13 +83,13 @@ async def test_verify_runtime_auth_enforced_raises_when_runtime_accepts_unauthen
         )
 
     monkeypatch.setattr(
-        anyharness_api.anyharness,
+        runtime_health.anyharness,
         "check_runtime_auth_enforcement",
         _check_runtime_auth_enforcement,
     )
 
     with pytest.raises(CloudRuntimeReconnectError, match="did not reject"):
-        await anyharness_api.verify_runtime_auth_enforced(
+        await runtime_health.verify_runtime_auth_enforced(
             "https://runtime.invalid",
             "runtime-token",
         )
@@ -101,13 +103,13 @@ async def test_verify_runtime_auth_enforced_raises_when_probe_request_errors(
         raise CloudRuntimeReconnectError("boom")
 
     monkeypatch.setattr(
-        anyharness_api.anyharness,
+        runtime_health.anyharness,
         "check_runtime_auth_enforcement",
         _check_runtime_auth_enforcement,
     )
 
     with pytest.raises(CloudRuntimeReconnectError, match="Failed to verify bearer authentication"):
-        await anyharness_api.verify_runtime_auth_enforced(
+        await runtime_health.verify_runtime_auth_enforced(
             "https://runtime.invalid",
             "runtime-token",
         )
@@ -131,10 +133,10 @@ async def test_reconcile_remote_agents_skips_install_when_required_agents_are_al
         install_calls.append("install")
         return RemoteAgentSummary(kind="claude", readiness="ready", credential_state=None)
 
-    monkeypatch.setattr(anyharness_api, "_list_remote_agents", _list_remote_agents)
-    monkeypatch.setattr(anyharness_api, "_install_remote_agent", _install_remote_agent)
+    monkeypatch.setattr(remote_agents, "_list_remote_agents", _list_remote_agents)
+    monkeypatch.setattr(remote_agents, "_install_remote_agent", _install_remote_agent)
 
-    ready_agents = await anyharness_api.reconcile_remote_agents(
+    ready_agents = await remote_agents.reconcile_remote_agents(
         "https://runtime.invalid",
         "runtime-token",
         required_agent_kinds=["claude", "codex"],
@@ -185,10 +187,10 @@ async def test_reconcile_remote_agents_installs_only_install_required_agents(
         install_calls.append(kind)
         return RemoteAgentSummary(kind=kind, readiness="ready", credential_state=None)
 
-    monkeypatch.setattr(anyharness_api, "_list_remote_agents", _list_remote_agents)
-    monkeypatch.setattr(anyharness_api, "_install_remote_agent", _install_remote_agent)
+    monkeypatch.setattr(remote_agents, "_list_remote_agents", _list_remote_agents)
+    monkeypatch.setattr(remote_agents, "_install_remote_agent", _install_remote_agent)
 
-    ready_agents = await anyharness_api.reconcile_remote_agents(
+    ready_agents = await remote_agents.reconcile_remote_agents(
         "https://runtime.invalid",
         "runtime-token",
         required_agent_kinds=["claude", "codex", "gemini"],
@@ -219,10 +221,10 @@ async def test_reconcile_remote_agents_accepts_auth_overlay_credential_gated_age
     async def _install_remote_agent(*_args: object, **_kwargs: object) -> RemoteAgentSummary:
         raise AssertionError("credential-gated agents should not be installed")
 
-    monkeypatch.setattr(anyharness_api, "_list_remote_agents", _list_remote_agents)
-    monkeypatch.setattr(anyharness_api, "_install_remote_agent", _install_remote_agent)
+    monkeypatch.setattr(remote_agents, "_list_remote_agents", _list_remote_agents)
+    monkeypatch.setattr(remote_agents, "_install_remote_agent", _install_remote_agent)
 
-    ready_agents = await anyharness_api.reconcile_remote_agents(
+    ready_agents = await remote_agents.reconcile_remote_agents(
         "https://runtime.invalid",
         "runtime-token",
         required_agent_kinds=["claude", "codex"],
@@ -295,12 +297,12 @@ async def test_resolve_remote_workspace_accepts_current_contract_shape(
         return ResolvedRemoteWorkspace(workspace_id="workspace-123", repo_root_id="repo-1")
 
     monkeypatch.setattr(
-        anyharness_api.anyharness,
+        remote_workspace.anyharness,
         "resolve_runtime_workspace",
         _resolve_runtime_workspace,
     )
 
-    workspace = await anyharness_api.resolve_remote_workspace(
+    workspace = await remote_workspace.resolve_remote_workspace(
         "https://runtime.invalid",
         "runtime-token",
         runtime_workdir="/workspace",

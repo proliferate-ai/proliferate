@@ -144,7 +144,7 @@ from proliferate.server.cloud.repos.service import (
 from proliferate.server.cloud.repos.service import (
     get_repo_branches_for_user as get_github_repo_branches,
 )
-from proliferate.server.cloud.runtime.auth_status import (
+from proliferate.server.cloud.runtime.credentials.auth_status import (
     build_workspace_runtime_auth_snapshot,
     load_workspace_runtime_auth_snapshot,
     selected_agent_auth_agent_kinds,

@@ -17,7 +17,7 @@ from proliferate.constants.cloud import (
     CloudWorkspaceStatus,
 )
 from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kinds
-from proliferate.server.cloud.runtime.auth_status import RuntimeAuthStateSnapshot
+from proliferate.server.cloud.runtime.credentials.auth_status import RuntimeAuthStateSnapshot
 
 logger = logging.getLogger(__name__)
 

@@ -275,8 +275,10 @@ Existing code has these integration-boundary exceptions:
 
 - `integrations/mcp_oauth.py` is large enough to earn `mcp_oauth/` with
   `client.py`, `flows.py`, `models.py`, and `errors.py`.
-- `cloud/runtime/anyharness_api.py`, `session_api.py`, and
-  `workspace_operations.py` are AnyHarness vendor access and belong under
-  `integrations/anyharness/` as a single-provider folder.
+- The former flat AnyHarness runtime-helper exception is resolved for the
+  server runtime carve: raw AnyHarness protocol access lives under
+  `integrations/anyharness/`, while product runtime wrappers are split under
+  `cloud/runtime/liveness/`, `cloud/runtime/credentials/`,
+  `cloud/runtime/config_sync/`, and `cloud/runtime/provisioning/`.
 
 These are concrete cleanups, not rule changes.

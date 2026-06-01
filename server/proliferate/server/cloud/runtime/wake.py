@@ -23,7 +23,9 @@ from proliferate.integrations.sentry import capture_server_sentry_exception
 from proliferate.server.billing.service import authorize_sandbox_start_for_billing_subject
 from proliferate.server.cloud.live.service import publish_command_status_after_commit
 from proliferate.server.cloud.runtime.domain.wake import WAKE_REQUIRED_CLOUD_COMMAND_KINDS
-from proliferate.server.cloud.runtime.ensure_running import ensure_environment_runtime_ready
+from proliferate.server.cloud.runtime.liveness.ensure_running import (
+    ensure_environment_runtime_ready,
+)
 from proliferate.utils.crypto import decrypt_text
 from proliferate.utils.time import utcnow
 
