@@ -37,7 +37,6 @@ apps/desktop/src/components/settings/panes/SlackBotPane.tsx 545 existing desktop
 apps/desktop/src/components/settings/panes/compute/ComputeTargetDetails.tsx 528 existing desktop component oversized file
 apps/desktop/src/components/workspace/chat/input/ComposerModelConfigSelector.tsx 735 existing desktop component oversized file
 apps/desktop/src/components/workspace/shell/right-panel/RightPanel.test.tsx 732 existing desktop component oversized test file
-apps/desktop/src/components/workspace/shell/right-panel/RightPanel.tsx 637 existing desktop component oversized file
 apps/desktop/src/hooks/home/workflows/use-home-next-launch.ts 611 existing desktop hook oversized file
 apps/desktop/src/hooks/sessions/lifecycle/use-session-stream-flush.ts 666 existing desktop hook oversized file
 apps/desktop/src/hooks/sessions/workflows/use-session-creation-actions.ts 765 existing desktop hook oversized file
