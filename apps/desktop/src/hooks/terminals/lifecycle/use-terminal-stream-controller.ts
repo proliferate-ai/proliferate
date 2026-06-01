@@ -4,14 +4,14 @@ import { useTerminalCache } from "@/hooks/access/anyharness/terminals/use-termin
 import { useTerminalWorkspaceConnection } from "@/hooks/terminals/workflows/use-terminal-workspace-connection";
 import {
   adoptTerminalStreamIdentity,
-  createTerminalRuntimeIdentity,
   ensureConnected,
   hasActiveHandle,
-  isTerminalIntentionalClose,
   markExited,
   markReadOnly,
   type TerminalStreamIdentity,
 } from "@/lib/infra/terminals/terminal-stream-registry";
+import { isTerminalIntentionalClose } from "@/lib/infra/terminals/terminal-close-intent";
+import { createTerminalRuntimeIdentity } from "@/lib/infra/terminals/terminal-stream-key";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useTerminalStore } from "@/stores/terminal/terminal-store";
 

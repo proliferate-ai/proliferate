@@ -69,14 +69,14 @@ vi.mock("@/lib/access/tauri/google-workspace-mcp", async (importOriginal) => {
 });
 
 import {
-  cancelLocalOAuthConnectorConnect,
   deleteConnector,
   installConnector,
-  loadConnectorPaneData,
   setConnectorPublicExposure,
   setConnectorEnabled,
   updateConnectorSecret,
 } from "@/lib/workflows/mcp/connector-persistence";
+import { loadCloudConnectorPaneData } from "@/lib/workflows/mcp/connector-catalog-persistence";
+import { cancelLocalOAuthConnectorConnect } from "@/lib/workflows/mcp/local-oauth-persistence";
 
 function secretCatalogEntry(id = "context7") {
   const secretFields = [
@@ -388,7 +388,7 @@ describe("cloud MCP connector persistence", () => {
   });
 
   it("loads catalog and installed connectors from cloud", async () => {
-    const paneData = await loadConnectorPaneData();
+    const paneData = await loadCloudConnectorPaneData();
 
     expect(mocks.getCloudMcpCatalogMock).toHaveBeenCalledTimes(1);
     expect(mocks.listCloudMcpConnectionsMock).toHaveBeenCalledTimes(1);
@@ -444,7 +444,7 @@ describe("cloud MCP connector persistence", () => {
       connections: [],
     });
 
-    const paneData = await loadConnectorPaneData();
+    const paneData = await loadCloudConnectorPaneData();
 
     expect(paneData.available[0]?.pluginPackage?.skills[0]?.id).toBe("triage");
     expect(paneData.available[0]?.pluginPackage?.skills[0]?.provenance?.sourceSha256)
@@ -485,7 +485,7 @@ describe("cloud MCP connector persistence", () => {
       }],
     });
 
-    const paneData = await loadConnectorPaneData();
+    const paneData = await loadCloudConnectorPaneData();
 
     expect(paneData.installed[0]?.metadata.publicToOrg).toBe(true);
     expect(paneData.installed[0]?.metadata.publicOrganizationId).toBe("org_1");
@@ -527,7 +527,7 @@ describe("cloud MCP connector persistence", () => {
     mocks.listConfiguredSkillsMock.mockResolvedValue({
       skills: [configuredSkillItem()],
     });
-    const record = (await loadConnectorPaneData()).installed[0]!;
+    const record = (await loadCloudConnectorPaneData()).installed[0]!;
 
     await setConnectorPublicExposure(record, "org_1", true);
     await setConnectorPublicExposure(record, "org_1", false);
@@ -587,7 +587,7 @@ describe("cloud MCP connector persistence", () => {
         organizationId: "org_1",
       }],
     });
-    const record = (await loadConnectorPaneData()).installed[0]!;
+    const record = (await loadCloudConnectorPaneData()).installed[0]!;
 
     await setConnectorPublicExposure(record, "org_1", true);
 
@@ -609,7 +609,7 @@ describe("cloud MCP connector persistence", () => {
       ],
     });
 
-    const paneData = await loadConnectorPaneData();
+    const paneData = await loadCloudConnectorPaneData();
 
     expect(paneData.installed.map((record) => record.metadata.connectionId)).toEqual(["conn_1"]);
   });

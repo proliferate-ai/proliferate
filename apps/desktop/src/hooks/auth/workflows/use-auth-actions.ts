@@ -9,7 +9,7 @@ import {
   linkDesktopProvider,
   signInWithGitHub,
   signOut,
-} from "@/lib/integrations/auth/orchestration";
+} from "@/lib/integrations/auth/orchestration-provider-flow";
 import type { GitHubDesktopSignInOptions } from "@/lib/integrations/auth/proliferate-auth";
 import { useAuthOrchestrationEffects } from "@/hooks/auth/workflows/use-auth-orchestration-effects";
 

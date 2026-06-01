@@ -7,13 +7,6 @@ import {
 import { terminalStreamKey } from "./terminal-stream-key";
 import { resetTerminalCloseIntentForTests } from "./terminal-close-intent";
 
-export { createTerminalRuntimeIdentity } from "./terminal-stream-key";
-export {
-  clearTerminalIntentionalClose,
-  isTerminalIntentionalClose,
-  markTerminalIntentionalClose,
-} from "./terminal-close-intent";
-
 const MAX_REPLAY_DATA_BYTES = 256 * 1024;
 const MAX_REPLAY_ENTRIES = 1000;
 export const TERMINAL_OUTPUT_GAP_MESSAGE = "[terminal output gap: earlier output was discarded]";

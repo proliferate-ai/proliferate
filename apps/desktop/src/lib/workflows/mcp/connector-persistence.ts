@@ -37,8 +37,6 @@ import {
 } from "./local-oauth-persistence";
 import {
   loadCloudCatalogEntry,
-  loadCloudConnectorPaneData,
-  type ConnectorPaneData,
 } from "./connector-catalog-persistence";
 import {
   runCloudOAuthFlow,
@@ -47,12 +45,6 @@ import {
   normalizeConnectorSecretValues,
   validateConnectorSecretValues,
 } from "./connector-secret-validation";
-
-export async function loadConnectorPaneData(): Promise<ConnectorPaneData> {
-  return loadCloudConnectorPaneData();
-}
-
-export type { ConnectorPaneData } from "./connector-catalog-persistence";
 
 export async function installConnector(
   catalogEntryId: string,
@@ -128,9 +120,6 @@ async function installPluginPackageIfPresent(
   }
   await installConfiguredPlugin(catalogEntry.pluginPackage.id);
 }
-
-export { cancelLocalOAuthConnectorConnect } from "./local-oauth-persistence";
-export { cancelOAuthConnectorConnect } from "./connector-oauth-flow";
 
 export async function reconnectOAuthConnector(
   connectionId: string,
