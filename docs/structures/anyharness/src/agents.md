@@ -167,7 +167,8 @@ Local readiness and cloud portability intentionally remain separate questions:
 ### Installation Flow
 
 Managed installation is owned by
-`anyharness/crates/anyharness-lib/src/domains/agents/installer.rs`.
+`anyharness/crates/anyharness-lib/src/domains/agents/installer.rs`, with
+focused child modules under `domains/agents/installer/`.
 
 The flow is:
 
@@ -236,9 +237,10 @@ the requested agent is installed through this API.
 
 ### ACP Registry Flow
 
-`integrations/agent_cli/acp_registry.rs`
+`integrations/agent_cli/acp_registry.rs` and
+`integrations/agent_cli/acp_registry/**`
 (`anyharness/crates/anyharness-lib/src/integrations/agent_cli/acp_registry.rs`)
-is the provider-mechanics helper boundary for ACP-registry-backed
+are the provider-mechanics helper boundary for ACP-registry-backed
 agent-process installation.
 
 It owns:
