@@ -24,18 +24,13 @@ import type {
 } from "../../../navigation/navigation-model";
 import {
   clearPendingMobilePrompt,
-  loadPendingMobilePrompt,
   savePendingMobilePrompt,
 } from "../../../lib/access/cloud/pending-mobile-prompt-store";
-import {
-  dispatchPendingMobilePrompt,
-  rearmRetryablePendingMobilePrompt,
-  RetryablePendingPromptDispatchError,
-  shouldRetryPendingMobilePromptFailure,
-  type SendPromptPayload,
-  type StartSessionPayload,
-  type UpdateSessionConfigPayload,
-} from "../../../lib/access/cloud/pending-mobile-prompt-dispatch";
+import type {
+  SendPromptPayload,
+  StartSessionPayload,
+  UpdateSessionConfigPayload,
+} from "../../../lib/access/cloud/pending-mobile-prompt-types";
 import {
   failedPendingInteractionForPendingPrompt,
   failedPendingInteractionMessage,
@@ -48,6 +43,8 @@ import {
   sessionConfigCommandFailureMessage,
   promptCommandFailureMessage,
 } from "../../../lib/domain/chat/mobile-chat-presentation";
+import { useMobilePendingPromptDispatcher } from "./use-mobile-pending-prompt-dispatcher";
+import { useMobilePendingPromptRestore } from "./use-mobile-pending-prompt-restore";
 
 type EnqueueCloudCommand<TPayload> = (
   command: CloudCommandEnvelope<TPayload>,
@@ -156,55 +153,17 @@ export function useMobileChatLifecycle({
     resetPermissionSheet();
   }, [chat.workspaceId, chat.sessionId]);
 
-  useEffect(() => {
-    if (!ownerUserId) {
-      setPendingPrompt(null);
-      setPendingPromptFailed(false);
-      return;
-    }
-    let active = true;
-    void loadPendingMobilePrompt(chat.workspaceId, ownerUserId).then((stored) => {
-      const initialPrompt = chat.initialPendingPrompt ?? null;
-      const restoredRaw = stored ?? initialPrompt;
-      const restored = restoredRaw ? rearmRetryablePendingMobilePrompt(restoredRaw) : null;
-      if (active) {
-        setPendingPrompt(restored);
-        setPendingPromptFailed(Boolean(restored?.failedAt));
-        setPendingPromptStatus(
-          restoredRaw && restoredRaw !== restored
-            ? "Retrying queued prompt handoff."
-            : restored?.failureMessage ?? null,
-        );
-        if (restored?.dispatchedSessionId) {
-          setSelectedSessionId(restored.dispatchedSessionId);
-          setNewSessionMode(false);
-          onSessionSelected?.(restored.dispatchedSessionId);
-        } else if (restored) {
-          setSelectedSessionId(null);
-          setNewSessionMode(true);
-        }
-        if (restoredRaw && restored && restoredRaw !== restored && ownerUserId) {
-          void savePendingMobilePrompt(chat.workspaceId, ownerUserId, restored);
-        }
-        if (initialPrompt) {
-          if (stored) {
-            onInitialPendingPromptConsumed?.();
-          } else if (restored) {
-            void savePendingMobilePrompt(chat.workspaceId, ownerUserId, restored)
-              .then(() => {
-                if (active) {
-                  onInitialPendingPromptConsumed?.();
-                }
-              })
-              .catch(() => undefined);
-          }
-        }
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, [chat.initialPendingPrompt, chat.workspaceId, onInitialPendingPromptConsumed, onSessionSelected, ownerUserId]);
+  useMobilePendingPromptRestore({
+    chat,
+    ownerUserId,
+    onInitialPendingPromptConsumed,
+    onSessionSelected,
+    setPendingPrompt,
+    setPendingPromptFailed,
+    setPendingPromptStatus,
+    setSelectedSessionId,
+    setNewSessionMode,
+  });
 
   useEffect(() => {
     if (!workspace || workspaceStatus === "ready" || workspaceStatus === "error") {
@@ -369,203 +328,28 @@ export function useMobileChatLifecycle({
     transcriptRefetch,
   ]);
 
-  useEffect(() => {
-    if (!pendingPrompt || !workspace || pendingPromptFailed) {
-      return;
-    }
-    if (pendingPrompt.dispatchedSessionId && pendingPromptDurable) {
-      return;
-    }
-    if (workspaceStatus === "error" || workspaceStatus === "archived") {
-      const message = "Workspace creation failed before the prompt could be sent.";
-      const failedPrompt = markPendingPromptFailed(pendingPrompt, message, Date.now());
-      setPendingPrompt(failedPrompt);
-      setPendingPromptStatus(message);
-      setPendingPromptFailed(true);
-      if (ownerUserId) {
-        void savePendingMobilePrompt(workspace.id, ownerUserId, failedPrompt);
-      }
-      return;
-    }
-    if (workspaceStatus !== "ready") {
-      setPendingPromptStatus("Workspace is provisioning; the prompt will send when ready.");
-      return;
-    }
-    if (!workspace.targetId || !workspace.anyharnessWorkspaceId) {
-      setPendingPromptStatus(
-        workspace.actionBlockReason || "Managed target configuration is still materializing.",
-      );
-      return;
-    }
-    if (pendingPrompt.dispatchedSessionId && pendingPrompt.sendCommandId) {
-      setNewSessionMode(false);
-      setSelectedSessionId(pendingPrompt.dispatchedSessionId);
-      onSessionSelected?.(pendingPrompt.dispatchedSessionId);
-      setLatestCommandId(pendingPrompt.sendCommandId);
-      setPendingPromptStatus("Queued prompt; waiting for transcript.");
-      setPendingPromptFailed(false);
-      return;
-    }
-
-    const runKey = `${workspace.id}:${pendingPrompt.id}`;
-    const currentRun = pendingDispatchRunRef.current;
-    if (currentRun?.key === runKey && currentRun.active) {
-      return;
-    }
-
-    const run = { key: runKey, active: true };
-    pendingDispatchRunRef.current = run;
-    const isCurrentRun = () => pendingDispatchRunRef.current === run && run.active;
-    let startedSessionId: string | null = pendingPrompt.dispatchedSessionId ?? null;
-    let enqueuedSendCommandId: string | null = pendingPrompt.sendCommandId ?? null;
-    setPendingPromptStatus("Starting a session for the queued prompt.");
-    setPendingPromptFailed(false);
-
-    void dispatchPendingMobilePrompt({
-      client,
-      workspace,
-      pendingPrompt,
-      modelId: pendingPrompt.modelId,
-      enqueueStartSession,
-      enqueueConfig,
-      enqueuePrompt,
-      setLatestCommandId: (commandId) => {
-        if (isCurrentRun()) {
-          setLatestCommandId(commandId);
-        }
-      },
-      onSessionStarted: (sessionId) => {
-        if (!isCurrentRun()) {
-          return;
-        }
-        startedSessionId = sessionId;
-        const dispatchedPrompt: MobilePendingPrompt = {
-          ...pendingPrompt,
-          dispatchedSessionId: sessionId,
-          failedAt: null,
-          failureMessage: null,
-        };
-        setNewSessionMode(false);
-        setSelectedSessionId(sessionId);
-        onSessionSelected?.(sessionId);
-        if (ownerUserId) {
-          void savePendingMobilePrompt(workspace.id, ownerUserId, dispatchedPrompt);
-        }
-      },
-      onPromptEnqueued: (commandId) => {
-        if (!isCurrentRun() || !startedSessionId) {
-          return;
-        }
-        enqueuedSendCommandId = commandId;
-        const enqueuedPrompt: MobilePendingPrompt = {
-          ...pendingPrompt,
-          dispatchedSessionId: startedSessionId,
-          sendCommandId: commandId,
-          failedAt: null,
-          failureMessage: null,
-        };
-        if (ownerUserId) {
-          void savePendingMobilePrompt(workspace.id, ownerUserId, enqueuedPrompt);
-        }
-      },
-      onStatus: (status) => {
-        if (isCurrentRun()) {
-          setPendingPromptStatus(status);
-        }
-      },
-      shouldContinue: isCurrentRun,
-    })
-      .then((result) => {
-        if (!isCurrentRun()) {
-          return;
-        }
-        const dispatchedPrompt: MobilePendingPrompt = {
-          ...pendingPrompt,
-          dispatchedSessionId: result.sessionId,
-          sendCommandId: result.sendCommandId,
-          failedAt: null,
-          failureMessage: null,
-        };
-        setNewSessionMode(false);
-        setSelectedSessionId(result.sessionId);
-        onSessionSelected?.(result.sessionId);
-        setPendingPrompt(dispatchedPrompt);
-        setPendingPromptStatus(null);
-        setPendingPromptFailed(false);
-        if (ownerUserId) {
-          void savePendingMobilePrompt(workspace.id, ownerUserId, dispatchedPrompt);
-        }
-        void workspaceRefetch();
-        invalidateWorkspaceLists();
-      })
-      .catch((error: unknown) => {
-        if (!isCurrentRun()) {
-          return;
-        }
-        const message = error instanceof Error ? error.message : "Queued prompt could not be sent.";
-        if (error instanceof RetryablePendingPromptDispatchError) {
-          setPendingPromptStatus(message);
-          if (shouldRetryPendingMobilePromptFailure(pendingPrompt)) {
-            const retryingPrompt = rearmRetryablePendingMobilePrompt(pendingPrompt);
-            setPendingPrompt(retryingPrompt);
-            setPendingPromptFailed(false);
-            if (ownerUserId) {
-              void savePendingMobilePrompt(workspace.id, ownerUserId, retryingPrompt);
-            }
-          }
-          setTimeout(() => {
-            if (!run.active) {
-              return;
-            }
-            setPendingPrompt((current) =>
-              current?.id === pendingPrompt.id ? { ...current } : current
-            );
-          }, 2500);
-          return;
-        }
-        const failedPrompt = markPendingPromptFailed(
-          startedSessionId
-            ? {
-                ...pendingPrompt,
-                dispatchedSessionId: startedSessionId,
-                sendCommandId: enqueuedSendCommandId,
-              }
-            : pendingPrompt,
-          message,
-          Date.now(),
-        );
-        setPendingPrompt(failedPrompt);
-        setPendingPromptStatus(message);
-        setPendingPromptFailed(true);
-        if (ownerUserId) {
-          void savePendingMobilePrompt(workspace.id, ownerUserId, failedPrompt);
-        }
-      })
-      .finally(() => {
-        if (pendingDispatchRunRef.current === run) {
-          pendingDispatchRunRef.current = null;
-        }
-      });
-
-    return () => {
-      run.active = false;
-    };
-  }, [
+  useMobilePendingPromptDispatcher({
     client,
-    enqueuePrompt,
     enqueueStartSession,
+    enqueueConfig,
+    enqueuePrompt,
     ownerUserId,
     pendingPrompt,
     pendingPromptDurable,
     pendingPromptFailed,
     invalidateWorkspaceLists,
-    workspace?.actionBlockReason,
-    workspace?.anyharnessWorkspaceId,
-    workspace?.id,
-    workspace?.targetId,
+    workspace,
     workspaceStatus,
     workspaceRefetch,
-  ]);
+    pendingDispatchRunRef,
+    onSessionSelected,
+    setLatestCommandId,
+    setNewSessionMode,
+    setSelectedSessionId,
+    setPendingPrompt,
+    setPendingPromptStatus,
+    setPendingPromptFailed,
+  });
 
   useEffect(() => {
     if (
