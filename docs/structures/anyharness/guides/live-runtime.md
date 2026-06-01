@@ -585,12 +585,15 @@ live/sessions/actor/**
 live/sessions/connection/**
   current name for target driver
 
-live/sessions/manager.rs
-  current LiveSessionManager
+live/sessions/manager/**
+  current LiveSessionManager split by manager surface, startup, replay, and
+  runtime-event injection
 
-live/sessions/connection/runtime_client.rs
-  current low-level ACP client name; target role belongs under driver or
-  integrations/acp depending on whether the extracted piece is stateful
+live/sessions/connection/runtime_client/**
+  current low-level ACP client name inside the connection-as-driver role;
+  final connection/** -> driver/** topology move remains deferred, and
+  reusable protocol pieces belong under integrations/acp only when they are
+  genuinely protocol-neutral
 
 live/sessions/event_sink/**
   current and target session event sink
