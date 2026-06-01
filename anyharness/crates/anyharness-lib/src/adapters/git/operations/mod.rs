@@ -1,0 +1,12 @@
+pub mod autosave;
+pub mod branches;
+pub mod commit;
+pub mod diff;
+mod diff_base;
+pub mod diff_files;
+mod diff_support;
+pub mod push;
+pub mod revert_patches;
+pub mod staging;
+pub mod status;
+mod status_operation;

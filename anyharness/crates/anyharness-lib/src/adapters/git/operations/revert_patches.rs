@@ -3,15 +3,15 @@ use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use super::executor::{run_git_ok, GitOutput};
-use super::operation::detect_operation;
-use super::parse_status::parse_porcelain_v2;
-use super::types::{
+use super::super::executor::{run_git_ok, GitOutput};
+use super::super::parse_status::parse_porcelain_v2;
+use super::super::types::{
     GitFileStatus, GitIncludedState, GitOperation, GitRevertPatchEntry, GitRevertPatchOperation,
     GitRevertPatchesError, GitRevertPatchesResult,
 };
+use super::status_operation::detect_operation;
 
-pub(super) fn revert_patches(
+pub fn revert_patches(
     workspace_path: &Path,
     entries: &[GitRevertPatchEntry],
 ) -> Result<GitRevertPatchesResult, GitRevertPatchesError> {
@@ -193,7 +193,7 @@ fn normalize_revert_patch(
 }
 
 fn revert_entry_touches_status_file(
-    file: &super::types::GitChangedFile,
+    file: &super::super::types::GitChangedFile,
     path: &str,
     old_path: Option<&str>,
 ) -> bool {
