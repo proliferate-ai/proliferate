@@ -5,7 +5,7 @@ around the canonical self-hosted deployment in `server/deploy/**`.
 
 Template:
 
-- [template.yaml](/Users/pablo/proliferate-local-desktop/server/infra/self-hosted-aws/template.yaml)
+- [template.yaml](template.yaml)
 
 ## Validate
 
@@ -36,10 +36,10 @@ GitHub release named `server-v0.1.0`, set `ReleaseVersion=0.1.0`.
 This stack intentionally exposes only the common operator-facing subset of the
 full control-plane env surface. Advanced auth-flow and sandbox-template
 overrides remain in the server config layer; customize
-[template.yaml](/Users/pablo/proliferate-local-desktop/server/infra/self-hosted-aws/template.yaml)
+[template.yaml](template.yaml)
 if you need to promote more of them into CloudFormation parameters. The full
 env surface is documented in
-[docs/dev/reference/env-secrets-matrix.md](/Users/pablo/proliferate-local-desktop/docs/dev/reference/env-secrets-matrix.md).
+[specs/developing/reference/env-secrets-matrix.md](../../../specs/developing/reference/env-secrets-matrix.md).
 
 ## Versioned Release Assets
 
