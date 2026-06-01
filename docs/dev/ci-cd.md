@@ -468,6 +468,9 @@ Note:
 - `_deploy-desktop.yml` refuses to publish a desktop version if the derived
   `desktop-v<VERSION>` tag already exists at a different SHA. Bump the desktop
   version before publishing a new desktop build from a new commit.
+- `_deploy-desktop.yml` also refuses to publish updater assets when the live
+  stable updater feed already advertises the same or newer desktop version.
+  Bump the desktop version before making another updater release visible.
 - Publishing the GitHub Release does not make the updater live. The updater is
   made live by the tag-push workflow's S3/CloudFront publish step. The GitHub
   Release is the public release-notes and artifact archive surface.

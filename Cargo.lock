@@ -4196,7 +4196,7 @@ dependencies = [
 
 [[package]]
 name = "proliferate"
-version = "0.1.45"
+version = "0.1.46"
 dependencies = [
  "anyharness-credential-discovery",
  "base64 0.22.1",

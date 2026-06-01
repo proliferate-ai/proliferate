@@ -49,6 +49,8 @@ jobs:
         env:
           DRY_RUN: ${{ inputs.dry_run }}
           GIT_SHA: ${{ inputs.git_sha }}
+          PUBLISH_UPDATER: ${{ inputs.publish_updater }}
+          DESKTOP_DOWNLOADS_BASE_URL: ${{ vars.DESKTOP_DOWNLOADS_BASE_URL }}
         run: |
           set -euo pipefail
           if [[ "$DESKTOP_DEPLOY_ENABLED" != "true" ]]; then
@@ -87,6 +89,56 @@ jobs:
           fi
           if [[ -n "$tag_target" && "$DRY_RUN" == "true" ]]; then
             echo "::warning::Desktop tag $tag_name already exists at $tag_target; dry run will build without publishing."
+          fi
+
+          if [[ "$PUBLISH_UPDATER" == "true" && "$DRY_RUN" != "true" ]]; then
+            if [[ -z "$DESKTOP_DOWNLOADS_BASE_URL" ]]; then
+              echo "::error::DESKTOP_DOWNLOADS_BASE_URL is required before publishing the desktop updater."
+              exit 1
+            fi
+
+            latest_url="${DESKTOP_DOWNLOADS_BASE_URL%/}/desktop/stable/latest.json"
+            latest_body="$(mktemp)"
+            latest_status="$(curl -sS -L -o "$latest_body" -w "%{http_code}" "$latest_url" || true)"
+            if [[ "$latest_status" == "200" ]]; then
+              live_version="$(node -e "const fs=require('fs'); const data=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); if (!data.version) process.exit(2); console.log(data.version);" "$latest_body")"
+              node - "$live_version" "$package_version" <<'NODE'
+          const live = process.argv[2];
+          const next = process.argv[3];
+
+          function parseVersion(value) {
+            const [main] = value.split("-");
+            const parts = main.split(".").map((part) => Number(part));
+            if (parts.length !== 3 || parts.some((part) => !Number.isInteger(part))) {
+              throw new Error(`Unsupported desktop version '${value}'`);
+            }
+            return parts;
+          }
+
+          function compareVersions(left, right) {
+            const a = parseVersion(left);
+            const b = parseVersion(right);
+            for (let index = 0; index < 3; index += 1) {
+              if (a[index] > b[index]) return 1;
+              if (a[index] < b[index]) return -1;
+            }
+            return 0;
+          }
+
+          if (compareVersions(next, live) <= 0) {
+            console.error(
+              `::error::Desktop updater already advertises ${live}; refusing to publish ${next}. Bump the desktop version before publishing updater assets.`,
+            );
+            process.exit(1);
+          }
+          NODE
+              echo "Desktop updater feed currently advertises $live_version; publishing $package_version is allowed."
+            elif [[ "$latest_status" == "404" ]]; then
+              echo "No existing desktop updater feed found at $latest_url; allowing first updater publish."
+            else
+              echo "::error::Could not read desktop updater feed at $latest_url (HTTP $latest_status)."
+              exit 1
+            fi
           fi
 
           {
