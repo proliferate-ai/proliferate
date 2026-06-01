@@ -7,13 +7,13 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.authorization import ActorIdentity
 from proliferate.auth.identity.store import get_ready_github_grant_for_user
 from proliferate.constants.cloud import (
     SUPPORTED_GIT_PROVIDER,
     CloudCommandKind,
     CloudCommandStatus,
 )
-from proliferate.db.models.auth import User
 from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.cloud_repo_config import (
     get_cloud_repo_config,
@@ -202,7 +202,7 @@ async def materialize_target_config(
     db: AsyncSession,
     *,
     target_id: UUID,
-    user: User,
+    user: ActorIdentity,
     body: MaterializeTargetConfigRequest,
 ) -> MaterializeTargetConfigResponse:
     target = await _controllable_target(db, target_id=target_id, user_id=user.id)

@@ -23,7 +23,7 @@ ARCHIVE_WITH_DB = "cloud_workspace_user_can_archive_with_db"
 
 
 def _patch_session_factory(monkeypatch: pytest.MonkeyPatch) -> NoopDb:
-    return patch_async_session_factory(monkeypatch, workspace_service.db_engine)
+    return patch_async_session_factory(monkeypatch, workspace_service.db_session.db_engine)
 
 
 def _denied_start_authorization(*, blocked_reason: str) -> SandboxStartAuthorization:
@@ -453,7 +453,7 @@ async def test_launch_workspace_on_target_keeps_workspace_id_after_expire_all(
         "create_direct_target_cloud_workspace",
         _create_direct_target_cloud_workspace,
     )
-    monkeypatch.setattr(workspace_service.db_engine, "commit_session", _commit_session)
+    monkeypatch.setattr(workspace_service.db_session.db_engine, "commit_session", _commit_session)
     monkeypatch.setattr(
         workspace_service,
         "_enqueue_target_launch_command",
@@ -567,11 +567,11 @@ async def test_target_launch_wait_marks_pending_prompt_failed(
         _publish,
     )
     monkeypatch.setattr(
-        workspace_service.db_engine,
+        workspace_service.db_session.db_engine,
         "async_session_factory",
         FakeSessionFactory(),
     )
-    monkeypatch.setattr(workspace_service.db_engine, "commit_session", _commit)
+    monkeypatch.setattr(workspace_service.db_session.db_engine, "commit_session", _commit)
 
     with pytest.raises(TimeoutError):
         await workspace_service._wait_for_target_launch_command(

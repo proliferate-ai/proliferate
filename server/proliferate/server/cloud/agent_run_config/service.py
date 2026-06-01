@@ -6,13 +6,13 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.authorization import ActorIdentity
 from proliferate.constants.automations import (
     CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION,
     CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_PERSONAL,
     CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_SYSTEM,
     CLOUD_AGENT_RUN_CONFIG_STATUS_ACTIVE,
 )
-from proliferate.db.models.auth import User
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.cloud_agent_run_config import configs as config_store
 from proliferate.db.store.cloud_agent_run_config.configs import (
@@ -96,7 +96,7 @@ async def _require_org_member(
 async def _visible_config(
     db: AsyncSession,
     *,
-    user: User,
+    user: ActorIdentity,
     config_id: UUID,
 ) -> CloudAgentRunConfigRecord:
     value = await config_store.get_config(db, config_id)
@@ -146,7 +146,7 @@ def snapshot_json(value: CloudAgentRunConfigRecord) -> dict[str, object]:
 
 async def list_agent_run_configs(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     *,
     owner_scope: str | None = None,
     organization_id: UUID | None = None,
@@ -177,7 +177,7 @@ async def list_agent_run_configs(
 
 async def create_agent_run_config(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     body: AgentRunConfigCreateRequest,
 ) -> CloudAgentRunConfigRecord:
     owner_scope = body.owner_scope
@@ -240,7 +240,7 @@ async def create_agent_run_config(
 
 async def get_agent_run_config(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     config_id: UUID,
 ) -> CloudAgentRunConfigRecord:
     return await _visible_config(db, user=user, config_id=config_id)
@@ -248,7 +248,7 @@ async def get_agent_run_config(
 
 async def update_agent_run_config(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     config_id: UUID,
     body: AgentRunConfigUpdateRequest,
 ) -> CloudAgentRunConfigRecord:
@@ -311,7 +311,7 @@ async def update_agent_run_config(
 
 async def archive_agent_run_config(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     config_id: UUID,
 ) -> CloudAgentRunConfigRecord:
     existing = await _visible_config(db, user=user, config_id=config_id)
@@ -336,7 +336,7 @@ async def archive_agent_run_config(
 
 async def list_agent_run_config_defaults(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     *,
     owner_scope: str,
     organization_id: UUID | None,
@@ -365,7 +365,7 @@ async def list_agent_run_config_defaults(
 
 async def set_agent_run_config_default(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     *,
     owner_scope: str,
     organization_id: UUID | None,

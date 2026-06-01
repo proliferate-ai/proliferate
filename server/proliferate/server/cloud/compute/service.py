@@ -6,8 +6,8 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.authorization import ActorIdentity
 from proliferate.constants.cloud import CloudTargetStatus
-from proliferate.db.models.auth import User
 from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import events as events_store
@@ -44,7 +44,7 @@ async def _require_admin_target(
     db: AsyncSession,
     *,
     target_id: UUID,
-    user: User,
+    user: ActorIdentity,
 ) -> targets_store.CloudTargetSnapshot:
     target = await targets_store.get_visible_target_by_id(
         db,
@@ -85,7 +85,7 @@ async def set_desired_versions(
     db: AsyncSession,
     *,
     target_id: UUID,
-    user: User,
+    user: ActorIdentity,
     body: SetDesiredVersionsRequest,
 ) -> SetDesiredVersionsResponse:
     target = await _require_admin_target(db, target_id=target_id, user=user)
@@ -141,7 +141,7 @@ async def check_safe_stop(
     db: AsyncSession,
     *,
     target_id: UUID,
-    user: User,
+    user: ActorIdentity,
 ) -> SafeStopCheckResponse:
     target = await _require_admin_target(db, target_id=target_id, user=user)
     active_session_count = await events_store.count_active_sessions_for_target(
@@ -172,7 +172,7 @@ async def revoke_workers_for_target(
     db: AsyncSession,
     *,
     target_id: UUID,
-    user: User,
+    user: ActorIdentity,
 ) -> RevokeWorkersResponse:
     target = await _require_admin_target(db, target_id=target_id, user=user)
     if target.status == CloudTargetStatus.archived.value:

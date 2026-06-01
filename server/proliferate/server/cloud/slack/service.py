@@ -10,6 +10,7 @@ from uuid import UUID
 from cryptography.fernet import InvalidToken
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.authorization import ActorIdentity
 from proliferate.config import settings
 from proliferate.constants.cloud import (
     CloudCommandActorKind,
@@ -25,8 +26,7 @@ from proliferate.constants.slack import (
     SLACK_REPO_MODE_FIXED,
     SLACK_THREAD_WORK_STATUS_ACTIVE,
 )
-from proliferate.db import engine as db_engine
-from proliferate.db.models.auth import User
+from proliferate.db import session_ops as db_session
 from proliferate.db.store import cloud_repo_config as repo_store
 from proliferate.db.store import cloud_sandbox_profiles as profile_store
 from proliferate.db.store import cloud_workspaces
@@ -125,7 +125,7 @@ _SLACK_CONFIGURATION_ERROR_CODES = {
 
 async def start_oauth_install(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     *,
     organization_id: UUID,
 ) -> str:
@@ -176,7 +176,7 @@ async def complete_oauth_install(
 
 async def disconnect(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     *,
     organization_id: UUID,
 ) -> None:
@@ -186,7 +186,7 @@ async def disconnect(
 
 async def get_bot_config_envelope(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     *,
     organization_id: UUID,
 ) -> tuple[SlackWorkspaceConnectionRecord | None, SlackBotConfigRecord | None]:
@@ -201,7 +201,7 @@ async def get_bot_config_envelope(
 
 async def update_bot_config(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     *,
     organization_id: UUID,
     body: SlackBotConfigUpdateRequest,
@@ -292,7 +292,7 @@ async def update_bot_config(
 
 async def validate_connection(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     *,
     organization_id: UUID,
 ) -> tuple[bool, str, str | None, str | None]:
@@ -320,7 +320,7 @@ async def validate_connection(
 
 async def list_channels(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     *,
     organization_id: UUID,
 ) -> list[slack_client.SlackChannelSummary]:
@@ -339,7 +339,7 @@ async def list_channels(
 
 async def list_repo_routing_profiles(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     *,
     organization_id: UUID,
 ) -> list[CloudRepoRoutingProfileRecord]:
@@ -372,7 +372,7 @@ async def list_repo_routing_profiles(
 
 async def upsert_repo_routing_profile(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     *,
     organization_id: UUID,
     cloud_repo_config_id: UUID,
@@ -424,7 +424,7 @@ async def ingest_slack_event(
         event_type=str(event_type or "unknown"),
         payload_json=payload,
     )
-    db_engine.defer_after_commit(
+    db_session.defer_after_commit(
         db,
         lambda job_id=job.id: _process_inbound_job_and_due_outbound(job_id),
     )
@@ -437,7 +437,7 @@ async def _process_inbound_job_and_due_outbound(job_id: UUID) -> None:
 
 
 async def process_inbound_job_by_id(job_id: UUID) -> None:
-    async with db_engine.async_session_factory() as db:
+    async with db_session.open_async_session() as db:
         async with db.begin():
             job = await slack_event_store.mark_job_processing(db, job_id)
         if job is None:
@@ -445,9 +445,9 @@ async def process_inbound_job_by_id(job_id: UUID) -> None:
         try:
             await _process_inbound_job(db, job)
             await slack_event_store.mark_job_completed(db, job.id)
-            await db.commit()
+            await db_session.commit_session(db)
         except CloudApiError as exc:
-            await db.rollback()
+            await db_session.rollback_session(db)
             await _queue_job_error(db, job, error_code=exc.code, message=exc.message)
             await slack_event_store.mark_job_failed(
                 db,
@@ -455,9 +455,9 @@ async def process_inbound_job_by_id(job_id: UUID) -> None:
                 error_code=exc.code,
                 error_message=exc.message,
             )
-            await db.commit()
+            await db_session.commit_session(db)
         except Exception as exc:
-            await db.rollback()
+            await db_session.rollback_session(db)
             await _queue_job_error(db, job, error_code="slack_job_failed", message=str(exc))
             await slack_event_store.mark_job_failed(
                 db,
@@ -465,7 +465,7 @@ async def process_inbound_job_by_id(job_id: UUID) -> None:
                 error_code="slack_job_failed",
                 error_message=str(exc),
             )
-            await db.commit()
+            await db_session.commit_session(db)
 
 
 async def enqueue_post_session_event(
@@ -510,7 +510,7 @@ async def enqueue_post_session_event(
 
 
 async def process_due_outbound_messages(*, limit: int = 20) -> None:
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         due = await outbound_store.list_due_outbound_messages(db, now=utcnow(), limit=limit)
         for message in due:
             await _send_outbound_message(db, message)
@@ -663,7 +663,7 @@ async def _handle_app_mention(
         slack_user_id=_string_or_none(event.get("user")),
         idempotency_key=f"{job.slack_event_id}:start",
     )
-    await db.commit()
+    await db_session.commit_session(db)
     session_result = parse_start_session_result(
         await wait_for_command_result(start_command, timeout=SLACK_COMMAND_WAIT_TIMEOUT),
     )
@@ -892,7 +892,7 @@ async def _create_and_materialize_workspace(
         idempotency_key="ensure-repo-checkout",
         slack_user_id=None,
     )
-    await db.commit()
+    await db_session.commit_session(db)
     await wait_for_command_result(checkout, timeout=SLACK_COMMAND_WAIT_TIMEOUT)
     root_command = await _enqueue_command(
         db,
@@ -912,7 +912,7 @@ async def _create_and_materialize_workspace(
         idempotency_key="materialize-root",
         slack_user_id=None,
     )
-    await db.commit()
+    await db_session.commit_session(db)
     root_result = parse_materialize_workspace_result(
         await wait_for_command_result(root_command, timeout=SLACK_COMMAND_WAIT_TIMEOUT),
     )
@@ -936,7 +936,7 @@ async def _create_and_materialize_workspace(
         idempotency_key="materialize-worktree",
         slack_user_id=None,
     )
-    await db.commit()
+    await db_session.commit_session(db)
     materialized = parse_materialize_workspace_result(
         await wait_for_command_result(worktree_command, timeout=SLACK_COMMAND_WAIT_TIMEOUT),
     )
@@ -1041,7 +1041,7 @@ async def _apply_run_config_updates(
             slack_user_id=slack_user_id,
             idempotency_key=f"{idempotency_key_prefix}:config:{control_key}",
         )
-        await db.commit()
+        await db_session.commit_session(db)
         result = await wait_for_command_result(command, timeout=SLACK_COMMAND_WAIT_TIMEOUT)
         if _config_apply_state(result.body) != "applied":
             raise CloudApiError(

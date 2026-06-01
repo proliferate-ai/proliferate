@@ -10,13 +10,13 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.authorization import ActorIdentity
 from proliferate.config import settings
 from proliferate.constants.cloud import (
     CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN,
     CloudTargetKind,
     CloudTargetStatus,
 )
-from proliferate.db.models.auth import User
 from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.cloud_sync import inventory as inventory_store
 from proliferate.db.store.cloud_sync import targets as targets_store
@@ -70,7 +70,7 @@ async def _create_enrollment_response_for_target(
     db: AsyncSession,
     *,
     target: targets_store.CloudTargetSnapshot,
-    user: User,
+    user: ActorIdentity,
     ttl_seconds: int | None,
 ) -> CloudTargetEnrollmentResponse:
     token = secrets.token_urlsafe(48)
@@ -108,7 +108,7 @@ async def _create_enrollment_response_for_target(
 async def create_target_enrollment(
     db: AsyncSession,
     *,
-    user: User,
+    user: ActorIdentity,
     body: CloudTargetEnrollmentRequest,
 ) -> CloudTargetEnrollmentResponse:
     kind = validate_enrollable_kind(body.kind)
@@ -160,7 +160,7 @@ async def create_target_enrollment_for_existing_target(
     db: AsyncSession,
     *,
     target_id: UUID,
-    user: User,
+    user: ActorIdentity,
     body: CloudTargetExistingEnrollmentRequest,
 ) -> CloudTargetEnrollmentResponse:
     target = await get_target_detail(db, target_id=target_id, user_id=user.id)
@@ -238,7 +238,7 @@ async def archive_target(
     db: AsyncSession,
     *,
     target_id: UUID,
-    user: User,
+    user: ActorIdentity,
 ) -> targets_store.CloudTargetSnapshot:
     target = await get_target_detail(db, target_id=target_id, user_id=user.id)
     if target.organization_id is not None:

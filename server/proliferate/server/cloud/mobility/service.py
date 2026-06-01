@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.cloud import CloudWorkspaceStatus
-from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_mobility import (
     CloudWorkspaceHandoffOpValue,
     CloudWorkspaceMobilityValue,
@@ -42,6 +41,7 @@ from proliferate.db.store.cloud_sync.events import list_session_projections_for_
 from proliferate.db.store.cloud_sync.exposures import get_active_workspace_exposure
 from proliferate.db.store.cloud_workspaces import (
     get_cloud_workspace_for_user,
+    load_cloud_workspace_by_id,
     load_existing_cloud_workspace,
 )
 from proliferate.db.store.cloud_workspaces import (
@@ -98,6 +98,8 @@ from proliferate.server.cloud.workspaces.service import (
     start_cloud_workspace,
 )
 from proliferate.utils.time import duration_ms, utcnow
+
+type CloudWorkspace = object
 
 _STALE_HANDOFF_AFTER = timedelta(seconds=120)
 _BRANCH_NOT_PUBLISHED_BLOCKER = "The branch '{branch}' was not found on GitHub."
@@ -198,7 +200,7 @@ async def _default_cleanup_items_for_cutover(
     ):
         return []
 
-    source_workspace = await db.get(CloudWorkspace, source_cloud_workspace_id)
+    source_workspace = await load_cloud_workspace_by_id(db, source_cloud_workspace_id)
     if source_workspace is None:
         return []
 

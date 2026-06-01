@@ -25,6 +25,7 @@ from proliferate.constants.cloud import (
     CloudWorkspaceCleanupState,
     CloudWorkspaceStatus,
 )
+from proliferate.db import session_ops as db_session
 from proliferate.db.store import cloud_workspaces
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_claims import tokens as claim_tokens_store
@@ -952,7 +953,7 @@ async def record_materialization_report(
                 target_id=auth.target_id,
                 reason="exposures",
             )
-    await db.commit()
+    await db_session.commit_session(db)
     return WorkerMaterializationReportResponse(
         cloud_workspace_id=str(workspace.id),
         updated=True,
@@ -1090,7 +1091,7 @@ async def lease_worker_command(
         # delivery request can race the request-session commit and fail closed as
         # "not leased by this worker."
     if command is not None or expired_commands:
-        await db.commit()
+        await db_session.commit_session(db)
     return WorkerCommandLeaseResponse(
         command=_command_envelope(command) if command is not None else None,
         server_time=now.isoformat(),

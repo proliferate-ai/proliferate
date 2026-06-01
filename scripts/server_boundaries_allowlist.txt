@@ -15,32 +15,7 @@ SINGLE_FILE_FOLDER server/proliferate/integrations/billing 1 transitional Stripe
 INTEGRATION_PRODUCT_IMPORT server/proliferate/integrations/billing/stripe.py 1 transitional integration depends on product domain types/logic
 API_STORE_IMPORT server/proliferate/server/cloud/live/api.py 1 transitional live API reads store types during cloud worker migration
 API_STORE_IMPORT server/proliferate/server/cloud/slack/api.py 2 transitional Slack API composes repo routing store records for admin settings
-SERVICE_ORM_IMPORT server/proliferate/server/billing/service.py 2 transitional service imports ORM/auth model
-SERVICE_ORM_IMPORT server/proliferate/server/cloud/agent_run_config/service.py 1 transitional agent run config service imports auth model for admin checks
-SERVICE_ORM_IMPORT server/proliferate/server/cloud/commands/service.py 1 transitional cloud command service imports ORM model during worker migration
-SERVICE_ORM_IMPORT server/proliferate/server/cloud/compute/service.py 1 transitional cloud compute service imports ORM model during worker migration
-SERVICE_ORM_IMPORT server/proliferate/server/cloud/mobility/service.py 1 transitional mobility service imports ORM model during workspace migration
-SERVICE_ORM_IMPORT server/proliferate/server/cloud/runtime/service.py 1 transitional service imports ORM/auth model
-SERVICE_ORM_IMPORT server/proliferate/server/cloud/sandbox_profiles/service.py 1 transitional sandbox profile service imports auth model
-SERVICE_ORM_IMPORT server/proliferate/server/cloud/slack/service.py 1 transitional Slack service imports auth model for deferred event handling
-SERVICE_ORM_IMPORT server/proliferate/server/cloud/target_config/service.py 1 transitional target config service imports ORM model during worker migration
-SERVICE_ORM_IMPORT server/proliferate/server/cloud/target_git_identity/service.py 1 transitional target git identity service imports ORM model during worker migration
-SERVICE_ORM_IMPORT server/proliferate/server/cloud/targets/service.py 1 transitional cloud targets service imports ORM model during worker migration
-SERVICE_ORM_IMPORT server/proliferate/server/cloud/workspaces/service.py 3 transitional service imports ORM/auth model
-SERVICE_DB_ENGINE_IMPORT server/proliferate/server/billing/service.py 1 transitional billing checkout service opens isolated organization checkout sessions
-SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/agent_auth/service.py 1 transitional agent auth service opens isolated DB sessions for deferred materialization
-SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/commands/service.py 1 transitional command service defers isolated DB work after commit
-SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/live/service.py 1 transitional live service opens DB session during worker migration
-SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/slack/service.py 1 transitional Slack service opens isolated DB sessions for deferred event handling
-SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/workspaces/service.py 1 transitional workspace service opens DB session during managed-cloud migration
-SERVICE_SQLALCHEMY_IMPORT server/proliferate/server/cloud/agent_auth/service.py 1 transitional agent auth service handles SQLAlchemy integrity errors during worker migration
-SERVICE_SQLALCHEMY_IMPORT server/proliferate/server/cloud/commands/service.py 1 transitional cloud command service builds SQLAlchemy query during worker migration
-SERVICE_SQLALCHEMY_IMPORT server/proliferate/server/cloud/workspaces/service.py 1 transitional workspace archive restore handles active-workspace uniqueness conflicts
 DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/agent_run_config/domain/resolve.py 1 transitional agent run config resolver imports product constants
 DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/slack/domain/policy.py 1 transitional Slack policy imports product constants
 DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/target_config/domain/policy.py 1 transitional target config policy imports product config during worker migration
 DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/targets/domain/policy.py 1 transitional target policy imports product config during worker migration
-SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/agent_auth/service.py 1 transitional agent auth deferred session commits materialization result
-SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/slack/service.py 10 transitional Slack deferred handlers own isolated transactions
-SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/worker/service.py 2 transitional worker lease/materialization flows commit before follow-up worker requests
-SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/workspaces/service.py 4 transitional workspace sync/archive flows own isolated lifecycle transactions
