@@ -6,35 +6,16 @@ use serde_json::Value;
 
 use crate::integrations::mcp::product_server::{
     dispatch_product_mcp_request, ProductMcpAuthHeader, ProductMcpDefinition,
-    ProductMcpDispatchError, ProductMcpRequestContext, ProductMcpServer, ProductMcpTokenValidation,
+    ProductMcpDispatchError, ProductMcpEndpointOperation, ProductMcpRequestContext,
+    ProductMcpServer, ProductMcpTokenValidation,
 };
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ProductMcpEndpointOperation {
-    Initialize,
-    InitializedNotification,
-    ToolsList,
-    ToolsCall { tool_name: Option<String> },
-    Other,
-}
-
-impl ProductMcpEndpointOperation {
-    pub fn from_request_body(body: &Value) -> Self {
-        match body.get("method").and_then(Value::as_str) {
-            Some("initialize") => Self::Initialize,
-            Some("notifications/initialized") => Self::InitializedNotification,
-            Some("tools/list") => Self::ToolsList,
-            Some("tools/call") => Self::ToolsCall {
-                tool_name: body
-                    .get("params")
-                    .and_then(|params| params.get("name"))
-                    .and_then(Value::as_str)
-                    .map(str::to_owned),
-            },
-            _ => Self::Other,
-        }
-    }
+pub mod legacy_route_aliases {
+    pub const COWORK: &str = "legacy:cowork";
+    pub const REVIEWS: &str = "legacy:reviews";
+    pub const SUBAGENTS: &str = "legacy:subagents";
+    pub const WORKSPACE_NAMING: &str = "legacy:workspace_naming";
 }
 
 #[async_trait]
@@ -367,43 +348,6 @@ mod tests {
     }
 
     #[test]
-    fn endpoint_operation_parses_tools_call_name() {
-        let operation = ProductMcpEndpointOperation::from_request_body(&json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/call",
-            "params": { "name": "create_subagent" }
-        }));
-
-        assert_eq!(
-            operation,
-            ProductMcpEndpointOperation::ToolsCall {
-                tool_name: Some("create_subagent".to_string())
-            }
-        );
-    }
-
-    #[test]
-    fn endpoint_operation_treats_protocol_methods_as_non_tool_operations() {
-        assert_eq!(
-            ProductMcpEndpointOperation::from_request_body(&json!({
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "initialize"
-            })),
-            ProductMcpEndpointOperation::Initialize
-        );
-        assert_eq!(
-            ProductMcpEndpointOperation::from_request_body(&json!({
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "tools/list"
-            })),
-            ProductMcpEndpointOperation::ToolsList
-        );
-    }
-
-    #[test]
     fn endpoint_handler_adapter_gates_only_mutating_tool_calls() {
         let adapter = ProductMcpEndpointHandlerAdapter::new(
             Arc::new(TestProductMcpServer),
@@ -439,6 +383,24 @@ mod tests {
         assert!(registry.get_by_product_id("test_a").is_some());
         assert!(registry.get_by_route_slug("test-a").is_some());
         assert_eq!(registry.definitions()[0].id, "test_a");
+    }
+
+    #[test]
+    fn registry_indexes_route_aliases_to_the_registered_handler() {
+        let handler = Arc::new(TestEndpointHandler(&TEST_DEFINITION_A));
+        let registry = ProductMcpEndpointRegistry::new(vec![
+            ProductMcpEndpointRegistration::with_route_aliases(handler, &["legacy:test-a"]),
+        ])
+        .expect("registry");
+
+        assert_eq!(
+            registry
+                .get_by_route_slug("legacy:test-a")
+                .expect("alias")
+                .definition()
+                .id,
+            "test_a"
+        );
     }
 
     #[test]

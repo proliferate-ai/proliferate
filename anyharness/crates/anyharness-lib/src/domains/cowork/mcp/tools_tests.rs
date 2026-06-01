@@ -5,11 +5,12 @@ use serde_json::{json, Value};
 
 use super::tools::{build_tool_list, MUTATING_TOOL_NAMES, READ_ONLY_TOOL_NAMES};
 use crate::integrations::mcp::product_server::{
-    ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDefinition, ProductMcpRequestContext,
-    ProductMcpServer, ProductMcpTokenValidation,
+    ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDefinition,
+    ProductMcpEndpointOperation, ProductMcpRequestContext, ProductMcpServer,
+    ProductMcpTokenValidation,
 };
 use crate::sessions::mcp_bindings::product_registry::{
-    ProductMcpEndpointHandler, ProductMcpEndpointHandlerAdapter, ProductMcpEndpointOperation,
+    ProductMcpEndpointHandler, ProductMcpEndpointHandlerAdapter,
 };
 use crate::workspaces::operation_gate::WorkspaceOperationKind;
 

@@ -17,7 +17,8 @@ use crate::sessions::mcp_bindings::product_launch::{
     ProductMcpLaunchRegistration, ProductMcpSelectionContext,
 };
 use crate::sessions::mcp_bindings::product_registry::{
-    ProductMcpEndpointHandlerAdapter, ProductMcpEndpointRegistration, ProductMcpEndpointRegistry,
+    legacy_route_aliases, ProductMcpEndpointHandlerAdapter, ProductMcpEndpointRegistration,
+    ProductMcpEndpointRegistry,
 };
 use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::store::SessionStore;
@@ -168,40 +169,52 @@ pub(super) fn build_product_mcp_endpoint_registry(
     } = deps;
 
     let product_mcp_endpoint_registrations = vec![
-        ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
-            Arc::new(ReviewProductMcpServer::new(review_runtime, review_mcp_auth)),
-            Some(WorkspaceOperationKind::ReviewWrite),
-            review_mcp_tools::MUTATING_TOOL_NAMES,
-        ))),
-        ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
-            Arc::new(SubagentProductMcpServer::new(
-                subagent_service.clone(),
-                session_runtime,
-                workspace_runtime.clone(),
-                subagent_mcp_auth,
+        ProductMcpEndpointRegistration::with_route_aliases(
+            Arc::new(ProductMcpEndpointHandlerAdapter::new(
+                Arc::new(ReviewProductMcpServer::new(review_runtime, review_mcp_auth)),
+                Some(WorkspaceOperationKind::ReviewWrite),
+                review_mcp_tools::MUTATING_TOOL_NAMES,
             )),
-            Some(WorkspaceOperationKind::SubagentWrite),
-            subagent_mcp_tools::MUTATING_TOOL_NAMES,
-        ))),
-        ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
-            Arc::new(WorkspaceNamingProductMcpServer::new(
-                workspace_runtime,
-                workspace_access_gate,
-                SessionStore::new(db),
-                workspace_naming_mcp_auth,
+            &[legacy_route_aliases::REVIEWS],
+        ),
+        ProductMcpEndpointRegistration::with_route_aliases(
+            Arc::new(ProductMcpEndpointHandlerAdapter::new(
+                Arc::new(SubagentProductMcpServer::new(
+                    subagent_service.clone(),
+                    session_runtime,
+                    workspace_runtime.clone(),
+                    subagent_mcp_auth,
+                )),
+                Some(WorkspaceOperationKind::SubagentWrite),
+                subagent_mcp_tools::MUTATING_TOOL_NAMES,
             )),
-            None,
-            &[],
-        ))),
-        ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
-            Arc::new(CoworkProductMcpServer::new(
-                cowork_artifact_runtime,
-                cowork_runtime,
-                cowork_mcp_auth,
+            &[legacy_route_aliases::SUBAGENTS],
+        ),
+        ProductMcpEndpointRegistration::with_route_aliases(
+            Arc::new(ProductMcpEndpointHandlerAdapter::new(
+                Arc::new(WorkspaceNamingProductMcpServer::new(
+                    workspace_runtime,
+                    workspace_access_gate,
+                    SessionStore::new(db),
+                    workspace_naming_mcp_auth,
+                )),
+                None,
+                &[],
             )),
-            Some(WorkspaceOperationKind::CoworkWrite),
-            cowork_mcp_tools::MUTATING_TOOL_NAMES,
-        ))),
+            &[legacy_route_aliases::WORKSPACE_NAMING],
+        ),
+        ProductMcpEndpointRegistration::with_route_aliases(
+            Arc::new(ProductMcpEndpointHandlerAdapter::new(
+                Arc::new(CoworkProductMcpServer::new(
+                    cowork_artifact_runtime,
+                    cowork_runtime,
+                    cowork_mcp_auth,
+                )),
+                Some(WorkspaceOperationKind::CoworkWrite),
+                cowork_mcp_tools::MUTATING_TOOL_NAMES,
+            )),
+            &[legacy_route_aliases::COWORK],
+        ),
         ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
             Arc::new(SkillsProductMcpServer::new(
                 runtime_config_service,
