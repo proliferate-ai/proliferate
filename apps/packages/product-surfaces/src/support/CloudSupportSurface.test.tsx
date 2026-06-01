@@ -11,20 +11,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CloudSupportSurface } from "./CloudSupportSurface";
 
 const support = vi.hoisted(() => ({
-  client: { requestJson: vi.fn() },
   completeSupportReportUpload: vi.fn(),
   createSupportReport: vi.fn(),
   ensureSupportReportTracker: vi.fn(),
 }));
 
-vi.mock("@proliferate/cloud-sdk", () => ({
-  completeSupportReportUpload: support.completeSupportReportUpload,
-  createSupportReport: support.createSupportReport,
-  ensureSupportReportTracker: support.ensureSupportReportTracker,
-}));
-
 vi.mock("@proliferate/cloud-sdk-react", () => ({
-  useCloudClient: () => support.client,
+  useCloudSupportReportActions: () => ({
+    completeSupportReportUpload: support.completeSupportReportUpload,
+    createSupportReport: support.createSupportReport,
+    ensureSupportReportTracker: support.ensureSupportReportTracker,
+  }),
 }));
 
 afterEach(() => {
@@ -95,7 +92,6 @@ describe("CloudSupportSurface", () => {
           },
           publicContentConsent: true,
         },
-        support.client,
       );
     });
     expect(support.completeSupportReportUpload).toHaveBeenCalledWith(
@@ -104,9 +100,8 @@ describe("CloudSupportSurface", () => {
         diagnostics: null,
         attachments: [],
       }),
-      support.client,
     );
-    expect(support.ensureSupportReportTracker).toHaveBeenCalledWith("report-1", support.client);
+    expect(support.ensureSupportReportTracker).toHaveBeenCalledWith("report-1");
     expect(screen.queryByText("Support issue sent.")).not.toBeNull();
   });
 
@@ -162,7 +157,7 @@ describe("CloudSupportSurface", () => {
       const secondJobId = support.createSupportReport.mock.calls[1]?.[0]?.clientJobId;
       expect(secondJobId).toBe(firstJobId);
       expect(support.completeSupportReportUpload).not.toHaveBeenCalled();
-      expect(support.ensureSupportReportTracker).toHaveBeenCalledWith("report-2", support.client);
+      expect(support.ensureSupportReportTracker).toHaveBeenCalledWith("report-2");
     });
   });
 });

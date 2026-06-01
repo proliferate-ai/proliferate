@@ -1,10 +1,5 @@
-import {
-  completeSupportReportUpload,
-  createSupportReport,
-  ensureSupportReportTracker,
-  type SupportMessageContext,
-} from "@proliferate/cloud-sdk";
-import { useCloudClient } from "@proliferate/cloud-sdk-react";
+import type { SupportMessageContext } from "@proliferate/cloud-sdk";
+import { useCloudSupportReportActions } from "@proliferate/cloud-sdk-react";
 import type { SupportSurfaceSubmitInput } from "@proliferate/product-ui/support/SupportSurface";
 import { SupportSurface } from "@proliferate/product-ui/support/SupportSurface";
 import { useRef } from "react";
@@ -14,7 +9,11 @@ export interface CloudSupportSurfaceProps {
 }
 
 export function CloudSupportSurface({ context }: CloudSupportSurfaceProps) {
-  const client = useCloudClient();
+  const {
+    completeSupportReportUpload,
+    createSupportReport,
+    ensureSupportReportTracker,
+  } = useCloudSupportReportActions();
   const clientJobIdRef = useRef<string | null>(null);
 
   async function submitSupportReport(input: SupportSurfaceSubmitInput) {
@@ -37,7 +36,6 @@ export function CloudSupportSurface({ context }: CloudSupportSurfaceProps) {
         },
         publicContentConsent: input.publicContentConsent,
       },
-      client,
     );
     if (report.status !== "completed") {
       await completeSupportReportUpload(
@@ -52,11 +50,10 @@ export function CloudSupportSurface({ context }: CloudSupportSurfaceProps) {
             sourceSurface: "web",
           },
         },
-        client,
       );
     }
     clientJobIdRef.current = null;
-    void ensureSupportReportTracker(report.reportId, client).catch(() => undefined);
+    void ensureSupportReportTracker(report.reportId).catch(() => undefined);
     return undefined;
   }
 
