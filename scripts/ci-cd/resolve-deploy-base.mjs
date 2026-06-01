@@ -2,6 +2,12 @@
 
 import fs from "node:fs";
 
+import {
+  listSuccessfulWorkflowRuns,
+  readPositiveIntegerEnv,
+  readRunArtifactSummary,
+} from "./github-deploy-artifacts.mjs";
+
 function printUsage() {
   console.log(`Resolve the previous successful deploy SHA for an environment.
 
@@ -61,37 +67,6 @@ function parseArgs(argv) {
   return parsed;
 }
 
-async function githubJson(path, token) {
-  const repository = process.env.GITHUB_REPOSITORY;
-  if (!repository) {
-    throw new Error("GITHUB_REPOSITORY is required.");
-  }
-  const response = await fetch(`https://api.github.com/repos/${repository}${path}`, {
-    headers: {
-      accept: "application/vnd.github+json",
-      authorization: `Bearer ${token}`,
-      "x-github-api-version": "2022-11-28",
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`GitHub API request failed (${response.status}): ${await response.text()}`);
-  }
-  return response.json();
-}
-
-async function runHasRequiredArtifact(runId, artifactName, token) {
-  if (!artifactName) {
-    return true;
-  }
-  const data = await githubJson(
-    `/actions/runs/${encodeURIComponent(runId)}/artifacts?per_page=100`,
-    token
-  );
-  return (data.artifacts || []).some((artifact) => {
-    return artifact.name === artifactName && artifact.expired !== true;
-  });
-}
-
 function fallbackSha(parsed) {
   return parsed.fallback || parsed.head;
 }
@@ -102,6 +77,15 @@ function writeGithubOutput(baseSha) {
     return;
   }
   fs.appendFileSync(outputPath, `base_sha=${baseSha}\n`);
+}
+
+async function resolveCandidateDeployHeadSha(candidate, artifactName, token) {
+  if (!artifactName) {
+    return candidate.head_sha || "";
+  }
+
+  const summary = await readRunArtifactSummary(candidate.id, artifactName, token);
+  return summary?.headSha || "";
 }
 
 async function main() {
@@ -125,7 +109,7 @@ async function main() {
     throw new Error("--head is required.");
   }
 
-  const token = process.env.GITHUB_TOKEN;
+  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (!token) {
     const baseSha = fallbackSha(parsed);
     writeGithubOutput(baseSha);
@@ -134,48 +118,51 @@ async function main() {
   }
 
   const currentRunId = process.env.GITHUB_RUN_ID || "";
-  try {
-    let run;
-    for (let page = 1; page <= 5 && !run; page += 1) {
-      const params = new URLSearchParams({
-        branch: parsed.branch,
-        status: "success",
-        per_page: "50",
-        page: String(page),
-      });
-      const data = await githubJson(
-        `/actions/workflows/${encodeURIComponent(parsed.workflow)}/runs?${params.toString()}`,
+  const maxPages = readPositiveIntegerEnv("DEPLOY_RUN_SCAN_MAX_PAGES", 20);
+  let run;
+  let exhausted = false;
+  for (let page = 1; page <= maxPages && !run; page += 1) {
+    const data = await listSuccessfulWorkflowRuns({
+      workflow: parsed.workflow,
+      branch: parsed.branch,
+      page,
+      token,
+    });
+    const candidates = data.workflow_runs || [];
+    if (candidates.length === 0) {
+      exhausted = true;
+      break;
+    }
+    for (const candidate of candidates) {
+      if (
+        String(candidate.id) === currentRunId ||
+        candidate.conclusion !== "success" ||
+        !candidate.head_sha
+      ) {
+        continue;
+      }
+      const deployHeadSha = await resolveCandidateDeployHeadSha(
+        candidate,
+        parsed.requiredArtifact,
         token
       );
-      const candidates = data.workflow_runs || [];
-      if (candidates.length === 0) {
-        break;
+      if (!deployHeadSha || deployHeadSha === parsed.head) {
+        continue;
       }
-      for (const candidate of candidates) {
-        if (
-          String(candidate.id) === currentRunId ||
-          candidate.conclusion !== "success" ||
-          !candidate.head_sha ||
-          candidate.head_sha === parsed.head
-        ) {
-          continue;
-        }
-        if (!(await runHasRequiredArtifact(candidate.id, parsed.requiredArtifact, token))) {
-          continue;
-        }
-        run = candidate;
-        break;
-      }
+      run = { ...candidate, deployHeadSha };
+      break;
     }
-    const baseSha = run?.head_sha || fallbackSha(parsed);
-    writeGithubOutput(baseSha);
-    console.log(baseSha);
-  } catch (error) {
-    console.warn(error instanceof Error ? error.message : String(error));
-    const baseSha = fallbackSha(parsed);
-    writeGithubOutput(baseSha);
-    console.log(baseSha);
   }
+
+  if (!run && !exhausted) {
+    throw new Error(
+      `Deploy base scan reached DEPLOY_RUN_SCAN_MAX_PAGES=${maxPages} without finding a base.`
+    );
+  }
+
+  const baseSha = run?.deployHeadSha || fallbackSha(parsed);
+  writeGithubOutput(baseSha);
+  console.log(baseSha);
 }
 
 main();

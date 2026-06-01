@@ -138,7 +138,10 @@ dry_run: false
 For a staging plan only, use `dry_run=true` and do not treat it as a deploy.
 Dry-run staging runs upload `deploy-plan-staging`, not
 `deploy-summary-staging`; deploy-base resolution and production's staging
-success check require the real deploy summary artifact.
+success check require the real deploy summary artifact. When a staging run is
+triggered by `workflow_run`, the GitHub run-level SHA can point at the branch
+tip even if the deploy job checked out the CI commit that triggered it. Use the
+deploy summary artifact's `headSha` as the deployed commit of record.
 
 ### Production
 
@@ -156,11 +159,13 @@ Normal production flow:
 
 1. Confirm a successful `Deploy Staging` run exists for the exact `main` SHA.
    The run must be a non-dry-run deploy with a `deploy-summary-staging`
-   artifact; a dry-run plan is not enough.
+   artifact whose JSON `headSha` matches the promoted SHA; a dry-run plan is
+   not enough.
 2. Dispatch `Promote Production` with `require_staging_success=true`.
-3. Approve the GitHub `Production` environment gates as they appear.
-4. Watch every selected lane until completion.
-5. Verify the production surfaces that ran.
+3. The promote plan verifies the promoted commit is reachable from `main`.
+4. Approve the GitHub `Production` environment gates as they appear.
+5. Watch every selected lane until completion.
+6. Verify the production surfaces that ran.
 
 The production GitHub environment currently exists as `Production`; workflow
 inputs and reusable workflow calls use `production`, and GitHub resolves that
@@ -775,9 +780,16 @@ Deploy graph:
 
 1. Resolve base/head:
    - staging diffs against the last successful non-dry-run
-     `deploy-staging.yml` run with a `deploy-summary-staging` artifact
+     `deploy-staging.yml` run with a `deploy-summary-staging` artifact; the
+     artifact `headSha` is the base when it differs from the GitHub run-level
+     SHA
    - production diffs against the last successful non-dry-run
-     `promote-production.yml` run with a `deploy-summary-production` artifact
+     `promote-production.yml` run with a `deploy-summary-production` artifact;
+     the artifact `headSha` is the base when it differs from the GitHub
+     run-level SHA
+   - deploy-base lookup fails closed on GitHub API, artifact download, or scan
+     limit errors when `GITHUB_TOKEN` is available; local/no-token runs fall
+     back to the parent SHA for developer ergonomics
 2. Detect changed surfaces:
    - `server`
    - `workers`
