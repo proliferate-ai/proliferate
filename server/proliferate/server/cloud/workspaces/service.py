@@ -9,10 +9,9 @@ from types import SimpleNamespace
 from typing import NoReturn
 from uuid import UUID, uuid4
 
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.authorization import OwnerSelection
+from proliferate.auth.authorization import ActorIdentity, OwnerSelection
 from proliferate.constants.billing import (
     BILLING_MODE_ENFORCE,
     USAGE_SEGMENT_CLOSED_BY_DESTROY,
@@ -33,8 +32,7 @@ from proliferate.constants.cloud import (
     CloudWorkspaceCleanupState,
     CloudWorkspaceStatus,
 )
-from proliferate.db import engine as db_engine
-from proliferate.db.models.auth import User
+from proliferate.db import session_ops as db_session
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store import billing as billing_store
@@ -118,6 +116,7 @@ from proliferate.server.billing.service import (
     authorize_sandbox_start,
     authorize_sandbox_start_for_billing_subject,
     get_billing_snapshot_for_subject,
+    get_billing_snapshot_for_subject_in_session,
     record_cloud_sandbox_usage_stopped,
     repo_limit_for_billing_snapshot,
 )
@@ -306,7 +305,7 @@ async def list_cloud_workspaces_for_user(
     db: AsyncSession,
     user_id: UUID,
     *,
-    user: User | None = None,
+    user: ActorIdentity | None = None,
     owner_selection: OwnerSelection | None = None,
     scope: str | None = None,
     lifecycle: str = "active",
@@ -435,7 +434,7 @@ async def _workspace_summaries_for_request(
         )
         billing = snapshots_by_subject.get(billing_subject_id)
         if billing is None:
-            billing = await get_billing_snapshot_for_subject(billing_subject_id)
+            billing = await get_billing_snapshot_for_subject_in_session(db, billing_subject_id)
             snapshots_by_subject[billing_subject_id] = billing
         action_block_kind, action_block_reason = _workspace_action_block(workspace, billing)
         direct_target_context = _direct_target_context_for_workspace(
@@ -519,7 +518,7 @@ def _raise_repo_limit_exceeded(error: CloudRepoLimitExceededError) -> NoReturn:
 
 
 async def _load_personal_agent_auth_agent_kinds(user_id: UUID) -> tuple[str, ...]:
-    async with db_engine.async_session_factory() as db:
+    async with db_session.open_async_session() as db:
         profile = await agent_auth_store.get_active_personal_sandbox_profile_for_user(
             db,
             user_id,
@@ -555,7 +554,7 @@ async def _agent_auth_agent_kinds_for_workspace_request(
 async def _load_agent_auth_agent_kinds_for_workspace(
     workspace: CloudWorkspace,
 ) -> tuple[str, ...]:
-    async with db_engine.async_session_factory() as db:
+    async with db_session.open_async_session() as db:
         return await _agent_auth_agent_kinds_for_workspace_request(db, workspace)
 
 
@@ -630,7 +629,7 @@ def _remote_access_repo_fields(
 
 async def bootstrap_workspace_remote_access(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     body: BootstrapWorkspaceRemoteAccessRequest,
 ) -> WorkspaceDetail:
     target = await targets_store.get_visible_target_by_id(
@@ -736,7 +735,7 @@ async def bootstrap_workspace_remote_access(
 
 async def launch_workspace_on_target(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     body: LaunchWorkspaceOnTargetRequest,
 ) -> WorkspaceTargetLaunchResponse:
     prompt_text = body.prompt.strip()
@@ -820,7 +819,7 @@ async def launch_workspace_on_target(
         origin="manual_mobile" if body.source == "mobile" else "manual_web",
     )
     workspace_id = workspace.id
-    await db_engine.commit_session(db)
+    await db_session.commit_session(db)
 
     try:
         checkout = await _enqueue_target_launch_command(
@@ -982,7 +981,7 @@ async def launch_workspace_on_target(
 async def _resolve_new_direct_target_workspace_create(
     db: AsyncSession,
     *,
-    user: User,
+    user: ActorIdentity,
     body: LaunchWorkspaceOnTargetRequest,
 ) -> ResolvedCloudWorkspaceCreate:
     if body.git_provider != SUPPORTED_GIT_PROVIDER:
@@ -1107,7 +1106,7 @@ def _direct_target_workspace_paths(
 async def _enqueue_target_launch_command(
     db: AsyncSession,
     *,
-    user: User,
+    user: ActorIdentity,
     target_id: UUID,
     cloud_workspace_id: UUID | None,
     kind: str,
@@ -1131,7 +1130,7 @@ async def _enqueue_target_launch_command(
             }
         ),
     )
-    await db_engine.commit_session(db)
+    await db_session.commit_session(db)
     return command
 
 
@@ -1154,7 +1153,7 @@ async def _wait_for_target_launch_command(
 async def _mark_target_launch_command_failed_interaction_if_needed(
     command_id: UUID,
 ) -> None:
-    async with db_engine.async_session_factory() as fresh_db:
+    async with db_session.open_async_session() as fresh_db:
         latest = await command_store.get_command_by_id(fresh_db, command_id)
         if latest is None:
             return
@@ -1167,12 +1166,12 @@ async def _mark_target_launch_command_failed_interaction_if_needed(
             return
         await mark_pending_prompt_interaction_failed_for_command(fresh_db, latest)
         await publish_command_status_after_commit(fresh_db, latest)
-        await db_engine.commit_session(fresh_db)
+        await db_session.commit_session(fresh_db)
 
 
 async def enable_cloud_workspace_remote_access(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     workspace_id: UUID,
 ) -> WorkspaceDetail:
     workspace = await cloud_workspace_user_can_interact_with_db(db, user.id, workspace_id)
@@ -1239,7 +1238,7 @@ async def enable_cloud_workspace_remote_access(
 
 async def disable_cloud_workspace_remote_access(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     workspace_id: UUID,
 ) -> WorkspaceDetail:
     workspace = await cloud_workspace_user_can_archive_with_db(db, user.id, workspace_id)
@@ -1287,10 +1286,11 @@ async def _build_workspace_detail_for_request(
         if workspace.target_id is not None
         else None
     )
-    billing = await get_billing_snapshot_for_subject(
+    billing = await get_billing_snapshot_for_subject_in_session(
+        db,
         runtime_environment.billing_subject_id
         if runtime_environment is not None
-        else workspace.billing_subject_id
+        else workspace.billing_subject_id,
     )
     action_block_kind, action_block_reason = _workspace_action_block(workspace, billing)
     automation_runs_by_workspace = await list_latest_runs_by_cloud_workspace_ids_for_user(
@@ -1330,7 +1330,7 @@ async def _build_workspace_detail(
 ) -> WorkspaceDetail:
     exposure = None
     claim = None
-    async with db_engine.async_session_factory() as db:
+    async with db_session.open_async_session() as db:
         exposure, claim = await load_workspace_exposure_and_claim(
             db,
             target_id=workspace.target_id,
@@ -1345,7 +1345,7 @@ async def _build_workspace_detail(
     latest_sessions = ()
     target = None
     automation_runs_by_workspace = {}
-    async with db_engine.async_session_factory() as db:
+    async with db_session.open_async_session() as db:
         latest_sessions = await events_store.list_session_projections_for_workspace(
             db,
             cloud_workspace_id=workspace.id,
@@ -1398,31 +1398,31 @@ async def _build_workspace_detail(
 async def _load_repo_config_value_tx(
     user_id: UUID, git_owner: str, git_repo_name: str
 ) -> object | None:
-    async with db_engine.async_session_factory() as db:
+    async with db_session.open_async_session() as db:
         return await load_repo_config_value(
             db, user_id=user_id, git_owner=git_owner, git_repo_name=git_repo_name
         )
 
 
 async def _bootstrap_repo_config_tx(user_id: UUID, git_owner: str, git_repo_name: str) -> object:
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         return await bootstrap_repo_config(
             db, user_id=user_id, git_owner=git_owner, git_repo_name=git_repo_name
         )
 
 
 async def _mark_workspace_error_tx(workspace_id: UUID, message: str, **kwargs: object) -> None:
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         await mark_workspace_error_by_id(db, workspace_id, message, **kwargs)
 
 
 async def _update_sandbox_status_tx(sandbox: CloudSandbox, status: str, **kwargs: object) -> None:
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         await update_sandbox_status(db, sandbox, status, **kwargs)
 
 
 async def _resolve_new_cloud_workspace_create(
-    user: User,
+    user: ActorIdentity,
     *,
     git_provider: str,
     git_owner: str,
@@ -1457,7 +1457,7 @@ async def _resolve_new_cloud_workspace_create(
 
     repo_config = await _load_repo_config_value_tx(user.id, git_owner, git_repo_name)
     if repo_config is None or not repo_config.configured:
-        async with db_engine.async_session_factory() as db:
+        async with db_session.open_async_session() as db:
             existing_repo_workspace = await load_any_cloud_workspace_for_repo(
                 db,
                 user_id=user.id,
@@ -1516,7 +1516,7 @@ async def _resolve_new_cloud_workspace_create(
             status_code=400,
         )
 
-    async with db_engine.async_session_factory() as db:
+    async with db_session.open_async_session() as db:
         existing_cloud_workspace = await load_existing_cloud_workspace(
             db,
             user_id=user.id,
@@ -1588,7 +1588,7 @@ async def _resolve_new_cloud_workspace_create(
 
 
 async def _resolve_new_managed_cloud_workspace_create(
-    user: User,
+    user: ActorIdentity,
     *,
     sandbox_profile_id: UUID,
     target_id: UUID,
@@ -1623,7 +1623,7 @@ async def _resolve_new_managed_cloud_workspace_create(
             status_code=400,
         )
 
-    async with db_engine.async_session_factory() as db:
+    async with db_session.open_async_session() as db:
         profile = await sandbox_profile_store.load_sandbox_profile_by_id(db, sandbox_profile_id)
         if profile is None or profile.primary_target_id != target_id:
             raise CloudApiError(
@@ -1783,7 +1783,7 @@ async def _resolve_new_managed_cloud_workspace_create(
 
 
 async def create_cloud_workspace(
-    user: User,
+    user: ActorIdentity,
     *,
     db: AsyncSession | None = None,
     git_provider: str,
@@ -1824,7 +1824,7 @@ async def create_cloud_workspace(
             source,
             CREATE_WORKSPACE_ORIGIN_BY_SOURCE["desktop"],
         )
-        async with db_engine.async_session_factory() as create_db, create_db.begin():
+        async with db_session.open_async_transaction() as create_db:
             workspace = await create_cloud_workspace_for_user(
                 create_db,
                 user_id=user.id,
@@ -1853,7 +1853,7 @@ async def create_cloud_workspace(
 
 
 async def create_cloud_workspace_for_automation_run(
-    user: User,
+    user: ActorIdentity,
     *,
     run_id: UUID,
     claim_id: UUID,
@@ -1885,7 +1885,7 @@ async def create_cloud_workspace_for_automation_run(
         required_agent_kind=required_agent_kind,
     )
     try:
-        async with db_engine.async_session_factory() as db, db.begin():
+        async with db_session.open_async_transaction() as db:
             workspace = await create_managed_cloud_workspace_for_claimed_run(
                 db,
                 run_id=run_id,
@@ -1920,7 +1920,7 @@ async def create_cloud_workspace_for_automation_run(
 
 
 async def ensure_cloud_workspace_for_existing_branch(
-    user: User,
+    user: ActorIdentity,
     *,
     git_provider: str,
     git_owner: str,
@@ -1947,7 +1947,7 @@ async def ensure_cloud_workspace_for_existing_branch(
             "Choose a branch before provisioning a cloud workspace.",
             status_code=400,
         )
-    async with db_engine.async_session_factory() as db:
+    async with db_session.open_async_session() as db:
         existing_cloud_workspace = await load_existing_cloud_workspace(
             db,
             user_id=user.id,
@@ -1984,7 +1984,7 @@ async def ensure_cloud_workspace_for_existing_branch(
     billing_snapshot = await get_billing_snapshot_for_subject(authorization.billing_subject_id)
     cloud_repo_limit = repo_limit_for_billing_snapshot(billing_snapshot)
     try:
-        async with db_engine.async_session_factory() as db, db.begin():
+        async with db_session.open_async_transaction() as db:
             workspace = await create_cloud_workspace_for_user(
                 db,
                 user_id=user.id,
@@ -2021,7 +2021,7 @@ def _cloud_workspace_should_be_replaced_for_mobility_retry(
 
 
 async def _archive_failed_cloud_workspace_for_mobility_retry(workspace_id: UUID) -> None:
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         await archive_cloud_workspace_record_by_id(db, workspace_id=workspace_id)
 
 
@@ -2038,13 +2038,13 @@ async def _refresh_repo_env_snapshot_for_workspace(workspace: CloudWorkspace) ->
             user_id=workspace.user_id,
             repo=f"{workspace.git_owner}/{workspace.git_repo_name}",
         )
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         return await save_workspace(db, workspace)
 
 
 async def start_cloud_workspace(
     db: AsyncSession,
-    user: User,
+    user: ActorIdentity,
     workspace_id: UUID,
     *,
     requested_base_sha: str | None = None,
@@ -2115,7 +2115,7 @@ async def start_cloud_workspace(
         if start_decision.clear_last_error:
             workspace.last_error = None
         if start_decision.persist_before_schedule:
-            async with db_engine.async_session_factory() as persist_db, persist_db.begin():
+            async with db_session.open_async_transaction() as persist_db:
                 workspace = await save_workspace(persist_db, workspace)
         log_cloud_event(
             "cloud workspace queued",
@@ -2165,7 +2165,7 @@ async def start_cloud_workspace(
     if start_decision.clear_last_error:
         workspace.last_error = None
     if start_decision.persist_before_schedule:
-        async with db_engine.async_session_factory() as persist_db, persist_db.begin():
+        async with db_session.open_async_transaction() as persist_db:
             workspace = await save_workspace(persist_db, workspace)
     log_cloud_event(
         "cloud workspace restart queued",
@@ -2270,7 +2270,7 @@ async def archive_cloud_workspace(
         workspace.cleanup_state = CloudWorkspaceCleanupState.failed.value
         workspace.cleanup_last_error = prune_error
     detail = await _build_workspace_detail_for_request(db, workspace)
-    await db.commit()
+    await db_session.commit_session(db)
     return detail
 
 
@@ -2327,9 +2327,11 @@ async def restore_cloud_workspace(
     try:
         await restore_cloud_workspace_record(db, workspace=workspace)
         detail = await _build_workspace_detail_for_request(db, workspace)
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
+        await db_session.commit_session(db)
+    except Exception as exc:
+        if not db_session.is_integrity_error(exc):
+            raise
+        await db_session.rollback_session(db)
         raise CloudApiError(
             "workspace_restore_conflict",
             "Another active workspace already exists for this repo and branch.",
@@ -2367,7 +2369,7 @@ async def purge_cloud_workspace(
         command_kinds=None,
     )
     await purge_cloud_workspace_record(db, workspace=workspace)
-    await db.commit()
+    await db_session.commit_session(db)
 
 
 async def delete_cloud_workspace(
@@ -2380,7 +2382,7 @@ async def delete_cloud_workspace(
     workspace_record_id = workspace.id
     db.expunge(workspace)
     await _destroy_workspace_runtime(workspace)
-    async with db_engine.async_session_factory() as delete_db, delete_db.begin():
+    async with db_session.open_async_transaction() as delete_db:
         if refreshed := await load_cloud_workspace_by_id(delete_db, workspace_record_id):
             await delete_cloud_workspace_records_for_workspace(delete_db, refreshed)
 
@@ -2390,7 +2392,7 @@ async def _revoke_claim_tokens_for_workspace(
     *,
     reason: str,
 ) -> None:
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         claim = await claims_store.get_claim_for_workspace(db, workspace.id)
         if claim is None:
             return
@@ -2454,7 +2456,7 @@ async def _stop_workspace_runtime(workspace: CloudWorkspace) -> None:
         )
     else:
         workspace.updated_at = utcnow()
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         await persist_workspace_stop_state(db, workspace)
     log_cloud_event(
         "cloud workspace stopped",
@@ -2498,7 +2500,7 @@ async def _destroy_workspace_runtime(workspace: CloudWorkspace) -> None:
         else:
             await _update_sandbox_status_tx(sandbox, "destroyed", stopped_at_now=True)
     transition_workspace_status(workspace, CloudWorkspaceStatus.archived, status_detail="Archived")
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         await persist_workspace_destroy_state(db, workspace)
     log_cloud_event(
         "cloud workspace destroyed",
@@ -2518,7 +2520,7 @@ async def _load_workspace_owned_runtime_sandbox(
     sandbox_id = getattr(workspace, "active_sandbox_id", None)
     if sandbox_id is None:
         return None
-    async with db_engine.async_session_factory() as db:
+    async with db_session.open_async_session() as db:
         sandbox = await load_cloud_sandbox_by_id(db, sandbox_id)
     if sandbox is None:
         return None
@@ -2541,7 +2543,7 @@ async def get_cloud_connection(
 ) -> WorkspaceConnection:
     workspace = await cloud_workspace_user_can_interact_with_db(db, user_id, workspace_id)
     await _reject_shared_workspace_static_connection(workspace)
-    async with db_engine.async_session_factory() as lookup_db:
+    async with db_session.open_async_session() as lookup_db:
         automation_runs_by_workspace = await list_latest_runs_by_cloud_workspace_ids_for_user(
             lookup_db,
             user_id=user_id,
@@ -2596,7 +2598,7 @@ async def get_cloud_connection(
             status_code=409,
         ) from exc
 
-    async with db_engine.async_session_factory() as reload_db:
+    async with db_session.open_async_session() as reload_db:
         reloaded_workspace = await load_cloud_workspace_by_id(reload_db, workspace.id)
     if reloaded_workspace is not None:
         workspace = reloaded_workspace
@@ -2620,7 +2622,7 @@ async def get_cloud_connection(
 async def _reject_shared_workspace_static_connection(workspace: CloudWorkspace) -> None:
     if workspace.owner_scope != "organization":
         return
-    async with db_engine.async_session_factory() as db:
+    async with db_session.open_async_session() as db:
         exposure, _claim = await load_workspace_exposure_and_claim(
             db,
             target_id=workspace.target_id,

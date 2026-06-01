@@ -15,7 +15,12 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.authorization import OwnerContext, OwnerSelection, require_org_role
+from proliferate.auth.authorization import (
+    AuthenticatedUser,
+    OwnerContext,
+    OwnerSelection,
+    require_org_role,
+)
 from proliferate.config import settings
 from proliferate.constants.billing import (
     ACTIVE_SANDBOX_STATUSES,
@@ -54,8 +59,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_ROLE_OWNER,
     ORGANIZATION_STATUS_PENDING_CHECKOUT,
 )
-from proliferate.db import engine as db_engine
-from proliferate.db.models.auth import User
+from proliferate.db import session_ops as db_session
 from proliferate.db.models.billing import (
     BillingEntitlement,
     BillingGrant,
@@ -64,6 +68,7 @@ from proliferate.db.models.billing import (
     UsageSegment,
 )
 from proliferate.db.store import organization_invitations as invitation_store
+from proliferate.db.store import users as user_store
 from proliferate.db.store.billing import (
     BillingAccountingResult,
     BillingSnapshotState,
@@ -297,7 +302,7 @@ async def maybe_create_organization_seat_adjustment(
 async def reconcile_initial_org_subscription_seats(
     record: BillingSubscription,
 ) -> BillingSubscription:
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         adjustment = await prepare_initial_org_seat_reconcile(
             db,
             billing_subscription_id=record.id,
@@ -305,7 +310,7 @@ async def reconcile_initial_org_subscription_seats(
             pro_monthly_price_id=configured_pro_monthly_price_id(),
         )
     if adjustment is None:
-        async with db_engine.async_session_factory() as db:
+        async with db_session.open_async_session() as db:
             reloaded = await load_billing_subscription_by_id(db, record.id)
         return reloaded or record
     try:
@@ -314,18 +319,18 @@ async def reconcile_initial_org_subscription_seats(
             quantity=adjustment.target_quantity,
             idempotency_key=f"initial-seat-reconcile:{adjustment.id}:seats:{adjustment.target_quantity}",
         )
-        async with db_engine.async_session_factory() as db, db.begin():
+        async with db_session.open_async_transaction() as db:
             await mark_seat_adjustment_stripe_confirmed(
                 db,
                 adjustment_id=adjustment.id,
             )
-        async with db_engine.async_session_factory() as db, db.begin():
+        async with db_session.open_async_transaction() as db:
             await mark_seat_adjustment_grant_issued(
                 db,
                 adjustment_id=adjustment.id,
             )
     except stripe_billing.StripeBillingError as error:
-        async with db_engine.async_session_factory() as db, db.begin():
+        async with db_session.open_async_transaction() as db:
             await mark_seat_adjustment_failed(
                 db,
                 adjustment_id=adjustment.id,
@@ -334,14 +339,14 @@ async def reconcile_initial_org_subscription_seats(
             )
         raise
     except Exception as error:
-        async with db_engine.async_session_factory() as db, db.begin():
+        async with db_session.open_async_transaction() as db:
             await mark_seat_adjustment_failed(
                 db,
                 adjustment_id=adjustment.id,
                 error=f"{type(error).__name__}: {error}",
             )
         raise
-    async with db_engine.async_session_factory() as db:
+    async with db_session.open_async_session() as db:
         reloaded = await load_billing_subscription_by_id(db, record.id)
     return reloaded or record
 
@@ -376,7 +381,7 @@ async def record_cloud_sandbox_usage_started(
     is_billable: bool = True,
     event_id: str | None = None,
 ) -> object:
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         return await open_usage_segment_for_sandbox_record(
             db,
             runtime_environment_id=runtime_environment_id,
@@ -400,7 +405,7 @@ async def record_cloud_sandbox_usage_stopped(
     is_billable: bool | None = None,
     event_id: str | None = None,
 ) -> object | None:
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         return await close_usage_segment_for_sandbox_record(
             db,
             sandbox_id=sandbox_id,
@@ -476,7 +481,7 @@ def _segment_seconds(segment: UsageSegment, now: datetime) -> float:
 
 
 async def get_billing_snapshot(user_id: UUID) -> BillingSnapshot:
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         state = await get_billing_snapshot_state_for_user(db, user_id)
         state = await state_with_overage_usage(db, state)
     return _build_billing_snapshot(state)
@@ -490,7 +495,7 @@ async def get_billing_snapshot_for_request(
 
 
 async def get_billing_snapshot_for_subject(billing_subject_id: UUID) -> BillingSnapshot:
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         state = await get_billing_snapshot_state_for_subject(db, billing_subject_id)
         state = await state_with_overage_usage(db, state)
     return _build_billing_snapshot(state)
@@ -724,7 +729,7 @@ async def authorize_sandbox_start_for_billing_subject(
     billing_subject_id: UUID,
     workspace_id: UUID | None = None,
 ) -> SandboxStartAuthorization:
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         state = await get_billing_snapshot_state_for_subject(db, billing_subject_id)
         state = await state_with_overage_usage(db, state)
         snapshot = _build_billing_snapshot(state)
@@ -741,7 +746,7 @@ async def authorize_sandbox_start(
     user_id: UUID,
     workspace_id: UUID | None,
 ) -> SandboxStartAuthorization:
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         if workspace_id is None:
             state = await get_billing_snapshot_state_for_user(db, user_id)
         else:
@@ -804,7 +809,7 @@ async def get_billing_overview(db: AsyncSession, user_id: UUID) -> BillingOvervi
 
 async def get_billing_overview_for_owner(
     db: AsyncSession,
-    user: User,
+    user: AuthenticatedUser,
     owner_selection: OwnerSelection,
 ) -> BillingOverview:
     context = await _resolve_billing_owner_context(db, user, owner_selection)
@@ -828,7 +833,7 @@ async def get_cloud_plan(db: AsyncSession, user_id: UUID) -> CloudPlanInfo:
 
 async def get_cloud_plan_for_owner(
     db: AsyncSession,
-    user: User,
+    user: AuthenticatedUser,
     owner_selection: OwnerSelection,
 ) -> CloudPlanInfo:
     context = await _resolve_billing_owner_context(db, user, owner_selection)
@@ -1012,7 +1017,7 @@ def _require_owner_selection_uuid(value: str | UUID | None, *, field: str) -> UU
 
 async def _resolve_billing_owner_context(
     db: AsyncSession,
-    user: User,
+    user: AuthenticatedUser,
     owner_selection: OwnerSelection,
 ) -> OwnerContext:
     selection = owner_selection or OwnerSelection()
@@ -1069,7 +1074,7 @@ async def _resolve_billing_owner_context(
 
 async def _ensure_stripe_customer_for_owner(
     db: AsyncSession,
-    user: User,
+    user: AuthenticatedUser,
     owner_selection: OwnerSelection,
     *,
     owner_context: OwnerContext | None = None,
@@ -1186,7 +1191,7 @@ async def _send_staged_team_checkout_invitation(
     email: str,
 ) -> None:
     token = secrets.token_urlsafe(32)
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         record = await invitation_store.create_or_rotate_organization_invitation(
             db,
             organization_id=organization_id,
@@ -1210,7 +1215,7 @@ async def _send_staged_team_checkout_invitation(
             invite_url=_organization_invitation_landing_url(token),
         )
     except resend.ResendEmailError as error:
-        async with db_engine.async_session_factory() as db, db.begin():
+        async with db_session.open_async_transaction() as db:
             await invitation_store.mark_invitation_delivery(
                 db,
                 invitation_id=record.invitation.id,
@@ -1228,7 +1233,7 @@ async def _send_staged_team_checkout_invitation(
             },
         )
         return
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         await invitation_store.mark_invitation_delivery(
             db,
             invitation_id=record.invitation.id,
@@ -1283,7 +1288,7 @@ async def _send_staged_team_checkout_invitations(
 async def _ensure_stripe_customer_for_team_checkout(
     db: AsyncSession,
     *,
-    user: User,
+    user: AuthenticatedUser,
     organization_id: UUID,
     billing_subject_id: UUID,
     team_name: str,
@@ -1322,7 +1327,7 @@ async def _ensure_stripe_customer_for_team_checkout(
 async def _create_stripe_session_for_team_checkout_intent(
     db: AsyncSession,
     *,
-    user: User,
+    user: AuthenticatedUser,
     intent_record: CheckoutIntentWithOrganizationRecord,
     success_url: str,
     cancel_url: str,
@@ -1388,7 +1393,7 @@ async def _create_stripe_session_for_team_checkout_intent(
 
 async def create_team_checkout_session(
     db: AsyncSession,
-    user: User,
+    user: AuthenticatedUser,
     *,
     team_name: str,
     invite_emails: list[str],
@@ -1445,7 +1450,7 @@ async def create_team_checkout_session(
 
 async def get_current_team_checkout(
     db: AsyncSession,
-    user: User,
+    user: AuthenticatedUser,
 ) -> CurrentTeamCheckoutResponse:
     async with db.begin():
         record = await get_current_team_checkout_intent(db, user.id)
@@ -1456,7 +1461,7 @@ async def get_current_team_checkout(
 
 async def cancel_current_team_checkout(
     db: AsyncSession,
-    user: User,
+    user: AuthenticatedUser,
     intent_id: UUID,
 ) -> CurrentTeamCheckoutResponse:
     async with db.begin():
@@ -1584,7 +1589,7 @@ async def activate_team_checkout_from_stripe_session(
             )
     status = subscription.get("status")
     if status not in {"active", "trialing"}:
-        async with db_engine.async_session_factory() as db, db.begin():
+        async with db_session.open_async_transaction() as db:
             row = await load_team_checkout_intent_for_update(db, intent_id)
             if row is not None:
                 intent, _organization = row
@@ -1599,7 +1604,7 @@ async def activate_team_checkout_from_stripe_session(
         return
 
     staged_invites: tuple[UUID, str, UUID, str, str | None] | None = None
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         row = await load_team_checkout_intent_for_update(db, intent_id)
         if row is None:
             raise BillingServiceError(
@@ -1631,7 +1636,7 @@ async def activate_team_checkout_from_stripe_session(
                 webhook_event_id=webhook_event_id,
             )
             return
-        creator = await db.get(User, created_by_user_id)
+        creator = await user_store.get_user_by_id(db, created_by_user_id)
         if creator is None:
             await mark_team_checkout_failed(
                 db,
@@ -1699,7 +1704,7 @@ async def activate_team_checkout_from_stripe_session(
 
 async def create_cloud_checkout_session(
     db: AsyncSession,
-    user: User,
+    user: AuthenticatedUser,
     owner_selection: OwnerSelection | None = None,
     return_surface: BillingReturnSurface = "web",
 ) -> BillingUrlResponse:
@@ -1801,7 +1806,7 @@ async def create_cloud_checkout_session(
 
 async def create_refill_checkout_session(
     db: AsyncSession,
-    user: User,
+    user: AuthenticatedUser,
     owner_selection: OwnerSelection | None = None,
     return_surface: BillingReturnSurface = "web",
 ) -> BillingUrlResponse:
@@ -1849,7 +1854,7 @@ async def create_refill_checkout_session(
 
 async def create_customer_portal_session(
     db: AsyncSession,
-    user: User,
+    user: AuthenticatedUser,
     owner_selection: OwnerSelection | None = None,
     return_surface: BillingReturnSurface = "web",
 ) -> BillingUrlResponse:
@@ -1872,7 +1877,7 @@ async def create_customer_portal_session(
 
 async def update_overage_settings(
     db: AsyncSession,
-    user: User,
+    user: AuthenticatedUser,
     *,
     enabled: bool,
     cap_cents_per_seat: int | None = None,
@@ -1968,7 +1973,7 @@ async def account_usage_for_billing_subject(
     if effective_scan_until > now:
         effective_scan_until = now
 
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         await acquire_billing_subject_accounting_lock(db, billing_subject_id)
         subject = await get_billing_subject_by_id(db, billing_subject_id)
         if subject is None:
@@ -2151,7 +2156,7 @@ async def account_usage_for_billing_subject(
 
 
 async def claim_usage_exports_for_sending(*, limit: int = 100) -> list[ClaimedUsageExport]:
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         return await claim_usage_exports_for_sending_record(db, limit=limit)
 
 
@@ -2192,13 +2197,13 @@ async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
 
     await process_pending_seat_adjustments()
 
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         subject_ids = await list_billing_subject_ids_for_usage_accounting(
             db,
             limit=subject_limit,
         )
     for billing_subject_id in subject_ids:
-        async with db_engine.async_session_factory() as db, db.begin():
+        async with db_session.open_async_transaction() as db:
             state = await get_billing_snapshot_state_for_subject(db, billing_subject_id)
             state = await state_with_overage_usage(db, state)
         now = utcnow()
@@ -2256,7 +2261,7 @@ async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
 
         if any(result.export_count > 0 for result in results):
             snapshot = _build_billing_snapshot(state)
-            async with db_engine.async_session_factory() as db, db.begin():
+            async with db_session.open_async_transaction() as db:
                 await record_billing_decision_event(
                     db,
                     billing_subject_id=billing_subject_id,
@@ -2283,7 +2288,7 @@ async def process_pending_seat_adjustments(*, limit: int = 100) -> None:
     if not settings.pro_billing_enabled or settings.cloud_billing_mode == BILLING_MODE_OFF:
         return
 
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         adjustments = await claim_pending_seat_adjustments(db, limit=limit)
     for adjustment in adjustments:
         try:
@@ -2292,7 +2297,7 @@ async def process_pending_seat_adjustments(*, limit: int = 100) -> None:
                 quantity=adjustment.target_quantity,
                 idempotency_key=f"seat-quantity:{adjustment.id}:seats:{adjustment.target_quantity}",
             )
-            async with db_engine.async_session_factory() as db, db.begin():
+            async with db_session.open_async_transaction() as db:
                 await mark_seat_adjustment_stripe_confirmed(
                     db,
                     adjustment_id=adjustment.id,
@@ -2316,7 +2321,7 @@ async def process_pending_seat_adjustments(*, limit: int = 100) -> None:
                     period_end=adjustment.period_end,
                     effective_at=adjustment.effective_at,
                 )
-                async with db_engine.async_session_factory() as db, db.begin():
+                async with db_session.open_async_transaction() as db:
                     await ensure_billing_grant_record(
                         db,
                         user_id=adjustment.user_id,
@@ -2327,13 +2332,13 @@ async def process_pending_seat_adjustments(*, limit: int = 100) -> None:
                         expires_at=adjustment.period_end,
                         source_ref=grant_source_ref,
                     )
-            async with db_engine.async_session_factory() as db, db.begin():
+            async with db_session.open_async_transaction() as db:
                 await mark_seat_adjustment_grant_issued(
                     db,
                     adjustment_id=adjustment.id,
                 )
         except stripe_billing.StripeBillingError as error:
-            async with db_engine.async_session_factory() as db, db.begin():
+            async with db_session.open_async_transaction() as db:
                 await mark_seat_adjustment_failed(
                     db,
                     adjustment_id=adjustment.id,
@@ -2341,7 +2346,7 @@ async def process_pending_seat_adjustments(*, limit: int = 100) -> None:
                     terminal=_stripe_error_is_terminal(error),
                 )
         except Exception as error:
-            async with db_engine.async_session_factory() as db, db.begin():
+            async with db_session.open_async_transaction() as db:
                 await mark_seat_adjustment_failed(
                     db,
                     adjustment_id=adjustment.id,
@@ -2357,7 +2362,7 @@ async def send_pending_usage_exports(*, limit: int = 100) -> None:
     if settings.cloud_billing_mode != BILLING_MODE_ENFORCE:
         return
 
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         exports = await claim_usage_exports_for_sending_record(db, limit=limit)
     now = utcnow()
     for export in exports:
@@ -2365,7 +2370,7 @@ async def send_pending_usage_exports(*, limit: int = 100) -> None:
         if not export.stripe_customer_id:
             terminal_error = "Billing subject has no Stripe customer id."
         if terminal_error is not None:
-            async with db_engine.async_session_factory() as db, db.begin():
+            async with db_session.open_async_transaction() as db:
                 await mark_usage_export_failed(
                     db,
                     export_id=export.id,
@@ -2407,7 +2412,7 @@ async def send_pending_usage_exports(*, limit: int = 100) -> None:
                 meter_kwargs["quantity"] = quantity
             payload = await stripe_billing.create_meter_event(**meter_kwargs)
         except stripe_billing.StripeBillingError as error:
-            async with db_engine.async_session_factory() as db, db.begin():
+            async with db_session.open_async_transaction() as db:
                 await mark_usage_export_failed(
                     db,
                     export_id=export.id,
@@ -2425,7 +2430,7 @@ async def send_pending_usage_exports(*, limit: int = 100) -> None:
             continue
 
         meter_identifier = payload.get("identifier")
-        async with db_engine.async_session_factory() as db, db.begin():
+        async with db_session.open_async_transaction() as db:
             await mark_usage_export_succeeded(
                 db,
                 export_id=export.id,
@@ -2444,7 +2449,7 @@ def _terminal_export_error(accounted_until: datetime, *, now: datetime) -> str |
 
 
 async def _record_usage_export_decision(*, billing_subject_id: UUID, reason: str) -> None:
-    async with db_engine.async_session_factory() as db, db.begin():
+    async with db_session.open_async_transaction() as db:
         await record_billing_decision_event(
             db,
             billing_subject_id=billing_subject_id,

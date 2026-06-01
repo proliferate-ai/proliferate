@@ -2,12 +2,20 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Protocol
 from uuid import UUID
 
 from proliferate.errors import NotFoundError, PermissionDenied
 
 OwnerScope = Literal["personal", "organization"]
+
+
+class ActorIdentity(Protocol):
+    id: UUID
+
+
+class AuthenticatedUser(ActorIdentity, Protocol):
+    email: str
 
 
 @dataclass(frozen=True)

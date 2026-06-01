@@ -7,7 +7,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.auth import User
+from proliferate.auth.authorization import ActorIdentity
 from proliferate.db.store import cloud_sandbox_profiles as profile_store
 from proliferate.db.store import cloud_sandboxes as slot_store
 from proliferate.db.store import organizations as organizations_store
@@ -43,7 +43,7 @@ class SandboxProfileTargetState:
 async def ensure_personal(
     db: AsyncSession,
     *,
-    user: User,
+    user: ActorIdentity,
 ) -> profile_store.SandboxProfileSnapshot:
     profile = await profile_store.ensure_personal_sandbox_profile(
         db,
@@ -73,7 +73,7 @@ async def ensure_personal(
 async def ensure_organization(
     db: AsyncSession,
     *,
-    user: User,
+    user: ActorIdentity,
     organization_id: UUID,
 ) -> profile_store.SandboxProfileSnapshot:
     membership = await organizations_store.get_active_membership(
@@ -141,7 +141,7 @@ async def ensure_organization_for_activation(
 async def get_profile(
     db: AsyncSession,
     *,
-    user: User,
+    user: ActorIdentity,
     sandbox_profile_id: UUID,
 ) -> profile_store.SandboxProfileSnapshot:
     profile = await profile_store.load_sandbox_profile_by_id(db, sandbox_profile_id)
@@ -158,7 +158,7 @@ async def get_profile(
 async def enable_cloud(
     db: AsyncSession,
     *,
-    user: User,
+    user: ActorIdentity,
     sandbox_profile_id: UUID,
 ) -> SandboxProfileTargetState:
     profile = await get_profile(db, user=user, sandbox_profile_id=sandbox_profile_id)
@@ -185,7 +185,7 @@ async def enable_cloud(
 async def get_target_state(
     db: AsyncSession,
     *,
-    user: User,
+    user: ActorIdentity,
     sandbox_profile_id: UUID,
 ) -> SandboxProfileTargetState:
     profile = await get_profile(db, user=user, sandbox_profile_id=sandbox_profile_id)
@@ -217,7 +217,7 @@ async def get_target_state(
 async def _require_profile_access(
     db: AsyncSession,
     *,
-    user: User,
+    user: ActorIdentity,
     profile: profile_store.SandboxProfileSnapshot,
 ) -> None:
     if profile.owner_scope == "personal":

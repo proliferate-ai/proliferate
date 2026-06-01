@@ -6,13 +6,18 @@ from uuid import uuid4
 import pytest
 
 from proliferate.server.cloud.workspaces import service as workspace_service
-from tests.unit.db_session_helpers import NoopDb, patch_async_session_factory
+from tests.unit.db_session_helpers import NoopDb, noop_async_context
 
 INTERACT_WITH_DB = "cloud_workspace_user_can_interact_with_db"
 
 
 def _patch_session_factory(monkeypatch: pytest.MonkeyPatch, db: NoopDb) -> NoopDb:
-    return patch_async_session_factory(monkeypatch, workspace_service.db_engine, db)
+    monkeypatch.setattr(
+        workspace_service.db_session,
+        "open_async_session",
+        lambda: noop_async_context(db),
+    )
+    return db
 
 
 @pytest.mark.asyncio

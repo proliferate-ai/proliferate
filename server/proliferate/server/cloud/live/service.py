@@ -11,7 +11,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db import engine as db_engine
+from proliferate.db import session_ops as db_session
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import targets as targets_store
@@ -184,7 +184,7 @@ async def _publish_live_after_commit(
     db: AsyncSession,
     callback: LivePublishCallback,
 ) -> None:
-    await db_engine.run_after_commit(db, callback)
+    await db_session.run_after_commit(db, callback)
 
 
 async def stream_session_events(
@@ -196,7 +196,7 @@ async def stream_session_events(
     cursor = clamp_live_cursor(after_seq)
     channel = session_channel(target_id=target_id, session_id=session_id)
     async with _live_bus.subscribe(channel) as messages:
-        async with db_engine.async_session_factory() as stream_db:
+        async with db_session.open_async_session() as stream_db:
             snapshot = await _get_session_snapshot(
                 stream_db,
                 target_id=target_id,
@@ -251,7 +251,7 @@ async def stream_workspace_events(
     workspace_id = UUID(workspace.id)
     channel = workspace_channel(workspace_id=workspace_id)
     async with _live_bus.subscribe(channel) as messages:
-        async with db_engine.async_session_factory() as stream_db:
+        async with db_session.open_async_session() as stream_db:
             snapshot = await _get_workspace_snapshot(
                 stream_db,
                 workspace=workspace,
@@ -307,7 +307,7 @@ async def stream_target_events(
     cursor = clamp_live_cursor(after_seq)
     channel = target_channel(target_id=target_id)
     async with _live_bus.subscribe(channel) as messages:
-        async with db_engine.async_session_factory() as stream_db:
+        async with db_session.open_async_session() as stream_db:
             snapshot = await _get_target_snapshot(stream_db, target_id=target_id)
         yield _sse_event(
             event="snapshot",

@@ -105,6 +105,25 @@ def test_service_rejects_db_commit_call(tmp_path: Path) -> None:
     assert any(".commit()" in item.message for item in violations)
 
 
+def test_service_rejects_session_ops_import_and_call(tmp_path: Path) -> None:
+    module = _load_checker_module()
+    path = tmp_path / "server" / "proliferate" / "server" / "example" / "service.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        "from proliferate.db import session_ops as db_session\n"
+        "async def run() -> None:\n"
+        "    async with db_session.open_async_session() as db:\n"
+        "        await db_session.commit_session(db)\n"
+        "    if db_session.is_integrity_error(Exception()):\n"
+        "        return None\n"
+    )
+
+    violations = module.check_paths([path])
+
+    assert any(item.rule_id == "SERVICE_DB_ENGINE_IMPORT" for item in violations)
+    assert sum(item.rule_id == "SERVICE_DB_METHOD_CALL" for item in violations) == 3
+
+
 def test_store_rejects_self_opening_session_and_commit(tmp_path: Path) -> None:
     module = _load_checker_module()
     path = tmp_path / "server" / "proliferate" / "db" / "store" / "example.py"

@@ -15,7 +15,6 @@ from urllib.parse import urlparse
 from uuid import UUID
 
 from cryptography.fernet import InvalidToken
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import PolicyDenied
@@ -35,7 +34,7 @@ from proliferate.constants.cloud import (
     CloudCommandStatus,
 )
 from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZATION_ROLE_OWNER
-from proliferate.db import engine as db_engine
+from proliferate.db import session_ops as db_session
 from proliferate.db.store import cloud_sandboxes
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.billing import (
@@ -144,7 +143,7 @@ async def _kick_agent_auth_refresh_wake_after_commit(
 
         kick_off_managed_slot_wake(command.target_id, command.id)
 
-    await db_engine.run_after_commit(db, _wake_after_commit)
+    await db_session.run_after_commit(db, _wake_after_commit)
 
 
 @dataclass(frozen=True)
@@ -1129,12 +1128,12 @@ async def sync_managed_credit_budget_for_organization(
 ) -> AgentGatewayBudgetSubjectRecord | None:
     """Recompute and mirror an existing managed-credit budget after billing changes."""
 
-    async with db_engine.async_session_factory() as db:
+    async with db_session.open_async_session() as db:
         budget = await store.get_managed_budget_subject(db, organization_id)
         if budget is None:
             return None
         reconciled = await _reconcile_managed_budget_subject(db, budget=budget)
-        await db.commit()
+        await db_session.commit_session(db)
         return reconciled
 
 
@@ -4686,7 +4685,9 @@ async def _queue_agent_auth_refresh_command(
                     }
                 ),
             )
-    except IntegrityError:
+    except Exception as exc:
+        if not db_session.is_integrity_error(exc):
+            raise
         duplicate = await commands_store.get_command_by_idempotency(
             db,
             idempotency_scope=idempotency_scope,

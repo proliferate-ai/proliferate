@@ -7,13 +7,13 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.authorization import ActorIdentity
 from proliferate.auth.identity.store import ReadyGitHubGrant, get_ready_github_grant_for_user
 from proliferate.constants.cloud import (
     SUPPORTED_GIT_PROVIDER,
     CloudCommandKind,
     CloudCommandStatus,
 )
-from proliferate.db.models.auth import User
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import target_git_identity as identity_store
 from proliferate.db.store.cloud_sync import targets as targets_store
@@ -122,7 +122,7 @@ async def materialize_target_git_identity(
     db: AsyncSession,
     *,
     target_id: UUID,
-    user: User,
+    user: ActorIdentity,
     source: str,
     idempotency_key: str | None = None,
 ) -> MaterializeTargetGitIdentityResponse:

@@ -42,6 +42,7 @@ from proliferate.db.store.cloud_sync.events import list_session_projections_for_
 from proliferate.db.store.cloud_sync.exposures import get_active_workspace_exposure
 from proliferate.db.store.cloud_workspaces import (
     get_cloud_workspace_for_user,
+    load_cloud_workspace_by_id,
     load_existing_cloud_workspace,
 )
 from proliferate.db.store.cloud_workspaces import (
@@ -198,7 +199,7 @@ async def _default_cleanup_items_for_cutover(
     ):
         return []
 
-    source_workspace = await db.get(CloudWorkspace, source_cloud_workspace_id)
+    source_workspace = await load_cloud_workspace_by_id(db, source_cloud_workspace_id)
     if source_workspace is None:
         return []
 

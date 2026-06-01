@@ -6,9 +6,9 @@ import json
 from datetime import timedelta
 from uuid import UUID
 
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.auth.authorization import ActorIdentity
 from proliferate.constants.cloud import (
     CloudCommandActorKind,
     CloudCommandKind,
@@ -17,8 +17,7 @@ from proliferate.constants.cloud import (
     CloudTargetStatus,
     CloudWorkspaceStatus,
 )
-from proliferate.db import engine as db_engine
-from proliferate.db.models.auth import User
+from proliferate.db import session_ops as db_session
 from proliferate.db.store import cloud_runtime_environments, cloud_sandboxes, cloud_workspaces
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_profile_target_guard import managed_profile_target_requires_slot
@@ -106,7 +105,7 @@ _PROJECTED_SESSION_COMMAND_KINDS = {
 async def _resolve_command_workspace(
     db: AsyncSession,
     *,
-    user: User,
+    user: ActorIdentity,
     target: targets_store.CloudTargetSnapshot,
     kind: str,
     body: CreateCloudCommandRequest,
@@ -304,7 +303,7 @@ async def _resolve_command_workspace(
 async def _resolve_direct_start_session_workspace(
     db: AsyncSession,
     *,
-    user: User,
+    user: ActorIdentity,
     target: targets_store.CloudTargetSnapshot,
     body: CreateCloudCommandRequest,
     workspace_id: str,
@@ -359,7 +358,7 @@ async def _resolve_direct_start_session_workspace(
 async def _resolve_managed_start_session_workspace(
     db: AsyncSession,
     *,
-    user: User,
+    user: ActorIdentity,
     target: targets_store.CloudTargetSnapshot,
     body: CreateCloudCommandRequest,
 ) -> tuple[str | None, dict[str, object], str | None]:
@@ -459,7 +458,7 @@ async def _resolve_managed_start_session_workspace(
 async def _resolve_backfill_exposed_workspace_command(
     db: AsyncSession,
     *,
-    user: User,
+    user: ActorIdentity,
     target: targets_store.CloudTargetSnapshot,
     body: CreateCloudCommandRequest,
 ) -> tuple[str | None, dict[str, object], str | None]:
@@ -513,7 +512,7 @@ async def _resolve_backfill_exposed_workspace_command(
 async def _resolve_prune_workspace_worktree_command(
     db: AsyncSession,
     *,
-    user: User,
+    user: ActorIdentity,
     target: targets_store.CloudTargetSnapshot,
     body: CreateCloudCommandRequest,
 ) -> tuple[str | None, dict[str, object], str | None]:
@@ -587,7 +586,7 @@ async def _resolve_prune_workspace_worktree_command(
 async def _resolve_projected_session_command_workspace(
     db: AsyncSession,
     *,
-    user: User,
+    user: ActorIdentity,
     target: targets_store.CloudTargetSnapshot,
     body: CreateCloudCommandRequest,
 ) -> tuple[str | None, dict[str, object], str | None]:
@@ -802,7 +801,7 @@ def _command_has_managed_cloud_workspace(
 async def enqueue_command(
     db: AsyncSession,
     *,
-    user: User,
+    user: ActorIdentity,
     body: CreateCloudCommandRequest,
 ) -> commands_store.CloudCommandSnapshot:
     target = await targets_store.get_visible_target_by_id(
@@ -980,7 +979,9 @@ async def enqueue_command(
             command=command,
         )
         return command
-    except IntegrityError:
+    except Exception as exc:
+        if not db_session.is_integrity_error(exc):
+            raise
         duplicate = await commands_store.get_command_by_idempotency(
             db,
             idempotency_scope=idempotency_scope,
@@ -994,11 +995,11 @@ async def enqueue_command(
 async def enqueue_command_and_commit(
     db: AsyncSession,
     *,
-    user: User,
+    user: ActorIdentity,
     body: CreateCloudCommandRequest,
 ) -> commands_store.CloudCommandSnapshot:
     command = await enqueue_command(db, user=user, body=body)
-    await db_engine.commit_session(db)
+    await db_session.commit_session(db)
     return command
 
 
@@ -1154,7 +1155,7 @@ async def _queue_agent_auth_refresh_for_not_ready_preflight(
     actor_user_id: UUID,
 ) -> None:
     try:
-        async with db_engine.async_session_factory() as refresh_db, refresh_db.begin():
+        async with db_session.open_async_transaction() as refresh_db:
             await request_agent_auth_refresh_for_profile_target(
                 refresh_db,
                 sandbox_profile_id=sandbox_profile_id,
@@ -1726,7 +1727,7 @@ async def kick_off_command_wake_after_commit_if_required(
     async def _wake_after_commit() -> None:
         kick_off_managed_slot_wake(target.id, command.id)
 
-    await db_engine.run_after_commit(db, _wake_after_commit)
+    await db_session.run_after_commit(db, _wake_after_commit)
 
 
 def is_terminal_command_status(status: str) -> bool:

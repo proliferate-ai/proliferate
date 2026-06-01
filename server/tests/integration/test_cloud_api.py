@@ -1947,7 +1947,10 @@ class TestCloudWorkspaces:
         db_session: AsyncSession,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        async def _workspace_connection(_db, _workspace):
+        async def _workspace_connection(
+            _db: AsyncSession,
+            _workspace: CloudWorkspace,
+        ) -> RuntimeConnectionTarget:
             return RuntimeConnectionTarget(
                 target_id=None,
                 runtime_url="https://example-runtime.invalid",
