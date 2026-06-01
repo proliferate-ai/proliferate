@@ -12,6 +12,8 @@ use crate::domains::agents::model_registry::store::DynamicModelRegistryStore;
 use crate::domains::agents::reconcile::execution::AgentReconcileService;
 use crate::domains::agents::runtime::AgentRuntime;
 use crate::domains::agents::seed::AgentSeedStore;
+use crate::domains::artifacts::protection::ArtifactProtectionService;
+use crate::domains::artifacts::runtime::ArtifactRuntime;
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
 use crate::domains::cowork::delegation::service::CoworkDelegationService;
 use crate::domains::cowork::mcp::auth::CoworkMcpAuth;
@@ -43,7 +45,7 @@ use crate::sessions::deletion::SessionDeleteWorkflow;
 use crate::sessions::links::completions::LinkCompletionStore;
 use crate::sessions::links::service::SessionLinkService;
 use crate::sessions::links::store::SessionLinkStore;
-use crate::sessions::mcp_bindings::crypto::{DATA_KEY_ENV_VAR, load_data_cipher_from_env};
+use crate::sessions::mcp_bindings::crypto::{load_data_cipher_from_env, DATA_KEY_ENV_VAR};
 use crate::sessions::mcp_bindings::product_registry::ProductMcpEndpointRegistry;
 use crate::sessions::runtime::SessionRuntime;
 use crate::sessions::service::SessionService;
@@ -105,6 +107,7 @@ pub struct AppState {
     pub files_runtime: Arc<WorkspaceFilesRuntime>,
     pub process_service: Arc<ProcessService>,
     pub workspace_file_search_cache: Arc<WorkspaceFileSearchCache>,
+    pub artifact_runtime: Arc<ArtifactRuntime>,
     pub cowork_service: Arc<CoworkService>,
     pub cowork_artifact_runtime: Arc<CoworkArtifactRuntime>,
     pub cowork_session_hooks: Arc<CoworkSessionHooks>,
@@ -196,11 +199,16 @@ impl AppState {
         let workspace_operation_gate = Arc::new(WorkspaceOperationGate::new());
         let checkout_deletion_gate = Arc::new(CheckoutDeletionGate::new());
         let workspace_file_search_cache = Arc::new(WorkspaceFileSearchCache::new());
+        let artifact_runtime = Arc::new(ArtifactRuntime::new());
         let cowork_service = Arc::new(CoworkService::new(CoworkStore::new(db.clone())));
-        let cowork_artifact_runtime = Arc::new(CoworkArtifactRuntime::new());
+        let cowork_artifact_runtime = Arc::new(CoworkArtifactRuntime::from_artifact_runtime(
+            artifact_runtime.clone(),
+        ));
         let cowork_mcp_auth = Arc::new(CoworkMcpAuth::new(runtime_home.clone()));
+        let artifact_protection_service =
+            Arc::new(ArtifactProtectionService::for_surfaces(["cowork"]));
         let file_protection_registry = WorkspaceFileProtectionRegistry::new(vec![
-            cowork_artifact_runtime.clone() as Arc<dyn WorkspaceFileProtection>,
+            artifact_protection_service as Arc<dyn WorkspaceFileProtection>,
         ]);
         let files_runtime = Arc::new(WorkspaceFilesRuntime::new(
             workspace_runtime.clone(),
@@ -436,6 +444,7 @@ impl AppState {
             files_runtime,
             process_service,
             workspace_file_search_cache,
+            artifact_runtime,
             cowork_service,
             cowork_artifact_runtime,
             cowork_session_hooks,

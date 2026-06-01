@@ -5,8 +5,12 @@ Status: authoritative for cowork artifact lifecycle in AnyHarness.
 Scope:
 
 - `anyharness/crates/anyharness-contract/**` for cowork artifact wire shapes
-- `anyharness/crates/anyharness-lib/src/domains/cowork/**` for artifact lifecycle logic
-- `anyharness/crates/anyharness-lib/src/adapters/files/**` for artifact write protection
+- `anyharness/crates/anyharness-lib/src/domains/artifacts/**` for generic
+  artifact manifest, lifecycle, and write-protection logic
+- `anyharness/crates/anyharness-lib/src/domains/cowork/**` for cowork artifact
+  compatibility, session policy, and the current cowork MCP surface
+- `anyharness/crates/anyharness-lib/src/workspaces/files_runtime.rs` for
+  consulting artifact write protection before generic file mutations
 - `anyharness/sdk/**` and `anyharness/sdk-react/**` for cowork artifact client access
 - desktop consumers of cowork artifact HTTP endpoints
 
@@ -64,19 +68,32 @@ Keep ownership split the same way the rest of the runtime is split:
   - session startup prompt assembly
   - built-in cowork MCP binding injection
   - turn-end artifact autosave trigger
-- `domains/cowork/manifest.rs`
+- `domains/artifacts/model.rs`
+  - artifact-owned types, read models, inputs, and errors
+- `domains/artifacts/manifest.rs`
   - manifest schema
   - parse, validate, normalize, persist
-- `domains/cowork/artifacts.rs`
+- `domains/artifacts/service.rs`
+  - durable artifact lifecycle rules over the manifest/file-backed store
+- `domains/artifacts/runtime.rs`
   - artifact lifecycle operations
   - create, update, delete, read, list
+- `domains/artifacts/protection.rs`
+  - artifact manifest and artifact-backed path write protection
+- `domains/cowork/manifest.rs`
+  - cowork compatibility re-exports for existing callers
+- `domains/cowork/artifacts.rs`
+  - cowork compatibility wrapper that enforces cowork workspace scope before
+    delegating to the artifact runtime
 - `domains/cowork/mcp/**`
   - built-in cowork MCP server implementation
-  - tool registry and dispatch
+  - existing tool names and dispatch, with artifact calls delegated through the
+    cowork compatibility wrapper
 - `api/http/cowork.rs`
   - cowork artifact HTTP handlers only
-- `adapters/files/`
-  - generic write protection for manifest and artifact-backed paths
+- `workspaces/files_runtime.rs`
+  - generic file operations consult artifact-owned write protection for
+    manifest and artifact-backed paths
 
 Do not put artifact lifecycle logic in HTTP handlers or desktop hooks.
 
