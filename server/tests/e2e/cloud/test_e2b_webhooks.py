@@ -89,6 +89,7 @@ async def test_e2b_webhook_duplicate_ignored(
         sandbox_status="running",
     )
     await open_usage_segment_for_sandbox(
+        db_session,
         user_id=workspace.user_id,
         workspace_id=workspace.id,
         sandbox_id=sandbox.id,
@@ -279,6 +280,7 @@ async def test_e2b_webhook_paused_updates_state(
         sandbox_status="running",
     )
     await open_usage_segment_for_sandbox(
+        db_session,
         user_id=workspace.user_id,
         workspace_id=workspace.id,
         sandbox_id=sandbox.id,
@@ -334,6 +336,7 @@ async def test_e2b_webhook_killed_updates_state(
         with_runtime_metadata=True,
     )
     await open_usage_segment_for_sandbox(
+        db_session,
         user_id=workspace.user_id,
         workspace_id=workspace.id,
         sandbox_id=sandbox.id,

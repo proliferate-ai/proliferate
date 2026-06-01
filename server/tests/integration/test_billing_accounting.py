@@ -35,13 +35,11 @@ from proliferate.db.models.billing import (
     BillingUsageExport,
 )
 from proliferate.db.store.billing import (
-    account_usage_for_billing_subject,
-    claim_usage_exports_for_sending,
     ensure_billing_grant,
     ensure_personal_billing_subject,
 )
-from proliferate.server.billing import service as billing_service
 from proliferate.integrations.billing import stripe as stripe_billing
+from proliferate.server.billing import service as billing_service
 from tests.integration.billing_accounting_helpers import (
     patch_global_session_factory,
     seed_usage_segment,
@@ -96,7 +94,7 @@ async def test_usage_export_claiming_skips_written_off_rows(
     written_off_export_id = written_off_export.id
     billable_export_id = billable_export.id
 
-    claimed = await claim_usage_exports_for_sending()
+    claimed = await billing_service.claim_usage_exports_for_sending()
     db_session.expire_all()
 
     assert [export.id for export in claimed] == [billable_export_id]
@@ -137,7 +135,7 @@ async def test_usage_export_claiming_keeps_legacy_null_exports_in_pro_mode(
     await db_session.commit()
     legacy_export_id = legacy_export.id
 
-    claimed = await claim_usage_exports_for_sending()
+    claimed = await billing_service.claim_usage_exports_for_sending()
     db_session.expire_all()
 
     assert [export.id for export in claimed] == [legacy_export_id]
@@ -203,7 +201,7 @@ async def test_accounting_consumes_monthly_then_refill_and_observes_uncovered_us
     db_session.add(subscription)
     await db_session.commit()
 
-    result = await account_usage_for_billing_subject(
+    result = await billing_service.account_usage_for_billing_subject(
         billing_subject_id=subject_id,
         is_paid_cloud=True,
         billing_subscription_id=subscription.id,
@@ -328,7 +326,7 @@ async def test_paid_accounting_carries_free_grants_after_monthly_before_refill(
     db_session.add(subscription)
     await db_session.commit()
 
-    result = await account_usage_for_billing_subject(
+    result = await billing_service.account_usage_for_billing_subject(
         billing_subject_id=subject_id,
         is_paid_cloud=True,
         billing_subscription_id=subscription.id,
@@ -402,7 +400,7 @@ async def test_unlimited_accounting_advances_cursor_without_consuming_or_exporti
     )
     await db_session.commit()
 
-    result = await account_usage_for_billing_subject(
+    result = await billing_service.account_usage_for_billing_subject(
         billing_subject_id=subject_id,
         is_paid_cloud=False,
         billing_subscription_id=None,
@@ -667,7 +665,7 @@ async def test_paid_accounting_does_not_export_pre_subscription_free_overage(
     db_session.add(subscription)
     await db_session.commit()
 
-    result = await account_usage_for_billing_subject(
+    result = await billing_service.account_usage_for_billing_subject(
         billing_subject_id=subject_id,
         is_paid_cloud=True,
         billing_subscription_id=subscription.id,

@@ -409,6 +409,7 @@ async def create_invitation(
     normalized_email = normalize_invitation_email(email)
     token = _new_token()
     record = await invitation_store.create_or_rotate_organization_invitation(
+        db,
         organization_id=organization_id,
         email=normalized_email,
         role=_require_role(role),
@@ -446,6 +447,7 @@ async def resend_invitation(
     require_org_role(context, organization_admin_roles())
     token = _new_token()
     record = await invitation_store.rotate_organization_invitation(
+        db,
         organization_id=organization_id,
         invitation_id=invitation_id,
         token_hash=_hash_token(token, ORGANIZATION_INVITE_TOKEN_DOMAIN),

@@ -52,7 +52,6 @@ from proliferate.db.store.billing import (
     ensure_free_included_grant,
     ensure_organization_billing_subject,
     ensure_personal_billing_subject,
-    maybe_create_org_seat_adjustment,
 )
 from proliferate.db.store.cloud_runtime_environments import (
     ensure_runtime_environment_for_workspace,
@@ -62,6 +61,7 @@ from proliferate.integrations.billing import stripe as stripe_billing
 from proliferate.integrations.github import GitHubRepoBranches
 from proliferate.server.billing.service import (
     activate_team_checkout_from_stripe_session,
+    maybe_create_organization_seat_adjustment as maybe_create_org_seat_adjustment,
     process_pending_seat_adjustments,
 )
 from proliferate.server.cloud.workspaces import service as cloud_service
@@ -1532,7 +1532,7 @@ class TestBillingApi:
         async def fake_update_subscription_item_quantity(**kwargs: object) -> None:
             updates.append(int(kwargs["quantity"]))
 
-        async def fail_ensure_billing_grant_record(**kwargs: object) -> None:
+        async def fail_ensure_billing_grant_record(*_args: object, **_kwargs: object) -> None:
             raise RuntimeError("grant write failed")
 
         monkeypatch.setattr(

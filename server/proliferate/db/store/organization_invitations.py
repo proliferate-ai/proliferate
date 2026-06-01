@@ -20,7 +20,6 @@ from proliferate.constants.organizations import (
     ORGANIZATION_INVITATION_STATUS_REVOKED,
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
 )
-from proliferate.db import engine as db_engine
 from proliferate.db.models.organizations import (
     Organization,
     OrganizationInvitation,
@@ -60,6 +59,7 @@ async def _lock_invitation_email(
 
 
 async def create_or_rotate_organization_invitation(
+    db: AsyncSession,
     *,
     organization_id: UUID,
     email: str,
@@ -68,88 +68,83 @@ async def create_or_rotate_organization_invitation(
     invited_by_user_id: UUID,
     expires_at: datetime,
 ) -> InvitationCreateRecord | None:
-    # Intentionally isolated: invitation rows must commit before the service
-    # sends external email. Replace this only with an explicit delivery
-    # checkpoint/outbox design that preserves that ordering.
     normalized_email = normalize_invitation_email(email)
     now = utcnow()
-    async with db_engine.async_session_factory() as db, db.begin():
-        organization = await _load_organization(db, organization_id)
-        if organization is None:
-            return None
-        await _lock_invitation_email(
-            db,
+    organization = await _load_organization(db, organization_id)
+    if organization is None:
+        return None
+    await _lock_invitation_email(
+        db,
+        organization_id=organization_id,
+        email=normalized_email,
+    )
+    await db.execute(
+        update(OrganizationInvitation)
+        .where(
+            OrganizationInvitation.organization_id == organization_id,
+            OrganizationInvitation.email == normalized_email,
+            OrganizationInvitation.status == ORGANIZATION_INVITATION_STATUS_PENDING,
+        )
+        .values(
+            status=ORGANIZATION_INVITATION_STATUS_EXPIRED,
+            expired_at=now,
+            handoff_token_hash=None,
+            handoff_expires_at=None,
+            updated_at=now,
+        )
+    )
+    result = await db.execute(
+        pg_insert(OrganizationInvitation)
+        .values(
             organization_id=organization_id,
             email=normalized_email,
+            role=role,
+            status=ORGANIZATION_INVITATION_STATUS_PENDING,
+            token_hash=token_hash,
+            handoff_token_hash=None,
+            handoff_expires_at=None,
+            delivery_status=ORGANIZATION_INVITATION_DELIVERY_PENDING,
+            delivery_error=None,
+            delivered_at=None,
+            invited_by_user_id=invited_by_user_id,
+            accepted_by_user_id=None,
+            expires_at=expires_at,
+            accepted_at=None,
+            revoked_at=None,
+            expired_at=None,
+            created_at=now,
+            updated_at=now,
         )
-        await db.execute(
-            update(OrganizationInvitation)
-            .where(
-                OrganizationInvitation.organization_id == organization_id,
-                OrganizationInvitation.email == normalized_email,
-                OrganizationInvitation.status == ORGANIZATION_INVITATION_STATUS_PENDING,
-            )
-            .values(
-                status=ORGANIZATION_INVITATION_STATUS_EXPIRED,
-                expired_at=now,
-                handoff_token_hash=None,
-                handoff_expires_at=None,
-                updated_at=now,
-            )
+        .on_conflict_do_update(
+            index_elements=[
+                OrganizationInvitation.organization_id,
+                OrganizationInvitation.email,
+            ],
+            index_where=(OrganizationInvitation.status == ORGANIZATION_INVITATION_STATUS_PENDING),
+            set_={
+                "role": role,
+                "token_hash": token_hash,
+                "handoff_token_hash": None,
+                "handoff_expires_at": None,
+                "delivery_status": ORGANIZATION_INVITATION_DELIVERY_PENDING,
+                "delivery_error": None,
+                "delivered_at": None,
+                "invited_by_user_id": invited_by_user_id,
+                "expires_at": expires_at,
+                "updated_at": now,
+            },
         )
-        result = await db.execute(
-            pg_insert(OrganizationInvitation)
-            .values(
-                organization_id=organization_id,
-                email=normalized_email,
-                role=role,
-                status=ORGANIZATION_INVITATION_STATUS_PENDING,
-                token_hash=token_hash,
-                handoff_token_hash=None,
-                handoff_expires_at=None,
-                delivery_status=ORGANIZATION_INVITATION_DELIVERY_PENDING,
-                delivery_error=None,
-                delivered_at=None,
-                invited_by_user_id=invited_by_user_id,
-                accepted_by_user_id=None,
-                expires_at=expires_at,
-                accepted_at=None,
-                revoked_at=None,
-                expired_at=None,
-                created_at=now,
-                updated_at=now,
-            )
-            .on_conflict_do_update(
-                index_elements=[
-                    OrganizationInvitation.organization_id,
-                    OrganizationInvitation.email,
-                ],
-                index_where=(
-                    OrganizationInvitation.status == ORGANIZATION_INVITATION_STATUS_PENDING
-                ),
-                set_={
-                    "role": role,
-                    "token_hash": token_hash,
-                    "handoff_token_hash": None,
-                    "handoff_expires_at": None,
-                    "delivery_status": ORGANIZATION_INVITATION_DELIVERY_PENDING,
-                    "delivery_error": None,
-                    "delivered_at": None,
-                    "invited_by_user_id": invited_by_user_id,
-                    "expires_at": expires_at,
-                    "updated_at": now,
-                },
-            )
-            .returning(OrganizationInvitation.id)
-        )
-        invitation_id = result.scalar_one()
-        invitation = await db.get(OrganizationInvitation, invitation_id)
-        if invitation is None:
-            raise RuntimeError("Organization invitation disappeared after creation.")
-        return InvitationCreateRecord(
-            invitation=invitation_record(invitation),
-            organization=organization_record(organization),
-        )
+        .returning(OrganizationInvitation.id)
+    )
+    invitation_id = result.scalar_one()
+    invitation = await db.get(OrganizationInvitation, invitation_id)
+    if invitation is None:
+        raise RuntimeError("Organization invitation disappeared after creation.")
+    await db.flush()
+    return InvitationCreateRecord(
+        invitation=invitation_record(invitation),
+        organization=organization_record(organization),
+    )
 
 
 async def list_organization_invitations(
@@ -244,44 +239,42 @@ async def revoke_organization_invitation(
 
 
 async def rotate_organization_invitation(
+    db: AsyncSession,
     *,
     organization_id: UUID,
     invitation_id: UUID,
     token_hash: str,
     expires_at: datetime,
 ) -> InvitationCreateRecord | None:
-    # Intentionally isolated for the same pre-email durability boundary as
-    # create_or_rotate_organization_invitation.
-    async with db_engine.async_session_factory() as db, db.begin():
-        invitation = (
-            await db.execute(
-                select(OrganizationInvitation)
-                .where(
-                    OrganizationInvitation.id == invitation_id,
-                    OrganizationInvitation.organization_id == organization_id,
-                )
-                .with_for_update()
+    invitation = (
+        await db.execute(
+            select(OrganizationInvitation)
+            .where(
+                OrganizationInvitation.id == invitation_id,
+                OrganizationInvitation.organization_id == organization_id,
             )
-        ).scalar_one_or_none()
-        organization = await _load_organization(db, organization_id)
-        if invitation is None or organization is None:
-            return None
-        if invitation.status != ORGANIZATION_INVITATION_STATUS_PENDING:
-            return None
-        now = utcnow()
-        invitation.token_hash = token_hash
-        invitation.handoff_token_hash = None
-        invitation.handoff_expires_at = None
-        invitation.delivery_status = ORGANIZATION_INVITATION_DELIVERY_PENDING
-        invitation.delivery_error = None
-        invitation.delivered_at = None
-        invitation.expires_at = expires_at
-        invitation.updated_at = now
-        await db.flush()
-        return InvitationCreateRecord(
-            invitation=invitation_record(invitation),
-            organization=organization_record(organization),
+            .with_for_update()
         )
+    ).scalar_one_or_none()
+    organization = await _load_organization(db, organization_id)
+    if invitation is None or organization is None:
+        return None
+    if invitation.status != ORGANIZATION_INVITATION_STATUS_PENDING:
+        return None
+    now = utcnow()
+    invitation.token_hash = token_hash
+    invitation.handoff_token_hash = None
+    invitation.handoff_expires_at = None
+    invitation.delivery_status = ORGANIZATION_INVITATION_DELIVERY_PENDING
+    invitation.delivery_error = None
+    invitation.delivered_at = None
+    invitation.expires_at = expires_at
+    invitation.updated_at = now
+    await db.flush()
+    return InvitationCreateRecord(
+        invitation=invitation_record(invitation),
+        organization=organization_record(organization),
+    )
 
 
 async def mark_invitation_delivery(

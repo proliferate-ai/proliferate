@@ -18,7 +18,6 @@ from proliferate.constants.billing import (
     PRO_PERIOD_GRANT_TYPE,
     REFILL_10H_GRANT_TYPE,
 )
-from proliferate.db import engine as db_engine
 from proliferate.db.models.billing import BillingSubject, BillingSubscription
 from proliferate.db.store.billing import (
     apply_payment_failed_hold,
@@ -27,17 +26,11 @@ from proliferate.db.store.billing import (
     ensure_billing_grant_record,
     get_billing_subject_for_stripe_reference,
     get_billing_subscription_by_stripe_subscription_id,
-    load_billing_subscription_by_id,
-    mark_seat_adjustment_failed,
-    mark_seat_adjustment_grant_issued,
-    mark_seat_adjustment_stripe_confirmed,
     mark_webhook_event_failed_by_id,
     mark_webhook_event_processed_by_id,
-    prepare_initial_org_seat_reconcile,
     upsert_stripe_subscription_record,
 )
 from proliferate.integrations.billing import stripe as stripe_billing
-from proliferate.server.billing.domain.accounting import stripe_status_is_terminal
 from proliferate.server.billing.domain.pricing import (
     monthly_subscription_price_ids,
     overage_subscription_price_ids,
@@ -79,7 +72,12 @@ from proliferate.server.billing.pricing import (
     classify_monthly_price_id,
 )
 from proliferate.server.billing.seats import pro_period_grant_source_ref
-from proliferate.server.billing.service import activate_team_checkout_from_stripe_session
+from proliferate.server.billing.service import (
+    activate_team_checkout_from_stripe_session,
+    reconcile_initial_org_subscription_seats,
+    run_billing_store_read,
+    run_billing_store_write,
+)
 from proliferate.server.notifications import (
     BillingSlackEvent,
     BillingSlackNotification,
@@ -143,7 +141,8 @@ async def handle_stripe_webhook(
             status_code=400,
         )
 
-    claim = await claim_webhook_event(
+    claim = await run_billing_store_write(
+        claim_webhook_event,
         provider=STRIPE_PROVIDER,
         event_id=event_id,
         event_type=event_type,
@@ -160,10 +159,17 @@ async def handle_stripe_webhook(
         try:
             dispatch_notifications = await _dispatch_stripe_event(event)
         except Exception as exc:
-            await mark_webhook_event_failed_by_id(receipt_id=claim.receipt.id, error=str(exc))
+            await run_billing_store_write(
+                mark_webhook_event_failed_by_id,
+                receipt_id=claim.receipt.id,
+                error=str(exc),
+            )
             raise
         notifications = tuple(dispatch_notifications or ())
-        await mark_webhook_event_processed_by_id(receipt_id=claim.receipt.id)
+        await run_billing_store_write(
+            mark_webhook_event_processed_by_id,
+            receipt_id=claim.receipt.id,
+        )
         await deliver_billing_slack_notifications(notifications)
 
     livemode = event.get("livemode")
@@ -219,7 +225,8 @@ async def _subject_from_object(stripe_object: dict[str, Any]) -> BillingSubject 
             billing_subject_id = UUID(subject_id)
         except ValueError:
             return None
-    return await get_billing_subject_for_stripe_reference(
+    return await run_billing_store_read(
+        get_billing_subject_for_stripe_reference,
         billing_subject_id=billing_subject_id,
         stripe_customer_id=_id_from_expandable(stripe_object.get("customer")),
     )
@@ -250,7 +257,8 @@ async def _handle_checkout_session_completed(
     lines = await stripe_billing.list_checkout_session_line_items(session_id)
     if not stripe_billing.line_items_include_price(lines, settings.stripe_refill_10h_price_id):
         return
-    await ensure_billing_grant_record(
+    await run_billing_store_write(
+        ensure_billing_grant_record,
         user_id=subject.user_id,
         billing_subject_id=subject.id,
         grant_type=REFILL_10H_GRANT_TYPE,
@@ -286,7 +294,8 @@ async def _sync_subscription(subscription: dict[str, Any]) -> BillingSubscriptio
         monthly_item_id=monthly_item_id,
         metered_item_id=metered_item_id,
     )
-    record = await upsert_stripe_subscription_record(
+    record = await run_billing_store_write(
+        upsert_stripe_subscription_record,
         billing_subject_id=subject.id,
         stripe_subscription_id=subscription_id,
         stripe_customer_id=customer_id,
@@ -309,7 +318,7 @@ async def _sync_subscription(subscription: dict[str, Any]) -> BillingSubscriptio
             and status in {"active", "trialing"}
         ),
     )
-    record = await _reconcile_initial_org_subscription_seats(record)
+    record = await reconcile_initial_org_subscription_seats(record)
     await _sync_managed_credit_budget_for_subscription_subject(subject)
     return record
 
@@ -408,11 +417,10 @@ async def _build_billing_slack_notification(
 async def _load_billing_subscription_by_stripe_subscription_id(
     stripe_subscription_id: str,
 ) -> BillingSubscription | None:
-    async with db_engine.async_session_factory() as db:
-        return await get_billing_subscription_by_stripe_subscription_id(
-            db,
-            stripe_subscription_id,
-        )
+    return await run_billing_store_read(
+        get_billing_subscription_by_stripe_subscription_id,
+        stripe_subscription_id,
+    )
 
 
 def _subscription_is_active(subscription: BillingSubscription | None) -> bool:
@@ -425,40 +433,6 @@ def _subscription_has_cancel_intent(subscription: BillingSubscription | None) ->
         or subscription.canceled_at is not None
         or subscription.status in BILLING_SLACK_CANCELLED_STATUSES
     )
-
-
-async def _reconcile_initial_org_subscription_seats(
-    record: BillingSubscription,
-) -> BillingSubscription:
-    adjustment = await prepare_initial_org_seat_reconcile(
-        billing_subscription_id=record.id,
-    )
-    if adjustment is None:
-        reloaded = await load_billing_subscription_by_id(record.id)
-        return reloaded or record
-    try:
-        await stripe_billing.update_subscription_item_quantity(
-            subscription_item_id=adjustment.monthly_subscription_item_id,
-            quantity=adjustment.target_quantity,
-            idempotency_key=f"initial-seat-reconcile:{adjustment.id}:seats:{adjustment.target_quantity}",
-        )
-        await mark_seat_adjustment_stripe_confirmed(adjustment_id=adjustment.id)
-        await mark_seat_adjustment_grant_issued(adjustment_id=adjustment.id)
-    except stripe_billing.StripeBillingError as error:
-        await mark_seat_adjustment_failed(
-            adjustment_id=adjustment.id,
-            error=error.message,
-            terminal=stripe_status_is_terminal(error.status_code),
-        )
-        raise
-    except Exception as error:
-        await mark_seat_adjustment_failed(
-            adjustment_id=adjustment.id,
-            error=f"{type(error).__name__}: {error}",
-        )
-        raise
-    reloaded = await load_billing_subscription_by_id(record.id)
-    return reloaded or record
 
 
 def _subscription_item_details(
@@ -516,7 +490,8 @@ async def _handle_invoice_paid(invoice: dict[str, Any]) -> tuple[BillingSlackNot
         and subscription_record.current_period_start is not None
     ):
         period_start_unix = int(subscription_record.current_period_start.timestamp())
-        await ensure_billing_grant_record(
+        await run_billing_store_write(
+            ensure_billing_grant_record,
             user_id=subject.user_id,
             billing_subject_id=subject.id,
             grant_type=PRO_PERIOD_GRANT_TYPE,
@@ -531,7 +506,7 @@ async def _handle_invoice_paid(invoice: dict[str, Any]) -> tuple[BillingSlackNot
             ),
             top_up_existing=True,
         )
-    await clear_payment_failed_holds(billing_subject_id=subject.id)
+    await run_billing_store_write(clear_payment_failed_holds, billing_subject_id=subject.id)
     return notifications
 
 
@@ -549,7 +524,8 @@ async def _handle_invoice_payment_failed(invoice: dict[str, Any]) -> None:
             subject = await _subject_from_object(subscription)
     if subject is None:
         return
-    await apply_payment_failed_hold(
+    await run_billing_store_write(
+        apply_payment_failed_hold,
         billing_subject_id=subject.id,
         source=PAYMENT_HOLD_SOURCE,
         source_ref=_id_from_expandable(invoice.get("id")),
@@ -560,7 +536,8 @@ async def _apply_payment_hold_for_subscription(subscription: dict[str, Any]) -> 
     subject = await _subject_from_object(subscription)
     if subject is None:
         return
-    await apply_payment_failed_hold(
+    await run_billing_store_write(
+        apply_payment_failed_hold,
         billing_subject_id=subject.id,
         source=PAYMENT_HOLD_SOURCE,
         source_ref=_id_from_expandable(subscription.get("id")),
