@@ -11,7 +11,7 @@ import { POPOVER_SURFACE_CLASS } from "@proliferate/ui/primitives/PopoverButton"
 import { ChevronRight } from "@proliferate/ui/icons";
 import { recordSubagentChildRelationshipHint } from "@/hooks/sessions/workflows/session-relationship-hints";
 import type { HeaderChatMenuEntry } from "@/lib/domain/workspaces/tabs/workspace-header-tabs-view-model-types";
-import type { HeaderSubagentChildRow } from "@/hooks/workspaces/cache/tabs/use-workspace-header-subagent-hierarchy";
+import type { HeaderSubagentChildRow } from "@/lib/domain/workspaces/tabs/workspace-header-subagent-hierarchy";
 
 const FLYOUT_WIDTH = 256;
 const FLYOUT_OFFSET = 6;
