@@ -286,24 +286,34 @@ See [guides/errors.md](guides/errors.md) for the detailed error model.
 
 Soft is a PR-review prompt. Hard requires a justification in the PR
 description (typically a tracking issue + reason it can't split now).
+`scripts/check_max_lines.py` enforces the hard column for server layers and
+falls back to the repo-wide 600-line ceiling for server files without a
+server-specific hard threshold. Existing oversized files are count-allowlisted
+in `scripts/max_lines_allowlist.txt`; if one shrinks, lower or remove the
+matching count in the same PR.
 
 ### Naming
 
 - Canonical files (`api.py`, `service.py`, `models.py`, `worker.py`,
   `reconciler.py`, `scheduler.py`) are never prefixed or suffixed.
 - Domain subdirectory files use descriptive nouns (`pricing.py`, `policy.py`,
-  `validation.py`). No `_service`, `_helper`, or `_utils` suffixes.
+  `validation.py`). No `_service.py`, `_helper.py`, `_helpers.py`, or
+  `_utils.py` suffixes.
 - Subdomain folders use singular product concepts (`subscriptions/`,
   `seats/`). No "manager"/"handler" suffixes.
 - Store files match the ORM resource name. Flat: prefixed
   (`cloud_workspaces.py`). Folder: un-prefixed inside (`cloud_mcp/connections.py`).
-- No underscore-prefixed module names at module scope (`_logging.py` is
-  forbidden).
+- No single-underscore-prefixed module names at module scope (`_logging.py` is
+  forbidden). Python package mechanics such as `__init__.py` and
+  `__main__.py` are allowed.
 - Constants use `UPPER_SNAKE_CASE` and live in `constants/<area>.py`.
 
 ### Folder hygiene
 
 - Single-file folders are forbidden. If a folder has only one file, inline it.
+- Exception: `server/**/domain/` may contain exactly one meaningful pure-domain
+  module such as `policy.py`, `pricing.py`, or `validation.py`. Do not add
+  placeholder files just to satisfy folder shape.
 - Domain folders answer "what product area?" — not transport (`cloud/`,
   `api/`, `tauri/` are forbidden as `server/` children; transport stays in
   `integrations/` or `db/`) and not UI shape.
@@ -311,9 +321,9 @@ description (typically a tracking issue + reason it can't split now).
   consistently or is flat. Mixed shapes are forbidden.
 - New top-level `server/proliferate/` folders require a doc-touching PR with
   a one-paragraph rationale.
-- No junk-drawer modules: `helpers.py`, `misc.py`, `utils.py` at any
-  domain level. `utils/` at the project root is for truly generic helpers
-  only.
+- No junk-drawer modules: `helper.py`, `helpers.py`, `misc.py`, `common.py`,
+  or `utils.py` at any checked server boundary. `utils/` at the project root
+  is for truly generic helpers only.
 
 ### Cross-domain coordination
 

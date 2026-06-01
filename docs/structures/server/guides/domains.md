@@ -302,7 +302,9 @@ A top-level sibling file in `server/<domain>/` that:
   store + service.
 - Has REST handlers. Those go in `api.py`.
 - Mixes business orchestration with vendor specifics. Split.
-- Is named `helpers.py`, `misc.py`, `utils.py`, or `common.py`. Junk-drawer.
+- Is named `helper.py`, `helpers.py`, `misc.py`, `common.py`, or `utils.py`,
+  or uses `_helper.py`, `_helpers.py`, or `_utils.py` as a suffix.
+  Junk-drawer.
 
 ## Subdomain Promotion
 
@@ -464,7 +466,9 @@ rules belong in `provisioning/domain/`; vendor calls belong in
 
 - A domain folder either has subfolder children consistently or is flat.
   Mixed shapes (some subfolders, some flat sibling files belonging to a
-  subdomain) are forbidden.
+  subdomain) are forbidden. `domain/` is the narrow exception to the
+  single-file-folder rule: one meaningful pure-domain file is allowed when
+  the domain only has one extracted rule module.
 - Service composes; domain decides; store persists. If you find a service
   computing a complex rule inline, the rule belongs in `domain/`. If you find
   a domain function calling a store, it's not domain.
