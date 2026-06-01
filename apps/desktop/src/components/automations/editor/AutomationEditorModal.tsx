@@ -1,50 +1,31 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
-import { Textarea } from "@proliferate/ui/primitives/Textarea";
-import { AgentHarnessModelSelector } from "@/components/agents/AgentHarnessModelSelector";
-import { SessionConfigControls } from "@/components/workspace/chat/input/SessionConfigControls";
 import { useAutomationTargetSelection } from "@/hooks/automations/derived/use-automation-target-selection";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { useAgentRunConfigMutations } from "@/hooks/access/cloud/agent-run-configs/use-agent-run-config-mutations";
 import type { AutomationTargetSelection } from "@/lib/domain/automations/target/selection";
-import type {
-  AutomationRecord,
-  CreateAutomationInput,
-  UpdateAutomationInput,
-} from "@/lib/domain/automations/run/ui-records";
+import type { AutomationRecord, CreateAutomationInput, UpdateAutomationInput } from "@/lib/domain/automations/run/ui-records";
 import type {
   AutomationOwnerScope,
   AutomationTargetMode,
 } from "@/lib/domain/automations/run/types";
+import { buildLaunchControlDescriptors } from "@/lib/domain/chat/models/launch-control-descriptors";
+import type { SupportedLiveControlKey } from "@/lib/domain/chat/session-controls/session-controls";
 import {
-  buildLaunchControlDescriptors,
-} from "@/lib/domain/chat/models/launch-control-descriptors";
-import type {
-  DesktopAgentLaunchAgent,
-  DesktopAgentLaunchModel,
-} from "@/lib/domain/agents/cloud-launch-catalog";
-import type {
-  LiveSessionControlDescriptor,
-  SupportedLiveControlKey,
-} from "@/lib/domain/chat/session-controls/session-controls";
+  automationControlValuesEqual,
+  automationRunConfigName,
+  initialAutomationControlValues,
+  resolveAutomationAgent,
+  resolveAutomationModel,
+  selectedAutomationControlValues,
+} from "@/lib/domain/automations/editor/run-config";
 import {
   defaultAutomationTimezone,
   presetForRrule,
   rruleForPresetAtTime,
   validateAutomationRrule,
   validateAutomationTimezone,
-  type AutomationSchedulePresetOrCustom,
 } from "@/lib/domain/automations/schedule/schedule";
-import {
-  AutomationSchedulePopover,
-  AutomationTemplatePopover,
-} from "./AutomationEditorControls";
-import { AutomationRunLocationSelector } from "@/components/automations/controls/AutomationRunLocationSelector";
-
-type SchedulePresetValue = AutomationSchedulePresetOrCustom;
+import { AutomationEditorDialog } from "@/components/automations/editor/AutomationEditorDialog";
 
 interface AutomationEditorModalProps {
   open: boolean;
@@ -83,7 +64,7 @@ export function AutomationEditorModal({
   const [draftOwnerScope, setDraftOwnerScope] = useState<AutomationOwnerScope>(
     automation?.ownerScope ?? initialOwnerScope,
   );
-  const [schedulePreset, setSchedulePreset] = useState<SchedulePresetValue>(
+  const [schedulePreset, setSchedulePreset] = useState(
     automation ? presetForRrule(automation.schedule.rrule) : "daily",
   );
   const [rrule, setRrule] = useState(
@@ -177,7 +158,7 @@ export function AutomationEditorModal({
     [agentControlValues, effectiveModelId, selectedAgent],
   );
   const selectedAgentControlValues = useMemo(
-    () => selectedControlValues(agentControlDescriptors),
+    () => selectedAutomationControlValues(agentControlDescriptors),
     [agentControlDescriptors],
   );
   const agentSelectionReady = Boolean(effectiveAgentKind && effectiveModelId);
@@ -330,7 +311,7 @@ export function AutomationEditorModal({
       || draftOwnerScope !== (automation?.ownerScope ?? initialOwnerScope)
       || effectiveAgentKind !== (automation?.agentKind ?? null)
       || effectiveModelId !== (automation?.modelId ?? null)
-      || !controlValuesEqual(
+      || !automationControlValuesEqual(
         selectedAgentControlValues,
         initialAutomationControlValues(automation),
       );
@@ -369,242 +350,49 @@ export function AutomationEditorModal({
   };
 
   return (
-    <>
-      <ModalShell
-        open={open}
-        onClose={onClose}
-        disableClose={busy || pendingConfigureTarget !== null}
-        title={automation ? "Edit automation" : "Create automation"}
-        description="Create a scheduled automation."
-        sizeClassName="max-h-[95vh] max-w-[800px]"
-        bodyClassName="flex min-h-[24rem] flex-col px-5 pb-5 pt-0"
-        panelClassName="border-border bg-background/95 shadow-lg backdrop-blur-xl"
-        headerContent={(
-          <div className="flex min-w-0 items-center justify-between gap-4 pt-2">
-            <Input
-              id="automation-title"
-              data-testid="automation-title-input"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              aria-label="Automation title"
-              placeholder="Automation title"
-              className="h-auto min-w-0 border-0 bg-transparent px-0 py-0 pr-2 text-lg leading-tight shadow-none outline-none placeholder:text-muted-foreground focus:ring-0"
-            />
-            <AutomationTemplatePopover
-              onSelectTemplate={(template) => {
-                if (!title.trim()) {
-                  setTitle(template.title);
-                }
-                setPrompt(template.prompt);
-              }}
-            />
-          </div>
-        )}
-      >
-        <form
-          id="automation-form"
-          onSubmit={handleSubmit}
-          className="flex min-h-0 flex-1 flex-col"
-        >
-          {error && (
-            <div className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {error}
-            </div>
-          )}
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-3">
-            <AutomationRunLocationSelector
-              ownerScope={ownerScope}
-              canChangeOwner={!automation}
-              ownerOptions={ownerOptions}
-              personalGroups={personalTargetSelection.groups}
-              teamGroups={teamTargetGroups}
-              isLoading={targetSelectionLoading}
-              disabledReason={activeTargetSelection.disabledReason}
-              onSelectOwner={handleOwnerScopeSelect}
-              onSelectTarget={setTargetOverride}
-              onConfigureCloud={handleConfigureCloudTarget}
-            />
-            <Textarea
-              id="automation-prompt"
-              variant="ghost"
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              aria-label="Prompt"
-              placeholder="Add prompt e.g. look for crashes in $sentry"
-              className="min-h-[12rem] px-0 text-base leading-relaxed placeholder:text-muted-foreground"
-            />
-          </div>
-          <div className="shrink-0 pt-3">
-            <div className="flex w-full flex-wrap items-center justify-between gap-2">
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-                <AutomationSchedulePopover
-                  schedulePreset={schedulePreset}
-                  rrule={rrule}
-                  timezone={timezone}
-                  onSchedulePresetChange={setSchedulePreset}
-                  onRruleChange={handleRruleChange}
-                  onTimezoneChange={setTimezone}
-                  onRruleBlur={() => setError(validateAutomationRrule(rrule))}
-                />
-                <AutomationAgentHarnessControls
-                  agents={launchAgents}
-                  selectedAgent={selectedAgent}
-                  selectedModel={selectedModel}
-                  controls={agentControlDescriptors}
-                  loading={cloudAgentCatalogQuery.isLoading}
-                  onSelectModel={(nextAgent, nextModel) => {
-                    setAgentKind(nextAgent.kind);
-                    setModelId(nextModel.id);
-                    setAgentControlValues({});
-                  }}
-                />
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  loading={busy || agentRunConfigMutations.createMutation.isPending}
-                  disabled={
-                    (!automation && (cloudAgentCatalogQuery.isLoading || targetSelectionLoading))
-                    || agentRunConfigMutations.createMutation.isPending
-                    || !agentSelectionReady
-                    || !canSubmitTarget
-                  }
-                >
-                  {automation ? "Save" : "Create"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </form>
-      </ModalShell>
-      <ConfirmationDialog
-        open={pendingConfigureTarget !== null}
-        onClose={() => setPendingConfigureTarget(null)}
-        onConfirm={handleConfirmConfigureCloudTarget}
-        title="Discard automation draft?"
-        description="Opening cloud repo settings will close this automation draft."
-        confirmLabel="Open settings"
-      />
-    </>
+    <AutomationEditorDialog
+      open={open}
+      automation={automation}
+      busy={busy}
+      error={error}
+      title={title}
+      prompt={prompt}
+      ownerScope={ownerScope}
+      ownerOptions={ownerOptions}
+      personalGroups={personalTargetSelection.groups}
+      teamGroups={teamTargetGroups}
+      targetSelectionLoading={targetSelectionLoading}
+      targetDisabledReason={activeTargetSelection.disabledReason}
+      schedulePreset={schedulePreset}
+      rrule={rrule}
+      timezone={timezone}
+      agents={launchAgents}
+      selectedAgent={selectedAgent}
+      selectedModel={selectedModel}
+      controls={agentControlDescriptors}
+      agentsLoading={cloudAgentCatalogQuery.isLoading}
+      savingRunConfig={agentRunConfigMutations.createMutation.isPending}
+      agentSelectionReady={agentSelectionReady}
+      canSubmitTarget={canSubmitTarget}
+      pendingConfigureTarget={pendingConfigureTarget}
+      onClose={onClose}
+      onSubmit={handleSubmit}
+      onTitleChange={setTitle}
+      onPromptChange={setPrompt}
+      onSelectOwner={handleOwnerScopeSelect}
+      onSelectTarget={setTargetOverride}
+      onConfigureCloudTarget={handleConfigureCloudTarget}
+      onSchedulePresetChange={setSchedulePreset}
+      onRruleChange={handleRruleChange}
+      onTimezoneChange={setTimezone}
+      onRruleBlur={() => setError(validateAutomationRrule(rrule))}
+      onSelectModel={(nextAgent, nextModel) => {
+        setAgentKind(nextAgent.kind);
+        setModelId(nextModel.id);
+        setAgentControlValues({});
+      }}
+      onCancelConfigureTarget={() => setPendingConfigureTarget(null)}
+      onConfirmConfigureTarget={handleConfirmConfigureCloudTarget}
+    />
   );
-}
-
-function AutomationAgentHarnessControls({
-  agents,
-  selectedAgent,
-  selectedModel,
-  controls,
-  loading,
-  onSelectModel,
-}: {
-  agents: DesktopAgentLaunchAgent[];
-  selectedAgent: DesktopAgentLaunchAgent | null;
-  selectedModel: DesktopAgentLaunchModel | null;
-  controls: LiveSessionControlDescriptor[];
-  loading: boolean;
-  onSelectModel: (agent: DesktopAgentLaunchAgent, model: DesktopAgentLaunchModel) => void;
-}) {
-  const label = selectedAgent && selectedModel
-    ? `${selectedAgent.displayName} · ${selectedModel.displayName}`
-    : loading
-      ? "Loading agents"
-      : "Agent harness";
-
-  return (
-    <>
-      <AgentHarnessModelSelector
-        label={label}
-        agentKind={selectedAgent?.kind ?? null}
-        selectedModelId={selectedModel?.id ?? null}
-        disabled={loading || agents.length === 0}
-        className="max-w-[16rem]"
-        menuClassName="w-80"
-        modelGroups={agents.map((agent) => ({
-          agentKind: agent.kind,
-          agentDisplayName: agent.displayName,
-          models: agent.models.map((model) => ({
-            id: model.id,
-            label: model.displayName,
-            detail: agent.displayName,
-          })),
-        })).filter((group) => group.models.length > 0)}
-        onSelectModel={(nextAgentKind, nextModelId) => {
-          const nextAgent = agents.find((agent) => agent.kind === nextAgentKind) ?? null;
-          const nextModel = nextAgent?.models.find((model) => model.id === nextModelId) ?? null;
-          if (nextAgent && nextModel) {
-            onSelectModel(nextAgent, nextModel);
-          }
-        }}
-      />
-      <SessionConfigControls
-        agentKind={selectedAgent?.kind ?? null}
-        controls={controls}
-      />
-    </>
-  );
-}
-
-function resolveAutomationAgent(
-  agents: DesktopAgentLaunchAgent[],
-  agentKind: string | null,
-): DesktopAgentLaunchAgent | null {
-  return agents.find((agent) => agent.kind === agentKind)
-    ?? agents.find((agent) => agent.models.length > 0)
-    ?? null;
-}
-
-function resolveAutomationModel(
-  agent: DesktopAgentLaunchAgent | null,
-  modelId: string | null,
-): DesktopAgentLaunchModel | null {
-  if (!agent) {
-    return null;
-  }
-  return agent.models.find((model) => model.id === modelId)
-    ?? agent.models.find((model) => model.id === agent.defaultModelId)
-    ?? agent.models.find((model) => model.isDefault)
-    ?? agent.models[0]
-    ?? null;
-}
-
-function selectedControlValues(
-  controls: LiveSessionControlDescriptor[],
-): Record<string, string> {
-  const values: Record<string, string> = {};
-  for (const control of controls) {
-    const selected = control.options.find((option) => option.selected);
-    if (selected?.value) {
-      values[control.rawConfigId] = selected.value;
-    }
-  }
-  return values;
-}
-
-function initialAutomationControlValues(
-  automation: AutomationRecord | null,
-): Record<string, string> {
-  return {
-    ...(automation?.modeId ? { mode: automation.modeId } : {}),
-    ...(automation?.reasoningEffort ? { effort: automation.reasoningEffort } : {}),
-  };
-}
-
-function controlValuesEqual(
-  left: Record<string, string>,
-  right: Record<string, string>,
-): boolean {
-  const leftEntries = Object.entries(left).filter(([, value]) => value.trim().length > 0);
-  const rightEntries = Object.entries(right).filter(([, value]) => value.trim().length > 0);
-  if (leftEntries.length !== rightEntries.length) {
-    return false;
-  }
-  return leftEntries.every(([key, value]) => right[key] === value);
-}
-
-function automationRunConfigName(title: string): string {
-  const trimmed = title.trim();
-  return `Automation · ${trimmed ? trimmed.slice(0, 80) : "Untitled"}`;
 }

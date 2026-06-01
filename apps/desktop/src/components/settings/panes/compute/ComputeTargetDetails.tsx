@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import type { CSSProperties } from "react";
-import { Badge } from "@proliferate/ui/primitives/Badge";
-import { Archive, Check, RefreshCw, Server } from "@proliferate/ui/icons";
+import { Archive } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { COMPUTE_COPY } from "@/copy/settings/compute";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
@@ -13,14 +9,6 @@ import { useSshDirectTargetProfile } from "@/hooks/settings/workflows/use-ssh-di
 import { useSandboxProfileTargetState } from "@proliferate/cloud-sdk-react/hooks/agent-auth";
 import { useSandboxProfileRuntimeConfig } from "@proliferate/cloud-sdk-react/hooks/runtime-config";
 import {
-  computeTargetKindLabel,
-  computeTargetOwnerLabel,
-  computeTargetStatusLabel,
-  computeTargetStatusTone,
-} from "@/lib/domain/compute/target-presentation";
-import {
-  COMPUTE_TARGET_COLOR_OPTIONS,
-  COMPUTE_TARGET_ICON_OPTIONS,
   resolveComputeTargetAppearance,
   type ComputeTargetAppearancePreference,
   type ComputeTargetColorId,
@@ -33,7 +21,10 @@ import type {
 import { ComputeTargetAgentAuthCard } from "./ComputeTargetAgentAuthCard";
 import { EnrollmentCommandBlock } from "./EnrollmentCommandBlock";
 import { ComputeTargetReadiness } from "./ComputeTargetReadiness";
-import { ComputeTargetIconGlyph, ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
+import { ComputeTargetDetailsHeader } from "@/components/settings/panes/compute/ComputeTargetDetailsHeader";
+import { ComputeTargetAppearanceSection } from "@/components/settings/panes/compute/ComputeTargetAppearanceSection";
+import { ComputeTargetDirectSshSection } from "@/components/settings/panes/compute/ComputeTargetDirectSshSection";
+import { ComputeTargetEmptyState } from "@/components/settings/panes/compute/ComputeTargetEmptyState";
 
 interface ComputeTargetDetailsProps {
   target: ComputeTargetDetail | ComputeTargetSummary | null;
@@ -234,136 +225,32 @@ export function ComputeTargetDetails({
 
   return (
     <SettingsCard>
-      <div className="border-b border-border/40 p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            <ComputeTargetSwatch appearance={draftAppearance} size="sm" />
-            <div className="min-w-0">
-              <h3 className="truncate text-sm font-medium text-foreground">
-                {draftAppearance.displayName}
-              </h3>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                {computeTargetKindLabel(target.kind)}
-                {" · "}
-                {computeTargetStatusLabel(target.status).toLowerCase()}
-                {" · "}
-                {computeTargetOwnerLabel(target.ownerScope)}
-                {target.statusDetail?.lastHeartbeatAt
-                  ? ` · last heartbeat ${target.statusDetail.lastHeartbeatAt}`
-                  : ""}
-              </p>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Badge tone={computeTargetStatusTone(target.status)}>
-              {computeTargetStatusLabel(target.status)}
-            </Badge>
-            {target.kind === "ssh" && (
-              <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={!canReconnect}
-                  loading={reconnect.isCreating}
-                  onClick={() => { void handleReconnect(); }}
-                  title={
-                    target.ownerScope === "organization" && !targetOrgAdmin.isAdmin
-                      ? "Only organization admins can reconnect shared SSH targets."
-                      : undefined
-                  }
-                >
-                  <RefreshCw className="size-3.5" />
-                  {COMPUTE_COPY.reconnectTarget}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={!canTestConnection}
-                  loading={directProfile.testing}
-                  onClick={() => { void handleTestConnection(); }}
-                >
-                  <RefreshCw className="size-3.5" />
-                  {COMPUTE_COPY.testConnection}
-                </Button>
-              </>
-            )}
-            <Button type="button" onClick={() => { void handleSave(); }}>
-              <Check className="size-3.5" />
-              {COMPUTE_COPY.save}
-            </Button>
-          </div>
-        </div>
-      </div>
+      <ComputeTargetDetailsHeader
+        target={target}
+        appearance={draftAppearance}
+        canReconnect={canReconnect}
+        canTestConnection={canTestConnection}
+        reconnecting={reconnect.isCreating}
+        testing={directProfile.testing}
+        reconnectTitle={
+          target.ownerScope === "organization" && !targetOrgAdmin.isAdmin
+            ? "Only organization admins can reconnect shared SSH targets."
+            : undefined
+        }
+        onReconnect={() => { void handleReconnect(); }}
+        onTestConnection={() => { void handleTestConnection(); }}
+        onSave={() => { void handleSave(); }}
+      />
 
       <div className="space-y-5 p-4">
-        <section className="space-y-3">
-          <div>
-            <div className="text-sm font-medium text-foreground">Appearance</div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {COMPUTE_COPY.appearanceHelp}
-            </p>
-          </div>
-          <div>
-            <Label htmlFor="compute-target-detail-display-name">Name</Label>
-            <Input
-              id="compute-target-detail-display-name"
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Icon</Label>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {COMPUTE_TARGET_ICON_OPTIONS.map((option) => (
-                <Button
-                  key={option.id}
-                  type="button"
-                  variant="unstyled"
-                  size="unstyled"
-                  aria-label={option.label}
-                  aria-pressed={iconId === option.id}
-                  title={option.label}
-                  className={`inline-flex size-8 items-center justify-center rounded-md border transition-colors hover:bg-accent hover:text-foreground ${
-                    iconId === option.id
-                      ? "border-foreground text-foreground"
-                      : "border-transparent bg-surface-control text-muted-foreground"
-                  }`}
-                  onClick={() => setIconId(option.id)}
-                >
-                  <ComputeTargetIconGlyph iconId={option.id} />
-                </Button>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Color</Label>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {COMPUTE_TARGET_COLOR_OPTIONS.map((option) => {
-                const style = {
-                  "--compute-target-color": option.value,
-                } as CSSProperties;
-                return (
-                  <Button
-                    key={option.id}
-                    type="button"
-                    variant="unstyled"
-                    size="unstyled"
-                    aria-label={option.label}
-                    aria-pressed={colorId === option.id}
-                    title={option.label}
-                    className={`relative size-[26px] rounded-md border bg-[var(--compute-target-color)] transition-transform hover:scale-105 ${
-                      colorId === option.id
-                        ? "ring-1 ring-foreground ring-offset-2 ring-offset-background"
-                        : "border-border"
-                    }`}
-                    style={style}
-                    onClick={() => setColorId(option.id)}
-                  />
-                );
-              })}
-            </div>
-          </div>
-        </section>
+        <ComputeTargetAppearanceSection
+          displayName={displayName}
+          iconId={iconId}
+          colorId={colorId}
+          onDisplayNameChange={setDisplayName}
+          onIconChange={setIconId}
+          onColorChange={setColorId}
+        />
 
         <Divider />
 
@@ -381,88 +268,21 @@ export function ComputeTargetDetails({
 
         <Divider />
 
-        <section className="space-y-3">
-          <div>
-            <div className="text-sm font-medium text-foreground">Direct SSH access</div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {target.kind === "ssh"
-                ? COMPUTE_COPY.directSshHelp
-                : COMPUTE_COPY.directSshUnavailable}
-            </p>
-          </div>
-          {target.kind === "ssh" ? (
-            <div className="space-y-3">
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_7rem]">
-                <div>
-                  <Label htmlFor="compute-target-detail-ssh-host">Host</Label>
-                  <Input
-                    id="compute-target-detail-ssh-host"
-                    className="font-mono"
-                    value={sshHost}
-                    placeholder="44.247.206.119"
-                    onChange={(event) => setSshHost(event.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="compute-target-detail-ssh-port">Port</Label>
-                  <Input
-                    id="compute-target-detail-ssh-port"
-                    className="font-mono"
-                    value={sshPort}
-                    inputMode="numeric"
-                    onChange={(event) => setSshPort(event.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
-                <div>
-                  <Label htmlFor="compute-target-detail-ssh-user">User</Label>
-                  <Input
-                    id="compute-target-detail-ssh-user"
-                    className="font-mono"
-                    value={sshUser}
-                    placeholder="ubuntu"
-                    onChange={(event) => setSshUser(event.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="compute-target-detail-runtime-port">Runtime port</Label>
-                  <Input
-                    id="compute-target-detail-runtime-port"
-                    className="font-mono"
-                    value={remoteAnyHarnessPort}
-                    inputMode="numeric"
-                    onChange={(event) => setRemoteAnyHarnessPort(event.target.value)}
-                  />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="compute-target-detail-identity-file">SSH key path</Label>
-                <Input
-                  id="compute-target-detail-identity-file"
-                  className="font-mono"
-                  value={identityFile}
-                  placeholder="~/.ssh/id_ed25519"
-                  onChange={(event) => setIdentityFile(event.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="compute-target-detail-workspace-root">Workspace root</Label>
-                <Input
-                  id="compute-target-detail-workspace-root"
-                  className="font-mono"
-                  value={workspaceRoot}
-                  placeholder="~/proliferate-workspaces"
-                  onChange={(event) => setWorkspaceRoot(event.target.value)}
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-md border border-border/50 bg-foreground/5 p-3 text-xs text-muted-foreground">
-              {COMPUTE_COPY.directSshNotSshTarget}
-            </div>
-          )}
-        </section>
+        <ComputeTargetDirectSshSection
+          targetKind={target.kind}
+          sshHost={sshHost}
+          sshPort={sshPort}
+          sshUser={sshUser}
+          remoteAnyHarnessPort={remoteAnyHarnessPort}
+          identityFile={identityFile}
+          workspaceRoot={workspaceRoot}
+          onSshHostChange={setSshHost}
+          onSshPortChange={setSshPort}
+          onSshUserChange={setSshUser}
+          onRemoteAnyHarnessPortChange={setRemoteAnyHarnessPort}
+          onIdentityFileChange={setIdentityFile}
+          onWorkspaceRootChange={setWorkspaceRoot}
+        />
 
         {reconnect.phaseState && (
           <div className="rounded-md border border-border/60 bg-foreground/5 p-3 text-xs text-muted-foreground">
@@ -496,24 +316,6 @@ export function ComputeTargetDetails({
             </div>
           </>
         )}
-      </div>
-    </SettingsCard>
-  );
-}
-
-function ComputeTargetEmptyState() {
-  return (
-    <SettingsCard className="min-h-[320px]">
-      <div className="flex min-h-[320px] flex-col items-center justify-center gap-4 p-8 text-center">
-        <span className="inline-flex size-11 items-center justify-center rounded-lg bg-foreground/5 text-muted-foreground">
-          <Server className="size-5" aria-hidden="true" />
-        </span>
-        <div className="max-w-sm space-y-2">
-          <h3 className="text-sm font-medium text-foreground">{COMPUTE_COPY.selectTargetTitle}</h3>
-          <p className="text-sm leading-6 text-muted-foreground">
-            {COMPUTE_COPY.selectTargetDescription}
-          </p>
-        </div>
       </div>
     </SettingsCard>
   );
