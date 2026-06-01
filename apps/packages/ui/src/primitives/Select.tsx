@@ -1,6 +1,6 @@
 import { forwardRef, type SelectHTMLAttributes } from "react";
 import { twMerge } from "tailwind-merge";
-import { ChevronUpDown } from "../icons";
+import { ChevronUpDown } from "../icons/core";
 
 type SelectProps = SelectHTMLAttributes<HTMLSelectElement>;
 

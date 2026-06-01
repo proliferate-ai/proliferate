@@ -3,7 +3,7 @@ import {
   type ButtonHTMLAttributes,
   type ReactNode,
 } from "react";
-import { ChevronDown } from "../icons";
+import { ChevronDown } from "../icons/core";
 import { Button } from "./Button";
 
 interface PillControlButtonProps
