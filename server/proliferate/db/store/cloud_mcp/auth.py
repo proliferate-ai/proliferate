@@ -77,6 +77,7 @@ async def upsert_connection_auth(
     await db.refresh(auth)
     return _record(auth)
 
+
 async def load_connection_auth(
     db: AsyncSession,
     *,

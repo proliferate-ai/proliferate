@@ -42,6 +42,7 @@ from proliferate.server.automations.domain.claim_lifecycle import (
     unconfigured_agent_failure,
 )
 
+
 async def _run_in_transaction[T](operation: Callable[[AsyncSession], Awaitable[T]]) -> T:
     async with engine_module.async_session_factory() as db, db.begin():
         return await operation(db)
