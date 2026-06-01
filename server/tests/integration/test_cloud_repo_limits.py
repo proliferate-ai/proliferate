@@ -39,18 +39,20 @@ async def _create_workspace(
     branch_name: str = "main",
     cloud_repo_limit: int,
 ):
-    return await create_cloud_workspace_for_user(
-        user_id=user_id,
-        display_name=f"acme/{repo_name}",
-        git_provider="github",
-        git_owner="acme",
-        git_repo_name=repo_name,
-        git_branch=branch_name,
-        git_base_branch="main",
-        origin_json=None,
-        template_version="v1",
-        cloud_repo_limit=cloud_repo_limit,
-    )
+    async with engine_module.async_session_factory() as db, db.begin():
+        return await create_cloud_workspace_for_user(
+            db,
+            user_id=user_id,
+            display_name=f"acme/{repo_name}",
+            git_provider="github",
+            git_owner="acme",
+            git_repo_name=repo_name,
+            git_branch=branch_name,
+            git_base_branch="main",
+            origin_json=None,
+            template_version="v1",
+            cloud_repo_limit=cloud_repo_limit,
+        )
 
 
 @pytest.mark.asyncio
@@ -155,6 +157,7 @@ async def test_archived_workspace_releases_cloud_repo_slot(
     assert workspace_for_archive is not None
     await delete_cloud_workspace_records(db_session, workspace_for_archive)
     assert workspace_for_archive.archived_at is not None
+    await db_session.commit()
 
     replacement = await _create_workspace(
         user_id=user_id,

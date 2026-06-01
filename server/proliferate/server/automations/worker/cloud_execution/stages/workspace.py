@@ -94,7 +94,8 @@ async def _create_workspace_record(
     if current.cloud_workspace_id is not None:
         return ctx.with_claim(current)
 
-    user = await load_user_with_oauth_accounts_by_id(current.user_id)
+    async with db_engine.async_session_factory() as db:
+        user = await load_user_with_oauth_accounts_by_id(db, current.user_id)
     if user is None:
         await fail_claim(current, code="user_not_found")
         return None
@@ -135,7 +136,8 @@ async def materialize_workspace_stage(
         return None
 
     if ctx.claim.anyharness_workspace_id is not None:
-        workspace = await load_cloud_workspace_by_id(ctx.claim.cloud_workspace_id)
+        async with db_engine.async_session_factory() as db:
+            workspace = await load_cloud_workspace_by_id(db, ctx.claim.cloud_workspace_id)
         branch_name = (
             workspace.git_branch
             if workspace is not None and workspace.git_branch
@@ -165,7 +167,8 @@ async def materialize_workspace_stage(
         return None
     ctx = ctx.with_claim(current)
 
-    workspace = await load_cloud_workspace_by_id(current.cloud_workspace_id)
+    async with db_engine.async_session_factory() as db:
+        workspace = await load_cloud_workspace_by_id(db, current.cloud_workspace_id)
     if workspace is None:
         await fail_claim(current, code="workspace_missing")
         return None

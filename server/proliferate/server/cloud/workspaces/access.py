@@ -43,11 +43,10 @@ async def cloud_workspace_user_can_read(
 ) -> CloudWorkspace:
     # Transitional: the cloud workspace service still consumes ORM objects.
     # Keep lookup/policy ownership here until the store returns snapshots.
-    workspace = await load_cloud_workspace_by_id(workspace_id)
-    if workspace is None:
-        _raise_workspace_not_found()
-
     async with db_engine.async_session_factory() as db:
+        workspace = await load_cloud_workspace_by_id(db, workspace_id)
+        if workspace is None:
+            _raise_workspace_not_found()
         exposure, _claim = await load_workspace_exposure_and_claim(
             db,
             target_id=workspace.target_id,

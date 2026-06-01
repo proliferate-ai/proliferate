@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from proliferate.constants.billing import BILLING_MODE_ENFORCE
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_runtime_environments import load_runtime_environment_for_workspace
@@ -27,8 +29,12 @@ from proliferate.utils.crypto import decrypt_text
 provision_workspace = _provision_workspace
 
 
-async def get_workspace_connection(workspace: CloudWorkspace) -> RuntimeConnectionTarget:
-    runtime_environment = await load_runtime_environment_for_workspace(workspace)
+async def get_workspace_connection(
+    db: AsyncSession,
+    workspace: CloudWorkspace,
+) -> RuntimeConnectionTarget:
+    workspace_id = workspace.id
+    runtime_environment = await load_runtime_environment_for_workspace(db, workspace)
     billing_subject_id = (
         runtime_environment.billing_subject_id
         if runtime_environment is not None
@@ -67,12 +73,14 @@ async def get_workspace_connection(workspace: CloudWorkspace) -> RuntimeConnecti
     access_token = decrypt_text(runtime_environment.runtime_token_ciphertext)
     runtime_url = await ensure_environment_runtime_ready(
         runtime_environment,
-        workspace_id=workspace.id,
+        workspace_id=workspace_id,
         allow_launcher_restart=True,
         access_token=access_token,
     )
-    reloaded_workspace = await load_cloud_workspace_by_id(workspace.id)
+    db.expire_all()
+    reloaded_workspace = await load_cloud_workspace_by_id(db, workspace_id)
     reloaded_environment = await load_runtime_environment_for_workspace(
+        db,
         reloaded_workspace or workspace,
     )
     if (
@@ -100,14 +108,14 @@ async def get_workspace_connection(workspace: CloudWorkspace) -> RuntimeConnecti
         user_id=reloaded_workspace.user_id,
         runtime_url=runtime_url,
         access_token=access_token,
-        workspace_id=workspace.id,
+        workspace_id=workspace_id,
         run_deferred_startup_cleanup=True,
         await_deferred_startup_cleanup=False,
     )
     ready_agent_kinds = await get_runtime_ready_agent_kinds(
         runtime_url,
         access_token,
-        workspace_id=workspace.id,
+        workspace_id=workspace_id,
     )
     return RuntimeConnectionTarget(
         target_id=reloaded_environment.target_id,

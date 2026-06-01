@@ -431,6 +431,24 @@ async def _connect_or_resume_sandbox(
     raise CloudRuntimeReconnectError("Cloud workspace sandbox is unavailable.")
 
 
+async def _persist_reconnect(
+    workspace: CloudWorkspace, sandbox_record: object, restarted_runtime: bool, runtime_url: str
+) -> None:
+    async with db_engine.async_session_factory() as db, db.begin():
+        await persist_runtime_reconnect_state_for_workspace(
+            db,
+            workspace,
+            sandbox_record,
+            restarted_runtime=restarted_runtime,
+            runtime_url=runtime_url,
+        )
+
+
+async def _save_env_updates(environment_id: UUID, updates: dict[str, object]) -> None:
+    async with db_engine.async_session_factory() as db, db.begin():
+        await save_runtime_environment_state(db, environment_id, **updates)
+
+
 async def ensure_workspace_runtime_ready(
     workspace: CloudWorkspace,
     *,
@@ -450,7 +468,8 @@ async def ensure_workspace_runtime_ready(
     ):
         return workspace.runtime_url
 
-    sandbox_record = await load_active_sandbox_for_workspace(workspace)
+    async with db_engine.async_session_factory() as db:
+        sandbox_record = await load_active_sandbox_for_workspace(db, workspace)
     if sandbox_record is None:
         raise CloudRuntimeReconnectError("Cloud workspace sandbox record was not found.")
 
@@ -483,12 +502,7 @@ async def ensure_workspace_runtime_ready(
         delay_seconds=endpoint_probe.delay_seconds,
     ):
         if should_persist_rotated_runtime_url(workspace.runtime_url, endpoint.runtime_url):
-            await persist_runtime_reconnect_state_for_workspace(
-                workspace,
-                sandbox_record,
-                restarted_runtime=False,
-                runtime_url=endpoint.runtime_url,
-            )
+            await _persist_reconnect(workspace, sandbox_record, False, endpoint.runtime_url)
         return endpoint.runtime_url
 
     if not allow_launcher_restart:
@@ -528,12 +542,7 @@ async def ensure_workspace_runtime_ready(
         access_token,
         workspace_id=workspace.id,
     )
-    await persist_runtime_reconnect_state_for_workspace(
-        workspace,
-        sandbox_record,
-        restarted_runtime=True,
-        runtime_url=endpoint.runtime_url,
-    )
+    await _persist_reconnect(workspace, sandbox_record, True, endpoint.runtime_url)
     return endpoint.runtime_url
 
 
@@ -561,7 +570,8 @@ async def ensure_environment_runtime_ready(
     ):
         return environment.runtime_url
 
-    sandbox_record = await load_cloud_sandbox_by_id(environment.active_sandbox_id)
+    async with db_engine.async_session_factory() as db:
+        sandbox_record = await load_cloud_sandbox_by_id(db, environment.active_sandbox_id)
     if sandbox_record is None:
         raise CloudRuntimeReconnectError("Cloud runtime environment sandbox record was not found.")
 
@@ -594,17 +604,15 @@ async def ensure_environment_runtime_ready(
     ):
         if not force_launcher_restart:
             if should_persist_rotated_runtime_url(environment.runtime_url, endpoint.runtime_url):
-                await save_runtime_environment_state(
-                    environment.id,
-                    **runtime_endpoint_rotated_update(endpoint.runtime_url),
+                await _save_env_updates(
+                    environment.id, runtime_endpoint_rotated_update(endpoint.runtime_url)
                 )
             return endpoint.runtime_url
         if not allow_launcher_restart:
             raise CloudRuntimeReconnectError("Cloud runtime restart was requested but disallowed.")
         if should_persist_rotated_runtime_url(environment.runtime_url, endpoint.runtime_url):
-            await save_runtime_environment_state(
-                environment.id,
-                **runtime_endpoint_rotated_update(endpoint.runtime_url),
+            await _save_env_updates(
+                environment.id, runtime_endpoint_rotated_update(endpoint.runtime_url)
             )
 
     if not allow_launcher_restart:
@@ -660,8 +668,7 @@ async def ensure_environment_runtime_ready(
             not_before=worker_restart_started_at,
             previous_worker_id=previous_worker_id,
         )
-    await save_runtime_environment_state(
-        environment.id,
-        **runtime_process_relaunched_update(endpoint.runtime_url),
+    await _save_env_updates(
+        environment.id, runtime_process_relaunched_update(endpoint.runtime_url)
     )
     return endpoint.runtime_url

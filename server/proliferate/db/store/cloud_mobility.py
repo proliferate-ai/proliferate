@@ -11,7 +11,6 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db import engine as db_engine
 from proliferate.db.models.analytics import CloudWorkspaceMobilityEvent
 from proliferate.db.models.cloud.mobility import (
     CloudWorkspaceHandoffOp,
@@ -498,7 +497,7 @@ async def ensure_cloud_workspace_mobility(
             updated_at=now,
         )
         db.add(record)
-        await db.commit()
+        await db.flush()
         await db.refresh(record)
         return _mobility_value(record)
 
@@ -537,7 +536,7 @@ async def ensure_cloud_workspace_mobility(
         changed = True
     if changed:
         record.updated_at = now
-        await db.commit()
+        await db.flush()
         await db.refresh(record)
 
     active_handoff = None
@@ -634,7 +633,7 @@ async def create_cloud_workspace_handoff_op(
         occurred_at=now,
     )
 
-    await db.commit()
+    await db.flush()
     await db.refresh(record)
     await db.refresh(mobility_workspace)
     return _handoff_value(record)
@@ -1039,38 +1038,39 @@ async def fail_cloud_workspace_handoff_op(
 
 
 async def list_cloud_workspace_mobility_for_user(
+    db: AsyncSession,
     *,
     user_id: UUID,
 ) -> list[CloudWorkspaceMobilityValue]:
-    async with db_engine.async_session_factory() as db:
-        records = await list_cloud_workspace_mobility(db, user_id=user_id)
-        values: list[CloudWorkspaceMobilityValue] = []
-        for record in records:
-            active_handoff = None
-            if record.active_handoff_op_id is not None:
-                active_handoff = await get_cloud_workspace_handoff_op(
-                    db,
-                    user_id=user_id,
-                    handoff_op_id=record.active_handoff_op_id,
-                )
-            values.append(_mobility_value(record, active_handoff=active_handoff))
-        return values
+    records = await list_cloud_workspace_mobility(db, user_id=user_id)
+    values: list[CloudWorkspaceMobilityValue] = []
+    for record in records:
+        active_handoff = None
+        if record.active_handoff_op_id is not None:
+            active_handoff = await get_cloud_workspace_handoff_op(
+                db,
+                user_id=user_id,
+                handoff_op_id=record.active_handoff_op_id,
+            )
+        values.append(_mobility_value(record, active_handoff=active_handoff))
+    return values
 
 
 async def load_cloud_workspace_mobility_for_user(
+    db: AsyncSession,
     *,
     user_id: UUID,
     mobility_workspace_id: UUID,
 ) -> CloudWorkspaceMobilityValue | None:
-    async with db_engine.async_session_factory() as db:
-        return await load_cloud_workspace_mobility_value(
-            db,
-            user_id=user_id,
-            mobility_workspace_id=mobility_workspace_id,
-        )
+    return await load_cloud_workspace_mobility_value(
+        db,
+        user_id=user_id,
+        mobility_workspace_id=mobility_workspace_id,
+    )
 
 
 async def ensure_cloud_workspace_mobility_for_user(
+    db: AsyncSession,
     *,
     user_id: UUID,
     git_provider: str,
@@ -1083,52 +1083,52 @@ async def ensure_cloud_workspace_mobility_for_user(
     display_name: str | None,
     cloud_workspace_id: UUID | None,
 ) -> CloudWorkspaceMobilityValue:
-    async with db_engine.async_session_factory() as db:
-        return await ensure_cloud_workspace_mobility(
-            db,
-            user_id=user_id,
-            git_provider=git_provider,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-            git_branch=git_branch,
-            owner_hint=owner_hint,
-            active_lifecycle_state=active_lifecycle_state,
-            is_retryable_failure=is_retryable_failure,
-            display_name=display_name,
-            cloud_workspace_id=cloud_workspace_id,
-        )
+    return await ensure_cloud_workspace_mobility(
+        db,
+        user_id=user_id,
+        git_provider=git_provider,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        git_branch=git_branch,
+        owner_hint=owner_hint,
+        active_lifecycle_state=active_lifecycle_state,
+        is_retryable_failure=is_retryable_failure,
+        display_name=display_name,
+        cloud_workspace_id=cloud_workspace_id,
+    )
 
 
 async def backfill_cloud_workspace_mobility_for_workspace(
+    db: AsyncSession,
     *,
     workspace: CloudWorkspace,
     active_lifecycle_state: str,
     is_retryable_failure: RetryableMobilityFailurePredicate,
 ) -> CloudWorkspaceMobilityValue:
-    async with db_engine.async_session_factory() as db:
-        return await backfill_cloud_workspace_mobility_from_workspace(
-            db,
-            workspace=workspace,
-            active_lifecycle_state=active_lifecycle_state,
-            is_retryable_failure=is_retryable_failure,
-        )
+    return await backfill_cloud_workspace_mobility_from_workspace(
+        db,
+        workspace=workspace,
+        active_lifecycle_state=active_lifecycle_state,
+        is_retryable_failure=is_retryable_failure,
+    )
 
 
 async def load_active_user_handoff_op_for_user(
+    db: AsyncSession,
     *,
     user_id: UUID,
     final_handoff_phases: tuple[str, ...],
 ) -> CloudWorkspaceHandoffOpValue | None:
-    async with db_engine.async_session_factory() as db:
-        record = await get_active_user_handoff_op(
-            db,
-            user_id=user_id,
-            final_handoff_phases=final_handoff_phases,
-        )
-        return _handoff_value(record) if record is not None else None
+    record = await get_active_user_handoff_op(
+        db,
+        user_id=user_id,
+        final_handoff_phases=final_handoff_phases,
+    )
+    return _handoff_value(record) if record is not None else None
 
 
 async def record_cloud_workspace_mobility_event_for_user(
+    db: AsyncSession,
     *,
     user_id: UUID,
     cloud_workspace_id: UUID | None,
@@ -1141,25 +1141,25 @@ async def record_cloud_workspace_mobility_event_for_user(
     to_phase: str | None = None,
     failure_code: str | None = None,
 ) -> None:
-    async with db_engine.async_session_factory() as db:
-        _record_mobility_event(
-            db,
-            user_id=user_id,
-            cloud_workspace_id=cloud_workspace_id,
-            handoff_op_id=handoff_op_id,
-            event_type=event_type,
-            direction=direction,
-            source_owner=source_owner,
-            target_owner=target_owner,
-            from_phase=from_phase,
-            to_phase=to_phase,
-            failure_code=failure_code,
-            occurred_at=utcnow(),
-        )
-        await db.commit()
+    _record_mobility_event(
+        db,
+        user_id=user_id,
+        cloud_workspace_id=cloud_workspace_id,
+        handoff_op_id=handoff_op_id,
+        event_type=event_type,
+        direction=direction,
+        source_owner=source_owner,
+        target_owner=target_owner,
+        from_phase=from_phase,
+        to_phase=to_phase,
+        failure_code=failure_code,
+        occurred_at=utcnow(),
+    )
+    await db.flush()
 
 
 async def create_cloud_workspace_handoff_op_for_user(
+    db: AsyncSession,
     *,
     user_id: UUID,
     mobility_workspace_id: UUID,
@@ -1172,32 +1172,31 @@ async def create_cloud_workspace_handoff_op_for_user(
     requested_base_sha: str | None,
     exclude_paths: list[str],
 ) -> CloudWorkspaceHandoffOpValue:
-    async with db_engine.async_session_factory() as db:
-        mobility_workspace = await get_cloud_workspace_mobility_for_update(
-            db,
-            user_id=user_id,
-            mobility_workspace_id=mobility_workspace_id,
-        )
-        if mobility_workspace is None:
-            raise ValueError("mobility workspace not found")
-        existing_handoff = await get_active_handoff_for_mobility(
-            db,
-            mobility_workspace_id=mobility_workspace_id,
-            final_handoff_phases=final_handoff_phases,
-        )
-        if existing_handoff is not None:
-            raise ValueError("handoff already in progress for workspace")
-        return await create_cloud_workspace_handoff_op(
-            db,
-            mobility_workspace=mobility_workspace,
-            direction=direction,
-            source_owner=source_owner,
-            target_owner=target_owner,
-            moving_lifecycle_state=moving_lifecycle_state,
-            requested_branch=requested_branch,
-            requested_base_sha=requested_base_sha,
-            exclude_paths=exclude_paths,
-        )
+    mobility_workspace = await get_cloud_workspace_mobility_for_update(
+        db,
+        user_id=user_id,
+        mobility_workspace_id=mobility_workspace_id,
+    )
+    if mobility_workspace is None:
+        raise ValueError("mobility workspace not found")
+    existing_handoff = await get_active_handoff_for_mobility(
+        db,
+        mobility_workspace_id=mobility_workspace_id,
+        final_handoff_phases=final_handoff_phases,
+    )
+    if existing_handoff is not None:
+        raise ValueError("handoff already in progress for workspace")
+    return await create_cloud_workspace_handoff_op(
+        db,
+        mobility_workspace=mobility_workspace,
+        direction=direction,
+        source_owner=source_owner,
+        target_owner=target_owner,
+        moving_lifecycle_state=moving_lifecycle_state,
+        requested_branch=requested_branch,
+        requested_base_sha=requested_base_sha,
+        exclude_paths=exclude_paths,
+    )
 
 
 async def update_cloud_workspace_handoff_phase_for_user(
@@ -1234,6 +1233,7 @@ async def update_cloud_workspace_handoff_phase_for_user(
 
 
 async def update_cloud_workspace_handoff_phase_checkpoint_for_user(
+    db: AsyncSession,
     *,
     user_id: UUID,
     mobility_workspace_id: UUID,
@@ -1242,18 +1242,17 @@ async def update_cloud_workspace_handoff_phase_checkpoint_for_user(
     status_detail: str | None,
     cloud_workspace_id: UUID | None = None,
 ) -> CloudWorkspaceHandoffOpValue:
-    async with db_engine.async_session_factory() as db:
-        value = await update_cloud_workspace_handoff_phase_for_user(
-            db,
-            user_id=user_id,
-            mobility_workspace_id=mobility_workspace_id,
-            handoff_op_id=handoff_op_id,
-            phase=phase,
-            status_detail=status_detail,
-            cloud_workspace_id=cloud_workspace_id,
-        )
-        await db.commit()
-        return value
+    value = await update_cloud_workspace_handoff_phase_for_user(
+        db,
+        user_id=user_id,
+        mobility_workspace_id=mobility_workspace_id,
+        handoff_op_id=handoff_op_id,
+        phase=phase,
+        status_detail=status_detail,
+        cloud_workspace_id=cloud_workspace_id,
+    )
+    await db.flush()
+    return value
 
 
 async def heartbeat_cloud_workspace_handoff_op_for_user(
@@ -1379,6 +1378,7 @@ async def fail_cloud_workspace_handoff_op_for_user(
 
 
 async def fail_cloud_workspace_handoff_op_checkpoint_for_user(
+    db: AsyncSession,
     *,
     user_id: UUID,
     mobility_workspace_id: UUID,
@@ -1392,20 +1392,19 @@ async def fail_cloud_workspace_handoff_op_checkpoint_for_user(
     keep_active_handoff: bool = False,
     event_type: str = "handoff_failed",
 ) -> CloudWorkspaceHandoffOpValue:
-    async with db_engine.async_session_factory() as db:
-        value = await fail_cloud_workspace_handoff_op_for_user(
-            db,
-            user_id=user_id,
-            mobility_workspace_id=mobility_workspace_id,
-            handoff_op_id=handoff_op_id,
-            phase=phase,
-            lifecycle_state=lifecycle_state,
-            failure_code=failure_code,
-            failure_detail=failure_detail,
-            status_detail=status_detail,
-            last_error=last_error,
-            keep_active_handoff=keep_active_handoff,
-            event_type=event_type,
-        )
-        await db.commit()
-        return value
+    value = await fail_cloud_workspace_handoff_op_for_user(
+        db,
+        user_id=user_id,
+        mobility_workspace_id=mobility_workspace_id,
+        handoff_op_id=handoff_op_id,
+        phase=phase,
+        lifecycle_state=lifecycle_state,
+        failure_code=failure_code,
+        failure_detail=failure_detail,
+        status_detail=status_detail,
+        last_error=last_error,
+        keep_active_handoff=keep_active_handoff,
+        event_type=event_type,
+    )
+    await db.flush()
+    return value

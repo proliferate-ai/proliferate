@@ -19,7 +19,7 @@ async def test_sync_policy_can_trigger_deferred_cleanup_without_awaiting(
     cleanup_release = asyncio.Event()
     cleanup_finished = asyncio.Event()
 
-    async def _get_policy(_user_id):
+    async def _get_policy(_db, _user_id):
         return SimpleNamespace(max_materialized_worktrees_per_repo=42)
 
     async def _update_policy(*_args, **_kwargs) -> None:

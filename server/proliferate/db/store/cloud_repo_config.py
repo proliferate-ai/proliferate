@@ -11,7 +11,6 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig, CloudRepoFile
 from proliferate.db.store.billing import (
     acquire_billing_subject_repo_limit_lock,
@@ -689,32 +688,32 @@ async def bootstrap_cloud_repo_config(
 
 
 async def load_cloud_repo_config_for_user(
+    db: AsyncSession,
     *,
     user_id: UUID,
     git_owner: str,
     git_repo_name: str,
 ) -> CloudRepoConfigValue | None:
-    async with db_engine.async_session_factory() as db:
-        return await get_cloud_repo_config(
-            db,
-            user_id=user_id,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-        )
+    return await get_cloud_repo_config(
+        db,
+        user_id=user_id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+    )
 
 
 async def bootstrap_cloud_repo_config_for_user(
+    db: AsyncSession,
     *,
     user_id: UUID,
     git_owner: str,
     git_repo_name: str,
     cloud_repo_limit: int | None,
 ) -> CloudRepoConfigValue:
-    async with db_engine.async_session_factory() as db, db.begin():
-        return await bootstrap_cloud_repo_config(
-            db,
-            user_id=user_id,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-            cloud_repo_limit=cloud_repo_limit,
-        )
+    return await bootstrap_cloud_repo_config(
+        db,
+        user_id=user_id,
+        git_owner=git_owner,
+        git_repo_name=git_repo_name,
+        cloud_repo_limit=cloud_repo_limit,
+    )

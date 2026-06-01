@@ -178,7 +178,6 @@ async def _create_workspace_for_claimed_run(
             origin_json=origin_json,
             template_version=template_version,
             cloud_repo_limit=cloud_repo_limit,
-            commit=False,
         )
     run.cloud_workspace_id = workspace.id
     if target_id is not None:

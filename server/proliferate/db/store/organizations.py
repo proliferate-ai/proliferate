@@ -29,7 +29,6 @@ from proliferate.constants.organizations import (
     ORGANIZATION_STATUS_ARCHIVED,
     ORGANIZATION_STATUS_PENDING_CHECKOUT,
 )
-from proliferate.db import engine as db_engine
 from proliferate.db.models.auth import User
 from proliferate.db.models.billing import BillingSubject
 from proliferate.db.models.organizations import (
@@ -204,16 +203,16 @@ async def get_organization_with_membership(
 
 
 async def load_active_membership(
+    db: AsyncSession,
     *,
     organization_id: UUID,
     user_id: UUID,
 ) -> MembershipRecord | None:
-    async with db_engine.async_session_factory() as db:
-        return await get_active_membership(
-            db,
-            organization_id=organization_id,
-            user_id=user_id,
-        )
+    return await get_active_membership(
+        db,
+        organization_id=organization_id,
+        user_id=user_id,
+    )
 
 
 async def get_active_membership(

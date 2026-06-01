@@ -415,12 +415,14 @@ async def save_repo_file(
 
 
 async def load_repo_config_value(
+    db: AsyncSession,
     *,
     user_id: UUID,
     git_owner: str,
     git_repo_name: str,
 ) -> CloudRepoConfigValue | None:
     return await load_cloud_repo_config_for_user(
+        db,
         user_id=user_id,
         git_owner=git_owner,
         git_repo_name=git_repo_name,
@@ -428,6 +430,7 @@ async def load_repo_config_value(
 
 
 async def bootstrap_repo_config(
+    db: AsyncSession,
     *,
     user_id: UUID,
     git_owner: str,
@@ -437,6 +440,7 @@ async def bootstrap_repo_config(
     cloud_repo_limit = repo_limit_for_billing_snapshot(billing_snapshot)
     try:
         return await bootstrap_cloud_repo_config_for_user(
+            db,
             user_id=user_id,
             git_owner=git_owner,
             git_repo_name=git_repo_name,
@@ -508,7 +512,7 @@ async def resync_workspace_files(
     workspace = await _load_authorized_workspace_for_repo_config(db, user_id, workspace_id)
 
     # Workspace stores still return ORM rows; this lane only removes ORM-aware response builders.
-    target = await get_workspace_connection(workspace)  # type: ignore[arg-type]
+    target = await get_workspace_connection(db, workspace)  # type: ignore[arg-type]
     try:
         await apply_workspace_repo_config(
             workspace,  # type: ignore[arg-type]
@@ -546,7 +550,7 @@ async def run_workspace_setup(
     workspace = await _load_authorized_workspace_for_repo_config(db, user_id, workspace_id)
 
     # Workspace stores still return ORM rows; this lane only removes ORM-aware response builders.
-    target = await get_workspace_connection(workspace)  # type: ignore[arg-type]
+    target = await get_workspace_connection(db, workspace)  # type: ignore[arg-type]
     try:
         started = await run_workspace_saved_setup(
             workspace,  # type: ignore[arg-type]

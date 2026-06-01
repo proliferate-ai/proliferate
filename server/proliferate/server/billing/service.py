@@ -347,20 +347,20 @@ async def reconcile_initial_org_subscription_seats(
 
 
 async def remember_cloud_sandbox_event_receipt(
+    db: AsyncSession,
     *,
     event_id: str,
     provider: str,
     event_type: str,
     external_sandbox_id: str | None,
 ) -> bool:
-    async with db_engine.async_session_factory() as db, db.begin():
-        return await remember_sandbox_event_receipt_record(
-            db,
-            event_id=event_id,
-            provider=provider,
-            event_type=event_type,
-            external_sandbox_id=external_sandbox_id,
-        )
+    return await remember_sandbox_event_receipt_record(
+        db,
+        event_id=event_id,
+        provider=provider,
+        event_type=event_type,
+        external_sandbox_id=external_sandbox_id,
+    )
 
 
 async def record_cloud_sandbox_usage_started(

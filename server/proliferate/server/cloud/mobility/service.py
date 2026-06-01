@@ -19,7 +19,6 @@ from proliferate.db.store.cloud_mobility import (
     all_cleanup_items_completed,
     backfill_cloud_workspace_mobility_for_workspace,
     complete_cloud_workspace_handoff_cleanup_for_user,
-    create_cloud_workspace_handoff_op_for_user,
     ensure_cloud_workspace_mobility_for_user,
     fail_cloud_workspace_handoff_op_checkpoint_for_user,
     fail_cloud_workspace_handoff_op_for_user,
@@ -30,11 +29,9 @@ from proliferate.db.store.cloud_mobility import (
     insert_cleanup_items_for_handoff,
     list_cleanup_items_for_handoff,
     load_active_user_handoff_op_for_user,
-    load_cloud_workspace_mobility_for_user,
     load_cloud_workspace_mobility_value,
     record_cloud_workspace_mobility_event_for_user,
     update_cleanup_item_status,
-    update_cloud_workspace_handoff_phase_checkpoint_for_user,
     update_cloud_workspace_handoff_phase_for_user,
 )
 from proliferate.db.store.cloud_mobility import (
@@ -53,6 +50,7 @@ from proliferate.db.store.cloud_workspaces import (
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
 from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.mobility import transactions as mobility_tx
 from proliferate.server.cloud.mobility.cleanup_executor import (
     SERVER_CLEANUP_ITEM_KINDS,
     cleanup_item_execution_rank,
@@ -258,9 +256,11 @@ async def _default_cleanup_items_for_cutover(
     return items
 
 
-async def expire_stale_cloud_workspace_handoffs_for_user(*, user_id: UUID) -> None:
+async def expire_stale_cloud_workspace_handoffs_for_user(
+    db: AsyncSession, *, user_id: UUID
+) -> None:
     stale_before = utcnow() - _STALE_HANDOFF_AFTER
-    workspaces = await list_cloud_workspace_mobility_store(user_id=user_id)
+    workspaces = await list_cloud_workspace_mobility_store(db, user_id=user_id)
     for workspace in workspaces:
         active_handoff = workspace.active_handoff
         if active_handoff is None or active_handoff.heartbeat_at >= stale_before:
@@ -271,6 +271,7 @@ async def expire_stale_cloud_workspace_handoffs_for_user(*, user_id: UUID) -> No
             canonical_side=active_handoff.canonical_side,
         )
         await fail_cloud_workspace_handoff_op_checkpoint_for_user(
+            db,
             user_id=user_id,
             mobility_workspace_id=workspace.id,
             handoff_op_id=active_handoff.id,
@@ -286,22 +287,24 @@ async def expire_stale_cloud_workspace_handoffs_for_user(*, user_id: UUID) -> No
 
 
 async def list_cloud_workspace_mobility_for_user(
-    user_id: UUID,
+    db: AsyncSession, user_id: UUID
 ) -> list[CloudWorkspaceMobilityValue]:
-    await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
-    workspaces = await list_cloud_workspaces_store(user_id)
+    await expire_stale_cloud_workspace_handoffs_for_user(db, user_id=user_id)
+    workspaces = await list_cloud_workspaces_store(db, user_id)
     for workspace in workspaces:
         if not _should_backfill_mobility_from_cloud_workspace(workspace):
             continue
         await backfill_cloud_workspace_mobility_for_workspace(
+            db,
             workspace=workspace,
             active_lifecycle_state=active_lifecycle_state(OWNER_CLOUD),
             is_retryable_failure=_preserve_failed_handoff_during_passive_backfill,
         )
-    return await list_cloud_workspace_mobility_store(user_id=user_id)
+    return await list_cloud_workspace_mobility_store(db, user_id=user_id)
 
 
 async def ensure_cloud_workspace_mobility(
+    db: AsyncSession,
     *,
     user_id: UUID,
     git_provider: str,
@@ -311,7 +314,7 @@ async def ensure_cloud_workspace_mobility(
     display_name: str | None,
     owner_hint: str,
 ) -> CloudWorkspaceMobilityValue:
-    await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
+    await expire_stale_cloud_workspace_handoffs_for_user(db, user_id=user_id)
     owner_hint = normalize_owner(owner_hint)
     if not is_valid_owner(owner_hint):
         raise CloudApiError(
@@ -322,6 +325,7 @@ async def ensure_cloud_workspace_mobility(
         )
 
     existing_cloud_workspace = await load_existing_cloud_workspace(
+        db,
         user_id=user_id,
         git_provider=git_provider,
         git_owner=git_owner,
@@ -333,6 +337,7 @@ async def ensure_cloud_workspace_mobility(
         existing_cloud_workspace.display_name if existing_cloud_workspace else None
     )
     return await ensure_cloud_workspace_mobility_for_user(
+        db,
         user_id=user_id,
         git_provider=git_provider,
         git_owner=git_owner,
@@ -347,23 +352,16 @@ async def ensure_cloud_workspace_mobility(
 
 
 async def get_cloud_workspace_mobility_detail(
-    db: AsyncSession | None = None,
+    db: AsyncSession,
     *,
     user_id: UUID,
     mobility_workspace_id: UUID,
 ) -> CloudWorkspaceMobilityValue:
-    await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
-    record = (
-        await load_cloud_workspace_mobility_value(
-            db,
-            user_id=user_id,
-            mobility_workspace_id=mobility_workspace_id,
-        )
-        if db is not None
-        else await load_cloud_workspace_mobility_for_user(
-            user_id=user_id,
-            mobility_workspace_id=mobility_workspace_id,
-        )
+    await expire_stale_cloud_workspace_handoffs_for_user(db, user_id=user_id)
+    record = await load_cloud_workspace_mobility_value(
+        db,
+        user_id=user_id,
+        mobility_workspace_id=mobility_workspace_id,
     )
     if record is None:
         raise CloudApiError(
@@ -375,6 +373,7 @@ async def get_cloud_workspace_mobility_detail(
 
 
 async def preflight_cloud_workspace_handoff(
+    db: AsyncSession,
     *,
     user_id: UUID,
     mobility_workspace_id: UUID,
@@ -394,9 +393,10 @@ async def preflight_cloud_workspace_handoff(
         normalized_requested_base_sha
         and _FULL_SHA_RE.fullmatch(normalized_requested_base_sha) is not None
     )
-    await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
+    await expire_stale_cloud_workspace_handoffs_for_user(db, user_id=user_id)
     detail_started = time.perf_counter()
     workspace = await get_cloud_workspace_mobility_detail(
+        db,
         user_id=user_id,
         mobility_workspace_id=mobility_workspace_id,
     )
@@ -424,8 +424,7 @@ async def preflight_cloud_workspace_handoff(
             )
         )
     active_handoff = await load_active_user_handoff_op_for_user(
-        user_id=user_id,
-        final_handoff_phases=FINAL_HANDOFF_PHASES,
+        db, user_id=user_id, final_handoff_phases=FINAL_HANDOFF_PHASES
     )
     if active_handoff is not None and active_handoff.mobility_workspace_id != workspace.id:
         blockers.append(
@@ -457,7 +456,7 @@ async def preflight_cloud_workspace_handoff(
             )
         )
     if is_valid_handoff_direction(direction):
-        user = await load_user_with_oauth_accounts_by_id(user_id)
+        user = await load_user_with_oauth_accounts_by_id(db, user_id)
         if user is None:
             raise CloudApiError("user_not_found", "User not found.", status_code=404)
         branch_lookup_started = time.perf_counter()
@@ -524,9 +523,7 @@ async def preflight_cloud_workspace_handoff(
 
     repo_config_started = time.perf_counter()
     repo_config = await load_cloud_repo_config_for_user(
-        user_id=user_id,
-        git_owner=workspace.git_owner,
-        git_repo_name=workspace.git_repo_name,
+        db, user_id=user_id, git_owner=workspace.git_owner, git_repo_name=workspace.git_repo_name
     )
     repo_config_elapsed_ms = duration_ms(repo_config_started)
     excluded_paths = (
@@ -565,6 +562,7 @@ async def preflight_cloud_workspace_handoff(
     )
     with suppress(Exception):
         await record_cloud_workspace_mobility_event_for_user(
+            db,
             user_id=user_id,
             cloud_workspace_id=workspace.cloud_workspace_id,
             handoff_op_id=workspace.active_handoff.id if workspace.active_handoff else None,
@@ -579,6 +577,7 @@ async def preflight_cloud_workspace_handoff(
 
 
 async def start_cloud_workspace_handoff(
+    db: AsyncSession,
     *,
     user_id: UUID,
     mobility_workspace_id: UUID,
@@ -587,12 +586,14 @@ async def start_cloud_workspace_handoff(
     requested_base_sha: str | None,
     exclude_paths: list[str],
 ) -> CloudWorkspaceHandoffOpValue:
-    await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
+    await mobility_tx.expire_stale_handoffs_tx(user_id=user_id, stale_after=_STALE_HANDOFF_AFTER)
     workspace = await get_cloud_workspace_mobility_detail(
+        db,
         user_id=user_id,
         mobility_workspace_id=mobility_workspace_id,
     )
     preflight = await preflight_cloud_workspace_handoff(
+        db,
         user_id=user_id,
         mobility_workspace_id=mobility_workspace_id,
         direction=direction,
@@ -611,7 +612,7 @@ async def start_cloud_workspace_handoff(
     source_owner = normalize_owner(workspace.owner)
     target_owner = target_owner_for_direction(direction)
     try:
-        handoff = await create_cloud_workspace_handoff_op_for_user(
+        handoff = await mobility_tx.create_cloud_workspace_handoff_op_checkpoint_tx(
             user_id=user_id,
             mobility_workspace_id=mobility_workspace_id,
             direction=direction,
@@ -639,7 +640,7 @@ async def start_cloud_workspace_handoff(
         raise
     if direction == "local_to_cloud":
         try:
-            user = await load_user_with_oauth_accounts_by_id(user_id)
+            user = await load_user_with_oauth_accounts_by_id(db, user_id)
             if user is None:
                 raise CloudApiError("user_not_found", "User not found.", status_code=404)
             cloud_workspace = await ensure_cloud_workspace_for_existing_branch(
@@ -651,9 +652,7 @@ async def start_cloud_workspace_handoff(
                 display_name=workspace.display_name,
             )
             await start_cloud_workspace(
-                user,
-                cloud_workspace.id,
-                requested_base_sha=requested_base_sha,
+                db, user, cloud_workspace.id, requested_base_sha=requested_base_sha
             )
         except Exception as error:
             failure_code = (
@@ -665,7 +664,7 @@ async def start_cloud_workspace_handoff(
                 else str(error) or "Workspace handoff start failed."
             )
             with suppress(ValueError):
-                await fail_cloud_workspace_handoff_op_checkpoint_for_user(
+                await mobility_tx.fail_cloud_workspace_handoff_op_checkpoint_tx(
                     user_id=user_id,
                     mobility_workspace_id=mobility_workspace_id,
                     handoff_op_id=handoff.id,
@@ -677,7 +676,7 @@ async def start_cloud_workspace_handoff(
                     last_error=visible_failure_last_error(failure_detail),
                 )
             raise
-        return await update_cloud_workspace_handoff_phase_checkpoint_for_user(
+        return await mobility_tx.update_cloud_workspace_handoff_phase_checkpoint_tx(
             user_id=user_id,
             mobility_workspace_id=mobility_workspace_id,
             handoff_op_id=handoff.id,
@@ -695,7 +694,7 @@ async def heartbeat_cloud_workspace_handoff(
     mobility_workspace_id: UUID,
     handoff_op_id: UUID,
 ) -> CloudWorkspaceHandoffOpValue:
-    await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
+    await expire_stale_cloud_workspace_handoffs_for_user(db, user_id=user_id)
     try:
         return await heartbeat_cloud_workspace_handoff_op_for_user(
             db,
@@ -717,7 +716,7 @@ async def update_cloud_workspace_handoff_phase(
     status_detail: str | None,
     cloud_workspace_id: UUID | None,
 ) -> CloudWorkspaceHandoffOpValue:
-    await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
+    await expire_stale_cloud_workspace_handoffs_for_user(db, user_id=user_id)
     if not is_valid_handoff_phase(phase):
         raise CloudApiError(
             "invalid_handoff_phase",
@@ -774,7 +773,7 @@ async def finalize_cloud_workspace_handoff(
     handoff_op_id: UUID,
     cloud_workspace_id: UUID | None,
 ) -> CloudWorkspaceHandoffOpValue:
-    await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
+    await expire_stale_cloud_workspace_handoffs_for_user(db, user_id=user_id)
     source_workspace = await get_cloud_workspace_mobility_detail(
         db,
         user_id=user_id,
@@ -877,7 +876,7 @@ async def complete_cloud_workspace_handoff_cleanup(
     mobility_workspace_id: UUID,
     handoff_op_id: UUID,
 ) -> CloudWorkspaceHandoffOpValue:
-    await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
+    await expire_stale_cloud_workspace_handoffs_for_user(db, user_id=user_id)
     cleanup_items = await list_cleanup_items_for_handoff(db, handoff_op_id=handoff_op_id)
     if cleanup_items:
         for item in cleanup_items:
@@ -1167,7 +1166,7 @@ async def fail_cloud_workspace_handoff(
     failure_code: str,
     failure_detail: str,
 ) -> CloudWorkspaceHandoffOpValue:
-    await expire_stale_cloud_workspace_handoffs_for_user(user_id=user_id)
+    await expire_stale_cloud_workspace_handoffs_for_user(db, user_id=user_id)
     try:
         await _require_handoff_belongs_to_workspace(
             db,

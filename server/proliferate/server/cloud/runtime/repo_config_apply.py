@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from uuid import UUID, uuid4
 
+from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigValue,
@@ -63,7 +64,10 @@ class WorkspaceSetupStartResult:
 
 @asynccontextmanager
 async def _workspace_apply_lock(workspace_id: UUID) -> AsyncIterator[None]:
-    async with workspace_repo_apply_lock(workspace_id) as acquired:
+    async with (
+        db_engine.async_session_factory() as db,
+        workspace_repo_apply_lock(db, workspace_id) as acquired,
+    ):
         if not acquired:
             raise WorkspaceRepoApplyBusyError(
                 "A repo config apply operation is already running for this workspace."
@@ -72,11 +76,13 @@ async def _workspace_apply_lock(workspace_id: UUID) -> AsyncIterator[None]:
 
 
 async def _load_workspace_repo_config(workspace: CloudWorkspace) -> CloudRepoConfigValue | None:
-    return await load_cloud_repo_config_for_user(
-        user_id=workspace.user_id,
-        git_owner=workspace.git_owner,
-        git_repo_name=workspace.git_repo_name,
-    )
+    async with db_engine.async_session_factory() as db:
+        return await load_cloud_repo_config_for_user(
+            db,
+            user_id=workspace.user_id,
+            git_owner=workspace.git_owner,
+            git_repo_name=workspace.git_repo_name,
+        )
 
 
 async def _apply_post_ready_patch(
@@ -110,7 +116,8 @@ async def _apply_post_ready_patch(
         kwargs["repo_post_ready_apply_token"] = None
     elif patch.apply_token is not None:
         kwargs["repo_post_ready_apply_token"] = patch.apply_token
-    await update_workspace_repo_apply_status_by_id(workspace_id, **kwargs)
+    async with db_engine.async_session_factory() as db, db.begin():
+        await update_workspace_repo_apply_status_by_id(db, workspace_id, **kwargs)
 
 
 async def _start_workspace_setup_monitor(
@@ -140,16 +147,18 @@ async def _start_workspace_setup_monitor(
         )
         if not started.command_run_id:
             raise CloudRuntimeOperationError("Remote setup start did not return a commandRunId.")
-        await create_cloud_workspace_setup_run(
-            workspace_id=workspace.id,
-            anyharness_workspace_id=runtime.anyharness_workspace_id,
-            terminal_id=started.terminal_id,
-            command_run_id=started.command_run_id,
-            setup_script_version=repo_config.files_version,
-            apply_token=apply_token,
-            deadline_at=utcnow() + timedelta(minutes=35),
-            status="running",
-        )
+        async with db_engine.async_session_factory() as db, db.begin():
+            await create_cloud_workspace_setup_run(
+                db,
+                workspace_id=workspace.id,
+                anyharness_workspace_id=runtime.anyharness_workspace_id,
+                terminal_id=started.terminal_id,
+                command_run_id=started.command_run_id,
+                setup_script_version=repo_config.files_version,
+                apply_token=apply_token,
+                deadline_at=utcnow() + timedelta(minutes=35),
+                status="running",
+            )
     except Exception as exc:
         error_message = format_exception_message(exc)
         await _apply_post_ready_patch(

@@ -45,11 +45,13 @@ def _patch_global_session_factory(
 
 
 async def _create_workspace(
+    db: AsyncSession,
     *,
     user_id: uuid.UUID,
     repo_name: str = "rocket",
 ) -> CloudWorkspace:
     return await create_cloud_workspace_for_user(
+        db,
         user_id=user_id,
         display_name=f"acme/{repo_name}",
         git_provider="github",
@@ -73,9 +75,10 @@ async def test_setup_run_claim_release_and_expired_claim_reclaim(
     user_id = uuid.uuid4()
     await ensure_personal_billing_subject(db_session, user_id)
     await db_session.commit()
-    workspace = await _create_workspace(user_id=user_id)
+    workspace = await _create_workspace(db_session, user_id=user_id)
     now = datetime.now(UTC)
     first = await create_cloud_workspace_setup_run(
+        db_session,
         workspace_id=workspace.id,
         anyharness_workspace_id="workspace-1",
         terminal_id="terminal-1",
@@ -85,6 +88,7 @@ async def test_setup_run_claim_release_and_expired_claim_reclaim(
         deadline_at=now + timedelta(minutes=10),
     )
     second = await create_cloud_workspace_setup_run(
+        db_session,
         workspace_id=workspace.id,
         anyharness_workspace_id="workspace-1",
         terminal_id="terminal-2",
@@ -95,16 +99,22 @@ async def test_setup_run_claim_release_and_expired_claim_reclaim(
     )
 
     claim_now = datetime.now(UTC) + timedelta(seconds=1)
-    claimed = await claim_due_setup_runs(owner="worker-a", limit=1, now=claim_now)
+    claimed = await claim_due_setup_runs(db_session, owner="worker-a", limit=1, now=claim_now)
     assert [run.id for run in claimed] == [first.id]
     assert claimed[0].claim_owner == "worker-a"
     assert claimed[0].claim_until is not None
 
-    next_claim = await claim_due_setup_runs(owner="worker-b", limit=10, now=claim_now)
+    next_claim = await claim_due_setup_runs(
+        db_session,
+        owner="worker-b",
+        limit=10,
+        now=claim_now,
+    )
     assert [run.id for run in next_claim] == [second.id]
 
     next_poll_at = now + timedelta(seconds=30)
     await release_setup_run_claim(
+        db_session,
         first.id,
         bound_error=bounded_setup_monitor_error,
         next_poll_at=next_poll_at,
@@ -119,8 +129,9 @@ async def test_setup_run_claim_release_and_expired_claim_reclaim(
     assert released.next_poll_at == next_poll_at
     assert released.last_error == "retry"
 
-    assert await claim_due_setup_runs(owner="worker-c", limit=10, now=claim_now) == []
+    assert await claim_due_setup_runs(db_session, owner="worker-c", limit=10, now=claim_now) == []
     reclaimed = await claim_due_setup_runs(
+        db_session,
         owner="worker-c",
         limit=10,
         now=claim_now + timedelta(minutes=2),
@@ -139,7 +150,7 @@ async def test_setup_run_finalize_updates_workspace_only_for_active_token(
     user_id = uuid.uuid4()
     await ensure_personal_billing_subject(db_session, user_id)
     await db_session.commit()
-    workspace = await _create_workspace(user_id=user_id)
+    workspace = await _create_workspace(db_session, user_id=user_id)
     stored_workspace = await db_session.get(CloudWorkspace, workspace.id)
     assert stored_workspace is not None
     stored_workspace.repo_post_ready_phase = WorkspacePostReadyPhase.starting_setup.value
@@ -147,6 +158,7 @@ async def test_setup_run_finalize_updates_workspace_only_for_active_token(
     await db_session.commit()
 
     stale_run = await create_cloud_workspace_setup_run(
+        db_session,
         workspace_id=workspace.id,
         anyharness_workspace_id="workspace-1",
         terminal_id=None,
@@ -156,6 +168,7 @@ async def test_setup_run_finalize_updates_workspace_only_for_active_token(
         deadline_at=datetime.now(UTC) + timedelta(minutes=10),
     )
     await finalize_setup_run(
+        db_session,
         stale_run.id,
         classify_finalization=classify_setup_run_finalization,
         final_status="succeeded",
@@ -172,6 +185,7 @@ async def test_setup_run_finalize_updates_workspace_only_for_active_token(
     assert stored_workspace.repo_setup_applied_version == 0
 
     active_run = await create_cloud_workspace_setup_run(
+        db_session,
         workspace_id=workspace.id,
         anyharness_workspace_id="workspace-1",
         terminal_id=None,
@@ -181,6 +195,7 @@ async def test_setup_run_finalize_updates_workspace_only_for_active_token(
         deadline_at=datetime.now(UTC) + timedelta(minutes=10),
     )
     await finalize_setup_run(
+        db_session,
         active_run.id,
         classify_finalization=classify_setup_run_finalization,
         final_status="succeeded",
@@ -211,8 +226,8 @@ async def test_sandbox_reservation_limit_and_provision_finalization_are_atomic(
     user_id = uuid.uuid4()
     await ensure_personal_billing_subject(db_session, user_id)
     await db_session.commit()
-    first_workspace = await _create_workspace(user_id=user_id, repo_name="first")
-    second_workspace = await _create_workspace(user_id=user_id, repo_name="second")
+    first_workspace = await _create_workspace(db_session, user_id=user_id, repo_name="first")
+    second_workspace = await _create_workspace(db_session, user_id=user_id, repo_name="second")
 
     sandbox = await reserve_sandbox_slot_for_workspace(
         db_session,
@@ -276,7 +291,7 @@ async def test_provision_failure_cleanup_is_idempotent_and_preserves_failed_sand
     user_id = uuid.uuid4()
     await ensure_personal_billing_subject(db_session, user_id)
     await db_session.commit()
-    workspace = await _create_workspace(user_id=user_id)
+    workspace = await _create_workspace(db_session, user_id=user_id)
     stored_workspace = await db_session.get(CloudWorkspace, workspace.id)
     assert stored_workspace is not None
     sandbox = CloudSandbox(
@@ -361,15 +376,17 @@ async def test_stop_and_destroy_preserve_retry_state_after_provider_failure(
     async def _load_workspace_owned_runtime_sandbox(_workspace: CloudWorkspace):
         return sandbox
 
-    async def _update_sandbox_status(_sandbox: CloudSandbox, status: str, **_kwargs) -> None:
+    async def _update_sandbox_status(
+        _db: _NoopDb, _sandbox: CloudSandbox, status: str, **_kwargs
+    ) -> None:
         sandbox_statuses.append(status)
         _sandbox.status = status
 
-    async def _persist_workspace_stop_state(_workspace: CloudWorkspace) -> None:
+    async def _persist_workspace_stop_state(_db: _NoopDb, _workspace: CloudWorkspace) -> None:
         stopped.append(_workspace)
         await persist_workspace_stop(_NoopDb(), _workspace)
 
-    async def _persist_workspace_destroy_state(_workspace: CloudWorkspace) -> None:
+    async def _persist_workspace_destroy_state(_db: _NoopDb, _workspace: CloudWorkspace) -> None:
         destroyed.append(_workspace)
         await persist_workspace_destroy(_NoopDb(), _workspace)
 
@@ -420,5 +437,8 @@ async def test_stop_and_destroy_preserve_retry_state_after_provider_failure(
 
 
 class _NoopDb:
+    async def flush(self) -> None:
+        return None
+
     async def commit(self) -> None:
         return None

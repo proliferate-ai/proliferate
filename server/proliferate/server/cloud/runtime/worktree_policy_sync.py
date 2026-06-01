@@ -7,6 +7,7 @@ import logging
 import time
 from uuid import UUID
 
+from proliferate.db import engine as db_engine
 from proliferate.integrations import anyharness
 from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.worktree_policy.service import (
@@ -96,7 +97,8 @@ async def sync_cloud_worktree_policy_to_runtime(
     run_deferred_startup_cleanup: bool,
     await_deferred_startup_cleanup: bool = True,
 ) -> int:
-    policy = await get_worktree_retention_policy(user_id)
+    async with db_engine.async_session_factory() as db:
+        policy = await get_worktree_retention_policy(db, user_id)
     limit = policy.max_materialized_worktrees_per_repo
     await update_runtime_worktree_retention_policy(
         runtime_url,
