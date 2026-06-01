@@ -1,12 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
-import { flushSync } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import {
   CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
   HOME_CHAT_COMPOSER_INPUT,
 } from "@/config/chat";
 import { HomeModePicker } from "@/components/home/screen/HomeModePicker";
 import { HomeModelPicker } from "@/components/home/screen/HomeModelPicker";
+import { HomeOnboardingCards } from "@/components/home/screen/HomeOnboardingCards";
 import { HomeTargetPicker } from "@/components/home/screen/HomeTargetPicker";
 import { ChatComposerActions } from "@/components/workspace/chat/input/ChatComposerActions";
 import { SessionConfigControls } from "@/components/workspace/chat/input/SessionConfigControls";
@@ -15,83 +14,15 @@ import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
 import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { useHomeNextLaunchControls } from "@/hooks/home/derived/use-home-next-launch-controls";
-import { useHomeNextLaunch } from "@/hooks/home/workflows/use-home-next-launch";
+import { useHomeCloudRepoSettingsNavigation } from "@/hooks/home/workflows/use-home-cloud-repo-settings-navigation";
+import { useHomeNextComposerState } from "@/hooks/home/ui/use-home-next-composer-state";
 import { useHomeNextTargetSelectionState } from "@/hooks/home/ui/use-home-next-target-selection-state";
 import { useHomeNextState } from "@/hooks/home/derived/use-home-next-state";
 import { useHomeScreen } from "@/hooks/home/facade/use-home-screen";
-import { useHomeDraftHandoffStore } from "@/stores/home/home-draft-handoff-store";
-import {
-  type HomeNextModelSelection,
-  type HomeNextRepoLaunchKind,
-} from "@/lib/domain/home/home-next-launch";
-import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
-import { buildCloudRepoSettingsHref } from "@/lib/domain/settings/navigation";
-import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
-import { GitHub, Settings, SlidersHorizontal } from "@proliferate/ui/icons";
-import type {
-  HomeOnboardingCardModel,
-  HomeOnboardingIcon,
-} from "@/lib/domain/home/home-screen";
-
-function waitForNextPaint(): Promise<void> {
-  return new Promise((resolve) => {
-    scheduleAfterNextPaint(resolve);
-  });
-}
-
-function resolveOnboardingIcon(icon: HomeOnboardingIcon) {
-  switch (icon) {
-    case "github":
-      return <GitHub className="size-4" />;
-    case "settings":
-      return <Settings className="size-4" />;
-    case "sliders":
-      return <SlidersHorizontal className="size-4" />;
-  }
-}
-
-function HomeOnboardingCards({
-  cards,
-  isAddingRepo,
-  onSelect,
-}: {
-  cards: HomeOnboardingCardModel[];
-  isAddingRepo: boolean;
-  onSelect: (card: HomeOnboardingCardModel) => void;
-}) {
-  if (cards.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
-      {cards.map((card) => (
-        <Button
-          key={card.id}
-          type="button"
-          variant="unstyled"
-          size="unstyled"
-          loading={card.id === "add-repository" && isAddingRepo}
-          aria-label={card.title}
-          onClick={() => onSelect(card)}
-          className="group flex h-24 w-full min-w-0 flex-col items-start whitespace-normal rounded-2xl border border-border/60 bg-card/70 p-3 text-left transition-colors hover:border-border hover:bg-foreground/5 hover:text-foreground"
-        >
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-foreground/5 text-muted-foreground transition-colors group-hover:bg-foreground/10 group-hover:text-foreground">
-            {resolveOnboardingIcon(card.icon)}
-          </span>
-          <span className="mt-auto max-w-44 break-words text-base font-medium leading-5 text-foreground">
-            {card.title}
-          </span>
-        </Button>
-      ))}
-    </div>
-  );
-}
+import { type HomeNextModelSelection } from "@/lib/domain/home/home-next-launch";
+import { resolveHomeTargetLaunchKindForRepository } from "@/lib/domain/home/home-target-picker";
 
 export function HomeNextScreen() {
-  const navigate = useNavigate();
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [draft, setDraft] = useState("");
   const {
     destination,
     repositorySelection,
@@ -104,12 +35,6 @@ export function HomeNextScreen() {
     useState<HomeNextModelSelection | null>(null);
   const [modeOverrideId, setModeOverrideId] = useState<string | null>(null);
   const [launchControlOverrides, setLaunchControlOverrides] = useState<Record<string, string>>({});
-  const [submittedPreview, setSubmittedPreview] = useState<{
-    id: string;
-    text: string;
-  } | null>(null);
-  const restoredDraftText = useHomeDraftHandoffStore((state) => state.draftText);
-  const clearRestoredDraftText = useHomeDraftHandoffStore((state) => state.clearDraftText);
   const {
     onboardingCards,
     isAddingRepo,
@@ -135,14 +60,16 @@ export function HomeNextScreen() {
       }));
     },
   });
-  const { isLaunching, launch } = useHomeNextLaunch();
-
-  useEffect(() => {
-    if (restoredDraftText !== null) {
-      setDraft(restoredDraftText);
-      clearRestoredDraftText();
-    }
-  }, [clearRestoredDraftText, restoredDraftText]);
+  const configureCloud = useHomeCloudRepoSettingsNavigation(homeNext.cloudRepoTarget);
+  const composer = useHomeNextComposerState({
+    targetDisabledReason: homeNext.targetDisabledReason,
+    modelAvailabilityState: homeNext.modelAvailabilityState,
+    canLaunchTarget: homeNext.canLaunchTarget,
+    modelSelection: homeNext.effectiveModelSelection,
+    modeId: homeNext.effectiveModeId,
+    launchControlValues: homeLaunchControls.launchControlValues,
+    launchTarget: homeNext.launchTarget,
+  });
 
   const promptTarget = destination === "repository"
     ? homeNext.selectedRepository?.name?.trim()
@@ -150,9 +77,6 @@ export function HomeNextScreen() {
   const heading = promptTarget
     ? `What should we build in ${promptTarget}?`
     : "What should we build?";
-  const submitDisabledReason = draft.trim().length === 0
-    ? null
-    : homeNext.targetDisabledReason;
   const modelAvailabilityNotice =
     homeNext.modelAvailabilityState === "no_launchable_model"
       ? {
@@ -165,107 +89,6 @@ export function HomeNextScreen() {
           actionLabel: null,
         }
         : null;
-  const canSubmit =
-    draft.trim().length > 0
-    && homeNext.modelAvailabilityState === "launchable"
-    && homeNext.canLaunchTarget
-    && !!homeNext.effectiveModelSelection
-    && !!homeNext.launchTarget
-    && submittedPreview === null
-    && !isLaunching;
-  useLayoutEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-
-    const lineHeightPx = parseFloat(getComputedStyle(el).lineHeight);
-    if (!Number.isFinite(lineHeightPx) || lineHeightPx <= 0) return;
-
-    const rootFontSizePx = parseFloat(getComputedStyle(document.documentElement).fontSize);
-    const homeMinHeightPx = Number.isFinite(rootFontSizePx)
-      ? rootFontSizePx * HOME_CHAT_COMPOSER_INPUT.minHeightRem
-      : lineHeightPx * HOME_CHAT_COMPOSER_INPUT.minRows;
-    const minPx = Math.max(lineHeightPx * HOME_CHAT_COMPOSER_INPUT.minRows, homeMinHeightPx);
-    const maxPx = lineHeightPx * HOME_CHAT_COMPOSER_INPUT.maxRows;
-    el.style.height = "auto";
-    const contentHeight = el.scrollHeight;
-    const next = Math.min(maxPx, Math.max(minPx, contentHeight));
-    el.style.height = `${next}px`;
-    el.style.overflowY = contentHeight > maxPx ? "auto" : "hidden";
-  }, [draft]);
-
-  async function handleSubmit() {
-    if (!canSubmit || !homeNext.effectiveModelSelection || !homeNext.launchTarget) return;
-
-    const submittedDraft = draft;
-    const submittedText = submittedDraft.trim();
-    const shouldShowHomeSubmittedPreview = homeNext.launchTarget.kind !== "cowork";
-    flushSync(() => {
-      if (shouldShowHomeSubmittedPreview) {
-        setSubmittedPreview({
-          id: crypto.randomUUID(),
-          text: submittedText,
-        });
-      }
-      setDraft("");
-    });
-    if (shouldShowHomeSubmittedPreview) {
-      await waitForNextPaint();
-    }
-    const succeeded = await launch({
-      text: submittedDraft,
-      modelSelection: homeNext.effectiveModelSelection,
-      modeId: homeNext.effectiveModeId,
-      launchControlValues: homeLaunchControls.launchControlValues,
-      target: homeNext.launchTarget,
-    });
-    if (!succeeded) {
-      setSubmittedPreview(null);
-      setDraft(submittedDraft);
-    }
-  }
-
-  function handleCancel() {
-    if (!isLaunching) {
-      setSubmittedPreview(null);
-      setDraft("");
-    }
-  }
-
-  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.nativeEvent.isComposing) return;
-    if (event.key === "Escape" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
-      handleCancel();
-      return;
-    }
-    if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && canSubmit) {
-      event.preventDefault();
-      void handleSubmit();
-    }
-  }
-
-  function handleConfigureCloud(repository?: SettingsRepositoryEntry) {
-    const repoTarget = repository
-      ? {
-        gitOwner: repository.gitOwner?.trim(),
-        gitRepoName: repository.gitRepoName?.trim(),
-      }
-      : homeNext.cloudRepoTarget;
-    const target = repoTarget?.gitOwner && repoTarget.gitRepoName
-      ? { gitOwner: repoTarget.gitOwner, gitRepoName: repoTarget.gitRepoName }
-      : null;
-    if (target) {
-      navigate(buildCloudRepoSettingsHref(target.gitOwner, target.gitRepoName));
-    }
-  }
-
-  function resolveLaunchKindForRepository(sourceRoot: string): HomeNextRepoLaunchKind {
-    if (repoLaunchKind !== "cloud") {
-      return repoLaunchKind;
-    }
-    const cloudAction = homeNext.cloudRepoActionBySourceRoot[sourceRoot];
-    return cloudAction?.kind === "create" ? "cloud" : "worktree";
-  }
-
   return (
     <div className="relative flex h-full w-full min-w-0 flex-1 overflow-hidden bg-background text-foreground" data-telemetry-block>
       <div className="absolute inset-x-0 top-0 h-10" data-tauri-drag-region="true" />
@@ -282,7 +105,7 @@ export function HomeNextScreen() {
               className="relative flex flex-col"
               onSubmit={(event) => {
                 event.preventDefault();
-                if (canSubmit) void handleSubmit();
+                if (composer.canSubmit) void composer.submit();
               }}
             >
               <div
@@ -295,11 +118,11 @@ export function HomeNextScreen() {
                 <ComposerTextarea
                   data-telemetry-mask
                   data-home-composer-editor
-                  ref={textareaRef}
+                  ref={composer.textareaRef}
                   rows={4}
-                  value={draft}
-                  onChange={(event) => setDraft(event.target.value)}
-                  onKeyDown={handleKeyDown}
+                  value={composer.draft}
+                  onChange={(event) => composer.setDraft(event.target.value)}
+                  onKeyDown={composer.handleKeyDown}
                   placeholder="Describe a task"
                   spellCheck={false}
                   autoComplete="off"
@@ -337,10 +160,10 @@ export function HomeNextScreen() {
                 <div className="flex items-center">
                   <ChatComposerActions
                     isRunning={false}
-                    isEmpty={draft.trim().length === 0}
-                    isDisabled={!canSubmit}
-                    onSubmit={() => { void handleSubmit(); }}
-                    onCancel={handleCancel}
+                    isEmpty={composer.draft.trim().length === 0}
+                    isDisabled={!composer.canSubmit}
+                    onSubmit={() => { void composer.submit(); }}
+                    onCancel={composer.cancel}
                   />
                 </div>
               </div>
@@ -364,7 +187,11 @@ export function HomeNextScreen() {
                 patchTargetSelection({ destination: "cowork" });
               }}
               onSelectRepository={(sourceRoot) => {
-                const launchKind = resolveLaunchKindForRepository(sourceRoot);
+                const launchKind = resolveHomeTargetLaunchKindForRepository({
+                  currentLaunchKind: repoLaunchKind,
+                  sourceRoot,
+                  cloudActionBySourceRoot: homeNext.cloudRepoActionBySourceRoot,
+                });
                 patchTargetSelection({
                   destination: "repository",
                   repositorySelection: { kind: "repository", sourceRoot },
@@ -381,20 +208,20 @@ export function HomeNextScreen() {
                 patchTargetSelection({ baseBranchOverride: branchName });
               }}
               onAddRepository={() => handleHomeAction("add-repository")}
-              onConfigureCloud={handleConfigureCloud}
+              onConfigureCloud={configureCloud}
             />
           </div>
 
-          {submittedPreview ? (
+          {composer.submittedPreview ? (
             <div
-              key={submittedPreview.id}
+              key={composer.submittedPreview.id}
               className="mt-5"
               data-home-submit-preview
             >
               <UserMessage
                 sessionId={null}
-                content={submittedPreview.text}
-                contentParts={[{ type: "text", text: submittedPreview.text }]}
+                content={composer.submittedPreview.text}
+                contentParts={[{ type: "text", text: composer.submittedPreview.text }]}
               />
             </div>
           ) : null}
@@ -415,14 +242,14 @@ export function HomeNextScreen() {
             </div>
           ) : null}
 
-          {submitDisabledReason ? (
+          {composer.submitDisabledReason ? (
             <div className="mx-auto mt-2 flex max-w-2xl items-center justify-center gap-2 px-2 text-center text-sm text-muted-foreground">
-              <span>{submitDisabledReason}</span>
+              <span>{composer.submitDisabledReason}</span>
               {repoLaunchKind === "cloud" && homeNext.cloudRepoAction.kind === "configure" ? (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleConfigureCloud()}
+                  onClick={() => configureCloud()}
                   className="h-auto px-0 py-0 text-foreground underline underline-offset-4 hover:text-muted-foreground"
                 >
                   Configure

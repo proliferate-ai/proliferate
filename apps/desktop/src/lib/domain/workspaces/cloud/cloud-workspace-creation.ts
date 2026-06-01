@@ -6,7 +6,7 @@ import {
 import type { CloudRepoConfigSummary } from "@/lib/domain/cloud/repo-configs";
 import type { AuthUser } from "@/lib/domain/auth/auth-user";
 import type { BranchPrefixType } from "@/lib/domain/preferences/user/model";
-import { generateWorkspaceSlug } from "@/lib/domain/workspaces/creation/arrival";
+import { generateWorkspaceSlug } from "@/lib/domain/workspaces/creation/workspace-slug";
 import {
   buildBranchName,
   resolveBranchPrefix,

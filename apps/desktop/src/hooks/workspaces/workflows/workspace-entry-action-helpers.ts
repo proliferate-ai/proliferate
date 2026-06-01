@@ -5,7 +5,7 @@ import type {
 import {
   collectWorktreeBasenamesForRepo,
   generateWorkspaceSlug,
-} from "@/lib/domain/workspaces/creation/arrival";
+} from "@/lib/domain/workspaces/creation/workspace-slug";
 import type {
   CreateWorktreeWorkspaceInput,
 } from "@/lib/domain/workspaces/creation/workspace-creation";

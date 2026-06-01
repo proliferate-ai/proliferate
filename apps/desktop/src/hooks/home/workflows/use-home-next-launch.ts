@@ -2,8 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
 import { useCoworkThreadWorkflow } from "@/hooks/cowork/workflows/use-cowork-thread-workflow";
-import { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
-import { useSessionPromptWorkflow } from "@/hooks/sessions/workflows/use-session-prompt-workflow";
+import { useHomeNextLaunchPromptActions } from "@/hooks/home/workflows/use-home-next-launch-prompt-actions";
 import { useWorkspaceEntryActions } from "@/hooks/workspaces/workflows/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
 import type {
@@ -11,24 +10,23 @@ import type {
   HomeNextModelSelection,
 } from "@/lib/domain/home/home-next-launch";
 import {
-  resolveChatLaunchRetryMode,
-  resolveLaunchIntentPendingWorkspaceId,
-  type ChatLaunchRetryMode,
-} from "@/lib/domain/chat/launch/launch-intent";
-import {
   buildDeferredHomeLaunchId,
   useDeferredHomeLaunchStore,
 } from "@/stores/home/deferred-home-launch-store";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
-import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
-import type { PendingWorkspaceInitialSession } from "@/lib/domain/workspaces/creation/pending-entry";
-import { buildPendingWorkspaceUiKey } from "@/lib/domain/workspaces/creation/pending-entry";
-import { getSessionRecord } from "@/stores/sessions/session-records";
+import {
+  buildHomePendingWorkspaceInitialSession,
+  buildResolvedHomeLaunchControlValues,
+  homeLaunchFailureRetryMode,
+  homeNextLaunchErrorMessage,
+  markHomeLaunchIntentMaterializedFromPendingWorkspace,
+  newHomeNextLaunchId,
+} from "@/hooks/home/workflows/home-next-launch-intent";
 
 interface HomeNextLaunchInput {
   text: string;
@@ -36,114 +34,6 @@ interface HomeNextLaunchInput {
   modeId: string | null;
   launchControlValues?: Record<string, string>;
   target: HomeLaunchTarget;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function modeOptions(modeId: string | null): { modeId?: string } {
-  return modeId ? { modeId } : {};
-}
-
-function newLaunchId(): string {
-  return crypto.randomUUID();
-}
-
-function markLaunchIntentMaterializedFromPendingWorkspace(intentId: string): void {
-  const activeIntent = useChatLaunchIntentStore.getState().activeIntent;
-  if (!activeIntent || activeIntent.id !== intentId) {
-    return;
-  }
-
-  const workspaceId = resolveLaunchIntentPendingWorkspaceId(
-    activeIntent,
-    useSessionSelectionStore.getState().pendingWorkspaceEntry,
-  );
-  if (!workspaceId) {
-    return;
-  }
-
-  useChatLaunchIntentStore.getState().markMaterializedIfActive(intentId, {
-    workspaceId,
-  });
-}
-
-function launchFailureRetryMode(intentId: string): ChatLaunchRetryMode {
-  const activeIntent = useChatLaunchIntentStore.getState().activeIntent;
-  if (!activeIntent || activeIntent.id !== intentId) {
-    return "safe";
-  }
-
-  const retryMode = resolveChatLaunchRetryMode(activeIntent);
-  if (retryMode !== "safe") {
-    return retryMode;
-  }
-
-  return resolveLaunchIntentPendingWorkspaceId(
-    activeIntent,
-    useSessionSelectionStore.getState().pendingWorkspaceEntry,
-  )
-    ? "manual_after_workspace"
-    : "safe";
-}
-
-function resolveProjectedPendingWorkspaceSession(): {
-  sessionId: string;
-  workspaceId: string;
-} | null {
-  const selection = useSessionSelectionStore.getState();
-  const entry = selection.pendingWorkspaceEntry;
-  const activeSessionId = selection.activeSessionId;
-  if (!entry || !activeSessionId) {
-    return null;
-  }
-
-  const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(entry);
-  const record = getSessionRecord(activeSessionId);
-  if (record?.workspaceId !== pendingWorkspaceUiKey) {
-    return null;
-  }
-
-  return {
-    sessionId: activeSessionId,
-    workspaceId: pendingWorkspaceUiKey,
-  };
-}
-
-function waitForProjectedPendingWorkspaceSession(
-  stopWhen: Promise<unknown>,
-): Promise<{
-  sessionId: string;
-  workspaceId: string;
-} | null> {
-  const existing = resolveProjectedPendingWorkspaceSession();
-  if (existing) {
-    return Promise.resolve(existing);
-  }
-
-  return new Promise((resolve) => {
-    let resolved = false;
-    let unsubscribe: () => void = () => {};
-    const finish = (projected: ReturnType<typeof resolveProjectedPendingWorkspaceSession>) => {
-      if (resolved) {
-        return;
-      }
-      resolved = true;
-      unsubscribe();
-      resolve(projected);
-    };
-    unsubscribe = useSessionSelectionStore.subscribe(() => {
-      const projected = resolveProjectedPendingWorkspaceSession();
-      if (projected) {
-        finish(projected);
-      }
-    });
-    void stopWhen.then(
-      () => finish(resolveProjectedPendingWorkspaceSession()),
-      () => finish(resolveProjectedPendingWorkspaceSession()),
-    );
-  });
 }
 
 // Owns the Home Next submit action. Does not own read-only selection state or deferred launch replay.
@@ -158,118 +48,18 @@ export function useHomeNextLaunch() {
   const failLaunchIntentIfActive = useChatLaunchIntentStore((state) => state.failIfActive);
   const markLaunchIntentMaterialized =
     useChatLaunchIntentStore((state) => state.markMaterializedIfActive);
-  const markLaunchIntentSendAttempted =
-    useChatLaunchIntentStore((state) => state.markSendAttemptedIfActive);
   const { createThreadFromSelection } = useCoworkThreadWorkflow();
-  const { promptSession } = useSessionPromptWorkflow();
-  const { createSessionWithResolvedConfig } = useSessionCreationActions();
+  const {
+    promptExistingSession,
+    promptProjectedOrCreateFreshSession,
+    promptProjectedPendingWorkspaceSession,
+  } = useHomeNextLaunchPromptActions();
   const {
     createLocalWorkspaceAndEnterWithResult,
     createWorktreeAndEnterWithResult,
   } = useWorkspaceEntryActions();
   const { createCloudWorkspaceAndEnterWithResult } = useCreateCloudWorkspace();
   const { selectWorkspace } = useWorkspaceSelection();
-
-  const createFreshSession = useCallback(async (input: {
-    workspaceId: string;
-    modelSelection: HomeNextModelSelection;
-    modeId: string | null;
-    launchControlValues?: Record<string, string>;
-    text: string;
-    promptId: string;
-    launchIntentId: string;
-  }) => {
-    await createSessionWithResolvedConfig({
-      workspaceId: input.workspaceId,
-      agentKind: input.modelSelection.kind,
-      modelId: input.modelSelection.modelId,
-      text: input.text,
-      promptId: input.promptId,
-      launchIntentId: input.launchIntentId,
-      launchControlValues: input.launchControlValues,
-      ...modeOptions(input.modeId),
-    });
-  }, [createSessionWithResolvedConfig]);
-
-  const promptProjectedOrCreateFreshSession = useCallback(async (input: {
-    workspaceId: string;
-    projectedSessionId: string | null | undefined;
-    modelSelection: HomeNextModelSelection;
-    modeId: string | null;
-    launchControlValues?: Record<string, string>;
-    text: string;
-    promptId: string;
-    launchIntentId: string;
-    allowFreshFallback?: boolean;
-  }) => {
-    if (input.projectedSessionId) {
-      markLaunchIntentMaterialized(input.launchIntentId, {
-        clientSessionId: input.projectedSessionId,
-        workspaceId: input.workspaceId,
-      });
-      await promptSession({
-        sessionId: input.projectedSessionId,
-        text: input.text,
-        workspaceId: input.workspaceId,
-        promptId: input.promptId,
-        onBeforeOptimisticPrompt: () => {
-          markLaunchIntentSendAttempted(input.launchIntentId);
-        },
-      });
-      return;
-    }
-
-    if (input.allowFreshFallback === false) {
-      throw new Error("Projected session shell was not created.");
-    }
-
-    await createFreshSession({
-      workspaceId: input.workspaceId,
-      modelSelection: input.modelSelection,
-      modeId: input.modeId,
-      launchControlValues: input.launchControlValues,
-      text: input.text,
-      promptId: input.promptId,
-      launchIntentId: input.launchIntentId,
-    });
-  }, [
-    createFreshSession,
-    markLaunchIntentMaterialized,
-    markLaunchIntentSendAttempted,
-    promptSession,
-  ]);
-
-  const promptProjectedPendingWorkspaceSession = useCallback(async (input: {
-    text: string;
-    promptId: string;
-    launchIntentId: string;
-    waitUntil?: Promise<unknown>;
-  }): Promise<string | null> => {
-    const projected = input.waitUntil
-      ? await waitForProjectedPendingWorkspaceSession(input.waitUntil)
-      : resolveProjectedPendingWorkspaceSession();
-    if (!projected) {
-      return null;
-    }
-
-    markLaunchIntentMaterialized(input.launchIntentId, {
-      clientSessionId: projected.sessionId,
-    });
-    await promptSession({
-      sessionId: projected.sessionId,
-      text: input.text,
-      workspaceId: projected.workspaceId,
-      promptId: input.promptId,
-      onBeforeOptimisticPrompt: () => {
-        markLaunchIntentSendAttempted(input.launchIntentId);
-      },
-    });
-    return projected.sessionId;
-  }, [
-    markLaunchIntentMaterialized,
-    markLaunchIntentSendAttempted,
-    promptSession,
-  ]);
 
   const launch = useCallback(async ({
     text,
@@ -285,20 +75,17 @@ export function useHomeNextLaunch() {
 
     inFlightRef.current = true;
     setIsLaunching(true);
-    const launchIntentId = newLaunchId();
-    const promptId = newLaunchId();
-    const resolvedLaunchControlValues = {
-      ...launchControlValues,
-      ...(modeId ? { mode: modeId } : {}),
-    };
-    const initialSession: PendingWorkspaceInitialSession = {
-      kind: "session",
-      agentKind: modelSelection.kind,
-      modelId: modelSelection.modelId,
+    const launchIntentId = newHomeNextLaunchId();
+    const promptId = newHomeNextLaunchId();
+    const resolvedLaunchControlValues = buildResolvedHomeLaunchControlValues({
+      modeId,
+      launchControlValues,
+    });
+    const initialSession = buildHomePendingWorkspaceInitialSession({
+      modelSelection,
       modeId,
       launchControlValues: resolvedLaunchControlValues,
-      displayTitle: modelSelection.modelId,
-    };
+    });
     beginLaunchIntent({
       id: launchIntentId,
       catalogSnapshotId: null,
@@ -360,14 +147,12 @@ export function useHomeNextLaunch() {
         });
 
         if (!queuedProjectedSessionId) {
-          await promptSession({
+          await promptExistingSession({
             sessionId: projectedSessionId ?? result.session.id,
             text: prompt,
             workspaceId: result.workspace.id,
             promptId,
-            onBeforeOptimisticPrompt: () => {
-              markLaunchIntentSendAttempted(launchIntentId);
-            },
+            launchIntentId,
           });
         }
         clearLaunchIntentIfActive(launchIntentId);
@@ -574,12 +359,12 @@ export function useHomeNextLaunch() {
       showToast("Prompt queued. It will send when the cloud workspace is ready.", "info");
       return true;
     } catch (error) {
-      markLaunchIntentMaterializedFromPendingWorkspace(launchIntentId);
+      markHomeLaunchIntentMaterializedFromPendingWorkspace(launchIntentId);
       failLaunchIntentIfActive(launchIntentId, {
-        message: errorMessage(error),
-        retryMode: launchFailureRetryMode(launchIntentId),
+        message: homeNextLaunchErrorMessage(error),
+        retryMode: homeLaunchFailureRetryMode(launchIntentId),
       });
-      showToast(`Failed to start work: ${errorMessage(error)}`);
+      showToast(`Failed to start work: ${homeNextLaunchErrorMessage(error)}`);
       return false;
     } finally {
       inFlightRef.current = false;
@@ -597,9 +382,8 @@ export function useHomeNextLaunch() {
     enqueueDeferredLaunch,
     failLaunchIntentIfActive,
     markLaunchIntentMaterialized,
-    markLaunchIntentSendAttempted,
     navigate,
-    promptSession,
+    promptExistingSession,
     selectWorkspace,
     showToast,
   ]);

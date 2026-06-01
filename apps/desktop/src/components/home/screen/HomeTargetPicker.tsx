@@ -1,27 +1,17 @@
-import { useState, type ReactNode } from "react";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { ComputeTargetSwatch } from "@/components/compute/ComputeTargetSwatch";
+import { useState } from "react";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import {
   PickerEmptyRow,
   PickerPopoverContent,
 } from "@proliferate/ui/primitives/PickerPopoverContent";
 import { PillControlButton } from "@proliferate/ui/primitives/PillControlButton";
-import {
-  POPOVER_SURFACE_CLASS,
-  PopoverButton,
-} from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import {
   Check,
   ChevronRight,
-  CloudIcon,
   FolderPlus,
   GitBranchIcon,
-  Monitor,
-  Search,
   Sparkles,
-  Terminal,
-  Tree,
   X,
 } from "@proliferate/ui/icons";
 import { matchesPickerSearch } from "@proliferate/ui/utils/search";
@@ -32,6 +22,22 @@ import type {
 } from "@/lib/domain/home/home-next-launch";
 import type { SettingsRepositoryEntry } from "@/lib/domain/settings/repositories";
 import type { CloudRepoActionState } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
+import {
+  homeRepoLaunchKindLabel,
+  homeTargetProjectAriaLabel,
+  homeTargetProjectLabel,
+  homeTargetRuntimeAriaLabel,
+  homeTargetRuntimeOptionLabel,
+} from "@/lib/domain/home/home-target-picker";
+import {
+  BranchSearchField,
+  homeTargetLaunchKindIcon,
+  ProjectSearchField,
+  TARGET_PICKER_DIVIDER_CLASS,
+  TARGET_PICKER_SURFACE_CLASS,
+  TargetPickerMenuItem,
+  TargetSection,
+} from "@/components/home/screen/HomeTargetPickerParts";
 
 interface HomeTargetPickerProps {
   destination: HomeNextDestination;
@@ -51,190 +57,6 @@ interface HomeTargetPickerProps {
   onSelectBranch: (branchName: string) => void;
   onAddRepository: () => void;
   onConfigureCloud: (repository: SettingsRepositoryEntry) => void;
-}
-
-const TARGET_PICKER_SURFACE_CLASS = `w-60 min-w-[175px] ${POPOVER_SURFACE_CLASS}`;
-const TARGET_PICKER_SECTION_CLASS =
-  "flex min-h-6 items-center truncate px-2 py-1 text-sm leading-4 text-muted-foreground";
-const TARGET_PICKER_DIVIDER_CLASS = "mx-1 my-1.5 h-px scale-y-50 bg-foreground/10";
-const TARGET_PICKER_TRIGGER_ICON_CLASS = "size-3.5";
-const TARGET_PICKER_MENU_ICON_CLASS = "size-full";
-
-function launchKindLabel(kind: HomeNextRepoLaunchKind): string {
-  switch (kind) {
-    case "worktree":
-      return "New worktree";
-    case "local":
-      return "Work locally";
-    case "cloud":
-      return "Cloud";
-    case "ssh":
-      return "SSH target";
-  }
-}
-
-function launchKindIcon(
-  kind: HomeNextRepoLaunchKind,
-  target?: ComputeLaunchTargetOption | null,
-  variant: "trigger" | "menu" = "trigger",
-) {
-  if (kind === "ssh" && target) {
-    if (variant === "menu") {
-      return <ComputeTargetSwatch appearance={target.appearance} size="inherit" />;
-    }
-    return (
-      <span className={TARGET_PICKER_TRIGGER_ICON_CLASS}>
-        <ComputeTargetSwatch appearance={target.appearance} size="inherit" />
-      </span>
-    );
-  }
-  const iconClassName = variant === "menu"
-    ? TARGET_PICKER_MENU_ICON_CLASS
-    : TARGET_PICKER_TRIGGER_ICON_CLASS;
-  switch (kind) {
-    case "worktree":
-      return <Tree className={iconClassName} />;
-    case "local":
-      return <Monitor className={iconClassName} />;
-    case "cloud":
-      return <CloudIcon className={iconClassName} />;
-    case "ssh":
-      return <Terminal className={iconClassName} />;
-  }
-}
-
-function projectLabel(input: {
-  destination: HomeNextDestination;
-  selectedRepository: SettingsRepositoryEntry | null;
-}): string {
-  if (input.destination === "cowork") {
-    return "No project";
-  }
-  return input.selectedRepository?.name ?? "Choose repository";
-}
-
-function TargetSection({ label }: { label: string }) {
-  return (
-    <div className={TARGET_PICKER_SECTION_CLASS}>
-      {label}
-    </div>
-  );
-}
-
-function TargetPickerMenuItem({
-  icon,
-  label,
-  trailing,
-  disabled,
-  title,
-  onClick,
-}: {
-  icon?: ReactNode;
-  label: string;
-  trailing?: ReactNode;
-  disabled?: boolean;
-  title?: string;
-  onClick: () => void;
-}) {
-  return (
-    <PopoverMenuItem
-      density="compact"
-      title={title}
-      disabled={disabled}
-      icon={icon}
-      label={label}
-      trailing={trailing}
-      onClick={() => {
-        onClick();
-      }}
-    />
-  );
-}
-
-function runtimeOptionLabel(input: {
-  launchKind: HomeNextRepoLaunchKind;
-  cloudAction: CloudRepoActionState;
-}): string {
-  if (input.launchKind !== "cloud") {
-    return launchKindLabel(input.launchKind);
-  }
-  if (input.cloudAction.kind === "loading") {
-    return input.cloudAction.label;
-  }
-  if (input.cloudAction.kind === "configure") {
-    return "Set up cloud";
-  }
-  if (input.cloudAction.kind === "hidden") {
-    return "Cloud unavailable";
-  }
-  return launchKindLabel(input.launchKind);
-}
-
-function projectAriaLabel(input: {
-  destination: HomeNextDestination;
-  selectedRepository: SettingsRepositoryEntry | null;
-}): string {
-  if (input.destination === "cowork") {
-    return "Project: No project";
-  }
-  return input.selectedRepository
-    ? `Project: ${input.selectedRepository.name} repository`
-    : "Project: Choose repository";
-}
-
-function ProjectSearchField({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="p-2 pb-1.5">
-      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-surface-control px-2.5">
-        <Search className="size-3.5 shrink-0 text-muted-foreground" />
-        <Input
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="Search projects"
-          className="h-8 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
-        />
-      </div>
-    </div>
-  );
-}
-
-function runtimeAriaLabel(input: {
-  label: string;
-  selectedRepository: SettingsRepositoryEntry | null;
-  destination: HomeNextDestination;
-}): string {
-  if (!input.selectedRepository || input.destination === "cowork") {
-    return "Runtime: no repository selected";
-  }
-  return `Runtime: ${input.label}`;
-}
-
-function BranchSearchField({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="px-1 pb-1">
-      <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-surface-control px-2.5">
-        <Search className="size-3.5 shrink-0 text-muted-foreground" />
-        <Input
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="Search branches"
-          className="h-8 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus:ring-0"
-        />
-      </div>
-    </div>
-  );
 }
 
 export function HomeTargetPicker({
@@ -277,20 +99,20 @@ export function HomeTargetPicker({
     setRuntimeSearchValue("");
   };
   const runtimeLabel = repoLaunchKind === "ssh"
-    ? selectedSshTarget?.label ?? launchKindLabel(repoLaunchKind)
+    ? selectedSshTarget?.label ?? homeRepoLaunchKindLabel(repoLaunchKind)
     : repoLaunchKind === "cloud"
-    ? runtimeOptionLabel({
+    ? homeTargetRuntimeOptionLabel({
       launchKind: repoLaunchKind,
       cloudAction: selectedRepositoryCloudAction,
     })
-    : launchKindLabel(repoLaunchKind);
+    : homeRepoLaunchKindLabel(repoLaunchKind);
   const runtimeButton = (
     <PillControlButton
-      icon={launchKindIcon(repoLaunchKind, selectedSshTarget)}
+      icon={homeTargetLaunchKindIcon(repoLaunchKind, selectedSshTarget)}
       label={destination === "cowork" ? "No repository" : runtimeLabel}
       disabled={!selectedRepository || destination === "cowork"}
       disclosure={!!selectedRepository && destination === "repository"}
-      aria-label={runtimeAriaLabel({
+      aria-label={homeTargetRuntimeAriaLabel({
         label: runtimeLabel,
         selectedRepository,
         destination,
@@ -305,9 +127,9 @@ export function HomeTargetPicker({
         trigger={(
           <PillControlButton
             icon={destination === "cowork" ? <Sparkles className="size-3.5" /> : null}
-            label={projectLabel({ destination, selectedRepository })}
+            label={homeTargetProjectLabel({ destination, selectedRepository })}
             disclosure
-            aria-label={projectAriaLabel({ destination, selectedRepository })}
+            aria-label={homeTargetProjectAriaLabel({ destination, selectedRepository })}
             className="max-w-[14rem]"
           />
         )}
@@ -395,8 +217,8 @@ export function HomeTargetPicker({
                 return (
                   <TargetPickerMenuItem
                     key={launchKind}
-                    icon={launchKindIcon(launchKind, null, "menu")}
-                    label={runtimeOptionLabel({
+                    icon={homeTargetLaunchKindIcon(launchKind, null, "menu")}
+                    label={homeTargetRuntimeOptionLabel({
                       launchKind,
                       cloudAction: selectedRepositoryCloudAction,
                     })}
@@ -427,7 +249,7 @@ export function HomeTargetPicker({
                   return (
                     <TargetPickerMenuItem
                       key={`ssh:${target.id}`}
-                      icon={<ComputeTargetSwatch appearance={target.appearance} size="inherit" />}
+                      icon={homeTargetLaunchKindIcon("ssh", target, "menu")}
                       label={target.label}
                       disabled={target.disabledReason !== null}
                       title={target.disabledReason ?? undefined}
