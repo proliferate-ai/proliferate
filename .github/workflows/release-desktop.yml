@@ -262,11 +262,15 @@ jobs:
           SENTRY_PROJECT: ${{ vars.SENTRY_DESKTOP_RENDERER_PROJECT || vars.SENTRY_PROJECT }}
           SENTRY_URL: ${{ vars.SENTRY_URL }}
         run: |
+          export VITE_PROLIFERATE_RELEASE="proliferate-desktop@${PROLIFERATE_RELEASE_VERSION}"
+
           if [[ -n "$VITE_PROLIFERATE_SENTRY_DSN" ]]; then
             : "${SENTRY_AUTH_TOKEN:?Set SENTRY_AUTH_TOKEN secret for desktop renderer Sentry sourcemaps.}"
             : "${SENTRY_ORG:?Set SENTRY_ORG GitHub variable for desktop renderer Sentry sourcemaps.}"
             : "${SENTRY_PROJECT:?Set SENTRY_DESKTOP_RENDERER_PROJECT or SENTRY_PROJECT GitHub variable for desktop renderer Sentry sourcemaps.}"
+          fi
 
+          if [[ -n "$SENTRY_AUTH_TOKEN" && -n "$SENTRY_ORG" && -n "$SENTRY_PROJECT" && -n "$VITE_PROLIFERATE_RELEASE" ]]; then
             sentry_url="${SENTRY_URL:-https://sentry.io/}"
             sentry_status="$(
               curl -sS -o /tmp/sentry-desktop-renderer-project.json -w "%{http_code}" \
@@ -281,7 +285,6 @@ jobs:
             fi
           fi
 
-          export VITE_PROLIFERATE_RELEASE="proliferate-desktop@${PROLIFERATE_RELEASE_VERSION}"
           pnpm run build
 
       - name: Import Apple Developer Certificate
