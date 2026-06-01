@@ -10,8 +10,11 @@ import {
 } from "react-native";
 
 import { colors } from "../../../styles/tokens";
+import {
+  useMobilePopover,
+  useMobilePopoverGroup,
+} from "../../../hooks/ui/popover/popover-context";
 import { MobileIcon, type MobileIconName } from "../MobileIcon";
-import { useMobilePopover, useMobilePopoverGroup } from "./popover-context";
 
 interface MobilePopoverDisclosureProps {
   id: string;

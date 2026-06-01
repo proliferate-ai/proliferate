@@ -1,5 +1,23 @@
 import { Fragment, useMemo } from "react";
-import { ArrowLeft } from "@proliferate/ui/icons";
+import {
+  Archive,
+  ArrowLeft,
+  Building2,
+  CircleUser,
+  ClipboardList,
+  CreditCard,
+  FolderList,
+  Keyboard,
+  LifeBuoy,
+  Palette,
+  RefreshCw,
+  Server,
+  Settings,
+  Shield,
+  SlidersHorizontal,
+  Tree,
+  UsersRound,
+} from "@proliferate/ui/icons";
 import { SidebarNavRow } from "@proliferate/ui/layout/SidebarNavRow";
 import { SETTINGS_COPY } from "@/copy/settings/settings-copy";
 import { SHORTCUTS } from "@/config/shortcuts";
@@ -9,8 +27,9 @@ import {
 } from "@/config/settings";
 import {
   SETTINGS_NAV_GROUPS,
+  type SettingsNavIconId,
   type SettingsNavItem,
-} from "@/components/settings/settings-navigation";
+} from "@/lib/domain/settings/navigation-presentation";
 import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
 import { useSettingsSectionShortcuts } from "@/hooks/settings/ui/use-settings-section-shortcuts";
 import { useShortcutRevealVisible } from "@/providers/ShortcutRevealProvider";
@@ -53,6 +72,25 @@ const SETTINGS_ROW_ACTIVE_CLASS =
   "!font-medium !text-sidebar-foreground";
 const SETTINGS_ROW_DISABLED_CLASS =
   "!text-sidebar-muted-foreground hover:!text-sidebar-muted-foreground";
+
+const SETTINGS_NAV_ICONS = {
+  account: CircleUser,
+  "agent-authentication": Shield,
+  "agent-defaults": SlidersHorizontal,
+  appearance: Palette,
+  "archived-chats": Archive,
+  billing: CreditCard,
+  "check-for-updates": RefreshCw,
+  compute: Server,
+  environments: FolderList,
+  general: Settings,
+  keyboard: Keyboard,
+  organization: Building2,
+  review: ClipboardList,
+  "shared-environments": UsersRound,
+  support: LifeBuoy,
+  worktrees: Tree,
+} satisfies Record<SettingsNavIconId, typeof Settings>;
 
 function settingsRowClass(active: boolean, disabled = false) {
   return [
@@ -229,7 +267,7 @@ export function SettingsSidebar({
                   updateActionState,
                   adminAccess,
                 );
-                const Icon = item.icon;
+                const Icon = SETTINGS_NAV_ICONS[item.iconId];
                 return (
                   <Fragment key={item.id}>
                     <SidebarNavRow

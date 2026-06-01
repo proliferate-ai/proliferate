@@ -1,7 +1,7 @@
 import { Children, isValidElement, useCallback, useMemo, useRef, useState } from "react";
 import { View } from "react-native";
 
-import { MobilePopoverGroupContext } from "./popover-context";
+import { MobilePopoverGroupContext } from "../../../hooks/ui/popover/popover-context";
 
 interface MobilePopoverGroupProps {
   expandedId?: string | null;
