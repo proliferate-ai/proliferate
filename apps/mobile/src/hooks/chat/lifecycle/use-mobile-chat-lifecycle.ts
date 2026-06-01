@@ -1,5 +1,4 @@
 import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
-import type { QueryClient } from "@tanstack/react-query";
 import type {
   CloudCommandEnvelope,
   CloudCommandResponse,
@@ -10,7 +9,6 @@ import type {
   CloudWorkspaceDetail,
   ProliferateCloudClient,
 } from "@proliferate/cloud-sdk";
-import { invalidateCloudWorkspaceLists } from "@proliferate/cloud-sdk-react";
 import {
   getLiveConfigControlValue,
   type PendingConfigChange,
@@ -67,7 +65,7 @@ export function useMobileChatLifecycle({
   onInitialPendingPromptConsumed,
   onSessionSelected,
   client,
-  queryClient,
+  invalidateWorkspaceLists,
   workspace,
   workspaceStatus,
   workspaceRefetch,
@@ -111,7 +109,7 @@ export function useMobileChatLifecycle({
   onInitialPendingPromptConsumed?: () => void;
   onSessionSelected?: (sessionId: string) => void;
   client: ProliferateCloudClient;
-  queryClient: QueryClient;
+  invalidateWorkspaceLists: () => void;
   workspace: CloudWorkspaceDetail | null;
   workspaceStatus: string;
   workspaceRefetch: () => void | Promise<unknown>;
@@ -335,7 +333,7 @@ export function useMobileChatLifecycle({
       return;
     }
     const message = failedPendingInteractionMessage(failedInteraction);
-    const failedPrompt = markPendingPromptFailed(pendingPrompt, message);
+    const failedPrompt = markPendingPromptFailed(pendingPrompt, message, Date.now());
     setPendingPrompt(failedPrompt);
     setPendingPromptStatus(message);
     setPendingPromptFailed(true);
@@ -380,7 +378,7 @@ export function useMobileChatLifecycle({
     }
     if (workspaceStatus === "error" || workspaceStatus === "archived") {
       const message = "Workspace creation failed before the prompt could be sent.";
-      const failedPrompt = markPendingPromptFailed(pendingPrompt, message);
+      const failedPrompt = markPendingPromptFailed(pendingPrompt, message, Date.now());
       setPendingPrompt(failedPrompt);
       setPendingPromptStatus(message);
       setPendingPromptFailed(true);
@@ -498,7 +496,7 @@ export function useMobileChatLifecycle({
           void savePendingMobilePrompt(workspace.id, ownerUserId, dispatchedPrompt);
         }
         void workspaceRefetch();
-        invalidateCloudWorkspaceLists(queryClient);
+        invalidateWorkspaceLists();
       })
       .catch((error: unknown) => {
         if (!isCurrentRun()) {
@@ -534,6 +532,7 @@ export function useMobileChatLifecycle({
               }
             : pendingPrompt,
           message,
+          Date.now(),
         );
         setPendingPrompt(failedPrompt);
         setPendingPromptStatus(message);
@@ -559,7 +558,7 @@ export function useMobileChatLifecycle({
     pendingPrompt,
     pendingPromptDurable,
     pendingPromptFailed,
-    queryClient,
+    invalidateWorkspaceLists,
     workspace?.actionBlockReason,
     workspace?.anyharnessWorkspaceId,
     workspace?.id,

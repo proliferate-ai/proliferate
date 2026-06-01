@@ -244,10 +244,11 @@ export function optimisticPromptFromPending(
 export function markPendingPromptFailed<TPrompt extends PendingPromptRowInput>(
   prompt: TPrompt,
   message: string,
+  failedAt: number,
 ): TPrompt & { failedAt: number; failureMessage: string } {
   return {
     ...prompt,
-    failedAt: Date.now(),
+    failedAt,
     failureMessage: message,
   };
 }

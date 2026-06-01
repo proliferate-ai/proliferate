@@ -1,5 +1,4 @@
 import { useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import type {
   CloudPendingInteraction,
   CloudSessionProjection,
@@ -11,7 +10,6 @@ import {
   useCloudClient,
   useCommandStatus,
   useEnqueueCloudCommand,
-  invalidateCloudWorkspaceLists,
 } from "@proliferate/cloud-sdk-react";
 import {
   buildLaunchSessionConfigUpdates,
@@ -38,8 +36,10 @@ import {
 } from "../../../lib/access/cloud/pending-mobile-prompt-dispatch";
 import type { OptimisticPrompt } from "../../../lib/domain/chat/mobile-chat-transcript";
 import type { PermissionInteractionOption } from "../../../lib/domain/chat/mobile-chat-permissions";
+import { buildMobileChatComposerControlsModel } from "../../../lib/domain/chat/mobile-chat-composer-controls";
 import { resolveAgentKind } from "../../../lib/domain/chat/mobile-chat-presentation";
-import { useMobileChatComposerControls } from "../facade/use-mobile-chat-composer-controls";
+import { useMobileCloudAgentResources } from "../../access/cloud/agents/use-mobile-cloud-agent-resources";
+import { useMobileCloudWorkspaceCache } from "../../access/cloud/workspaces/use-mobile-cloud-workspace-cache";
 
 type UpdateSessionConfigPayload = {
   configId: string;
@@ -125,13 +125,14 @@ export function useMobileChatActions({
   transcriptRefetch: () => void | Promise<unknown>;
   sessionEventsRefetch: () => void | Promise<unknown>;
 }) {
-  const queryClient = useQueryClient();
+  const { invalidateWorkspaceLists } = useMobileCloudWorkspaceCache();
   const client = useCloudClient();
   const enqueuePrompt = useEnqueueCloudCommand<SendPromptPayload>();
   const enqueueStartSession = useEnqueueCloudCommand<StartSessionPayload>();
   const enqueueConfig = useEnqueueCloudCommand<UpdateSessionConfigPayload>();
   const enqueueInteraction = useEnqueueCloudCommand<ResolveInteractionPayload>();
   const claimWorkspace = useClaimCloudWorkspace();
+  const agentResources = useMobileCloudAgentResources();
   const [latestCommandId, setLatestCommandId] = useState<string | null>(null);
   const [latestConfigCommandId, setLatestConfigCommandId] = useState<string | null>(null);
   const [directPromptDispatching, setLocalDirectPromptDispatching] = useState(false);
@@ -142,7 +143,6 @@ export function useMobileChatActions({
   const commandStatus = useCommandStatus(pendingPromptCommandId ?? latestCommandId);
   const configCommandStatus = useCommandStatus(latestConfigCommandId);
   const {
-    agentCatalog,
     workspaceHarnessAvailability,
     workspaceLaunchableAgentKinds,
     canStartNewSession,
@@ -151,13 +151,16 @@ export function useMobileChatActions({
     resolvedLaunchSelection,
     composerControls,
     composerControlSummary,
-  } = useMobileChatComposerControls({
+  } = buildMobileChatComposerControlsModel({
     workspace,
     session,
     pendingConfigChanges,
     launchSelection,
     runtimeLabel,
-    setLaunchSelection,
+    catalog: agentResources.agentCatalog.data,
+    agentGateway: agentResources.cloudCapabilities.data?.agentGateway,
+    agentAuthCredentials: agentResources.agentAuthCredentials.data,
+    updateLaunchSelection: setLaunchSelection,
     onSubmitSessionConfig: (rawConfigId, value) => {
       void submitSessionConfig(rawConfigId, value);
     },
@@ -197,7 +200,7 @@ export function useMobileChatActions({
         return;
       }
       const promptSelection = resolveCloudLaunchSelection({
-        catalog: agentCatalog.data,
+        catalog: agentResources.agentCatalog.data,
         launchableAgentKinds: workspaceLaunchableAgentKinds,
         selection: resolvedLaunchSelection,
       });
@@ -209,7 +212,7 @@ export function useMobileChatActions({
         modelId: promptSelection.modelId,
         modeId: promptSelection.modeId,
         sessionConfigUpdates: buildLaunchSessionConfigUpdates({
-          catalog: agentCatalog.data,
+          catalog: agentResources.agentCatalog.data,
           launchableAgentKinds: workspaceLaunchableAgentKinds,
           selection: promptSelection,
         }),
@@ -427,7 +430,7 @@ export function useMobileChatActions({
       setClaimedLocally(true);
       setPendingPromptStatus(null);
       void workspaceRefetch();
-      invalidateCloudWorkspaceLists(queryClient);
+      invalidateWorkspaceLists();
       return true;
     } catch (error) {
       setPendingPromptStatus(error instanceof Error ? error.message : "Workspace could not be claimed.");
@@ -470,7 +473,7 @@ export function useMobileChatActions({
 
   return {
     client,
-    queryClient,
+    invalidateWorkspaceLists,
     commandStatus,
     configCommandStatus,
     pendingDispatchRunRef: pendingDispatchRunRef as MutableRefObject<{ key: string; active: boolean } | null>,
