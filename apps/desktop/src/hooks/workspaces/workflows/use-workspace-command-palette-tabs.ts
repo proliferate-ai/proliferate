@@ -9,7 +9,7 @@ import {
   resolveRelativeWorkspaceShellTab,
   type WorkspaceShellTab,
 } from "@/lib/domain/workspaces/tabs/shell-tabs";
-import { resolveAvailableLaunchSelection } from "@/lib/domain/chat/models/model-selection";
+import { resolveAvailableLaunchSelection } from "@/lib/domain/chat/models/launch-selection-defaults";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
   failLatencyFlow,

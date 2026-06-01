@@ -16,7 +16,7 @@ import {
 } from "@/lib/domain/agents/model-options";
 import {
   resolveConfiguredLaunchAgentSelection,
-} from "@/lib/domain/chat/models/model-selection";
+} from "@/lib/domain/chat/models/launch-selection-defaults";
 import {
   dynamicLaunchAgentAcceptsModel,
   type DesktopAgentLaunchAgent,

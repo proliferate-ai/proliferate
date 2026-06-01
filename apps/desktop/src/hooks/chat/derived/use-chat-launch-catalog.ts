@@ -5,11 +5,13 @@ import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-s
 import { compareChatLaunchKinds } from "@/config/chat-launch";
 import {
   buildModelSelectorGroups,
-  type ActiveModelSelectorControl,
-  resolveEffectiveLaunchSelection,
-  type ModelSelectorGroup,
-  type ModelSelectorSelection,
-} from "@/lib/domain/chat/models/model-selection";
+} from "@/lib/domain/chat/models/model-selector-options";
+import type {
+  ActiveModelSelectorControl,
+  ModelSelectorGroup,
+  ModelSelectorSelection,
+} from "@/lib/domain/chat/models/model-selector-types";
+import { resolveEffectiveLaunchSelection } from "@/lib/domain/chat/models/launch-selection-defaults";
 import type { LaunchCatalogSnapshot } from "@/lib/domain/chat/launch/launch-intent";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import {

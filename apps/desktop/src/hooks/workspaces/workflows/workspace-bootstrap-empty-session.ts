@@ -3,8 +3,8 @@ import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-wo
 import type { useWorkspaceBootstrapCache } from "@/hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache";
 import type { useCloudAgentCatalogCache } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import type { useSessionCreationActions } from "@/hooks/sessions/workflows/use-session-creation-actions";
-import type { ChatLaunchPreferences } from "@/lib/domain/chat/models/model-selection";
-import { resolveEffectiveLaunchSelection } from "@/lib/domain/chat/models/model-selection";
+import { resolveEffectiveLaunchSelection } from "@/lib/domain/chat/models/launch-selection-defaults";
+import type { ChatLaunchPreferences } from "@/lib/domain/chat/models/model-selector-types";
 import { hasHiddenDismissedWorkspaceSessions } from "@/lib/domain/workspaces/selection/selection";
 import {
   mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,

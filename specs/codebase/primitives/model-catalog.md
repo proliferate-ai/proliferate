@@ -101,12 +101,17 @@ apps/desktop/src/lib/access/
     added.
 
 apps/desktop/src/lib/domain/chat/models/
+  launch-selection-defaults.ts
+  launch-visible-agents.ts
   model-display.ts
-  model-selection.ts
+  model-selection-ids.ts
+  model-selector-filtering.ts
+  model-selector-options.ts
+  model-selector-types.ts
   model-visibility.ts
   model-registry.ts
-    Pure model descriptor merge, display fallback, visibility, and picker list
-    logic. No network calls.
+    Pure model descriptor merge, display fallback, visibility, launch/default
+    selection, and picker list logic. No network calls.
 
 apps/desktop/src/lib/domain/settings/
   agent-defaults.ts
@@ -818,7 +823,7 @@ anyharness/sdk/
     Regenerate from contract/OpenAPI. Do not hand-edit generated files.
 
 anyharness/sdk-react/
-  no model-selection business logic
+  no model selector business logic
     React SDK may expose generated query hooks if that is the SDK pattern, but
     product visibility/default behavior belongs in desktop/cloud frontend
     domain code.
@@ -1010,8 +1015,25 @@ apps/desktop/src/lib/domain/chat/models/
     Display fallback only: prefer displayName, then catalog enriched name, then
     generated name from id.
 
-  model-selection.ts
-    Current selected model resolution for picker state.
+  launch-selection-defaults.ts
+    Current/default launch selection and target availability repair.
+
+  model-selector-options.ts
+    Picker groups, rows, action kinds, and live-control/catalog row merging.
+
+  model-selection-ids.ts
+    Canonical id and alias matching helpers shared by selection modules.
+
+  model-selector-filtering.ts
+    Pure model picker search/filter projections.
+
+  model-selector-types.ts
+    App-local model selector view-model types.
+
+  launch-visible-agents.ts
+    Visibility-filtered launch-agent projections for picker/defaulting flows.
+
+  model-selector modules
     Any branch that reads live active-session model controls must still
     intersect with visible model ids from the effective launch registry,
     preserving only the selected hidden/stale value for repair.

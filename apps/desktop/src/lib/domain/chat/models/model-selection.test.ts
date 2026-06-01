@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
 import {
   buildModelSelectorGroups,
-  resolveEffectiveLaunchSelection,
-} from "./model-selection";
+} from "./model-selector-options";
+import { resolveEffectiveLaunchSelection } from "./launch-selection-defaults";
 
 function launchAgent(
   kind: string,

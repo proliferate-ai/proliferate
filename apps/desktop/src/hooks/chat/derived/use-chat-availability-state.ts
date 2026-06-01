@@ -8,7 +8,7 @@ import {
   resolveChatInputAvailability,
   type ChatInputAvailabilityState,
 } from "@/lib/domain/chat/composer/chat-input";
-import { launchSelectionIsAvailable } from "@/lib/domain/chat/models/model-selection";
+import { launchSelectionIsAvailable } from "@/lib/domain/chat/models/launch-selection-defaults";
 import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
