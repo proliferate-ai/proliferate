@@ -436,7 +436,11 @@ async def _persist_reconnect(
 ) -> None:
     async with db_engine.async_session_factory() as db, db.begin():
         await persist_runtime_reconnect_state_for_workspace(
-            db, workspace, sandbox_record, restarted_runtime=restarted_runtime, runtime_url=runtime_url
+            db,
+            workspace,
+            sandbox_record,
+            restarted_runtime=restarted_runtime,
+            runtime_url=runtime_url,
         )
 
 
@@ -600,12 +604,16 @@ async def ensure_environment_runtime_ready(
     ):
         if not force_launcher_restart:
             if should_persist_rotated_runtime_url(environment.runtime_url, endpoint.runtime_url):
-                await _save_env_updates(environment.id, runtime_endpoint_rotated_update(endpoint.runtime_url))
+                await _save_env_updates(
+                    environment.id, runtime_endpoint_rotated_update(endpoint.runtime_url)
+                )
             return endpoint.runtime_url
         if not allow_launcher_restart:
             raise CloudRuntimeReconnectError("Cloud runtime restart was requested but disallowed.")
         if should_persist_rotated_runtime_url(environment.runtime_url, endpoint.runtime_url):
-            await _save_env_updates(environment.id, runtime_endpoint_rotated_update(endpoint.runtime_url))
+            await _save_env_updates(
+                environment.id, runtime_endpoint_rotated_update(endpoint.runtime_url)
+            )
 
     if not allow_launcher_restart:
         raise CloudRuntimeReconnectError("Cloud runtime is unavailable in the existing sandbox.")
@@ -660,5 +668,7 @@ async def ensure_environment_runtime_ready(
             not_before=worker_restart_started_at,
             previous_worker_id=previous_worker_id,
         )
-    await _save_env_updates(environment.id, runtime_process_relaunched_update(endpoint.runtime_url))
+    await _save_env_updates(
+        environment.id, runtime_process_relaunched_update(endpoint.runtime_url)
+    )
     return endpoint.runtime_url

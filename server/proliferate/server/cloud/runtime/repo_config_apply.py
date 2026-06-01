@@ -64,13 +64,15 @@ class WorkspaceSetupStartResult:
 
 @asynccontextmanager
 async def _workspace_apply_lock(workspace_id: UUID) -> AsyncIterator[None]:
-    async with db_engine.async_session_factory() as db:
-        async with workspace_repo_apply_lock(db, workspace_id) as acquired:
-            if not acquired:
-                raise WorkspaceRepoApplyBusyError(
-                    "A repo config apply operation is already running for this workspace."
-                )
-            yield
+    async with (
+        db_engine.async_session_factory() as db,
+        workspace_repo_apply_lock(db, workspace_id) as acquired,
+    ):
+        if not acquired:
+            raise WorkspaceRepoApplyBusyError(
+                "A repo config apply operation is already running for this workspace."
+            )
+        yield
 
 
 async def _load_workspace_repo_config(workspace: CloudWorkspace) -> CloudRepoConfigValue | None:

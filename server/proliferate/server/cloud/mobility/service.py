@@ -30,7 +30,6 @@ from proliferate.db.store.cloud_mobility import (
     insert_cleanup_items_for_handoff,
     list_cleanup_items_for_handoff,
     load_active_user_handoff_op_for_user,
-    load_cloud_workspace_mobility_for_user,
     load_cloud_workspace_mobility_value,
     record_cloud_workspace_mobility_event_for_user,
     update_cleanup_item_status,
@@ -258,7 +257,9 @@ async def _default_cleanup_items_for_cutover(
     return items
 
 
-async def expire_stale_cloud_workspace_handoffs_for_user(db: AsyncSession, *, user_id: UUID) -> None:
+async def expire_stale_cloud_workspace_handoffs_for_user(
+    db: AsyncSession, *, user_id: UUID
+) -> None:
     stale_before = utcnow() - _STALE_HANDOFF_AFTER
     workspaces = await list_cloud_workspace_mobility_store(db, user_id=user_id)
     for workspace in workspaces:
@@ -352,7 +353,8 @@ async def ensure_cloud_workspace_mobility(
 
 
 async def get_cloud_workspace_mobility_detail(
-    db: AsyncSession, *,
+    db: AsyncSession,
+    *,
     user_id: UUID,
     mobility_workspace_id: UUID,
 ) -> CloudWorkspaceMobilityValue:
@@ -372,7 +374,8 @@ async def get_cloud_workspace_mobility_detail(
 
 
 async def preflight_cloud_workspace_handoff(
-    db: AsyncSession, *,
+    db: AsyncSession,
+    *,
     user_id: UUID,
     mobility_workspace_id: UUID,
     direction: str,
@@ -575,7 +578,8 @@ async def preflight_cloud_workspace_handoff(
 
 
 async def start_cloud_workspace_handoff(
-    db: AsyncSession, *,
+    db: AsyncSession,
+    *,
     user_id: UUID,
     mobility_workspace_id: UUID,
     direction: str,

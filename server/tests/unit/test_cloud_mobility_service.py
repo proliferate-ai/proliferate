@@ -240,7 +240,8 @@ async def test_preflight_blocks_when_workspace_handoff_is_already_active(
     monkeypatch.setattr(mobility_service, "get_repo_branches_for_user", _repo_branches)
     monkeypatch.setattr(mobility_service, "load_cloud_repo_config_for_user", _load_repo_config)
 
-    response = await mobility_service.preflight_cloud_workspace_handoff(object(),
+    response = await mobility_service.preflight_cloud_workspace_handoff(
+        object(),
         user_id=uuid4(),
         mobility_workspace_id=workspace.id,
         direction="local_to_cloud",
@@ -297,7 +298,8 @@ async def test_preflight_blocks_when_github_repo_access_is_missing(
     monkeypatch.setattr(mobility_service, "get_repo_branches_for_user", _repo_branches)
     monkeypatch.setattr(mobility_service, "load_cloud_repo_config_for_user", _load_repo_config)
 
-    response = await mobility_service.preflight_cloud_workspace_handoff(object(),
+    response = await mobility_service.preflight_cloud_workspace_handoff(
+        object(),
         user_id=uuid4(),
         mobility_workspace_id=workspace.id,
         direction="local_to_cloud",
@@ -356,7 +358,8 @@ async def test_preflight_blocks_when_branch_is_not_published(
     monkeypatch.setattr(mobility_service, "get_repo_branches_for_user", _repo_branches)
     monkeypatch.setattr(mobility_service, "load_cloud_repo_config_for_user", _load_repo_config)
 
-    response = await mobility_service.preflight_cloud_workspace_handoff(object(),
+    response = await mobility_service.preflight_cloud_workspace_handoff(
+        object(),
         user_id=uuid4(),
         mobility_workspace_id=workspace.id,
         direction="local_to_cloud",
@@ -413,7 +416,8 @@ async def test_preflight_blocks_when_github_branch_head_is_behind_requested_comm
     monkeypatch.setattr(mobility_service, "get_repo_branches_for_user", _repo_branches)
     monkeypatch.setattr(mobility_service, "load_cloud_repo_config_for_user", _load_repo_config)
 
-    response = await mobility_service.preflight_cloud_workspace_handoff(object(),
+    response = await mobility_service.preflight_cloud_workspace_handoff(
+        object(),
         user_id=uuid4(),
         mobility_workspace_id=workspace.id,
         direction="local_to_cloud",
@@ -464,7 +468,8 @@ async def test_start_handoff_maps_existing_workspace_conflict_to_409(
     )
 
     with pytest.raises(CloudApiError) as exc_info:
-        await mobility_service.start_cloud_workspace_handoff(object(),
+        await mobility_service.start_cloud_workspace_handoff(
+            object(),
             user_id=user_id,
             mobility_workspace_id=workspace.id,
             direction="local_to_cloud",
@@ -546,7 +551,8 @@ async def test_start_local_to_cloud_marks_handoff_failed_when_cloud_setup_fails(
     )
 
     with pytest.raises(CloudApiError) as exc_info:
-        await mobility_service.start_cloud_workspace_handoff(object(),
+        await mobility_service.start_cloud_workspace_handoff(
+            object(),
             user_id=user_id,
             mobility_workspace_id=workspace.id,
             direction="local_to_cloud",

@@ -109,7 +109,8 @@ async def test_ensure_workspace_runtime_ready_rotates_to_fresh_endpoint_without_
         return sandbox_record
 
     async def _persist(
-        _db: object, _workspace: object,
+        _db: object,
+        _workspace: object,
         _sandbox: object,
         *,
         restarted_runtime: bool,
@@ -191,7 +192,9 @@ async def test_ensure_environment_runtime_ready_rotates_url_without_generation_i
     async def _load_cloud_sandbox_by_id(_db: object, _sandbox_id: object) -> object:
         return sandbox_record
 
-    async def _save_runtime_environment_state(_db: object, _environment_id: object, **kwargs: object) -> None:
+    async def _save_runtime_environment_state(
+        _db: object, _environment_id: object, **kwargs: object
+    ) -> None:
         saved.append(kwargs)
 
     monkeypatch.setattr(ensure_running, "wait_for_runtime_health", _wait)
@@ -325,7 +328,9 @@ async def test_ensure_environment_runtime_ready_refreshes_worker_before_forced_r
         events.append("wait-worker")
         return object()
 
-    async def _save_runtime_environment_state(_db: object, _environment_id: object, **_kwargs: object) -> None:
+    async def _save_runtime_environment_state(
+        _db: object, _environment_id: object, **_kwargs: object
+    ) -> None:
         events.append("save")
 
     monkeypatch.setattr(ensure_running, "wait_for_runtime_health", _wait)
@@ -682,7 +687,8 @@ async def test_ensure_workspace_runtime_ready_resumes_paused_sandbox(
         return sandbox_record
 
     async def _persist(
-        _db: object, _workspace: object,
+        _db: object,
+        _workspace: object,
         _sandbox: object,
         *,
         restarted_runtime: bool,
@@ -777,7 +783,8 @@ async def test_ensure_workspace_runtime_ready_relaunches_only_after_fresh_endpoi
         return sandbox_record
 
     async def _persist(
-        _db: object, _workspace: object,
+        _db: object,
+        _workspace: object,
         _sandbox: object,
         *,
         restarted_runtime: bool,

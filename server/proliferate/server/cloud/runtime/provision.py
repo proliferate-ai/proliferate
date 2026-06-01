@@ -205,7 +205,8 @@ async def _load_provision_input(
         runtime_environment = await ensure_runtime_environment_for_workspace_id(db, workspace_id)
         if runtime_environment and not runtime_environment.anyharness_data_key_ciphertext:
             runtime_environment = await save_runtime_environment_state(
-                db, runtime_environment.id,
+                db,
+                runtime_environment.id,
                 anyharness_data_key_ciphertext=encrypt_text(generate_anyharness_data_key()),
             )
     if runtime_environment is None:
@@ -569,7 +570,9 @@ async def _mark_sandbox_running(sandbox_id: UUID, started_at: object) -> None:
         )
 
 
-async def _save_runtime_environment_updates(runtime_environment_id: UUID, updates: dict[str, object]) -> None:
+async def _save_runtime_environment_updates(
+    runtime_environment_id: UUID, updates: dict[str, object]
+) -> None:
     async with db_engine.async_session_factory() as db, db.begin():
         await save_runtime_environment_state(db, runtime_environment_id, **updates)
 
@@ -647,7 +650,9 @@ async def _connect_existing_profile_slot(
         runtime_token_ciphertext=runtime_access.runtime_token_ciphertext,
         anyharness_data_key_ciphertext=runtime_access.anyharness_data_key_ciphertext,
     )
-    update = runtime_connected_sandbox_update(runtime_url=endpoint.runtime_url, active_sandbox_id=slot.id)
+    update = runtime_connected_sandbox_update(
+        runtime_url=endpoint.runtime_url, active_sandbox_id=slot.id
+    )
     await _save_runtime_environment_updates(ctx.runtime_environment_id, update)
     tracker.complete(runtime_url=endpoint.runtime_url, reused_sandbox=True)
 
@@ -1703,7 +1708,11 @@ async def provision_workspace(
                 await update_sandbox_status(db, sandbox_record, "destroyed", stopped_at_now=True)
         async with db_engine.async_session_factory() as db, db.begin():
             await mark_workspace_error_by_id(
-                db, workspace_id, error_message, clear_runtime_metadata=True, clear_active_sandbox=True
+                db,
+                workspace_id,
+                error_message,
+                clear_runtime_metadata=True,
+                clear_active_sandbox=True,
             )
         total_elapsed_ms = duration_ms(provision_started)
         log_cloud_event(

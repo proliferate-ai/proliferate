@@ -709,7 +709,9 @@ async def test_restore_cloud_workspace_uses_lifecycle_permission(
 
     db.commit = _commit
 
-    monkeypatch.setattr(workspace_service, ARCHIVE_WITH_DB, _cloud_workspace_user_can_archive_with_db)
+    monkeypatch.setattr(
+        workspace_service, ARCHIVE_WITH_DB, _cloud_workspace_user_can_archive_with_db
+    )
     monkeypatch.setattr(
         workspace_service,
         "restore_cloud_workspace_record",
@@ -786,7 +788,9 @@ async def test_purge_cloud_workspace_requires_archived_workspace(
         "get_cloud_workspace_by_id",
         _get_cloud_workspace_by_id,
     )
-    monkeypatch.setattr(workspace_service, ARCHIVE_WITH_DB, _cloud_workspace_user_can_archive_with_db)
+    monkeypatch.setattr(
+        workspace_service, ARCHIVE_WITH_DB, _cloud_workspace_user_can_archive_with_db
+    )
     monkeypatch.setattr(
         workspace_service,
         "_revoke_claim_tokens_for_workspace",

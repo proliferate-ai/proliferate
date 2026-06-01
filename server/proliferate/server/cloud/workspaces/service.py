@@ -155,9 +155,7 @@ from proliferate.server.cloud.runtime.service import (
     get_workspace_connection,
 )
 from proliferate.server.cloud.workspaces.access import (
-    cloud_workspace_user_can_archive,
     cloud_workspace_user_can_archive_with_db,
-    cloud_workspace_user_can_interact,
     cloud_workspace_user_can_interact_with_db,
     cloud_workspace_user_can_read,
     cloud_workspace_user_can_read_with_db,
@@ -1397,7 +1395,9 @@ async def _build_workspace_detail(
     )
 
 
-async def _load_repo_config_value_tx(user_id: UUID, git_owner: str, git_repo_name: str) -> object | None:
+async def _load_repo_config_value_tx(
+    user_id: UUID, git_owner: str, git_repo_name: str
+) -> object | None:
     async with db_engine.async_session_factory() as db:
         return await load_repo_config_value(
             db, user_id=user_id, git_owner=git_owner, git_repo_name=git_repo_name
@@ -1826,10 +1826,16 @@ async def create_cloud_workspace(
         )
         async with db_engine.async_session_factory() as create_db, create_db.begin():
             workspace = await create_cloud_workspace_for_user(
-                create_db, user_id=user.id, display_name=resolved.display_name,
-                git_provider=resolved.git_provider, git_owner=resolved.git_owner,
-                git_repo_name=resolved.git_repo_name, git_branch=resolved.git_branch,
-                git_base_branch=resolved.git_base_branch, origin=origin, origin_json=origin_json,
+                create_db,
+                user_id=user.id,
+                display_name=resolved.display_name,
+                git_provider=resolved.git_provider,
+                git_owner=resolved.git_owner,
+                git_repo_name=resolved.git_repo_name,
+                git_branch=resolved.git_branch,
+                git_base_branch=resolved.git_base_branch,
+                origin=origin,
+                origin_json=origin_json,
                 template_version=get_configured_sandbox_provider().template_version,
                 cloud_repo_limit=resolved.cloud_repo_limit,
             )
@@ -1980,10 +1986,16 @@ async def ensure_cloud_workspace_for_existing_branch(
     try:
         async with db_engine.async_session_factory() as db, db.begin():
             workspace = await create_cloud_workspace_for_user(
-                db, user_id=user.id,
-                display_name=display_name.strip() if display_name and display_name.strip() else None,
-                git_provider=git_provider, git_owner=git_owner, git_repo_name=git_repo_name,
-                git_branch=cleaned_branch_name, git_base_branch=cleaned_branch_name,
+                db,
+                user_id=user.id,
+                display_name=display_name.strip()
+                if display_name and display_name.strip()
+                else None,
+                git_provider=git_provider,
+                git_owner=git_owner,
+                git_repo_name=git_repo_name,
+                git_branch=cleaned_branch_name,
+                git_base_branch=cleaned_branch_name,
                 origin_json=CLOUD_HUMAN_ORIGIN_JSON,
                 template_version=get_configured_sandbox_provider().template_version,
                 cloud_repo_limit=cloud_repo_limit,
@@ -2009,7 +2021,8 @@ def _cloud_workspace_should_be_replaced_for_mobility_retry(
 
 
 async def _archive_failed_cloud_workspace_for_mobility_retry(workspace_id: UUID) -> None:
-    async with db_engine.async_session_factory() as db, db.begin(): await archive_cloud_workspace_record_by_id(db, workspace_id=workspace_id)
+    async with db_engine.async_session_factory() as db, db.begin():
+        await archive_cloud_workspace_record_by_id(db, workspace_id=workspace_id)
 
 
 async def _refresh_repo_env_snapshot_for_workspace(workspace: CloudWorkspace) -> CloudWorkspace:
@@ -2025,7 +2038,8 @@ async def _refresh_repo_env_snapshot_for_workspace(workspace: CloudWorkspace) ->
             user_id=workspace.user_id,
             repo=f"{workspace.git_owner}/{workspace.git_repo_name}",
         )
-    async with db_engine.async_session_factory() as db, db.begin(): return await save_workspace(db, workspace)
+    async with db_engine.async_session_factory() as db, db.begin():
+        return await save_workspace(db, workspace)
 
 
 async def start_cloud_workspace(
@@ -2101,7 +2115,8 @@ async def start_cloud_workspace(
         if start_decision.clear_last_error:
             workspace.last_error = None
         if start_decision.persist_before_schedule:
-            async with db_engine.async_session_factory() as persist_db, persist_db.begin(): workspace = await save_workspace(persist_db, workspace)
+            async with db_engine.async_session_factory() as persist_db, persist_db.begin():
+                workspace = await save_workspace(persist_db, workspace)
         log_cloud_event(
             "cloud workspace queued",
             workspace_id=workspace.id,
@@ -2150,7 +2165,8 @@ async def start_cloud_workspace(
     if start_decision.clear_last_error:
         workspace.last_error = None
     if start_decision.persist_before_schedule:
-        async with db_engine.async_session_factory() as persist_db, persist_db.begin(): workspace = await save_workspace(persist_db, workspace)
+        async with db_engine.async_session_factory() as persist_db, persist_db.begin():
+            workspace = await save_workspace(persist_db, workspace)
     log_cloud_event(
         "cloud workspace restart queued",
         workspace_id=workspace.id,
@@ -2362,7 +2378,8 @@ async def delete_cloud_workspace(
     workspace = await cloud_workspace_user_can_archive_with_db(db, user_id, workspace_id)
     await _revoke_claim_tokens_for_workspace(workspace, reason="workspace_deleted")
     await _destroy_workspace_runtime(workspace)
-    async with db_engine.async_session_factory() as delete_db, delete_db.begin(): await delete_cloud_workspace_records_for_workspace(delete_db, workspace)
+    async with db_engine.async_session_factory() as delete_db, delete_db.begin():
+        await delete_cloud_workspace_records_for_workspace(delete_db, workspace)
 
 
 async def _revoke_claim_tokens_for_workspace(
@@ -2438,7 +2455,8 @@ async def _stop_workspace_runtime(workspace: CloudWorkspace) -> None:
         )
     else:
         workspace.updated_at = utcnow()
-    async with db_engine.async_session_factory() as db, db.begin(): await persist_workspace_stop_state(db, workspace)
+    async with db_engine.async_session_factory() as db, db.begin():
+        await persist_workspace_stop_state(db, workspace)
     log_cloud_event(
         "cloud workspace stopped",
         workspace_id=workspace.id,
@@ -2481,7 +2499,8 @@ async def _destroy_workspace_runtime(workspace: CloudWorkspace) -> None:
         else:
             await _update_sandbox_status_tx(sandbox, "destroyed", stopped_at_now=True)
     transition_workspace_status(workspace, CloudWorkspaceStatus.archived, status_detail="Archived")
-    async with db_engine.async_session_factory() as db, db.begin(): await persist_workspace_destroy_state(db, workspace)
+    async with db_engine.async_session_factory() as db, db.begin():
+        await persist_workspace_destroy_state(db, workspace)
     log_cloud_event(
         "cloud workspace destroyed",
         workspace_id=workspace.id,
@@ -2500,7 +2519,8 @@ async def _load_workspace_owned_runtime_sandbox(
     sandbox_id = getattr(workspace, "active_sandbox_id", None)
     if sandbox_id is None:
         return None
-    async with db_engine.async_session_factory() as db: sandbox = await load_cloud_sandbox_by_id(db, sandbox_id)
+    async with db_engine.async_session_factory() as db:
+        sandbox = await load_cloud_sandbox_by_id(db, sandbox_id)
     if sandbox is None:
         return None
     if sandbox.cloud_workspace_id != workspace.id:
@@ -2577,7 +2597,8 @@ async def get_cloud_connection(
             status_code=409,
         ) from exc
 
-    async with db_engine.async_session_factory() as reload_db: reloaded_workspace = await load_cloud_workspace_by_id(reload_db, workspace.id)
+    async with db_engine.async_session_factory() as reload_db:
+        reloaded_workspace = await load_cloud_workspace_by_id(reload_db, workspace.id)
     if reloaded_workspace is not None:
         workspace = reloaded_workspace
     log_cloud_event(
