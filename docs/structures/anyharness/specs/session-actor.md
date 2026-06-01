@@ -691,8 +691,8 @@ Recommended order:
 5. Extract interaction resolution/cleanup commands.
 6. Extract shutdown finalization.
 7. Move process startup mechanics to live/sessions/connection.
-8. Rename AcpManager/RuntimeClient paths only after behavior-preserving splits
-   are stable.
+8. Rename remaining RuntimeClient/connection paths only after
+   behavior-preserving driver/client splits are stable.
 ```
 
 Each slice should:
@@ -744,8 +744,7 @@ A full actor migration is accepted only when all of these are true:
 12. Product MCP selection/injection remains in domains/sessions/mcp_bindings.
 
 13. Event normalization, sequence assignment, persistence, and broadcast remain
-    in `acp/event_sink/**` until the event-sink topology move; target owner is
-    `live/sessions/event_sink/**`.
+    in `live/sessions/event_sink/**`.
 
 14. The old acp/session_actor.rs implementation is gone.
 

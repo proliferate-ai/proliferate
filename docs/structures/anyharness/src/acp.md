@@ -1,19 +1,20 @@
 # ACP Runtime
 
-`anyharness-lib/src/acp/**` owns legacy ACP-backed session collaborators that
-have not completed final topology moves.
+`anyharness-lib/src/acp/**` owns remaining shared ACP helper modules:
+permission context mapping, permission payload normalization, and provider error
+mapping.
 
-This is a legacy subsystem doc updated for current implementation paths. The
-event sink is already split under `acp/event_sink/**`; the actor has moved to
-`live/sessions/actor/**`, connection mechanics to `live/sessions/connection/**`,
-and the control handle to `live/sessions/handle.rs`.
+Live ACP-backed session runtime now lives under `live/sessions/**`. This legacy
+subsystem doc maps the old "ACP runtime" concepts to current implementation
+paths: manager, handle, actor, connection, event sink, interactions, background
+work, and replay are all under `live/sessions/**`.
 
 ## Core Concepts
 
 The ACP runtime starts after the session domain has already decided that a
 session exists and should run live.
 
-It owns:
+The live ACP session runtime owns:
 
 - the in-memory registry of live sessions
 - one actor per live session
@@ -26,9 +27,9 @@ installation.
 
 ## Core Runtime Objects
 
-### `AcpManager` (`anyharness/crates/anyharness-lib/src/acp/manager.rs`)
+### `LiveSessionManager` (`anyharness/crates/anyharness-lib/src/live/sessions/manager.rs`)
 
-`AcpManager` is the process-local coordinator for live sessions.
+`LiveSessionManager` is the process-local coordinator for live sessions.
 
 It owns:
 
@@ -78,7 +79,7 @@ It includes:
 
 This is the handoff from durable orchestration into live execution.
 
-### `RuntimeClient` (`anyharness/crates/anyharness-lib/src/acp/runtime_client.rs`)
+### `RuntimeClient` (`anyharness/crates/anyharness-lib/src/live/sessions/connection/runtime_client.rs`)
 
 `RuntimeClient` is the AnyHarness ACP client implementation.
 
@@ -98,7 +99,7 @@ It does not own the actor loop. It translates ACP protocol callbacks into:
 - internal notification messages
 - normalized runtime events through the event sink
 
-### `SessionEventSink` (`anyharness/crates/anyharness-lib/src/acp/event_sink/**`)
+### `SessionEventSink` (`anyharness/crates/anyharness-lib/src/live/sessions/event_sink/**`)
 
 `SessionEventSink` is the canonical normalization layer from ACP updates into
 AnyHarness `SessionEventEnvelope`.
@@ -111,7 +112,7 @@ It owns:
 - transcript item coalescing
 - plan, tool, usage, config, interaction, and session event emission
 
-### `InteractionBroker` (`anyharness/crates/anyharness-lib/src/acp/permission_broker.rs`)
+### `InteractionBroker` (`anyharness/crates/anyharness-lib/src/live/sessions/interactions/broker.rs`)
 
 `InteractionBroker` owns live pending interaction waits behind the normalized
 interaction contract.
@@ -139,8 +140,8 @@ The live start flow is:
 1. `sessions/runtime/startup.rs` decides a session should be live.
    - code: `anyharness/crates/anyharness-lib/src/sessions/runtime/startup.rs`
 2. It resolves workspace and agent dependencies.
-3. It calls `AcpManager::start_session(...)`.
-4. `AcpManager` enters the start/inject critical section, deduplicates by
+3. It calls `LiveSessionManager::start_session(...)`.
+4. `LiveSessionManager` enters the start/inject critical section, deduplicates by
    session id, reads the latest durable event seq, and spawns an actor if
    needed.
 5. The actor launches the resolved agent-process executable with merged
@@ -164,7 +165,7 @@ events may also need to be appended while no actor is live.
 
 To prevent duplicate seq values:
 
-- `AcpManager::start_session(...)` reads `last_event_seq` only while holding
+- `LiveSessionManager::start_session(...)` reads `last_event_seq` only while holding
   the live-session registry write lock.
 - offline runtime event injection takes the same lock, re-checks that no live
   actor exists, and appends by using one store operation that computes the next
@@ -304,7 +305,7 @@ Most of that logic lives in
 
 ## Boundaries
 
-### ACP Owns
+### Live ACP Session Runtime Owns
 
 - the in-memory live-session registry
 - actor startup and shutdown
@@ -315,7 +316,7 @@ Most of that logic lives in
 - event normalization
 - interaction brokering
 
-### ACP Does Not Own
+### Live ACP Session Runtime Does Not Own
 
 - HTTP, SSE, or WebSocket transport
 - durable session creation validation
@@ -357,7 +358,8 @@ When that happens the actor is responsible for:
 
 ## Extension Points
 
-Add behavior here when it changes live ACP execution itself, for example:
+Add behavior under `live/sessions/**` when it changes live ACP execution itself,
+for example:
 
 - new ACP notification kinds
 - new normalized event behavior
@@ -365,7 +367,11 @@ Add behavior here when it changes live ACP execution itself, for example:
 - new actor commands
 - new startup or resume behavior
 
-Do not add behavior here when it belongs to:
+Only add code under `acp/**` when it is a shared ACP helper that fits the
+remaining permission context, permission payload, or provider error modules. Do
+not add live-session behavior there.
+
+Do not add live ACP behavior when it belongs to:
 
 - session-domain validation
 - workspace identity rules

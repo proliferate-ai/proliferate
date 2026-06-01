@@ -22,12 +22,12 @@ Current names:
 SessionRuntime      anyharness-lib/src/sessions/runtime/
 SessionService      anyharness-lib/src/sessions/service.rs
 SessionStore        anyharness-lib/src/sessions/store/**
-AcpManager          target name: LiveSessionManager
+LiveSessionManager  live/sessions/manager.rs
 LiveSessionHandle   live/sessions/handle.rs
 SessionActor        live/sessions/actor/**
-RuntimeClient       target name: AcpClient
-SessionEventSink    currently acp/event_sink/**
-InteractionBroker   currently acp/permission_broker/**
+RuntimeClient       live/sessions/connection/runtime_client.rs; target role: AcpClient
+SessionEventSink    live/sessions/event_sink/**
+InteractionBroker   live/sessions/interactions/broker.rs
 ```
 
 Implementation reality after the completed migration phases:
@@ -35,9 +35,10 @@ Implementation reality after the completed migration phases:
 - session MCP assembly lives under `sessions/mcp_bindings/**`.
 - `SessionStore` is split under `sessions/store/**`.
 - `SessionRuntime` is split under `sessions/runtime/**`.
-- `SessionEventSink` is split under `acp/event_sink/**`.
+- `SessionEventSink` is split under `live/sessions/event_sink/**`.
 - `SessionActor` is split under `live/sessions/actor/**`; connection mechanics
-  are split under `live/sessions/connection/**`.
+  are split under `live/sessions/connection/**`, the current name for the
+  target `driver/**` role.
 
 ## Role Map
 
@@ -95,7 +96,7 @@ Live registry:
 - pending startup waiters
 - shared interaction broker
 
-Current name: `AcpManager`.
+Current path: `live/sessions/manager.rs`.
 
 ### LiveSessionHandle
 
@@ -128,7 +129,8 @@ folder contract is specified in `specs/session-actor.md`.
 
 ### AcpClient
 
-Low-level ACP client wrapper. Current name: `RuntimeClient`.
+Low-level ACP client wrapper. Current name: `RuntimeClient`, under
+`live/sessions/connection/runtime_client.rs`.
 
 It sends ACP requests to the subprocess and receives ACP notifications. It does
 not own session business rules.
@@ -185,7 +187,7 @@ Prompt submission and transcript streaming are separate interfaces:
 
 ```text
 Command path:
-  client -> HTTP command -> SessionRuntime -> LiveSessionHandle.command_tx -> SessionActor
+  client -> HTTP command -> SessionRuntime -> LiveSessionHandle -> SessionActor
 
 Event path:
   SessionEventSink -> SQLite append -> live broadcast channel -> SSE stream
@@ -329,8 +331,9 @@ live/sessions/
   manager.rs
   handle.rs
   actor/
+  driver/
   event_sink/
   interactions/
-  acp_client/
-  replay_actor.rs
+  background_work/
+  replay/
 ```

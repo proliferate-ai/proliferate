@@ -295,15 +295,15 @@ which guide to read and where the code belongs.
 | AppState, dependency construction, wiring extension implementations, product MCP endpoint registration | `anyharness-lib/src/app/**` | `app/**` | [guides/app.md](guides/app.md) |
 | SQLite engine setup, migrations, DB pool wiring | `anyharness-lib/src/persistence/**` | `persistence/**` | [guides/persistence.md](guides/persistence.md) |
 | Session durable records, event rows, session config, pending prompts | `anyharness-lib/src/sessions/**` | `domains/sessions/**` | [guides/domains.md](guides/domains.md), [specs/session-engine.md](specs/session-engine.md), [src/sessions.md](src/sessions.md) |
-| Live running agent process, session actor loop, ACP client, event sink, interactions | `anyharness-lib/src/acp/**` | `live/sessions/**` plus earned `integrations/acp/**` | [guides/live-runtime.md](guides/live-runtime.md), [specs/session-engine.md](specs/session-engine.md), [src/acp.md](src/acp.md) |
+| Live running agent process, session actor loop, ACP client, event sink, interactions | `anyharness-lib/src/live/sessions/**`, with remaining ACP helpers in `anyharness-lib/src/acp/**` | `live/sessions/**` plus earned `integrations/acp/**` | [guides/live-runtime.md](guides/live-runtime.md), [specs/session-engine.md](specs/session-engine.md), [src/acp.md](src/acp.md) |
 | Workspace durable lifecycle, materialization, purge/retire, retention policy | `anyharness-lib/src/workspaces/**` | `domains/workspaces/**` | [guides/domains.md](guides/domains.md), [src/workspaces.md](src/workspaces.md) |
 | Agent catalog, install, credentials, readiness, supported-agent meaning | `anyharness-lib/src/domains/agents/**` | `domains/agents/**` | [guides/domains.md](guides/domains.md), [../../primitives/agent-catalog-readiness.md](../../primitives/agent-catalog-readiness.md), [src/agents.md](src/agents.md) |
 | Provider CLI install/probe/path/version mechanics | `anyharness-lib/src/integrations/agent_cli/**`, provider-specific ACP code | `integrations/agent_cli/**` | [guides/integrations.md](guides/integrations.md), [guides/harnesses.md](guides/harnesses.md) |
-| Provider-specific behavior such as Claude/Codex extension support or live controls | `anyharness-lib/src/acp/**`, `docs/structures/anyharness/harnesses/**` | harness doc plus owning runtime/integration module | [guides/harnesses.md](guides/harnesses.md), provider doc under `harnesses/**` |
+| Provider-specific behavior such as Claude/Codex extension support or live controls | `anyharness-lib/src/live/sessions/**`, `anyharness-lib/src/acp/**`, `docs/structures/anyharness/harnesses/**` | harness doc plus owning live runtime/integration module | [guides/harnesses.md](guides/harnesses.md), provider doc under `harnesses/**` |
 | File browsing, file reads/writes, workspace file capabilities | `anyharness-lib/src/adapters/files/**` | `adapters/files/**` | [guides/adapters.md](guides/adapters.md), [src/files.md](src/files.md) |
 | Git status/diff/branch operations and git command parsing | `anyharness-lib/src/adapters/git/**` | `adapters/git/**` | [guides/adapters.md](guides/adapters.md), [src/git.md](src/git.md) |
 | Hosting and process helpers around local workspace capabilities | `anyharness-lib/src/adapters/hosting/**`, `anyharness-lib/src/adapters/processes/**` | `adapters/hosting/**`, `adapters/processes/**` | [guides/adapters.md](guides/adapters.md) |
-| Terminal/PTY lifecycle, terminal stream handles, terminal registry | `anyharness-lib/src/terminals/**` | `live/terminals/**` | [guides/live-runtime.md](guides/live-runtime.md) |
+| Terminal durable records, PTY lifecycle, terminal stream handles, terminal registry | `anyharness-lib/src/domains/terminals/**`, `anyharness-lib/src/live/terminals/**` | durable `domains/terminals/**` plus live `live/terminals/**` | [guides/live-runtime.md](guides/live-runtime.md) |
 | MCP user bindings attached to a session | `anyharness-lib/src/sessions/mcp_bindings/**` | current `sessions/mcp_bindings/**`; final `domains/sessions/mcp_bindings/**` | [../../primitives/mcp-runtime.md](../../primitives/mcp-runtime.md), [guides/domains.md](guides/domains.md) |
 | Product MCP tool servers for artifacts, reviews, subagents, workspace naming | `domains/cowork/**`, `domains/reviews/**`, `sessions/subagents/**`, `sessions/workspace_naming/**` | owning product domain | [../../features/product-mcps/servers.md](../../features/product-mcps/servers.md), [../../features/product-mcps/definitions/README.md](../../features/product-mcps/definitions/README.md), [guides/domains.md](guides/domains.md) |
 | Shared MCP JSON-RPC, capability-token, tool-formatting scaffolding | `anyharness-lib/src/integrations/mcp/**` plus any remaining feature-local wrappers | `integrations/mcp/**` | [guides/integrations.md](guides/integrations.md), [../../primitives/mcp-runtime.md](../../primitives/mcp-runtime.md) |
@@ -386,8 +386,9 @@ current cowork/        -> target domains/cowork/
 domains/reviews/      -> target domains/reviews/
 domains/plans/        -> target domains/plans/
 current mobility/      -> target domains/mobility/
-current acp/           -> target live/sessions/ plus integrations/acp or mcp pieces
-current terminals/     -> target live/terminals/
+current live/sessions/ -> current live session runtime; target live/sessions/ with connection/ -> driver/
+current acp/           -> remaining ACP permission/payload/error helpers; target integrations/acp only if reusable protocol mechanics earn it
+current domains/terminals/ + live/terminals/ -> current and target terminal durable/live split
 current observability/latency.rs -> current and target latency request context
 and trace-field helper owner
 ```
@@ -399,8 +400,8 @@ Known transitional issues:
   `integrations/mcp/**`, and provider CLI mechanics live under
   `integrations/agent_cli/**`.
 - Product domain cleanup is partially present: agents, cowork, reviews, plans,
-  and mobility live under `domains/**`; sessions, workspaces, repo roots, and
-  terminals still use transitional top-level paths until the final topology
+  mobility, and terminals live under `domains/**`; sessions, workspaces, and
+  repo roots still use transitional top-level paths until the final topology
   rename phase.
 - Session MCP assembly is split under `sessions/mcp_bindings/**`, including
   `assembly.rs`. The final `domains/sessions/**` path is still a target.
@@ -408,19 +409,21 @@ Known transitional issues:
   `SessionRuntime` type remains the API-facing use-case surface.
 - `SessionStore` is split under `sessions/store/**`. The public `SessionStore`
   type remains the caller-facing store surface.
-- `SessionEventSink` is split under `acp/event_sink/**`. It has not moved to
-  final `live/sessions/event_sink/**` topology yet.
+- `SessionEventSink` is split under `live/sessions/event_sink/**`.
 - Latency request context and trace-field helpers are already owned by
   `observability/latency.rs`; lower layers should not import API transport
   modules for latency context.
 - Contract request/response types leak below `api/`. Contract event payloads
   may be a deliberate durable event-log type, but other contract types should
   be mapped at the API boundary.
-- The live session actor is split under `live/sessions/actor/**`,
-  `live/sessions/connection/**` (target role: `driver/**`), and
-  `live/sessions/handle.rs`. `AcpManager`, `RuntimeClient`,
-  `InteractionBroker`, `BackgroundWorkRegistry`, and `replay_actor` remain
-  transitional under `acp/**`.
+- The live session runtime is split under `live/sessions/manager.rs`,
+  `live/sessions/handle.rs`, `live/sessions/actor/**`,
+  `live/sessions/connection/**` (target role: `driver/**`),
+  `live/sessions/event_sink/**`, `live/sessions/interactions/**`,
+  `live/sessions/background_work/**`, and `live/sessions/replay/**`.
+  `RuntimeClient` remains the current low-level ACP client name under
+  `connection/**`; remaining `acp/**` files are permission/payload/provider
+  error helpers, not live-session owners.
 - Some product MCP endpoint scaffolding may still be feature-local. Common
   protocol/auth scaffolding should use `integrations/mcp/`; product tool
   semantics stay with their owning domain.
