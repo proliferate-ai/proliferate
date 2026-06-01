@@ -1,6 +1,6 @@
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
-import { useActivePendingApproval } from "@/hooks/chat/derived/use-active-chat-session-selectors";
+import { useActivePendingApproval } from "@/hooks/chat/derived/use-active-pending-session-interactions";
 import { useChatPermissionActions } from "@/hooks/chat/workflows/use-chat-permission-actions";
 import type { PermissionOptionAction } from "@/lib/domain/chat/composer/chat-input-helpers";
 

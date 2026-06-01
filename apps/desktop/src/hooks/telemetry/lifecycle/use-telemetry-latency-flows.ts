@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useActiveSessionSurfaceSnapshot } from "@/hooks/chat/derived/use-active-chat-session-selectors";
+import { useActiveSessionSurfaceSnapshot } from "@/hooks/chat/derived/use-active-session-transcript-state";
 import { useChatSurfaceState } from "@/hooks/chat/derived/use-chat-surface-state";
 import {
   finishLatencyFlow,

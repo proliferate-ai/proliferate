@@ -10,7 +10,7 @@ import {
 } from "@/lib/domain/chat/__fixtures__/playground/outbound-slot-fixtures";
 import {
   PLAYGROUND_SUBAGENT_WAKE_QUEUE,
-} from "@/lib/domain/chat/__fixtures__/playground/tool-transcript-fixtures";
+} from "@/lib/domain/chat/__fixtures__/playground/subagent-wake-transcript-fixtures";
 import {
   derivePendingPromptQueueRow,
   type PendingPromptQueueEntry,

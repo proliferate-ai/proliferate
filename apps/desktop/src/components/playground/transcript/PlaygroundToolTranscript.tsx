@@ -11,12 +11,20 @@ import type { ScenarioKey } from "@/config/playground";
 import { PLAYGROUND_END_TURN_DIFF_TRANSCRIPT } from "@/lib/domain/chat/__fixtures__/playground/git-diff-fixtures";
 import {
   PLAYGROUND_COWORK_ARTIFACT_TOOL_CALL,
+} from "@/lib/domain/chat/__fixtures__/playground/tool-artifact-transcript-fixtures";
+import {
   PLAYGROUND_SUBAGENT_CREATION_GROUP_TRANSCRIPT,
   PLAYGROUND_SUBAGENT_CREATION_SINGLE_TRANSCRIPT,
+} from "@/lib/domain/chat/__fixtures__/playground/subagent-creation-transcript-fixtures";
+import {
   PLAYGROUND_SUBAGENT_PARENT_SEND_TRANSCRIPT,
+} from "@/lib/domain/chat/__fixtures__/playground/subagent-parent-send-transcript-fixtures";
+import {
   PLAYGROUND_SUBAGENT_TRANSCRIPT,
+} from "@/lib/domain/chat/__fixtures__/playground/subagent-tool-transcript-fixtures";
+import {
   PLAYGROUND_SUBAGENT_WAKE_TRANSCRIPT,
-} from "@/lib/domain/chat/__fixtures__/playground/tool-transcript-fixtures";
+} from "@/lib/domain/chat/__fixtures__/playground/subagent-wake-transcript-fixtures";
 import { TranscriptPreviewShell } from "@/components/playground/transcript/PlaygroundTranscriptShell";
 
 export function renderPlaygroundToolTranscript(

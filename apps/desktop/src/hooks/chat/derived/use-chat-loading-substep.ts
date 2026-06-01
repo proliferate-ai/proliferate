@@ -8,7 +8,7 @@ import {
   resolveChatLoadingSubstep,
   type ChatLoadingSubstep,
 } from "@/lib/domain/chat/surface/chat-loading-substep";
-import { useActiveSessionSurfaceSnapshot } from "@/hooks/chat/derived/use-active-chat-session-selectors";
+import { useActiveSessionSurfaceSnapshot } from "@/hooks/chat/derived/use-active-session-transcript-state";
 
 /**
  * Disambiguates the loading sub-states that feed ChatLoadingHero. The loading

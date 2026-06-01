@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
+import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-session-config-state";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
 import { useCloseActiveWorkspaceTab } from "@/hooks/workspaces/workflows/tabs/use-close-active-workspace-tab";
 import { useChatTabVisibilityActions } from "@/hooks/workspaces/workflows/tabs/use-chat-tab-visibility-actions";

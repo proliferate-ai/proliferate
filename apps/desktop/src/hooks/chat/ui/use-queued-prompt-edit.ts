@@ -6,8 +6,10 @@ import type {
 } from "@proliferate/product-domain/sessions/intents/session-intent-model";
 import {
   useActivePendingPrompts,
+} from "@/hooks/chat/derived/use-active-pending-session-interactions";
+import {
   useActiveSessionId,
-} from "@/hooks/chat/derived/use-active-chat-session-selectors";
+} from "@/hooks/chat/derived/use-active-session-identity";
 import { useEditPendingPrompt } from "@/hooks/sessions/workflows/use-edit-pending-prompt";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
