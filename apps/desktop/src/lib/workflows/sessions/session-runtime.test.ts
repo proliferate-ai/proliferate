@@ -1,15 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  assertDirectSessionCreateRuntimeConfigStamped,
   collectInactiveSessionStreamIds,
   detachAndCloseSessionStreams,
-  fetchSessionHistory,
-  prepareLocalSessionRuntimeConfig,
   pruneInactiveSessionStreams,
-  resumeSession,
   type FlushAwareSessionStreamHandle,
   type SessionStreamPruningDeps,
 } from "./session-runtime";
+import {
+  fetchSessionHistory,
+  resumeSession,
+} from "@/lib/access/anyharness/session-runtime";
+import {
+  assertDirectSessionCreateRuntimeConfigStamped,
+  prepareLocalSessionRuntimeConfig,
+} from "@/lib/access/anyharness/session-runtime-config";
 import type { SessionStreamHandle } from "@anyharness/sdk";
 import { ProliferateClientError } from "@proliferate/cloud-sdk/client/core";
 import {

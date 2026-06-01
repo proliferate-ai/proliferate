@@ -4,7 +4,7 @@ import {
 import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-measurement-request-options";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap";
-import { fetchWorkspaceSessionSummaries } from "@/lib/workflows/sessions/session-runtime";
+import { fetchWorkspaceSessionSummaries } from "@/lib/access/anyharness/session-runtime";
 import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 

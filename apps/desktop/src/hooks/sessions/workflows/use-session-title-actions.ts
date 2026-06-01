@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useUpdateSessionTitleMutation } from "@anyharness/sdk-react";
 import { generateSessionTitle } from "@proliferate/cloud-sdk/client/ai-magic";
-import { getSessionClientAndWorkspace } from "@/lib/workflows/sessions/session-runtime";
+import { getSessionClientAndWorkspace } from "@/lib/access/anyharness/session-runtime";
 import {
   finishMeasurementOperation,
   recordMeasurementMetric,
