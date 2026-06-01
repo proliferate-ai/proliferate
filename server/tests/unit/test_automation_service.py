@@ -80,16 +80,23 @@ async def _create_online_target(  # type: ignore[no-untyped-def]
     return target
 
 
-async def _create_agent_run_config(session, *, user_id: uuid.UUID) -> CloudAgentRunConfig:  # type: ignore[no-untyped-def]
+async def _create_agent_run_config(
+    session,  # type: ignore[no-untyped-def]
+    *,
+    user_id: uuid.UUID,
+    agent_kind: str = "codex",
+    model_id: str = "gpt-5.4",
+    control_values: dict[str, object] | None = None,
+) -> CloudAgentRunConfig:
     config = CloudAgentRunConfig(
         owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
         owner_user_id=user_id,
         organization_id=None,
         created_by_user_id=user_id,
         name="Automation test config",
-        agent_kind="codex",
-        model_id="gpt-5.4",
-        control_values_json={"mode": "code", "effort": "medium"},
+        agent_kind=agent_kind,
+        model_id=model_id,
+        control_values_json=control_values or {"mode": "auto", "effort": "medium"},
         usable_in_personal_sandboxes=True,
         usable_in_shared_sandboxes=False,
         seed_key=None,

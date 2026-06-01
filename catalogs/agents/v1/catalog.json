@@ -2411,9 +2411,7 @@
             "id": "opencode/mimo-v2.5-free",
             "displayName": "MiMo V2.5 Free",
             "description": null,
-            "aliases": [
-              "opencode/minimax-m2.5-free"
-            ],
+            "aliases": [],
             "status": "active",
             "isDefault": false,
             "provider": "opencode",
@@ -2434,9 +2432,7 @@
             "id": "opencode/nemotron-3-super-free",
             "displayName": "Nemotron 3 Super Free",
             "description": null,
-            "aliases": [
-              "opencode/ring-2.6-1t-free"
-            ],
+            "aliases": [],
             "status": "active",
             "isDefault": false,
             "provider": "opencode",

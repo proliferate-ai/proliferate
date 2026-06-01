@@ -119,6 +119,20 @@ fn validate_agent_catalog_agent(
                     agent.session.default_model_id
                 );
             }
+            if model.status != ModelCatalogStatus::Active {
+                anyhow::bail!(
+                    "agent catalog agent '{}' default model '{}' is not active",
+                    agent.kind,
+                    model.id
+                );
+            }
+            if model.default_opt_in != Some(true) {
+                anyhow::bail!(
+                    "agent catalog agent '{}' default model '{}' must have defaultOptIn true",
+                    agent.kind,
+                    model.id
+                );
+            }
         }
         if model.default_opt_in == Some(true) && model.status != ModelCatalogStatus::Active {
             anyhow::bail!(

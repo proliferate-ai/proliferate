@@ -138,7 +138,7 @@ async function readPersistedUserPreferences(): Promise<{
   return {
     preferences: await readLegacyUserPreferences(),
     shouldPersist: false,
-    persistedMetadata: {},
+    persistedMetadata: markModelVisibilityDefaultsReset({}),
     deferWorktreeAutoDeleteLimitPersist: false,
     resetModelVisibilityDefaults: false,
   };

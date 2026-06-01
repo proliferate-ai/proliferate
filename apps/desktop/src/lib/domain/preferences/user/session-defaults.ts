@@ -68,15 +68,6 @@ const LEGACY_CURSOR_MODEL_IDS: Record<string, string> = {
   "kimi-k2.5[]": "kimi-k2.5",
 };
 
-const LEGACY_OPENCODE_MODEL_IDS: Record<string, string> = {
-  "opencode/minimax-m2.5-free": "opencode/mimo-v2.5-free",
-  "opencode/ring-2.6-1t-free": "opencode/nemotron-3-super-free",
-};
-
-const LEGACY_GEMINI_MODEL_IDS: Record<string, string> = {
-  "auto-gemini-2.5": "auto-gemini-3",
-};
-
 const DEFAULT_LIVE_SESSION_CONTROL_KEYS = new Set<DefaultLiveSessionControlKey>([
   "collaboration_mode",
   "reasoning",
@@ -211,12 +202,6 @@ export function normalizeDefaultChatModelId(agentKind: string, modelId: string):
   }
   if (agentKind === "cursor") {
     return LEGACY_CURSOR_MODEL_IDS[modelId] ?? modelId;
-  }
-  if (agentKind === "opencode") {
-    return LEGACY_OPENCODE_MODEL_IDS[modelId] ?? modelId;
-  }
-  if (agentKind === "gemini") {
-    return LEGACY_GEMINI_MODEL_IDS[modelId] ?? modelId;
   }
   return modelId;
 }
