@@ -17,7 +17,7 @@ use crate::sessions::links::model::{
 };
 use crate::sessions::links::service::{new_public_id, SessionLinkService};
 use crate::sessions::model::SessionRecord;
-use crate::sessions::prompt::PromptProvenance;
+use crate::sessions::prompt::provenance::PromptProvenance;
 use crate::sessions::store::SessionStore;
 use crate::workspaces::access_gate::WorkspaceAccessGate;
 use crate::workspaces::model::WorkspaceRecord;

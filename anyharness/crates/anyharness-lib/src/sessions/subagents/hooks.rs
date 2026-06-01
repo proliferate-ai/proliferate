@@ -9,7 +9,7 @@ use crate::live::sessions::LiveSessionManager;
 use crate::sessions::extensions::{
     SessionExtension, SessionTurnFinishedContext, SessionTurnOutcome,
 };
-use crate::sessions::prompt::{PromptPayload, PromptProvenance};
+use crate::sessions::prompt::{provenance::PromptProvenance, PromptPayload};
 use crate::sessions::runtime_event::RuntimeInjectedSessionEvent;
 use crate::sessions::store::SessionStore;
 

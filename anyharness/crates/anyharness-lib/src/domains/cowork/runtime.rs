@@ -29,7 +29,7 @@ use crate::sessions::extensions::{
 use crate::sessions::links::completions::LinkCompletionRecord;
 use crate::sessions::links::model::{SessionLinkRecord, SessionLinkRelation};
 use crate::sessions::model::SessionRecord;
-use crate::sessions::prompt::{PromptPayload, PromptProvenance};
+use crate::sessions::prompt::{provenance::PromptProvenance, PromptPayload};
 use crate::sessions::runtime::{CreateAndStartSessionError, SendPromptOutcome, SessionRuntime};
 use crate::sessions::runtime_event::RuntimeInjectedSessionEvent;
 use crate::sessions::service::SessionService;

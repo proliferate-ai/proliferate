@@ -8,5 +8,5 @@
 
 CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/mod.rs 1 transitional session runtime still owns plan service wiring
 CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/runtime/plans.rs 2 transitional session runtime still coordinates plan domain directly
-CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/service.rs 1 transitional session service still accepts mobility attachment domain data
+CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/sessions/service/mobility.rs 1 transitional session service still accepts mobility attachment domain data
 CORE_DOMAIN_PRODUCT_IMPORT anyharness/crates/anyharness-lib/src/workspaces/files_runtime.rs 1 transitional workspace files runtime still serves cowork artifact files directly

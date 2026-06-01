@@ -8,7 +8,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 BLOCKED_PATHS = [
     "anyharness/crates/anyharness-lib/src/sessions/mcp.rs",
+    "anyharness/crates/anyharness-lib/src/sessions/live_config.rs",
+    "anyharness/crates/anyharness-lib/src/sessions/prompt.rs",
     "anyharness/crates/anyharness-lib/src/sessions/runtime.rs",
+    "anyharness/crates/anyharness-lib/src/sessions/service.rs",
     "anyharness/crates/anyharness-lib/src/sessions/store.rs",
     "anyharness/crates/anyharness-lib/src/workspaces/runtime.rs",
     "anyharness/crates/anyharness-lib/src/workspaces/service.rs",

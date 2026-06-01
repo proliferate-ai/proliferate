@@ -1,5 +1,5 @@
 use super::*;
-use crate::sessions::prompt::{PromptPayload, PromptProvenance};
+use crate::sessions::prompt::{provenance::PromptProvenance, PromptPayload};
 
 #[test]
 fn pending_prompt_preserves_internal_provenance_through_load_edit_and_drain() {

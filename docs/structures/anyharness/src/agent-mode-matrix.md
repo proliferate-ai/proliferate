@@ -26,7 +26,7 @@ values are now validated against the bundled AnyHarness agent catalog:
 - `build_live_config_snapshot` normalizes whatever the agent exposed into the
   common `NormalizedSessionControls` buckets (`model`, `collaboration_mode`,
   `mode`, `reasoning`, `effort`, `fast_mode`, plus `extras`)
-  (`anyharness/crates/anyharness-lib/src/sessions/live_config.rs`).
+  (`anyharness/crates/anyharness-lib/src/sessions/live_config/**`).
 - The contract shape with the six normalized buckets is declared at
   `anyharness/crates/anyharness-contract/src/v1/session_config.rs`.
 
@@ -115,8 +115,9 @@ Control keys: **both** `mode` and `collaboration_mode` — source:
 Both keys are exposed in desktop config. Codex is the only family where the
 normalizer expects two distinct controls — see the `collaboration_mode`
 detection branch at
-`anyharness/crates/anyharness-lib/src/sessions/live_config.rs`; the tests in
-that file assert that the two controls keep distinct values.
+`anyharness/crates/anyharness-lib/src/sessions/live_config/controls.rs`; the
+tests under `sessions/live_config/**` assert that the two controls keep
+distinct values.
 
 - Most permissive: **`mode = full-access`**.
 - Caveat: the desktop UI lets the user set `collaboration_mode` independently,
@@ -200,7 +201,7 @@ will pass `mode_id` through verbatim.
 - Codex's `plan` appears in both `mode` and `collaboration_mode` as distinct
   options. The UI treats them as independent controls; the runtime
   normalizer explicitly keeps them separate
-  (`anyharness/crates/anyharness-lib/src/sessions/live_config.rs`).
+  (`anyharness/crates/anyharness-lib/src/sessions/live_config/controls.rs`).
 - Cursor and OpenCode have zero desktop mode metadata. A cowork thread
   created against one of these families today will send `mode_id = undefined`
   (since `defaultSessionModeByAgentKind` has no entry for them unless the

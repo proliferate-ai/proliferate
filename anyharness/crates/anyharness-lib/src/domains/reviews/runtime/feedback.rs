@@ -5,7 +5,7 @@ use super::super::model::{
 };
 use super::super::service::ReviewError;
 use super::ReviewRuntime;
-use crate::sessions::prompt::PromptProvenance;
+use crate::sessions::prompt::provenance::PromptProvenance;
 use crate::sessions::runtime::SendPromptOutcome;
 
 const FEEDBACK_RETRY_DELAY_SECS: i64 = 30;

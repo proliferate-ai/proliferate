@@ -29,7 +29,7 @@ use crate::live::sessions::event_sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::observability::latency::latency_trace_fields;
 use crate::sessions::model::serialize_action_capabilities;
-use crate::sessions::prompt::capabilities_from_acp;
+use crate::sessions::prompt::capabilities::capabilities_from_acp;
 use crate::sessions::store::SessionStore;
 
 pub(in crate::live::sessions::actor) struct StartedActor {

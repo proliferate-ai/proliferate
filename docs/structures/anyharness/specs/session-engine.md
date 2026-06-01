@@ -20,7 +20,7 @@ Current names:
 
 ```text
 SessionRuntime      anyharness-lib/src/sessions/runtime/
-SessionService      anyharness-lib/src/sessions/service.rs
+SessionService      anyharness-lib/src/sessions/service/
 SessionStore        anyharness-lib/src/sessions/store/**
 LiveSessionManager  live/sessions/manager/**
 LiveSessionHandle   live/sessions/handle.rs
@@ -34,6 +34,7 @@ Implementation reality after the completed migration phases:
 
 - session MCP assembly lives under `sessions/mcp_bindings/**`.
 - `SessionStore` is split under `sessions/store/**`.
+- `SessionService` is split under `sessions/service/**`.
 - `SessionRuntime` is split under `sessions/runtime/**`.
 - `SessionEventSink` is split under `live/sessions/event_sink/**`.
 - `SessionActor` is split under `live/sessions/actor/**`; connection mechanics

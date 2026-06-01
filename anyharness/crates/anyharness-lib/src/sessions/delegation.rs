@@ -3,7 +3,7 @@ use serde_json::json;
 
 use super::links::model::{SessionLinkRecord, SessionLinkRelation};
 use super::links::service::SessionLinkService;
-use super::prompt::PromptProvenance;
+use super::prompt::provenance::PromptProvenance;
 use super::store::SessionStore;
 
 pub const READ_EVENTS_DEFAULT_LIMIT: usize = 50;
