@@ -4,13 +4,9 @@ import {
   adoptTerminalStreamIdentity,
   clearForRuntime,
   clearTerminal,
-  clearTerminalIntentionalClose,
-  createTerminalRuntimeIdentity,
   ensureConnected,
   getLastDataSeq,
   hasActiveHandle,
-  isTerminalIntentionalClose,
-  markTerminalIntentionalClose,
   markReadOnly,
   resetTerminalStreamRegistryForTests,
   sendInput,
@@ -19,6 +15,12 @@ import {
   type TerminalReplayEntry,
   type TerminalStreamIdentity,
 } from "./terminal-stream-registry";
+import {
+  clearTerminalIntentionalClose,
+  isTerminalIntentionalClose,
+  markTerminalIntentionalClose,
+} from "./terminal-close-intent";
+import { createTerminalRuntimeIdentity } from "./terminal-stream-key";
 
 const mockState = vi.hoisted(() => ({
   connections: [] as Array<{

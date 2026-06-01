@@ -3,9 +3,11 @@ import { useCallback } from "react";
 import { useTerminalCache } from "@/hooks/access/anyharness/terminals/use-terminal-cache";
 import { useTerminalWorkspaceConnection } from "@/hooks/terminals/workflows/use-terminal-workspace-connection";
 import {
-  clearTerminal,
   clearTerminalIntentionalClose,
   markTerminalIntentionalClose,
+} from "@/lib/infra/terminals/terminal-close-intent";
+import {
+  clearTerminal,
 } from "@/lib/infra/terminals/terminal-stream-registry";
 import {
   closeTerminal,

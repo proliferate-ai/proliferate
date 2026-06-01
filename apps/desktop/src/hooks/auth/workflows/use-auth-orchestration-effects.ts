@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { closeAllSessionStreamHandles } from "@/lib/access/anyharness/session-stream-handles";
 import type { AuthClientStatePatch } from "@/lib/domain/auth/auth-state-mapping";
-import type { AuthOrchestrationDeps } from "@/lib/integrations/auth/orchestration";
+import type { AuthOrchestrationDeps } from "@/lib/integrations/auth/orchestration-effects";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";

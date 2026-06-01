@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from "react";
 import { registerCurrentAuthSessionProvider } from "@/lib/domain/auth/current-auth-session";
 import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
-import { bootstrapAuth } from "@/lib/integrations/auth/orchestration";
+import { bootstrapAuth } from "@/lib/integrations/auth/orchestration-bootstrap";
 import { useAuthOrchestrationEffects } from "@/hooks/auth/workflows/use-auth-orchestration-effects";
 
 // Owns app-mounted auth bootstrap wiring. Does not own sign-in/sign-out actions.

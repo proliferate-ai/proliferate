@@ -6,8 +6,6 @@ import type {
   InstalledConnectorRecord,
 } from "@/lib/domain/mcp/types";
 import {
-  cancelLocalOAuthConnectorConnect,
-  cancelOAuthConnectorConnect,
   connectOAuthConnector,
   deleteConnector,
   installConnector,
@@ -15,8 +13,10 @@ import {
   setConnectorPublicExposure,
   setConnectorEnabled,
   updateConnectorSecret,
-  type ConnectorPaneData,
 } from "@/lib/workflows/mcp/connector-persistence";
+import type { ConnectorPaneData } from "@/lib/workflows/mcp/connector-catalog-persistence";
+import { cancelOAuthConnectorConnect } from "@/lib/workflows/mcp/connector-oauth-flow";
+import { cancelLocalOAuthConnectorConnect } from "@/lib/workflows/mcp/local-oauth-persistence";
 import { mcpConnectorsKey } from "./query-keys";
 import { refreshMcpConnectorsQuery } from "./use-connectors";
 

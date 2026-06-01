@@ -4,6 +4,8 @@ import {
   type TerminalReplayGapFrame,
   type TerminalStreamHandle,
 } from "@anyharness/sdk";
+import { terminalStreamKey } from "./terminal-stream-key";
+import { resetTerminalCloseIntentForTests } from "./terminal-close-intent";
 
 const MAX_REPLAY_DATA_BYTES = 256 * 1024;
 const MAX_REPLAY_ENTRIES = 1000;
@@ -68,19 +70,6 @@ interface EnsureConnectedOptions {
 }
 
 const registry = new Map<string, TerminalRegistryEntry>();
-const intentionallyClosingTerminalIds = new Set<string>();
-
-export function createTerminalRuntimeIdentity(input: {
-  runtimeUrl: string;
-  anyharnessWorkspaceId: string;
-  runtimeGeneration?: number;
-}): string {
-  return [
-    input.runtimeUrl.replace(/\/+$/, ""),
-    input.anyharnessWorkspaceId,
-    input.runtimeGeneration?.toString() ?? "",
-  ].join("\u0000");
-}
 
 export function ensureConnected(options: EnsureConnectedOptions): boolean {
   const entry = getOrCreateEntry(options.identity);
@@ -168,7 +157,7 @@ export function adoptTerminalStreamIdentity(identity: TerminalStreamIdentity): v
 }
 
 export function sendInput(identity: TerminalStreamIdentity, data: string | Uint8Array): void {
-  const entry = registry.get(streamKey(identity));
+  const entry = registry.get(terminalStreamKey(identity));
   if (!entry || entry.exited || entry.readOnly) {
     return;
   }
@@ -180,7 +169,7 @@ export function sendResize(
   cols: number,
   rows: number,
 ): void {
-  const entry = registry.get(streamKey(identity));
+  const entry = registry.get(terminalStreamKey(identity));
   if (!entry || entry.exited || entry.readOnly) {
     return;
   }
@@ -221,18 +210,6 @@ export function clearTerminal(input: {
   }
 }
 
-export function markTerminalIntentionalClose(terminalId: string): void {
-  intentionallyClosingTerminalIds.add(terminalId);
-}
-
-export function clearTerminalIntentionalClose(terminalId: string): void {
-  intentionallyClosingTerminalIds.delete(terminalId);
-}
-
-export function isTerminalIntentionalClose(terminalId: string): boolean {
-  return intentionallyClosingTerminalIds.has(terminalId);
-}
-
 export function clearForRuntime(runtimeIdentity: string): void {
   for (const [key, entry] of registry.entries()) {
     if (entry.identity.runtimeIdentity === runtimeIdentity) {
@@ -242,11 +219,11 @@ export function clearForRuntime(runtimeIdentity: string): void {
 }
 
 export function hasActiveHandle(identity: TerminalStreamIdentity): boolean {
-  return Boolean(registry.get(streamKey(identity))?.handle);
+  return Boolean(registry.get(terminalStreamKey(identity))?.handle);
 }
 
 export function getLastDataSeq(identity: TerminalStreamIdentity): number {
-  return registry.get(streamKey(identity))?.lastDataSeq ?? 0;
+  return registry.get(terminalStreamKey(identity))?.lastDataSeq ?? 0;
 }
 
 export function resetTerminalStreamRegistryForTests(): void {
@@ -254,11 +231,11 @@ export function resetTerminalStreamRegistryForTests(): void {
     activelyCloseHandle(entry);
   }
   registry.clear();
-  intentionallyClosingTerminalIds.clear();
+  resetTerminalCloseIntentForTests();
 }
 
 function getOrCreateEntry(identity: TerminalStreamIdentity): TerminalRegistryEntry {
-  const key = streamKey(identity);
+  const key = terminalStreamKey(identity);
   const existing = registry.get(key);
   if (existing) {
     return existing;
@@ -390,7 +367,7 @@ function emitReplayEntry(
 }
 
 function forgetHandle(identity: TerminalStreamIdentity): void {
-  const entry = registry.get(streamKey(identity));
+  const entry = registry.get(terminalStreamKey(identity));
   if (entry) {
     entry.handle = null;
   }
@@ -412,12 +389,4 @@ function closeAndDeleteEntry(key: string, entry: TerminalRegistryEntry): void {
 function nextOrder(entry: TerminalRegistryEntry): number {
   entry.nextOrder += 1;
   return entry.nextOrder;
-}
-
-function streamKey(identity: TerminalStreamIdentity): string {
-  return [
-    identity.workspaceId,
-    identity.terminalId,
-    identity.runtimeIdentity,
-  ].join("\u0000");
 }

@@ -1,11 +1,7 @@
 import {
   openAuthSessionUrl,
   type StoredAuthSession,
-  type StoredPendingAuthSession,
 } from "@/lib/access/tauri/auth"
-import {
-  buildProliferateApiUrl,
-} from "@/lib/infra/proliferate-api"
 import {
   elapsedStartupMs,
   logStartupDebug,
@@ -13,8 +9,35 @@ import {
   summarizeStartupError,
 } from "@/lib/infra/measurement/debug-startup"
 import type { AuthUser } from "@/lib/domain/auth/auth-user"
+import {
+  abortError,
+  AuthRequestError,
+  buildAuthUrl,
+  delay,
+  fetchAuthResponse,
+  isAbortError,
+  parseAuthError,
+} from "./proliferate-auth-transport"
+import {
+  createPendingGitHubDesktopAuth,
+  DESKTOP_AUTH_REDIRECT_URI,
+  isPendingDesktopAuthExpired,
+  PENDING_AUTH_MAX_AGE_MS,
+  parseDesktopAuthCallback,
+  sha256Base64Url,
+  type DesktopAuthCallback,
+} from "./proliferate-auth-redirect"
 
 export type { AuthUser }
+export {
+  AuthRequestError,
+  createPendingGitHubDesktopAuth,
+  DESKTOP_AUTH_REDIRECT_URI,
+  isPendingDesktopAuthExpired,
+  PENDING_AUTH_MAX_AGE_MS,
+  parseDesktopAuthCallback,
+}
+export type { DesktopAuthCallback }
 
 interface DesktopTokenResponse {
   access_token: string
@@ -56,141 +79,11 @@ export interface DesktopProviderAuthOptions {
   accessToken?: string | null
 }
 
-export interface DesktopAuthCallback {
-  url: string
-  state: string
-  code: string | null
-  error: string | null
-}
-
-const DESKTOP_REDIRECT_SCHEME = "proliferate"
-const LOCAL_DESKTOP_REDIRECT_SCHEME = "proliferate-local"
-const DESKTOP_REDIRECT_SCHEMES = new Set([
-  DESKTOP_REDIRECT_SCHEME,
-  LOCAL_DESKTOP_REDIRECT_SCHEME,
-])
-const DESKTOP_REDIRECT_HOST = "auth"
-const DESKTOP_REDIRECT_PATH = "/callback"
 const GITHUB_RECOVERY_TIMEOUT_MS = 2 * 60 * 1000
-function isLocalDesktopHost(): boolean {
-  if (typeof window === "undefined") {
-    return false
-  }
-  return ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname)
-}
-
-function desktopRedirectScheme(): string {
-  return isLocalDesktopHost() ? LOCAL_DESKTOP_REDIRECT_SCHEME : DESKTOP_REDIRECT_SCHEME
-}
-
-export const DESKTOP_AUTH_REDIRECT_URI = `${desktopRedirectScheme()}://${DESKTOP_REDIRECT_HOST}${DESKTOP_REDIRECT_PATH}`
-export const PENDING_AUTH_MAX_AGE_MS = 10 * 60 * 1000
-const CLOUD_UNAVAILABLE_MESSAGE =
-  "Could not reach the Proliferate cloud. Local workspaces still work; sign-in requires the control plane."
 const GITHUB_APP_SETTINGS_FALLBACK_URL = "https://github.com/settings/applications"
 
-class AuthRequestError extends Error {
-  status: number
-
-  constructor(message: string, status: number) {
-    super(message)
-    this.name = "AuthRequestError"
-    this.status = status
-  }
-}
-
 function buildUrl(path: string): string {
-  return buildProliferateApiUrl(path)
-}
-
-function bytesToBase64Url(bytes: Uint8Array): string {
-  let binary = ""
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte)
-  }
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "")
-}
-
-function randomBase64Url(size = 32): string {
-  const bytes = new Uint8Array(size)
-  crypto.getRandomValues(bytes)
-  return bytesToBase64Url(bytes)
-}
-
-async function sha256Base64Url(input: string): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(input),
-  )
-  return bytesToBase64Url(new Uint8Array(digest))
-}
-
-function abortError(): Error {
-  return new DOMException("Aborted", "AbortError")
-}
-
-function isAbortError(error: unknown): error is Error {
-  return error instanceof Error && error.name === "AbortError"
-}
-
-function normalizeTransportError(error: unknown): Error {
-  if (isAbortError(error)) {
-    return error
-  }
-
-  if (error instanceof AuthRequestError) {
-    return error
-  }
-
-  return new AuthRequestError(CLOUD_UNAVAILABLE_MESSAGE, 503)
-}
-
-async function fetchAuthResponse(
-  input: RequestInfo | URL,
-  init?: RequestInit,
-): Promise<Response> {
-  try {
-    return await fetch(input, init)
-  } catch (error) {
-    throw normalizeTransportError(error)
-  }
-}
-
-function delay(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(abortError())
-      return
-    }
-
-    const timeout = window.setTimeout(() => {
-      signal?.removeEventListener("abort", onAbort)
-      resolve()
-    }, ms)
-
-    function onAbort() {
-      window.clearTimeout(timeout)
-      reject(abortError())
-    }
-
-    signal?.addEventListener("abort", onAbort, { once: true })
-  })
-}
-
-async function parseError(response: Response): Promise<AuthRequestError> {
-  try {
-    const payload = (await response.json()) as { detail?: unknown }
-    if (typeof payload.detail === "string") {
-      return new AuthRequestError(payload.detail, response.status)
-    }
-  } catch {
-    // Fall through to status text.
-  }
-
-  return new AuthRequestError(
-    response.statusText || "Authentication request failed",
-    response.status,
-  )
+  return buildAuthUrl(path)
 }
 
 function toStoredSession(response: DesktopTokenResponse): StoredAuthSession {
@@ -207,60 +100,6 @@ function toStoredSession(response: DesktopTokenResponse): StoredAuthSession {
   }
 }
 
-export function createPendingGitHubDesktopAuth(): StoredPendingAuthSession {
-  return {
-    state: randomBase64Url(24),
-    code_verifier: randomBase64Url(48),
-    redirect_uri: DESKTOP_AUTH_REDIRECT_URI,
-    created_at: new Date().toISOString(),
-    last_handled_callback_url: null,
-  }
-}
-
-export function isPendingDesktopAuthExpired(
-  pending: StoredPendingAuthSession,
-  now = Date.now(),
-): boolean {
-  const createdAt = Date.parse(pending.created_at)
-  if (Number.isNaN(createdAt)) return true
-  return now - createdAt > PENDING_AUTH_MAX_AGE_MS
-}
-
-export function parseDesktopAuthCallback(url: string): DesktopAuthCallback | null {
-  let parsed: URL
-
-  try {
-    parsed = new URL(url)
-  } catch {
-    return null
-  }
-
-  if (!DESKTOP_REDIRECT_SCHEMES.has(parsed.protocol.replace(/:$/, ""))) {
-    return null
-  }
-
-  if (parsed.hostname !== DESKTOP_REDIRECT_HOST) {
-    return null
-  }
-
-  if (parsed.pathname !== DESKTOP_REDIRECT_PATH) {
-    return null
-  }
-
-  const code = parsed.searchParams.get("code")
-  const error = parsed.searchParams.get("error")
-  const state = parsed.searchParams.get("state")
-  if (!state || (!code && !error)) {
-    return null
-  }
-
-  return {
-    url: parsed.toString(),
-    state,
-    code,
-    error,
-  }
-}
 
 export function isSessionExpiring(session: StoredAuthSession, skewSeconds = 60): boolean {
   const expiresAt = Date.parse(session.expires_at)
@@ -291,7 +130,7 @@ export async function getGitHubDesktopAuthAvailability(): Promise<GitHubDesktopA
         elapsedMs: elapsedStartupMs(startedAt),
         status: response.status,
       })
-      throw await parseError(response)
+      throw await parseAuthError(response)
     }
 
     const payload = (await response.json()) as OAuthAvailabilityResponse
@@ -360,7 +199,7 @@ export async function beginDesktopProviderAuth(
   })
 
   if (!response.ok) {
-    throw await parseError(response)
+    throw await parseAuthError(response)
   }
 
   const payload = (await response.json()) as StartAuthResponse
@@ -389,7 +228,7 @@ export async function exchangeDesktopAuthCode(
   })
 
   if (!response.ok) {
-    throw await parseError(response)
+    throw await parseAuthError(response)
   }
 
   return toStoredSession((await response.json()) as DesktopTokenResponse)
@@ -442,7 +281,7 @@ export async function pollGitHubDesktopSession(
     }
 
     if (!response.ok) {
-      throw await parseError(response)
+      throw await parseAuthError(response)
     }
 
     return toStoredSession((await response.json()) as DesktopTokenResponse)
@@ -482,7 +321,7 @@ export async function refreshDesktopUserSession(
         elapsedMs: elapsedStartupMs(startedAt),
         status: response.status,
       })
-      throw await parseError(response)
+      throw await parseAuthError(response)
     }
 
     const session = toStoredSession((await response.json()) as DesktopTokenResponse)
@@ -517,7 +356,7 @@ export async function fetchCurrentDesktopUser(accessToken: string): Promise<Auth
         elapsedMs: elapsedStartupMs(startedAt),
         status: response.status,
       })
-      throw await parseError(response)
+      throw await parseAuthError(response)
     }
 
     const user = (await response.json()) as AuthUser
@@ -535,5 +374,3 @@ export async function fetchCurrentDesktopUser(accessToken: string): Promise<Auth
     throw error
   }
 }
-
-export { AuthRequestError }
