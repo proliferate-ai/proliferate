@@ -631,8 +631,10 @@ MOVE/COPY RESPONSIBILITY
 
 KEEP TEMPORARILY
   cowork manifest re-exports and runtime wrapper
-  cowork HTTP routes as aliases
-  cowork MCP routes as aliases
+  cowork HTTP routes as the current compatibility surface until generic
+    artifact routes exist
+  cowork MCP routes as the current compatibility surface until generic
+    artifact MCP routes exist
   CoworkArtifact* contract names if contract rename would create too much churn
 ```
 
