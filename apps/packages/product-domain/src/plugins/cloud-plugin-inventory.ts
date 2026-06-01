@@ -14,10 +14,35 @@ import type {
   PluginInventoryItem,
 } from "./cloud-plugin-inventory-types";
 
-export * from "./cloud-plugin-inventory-types";
-export * from "./cloud-plugin-settings";
-export * from "./cloud-plugin-catalog";
-export * from "./cloud-plugin-inventory-items";
+export type {
+  BuildCloudPluginInventoryInput,
+  PluginCatalogEntryView,
+  PluginCatalogFieldView,
+  PluginConfiguredCapabilityView,
+  PluginConnectionDraft,
+  PluginConnectionStatusTone,
+  PluginInventoryItem,
+  PluginPackageSkillView,
+  PluginPackageView,
+  PluginSettings,
+  PluginSettingsFieldView,
+  PluginSettingsOptionView,
+  PluginSettingValue,
+  PluginSetupVariant,
+  PluginSurfaceKind,
+} from "./cloud-plugin-inventory-types";
+export {
+  createDefaultPluginDraft,
+  getPluginSecretFields,
+  normalizePluginSecretValue,
+  normalizePluginSettings,
+  normalizedPluginSecretFields,
+  pluginRequiresBrowserAuth,
+  pluginSettingsToCloud,
+  pluginSupportsSurface,
+  validatePluginSecrets,
+  validatePluginSettings,
+} from "./cloud-plugin-settings";
 
 export function buildCloudPluginInventory({
   catalog,

@@ -29,7 +29,7 @@ import {
 } from "./SidebarIndicators";
 import { SidebarActionButton } from "@proliferate/ui/layout/SidebarActionButton";
 import { WorkspaceRenamePopover } from "./WorkspaceRenamePopover";
-import { ProductSidebarWorkspaceRow } from "@proliferate/product-ui/sidebar/ProductSidebar";
+import { ProductSidebarWorkspaceRow } from "@proliferate/product-ui/sidebar/ProductSidebarRepositories";
 
 interface WorkspaceItemProps {
   workspaceId?: string;

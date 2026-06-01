@@ -54,7 +54,7 @@ vi.mock("@/components/workspace/shell/sidebar/SidebarIndicators", () => ({
   ),
 }));
 
-vi.mock("@proliferate/product-ui/sidebar/ProductSidebar", () => ({
+vi.mock("@proliferate/product-ui/sidebar/ProductSidebarLayout", () => ({
   ProductSidebarSectionHeader: ({
     actions,
     label,
@@ -67,6 +67,9 @@ vi.mock("@proliferate/product-ui/sidebar/ProductSidebar", () => ({
       {actions}
     </div>
   ),
+}));
+
+vi.mock("@proliferate/product-ui/sidebar/ProductSidebarThreads", () => ({
   ProductSidebarThreadRow: ({
     active,
     label,

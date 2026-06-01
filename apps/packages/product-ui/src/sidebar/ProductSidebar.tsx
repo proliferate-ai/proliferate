@@ -1,14 +1,15 @@
 import type { ProductSidebarProps } from "./ProductSidebarModel";
-import { AccountFooter, ProductSidebarFooter } from "./ProductSidebarFooter";
+import { AccountFooter } from "./ProductSidebarAccountFooter";
+import { ProductSidebarFooter } from "./ProductSidebarFooter";
 import {
   ProductSidebarBody,
   ProductSidebarFrame,
-  ProductSidebarHeader,
   ProductSidebarScrollableContent,
 } from "./ProductSidebarLayout";
+import { ProductSidebarHeader } from "./ProductSidebarHeader";
 import { ProductSidebarPrimaryNavigation } from "./ProductSidebarNavigation";
-import { ProductSidebarRepositoriesSection } from "./ProductSidebarRepositories";
-import { ProductSidebarThreadSection } from "./ProductSidebarThreads";
+import { ProductSidebarRepositoriesSection } from "./ProductSidebarRepositoriesSection";
+import { ProductSidebarThreadSection } from "./ProductSidebarThreadSection";
 
 export type {
   ProductSidebarProps,
@@ -32,11 +33,15 @@ export {
 export { ProductSidebarNavRow, ProductSidebarPrimaryNavigation } from "./ProductSidebarNavigation";
 export {
   ProductSidebarRepoGroupHeader,
-  ProductSidebarRepositoriesSection,
   ProductSidebarWorkspaceRow,
 } from "./ProductSidebarRepositories";
+export type {
+  ProductSidebarRepoGroupHeaderProps,
+  ProductSidebarWorkspaceRowProps,
+} from "./ProductSidebarRepositories";
 export { ProductSidebarShowToggleRow } from "./ProductSidebarShowToggleRow";
-export { ProductSidebarThreadRow, ProductSidebarThreadSection } from "./ProductSidebarThreads";
+export { ProductSidebarThreadRow } from "./ProductSidebarThreads";
+export type { ProductSidebarThreadRowProps } from "./ProductSidebarThreads";
 
 export function ProductSidebar({
   className = "",

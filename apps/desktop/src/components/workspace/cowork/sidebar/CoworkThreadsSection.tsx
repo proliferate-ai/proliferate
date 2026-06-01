@@ -12,10 +12,8 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { SidebarActionButton } from "@proliferate/ui/layout/SidebarActionButton";
 import { CoworkThreadItem } from "./CoworkThreadItem";
-import {
-  ProductSidebarSectionHeader,
-  ProductSidebarThreadRow,
-} from "@proliferate/product-ui/sidebar/ProductSidebar";
+import { ProductSidebarSectionHeader } from "@proliferate/product-ui/sidebar/ProductSidebarLayout";
+import { ProductSidebarThreadRow } from "@proliferate/product-ui/sidebar/ProductSidebarThreads";
 
 const DEFAULT_VISIBLE_THREAD_COUNT = 5;
 

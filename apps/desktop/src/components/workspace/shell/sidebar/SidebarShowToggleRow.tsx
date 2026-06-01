@@ -1,3 +1,3 @@
 export {
   ProductSidebarShowToggleRow as SidebarShowToggleRow,
-} from "@proliferate/product-ui/sidebar/ProductSidebar";
+} from "@proliferate/product-ui/sidebar/ProductSidebarShowToggleRow";

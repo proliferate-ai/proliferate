@@ -9,7 +9,7 @@ import type { SidebarSessionActivityState } from "@proliferate/product-domain/se
 import { sidebarStatusIndicatorFromActivity } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { formatSidebarRelativeTime } from "@/lib/domain/workspaces/display/workspace-display";
 import { coworkThreadTitle } from "@/lib/domain/cowork/threads";
-import { ProductSidebarThreadRow } from "@proliferate/product-ui/sidebar/ProductSidebar";
+import { ProductSidebarThreadRow } from "@proliferate/product-ui/sidebar/ProductSidebarThreads";
 
 interface CoworkThreadRowProps {
   thread: CoworkThread;
