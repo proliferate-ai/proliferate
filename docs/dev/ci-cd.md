@@ -9,6 +9,58 @@ Use this section when another agent is asked to deploy a merged change to
 staging or production. The detailed reference sections below explain how the
 workflows are built; this section is the operator path.
 
+### Operator Requirements
+
+Required tools and surfaces:
+
+- GitHub Actions through the GitHub MCP, `gh`, or the GitHub web UI
+- local `git` for resolving the exact commit SHA and checking dirty worktrees
+- `curl`, `jq`, and shell access for deploy verification and summary artifacts
+- AWS CLI access when deployment infra, S3, CloudFront, ECS, ECR, IAM, or SSM
+  secrets need inspection or repair
+- Vercel CLI or Vercel dashboard access for hosted web deploy failures
+- Expo/EAS and App Store Connect access when mobile build or TestFlight submit
+  lanes are enabled
+- Sentry access when release, sourcemap, native debug file, or crash
+  verification is part of the change
+- a browser with the right logged-in profile when GitHub, Vercel, Expo, Apple,
+  Stripe, or analytics dashboards require interactive auth
+
+Required operator permissions:
+
+- GitHub repo read access for workflow logs and artifacts
+- GitHub repo write access when the operator may need to push a fix
+- GitHub `Production` environment approval rights for production promotes
+- GitHub environment variable and secret admin rights when repairing deploy
+  configuration, such as a stale `VERCEL_TOKEN`
+- AWS access to assume or inspect the relevant deploy roles, SSM parameters,
+  S3 buckets, CloudFront distributions, ECR repositories, and ECS services
+- Vercel team access for the `proliferate-web` project
+- Expo project access and App Store Connect access when mobile submit is
+  enabled
+- Apple Developer signing, notarization, and App Store Connect secrets must
+  remain in GitHub or Apple systems; operators verify presence and failures,
+  but do not copy secret values into docs or chat
+
+Operating invariants:
+
+- Deploy from an exact SHA on `main`; do not deploy a local branch or dirty
+  worktree.
+- If `main` advances during a production deploy, the deployed SHA is still the
+  older SHA. Promote the newer tip separately before saying production matches
+  latest `main`.
+- A selected lane that fails means the deploy run failed, even if another lane
+  produced the artifact the operator cared about.
+- `force_surfaces` is additive. It cannot suppress other detected lanes.
+- Staging desktop validates the plan but does not publish the stable updater.
+  Production desktop publish is the point where `latest.json` becomes live.
+- Publishing the same desktop version twice does not update installed apps.
+  The desktop updater compares versions, so visible desktop fixes require a
+  real version bump.
+- Do not call a deployment done until every selected lane is complete, every
+  required approval gate is resolved, and the relevant URLs or artifacts have
+  been verified.
+
 Safe prompt to give an agent:
 
 ```text
@@ -132,6 +184,10 @@ ran, skipped lanes, verification results, and any follow-up needed.
 - If web fails on `vercel pull` or `vercel deploy` with an invalid token,
   refresh the `VERCEL_TOKEN` environment secret from a valid local or
   organization token; never paste the token in chat or docs.
+- GitHub environment `VERCEL_TOKEN` values must be durable scoped access
+  tokens for the `getonyx` team, not short-lived Vercel CLI session tokens.
+  A token that can pull settings but fails deploy with `Not authorized` is not
+  sufficient for the hosted web lane.
 - If mobile builds an IPA but EAS submit fails, the app did not reach
   TestFlight. Open the Expo submission detail and inspect the `jobRun.errors`
   detail before changing repo code.

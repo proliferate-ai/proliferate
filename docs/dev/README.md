@@ -22,6 +22,29 @@ PR title, label, release-note, and checklist rules live in
 [`ci-cd.md`](ci-cd.md) and
 [`../../.github/pull_request_template.md`](../../.github/pull_request_template.md).
 
+## Process Spec Contract
+
+Every durable developer process spec in this folder must make the operator
+path explicit. A process is not documented enough until it names:
+
+- the GitHub workflows, scripts, dashboards, hosted services, and local tools
+  that own the process
+- the MCPs, connectors, CLIs, or browser surfaces an agent or human operator
+  needs to use
+- the user permissions required, such as GitHub environment approval, repo
+  write access, AWS deploy role access, Vercel team access, Expo/App Store
+  Connect access, Stripe access, or analytics admin access
+- the normal happy path from request to verification
+- the exact verification commands or dashboards that prove the process worked
+- the failure modes that are common enough to have a first response
+- the secrets policy, including where values live and what must never be pasted
+  into chat, docs, PRs, or logs
+- the final report shape an agent should give back to the user
+
+Developer process specs belong here under `docs/dev/**`. Architecture,
+ownership, and product behavior still belong under `docs/structures/**`,
+`docs/primitives/**`, and `docs/features/**`.
+
 ## Operating Rules
 
 - Use a named dev profile for full-stack product work.
