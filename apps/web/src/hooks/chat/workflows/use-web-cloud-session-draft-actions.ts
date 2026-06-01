@@ -15,7 +15,7 @@ import {
   saveWebCloudSessionDraft,
   webCloudSessionDraftSearch,
   type WebCloudSessionDraft,
-} from "../../../stores/cloud/web-cloud-chat-state-store";
+} from "../../../stores/cloud/web-cloud-session-draft-store";
 
 export function useWebCloudSessionDraftActions(input: {
   workspace: CloudWorkspaceDetail | null;

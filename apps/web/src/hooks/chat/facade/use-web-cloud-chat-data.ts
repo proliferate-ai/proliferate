@@ -22,7 +22,7 @@ import {
   effectiveWorkspaceStatus,
   mergeWorkspaceSnapshot,
 } from "../../../lib/domain/chat/cloud-chat-session-model";
-import { webCloudSessionDraftIdFromSearch } from "../../../stores/cloud/web-cloud-chat-state-store";
+import { webCloudSessionDraftIdFromSearch } from "../../../stores/cloud/web-cloud-session-draft-store";
 
 const EMPTY_SESSION_EVENTS: CloudSessionEvent[] = [];
 const EMPTY_TRANSCRIPT_ITEMS: CloudTranscriptItem[] = [];

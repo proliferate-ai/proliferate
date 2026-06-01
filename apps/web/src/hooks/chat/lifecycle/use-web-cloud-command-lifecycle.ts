@@ -1,4 +1,4 @@
-import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
+import { useEffect, type Dispatch, type SetStateAction } from "react";
 import {
   getCommandStatus,
   type CloudCommandResponse,
@@ -22,7 +22,11 @@ import {
   planDecisionResolvedInRow,
   type ActivePlanDecision,
 } from "../../../lib/domain/chat/cloud-chat-plan-decision";
-import type { WebCloudPromptIntent } from "../../../stores/cloud/web-cloud-chat-state-store";
+import type { WebCloudPromptIntent } from "../../../stores/cloud/web-cloud-prompt-intent-store";
+import {
+  useCloudCommandStatusPolling,
+  useStableCommandIds,
+} from "./use-cloud-command-status-polling";
 
 export function useWebCloudCommandLifecycle(input: {
   client: ProliferateCloudClient;
@@ -104,8 +108,6 @@ export function useWebCloudCommandLifecycle(input: {
             : prompt
         )
       );
-    }
-    if (hasMatchingOptimisticPrompt) {
       setPendingHomePromptStatus(message);
     }
     if (isPersistedPendingPromptCommand) {
@@ -125,119 +127,81 @@ export function useWebCloudCommandLifecycle(input: {
     transcriptRefetch,
   ]);
 
-  useEffect(() => {
-    if (pendingPromptCommandIdsForPolling.length === 0) {
-      return;
-    }
-    let active = true;
-    let timeoutId: number | undefined;
-
-    const pollPendingCommands = async () => {
-      let sawTerminalCommand = false;
-      for (const commandId of pendingPromptCommandIdsForPolling) {
-        try {
-          const command = await getCommandStatus(commandId, client);
-          if (isTerminalCommandStatus(command.status)) {
-            sawTerminalCommand = true;
-          }
-        } catch {
-          // Keep polling other pending commands; transient status reads should not stop transcript updates.
-        }
-      }
-      if (!active) {
-        return;
-      }
-      if (sawTerminalCommand) {
+  useCloudCommandStatusPolling({
+    client,
+    commandIds: pendingPromptCommandIdsForPolling,
+    intervalMs: 3000,
+    onCommands: (commands) => {
+      if (commands.some((command) => isTerminalCommandStatus(command.status))) {
         void transcriptRefetch();
         void sessionEventsRefetch();
       }
-      timeoutId = window.setTimeout(pollPendingCommands, 3000);
-    };
+    },
+  });
 
-    timeoutId = window.setTimeout(pollPendingCommands, 0);
-    return () => {
-      active = false;
-      if (timeoutId !== undefined) {
-        window.clearTimeout(timeoutId);
-      }
-    };
-  }, [
+  useCloudCommandStatusPolling({
     client,
-    pendingPromptCommandIdsForPolling,
-    sessionEventsRefetch,
-    transcriptRefetch,
-  ]);
-
-  useEffect(() => {
-    if (optimisticPromptCommandIdsForPolling.length === 0) {
-      return;
-    }
-    let active = true;
-    let timeoutId: number | undefined;
-
-    const pollOptimisticPromptCommands = async () => {
-      let sawTerminalCommand = false;
+    commandIds: optimisticPromptCommandIdsForPolling,
+    intervalMs: 3000,
+    onCommands: (commands) => {
       let failureMessage: string | null = null;
-      for (const commandId of optimisticPromptCommandIdsForPolling) {
-        try {
-          const command = await getCommandStatus(commandId, client);
-          if (isTerminalCommandStatus(command.status)) {
-            sawTerminalCommand = true;
-          }
-          if (isRejectedCommandStatus(command.status)) {
-            const message = commandStatusFailureMessage(
-              command,
-              promptCommandFailureMessage(command.status),
-            );
-            failureMessage = failureMessage ?? message;
-            setOptimisticPrompts((current) =>
-              current.map((prompt) =>
-                prompt.commandId === command.commandId
-                  ? { ...prompt, status: "failed", errorMessage: message }
-                  : prompt
-              )
-            );
-          } else if (command.status === "accepted" || command.status === "accepted_but_queued") {
-            setOptimisticPrompts((current) =>
-              current.map((prompt) =>
-                prompt.commandId === command.commandId && prompt.status === "sending"
-                  ? { ...prompt, status: "queued" }
-                  : prompt
-              )
-            );
-          }
-        } catch {
-          // Keep polling other commands; a transient read should not strand prompt echoes.
+      for (const command of commands) {
+        if (isRejectedCommandStatus(command.status)) {
+          const message = commandStatusFailureMessage(
+            command,
+            promptCommandFailureMessage(command.status),
+          );
+          failureMessage = failureMessage ?? message;
+          setOptimisticPrompts((current) =>
+            current.map((prompt) =>
+              prompt.commandId === command.commandId
+                ? { ...prompt, status: "failed", errorMessage: message }
+                : prompt
+            )
+          );
+        } else if (command.status === "accepted" || command.status === "accepted_but_queued") {
+          setOptimisticPrompts((current) =>
+            current.map((prompt) =>
+              prompt.commandId === command.commandId && prompt.status === "sending"
+                ? { ...prompt, status: "queued" }
+                : prompt
+            )
+          );
         }
-      }
-      if (!active) {
-        return;
       }
       if (failureMessage) {
         setPendingHomePromptStatus(failureMessage);
       }
-      if (sawTerminalCommand) {
+      if (commands.some((command) => isTerminalCommandStatus(command.status))) {
         void transcriptRefetch();
         void sessionEventsRefetch();
       }
-      timeoutId = window.setTimeout(pollOptimisticPromptCommands, 3000);
-    };
+    },
+  });
 
-    timeoutId = window.setTimeout(pollOptimisticPromptCommands, 0);
-    return () => {
-      active = false;
-      if (timeoutId !== undefined) {
-        window.clearTimeout(timeoutId);
-      }
-    };
-  }, [
+  useCloudCommandStatusPolling({
     client,
-    optimisticPromptCommandIdsForPolling,
-    sessionEventsRefetch,
-    setOptimisticPrompts,
-    setPendingHomePromptStatus,
-    transcriptRefetch,
-  ]);
+    commandIds: pendingConfigCommandIdsForPolling,
+    intervalMs: 1000,
+    onCommands: (commands) => {
+      for (const command of commands) {
+        if (isRejectedCommandStatus(command.status)) {
+          setPendingConfigChanges((current) =>
+            removePendingConfigCommand(current, command.commandId)
+          );
+          setPendingHomePromptStatus(
+            commandStatusFailureMessage(
+              command,
+              sessionConfigCommandFailureMessage(command.status),
+            ) ?? sessionConfigCommandFailureMessage(command.status),
+          );
+        }
+      }
+      if (commands.some((command) => isTerminalCommandStatus(command.status))) {
+        void workspaceRefetch();
+      }
+    },
+  });
 
   useEffect(() => {
     const command = commandStatus;
@@ -255,60 +219,6 @@ export function useWebCloudCommandLifecycle(input: {
     pendingPromptCommandId,
     sessionEventsRefetch,
     transcriptRefetch,
-  ]);
-
-  useEffect(() => {
-    if (pendingConfigCommandIdsForPolling.length === 0) {
-      return;
-    }
-    let active = true;
-    let timeoutId: number | undefined;
-
-    const pollPendingConfigCommands = async () => {
-      let sawTerminalCommand = false;
-      for (const commandId of pendingConfigCommandIdsForPolling) {
-        try {
-          const command = await getCommandStatus(commandId, client);
-          if (isTerminalCommandStatus(command.status)) {
-            sawTerminalCommand = true;
-          }
-          if (isRejectedCommandStatus(command.status)) {
-            setPendingConfigChanges((current) =>
-              removePendingConfigCommand(current, command.commandId)
-            );
-            setPendingHomePromptStatus(
-              commandStatusFailureMessage(
-                command,
-                sessionConfigCommandFailureMessage(command.status),
-              ) ?? sessionConfigCommandFailureMessage(command.status),
-            );
-          }
-        } catch {
-          // Keep polling other pending config commands; transient reads should not strand indicators.
-        }
-      }
-      if (!active) {
-        return;
-      }
-      if (sawTerminalCommand) {
-        void workspaceRefetch();
-      }
-      timeoutId = window.setTimeout(pollPendingConfigCommands, 1000);
-    };
-
-    timeoutId = window.setTimeout(pollPendingConfigCommands, 0);
-    return () => {
-      active = false;
-      if (timeoutId !== undefined) {
-        window.clearTimeout(timeoutId);
-      }
-    };
-  }, [
-    client,
-    pendingConfigCommandIdsForPolling,
-    setPendingConfigChanges,
-    setPendingHomePromptStatus,
-    workspaceRefetch,
   ]);
 
   useEffect(() => {
@@ -441,12 +351,4 @@ export function useWebCloudCommandLifecycle(input: {
     setOptimisticPrompts,
     setPendingHomePromptStatus,
   ]);
-}
-
-function useStableCommandIds(commandIds: readonly string[], key: string): readonly string[] {
-  const stateRef = useRef({ commandIds, key });
-  if (stateRef.current.key !== key) {
-    stateRef.current = { commandIds, key };
-  }
-  return stateRef.current.commandIds;
 }

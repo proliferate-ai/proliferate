@@ -41,10 +41,12 @@ import {
   type PendingHomePrompt,
 } from "../../../lib/access/cloud/pending-home-prompt-store";
 import {
-  clearWebCloudSessionDraft,
   type WebCloudPromptIntent,
+} from "../../../stores/cloud/web-cloud-prompt-intent-store";
+import {
+  clearWebCloudSessionDraft,
   type WebCloudSessionDraft,
-} from "../../../stores/cloud/web-cloud-chat-state-store";
+} from "../../../stores/cloud/web-cloud-session-draft-store";
 
 type EnqueueCommand<TPayload> = (
   command: CloudCommandEnvelope<TPayload>,
