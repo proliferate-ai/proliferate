@@ -15,7 +15,7 @@ from proliferate.constants.automations import (
 )
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
-from proliferate.server.automations.local_executor_service import (
+from proliferate.server.automations.local_executor import (
     attach_local_run_session,
     attach_local_run_workspace,
     claim_local_runs,

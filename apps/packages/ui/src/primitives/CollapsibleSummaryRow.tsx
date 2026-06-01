@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ChevronDown } from "../icons";
+import { ChevronDown } from "../icons/core";
 
 interface CollapsibleSummaryRowProps {
   label: string;

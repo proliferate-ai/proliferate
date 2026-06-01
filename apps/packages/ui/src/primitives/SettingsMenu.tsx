@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Check, ChevronDown } from "../icons";
+import { Check, ChevronDown } from "../icons/core";
 import { Button } from "./Button";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "./PopoverButton";
 import { PopoverMenuItem } from "./PopoverMenuItem";

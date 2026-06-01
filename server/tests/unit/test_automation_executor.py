@@ -19,7 +19,7 @@ from proliferate.server.automations.domain.claim_lifecycle import (
     AUTOMATION_ERROR_DISPATCH_UNCERTAIN,
     LocalAutomationRepoIdentity,
 )
-from proliferate.server.automations.local_executor_service import (
+from proliferate.server.automations.local_executor import (
     _normalize_local_error_code,
 )
 from proliferate.server.automations.worker.main import _parse_args
@@ -39,7 +39,7 @@ from tests.unit.automation_test_data import (
 )
 
 
-def test_local_executor_service_caps_claims_and_allowlists_error_codes() -> None:
+def test_local_executor_caps_claims_and_allowlists_error_codes() -> None:
     assert AUTOMATION_LOCAL_CLAIM_MAX_LIMIT == 1
     assert _normalize_local_error_code("dispatch_uncertain") == "dispatch_uncertain"
     assert _normalize_local_error_code("local_prompt_send_failed") == "local_prompt_send_failed"

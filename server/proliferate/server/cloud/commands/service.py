@@ -27,7 +27,6 @@ from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
-from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.claims.access import require_workspace_interact
 from proliferate.server.cloud.commands.agent_auth_refresh import (
     queue_agent_auth_refresh_for_not_ready_preflight,
@@ -42,6 +41,7 @@ from proliferate.server.cloud.commands.domain.rules import (
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
 from proliferate.server.cloud.commands.wake import schedule_managed_slot_wake_after_commit
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.live.service import (
     publish_command_status_after_commit,
     publish_worker_control_after_commit,

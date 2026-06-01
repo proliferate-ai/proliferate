@@ -61,11 +61,11 @@ from proliferate.server.billing.service import (
     record_cloud_sandbox_usage_started,
     record_cloud_sandbox_usage_stopped,
 )
-from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.agent_auth.service import (
     request_agent_auth_refresh_for_profile_target,
 )
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.runtime.bootstrap import (
     build_detached_supervisor_launch_command,
     build_runtime_env,

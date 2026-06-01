@@ -16,7 +16,7 @@ from proliferate.db.models.automations import Automation, AutomationRun
 from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
 from proliferate.db.store.automations import create_manual_run_for_user
-from proliferate.server.automations.local_executor_service import (
+from proliferate.server.automations.local_executor import (
     claim_local_runs as claim_local_runs_service,
 )
 from proliferate.server.automations.models import (

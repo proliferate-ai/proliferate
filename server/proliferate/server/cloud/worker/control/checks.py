@@ -12,9 +12,9 @@ from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_control as worker_control_store
 from proliferate.db.store.cloud_sync import worker_exposures as worker_exposures_store
-from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.commands import service as command_service
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.live.service import publish_command_status_after_commit
 from proliferate.server.cloud.worker.domain.rules import (
     clamp_command_lease_seconds,

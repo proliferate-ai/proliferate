@@ -49,8 +49,8 @@ from proliferate.db.store.cloud_workspaces import (
     list_cloud_workspaces_for_user as list_cloud_workspaces_store,
 )
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
-from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.mobility import transactions as mobility_tx
 from proliferate.server.cloud.mobility.cleanup_executor import (
     SERVER_CLEANUP_ITEM_KINDS,

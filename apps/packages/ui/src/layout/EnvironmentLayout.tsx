@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
-import { ChevronDown, type IconProps } from "../icons";
+import { ChevronDown } from "../icons/core";
+import type { IconProps } from "../icons/types";
 
 interface EnvironmentSectionProps {
   title: string;

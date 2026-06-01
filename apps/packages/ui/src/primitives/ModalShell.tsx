@@ -1,6 +1,6 @@
 import { useEffect, useId, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { X } from "../icons";
+import { X } from "../icons/core";
 import { useNativeOverlayRegistration } from "../overlays/overlay-presence";
 
 export interface ModalShellProps {
