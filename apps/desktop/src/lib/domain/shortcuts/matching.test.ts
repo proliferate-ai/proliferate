@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { COMPOSER_SHORTCUTS, SHORTCUTS } from "@/config/shortcuts";
+import { COMPOSER_SHORTCUTS } from "@/config/shortcuts/composer-shortcuts";
+import { SHORTCUTS } from "@/config/shortcuts/registry";
 import {
   getShortcutDisplayLabel,
   isTextEntryTarget,

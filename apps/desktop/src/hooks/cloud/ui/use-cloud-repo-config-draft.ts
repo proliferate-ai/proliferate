@@ -12,125 +12,19 @@ import {
   type CloudEnvironmentDraftState,
 } from "@/lib/domain/settings/environment-draft";
 import {
-  envFileVariablesEqual,
-  parseEnvFileVariables,
-  serializeEnvFileVariablesPreservingOriginal,
-  type EnvFileVariable,
-} from "@/lib/domain/settings/env-file-draft";
+  buildCloudRepoEnvVarRows,
+  buildCloudRepoEnvVarsFromRows,
+  buildCloudRepoSharedEnvFilePayloads,
+  buildCloudRepoSharedEnvFiles,
+  buildEmptyCloudRepoSharedEnvFile,
+  cloudRepoSharedEnvFilesEqual,
+  type CloudRepoEnvVarRow,
+  type CloudRepoSharedEnvFile,
+} from "@/lib/domain/settings/cloud-repo-config-draft";
 import type { CloudRepoConfig } from "@/lib/domain/cloud/repo-configs";
-
-export interface CloudRepoEnvVarRow {
-  id: string;
-  key: string;
-  value: string;
-}
-
-export interface CloudRepoSharedEnvFile {
-  id: string;
-  relativePath: string;
-  rows: CloudRepoEnvVarRow[];
-  originalContent: string | null;
-  originalVariables: EnvFileVariable[];
-}
-
-export interface CloudRepoSharedEnvFilePayload {
-  relativePath: string;
-  content: string;
-}
 
 function createRowId(): string {
   return crypto.randomUUID();
-}
-
-function buildEnvVarRows(envVars: Record<string, string>): CloudRepoEnvVarRow[] {
-  return Object.entries(envVars)
-    .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
-    .map(([key, value]) => ({
-      id: createRowId(),
-      key,
-      value,
-    }));
-}
-
-function buildEnvVarRowsFromVariables(variables: readonly EnvFileVariable[]): CloudRepoEnvVarRow[] {
-  return variables.map((row) => ({
-    id: createRowId(),
-    key: row.key,
-    value: row.value,
-  }));
-}
-
-function buildSharedEnvFiles(savedConfig: CloudRepoConfig | null | undefined): CloudRepoSharedEnvFile[] {
-  return (savedConfig?.trackedFiles ?? [])
-    .filter((file) => typeof file.content === "string")
-    .map((file) => {
-      const originalContent = file.content ?? "";
-      const originalVariables = parseEnvFileVariables(originalContent);
-      return {
-        id: createRowId(),
-        relativePath: file.relativePath,
-        rows: buildEnvVarRowsFromVariables(originalVariables),
-        originalContent,
-        originalVariables,
-      };
-    });
-}
-
-function normalizeSharedEnvFilePath(relativePath: string): string {
-  return relativePath.trim().replaceAll("\\", "/");
-}
-
-function normalizeSharedEnvFiles(files: readonly CloudRepoSharedEnvFile[]): CloudRepoSharedEnvFile[] {
-  return files
-    .map((file) => ({
-      ...file,
-      relativePath: normalizeSharedEnvFilePath(file.relativePath),
-      rows: file.rows.filter((row) => row.key.trim().length > 0),
-    }))
-    .filter((file) => file.relativePath.length > 0);
-}
-
-function buildSharedEnvFilePayloads(
-  files: readonly CloudRepoSharedEnvFile[],
-): CloudRepoSharedEnvFilePayload[] {
-  return normalizeSharedEnvFiles(files).map((file) => ({
-    relativePath: file.relativePath,
-    content: serializeEnvFileVariablesPreservingOriginal(
-      file.rows,
-      file.originalVariables,
-      file.originalContent,
-    ),
-  }));
-}
-
-function sharedEnvFilesEqual(
-  left: readonly CloudRepoSharedEnvFile[],
-  right: readonly CloudRepoSharedEnvFile[],
-): boolean {
-  const leftNormalized = normalizeSharedEnvFiles(left);
-  const rightNormalized = normalizeSharedEnvFiles(right);
-  if (leftNormalized.length !== rightNormalized.length) {
-    return false;
-  }
-  return leftNormalized.every((leftFile, index) => {
-    const rightFile = rightNormalized[index];
-    return rightFile?.relativePath === leftFile.relativePath
-      && envFileVariablesEqual(leftFile.rows, rightFile.rows);
-  });
-}
-
-function nextDefaultSharedEnvFilePath(files: readonly CloudRepoSharedEnvFile[]): string {
-  const existing = new Set(files.map((file) => normalizeSharedEnvFilePath(file.relativePath)));
-  if (!existing.has(".env.shared")) {
-    return ".env.shared";
-  }
-  for (let index = 2; index < 100; index += 1) {
-    const candidate = `.env.shared.${index}`;
-    if (!existing.has(candidate)) {
-      return candidate;
-    }
-  }
-  return ".env.shared";
 }
 
 interface UseCloudRepoConfigDraftArgs {
@@ -165,21 +59,15 @@ export function useCloudRepoConfigDraft({
   const [state, setState] = useState<CloudRepoDraftViewState>(() => ({
     draftState: initialDraftState,
     activeSourceKey: sourceKey,
-    envVarRows: buildEnvVarRows(initialDraftState.draft.envVars),
-    sharedEnvFiles: buildSharedEnvFiles(savedConfig),
-    revertSharedEnvFiles: buildSharedEnvFiles(savedConfig),
+    envVarRows: buildCloudRepoEnvVarRows(initialDraftState.draft.envVars, createRowId),
+    sharedEnvFiles: buildCloudRepoSharedEnvFiles(savedConfig, createRowId),
+    revertSharedEnvFiles: buildCloudRepoSharedEnvFiles(savedConfig, createRowId),
   }));
 
-  const envVars = useMemo(() => (
-    state.envVarRows.reduce<Record<string, string>>((accumulator, row) => {
-      const key = row.key.trim();
-      if (!key) {
-        return accumulator;
-      }
-      accumulator[key] = row.value;
-      return accumulator;
-    }, {})
-  ), [state.envVarRows]);
+  const envVars = useMemo(
+    () => buildCloudRepoEnvVarsFromRows(state.envVarRows),
+    [state.envVarRows],
+  );
   const currentDraft = useMemo(
     () => normalizeCloudEnvironmentDraft({
       ...state.draftState.draft,
@@ -187,7 +75,7 @@ export function useCloudRepoConfigDraft({
     }),
     [state.draftState.draft, envVars],
   );
-  const sharedEnvFilesDirty = !sharedEnvFilesEqual(
+  const sharedEnvFilesDirty = !cloudRepoSharedEnvFilesEqual(
     state.sharedEnvFiles,
     state.revertSharedEnvFiles,
   );
@@ -208,9 +96,9 @@ export function useCloudRepoConfigDraft({
     setState({
       draftState: initialDraftState,
       activeSourceKey: sourceKey,
-      envVarRows: buildEnvVarRows(initialDraftState.draft.envVars),
-      sharedEnvFiles: buildSharedEnvFiles(savedConfig),
-      revertSharedEnvFiles: buildSharedEnvFiles(savedConfig),
+      envVarRows: buildCloudRepoEnvVarRows(initialDraftState.draft.envVars, createRowId),
+      sharedEnvFiles: buildCloudRepoSharedEnvFiles(savedConfig, createRowId),
+      revertSharedEnvFiles: buildCloudRepoSharedEnvFiles(savedConfig, createRowId),
     });
   }, [dirty, initialDraftState, savedConfig, sourceKey, state.activeSourceKey]);
 
@@ -273,13 +161,10 @@ export function useCloudRepoConfigDraft({
       },
       sharedEnvFiles: [
         ...current.sharedEnvFiles,
-        {
-          id: createRowId(),
-          relativePath: nextDefaultSharedEnvFilePath(current.sharedEnvFiles),
-          rows: [{ id: createRowId(), key: "", value: "" }],
-          originalContent: null,
-          originalVariables: [],
-        },
+        buildEmptyCloudRepoSharedEnvFile({
+          files: current.sharedEnvFiles,
+          createId: createRowId,
+        }),
       ],
     }));
   }, []);
@@ -406,7 +291,7 @@ export function useCloudRepoConfigDraft({
         ...current.draftState,
         draft: current.draftState.revertDraft,
       },
-      envVarRows: buildEnvVarRows(current.draftState.revertDraft.envVars),
+      envVarRows: buildCloudRepoEnvVarRows(current.draftState.revertDraft.envVars, createRowId),
       sharedEnvFiles: current.revertSharedEnvFiles,
     }));
   }, []);
@@ -428,9 +313,9 @@ export function useCloudRepoConfigDraft({
     setState((current) => ({
       ...current,
       draftState: nextState,
-      envVarRows: buildEnvVarRows(nextState.draft.envVars),
-      sharedEnvFiles: buildSharedEnvFiles(nextSavedConfig),
-      revertSharedEnvFiles: buildSharedEnvFiles(nextSavedConfig),
+      envVarRows: buildCloudRepoEnvVarRows(nextState.draft.envVars, createRowId),
+      sharedEnvFiles: buildCloudRepoSharedEnvFiles(nextSavedConfig, createRowId),
+      revertSharedEnvFiles: buildCloudRepoSharedEnvFiles(nextSavedConfig, createRowId),
     }));
   }, []);
 
@@ -442,7 +327,7 @@ export function useCloudRepoConfigDraft({
     envVars,
     sharedEnvFiles: state.sharedEnvFiles,
     sharedEnvFilesDirty,
-    sharedEnvFilePayloads: buildSharedEnvFilePayloads(state.sharedEnvFiles),
+    sharedEnvFilePayloads: buildCloudRepoSharedEnvFilePayloads(state.sharedEnvFiles),
     trackedFilePaths: currentDraft.trackedFilePaths,
     setupScript: currentDraft.setupScript,
     setSetupScript: (setupScript: string) => updateDraft({ setupScript }),

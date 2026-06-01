@@ -4,10 +4,10 @@ import type { AgentModelGroup } from "@/lib/domain/agents/model-options";
 import {
   createReviewSetupReviewerDraft,
   MAX_REVIEWERS_PER_RUN,
-  type ReviewPersonaTemplate,
   type ReviewSessionDefaults,
   type ReviewSetupDraft,
 } from "@/lib/domain/reviews/review-config";
+import type { ReviewPersonaTemplate } from "@/lib/domain/reviews/review-personas";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
 import { FixedPositionLayer } from "@proliferate/ui/layout/FixedPositionLayer";

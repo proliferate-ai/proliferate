@@ -19,7 +19,7 @@ import { agentAuthenticationCopy } from "@/copy/settings/agent-authentication-co
 import {
   agentAuthAgentLabel,
   agentAuthHarnessDescription,
-} from "@/lib/domain/agent-auth/agent-auth-presentation";
+} from "@/lib/domain/agent-auth/agent-auth-agent-presentation";
 import {
   cloudCredentialDescription,
   confirmationConfirmLabel,

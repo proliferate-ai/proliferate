@@ -1,4 +1,4 @@
-import { SHORTCUTS } from "@/config/shortcuts";
+import { SHORTCUTS } from "@/config/shortcuts/registry";
 import { useNativeContextMenu } from "@/hooks/ui/native/use-native-context-menu";
 import type { NativeContextMenuItem } from "@/lib/access/tauri/context-menu";
 import { getShortcutNativeAccelerator } from "@/lib/domain/shortcuts/native-accelerators";

@@ -10,7 +10,7 @@ import {
   Trash,
   X,
 } from "@proliferate/ui/icons";
-import { SHORTCUTS } from "@/config/shortcuts";
+import { SHORTCUTS } from "@/config/shortcuts/registry";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import type {
   WorkspaceTabContextMenuCommand,

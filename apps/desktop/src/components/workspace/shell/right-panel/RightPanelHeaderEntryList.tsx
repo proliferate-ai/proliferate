@@ -18,7 +18,7 @@ import {
   type FileViewerMode,
 } from "@/lib/domain/workspaces/viewer/viewer-target";
 import type { WorkspaceFileBuffer } from "@/stores/editor/workspace-file-buffers-store";
-import { SHORTCUTS } from "@/config/shortcuts";
+import { SHORTCUTS } from "@/config/shortcuts/registry";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 
 interface RightPanelHeaderEntryListProps {

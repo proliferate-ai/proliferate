@@ -10,10 +10,8 @@ import { Select } from "@proliferate/ui/primitives/Select";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
-import {
-  agentAuthByokCapabilityLabel,
-  isAgentAuthAdminRole,
-} from "@/lib/domain/agent-auth/agent-auth-presentation";
+import { isAgentAuthAdminRole } from "@/lib/domain/agent-auth/agent-auth-agent-presentation";
+import { agentAuthByokCapabilityLabel } from "@/lib/domain/agent-auth/agent-auth-gateway-capabilities";
 import {
   agentAuthGatewayCreatePayloadReady,
   agentAuthGatewayProviderOptionsForCapabilities,

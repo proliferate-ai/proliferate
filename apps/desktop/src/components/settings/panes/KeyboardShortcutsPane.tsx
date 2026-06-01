@@ -1,14 +1,14 @@
 import { useMemo, useState } from "react";
 import {
   COMPOSER_SHORTCUT_GROUPS,
-  COMPOSER_SHORTCUTS,
   SHORTCUT_GROUPS,
-  SHORTCUTS,
-  type ComposerShortcutDef,
+} from "@/config/shortcuts/groups";
+import {
+  COMPOSER_SHORTCUTS,
   type ComposerShortcutKey,
-  type ShortcutDef,
-  type ShortcutKey,
-} from "@/config/shortcuts";
+} from "@/config/shortcuts/composer-shortcuts";
+import { SHORTCUTS, type ShortcutKey } from "@/config/shortcuts/registry";
+import type { ComposerShortcutDef, ShortcutDef } from "@/config/shortcuts/types";
 import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
 import { Search } from "@proliferate/ui/icons";
 import { Input } from "@proliferate/ui/primitives/Input";

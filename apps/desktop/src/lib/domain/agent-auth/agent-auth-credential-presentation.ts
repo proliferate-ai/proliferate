@@ -1,10 +1,11 @@
 import type {
-  AgentAuthAgentKind,
   AgentAuthCredential,
   AgentGatewayCapabilities,
   SandboxAgentAuthSelection,
   SandboxAgentAuthTargetState,
 } from "@proliferate/cloud-sdk";
+import { agentAuthAgentLabel } from "./agent-auth-agent-presentation";
+import { gatewayByokCredentialEnabled } from "./agent-auth-gateway-capabilities";
 
 export type AgentAuthBadgeTone = "neutral" | "success" | "warning" | "destructive";
 export type AgentAuthCredentialAvailabilityStatus = "available" | "unavailable";
@@ -18,49 +19,6 @@ export interface AgentAuthCredentialAvailability {
   status: AgentAuthCredentialAvailabilityStatus;
   label: string;
   reason: string | null;
-}
-
-export function isAgentAuthAdminRole(role: string | null | undefined): boolean {
-  return role === "owner" || role === "admin";
-}
-
-export const AGENT_AUTH_AGENT_ORDER: AgentAuthAgentKind[] = [
-  "claude",
-  "codex",
-  "opencode",
-  "gemini",
-];
-
-export function agentAuthAgentLabel(agentKind: string): string {
-  if (agentKind === "claude") {
-    return "Claude";
-  }
-  if (agentKind === "codex") {
-    return "Codex";
-  }
-  if (agentKind === "opencode") {
-    return "OpenCode";
-  }
-  if (agentKind === "gemini") {
-    return "Gemini";
-  }
-  return agentKind;
-}
-
-export function agentAuthHarnessDescription(agentKind: string): string {
-  if (agentKind === "claude") {
-    return "Anthropic models - Claude Code harness";
-  }
-  if (agentKind === "codex") {
-    return "OpenAI models - Codex CLI harness";
-  }
-  if (agentKind === "opencode") {
-    return "Anthropic or OpenAI models - OpenCode harness";
-  }
-  if (agentKind === "gemini") {
-    return "Google or cross-provider models - Gemini CLI harness";
-  }
-  return "Agent harness";
 }
 
 export function agentAuthCredentialKindLabel(credential: AgentAuthCredential): string {
@@ -267,114 +225,6 @@ export function agentAuthCredentialShareLabel(
   return credential.ownerUserId === currentUserId
     ? "Not shared with organization"
     : "Owner consent required";
-}
-
-export function agentAuthManagedCreditsCapabilityLabel(
-  capabilities: AgentGatewayCapabilities | null | undefined,
-  ownerScope: "personal" | "organization",
-): string {
-  if (!capabilities) {
-    return "Checking managed credit capability.";
-  }
-  if (!capabilities.enabled) {
-    return "Gateway is disabled for this deployment.";
-  }
-  if (ownerScope === "organization") {
-    return capabilities.managedCreditsOrganizationEnabled
-      ? "Managed credits can be provisioned for shared cloud sandboxes."
-      : "Managed credits are not enabled for shared cloud sandboxes.";
-  }
-  return capabilities.managedCreditsPersonalEnabled
-    ? "Managed credits can be used by personal cloud sandboxes."
-    : "Managed credits are not enabled for personal cloud sandboxes.";
-}
-
-export function agentAuthByokCapabilityLabel(
-  capabilities: AgentGatewayCapabilities | null | undefined,
-  ownerScope?: "personal" | "organization",
-): string {
-  if (!capabilities) {
-    return "Checking BYOK capability.";
-  }
-  if (!capabilities.enabled || !capabilities.byokEnabled) {
-    return "BYOK provider forms are not enabled for this deployment.";
-  }
-  if (ownerScope === "personal" && !capabilities.byokPersonalEnabled) {
-    return "Personal BYOK is unavailable for this deployment.";
-  }
-  if (ownerScope === "organization" && !capabilities.byokOrganizationEnabled) {
-    return "Organization BYOK is unavailable until gateway route isolation is verified.";
-  }
-  if (!capabilities.byokPersonalEnabled && !capabilities.byokOrganizationEnabled) {
-    return "BYOK is configured but no cloud owner scope is enabled for provider credentials.";
-  }
-  if (!capabilities.byokOrganizationEnabled && capabilities.byokOrganizationDisabledReason) {
-    return "Organization BYOK is unavailable until gateway route isolation is verified.";
-  }
-  return "BYOK provider forms are enabled for this deployment.";
-}
-
-export function agentAuthCanCreateGatewayCredentialForAgent(
-  agentKind: AgentAuthAgentKind,
-  capabilities: AgentGatewayCapabilities | null | undefined,
-): boolean {
-  if (!capabilities?.enabled || !capabilities.byokEnabled) {
-    return false;
-  }
-  if (!capabilities.byokPersonalEnabled && !capabilities.byokOrganizationEnabled) {
-    return false;
-  }
-  if (agentKind === "claude") {
-    return capabilities.byokProviders.anthropicApiKey
-      || capabilities.byokProviders.bedrockAssumeRole;
-  }
-  if (agentKind === "codex") {
-    return capabilities.byokProviders.openaiApiKey
-      || capabilities.byokProviders.openaiCompatible;
-  }
-  if (agentKind === "gemini") {
-    return capabilities.byokProviders.geminiApiKey;
-  }
-  if (agentKind === "opencode") {
-    return capabilities.opencodeGatewayEnabled === true
-      && (
-        capabilities.byokProviders.openaiApiKey
-        || capabilities.byokProviders.openaiCompatible
-      );
-  }
-  return false;
-}
-
-export function gatewayByokCredentialEnabled(
-  credential: AgentAuthCredential,
-  capabilities: AgentGatewayCapabilities | null | undefined,
-): boolean {
-  const providerKind = credential.redactedSummary.providerKind;
-  if (!capabilities?.enabled || !capabilities.byokEnabled) {
-    return false;
-  }
-  if (credential.ownerScope === "organization" && !capabilities.byokOrganizationEnabled) {
-    return false;
-  }
-  if (credential.ownerScope === "personal" && !capabilities.byokPersonalEnabled) {
-    return false;
-  }
-  if (providerKind === "anthropic_api_key") {
-    return capabilities.byokProviders.anthropicApiKey;
-  }
-  if (providerKind === "openai_api_key") {
-    return capabilities.byokProviders.openaiApiKey;
-  }
-  if (providerKind === "gemini_api_key") {
-    return capabilities.byokProviders.geminiApiKey;
-  }
-  if (providerKind === "bedrock_assume_role") {
-    return capabilities.byokProviders.bedrockAssumeRole;
-  }
-  if (providerKind === "openai_compatible") {
-    return capabilities.byokProviders.openaiCompatible;
-  }
-  return false;
 }
 
 export function isProliferateManagedCreditsCredential(

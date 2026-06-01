@@ -1,4 +1,4 @@
-import type { ShortcutDef, ShortcutMatch } from "@/config/shortcuts";
+import type { ShortcutDef, ShortcutMatch } from "@/config/shortcuts/types";
 
 export type ShortcutDigit = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 

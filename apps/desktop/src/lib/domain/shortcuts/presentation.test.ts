@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SHORTCUTS } from "@/config/shortcuts";
+import { SHORTCUTS } from "@/config/shortcuts/registry";
 import { buildShortcutRangeLabelById } from "@/lib/domain/shortcuts/presentation";
 
 describe("shortcut presentation", () => {

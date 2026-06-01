@@ -13,9 +13,9 @@ import {
 import {
   reviewerMatchesReviewPersonaTemplate,
   reviewerPersonalityLabel,
-  type ReviewPersonaTemplate,
   type ReviewSetupReviewerDraft,
 } from "@/lib/domain/reviews/review-config";
+import type { ReviewPersonaTemplate } from "@/lib/domain/reviews/review-personas";
 
 export function ReviewDefaultPersonalityMenu({
   reviewer,

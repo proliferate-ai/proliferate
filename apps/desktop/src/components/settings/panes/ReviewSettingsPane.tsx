@@ -9,13 +9,15 @@ import { Label } from "@proliferate/ui/primitives/Label";
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import {
+  type StoredReviewKindDefaults,
+} from "@/lib/domain/reviews/review-config";
+import {
   isBuiltInReviewPersonaId,
   listBuiltInReviewPersonaTemplates,
   listReviewPersonaTemplates,
   type ReviewPersonaTemplate,
   type ReviewPersonalityPreference,
-  type StoredReviewKindDefaults,
-} from "@/lib/domain/reviews/review-config";
+} from "@/lib/domain/reviews/review-personas";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useCloudLaunchModelRegistries } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { buildAgentModelGroups } from "@/lib/domain/agents/model-options";

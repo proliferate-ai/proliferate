@@ -25,12 +25,14 @@ import { buildPluginSharedExposurePresentation } from "@/lib/domain/plugins/plug
 import {
   AGENT_AUTH_AGENT_ORDER,
   agentAuthAgentLabel,
+} from "@/lib/domain/agent-auth/agent-auth-agent-presentation";
+import {
   agentAuthCredentialAvailability,
   agentAuthCredentialKindLabel,
   credentialSelectableReason,
   credentialSummaryDetails,
   selectionByAgentKind,
-} from "@/lib/domain/agent-auth/agent-auth-presentation";
+} from "@/lib/domain/agent-auth/agent-auth-credential-presentation";
 
 export function SharedSandboxOverview({
   organizationId,

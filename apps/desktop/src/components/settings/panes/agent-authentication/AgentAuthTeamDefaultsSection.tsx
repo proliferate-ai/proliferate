@@ -18,6 +18,8 @@ import { agentAuthenticationCopy } from "@/copy/settings/agent-authentication-co
 import {
   AGENT_AUTH_AGENT_ORDER,
   agentAuthAgentLabel,
+} from "@/lib/domain/agent-auth/agent-auth-agent-presentation";
+import {
   agentAuthCredentialAvailability,
   agentAuthCredentialKindLabel,
   agentAuthCredentialStatusLabel,
@@ -26,7 +28,7 @@ import {
   credentialSummaryDetails,
   isProliferateManagedCreditsCredential,
   selectionByAgentKind,
-} from "@/lib/domain/agent-auth/agent-auth-presentation";
+} from "@/lib/domain/agent-auth/agent-auth-credential-presentation";
 
 interface AgentAuthTeamDefaultsSectionProps {
   selectedOrganizationName: string;

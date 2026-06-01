@@ -17,6 +17,8 @@ import { Select } from "@proliferate/ui/primitives/Select";
 import {
   AGENT_AUTH_AGENT_ORDER,
   agentAuthAgentLabel,
+} from "@/lib/domain/agent-auth/agent-auth-agent-presentation";
+import {
   agentAuthCredentialKindLabel,
   agentAuthCredentialStatusLabel,
   agentAuthCredentialStatusTone,
@@ -24,7 +26,7 @@ import {
   isAgentAuthCredentialVisibleForCapabilities,
   selectionByAgentKind,
   targetStateSummary,
-} from "@/lib/domain/agent-auth/agent-auth-presentation";
+} from "@/lib/domain/agent-auth/agent-auth-credential-presentation";
 import type {
   ComputeTargetDetail,
   ComputeTargetSummary,
