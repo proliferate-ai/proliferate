@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -596,6 +597,7 @@ async def test_delete_cloud_workspace_destroys_runtime_before_archiving(
     user_id = uuid4()
     workspace_id = uuid4()
     workspace = SimpleNamespace(id=workspace_id)
+    load_workspace = AsyncMock(return_value=workspace)
     calls: list[tuple[str, object]] = []
 
     async def _cloud_workspace_user_can_archive(_db, _user_id, _workspace_id):
@@ -605,15 +607,12 @@ async def test_delete_cloud_workspace_destroys_runtime_before_archiving(
         return workspace
 
     async def _revoke_claim_tokens_for_workspace(_workspace, *, reason: str) -> None:
-        assert _workspace is workspace
         calls.append(("revoke", reason))
 
     async def _destroy_workspace_runtime(_workspace) -> None:
-        assert _workspace is workspace
         calls.append(("destroy", _workspace.id))
 
     async def _delete_cloud_workspace_records_for_workspace(_db, _workspace) -> None:
-        assert _workspace is workspace
         calls.append(("archive", _workspace.id))
 
     monkeypatch.setattr(workspace_service, ARCHIVE_WITH_DB, _cloud_workspace_user_can_archive)
@@ -627,6 +626,7 @@ async def test_delete_cloud_workspace_destroys_runtime_before_archiving(
         "_destroy_workspace_runtime",
         _destroy_workspace_runtime,
     )
+    monkeypatch.setattr(workspace_service, "load_cloud_workspace_by_id", load_workspace)
     monkeypatch.setattr(
         workspace_service,
         "delete_cloud_workspace_records_for_workspace",

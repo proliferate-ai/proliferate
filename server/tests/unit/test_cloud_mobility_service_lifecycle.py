@@ -245,8 +245,8 @@ async def test_start_local_to_cloud_creates_handoff_before_provisioning(
     monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
     monkeypatch.setattr(mobility_service, "preflight_cloud_workspace_handoff", _preflight)
     monkeypatch.setattr(
-        mobility_service,
-        "create_cloud_workspace_handoff_op_for_user",
+        mobility_service.mobility_tx,
+        "create_cloud_workspace_handoff_op_checkpoint_tx",
         _create,
     )
     monkeypatch.setattr(
@@ -261,8 +261,8 @@ async def test_start_local_to_cloud_creates_handoff_before_provisioning(
     )
     monkeypatch.setattr(mobility_service, "start_cloud_workspace", _start_cloud_workspace)
     monkeypatch.setattr(
-        mobility_service,
-        "update_cloud_workspace_handoff_phase_checkpoint_for_user",
+        mobility_service.mobility_tx,
+        "update_cloud_workspace_handoff_phase_checkpoint_tx",
         _update_phase,
     )
 
@@ -314,8 +314,8 @@ async def test_start_cloud_to_local_creates_handoff_without_cloud_provisioning(
     monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
     monkeypatch.setattr(mobility_service, "preflight_cloud_workspace_handoff", _preflight)
     monkeypatch.setattr(
-        mobility_service,
-        "create_cloud_workspace_handoff_op_for_user",
+        mobility_service.mobility_tx,
+        "create_cloud_workspace_handoff_op_checkpoint_tx",
         _create,
     )
     monkeypatch.setattr(

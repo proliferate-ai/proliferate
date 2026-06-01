@@ -104,7 +104,7 @@ async def test_reconcile_segment_confirms_missing_list_state_before_marking_paus
     async def _mark_environment_unavailable(*args, **kwargs) -> None:
         marked.append((args, kwargs))
 
-    async def _load_cloud_sandbox_by_id(_sandbox_id):
+    async def _load_cloud_sandbox_by_id(_db, _sandbox_id):
         return sandbox
 
     monkeypatch.setattr(reconciler, "load_cloud_sandbox_by_id", _load_cloud_sandbox_by_id)

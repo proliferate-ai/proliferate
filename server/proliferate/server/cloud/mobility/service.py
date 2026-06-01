@@ -19,7 +19,6 @@ from proliferate.db.store.cloud_mobility import (
     all_cleanup_items_completed,
     backfill_cloud_workspace_mobility_for_workspace,
     complete_cloud_workspace_handoff_cleanup_for_user,
-    create_cloud_workspace_handoff_op_for_user,
     ensure_cloud_workspace_mobility_for_user,
     fail_cloud_workspace_handoff_op_checkpoint_for_user,
     fail_cloud_workspace_handoff_op_for_user,
@@ -33,7 +32,6 @@ from proliferate.db.store.cloud_mobility import (
     load_cloud_workspace_mobility_value,
     record_cloud_workspace_mobility_event_for_user,
     update_cleanup_item_status,
-    update_cloud_workspace_handoff_phase_checkpoint_for_user,
     update_cloud_workspace_handoff_phase_for_user,
 )
 from proliferate.db.store.cloud_mobility import (
@@ -52,6 +50,7 @@ from proliferate.db.store.cloud_workspaces import (
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
 from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.mobility import transactions as mobility_tx
 from proliferate.server.cloud.mobility.cleanup_executor import (
     SERVER_CLEANUP_ITEM_KINDS,
     cleanup_item_execution_rank,
@@ -613,8 +612,7 @@ async def start_cloud_workspace_handoff(
     source_owner = normalize_owner(workspace.owner)
     target_owner = target_owner_for_direction(direction)
     try:
-        handoff = await create_cloud_workspace_handoff_op_for_user(
-            db,
+        handoff = await mobility_tx.create_cloud_workspace_handoff_op_checkpoint_tx(
             user_id=user_id,
             mobility_workspace_id=mobility_workspace_id,
             direction=direction,
@@ -666,8 +664,7 @@ async def start_cloud_workspace_handoff(
                 else str(error) or "Workspace handoff start failed."
             )
             with suppress(ValueError):
-                await fail_cloud_workspace_handoff_op_checkpoint_for_user(
-                    db,
+                await mobility_tx.fail_cloud_workspace_handoff_op_checkpoint_tx(
                     user_id=user_id,
                     mobility_workspace_id=mobility_workspace_id,
                     handoff_op_id=handoff.id,
@@ -679,8 +676,7 @@ async def start_cloud_workspace_handoff(
                     last_error=visible_failure_last_error(failure_detail),
                 )
             raise
-        return await update_cloud_workspace_handoff_phase_checkpoint_for_user(
-            db,
+        return await mobility_tx.update_cloud_workspace_handoff_phase_checkpoint_tx(
             user_id=user_id,
             mobility_workspace_id=mobility_workspace_id,
             handoff_op_id=handoff.id,

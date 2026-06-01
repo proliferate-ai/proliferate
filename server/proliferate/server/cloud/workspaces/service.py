@@ -2377,9 +2377,12 @@ async def delete_cloud_workspace(
 ) -> None:
     workspace = await cloud_workspace_user_can_archive_with_db(db, user_id, workspace_id)
     await _revoke_claim_tokens_for_workspace(workspace, reason="workspace_deleted")
+    workspace_record_id = workspace.id
+    db.expunge(workspace)
     await _destroy_workspace_runtime(workspace)
     async with db_engine.async_session_factory() as delete_db, delete_db.begin():
-        await delete_cloud_workspace_records_for_workspace(delete_db, workspace)
+        if refreshed := await load_cloud_workspace_by_id(delete_db, workspace_record_id):
+            await delete_cloud_workspace_records_for_workspace(delete_db, refreshed)
 
 
 async def _revoke_claim_tokens_for_workspace(
@@ -2398,12 +2401,8 @@ async def _revoke_claim_tokens_for_workspace(
         )
 
 
-# ---------------------------------------------------------------------------
-# Runtime lifecycle orchestration
-# ---------------------------------------------------------------------------
 # These helpers own the interaction with the persisted sandbox provider
 # (pause / destroy) and delegate the persistence update to store.py primitives.
-# ---------------------------------------------------------------------------
 
 
 async def _stop_workspace_runtime(workspace: CloudWorkspace) -> None:

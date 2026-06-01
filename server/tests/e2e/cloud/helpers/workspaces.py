@@ -4,6 +4,7 @@ import asyncio
 import time
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
 import httpx
 import pytest
@@ -11,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
+from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_workspaces import (
@@ -308,9 +310,8 @@ async def force_delete_cloud_workspace_records(
     db_session: AsyncSession,
     workspace_id: str,
 ) -> None:
-    import uuid
-
-    workspace = await db_session.get(CloudWorkspace, uuid.UUID(workspace_id))
+    workspace_record_id = UUID(workspace_id)
+    workspace = await db_session.get(CloudWorkspace, workspace_record_id)
     if workspace is None:
         return
     await db_session.refresh(workspace)
@@ -321,7 +322,14 @@ async def force_delete_cloud_workspace_records(
             provider = get_sandbox_provider(sandbox.provider)
             with suppress(Exception):
                 await provider.destroy_sandbox(sandbox.external_sandbox_id)
-    await delete_cloud_workspace_records_for_workspace(workspace)
+    await _delete_cloud_workspace_records_in_transaction(workspace_record_id)
+
+
+async def _delete_cloud_workspace_records_in_transaction(workspace_id: UUID) -> None:
+    async with db_engine.async_session_factory() as delete_db, delete_db.begin():
+        workspace = await delete_db.get(CloudWorkspace, workspace_id)
+        if workspace is not None:
+            await delete_cloud_workspace_records_for_workspace(delete_db, workspace)
 
 
 async def cleanup_stale_provider_test_workspaces(
@@ -349,7 +357,7 @@ async def cleanup_stale_provider_test_workspaces(
             ):
                 with suppress(Exception):
                     await provider.destroy_sandbox(sandbox.external_sandbox_id)
-        await delete_cloud_workspace_records_for_workspace(workspace)
+        await _delete_cloud_workspace_records_in_transaction(workspace.id)
 
 
 async def provision_workspace_with_credentials(

@@ -14,6 +14,9 @@ class NoopDb(SimpleNamespace):
     def begin(self) -> object:
         return noop_async_context(self)
 
+    def expunge(self, _instance: object) -> None:
+        return None
+
 
 def patch_async_session_factory(monkeypatch, engine_module, db: NoopDb | None = None):  # type: ignore[no-untyped-def]
     db = db or NoopDb()

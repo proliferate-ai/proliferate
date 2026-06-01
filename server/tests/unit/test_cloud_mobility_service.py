@@ -462,8 +462,8 @@ async def test_start_handoff_maps_existing_workspace_conflict_to_409(
     monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
     monkeypatch.setattr(mobility_service, "preflight_cloud_workspace_handoff", _preflight)
     monkeypatch.setattr(
-        mobility_service,
-        "create_cloud_workspace_handoff_op_for_user",
+        mobility_service.mobility_tx,
+        "create_cloud_workspace_handoff_op_checkpoint_tx",
         _create,
     )
 
@@ -525,8 +525,8 @@ async def test_start_local_to_cloud_marks_handoff_failed_when_cloud_setup_fails(
     monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
     monkeypatch.setattr(mobility_service, "preflight_cloud_workspace_handoff", _preflight)
     monkeypatch.setattr(
-        mobility_service,
-        "create_cloud_workspace_handoff_op_for_user",
+        mobility_service.mobility_tx,
+        "create_cloud_workspace_handoff_op_checkpoint_tx",
         _create,
     )
     monkeypatch.setattr(
@@ -540,8 +540,8 @@ async def test_start_local_to_cloud_marks_handoff_failed_when_cloud_setup_fails(
         _ensure_cloud_workspace,
     )
     monkeypatch.setattr(
-        mobility_service,
-        "fail_cloud_workspace_handoff_op_checkpoint_for_user",
+        mobility_service.mobility_tx,
+        "fail_cloud_workspace_handoff_op_checkpoint_tx",
         _fail_handoff,
     )
     monkeypatch.setattr(

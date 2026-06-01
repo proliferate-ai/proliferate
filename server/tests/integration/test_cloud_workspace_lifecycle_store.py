@@ -376,15 +376,17 @@ async def test_stop_and_destroy_preserve_retry_state_after_provider_failure(
     async def _load_workspace_owned_runtime_sandbox(_workspace: CloudWorkspace):
         return sandbox
 
-    async def _update_sandbox_status(_sandbox: CloudSandbox, status: str, **_kwargs) -> None:
+    async def _update_sandbox_status(
+        _db: _NoopDb, _sandbox: CloudSandbox, status: str, **_kwargs
+    ) -> None:
         sandbox_statuses.append(status)
         _sandbox.status = status
 
-    async def _persist_workspace_stop_state(_workspace: CloudWorkspace) -> None:
+    async def _persist_workspace_stop_state(_db: _NoopDb, _workspace: CloudWorkspace) -> None:
         stopped.append(_workspace)
         await persist_workspace_stop(_NoopDb(), _workspace)
 
-    async def _persist_workspace_destroy_state(_workspace: CloudWorkspace) -> None:
+    async def _persist_workspace_destroy_state(_db: _NoopDb, _workspace: CloudWorkspace) -> None:
         destroyed.append(_workspace)
         await persist_workspace_destroy(_NoopDb(), _workspace)
 
@@ -435,5 +437,8 @@ async def test_stop_and_destroy_preserve_retry_state_after_provider_failure(
 
 
 class _NoopDb:
+    async def flush(self) -> None:
+        return None
+
     async def commit(self) -> None:
         return None

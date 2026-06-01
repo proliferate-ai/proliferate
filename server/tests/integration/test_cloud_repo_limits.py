@@ -157,6 +157,7 @@ async def test_archived_workspace_releases_cloud_repo_slot(
     assert workspace_for_archive is not None
     await delete_cloud_workspace_records(db_session, workspace_for_archive)
     assert workspace_for_archive.archived_at is not None
+    await db_session.commit()
 
     replacement = await _create_workspace(
         user_id=user_id,
