@@ -1,0 +1,228 @@
+# Env and Secrets Matrix
+
+This document is the operator-facing source of truth for the Proliferate
+control plane env surface.
+
+## Principles
+
+- `server/proliferate/config.py` contains env-derived runtime settings only.
+- Hardcoded protocol values, template names, ports, workdirs, and auth lifetime
+  defaults live in `server/proliferate/constants/**`.
+- Secrets must be provided explicitly through:
+  - `server/.env`
+  - `server/.env.local`
+  - container/task/service environment injection
+  - a deployment secret manager
+- There is intentionally no home-directory fallback such as
+  `~/proliferate/.env.local`.
+- Any variable not listed below should be treated as unsupported on this branch.
+  `Settings` ignores unknown env vars, so removed overrides fail closed by being
+  ignored rather than raising an error.
+
+## Environment Boundaries
+
+- `server/.env` and `server/.env.local` expose the full control-plane env
+  surface for local development, direct server runs, and operator debugging.
+- `server/deploy/.env.static` is the curated self-hosted production surface.
+  It includes the common operator settings; advanced overrides from this matrix
+  may still be added there manually when needed.
+- `server/infra/self-hosted-aws/template.yaml` promotes an even smaller subset
+  of those settings into CloudFormation parameters. Advanced defaults that are
+  not parameterized there intentionally stay on their code defaults unless you
+  customize the template or edit the generated `.env.static` on the host.
+
+## Core Runtime Settings
+
+| Variable | Secret | Required | Used for |
+| --- | --- | --- | --- |
+| `API_BASE_URL` | No | Recommended for public/proxied deployments | Canonical public API base URL used for absolute auth callback generation |
+| `DEBUG` | No | No | Debug mode flag |
+| `PROLIFERATE_TELEMETRY_MODE` | No | Yes for explicit telemetry routing | Telemetry runtime mode: `local_dev`, `self_managed`, or `hosted_product` |
+| `DATABASE_URL` | Yes | Yes | PostgreSQL connection |
+| `DATABASE_ECHO` | No | No | SQLAlchemy query echo/logging |
+| `CORS_ALLOW_ORIGINS` | No | Yes for browser/desktop API access | Allowed browser/webview origins |
+| `JWT_SECRET` | Yes | Yes | JWT signing and OAuth state signing |
+
+## Desktop Auth
+
+| Variable | Secret | Required | Used for |
+| --- | --- | --- | --- |
+| `GITHUB_OAUTH_CLIENT_ID` | Yes | Only when desktop GitHub sign-in is enabled | GitHub OAuth client ID |
+| `GITHUB_OAUTH_CLIENT_SECRET` | Yes | Only when desktop GitHub sign-in is enabled | GitHub OAuth client secret |
+
+The desktop redirect scheme, callback path, deep-link launch behavior, and auth
+token lifetimes now live in `server/proliferate/constants/auth.py`. They are
+code defaults on this branch, not env overrides.
+
+Desktop runtime overrides live in `~/.proliferate/config.json` (or the
+profile-specific `PROLIFERATE_DEV_HOME/config.json` in profile dev). The
+supported fields are:
+
+```json
+{
+  "apiBaseUrl": "https://api.company.com",
+  "telemetryDisabled": false
+}
+```
+
+## Auth and Token Lifetimes
+
+No env overrides are currently supported for token lifetimes or desktop PKCE
+timers on this branch. These values are defined in
+`server/proliferate/constants/auth.py`.
+
+## Observability and Messaging
+
+| Variable | Secret | Required | Used for |
+| --- | --- | --- | --- |
+| `CUSTOMERIO_SITE_ID` | Yes | No | Customer.io workspace/account messaging |
+| `CUSTOMERIO_API_KEY` | Yes | No | Customer.io API auth |
+| `CUSTOMERIO_APP_API_KEY` | Yes | No | Customer.io app API auth |
+| `CUSTOMERIO_FROM_EMAIL` | No | No | Customer.io sender email address |
+| `CUSTOMERIO_WELCOME_TRANSACTIONAL_MESSAGE_ID` | No | No | Customer.io transactional message ID for the desktop welcome email; blank disables the welcome email |
+| `FRONTEND_BASE_URL` | No | No | Frontend base URL for email links etc. |
+| `PROLIFERATE_ANONYMOUS_TELEMETRY_ENDPOINT` | No | No | First-party anonymous telemetry collector endpoint |
+| `PROLIFERATE_ANONYMOUS_TELEMETRY_DISABLED` | No | No | Disable server-side anonymous telemetry emission |
+| `RESEND_API_KEY` | Yes | No | Resend transactional email API key for organization invitations |
+| `RESEND_FROM_EMAIL` | No | No | Resend sender email address for organization invitations |
+| `SENTRY_DSN` | Yes | No | Server Sentry |
+| `SENTRY_ENVIRONMENT` | No | No | Server Sentry environment |
+| `SENTRY_RELEASE` | No | No | Server Sentry release |
+| `SENTRY_TRACES_SAMPLE_RATE` | No | No | Server Sentry tracing |
+| `SUPPORT_SLACK_WEBHOOK_URL` | Yes | No | Slack destination for support messages |
+| `SIGNUPS_SLACK_WEBHOOK_URL` | Yes | No | Internal Slack destination for desktop GitHub hosted-user signup notifications; sends user email, GitHub handle/id, name, and creation date |
+| `BILLING_POSITIVE_SLACK_WEBHOOK_URL` | Yes | No | Internal Slack destination for positive billing notifications; sends billing owner email, GitHub handle/id, name, creation date, workspace count, and org user count |
+| `BILLING_NEGATIVE_SLACK_WEBHOOK_URL` | Yes | No | Internal Slack destination for negative billing notifications; sends billing owner email, GitHub handle/id, name, creation date, workspace count, and org user count |
+
+## AI Magic
+
+| Variable | Secret | Required | Used for |
+| --- | --- | --- | --- |
+| `ANTHROPIC_API_KEY` | Yes | No | Session title generation |
+| `AI_MAGIC_SESSION_TITLE_MODEL` | No | No | Anthropic model name for session titles |
+
+Rate-limit thresholds (`SESSION_TITLE_RATE_LIMIT_REQUESTS`,
+`SESSION_TITLE_RATE_LIMIT_WINDOW_SECONDS`) and title length caps now live in
+`server/proliferate/constants/ai_magic.py`. They are not env-overridable.
+
+## Cloud Workspaces and Billing
+
+| Variable | Secret | Required | Used for |
+| --- | --- | --- | --- |
+| `CLOUD_SECRET_KEY` | Yes | Yes for cloud-enabled deployments | Control-plane signing for cloud flows |
+| `CLOUD_FREE_SANDBOX_HOURS` | No | No | Free-tier usage limit |
+| `CLOUD_FREE_REPO_LIMIT` | No | No | Free-tier active cloud repo limit |
+| `CLOUD_PAID_REPO_LIMIT` | No | No | Paid Cloud active repo limit |
+| `CLOUD_CONCURRENT_SANDBOX_LIMIT` | No | No | Concurrent sandbox limit |
+| `CLOUD_BILLING_MODE` | No | No | Billing mode (`off`, `observe`, `enforce`) |
+| `STRIPE_SECRET_KEY` | Yes | Future hosted billing only | Stripe API key for checkout, portal, price validation, and legacy usage export |
+| `STRIPE_WEBHOOK_SECRET` | Yes | When receiving Stripe billing webhooks | Stripe webhook signature verification |
+| `STRIPE_CLOUD_MONTHLY_PRICE_ID` | No | Future hosted billing only | Stripe $200 Cloud monthly price ID |
+| `STRIPE_SANDBOX_METER_ID` | No | Future hosted billing only | Stripe billing meter ID for sandbox usage |
+| `STRIPE_SANDBOX_METER_EVENT_NAME` | No | Future hosted billing only | Stripe billing meter event name for sandbox usage |
+| `STRIPE_SANDBOX_OVERAGE_PRICE_ID` | No | Future hosted billing only | Legacy Stripe metered 10-hour overage block price ID |
+| `STRIPE_REFILL_10H_PRICE_ID` | No | Future hosted billing only | Stripe one-time 10-hour refill price ID |
+| `STRIPE_CHECKOUT_SUCCESS_URL` | No | Future hosted billing only | Checkout success redirect URL |
+| `STRIPE_CHECKOUT_CANCEL_URL` | No | Future hosted billing only | Checkout cancellation redirect URL |
+| `STRIPE_CUSTOMER_PORTAL_RETURN_URL` | No | Future hosted billing only | Customer portal return URL |
+
+The billing reconciler interval (`BILLING_RECONCILE_INTERVAL_SECONDS`) now
+lives in `server/proliferate/constants/billing.py`. It is not env-overridable.
+
+## Agent LLM Gateway
+
+| Variable | Secret | Required | Used for |
+| --- | --- | --- | --- |
+| `AGENT_GATEWAY_ENABLED` | No | No | Enables Bifrost-backed managed LLM auth and BYOK policy provisioning |
+| `AGENT_GATEWAY_BIFROST_BASE_URL` | No | When gateway is enabled | Private Bifrost management API base URL for provider keys, virtual keys, and logs |
+| `AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL` | No | When gateway is enabled | Public Bifrost inference base URL written into managed sandbox auth config |
+| `AGENT_GATEWAY_BIFROST_ADMIN_TOKEN` | Yes | When Bifrost admin API is protected | Optional Bifrost management API bearer token; never sent to sandboxes |
+| `AGENT_GATEWAY_BIFROST_REQUEST_TIMEOUT_SECONDS` | No | No | Bifrost management API timeout |
+| `AGENT_GATEWAY_BIFROST_ISOLATION_VERIFIED` | No | BYOK with Bifrost | Operator proof flag that Bifrost virtual keys isolate BYOK credentials safely |
+| `AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY` | Yes | Managed credits via Anthropic-backed Bifrost | Proliferate-owned Anthropic provider key materialized into Bifrost |
+| `AGENT_GATEWAY_MANAGED_OPENAI_API_KEY` | Yes | Managed credits via OpenAI-backed Bifrost | Proliferate-owned OpenAI provider key materialized into Bifrost |
+| `AGENT_GATEWAY_MANAGED_GEMINI_API_KEY` | Yes | Managed credits via Gemini-backed Bifrost | Proliferate-owned Gemini provider key materialized into Bifrost |
+| `AGENT_GATEWAY_MANAGED_BEDROCK_REGION` | No | Managed credits via Bedrock-backed Bifrost | AWS Bedrock region for Proliferate-owned managed credits |
+| `AGENT_GATEWAY_MANAGED_BEDROCK_ROLE_ARN` | No | Managed credits via Bedrock-backed Bifrost | AWS Bedrock role ARN for Proliferate-owned managed credits |
+| `AGENT_GATEWAY_MANAGED_BEDROCK_EXTERNAL_ID` | Yes | No | Optional ExternalId for the managed-credit Bedrock role |
+| `AGENT_GATEWAY_MANAGED_BUDGET_FREE_USD` | No | Only for organization managed credits | Included organization managed-credit budget for free-plan organizations |
+| `AGENT_GATEWAY_MANAGED_BUDGET_PRO_USD` | No | Only for organization managed credits | Included organization managed-credit budget for Pro organizations |
+| `AGENT_GATEWAY_MANAGED_BUDGET_UNLIMITED_USD` | No | Only for organization managed credits | Included organization managed-credit budget for unlimited-plan organizations |
+| `AGENT_GATEWAY_USER_FREE_CREDIT_ENABLED` | No | No | Enables personal onboarding managed-credit grants for GitHub-linked users |
+| `AGENT_GATEWAY_USER_FREE_CREDIT_USD` | No | Only for personal managed credits | Personal free managed-credit amount |
+| `AGENT_GATEWAY_USER_FREE_CREDIT_PERIOD` | No | Only for personal managed credits | Free-credit period key mode: registration or monthly |
+| `AGENT_GATEWAY_MANAGED_CREDIT_AGENT_KINDS` | No | Only for managed credits | Comma-separated agent kinds eligible for Proliferate managed credits |
+| `AGENT_GATEWAY_MAX_REQUEST_BYTES` | No | No | Maximum gateway request body size |
+| `AGENT_GATEWAY_REQUEST_TIMEOUT_SECONDS` | No | No | Gateway request timeout for any remaining compatibility callers |
+| `AGENT_GATEWAY_BYOK_ENABLED` | No | No | Enables user/org provider credentials through Bifrost; hosted-cloud V1 leaves this disabled |
+| `AGENT_GATEWAY_ANTHROPIC_BYOK_ENABLED` | No | Only with `AGENT_GATEWAY_BYOK_ENABLED` | Enables Anthropic API key credentials through the gateway |
+| `AGENT_GATEWAY_OPENAI_BYOK_ENABLED` | No | Only with `AGENT_GATEWAY_BYOK_ENABLED` | Enables OpenAI API key credentials through the gateway |
+| `AGENT_GATEWAY_BEDROCK_BYOK_ENABLED` | No | Only with `AGENT_GATEWAY_BYOK_ENABLED` | Enables AWS Bedrock AssumeRole credentials through the gateway |
+| `AGENT_GATEWAY_GEMINI_BYOK_ENABLED` | No | Only with `AGENT_GATEWAY_BYOK_ENABLED` and Bifrost | Enables Gemini API key credentials through Bifrost |
+| `AGENT_GATEWAY_OPENAI_COMPATIBLE_BYOK_ENABLED` | No | Only with `AGENT_GATEWAY_BYOK_ENABLED` | Enables OpenAI-compatible provider credentials through the gateway |
+| `AGENT_GATEWAY_OPENCODE_ENABLED` | No | No | Enables the experimental OpenCode gateway route |
+| `AGENT_GATEWAY_RECONCILER_ENABLED` | No | No | Starts the background router reconciler and Bifrost usage importer |
+| `AGENT_GATEWAY_RECONCILER_INTERVAL_SECONDS` | No | No | Delay between reconciliation passes |
+| `AGENT_GATEWAY_RECONCILER_BATCH_SIZE` | No | No | Maximum unsynced, drifted, failed policy, budget, or usage rows checked by one reconciliation pass |
+
+## Cloud MCP
+
+| Variable | Secret | Required | Used for |
+| --- | --- | --- | --- |
+| `CLOUD_MCP_ENABLED` | No | No | Enables cloud-owned MCP catalog, connection, OAuth, and materialization APIs |
+| `CLOUD_MCP_OAUTH_CALLBACK_BASE_URL` | No | Required for public OAuth deployments unless `API_BASE_URL` is set | Public base URL used to build MCP OAuth callback URLs |
+| `CLOUD_MCP_SLACK_ENABLED` | No | No | Shows the Slack MCP connector when static Slack OAuth config is also present |
+| `CLOUD_MCP_SLACK_CLIENT_ID` | Yes | Only when Slack MCP is enabled for this deployment | Static Slack OAuth client ID |
+| `CLOUD_MCP_SLACK_CLIENT_SECRET` | Yes | Only when Slack MCP is enabled for this deployment | Static Slack OAuth client secret |
+| `CLOUD_MCP_SLACK_TOKEN_ENDPOINT_AUTH_METHOD` | No | No | Slack token endpoint auth method (`client_secret_post` or `client_secret_basic`) |
+| `CLOUD_MCP_GOOGLE_WORKSPACE_ENABLED` | No | No | Shows the local-only Gmail MCP connector |
+| `CLOUD_MCP_GOOGLE_WORKSPACE_OAUTH_CLIENT_ID` | No | Only when Gmail MCP is enabled for this deployment | Google Desktop OAuth client ID for local Gmail OAuth |
+| `CLOUD_MCP_GOOGLE_WORKSPACE_OAUTH_CLIENT_SECRET` | No | Only when Gmail MCP is enabled for this deployment | Google Desktop OAuth installed-app client secret passed to local Gmail OAuth setup; serialized to desktop catalog responses |
+
+Static OAuth MCP connectors are hidden from the catalog when their required
+deployment config is missing or their explicit connector enable flag is false.
+Gmail uses a Google restricted scope and must stay in test-user/dev mode until
+Google verification for the Proliferate OAuth app is accepted.
+The Google Desktop OAuth "client secret" is not a confidential server secret in
+this connector shape because the local MCP process must receive it to complete
+installed-app OAuth.
+
+## Sandbox Provider Settings
+
+| Variable | Secret | Required | Used for |
+| --- | --- | --- | --- |
+| `SANDBOX_PROVIDER` | No | Yes for cloud-enabled deployments | Selects `e2b` or `daytona` |
+| `E2B_API_KEY` | Yes | When `SANDBOX_PROVIDER=e2b` | E2B provisioning auth |
+| `E2B_TEMPLATE_NAME` | No | Required for non-debug E2B deployments | Explicit E2B template ref, typically `TEAM_SLUG/proliferate-runtime-cloud:production` |
+| `E2B_WEBHOOK_SIGNATURE_SECRET` | Yes | No | E2B webhook verification |
+| `DAYTONA_API_KEY` | Yes | When `SANDBOX_PROVIDER=daytona` | Daytona provisioning auth |
+| `DAYTONA_SERVER_URL` | No | No | Daytona API base URL |
+| `DAYTONA_TARGET` | No | No | Daytona target/region |
+
+Sandbox timeout defaults, runtime ports, workdirs, and target paths now live in
+`server/proliferate/constants/sandbox/e2b.py` and
+`server/proliferate/constants/sandbox/daytona.py`. They are code defaults, not
+env overrides.
+
+## Remote AnyHarness Injection
+
+| Variable | Secret | Required | Used for |
+| --- | --- | --- | --- |
+| `CLOUD_RUNTIME_SOURCE_BINARY_PATH` | No | No | Override path for the Linux AnyHarness binary uploaded into cloud sandboxes |
+| `CLOUD_WORKER_SOURCE_BINARY_PATH` | No | No | Override path for the Linux Proliferate Worker binary uploaded into cloud sandboxes |
+| `CLOUD_SUPERVISOR_SOURCE_BINARY_PATH` | No | No | Override path for the Linux Proliferate Supervisor binary uploaded into cloud sandboxes |
+| `CLOUD_RUNTIME_SENTRY_DSN` | Yes | No | Remote AnyHarness Sentry DSN |
+| `CLOUD_RUNTIME_SENTRY_ENVIRONMENT` | No | No | Remote AnyHarness Sentry environment |
+| `CLOUD_RUNTIME_SENTRY_RELEASE` | No | No | Remote AnyHarness Sentry release |
+| `CLOUD_RUNTIME_SENTRY_TRACES_SAMPLE_RATE` | No | No | Remote AnyHarness tracing |
+| `CLOUD_TARGET_SENTRY_DSN` | Yes | No | Remote target worker/supervisor Sentry DSN |
+| `CLOUD_TARGET_SENTRY_ENVIRONMENT` | No | No | Remote target worker/supervisor Sentry environment |
+| `CLOUD_TARGET_SENTRY_RELEASE` | No | No | Remote target worker/supervisor Sentry release |
+| `CLOUD_TARGET_SENTRY_TRACES_SAMPLE_RATE` | No | No | Remote target worker/supervisor tracing |
+
+## Legacy Compatibility
+
+There is no `E2B_RUNTIME_SENTRY_*` compatibility fallback on this branch.
+Operators should migrate any legacy runtime Sentry configuration to the
+`CLOUD_RUNTIME_*` variables above. The old `E2B_RUNTIME_SENTRY_*` names are not
+part of the supported env surface here.

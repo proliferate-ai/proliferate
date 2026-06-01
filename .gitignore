@@ -38,6 +38,8 @@ e2b-connection.json
 
 reference/
 references/
+!specs/developing/reference/
+!specs/developing/reference/**
 # Generated cloud client OpenAPI spec (intermediate artifact, regenerated from Python)
 server/openapi.json
 
