@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   getMobilityOverlayTitle,
   mobilityActionableCopy,
-  mobilityBlockerCopy,
   mobilityBranchSyncLoadingCopy,
   mobilityLocationLabel,
   mobilityReconnectCopy,
   mobilityStatusCopy,
 } from "@/lib/domain/workspaces/mobility/presentation";
+import { mobilityBlockerCopy } from "@/lib/domain/workspaces/mobility/mobility-blocker-presentation";
 
 describe("workspace mobility presentation", () => {
   it("maps workspace locations to labels and primary actions", () => {

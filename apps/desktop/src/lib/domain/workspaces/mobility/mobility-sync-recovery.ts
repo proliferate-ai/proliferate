@@ -1,4 +1,4 @@
-import { mobilityBlockerCopy } from "@/lib/domain/workspaces/mobility/presentation";
+import { mobilityBlockerCopy } from "@/lib/domain/workspaces/mobility/mobility-blocker-presentation";
 import type {
   WorkspaceMobilityBlockerCode,
   WorkspaceMobilityDirection,
