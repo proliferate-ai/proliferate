@@ -79,6 +79,10 @@ function writeGithubOutput(baseSha) {
   fs.appendFileSync(outputPath, `base_sha=${baseSha}\n`);
 }
 
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 async function resolveCandidateDeployHeadSha(candidate, artifactName, token) {
   if (!artifactName) {
     return candidate.head_sha || "";
@@ -121,6 +125,7 @@ async function main() {
   const maxPages = readPositiveIntegerEnv("DEPLOY_RUN_SCAN_MAX_PAGES", 20);
   let run;
   let exhausted = false;
+  const artifactLookupFailures = [];
   for (let page = 1; page <= maxPages && !run; page += 1) {
     const data = await listSuccessfulWorkflowRuns({
       workflow: parsed.workflow,
@@ -141,11 +146,24 @@ async function main() {
       ) {
         continue;
       }
-      const deployHeadSha = await resolveCandidateDeployHeadSha(
-        candidate,
-        parsed.requiredArtifact,
-        token
-      );
+      let deployHeadSha;
+      try {
+        deployHeadSha = await resolveCandidateDeployHeadSha(
+          candidate,
+          parsed.requiredArtifact,
+          token
+        );
+      } catch (error) {
+        const details = [
+          `run ${candidate.id}${candidate.html_url ? ` (${candidate.html_url})` : ""}`,
+          errorMessage(error),
+        ].join(": ");
+        artifactLookupFailures.push(details);
+        console.warn(
+          `Skipping candidate because its deploy artifact could not be verified: ${details}`
+        );
+        continue;
+      }
       if (!deployHeadSha || deployHeadSha === parsed.head) {
         continue;
       }
@@ -157,6 +175,21 @@ async function main() {
   if (!run && !exhausted) {
     throw new Error(
       `Deploy base scan reached DEPLOY_RUN_SCAN_MAX_PAGES=${maxPages} without finding a base.`
+    );
+  }
+
+  if (!run && artifactLookupFailures.length > 0) {
+    const examples = artifactLookupFailures
+      .slice(0, 5)
+      .map((failure) => `- ${failure}`)
+      .join("\n");
+    throw new Error(
+      [
+        `Unable to verify ${parsed.requiredArtifact} on ${artifactLookupFailures.length} candidate deploy run(s).`,
+        "Failing instead of falling back to an ancestor SHA, because that could under-detect deploy surfaces.",
+        "Retry the workflow or inspect GitHub Actions artifact API health.",
+        examples,
+      ].join("\n")
     );
   }
 

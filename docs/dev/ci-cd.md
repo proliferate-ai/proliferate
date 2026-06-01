@@ -242,6 +242,10 @@ ran, skipped lanes, verification results, and any follow-up needed.
 
 - Do not call a deploy successful while a selected lane is still running,
   waiting for approval, failed, or canceled.
+- If deploy-base resolution cannot verify a required deploy summary artifact
+  because the GitHub artifact API or artifact download fails, rerun the
+  workflow after GitHub recovers. The resolver fails closed in that case rather
+  than falling back to an ancestor SHA that could under-detect deploy surfaces.
 - If web fails on `vercel pull` or `vercel deploy` with an invalid token,
   refresh the `VERCEL_TOKEN` environment secret from a valid local or
   organization token; never paste the token in chat or docs.
