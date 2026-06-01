@@ -13,10 +13,8 @@ import type {
 import { pendingConfigChangeKey } from "@proliferate/product-domain/chats/cloud/composer-controls";
 import { cloudCommandReadiness } from "@proliferate/product-domain/workspaces/cloud-work-inventory";
 
-import {
-  prepareManagedWorkspaceForCloudCommands,
-  type UpdateSessionConfigPayload,
-} from "../../../lib/access/cloud/pending-home-prompt-dispatch";
+import { prepareManagedWorkspaceForCloudCommands } from "../../../lib/access/cloud/managed-workspace-command-readiness";
+import type { UpdateSessionConfigPayload } from "../../../lib/access/cloud/cloud-command-payloads";
 
 type EnqueueCommand<TPayload> = (
   command: CloudCommandEnvelope<TPayload>,

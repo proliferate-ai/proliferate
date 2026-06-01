@@ -21,24 +21,6 @@ import { applyPendingSessionConfigUpdates } from "./pending-home-prompt-session-
 import { enqueuePromptWithRetry } from "./pending-home-prompt-send";
 import { startSessionForPrompt } from "./pending-home-prompt-session-start";
 
-export type {
-  EnqueueCloudCommand,
-  PendingHomePromptDispatchResult,
-  SendPromptPayload,
-  StartSessionPayload,
-  UpdateSessionConfigPayload,
-} from "./cloud-command-payloads";
-export {
-  assertWorkspaceCanAcceptCloudCommands,
-  ensureManagedWorkspaceTargetConfigReady,
-  prepareManagedWorkspaceForCloudCommands,
-} from "./managed-workspace-command-readiness";
-export {
-  isRecoverableCloudDispatchError,
-  isRejectedCommandStatus,
-} from "./cloud-command-status";
-export { enqueuePromptCommandWithRetry } from "./pending-home-prompt-send";
-
 export async function dispatchPendingHomePrompt(args: {
   client: ProliferateCloudClient;
   workspace: CloudWorkspaceDetail;

@@ -29,12 +29,14 @@ import {
 import { removeRetryReplacedFailedPrompts } from "../../../lib/domain/chat/cloud-chat-prompt-projection";
 import {
   dispatchPendingHomePrompt,
-  enqueuePromptCommandWithRetry,
-  prepareManagedWorkspaceForCloudCommands,
-  type SendPromptPayload,
-  type StartSessionPayload,
-  type UpdateSessionConfigPayload,
 } from "../../../lib/access/cloud/pending-home-prompt-dispatch";
+import { enqueuePromptCommandWithRetry } from "../../../lib/access/cloud/pending-home-prompt-send";
+import { prepareManagedWorkspaceForCloudCommands } from "../../../lib/access/cloud/managed-workspace-command-readiness";
+import type {
+  SendPromptPayload,
+  StartSessionPayload,
+  UpdateSessionConfigPayload,
+} from "../../../lib/access/cloud/cloud-command-payloads";
 import {
   clearPendingHomePrompt,
   savePendingHomePrompt,

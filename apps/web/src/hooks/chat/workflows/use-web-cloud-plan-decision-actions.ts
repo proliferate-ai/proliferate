@@ -18,7 +18,7 @@ import {
   activePlanDecisionMatches,
   type ActivePlanDecision,
 } from "../../../lib/domain/chat/cloud-chat-plan-decision";
-import { prepareManagedWorkspaceForCloudCommands } from "../../../lib/access/cloud/pending-home-prompt-dispatch";
+import { prepareManagedWorkspaceForCloudCommands } from "../../../lib/access/cloud/managed-workspace-command-readiness";
 
 type DecidePlanPayload = {
   workspaceId: string;

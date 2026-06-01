@@ -1,10 +1,5 @@
-import { useState, type FormEvent } from "react";
+import type { FormEvent } from "react";
 
-import {
-  useCurrentTeam,
-  useCurrentTeamCheckout,
-  useTeamCheckoutActions,
-} from "@proliferate/cloud-sdk-react";
 import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
 import { SettingsCardRow } from "@proliferate/product-ui/settings/SettingsCardRow";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
@@ -12,38 +7,14 @@ import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 
-import { SettingsActionButton } from "./SettingsActionButton";
+import { useWebOrganizationSettings } from "../../../hooks/settings/facade/use-web-organization-settings";
 
 export function OrganizationSettingsSection() {
-  const currentTeam = useCurrentTeam();
-  const checkout = useCurrentTeamCheckout();
-  const checkoutActions = useTeamCheckoutActions();
-  const [teamName, setTeamName] = useState("");
-  const [inviteEmails, setInviteEmails] = useState("");
-  const [actionError, setActionError] = useState<string | null>(null);
+  const organization = useWebOrganizationSettings();
 
-  async function createTeam(event: FormEvent) {
+  function handleCreateTeam(event: FormEvent) {
     event.preventDefault();
-    setActionError(null);
-    try {
-      const response = await checkoutActions.createTeamCheckout({
-        teamName,
-        inviteEmails: inviteEmails
-          .split(",")
-          .map((email) => email.trim())
-          .filter(Boolean),
-      });
-      window.location.assign(response.url);
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Team checkout could not start.");
-    }
-  }
-
-  async function continueCheckout() {
-    const url = checkout.data?.intent?.checkoutUrl;
-    if (url) {
-      window.location.assign(url);
-    }
+    void organization.createTeam();
   }
 
   return (
@@ -52,52 +23,65 @@ export function OrganizationSettingsSection() {
         title="Organization"
         description="Create or join one team for shared work, members, invites, shared sandbox setup, and Team billing."
       />
-      {actionError ? (
+      {organization.actionError ? (
         <SettingsCard>
-          <SettingsCardRow label="Action failed" description={actionError} />
+          <SettingsCardRow label="Action failed" description={organization.actionError} />
         </SettingsCard>
       ) : null}
-      {checkout.data?.intent && !currentTeam.data ? (
+      {organization.pendingCheckoutIntent && !organization.currentTeam ? (
         <SettingsCard>
           <SettingsCardRow
-            label={checkout.data.intent.teamName}
+            label={organization.pendingCheckoutIntent.teamName}
             description="Team checkout is pending. Continue checkout or cancel setup."
           >
             <div className="flex gap-2">
-              <SettingsActionButton onClick={() => void continueCheckout()}>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={organization.continueCheckout}
+              >
                 Continue
-              </SettingsActionButton>
-              <SettingsActionButton
-                disabled={checkoutActions.cancelingTeamCheckout}
-                onClick={() => void checkoutActions.cancelTeamCheckout(checkout.data!.intent!.id)}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={organization.cancelingTeamCheckout}
+                onClick={organization.cancelCheckout}
               >
                 Cancel
-              </SettingsActionButton>
+              </Button>
             </div>
           </SettingsCardRow>
         </SettingsCard>
       ) : null}
       <SettingsCard>
-        {currentTeam.isLoading ? (
+        {organization.currentTeamLoading ? (
           <SettingsCardRow label="Organization" description="Loading team..." />
-        ) : currentTeam.isError ? (
+        ) : organization.currentTeamError ? (
           <SettingsCardRow
             label="Organization"
             description="Team could not be loaded."
           >
-            <SettingsActionButton onClick={() => void currentTeam.refetch()}>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={organization.retryCurrentTeam}
+            >
               Retry
-            </SettingsActionButton>
+            </Button>
           </SettingsCardRow>
-        ) : currentTeam.data ? (
+        ) : organization.currentTeam ? (
           <SettingsCardRow
-            label={currentTeam.data.name}
-            description={currentTeam.data.membership
-              ? `${membershipRoleLabel(currentTeam.data.membership.role)} - ${membershipStatusLabel(currentTeam.data.membership.status)}`
+            label={organization.currentTeam.name}
+            description={organization.currentTeam.membership
+              ? `${membershipRoleLabel(organization.currentTeam.membership.role)} - ${membershipStatusLabel(organization.currentTeam.membership.status)}`
               : "Current team"}
           >
-            <Badge tone={currentTeam.data.status === "active" ? "success" : "warning"}>
-              {currentTeam.data.status === "suspended" ? "Billing repair" : "Active"}
+            <Badge tone={organization.currentTeam.status === "active" ? "success" : "warning"}>
+              {organization.currentTeam.status === "suspended" ? "Billing repair" : "Active"}
             </Badge>
           </SettingsCardRow>
         ) : (
@@ -108,23 +92,23 @@ export function OrganizationSettingsSection() {
                 Create a team to invite people, manage shared work, and use org billing.
               </p>
             </div>
-            <form className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]" onSubmit={createTeam}>
+            <form className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]" onSubmit={handleCreateTeam}>
               <Input
                 className="min-h-9 rounded-md border border-border-light bg-background px-3 text-sm"
                 placeholder="Team name"
-                value={teamName}
-                onChange={(event) => setTeamName(event.currentTarget.value)}
+                value={organization.teamName}
+                onChange={(event) => organization.setTeamName(event.currentTarget.value)}
               />
               <Input
                 className="min-h-9 rounded-md border border-border-light bg-background px-3 text-sm"
                 placeholder="Invite emails, comma separated"
-                value={inviteEmails}
-                onChange={(event) => setInviteEmails(event.currentTarget.value)}
+                value={organization.inviteEmails}
+                onChange={(event) => organization.setInviteEmails(event.currentTarget.value)}
               />
               <Button
                 type="submit"
                 size="sm"
-                disabled={!teamName.trim() || checkoutActions.creatingTeamCheckout}
+                disabled={!organization.teamName.trim() || organization.creatingTeamCheckout}
               >
                 Create team
               </Button>

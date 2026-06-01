@@ -13,7 +13,7 @@ import {
 } from "@proliferate/product-domain/chats/cloud/composer-controls";
 
 import { shouldSuppressWorkspaceSessionRedirect } from "../../../lib/domain/chat/cloud-chat-session-model";
-import type { SendPromptPayload, StartSessionPayload, UpdateSessionConfigPayload } from "../../../lib/access/cloud/pending-home-prompt-dispatch";
+import type { SendPromptPayload, StartSessionPayload, UpdateSessionConfigPayload } from "../../../lib/access/cloud/cloud-command-payloads";
 import { loadPendingHomePrompt, type PendingHomePrompt } from "../../../lib/access/cloud/pending-home-prompt-store";
 import {
   loadWebCloudPromptIntents,

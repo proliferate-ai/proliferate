@@ -1,8 +1,7 @@
 import { SettingsCard } from "@proliferate/product-ui/settings/SettingsCard";
 import { SettingsCardRow } from "@proliferate/product-ui/settings/SettingsCardRow";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
-
-import { SettingsActionButton } from "./SettingsActionButton";
+import { Button } from "@proliferate/ui/primitives/Button";
 
 export function SupportSettingsSection({ onOpenSupport }: { onOpenSupport: () => void }) {
   return (
@@ -16,7 +15,14 @@ export function SupportSettingsSection({ onOpenSupport }: { onOpenSupport: () =>
           label="Product support"
           description="Send a support message with account and page context."
         >
-          <SettingsActionButton onClick={onOpenSupport}>Open support</SettingsActionButton>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={onOpenSupport}
+          >
+            Open support
+          </Button>
         </SettingsCardRow>
         <SettingsCardRow
           label="Support context"

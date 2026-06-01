@@ -13,7 +13,7 @@ import {
   removeSessionStorageValue,
   stringOrNull,
   writeSessionStorageValue,
-} from "./web-cloud-state-storage";
+} from "../../lib/access/browser/web-cloud-state-storage";
 
 export interface WebCloudSessionDraft {
   id: string;

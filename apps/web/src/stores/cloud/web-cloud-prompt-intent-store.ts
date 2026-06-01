@@ -5,7 +5,7 @@ import {
   removeSessionStorageValue,
   stringOrNull,
   writeSessionStorageValue,
-} from "./web-cloud-state-storage";
+} from "../../lib/access/browser/web-cloud-state-storage";
 
 export type WebCloudPromptIntentStatus = "sending" | "queued" | "failed";
 
