@@ -97,6 +97,14 @@ doc clarification needed to make the code alignment unambiguous.
   - Forbidden package imports across `product-domain`, `product-ui`,
     `product-surfaces`, `ui`, and `design`.
   - Large frontend files over the documented thresholds.
+- Report command:
+  - `python3 scripts/report_frontend_structure.py`
+  - The command is report-only by default and exits zero while the migration
+    inventory is still broad.
+  - `python3 scripts/report_frontend_structure.py --strict` is the future
+    opt-in enforcement mode once remaining violations are small and owned.
+  - The report skips tests, generated output, and declaration files so the
+    inventory tracks product source ownership drift.
 - Done when:
   - A local command prints a grouped violation inventory.
   - The report identifies existing violations without failing CI.
