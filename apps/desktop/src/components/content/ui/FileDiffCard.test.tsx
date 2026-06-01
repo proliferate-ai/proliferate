@@ -1,7 +1,8 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { FileChangesCard, FileDiffCard } from "./FileDiffCard";
+import { FileChangesCard } from "./FileChangesCard";
+import { FileDiffCard } from "./FileDiffCard";
 
 describe("FileChangesCard and FileDiffCard", () => {
   it("keeps aggregate headers clean and renders the sidebar-safe shared anatomy", () => {

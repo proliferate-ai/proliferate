@@ -9,18 +9,20 @@ import { DiffLineContent } from "@/components/content/ui/diff/DiffLineContent";
 import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { chainVerticalWheelScroll } from "@proliferate/ui/utils/scroll-chain";
-import type {
-  CollapsedContext,
-  DiffLine,
-  ParsedPatch,
-} from "@/lib/domain/files/diff-parser";
+import type { CollapsedContext, DiffLine, ParsedPatch } from "@/lib/domain/files/diff-parser";
+import {
+  getDiffLineIndex,
+  getDiffLineNumberColumnWidth,
+  getSplitAltLineNumber,
+  getSplitDiffRows,
+  getSplitEmptyLineType,
+  getSplitLineNumber,
+  getSplitLineNumberDigits,
+  getSplitLineType,
+  type SplitDiffRow,
+  type SplitSide,
+} from "@/lib/domain/files/diff-view-rows";
 import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
-
-type SplitDiffRow =
-  | { kind: "line"; key: string; oldLine: DiffLine | null; newLine: DiffLine | null }
-  | { kind: "collapsed"; key: string; section: CollapsedContext };
-
-type SplitSide = "old" | "new";
 
 const SPLIT_DIFF_PRE_STYLE = {
   color: "var(--diffs-fg)",
@@ -36,94 +38,6 @@ const SPLIT_DIFF_CODE_BASE_STYLE = {
   "--diffs-column-content-width": "360px",
   "--diffs-column-width": "360px",
 } as CSSProperties;
-
-function getSplitLineType(line: DiffLine): "context" | "change-addition" | "change-deletion" {
-  switch (line.type) {
-    case "added":
-      return "change-addition";
-    case "removed":
-      return "change-deletion";
-    case "context":
-      return "context";
-  }
-}
-
-function getSplitEmptyLineType(
-  peerLine: DiffLine | null,
-): "change-addition" | "change-deletion" | undefined {
-  if (!peerLine || peerLine.type === "context") {
-    return undefined;
-  }
-  return peerLine.type === "added" ? "change-addition" : "change-deletion";
-}
-
-function getSplitLineNumber(line: DiffLine, side: SplitSide): number | null {
-  return side === "old" ? line.oldLineNum : line.newLineNum;
-}
-
-function getSplitAltLineNumber(line: DiffLine, side: SplitSide): number | undefined {
-  if (line.type !== "context") {
-    return undefined;
-  }
-  return side === "old" ? line.newLineNum ?? undefined : line.oldLineNum ?? undefined;
-}
-
-function getSplitLineIndex(line: DiffLine): string {
-  return `${line.oldLineNum ?? ""},${line.newLineNum ?? ""}`;
-}
-
-function getSplitRows(
-  parsed: ParsedPatch,
-  expandedCollapsedKeys: Set<string>,
-): SplitDiffRow[] {
-  const rows: SplitDiffRow[] = [];
-
-  parsed.hunks.forEach((hunk, hunkIndex) => {
-    hunk.items.forEach((item, itemIndex) => {
-      const key = `${hunkIndex}-${itemIndex}`;
-      if ("kind" in item && item.kind === "collapsed") {
-        if (expandedCollapsedKeys.has(key)) {
-          item.lines.forEach((line) => {
-            rows.push({
-              kind: "line",
-              key: `${key}-${line.tokenIndex}`,
-              oldLine: line,
-              newLine: line,
-            });
-          });
-        } else {
-          rows.push({ kind: "collapsed", key, section: item });
-        }
-        return;
-      }
-
-      const line = item as DiffLine;
-      rows.push({
-        kind: "line",
-        key: `${key}-${line.tokenIndex}`,
-        oldLine: line.type === "added" ? null : line,
-        newLine: line.type === "removed" ? null : line,
-      });
-    });
-  });
-
-  return rows;
-}
-
-function getSplitLineNumberDigits(rows: SplitDiffRow[], side: SplitSide): number {
-  let maxLineNumber = 0;
-  for (const row of rows) {
-    if (row.kind !== "line") continue;
-    const line = side === "old" ? row.oldLine : row.newLine;
-    if (!line) continue;
-    maxLineNumber = Math.max(maxLineNumber, getSplitLineNumber(line, side) ?? 0);
-  }
-  return Math.max(String(maxLineNumber).length, 1);
-}
-
-function getDiffLineNumberColumnWidth(lineNumberDigits: number): string {
-  return `max(40px, calc(${lineNumberDigits}ch + 1.5rem))`;
-}
 
 function SplitEmptyCell({
   emptyLineType,
@@ -175,7 +89,7 @@ function SplitLineCells({
         data-gutter=""
         data-line-type={lineType}
         data-column-number={lineNumber ?? undefined}
-        data-line-index={getSplitLineIndex(line)}
+        data-line-index={getDiffLineIndex(line)}
         className="diff-gutter-cell sticky left-0 z-10 box-border flex min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] items-start justify-end bg-[var(--diffs-bg)] pr-2 pl-3 pt-[calc((var(--diffs-line-height)-1em)/2)] text-right tabular-nums"
       >
         <span data-line-number-content="">{lineNumber ?? ""}</span>
@@ -185,7 +99,7 @@ function SplitLineCells({
         data-line={lineNumber ?? undefined}
         data-alt-line={altLineNumber}
         data-line-type={lineType}
-        data-line-index={getSplitLineIndex(line)}
+        data-line-index={getDiffLineIndex(line)}
         className={`diff-content-cell relative min-h-[var(--diffs-line-height)] pr-3 pl-2 ${
           wrapLongLines
             ? "block min-w-0 whitespace-pre-wrap break-words py-[calc((var(--diffs-line-height)-1em)/2)]"
@@ -327,7 +241,7 @@ export function SplitDiffViewer({
     new Set(),
   );
   const rows = useMemo(
-    () => getSplitRows(parsed, expandedCollapsedKeys),
+    () => getSplitDiffRows(parsed, expandedCollapsedKeys),
     [parsed, expandedCollapsedKeys],
   );
   const rowCount = Math.max(rows.length, 1);

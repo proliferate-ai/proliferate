@@ -5,9 +5,9 @@ import { RefreshCw } from "@proliferate/ui/icons";
 import type { AgentModelGroup } from "@/lib/domain/agents/model-options";
 import {
   createStoredReviewKindDefaults,
-  type ReviewPersonaTemplate,
   type StoredReviewKindDefaults,
 } from "@/lib/domain/reviews/review-config";
+import type { ReviewPersonaTemplate } from "@/lib/domain/reviews/review-personas";
 import { ReviewDefaultOptionRows } from "./ReviewDefaultOptionRows";
 import { ReviewDefaultReviewerControls } from "./ReviewDefaultReviewerControls";
 
