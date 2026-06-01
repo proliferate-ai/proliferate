@@ -12,10 +12,10 @@ from proliferate.constants.slack import (
     SLACK_OUTBOUND_SOURCE_FAILED,
     SLACK_REPO_MODE_FIXED,
 )
+from proliferate.db.store import cloud_agent_run_config as run_config_store
 from proliferate.db.store import cloud_repo_config as repo_store
 from proliferate.db.store import cloud_workspaces
-from proliferate.db.store.cloud_agent_run_config import configs as run_config_store
-from proliferate.db.store.cloud_agent_run_config.configs import CloudAgentRunConfigRecord
+from proliferate.db.store.cloud_agent_run_config import CloudAgentRunConfigRecord
 from proliferate.db.store.cloud_slack import bot_configs as bot_config_store
 from proliferate.db.store.cloud_slack import connections as connection_store
 from proliferate.db.store.cloud_slack import outbound as outbound_store

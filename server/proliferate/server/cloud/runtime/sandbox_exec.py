@@ -9,7 +9,7 @@ from typing import Any
 from uuid import UUID
 
 from proliferate.integrations.sandbox import SandboxProvider, SandboxRuntimeContext
-from proliferate.server.cloud._logging import format_exception_message, log_cloud_event
+from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
 from proliferate.utils.time import duration_ms
 
 

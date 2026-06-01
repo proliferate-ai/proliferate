@@ -1167,9 +1167,9 @@ server/proliferate/db/store/cloud_mcp/connections.py
 server/proliferate/db/store/cloud_mcp/auth.py
   unchanged
 
-server/proliferate/db/store/cloud_skills/configured_items.py     (new)
+server/proliferate/db/store/cloud_skills.py                      (new)
 
-server/proliferate/db/store/cloud_plugins/configured_items.py    (new)
+server/proliferate/db/store/cloud_plugins.py                     (new)
 
 server/proliferate/db/store/cloud_runtime_config/revisions.py    (new)
 server/proliferate/db/store/cloud_runtime_config/current.py      (new)

@@ -38,9 +38,9 @@ from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.db.store.cloud_sync import worker_control as worker_control_store
 from proliferate.db.store.cloud_sync import worker_exposures as worker_exposures_store
 from proliferate.db.store.users import get_user_with_oauth_accounts_by_id
-from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.commands import service as command_service
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.events.models import (
     WorkerEventBatchRequest,
     WorkerEventBatchResponse,

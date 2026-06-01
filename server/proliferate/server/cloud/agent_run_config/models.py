@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from proliferate.db.store.cloud_agent_run_config.configs import (
+from proliferate.db.store.cloud_agent_run_config import (
     CloudAgentRunConfigDefaultRecord,
     CloudAgentRunConfigRecord,
 )
