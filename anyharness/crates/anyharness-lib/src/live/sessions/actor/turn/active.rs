@@ -14,9 +14,8 @@ use crate::live::sessions::actor::config::handle::handle_busy_config_command;
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
 use crate::live::sessions::actor::fork::handle::reject_busy_close_native_child_session;
 use crate::live::sessions::actor::interactions::cleanup::resolve_pending_interactions;
-use crate::live::sessions::actor::interactions::handle::{
-    handle_apply_plan_decision, handle_resolve_interaction,
-};
+use crate::live::sessions::actor::interactions::handle::handle_resolve_interaction;
+use crate::live::sessions::actor::interactions::plan_decisions::handle_apply_plan_decision;
 use crate::live::sessions::actor::notifications::dispatch::inject_runtime_event;
 use crate::live::sessions::actor::notifications::handle::handle_notification_with_resume_replay_filter;
 use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilter;
