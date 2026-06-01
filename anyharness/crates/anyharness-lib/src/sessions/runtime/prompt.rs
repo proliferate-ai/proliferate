@@ -6,9 +6,10 @@ use crate::live::sessions::{LiveSessionCommandError, PromptAcceptError, PromptAc
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::sessions::mcp_bindings::assembly::SESSION_RESTART_REQUIRED_DETAIL;
 use crate::sessions::model::PromptAttachmentState;
-use crate::sessions::prompt::{
-    capabilities_from_live_config, prepare_prompt, PromptPrepareContext, PromptProvenance,
-};
+use crate::sessions::prompt::capabilities::capabilities_from_live_config;
+use crate::sessions::prompt::prepare::prepare_prompt;
+use crate::sessions::prompt::provenance::PromptProvenance;
+use crate::sessions::prompt::PromptPrepareContext;
 
 use super::{
     SendPromptError, SendPromptOutcome, SessionLifecycleError, SessionRuntime, StartSessionError,

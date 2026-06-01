@@ -2,9 +2,9 @@ use anyharness_contract::v1::PromptInputBlock;
 
 use crate::live::sessions::{LiveSessionCommandError, QueueMutationError};
 use crate::sessions::model::{PromptAttachmentState, SessionRecord};
-use crate::sessions::prompt::{
-    capabilities_from_live_config, prepare_prompt, PromptPrepareContext,
-};
+use crate::sessions::prompt::capabilities::capabilities_from_live_config;
+use crate::sessions::prompt::prepare::prepare_prompt;
+use crate::sessions::prompt::PromptPrepareContext;
 
 use super::{PendingPromptMutationError, SessionLifecycleError, SessionRuntime};
 

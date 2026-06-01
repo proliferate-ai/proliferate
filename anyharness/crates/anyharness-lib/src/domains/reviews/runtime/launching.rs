@@ -12,7 +12,7 @@ use super::launch::{
 use super::ReviewRuntime;
 use crate::origin::OriginContext;
 use crate::sessions::model::SessionMcpBindingPolicy;
-use crate::sessions::prompt::PromptProvenance;
+use crate::sessions::prompt::provenance::PromptProvenance;
 
 impl ReviewRuntime {
     pub(super) fn spawn_launch_active_round(&self, run: ReviewRunRecord) {

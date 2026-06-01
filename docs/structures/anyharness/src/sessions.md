@@ -16,7 +16,9 @@ The sessions area has two layers:
 - durable session domain
   - `anyharness/crates/anyharness-lib/src/sessions/model.rs`
   - `anyharness/crates/anyharness-lib/src/sessions/store/**`
-  - `anyharness/crates/anyharness-lib/src/sessions/service.rs`
+  - `anyharness/crates/anyharness-lib/src/sessions/service/**`
+  - `anyharness/crates/anyharness-lib/src/sessions/prompt/**`
+  - `anyharness/crates/anyharness-lib/src/sessions/live_config/**`
   - `anyharness/crates/anyharness-lib/src/sessions/mcp_bindings/**`
   - `anyharness/crates/anyharness-lib/src/sessions/links/**`
 - live orchestration bridge
@@ -126,7 +128,7 @@ periods.
 
 ### Internal Prompt Provenance
 
-`PromptPayload` (`anyharness/crates/anyharness-lib/src/sessions/prompt.rs`)
+`PromptPayload` (`anyharness/crates/anyharness-lib/src/sessions/prompt/**`)
 can carry internal prompt provenance while it moves through the runtime.
 
 Current producers are internal only. Public prompt requests do not expose a
@@ -315,7 +317,7 @@ make the completed turn fail.
 ### Create
 
 `SessionService::create_session(...)`
-(`anyharness/crates/anyharness-lib/src/sessions/service.rs`)
+(`anyharness/crates/anyharness-lib/src/sessions/service/create.rs`)
 does the durable validation path.
 
 It:
@@ -419,8 +421,8 @@ The session domain owns:
 - the queue of pending config changes
 - normalized control metadata exposed back to clients
 
-`live_config.rs`
-(`anyharness/crates/anyharness-lib/src/sessions/live_config.rs`)
+`live_config/**`
+(`anyharness/crates/anyharness-lib/src/sessions/live_config/**`)
 is the normalization layer from ACP config options into the runtime-owned
 `SessionLiveConfigSnapshot` shape.
 
@@ -461,7 +463,7 @@ The runtime tries:
 
 That is why model configuration spans both:
 
-- `anyharness/crates/anyharness-lib/src/sessions/live_config.rs`
+- `anyharness/crates/anyharness-lib/src/sessions/live_config/**`
 - `anyharness/crates/anyharness-lib/src/live/sessions/actor/config/**`
 
 ## SSE and Event Flow
