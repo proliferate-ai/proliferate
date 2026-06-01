@@ -42,6 +42,37 @@ Required operator permissions:
   remain in GitHub or Apple systems; operators verify presence and failures,
   but do not copy secret values into docs or chat
 
+Configuration and secret locations:
+
+- `docs/dev/reference/env-vars.yaml` is the canonical variable catalog. Keep it
+  current when a deployment lane gains, removes, or renames an environment
+  variable.
+- GitHub `staging` and `Production` environments are the deploy-time source of
+  truth for workflow variables and secrets. Local `.env` files, dev profiles,
+  and shell exports are not production deploy configuration.
+- GitHub environment variables hold non-secret lane config and gates, including
+  `AWS_REGION`, `AWS_DEPLOY_ROLE_ARN`, `VERCEL_*`, `WEB_URL`, `API_*`,
+  `MOBILE_DEPLOY_ENABLED`, `EAS_*`, `DESKTOP_DEPLOY_ENABLED`,
+  `DESKTOP_DOWNLOADS_BASE_URL`, `WORKERS_DEPLOY_ENABLED`, E2B template refs,
+  and non-secret support tracker ids/labels/limits.
+- GitHub environment secrets hold deploy credentials used directly by Actions,
+  including `VERCEL_TOKEN`, `EXPO_TOKEN`, `E2B_API_KEY`, `E2B_ACCESS_TOKEN`,
+  `SUPPORT_GITHUB_APP_PRIVATE_KEY`, and `SUPPORT_LINEAR_API_KEY`.
+- Server deploys may copy GitHub environment secrets into AWS SSM SecureString
+  parameters for ECS runtime use, such as
+  `/proliferate/<environment>/support/github-app-private-key` and
+  `/proliferate/<environment>/support/linear-api-key`. Treat SSM as the runtime
+  destination and GitHub as the deploy orchestration source unless the workflow
+  says otherwise.
+- S3 buckets, CloudFront distributions, ECR repositories, ECS services, and IAM
+  roles live in AWS and are referenced by GitHub environment variables. Repair
+  the AWS resource or GitHub pointer explicitly; do not paper over a missing
+  resource with a local override.
+- Vercel project settings live in Vercel. GitHub only stores the deploy token
+  and project/team identifiers needed for the hosted workflow.
+- Expo/EAS and App Store Connect own mobile build credentials and submission
+  state. GitHub stores the token and profile names needed to start the lane.
+
 Operating invariants:
 
 - Deploy from an exact SHA on `main`; do not deploy a local branch or dirty
@@ -105,6 +136,9 @@ dry_run: false
 ```
 
 For a staging plan only, use `dry_run=true` and do not treat it as a deploy.
+Dry-run staging runs upload `deploy-plan-staging`, not
+`deploy-summary-staging`; deploy-base resolution and production's staging
+success check require the real deploy summary artifact.
 
 ### Production
 
@@ -121,15 +155,28 @@ dry_run: false
 Normal production flow:
 
 1. Confirm a successful `Deploy Staging` run exists for the exact `main` SHA.
+   The run must be a non-dry-run deploy with a `deploy-summary-staging`
+   artifact; a dry-run plan is not enough.
 2. Dispatch `Promote Production` with `require_staging_success=true`.
 3. Approve the GitHub `Production` environment gates as they appear.
 4. Watch every selected lane until completion.
 5. Verify the production surfaces that ran.
 
+The production GitHub environment currently exists as `Production`; workflow
+inputs and reusable workflow calls use `production`, and GitHub resolves that
+to the existing protected environment.
+
 Bypass `require_staging_success` only when explicitly directed. If bypassing
 staging, the agent must state that staging was bypassed and should watch the
 E2B lane closely because production will build and smoke the immutable template
 before moving the rolling production tag.
+
+If forcing `e2b` in production while `require_staging_success=true`, first
+force `e2b` in staging for the same SHA. Production uses `promote_only` in
+this mode and expects the immutable `sha-<shortsha>` template to already exist.
+Dry-run production promotes upload `deploy-plan-production`, not
+`deploy-summary-production`, and are excluded from future production
+deploy-base resolution.
 
 ### Surface Selection
 
@@ -147,8 +194,11 @@ force_surfaces=web      # deploy detected surfaces plus web
 
 If the intent is "only web" but the diff also detects mobile, server, E2B, or
 desktop, do not assume `force_surfaces=web` will suppress the other lanes.
-Temporarily use the relevant environment gate only when the operator explicitly
-wants a lane suppressed.
+Only mobile, desktop, and workers currently have environment gates. Setting
+`EAS_SUBMIT_ENABLED=false` skips TestFlight submission only; the mobile build
+can still run when `MOBILE_DEPLOY_ENABLED=true`. Server, web, and E2B do not
+have skip gates, so do not dispatch a mixed deploy when those detected lanes
+must not run.
 
 ### Verification
 
@@ -163,6 +213,12 @@ Web staging: curl -I https://staging.proliferate.com/
 
 Desktop stable updater:
 curl -fsS https://downloads.proliferate.com/desktop/stable/latest.json
+curl -fsS https://downloads.proliferate.com/desktop/stable/installers.json
+
+Desktop staging:
+Confirm the staging `deploy-desktop` lane completed its build/dry-run jobs and
+uploaded expected Actions artifacts. Staging does not publish the stable
+updater feed.
 
 Mobile/TestFlight:
 Confirm EAS submit finished for the exact build id produced by the build step,
@@ -528,8 +584,11 @@ Note:
   stable updater feed already advertises the same or newer desktop version.
   Bump the desktop version before making another updater release visible.
 - Publishing the GitHub Release does not make the updater live. The updater is
-  made live by the tag-push workflow's S3/CloudFront publish step. The GitHub
-  Release is the public release-notes and artifact archive surface.
+  made live only when `publish-updater` uploads manifests/assets and
+  invalidates CloudFront: automatically on `desktop-v*` tag pushes, or during
+  production promote when `_deploy-desktop.yml` calls `release-desktop.yml`
+  with `publish_updater=true`. The GitHub Release is the public release-notes
+  and artifact archive surface.
 - The release workflow is intentionally fail-closed now: manifest generation
   happens before S3 upload so a broken manifest does not leave a partial updater
   publish behind.
@@ -715,8 +774,10 @@ Trigger model:
 Deploy graph:
 
 1. Resolve base/head:
-   - staging diffs against the last successful `deploy-staging.yml` run
-   - production diffs against the last successful `promote-production.yml` run
+   - staging diffs against the last successful non-dry-run
+     `deploy-staging.yml` run with a `deploy-summary-staging` artifact
+   - production diffs against the last successful non-dry-run
+     `promote-production.yml` run with a `deploy-summary-production` artifact
 2. Detect changed surfaces:
    - `server`
    - `workers`
@@ -724,7 +785,8 @@ Deploy graph:
    - `web`
    - `mobile`
    - `desktop`
-   - `runtime`
+   - `runtime` as a detector-only advisory output for runtime-shaped changes;
+     hosted staging/production do not have a runtime deploy lane
 3. Deploy changed surfaces:
    - E2B builds immutable `sha-*` tags for staging, then moves the rolling
      `staging` tag after smoke
@@ -744,9 +806,10 @@ Deploy graph:
 Important: `force_surfaces` is additive. It forces listed surfaces to deploy in
 addition to any surfaces detected from the diff; it is not an "only these
 surfaces" filter. Do not use `force_surfaces=web` when the diff also detects
-mobile/E2B/server and the intent is web-only. Until an explicit
-`only_surfaces`/`skip_surfaces` input exists, use the per-lane environment
-gates to suppress unwanted lanes before dispatch.
+mobile/E2B/server and the intent is web-only. Only mobile, desktop, and workers
+currently have environment gates. Server, web, and E2B have no skip gate; until
+an explicit `only_surfaces`/`skip_surfaces` input exists, do not dispatch a
+deploy whose detected server/web/E2B lanes must not run.
 
 Required GitHub environment vars/secrets:
 
@@ -821,6 +884,19 @@ EAS_SUBMIT_ENABLED
 
 # desktop, when enabled
 DESKTOP_DEPLOY_ENABLED
+DESKTOP_DOWNLOADS_BASE_URL
+AWS_DESKTOP_RELEASE_ROLE_ARN
+DESKTOP_DOWNLOADS_S3_BUCKET
+DESKTOP_CLOUDFRONT_DISTRIBUTION_ID
+TAURI_SIGNING_PRIVATE_KEY
+TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+APPLE_CERTIFICATE
+APPLE_CERTIFICATE_PASSWORD
+APPLE_SIGNING_IDENTITY
+APPLE_API_ISSUER
+APPLE_API_KEY
+APPLE_API_KEY_PATH
+KEYCHAIN_PASSWORD
 ```
 
 For staging, the canonical values are expected to point at staging resources
@@ -895,12 +971,23 @@ EAS_BUILD_PROFILE=staging-testflight
 EAS_SUBMIT_PROFILE=staging
 EAS_SUBMIT_ENABLED=true
 WORKERS_DEPLOY_ENABLED=false
-DESKTOP_CHANNEL=beta
+DESKTOP_DEPLOY_ENABLED=<unset; defaults to false>
 ```
 
-The production GitHub environment currently exists as `Production`; the
-workflow input still uses `production`, which GitHub resolves to that existing
-environment. Production should keep `WORKERS_DEPLOY_ENABLED=false` until the
+Current hosted production inventory:
+
+```text
+GitHub environment: Production
+Web: https://web.proliferate.com
+API health: https://app.proliferate.com/api/health
+ECS cluster/service: proliferate-prod / proliferate-prod-server
+RDS instance: proliferate-prod
+E2B template: pablo-5391/proliferate-runtime-cloud:production
+Support reports bucket: proliferate-support-reports-prod
+Desktop downloads: https://downloads.proliferate.com/desktop/stable/
+```
+
+Production should keep `WORKERS_DEPLOY_ENABLED=false` until the
 hosted worker lane is canonical. `DESKTOP_DEPLOY_ENABLED=true` enables
 production promote to publish the desktop updater for SHAs that include a
 desktop version bump. Production mobile may be enabled with

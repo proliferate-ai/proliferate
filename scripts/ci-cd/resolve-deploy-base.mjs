@@ -6,10 +6,12 @@ function printUsage() {
   console.log(`Resolve the previous successful deploy SHA for an environment.
 
 Usage:
-  node scripts/ci-cd/resolve-deploy-base.mjs --workflow <workflow-file> --branch <branch> --head <sha> [--fallback <sha>]
+  node scripts/ci-cd/resolve-deploy-base.mjs --workflow <workflow-file> --branch <branch> --head <sha> [--fallback <sha>] [--required-artifact <name>]
 
 The script queries GitHub Actions for the latest successful run of the provided
 workflow on the given branch, excluding the current run and current head SHA.
+When --required-artifact is set, candidate runs must have that non-expired
+artifact. Deploy workflows use this to exclude plan-only dry-runs.
 It prints the resolved base SHA and writes base_sha to GITHUB_OUTPUT when set.
 `);
 }
@@ -20,6 +22,7 @@ function parseArgs(argv) {
     branch: "main",
     head: "",
     fallback: "",
+    requiredArtifact: "",
     help: false,
   };
 
@@ -40,6 +43,10 @@ function parseArgs(argv) {
         break;
       case "--fallback":
         parsed.fallback = argv[index + 1] || "";
+        index += 1;
+        break;
+      case "--required-artifact":
+        parsed.requiredArtifact = argv[index + 1] || "";
         index += 1;
         break;
       case "--help":
@@ -70,6 +77,19 @@ async function githubJson(path, token) {
     throw new Error(`GitHub API request failed (${response.status}): ${await response.text()}`);
   }
   return response.json();
+}
+
+async function runHasRequiredArtifact(runId, artifactName, token) {
+  if (!artifactName) {
+    return true;
+  }
+  const data = await githubJson(
+    `/actions/runs/${encodeURIComponent(runId)}/artifacts?per_page=100`,
+    token
+  );
+  return (data.artifacts || []).some((artifact) => {
+    return artifact.name === artifactName && artifact.expired !== true;
+  });
 }
 
 function fallbackSha(parsed) {
@@ -114,25 +134,39 @@ async function main() {
   }
 
   const currentRunId = process.env.GITHUB_RUN_ID || "";
-  const params = new URLSearchParams({
-    branch: parsed.branch,
-    status: "success",
-    per_page: "50",
-  });
-
   try {
-    const data = await githubJson(
-      `/actions/workflows/${encodeURIComponent(parsed.workflow)}/runs?${params.toString()}`,
-      token
-    );
-    const run = (data.workflow_runs || []).find((candidate) => {
-      return (
-        String(candidate.id) !== currentRunId &&
-        candidate.conclusion === "success" &&
-        candidate.head_sha &&
-        candidate.head_sha !== parsed.head
+    let run;
+    for (let page = 1; page <= 5 && !run; page += 1) {
+      const params = new URLSearchParams({
+        branch: parsed.branch,
+        status: "success",
+        per_page: "50",
+        page: String(page),
+      });
+      const data = await githubJson(
+        `/actions/workflows/${encodeURIComponent(parsed.workflow)}/runs?${params.toString()}`,
+        token
       );
-    });
+      const candidates = data.workflow_runs || [];
+      if (candidates.length === 0) {
+        break;
+      }
+      for (const candidate of candidates) {
+        if (
+          String(candidate.id) === currentRunId ||
+          candidate.conclusion !== "success" ||
+          !candidate.head_sha ||
+          candidate.head_sha === parsed.head
+        ) {
+          continue;
+        }
+        if (!(await runHasRequiredArtifact(candidate.id, parsed.requiredArtifact, token))) {
+          continue;
+        }
+        run = candidate;
+        break;
+      }
+    }
     const baseSha = run?.head_sha || fallbackSha(parsed);
     writeGithubOutput(baseSha);
     console.log(baseSha);

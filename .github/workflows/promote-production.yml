@@ -74,18 +74,28 @@ jobs:
         if: ${{ github.event.inputs.require_staging_success == 'true' }}
         run: |
           set -euo pipefail
-          count="$(
+          mapfile -t runs < <(
             gh run list \
               --workflow deploy-staging.yml \
               --commit "${{ steps.meta.outputs.head_sha }}" \
               --status success \
-              --json databaseId \
-              --jq 'length'
-          )"
-          if [[ "$count" == "0" ]]; then
-            echo "No successful Deploy Staging run found for ${{ steps.meta.outputs.head_sha }}." >&2
-            exit 1
-          fi
+              --limit 20 \
+              --json databaseId,url \
+              --jq '.[] | [.databaseId, .url] | @tsv'
+          )
+          for run in "${runs[@]}"; do
+            IFS=$'\t' read -r run_id url <<< "$run"
+            artifact_count="$(
+              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" \
+                --jq '[.artifacts[] | select(.name == "deploy-summary-staging" and .expired == false)] | length'
+            )"
+            if [[ "$artifact_count" != "0" ]]; then
+              echo "Found successful non-dry-run Deploy Staging run for ${{ steps.meta.outputs.head_sha }}: $url"
+              exit 0
+            fi
+          done
+          echo "No successful non-dry-run Deploy Staging run found for ${{ steps.meta.outputs.head_sha }}." >&2
+          exit 1
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -97,6 +107,7 @@ jobs:
           --branch main
           --head "${{ steps.meta.outputs.head_sha }}"
           --fallback "${{ steps.meta.outputs.fallback_sha }}"
+          --required-artifact deploy-summary-production
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
@@ -229,5 +240,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: deploy-summary-production
+          name: ${{ needs.plan.outputs.dry_run == 'true' && 'deploy-plan-production' || 'deploy-summary-production' }}
           path: deploy-summary/production.json
