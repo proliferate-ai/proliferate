@@ -1,7 +1,6 @@
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { compareChatLaunchKinds } from "@/config/chat-launch";
 import { useWorkspaceBootstrapCache } from "@/hooks/access/anyharness/workspaces/use-workspace-bootstrap-cache";
 import { useCloudAgentCatalogCache } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
@@ -13,7 +12,6 @@ import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-sessi
 import { useSessionSelectionActions } from "@/hooks/sessions/facade/use-session-selection-actions";
 import { selectSessionWithShellIntentRollback } from "@/hooks/sessions/workflows/session-shell-selection";
 import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
-import { resolveStatusFromExecutionSummary } from "@proliferate/product-domain/sessions/activity";
 import {
   choosePreferredWorkspaceSession,
 } from "@/lib/domain/workspaces/selection/selection";
@@ -22,10 +20,8 @@ import { resolveEffectiveLaunchSelection } from "@/lib/domain/chat/models/model-
 import { hasHiddenDismissedWorkspaceSessions } from "@/lib/domain/workspaces/selection/selection";
 import {
   mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents,
-  type DesktopAgentLaunchAgent,
 } from "@/lib/domain/agents/cloud-launch-catalog";
 import { getAgentLaunchOptions } from "@/lib/access/anyharness/agents";
-import { filterTargetReadyLaunchAgents } from "@/lib/domain/agents/target-ready-launch-agents";
 import {
   elapsedMs,
   logLatency,
@@ -44,7 +40,6 @@ import { getMeasurementRequestOptions } from "@/lib/infra/measurement/debug-meas
 import { hashMeasurementScope } from "@/lib/infra/measurement/debug-measurement-env";
 import type {
   MeasurementFinishReason,
-  MeasurementOperationId,
 } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import {
@@ -54,19 +49,25 @@ import {
 import {
   getSessionRecord,
   patchSessionRecord,
-  removeSessionRecord,
 } from "@/stores/sessions/session-records";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
-import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
 import { markWorkspaceBootstrappedInSession } from "@/hooks/workspaces/lifecycle/workspace-bootstrap-memory";
+import { useDeferredWorkspaceFileTreePrefetch } from "@/hooks/workspaces/lifecycle/files/use-deferred-workspace-file-tree-prefetch";
+import { useHotWorkspaceReconcileAction } from "@/hooks/workspaces/workflows/use-hot-workspace-reconcile-action";
 import {
   resolveActiveProjectedSessionForPendingWorkspace,
 } from "@/hooks/workspaces/workflows/pending-workspace-projected-session";
-import { writeChatShellIntentForEmptySurface } from "@/hooks/workspaces/workflows/tabs/workspace-shell-intent-writer";
+import {
+  clearInvalidOptimisticActiveSession,
+  findLoadedSessionForClientSession,
+} from "@/hooks/workspaces/workflows/workspace-bootstrap-session-state";
+import {
+  orderBootstrapLaunchAgents,
+  resolveLastViewedSessionForWorkspace,
+} from "@/lib/domain/workspaces/selection/workspace-bootstrap-selection";
 import {
   isOptimisticWorkspaceSessionPlaceholder,
 } from "@/lib/domain/workspaces/selection/optimistic-session-shell";
-import { buildLocalSlotLogicalWorkspaceId } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
 
 interface BootstrapWorkspaceInput {
   workspaceId: string;
@@ -78,83 +79,8 @@ interface BootstrapWorkspaceInput {
   isCurrent: () => boolean;
 }
 
-interface ReconcileHotWorkspaceInput {
-  workspaceId: string;
-  logicalWorkspaceId: string;
-  runtimeUrl: string;
-  workspaceConnection: AnyHarnessResolvedConnection;
-  sessionId: string;
-  selectionNonce: number;
-  latencyFlowId?: string | null;
-  isCurrent: () => boolean;
-}
-
 const EMPTY_WORKSPACES = [] as const;
 const WORKSPACE_BOOTSTRAP_SESSION_LIST_TIMEOUT_MS = 8_000;
-const WORKSPACE_RECONCILE_SESSION_LIST_TIMEOUT_MS = 3_000;
-
-function findLoadedSessionForClientSession(
-  clientSessionId: string,
-  sessions: readonly WorkspaceSession[],
-): WorkspaceSession | null {
-  const record = getSessionRecord(clientSessionId);
-  const materializedSessionId = record?.materializedSessionId ?? clientSessionId;
-  return sessions.find((session) =>
-    session.id === materializedSessionId || session.id === clientSessionId
-  ) ?? null;
-}
-
-function clearInvalidOptimisticActiveSession(input: {
-  workspaceId: string;
-  logicalWorkspaceId: string;
-}): boolean {
-  const activeSessionId = useSessionSelectionStore.getState().activeSessionId;
-  const activeSession = activeSessionId ? getSessionRecord(activeSessionId) : null;
-  if (
-    !activeSessionId
-    || activeSession?.workspaceId !== input.workspaceId
-    || !isOptimisticWorkspaceSessionPlaceholder(activeSession)
-  ) {
-    return false;
-  }
-
-  removeSessionRecord(activeSessionId);
-  useSessionSelectionStore.getState().setActiveSessionId(null);
-  writeChatShellIntentForEmptySurface({
-    workspaceId: input.workspaceId,
-    shellWorkspaceId: input.logicalWorkspaceId,
-    invalidateSessionIntent: false,
-  });
-  logLatency("workspace.select.optimistic_session_invalidated", {
-    workspaceId: input.workspaceId,
-    logicalWorkspaceId: input.logicalWorkspaceId,
-    sessionId: activeSessionId,
-  });
-  return true;
-}
-
-function resolveLastViewedSessionForWorkspace(
-  lastViewedSessionByWorkspace: Record<string, string>,
-  logicalWorkspaceId: string,
-  workspaceId: string,
-): { sessionId: string | null; sourceKey: string | null } {
-  for (const key of [
-    logicalWorkspaceId,
-    workspaceId,
-    buildLocalSlotLogicalWorkspaceId(workspaceId),
-  ]) {
-    if (Object.prototype.hasOwnProperty.call(lastViewedSessionByWorkspace, key)) {
-      return {
-        sessionId: lastViewedSessionByWorkspace[key] ?? null,
-        sourceKey: key,
-      };
-    }
-  }
-  return {
-    sessionId: null,
-    sourceKey: null,
-  };
-}
 
 export function useWorkspaceBootstrapActions() {
   const {
@@ -181,65 +107,20 @@ export function useWorkspaceBootstrapActions() {
   const { rehydrateSessionSlotFromHistory } = useSessionHistoryHydration();
   const { applySessionSummary } = useSessionSummaryActions();
   const { selectSession } = useSessionSelectionActions();
-  const cancelDeferredFileTreePrefetchRef = useRef<(() => void) | null>(null);
-
-  const cancelDeferredFileTreePrefetch = useCallback(() => {
-    cancelDeferredFileTreePrefetchRef.current?.();
-    cancelDeferredFileTreePrefetchRef.current = null;
-  }, []);
-
-  const scheduleDeferredFileTreePrefetch = useCallback((input: {
-    workspaceId: string;
-    materializedWorkspaceId: string;
-    anyharnessWorkspaceId: string;
-    runtimeUrl: string;
-    treeStateKey: string;
-    authToken?: string | null;
-    measurementOperationId: MeasurementOperationId | null;
-    startedAt: number;
-    isCurrent: () => boolean;
-  }) => {
-    cancelDeferredFileTreePrefetch();
-    let cancel: (() => void) | null = null;
-    cancel = scheduleAfterNextPaint(() => {
-      if (cancelDeferredFileTreePrefetchRef.current !== cancel) {
-        return;
-      }
-      cancelDeferredFileTreePrefetchRef.current = null;
-      if (!input.isCurrent()) {
-        return;
-      }
-      void prefetchWorkspaceDirectories({
-        materializedWorkspaceId: input.materializedWorkspaceId,
-        anyharnessWorkspaceId: input.anyharnessWorkspaceId,
-        runtimeUrl: input.runtimeUrl,
-        treeStateKey: input.treeStateKey,
-        authToken: input.authToken,
-        isCurrent: input.isCurrent,
-      }).then(() => {
-        recordMeasurementWorkflowStep({
-          operationId: input.measurementOperationId,
-          step: "workspace.bootstrap.file_tree_init",
-          startedAt: input.startedAt,
-        });
-        logLatency("workspace.select.file_tree_prefetched", {
-          workspaceId: input.workspaceId,
-          elapsedMs: elapsedMs(input.startedAt),
-        });
-      }).catch(() => {
-        recordMeasurementWorkflowStep({
-          operationId: input.measurementOperationId,
-          step: "workspace.bootstrap.file_tree_init",
-          startedAt: input.startedAt,
-          outcome: "error_sanitized",
-        });
-      });
-    });
-    cancelDeferredFileTreePrefetchRef.current = cancel;
-  }, [
+  const {
     cancelDeferredFileTreePrefetch,
+    scheduleDeferredFileTreePrefetch,
+  } = useDeferredWorkspaceFileTreePrefetch({
     prefetchWorkspaceDirectories,
-  ]);
+  });
+  const reconcileHotWorkspace = useHotWorkspaceReconcileAction({
+    cancelDeferredFileTreePrefetch,
+    loadWorkspaceSessions,
+    prepareFileWorkspace,
+    rehydrateSessionSlotFromHistory,
+    scheduleDeferredFileTreePrefetch,
+    workspaceCollections,
+  });
 
   const bootstrapWorkspace = useCallback(async ({
     workspaceId,
@@ -491,7 +372,7 @@ export function useWorkspaceBootstrapActions() {
         return { sessions };
       }
 
-      const launchAgents = orderLaunchAgents(
+      const launchAgents = orderBootstrapLaunchAgents(
         mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
           launchCatalog?.agents ?? [],
           runtimeLaunchOptions?.agents ?? null,
@@ -678,222 +559,6 @@ export function useWorkspaceBootstrapActions() {
 
   return {
     bootstrapWorkspace,
-    reconcileHotWorkspace: useCallback(async ({
-      workspaceId,
-      logicalWorkspaceId,
-      runtimeUrl,
-      workspaceConnection,
-      sessionId,
-      latencyFlowId,
-      isCurrent,
-    }: ReconcileHotWorkspaceInput): Promise<"completed" | "stale" | "session_missing"> => {
-      if (!isCurrent()) {
-        return "stale";
-      }
-
-      const measurementOperationId = startMeasurementOperation({
-        kind: "workspace_background_reconcile",
-        surfaces: [
-          "workspace-shell",
-          "workspace-sidebar",
-          "global-header",
-          "header-tabs",
-          "chat-surface",
-          "session-transcript-pane",
-          "transcript-list",
-          "file-tree",
-        ],
-        linkedLatencyFlowId: latencyFlowId ?? undefined,
-        maxDurationMs: 30_000,
-      });
-      const unbindMeasurementCategories = measurementOperationId
-        ? bindMeasurementCategories({
-          operationId: measurementOperationId,
-          categories: [
-            "session.list",
-            "session.get",
-            "session.events.list",
-            "session.resume",
-            "session.stream",
-            "file.list",
-            "git.status",
-            "workspace.session_launch",
-            "workspace.setup_status",
-          ],
-          scope: {
-            runtimeUrlHash: hashMeasurementScope(workspaceConnection.runtimeUrl),
-          },
-          ttlMs: 30_000,
-        })
-        : () => undefined;
-      let finishReason: MeasurementFinishReason = "completed";
-      cancelDeferredFileTreePrefetch();
-
-      try {
-        const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
-        const workspace = workspaces.find((entry) => entry.id === workspaceId);
-        const treeStateKey = workspace
-          ? workspaceFileTreeStateKey(workspace)
-          : workspaceId;
-        const requestHeaders = getLatencyFlowRequestHeaders(latencyFlowId) ?? undefined;
-        const sessionRequestOptions = getMeasurementRequestOptions({
-          operationId: measurementOperationId,
-          category: "session.list",
-          headers: requestHeaders,
-        });
-        const sessionsStartedAt = startLatencyTimer();
-        const sessions = await loadWorkspaceSessions({
-          runtimeUrl,
-          workspaceConnection,
-          workspaceId,
-          requestOptions: sessionRequestOptions ?? undefined,
-          forceRefresh: true,
-          timeoutMs: WORKSPACE_RECONCILE_SESSION_LIST_TIMEOUT_MS,
-        });
-        recordMeasurementWorkflowStep({
-          operationId: measurementOperationId,
-          step: "workspace.bootstrap.sessions",
-          startedAt: sessionsStartedAt,
-          count: sessions.length,
-        });
-        if (!isCurrent()) {
-          return "stale";
-        }
-
-        const sessionMeta = sessions.find((session) =>
-          session.id === sessionId && !session.dismissedAt
-        ) ?? null;
-        if (!sessionMeta) {
-          return "session_missing";
-        }
-
-        const currentSlot = getSessionRecord(sessionId);
-        if (!currentSlot) {
-          return "session_missing";
-        }
-        const storeStartedAt = performance.now();
-        patchSessionRecord(sessionId, {
-          workspaceId,
-          agentKind: sessionMeta.agentKind ?? currentSlot.agentKind,
-          modelId: sessionMeta.modelId ?? currentSlot.modelId ?? null,
-          requestedModelId:
-            sessionMeta.requestedModelId
-            ?? sessionMeta.modelId
-            ?? currentSlot.requestedModelId
-            ?? null,
-          modeId: sessionMeta.modeId ?? currentSlot.modeId ?? null,
-          title: sessionMeta.title ?? currentSlot.title ?? null,
-          liveConfig: sessionMeta.liveConfig ?? currentSlot.liveConfig ?? null,
-          executionSummary: sessionMeta.executionSummary ?? currentSlot.executionSummary ?? null,
-          mcpBindingSummaries: sessionMeta.mcpBindingSummaries ?? currentSlot.mcpBindingSummaries ?? null,
-          status: resolveStatusFromExecutionSummary(
-            sessionMeta.executionSummary ?? currentSlot.executionSummary ?? null,
-            sessionMeta.status ?? currentSlot.status,
-          ),
-          lastPromptAt: sessionMeta.lastPromptAt ?? currentSlot.lastPromptAt ?? null,
-        });
-        recordMeasurementMetric({
-          type: "store",
-          category: "session.list",
-          operationId: measurementOperationId ?? undefined,
-          durationMs: performance.now() - storeStartedAt,
-        });
-
-        const initStartedAt = startLatencyTimer();
-        const fileWorkspaceArgs = {
-          workspaceUiKey: logicalWorkspaceId ?? workspaceId,
-          materializedWorkspaceId: workspaceId,
-          anyharnessWorkspaceId: workspaceConnection.anyharnessWorkspaceId,
-          runtimeUrl: workspaceConnection.runtimeUrl,
-          treeStateKey,
-          authToken: workspaceConnection.authToken ?? undefined,
-        };
-        prepareFileWorkspace(fileWorkspaceArgs);
-        recordMeasurementWorkflowStep({
-          operationId: measurementOperationId,
-          step: "workspace.bootstrap.file_tree_init",
-          startedAt: initStartedAt,
-        });
-        if (!isCurrent()) {
-          return "stale";
-        }
-        scheduleDeferredFileTreePrefetch({
-          workspaceId,
-          materializedWorkspaceId: workspaceId,
-          anyharnessWorkspaceId: workspaceConnection.anyharnessWorkspaceId,
-          runtimeUrl: workspaceConnection.runtimeUrl,
-          treeStateKey,
-          authToken: workspaceConnection.authToken ?? undefined,
-          measurementOperationId,
-          startedAt: initStartedAt,
-          isCurrent,
-        });
-
-        const slotBeforeHydrate = getSessionRecord(sessionId);
-        const lastSeq = slotBeforeHydrate?.transcript.lastSeq ?? 0;
-        const hydrateStartedAt = startLatencyTimer();
-        const tailHydrated = await rehydrateSessionSlotFromHistory(sessionId, {
-          afterSeq: lastSeq,
-          requestHeaders,
-          measurementOperationId,
-          isCurrent,
-        });
-        if (!isCurrent()) {
-          return "stale";
-        }
-        if (!tailHydrated) {
-          await rehydrateSessionSlotFromHistory(sessionId, {
-            replace: true,
-            requestHeaders,
-            measurementOperationId,
-            isCurrent,
-          });
-        }
-        if (!isCurrent()) {
-          return "stale";
-        }
-        patchSessionRecord(sessionId, { transcriptHydrated: true });
-        recordMeasurementWorkflowStep({
-          operationId: measurementOperationId,
-          step: "session.select.history_hydrate",
-          startedAt: hydrateStartedAt,
-        });
-
-        markWorkspaceBootstrappedInSession(workspaceId);
-        markWorkspaceBootstrappedInSession(logicalWorkspaceId);
-        return "completed";
-      } catch (error) {
-        if (import.meta.env.DEV) {
-          console.debug("[workspace-bootstrap] hot reconcile failed", error);
-        }
-        finishReason = "error_sanitized";
-        return "stale";
-      } finally {
-        unbindMeasurementCategories();
-        finishOrCancelMeasurementOperation(measurementOperationId, finishReason);
-      }
-    }, [
-      cancelDeferredFileTreePrefetch,
-      loadWorkspaceSessions,
-      prepareFileWorkspace,
-      rehydrateSessionSlotFromHistory,
-      scheduleDeferredFileTreePrefetch,
-      workspaceCollections,
-    ]),
+    reconcileHotWorkspace,
   };
-}
-
-function orderLaunchAgents(
-  agents: readonly DesktopAgentLaunchAgent[],
-  agentsByKind: ReadonlyMap<string, { readiness: string }>,
-): DesktopAgentLaunchAgent[] {
-  return filterTargetReadyLaunchAgents(agents, agentsByKind)
-    .sort((left, right) =>
-      compareChatLaunchKinds(
-        left.kind,
-        right.kind,
-        left.displayName,
-        right.displayName,
-      )
-    );
 }
