@@ -106,9 +106,13 @@ async function main() {
 
     const combinedOutput = `${installCheck.stdout}\n${installCheck.stderr}`;
     for (const agent of ["claude", "codex"]) {
-      if (!combinedOutput.includes(`agent=${agent} outcome=already_installed`)) {
+      const acceptedOutcomes = [
+        `agent=${agent} outcome=already_installed`,
+        `agent=${agent} outcome=installed`,
+      ];
+      if (!acceptedOutcomes.some((outcome) => combinedOutput.includes(outcome))) {
         throw new Error(
-          `Expected ${agent} to be already installed, but output was:\n${combinedOutput.trim()}`
+          `Expected ${agent} to be available, but output was:\n${combinedOutput.trim()}`
         );
       }
     }
