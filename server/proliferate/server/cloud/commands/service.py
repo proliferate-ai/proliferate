@@ -42,7 +42,10 @@ from proliferate.server.cloud.commands.domain.rules import (
 )
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.live.service import publish_command_status_after_commit
+from proliferate.server.cloud.live.service import (
+    publish_command_status_after_commit,
+    publish_worker_control_after_commit,
+)
 from proliferate.server.cloud.runtime.domain.wake import command_kind_requires_wake
 from proliferate.server.cloud.runtime.wake import kick_off_managed_slot_wake
 from proliferate.server.cloud.workspaces.access import cloud_workspace_user_can_read_with_db
@@ -1716,6 +1719,7 @@ async def kick_off_command_wake_after_commit_if_required(
     target: targets_store.CloudTargetSnapshot,
     command: commands_store.CloudCommandSnapshot,
 ) -> None:
+    await publish_worker_control_after_commit(db, target_id=target.id, reason="command")
     if not _command_requires_managed_slot_wake(target, command):
         return
 

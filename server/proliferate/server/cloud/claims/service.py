@@ -45,6 +45,7 @@ from proliferate.server.cloud.claims.models import (
     RevokeClaimTokenResponse,
 )
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.live.service import publish_worker_control_after_commit
 from proliferate.utils.time import utcnow
 
 _ACTIVE_TOKEN_CAP = 5
@@ -126,6 +127,11 @@ async def claim_workspace(
                 "Workspace is not available to claim.",
                 status_code=409,
             )
+        await publish_worker_control_after_commit(
+            db,
+            target_id=workspace.target_id,
+            reason="exposures",
+        )
     return ClaimWorkspaceResponse(
         claim_id=str(claim.id),
         cloud_workspace_id=str(workspace.id),

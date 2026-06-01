@@ -38,6 +38,10 @@ pub enum WorkerError {
     MissingEnrollmentToken,
     #[error("failed to create parent directory for {path}")]
     CreateParent { path: PathBuf, source: io::Error },
+    #[error("another proliferate worker already owns {path}")]
+    AlreadyRunning { path: PathBuf },
+    #[error("failed to acquire worker process lock at {path}")]
+    AcquireProcessLock { path: PathBuf, source: io::Error },
     #[error("failed to write worker config at {path}")]
     WriteConfig { path: PathBuf, source: io::Error },
     #[error("failed to set private permissions on {path}")]

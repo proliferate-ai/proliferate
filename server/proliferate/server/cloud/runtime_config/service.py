@@ -31,10 +31,14 @@ from proliferate.db.store.cloud_skills.configured_items import (
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
+from proliferate.db.store.cloud_sync import worker_control as worker_control_store
 from proliferate.server.cloud.claims.domain.pem import normalize_pem_setting
 from proliferate.server.cloud.commands.domain.rules import compact_command_json
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.live.service import publish_command_status_after_commit
+from proliferate.server.cloud.live.service import (
+    publish_command_status_after_commit,
+    publish_worker_control_after_commit,
+)
 from proliferate.server.cloud.mcp_catalog.availability import catalog_entry_is_configured
 from proliferate.server.cloud.mcp_catalog.catalog import build_connector_catalog
 from proliferate.server.cloud.plugins.catalog.service import plugin_packages_for_catalog_entries
@@ -580,6 +584,12 @@ async def record_worker_runtime_config_status(
         status=body.status,
         error_code=body.error_code,
         error_message=error_message,
+    )
+    await worker_control_store.bump_control_revision(db, target_id=auth.target_id)
+    await publish_worker_control_after_commit(
+        db,
+        target_id=auth.target_id,
+        reason="state_changed",
     )
     return WorkerRuntimeConfigStatusResponse(
         revision_id=str(revision.id),

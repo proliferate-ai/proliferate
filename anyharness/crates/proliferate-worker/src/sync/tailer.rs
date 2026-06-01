@@ -1,6 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use tokio::time::{sleep, Duration};
+use reqwest::StatusCode;
+use tokio::time::{sleep, Duration, Instant};
 use tracing::{debug, info, warn};
 
 use crate::{
@@ -9,16 +10,20 @@ use crate::{
     },
     cloud_client::{
         events::{EventBatchRequest, ProjectionGapRequest, WorkerSessionEventEnvelope},
-        exposures::WorkerExposureSnapshot,
+        exposures::WorkerExposureSnapshot as CloudWorkerExposureSnapshot,
         CloudClient,
     },
     config::WorkerConfig,
     error::WorkerError,
     identity::credentials::WorkerIdentity,
-    store::{ProjectionCursor, ProjectionCursorUpsert, WorkerStore},
+    store::{
+        ProjectionCursor, ProjectionCursorUpsert,
+        WorkerExposureSnapshot as CachedWorkerExposureSnapshot, WorkerStore,
+    },
 };
 
 const EVENT_POLL_INTERVAL: Duration = Duration::from_millis(500);
+const EXPOSURE_REFRESH_INTERVAL: Duration = Duration::from_secs(30);
 const WORKSPACE_DISCOVERY_INTERVAL: Duration = Duration::from_secs(5);
 const ERROR_SLEEP: Duration = Duration::from_secs(5);
 const ANYHARNESS_EVENT_LIMIT: usize = 100;
@@ -34,13 +39,16 @@ pub async fn run_loop(
         return Ok(());
     };
     let anyharness = AnyHarnessClient::new(base_url, config.anyharness_bearer_token.clone())?;
+    let mut exposure_cache = ExposureRefreshState::default();
     loop {
         if !anyharness_health::probe(&anyharness).await {
             warn!("worker event sync paused because anyharness health check failed");
             sleep(ERROR_SLEEP).await;
             continue;
         }
-        if let Err(error) = sync_once(&store, &anyharness, &cloud, &identity).await {
+        if let Err(error) =
+            sync_once(&store, &anyharness, &cloud, &identity, &mut exposure_cache).await
+        {
             warn!(?error, "worker event sync pass failed");
             sleep(ERROR_SLEEP).await;
             continue;
@@ -54,8 +62,10 @@ async fn sync_once(
     anyharness: &AnyHarnessClient,
     cloud: &CloudClient,
     identity: &WorkerIdentity,
+    exposure_cache: &mut ExposureRefreshState,
 ) -> Result<(), WorkerError> {
-    let exposures = reconcile_projection_cursors(store, cloud, identity).await?;
+    let exposures =
+        refresh_exposure_cache_if_needed(store, cloud, identity, exposure_cache).await?;
     discover_workspace_sessions(store, anyharness, cloud, identity, &exposures).await;
     let cursors = store.list_active_projection_cursors()?;
     for cursor in cursors {
@@ -74,38 +84,67 @@ async fn sync_once(
     Ok(())
 }
 
-async fn reconcile_projection_cursors(
+async fn refresh_exposure_cache_if_needed(
     store: &WorkerStore,
     cloud: &CloudClient,
     identity: &WorkerIdentity,
-) -> Result<Vec<WorkerExposureSnapshot>, WorkerError> {
-    let response = cloud.list_worker_exposures(&identity.worker_token).await?;
-    let max_revision = response
-        .exposures
+    exposure_cache: &mut ExposureRefreshState,
+) -> Result<Vec<CachedWorkerExposureSnapshot>, WorkerError> {
+    let state = store.load_worker_control_state()?;
+    if !state.legacy_exposure_polling_enabled {
+        return store.list_cached_exposure_snapshots();
+    }
+    if !exposure_cache.should_refresh() {
+        return store.list_cached_exposure_snapshots();
+    }
+    let response = match cloud.list_worker_exposures(&identity.worker_token).await {
+        Ok(response) => response,
+        Err(error)
+            if state.exposure_cache_initialized && is_retryable_exposure_refresh_error(&error) =>
+        {
+            warn!(
+                ?error,
+                "worker exposure refresh failed; reusing last exposure snapshot"
+            );
+            return store.list_cached_exposure_snapshots();
+        }
+        Err(error) => return Err(error),
+    };
+    reconcile_exposure_snapshots(store, &response.exposures)?;
+    exposure_cache.last_refresh = Some(Instant::now());
+    store.list_cached_exposure_snapshots()
+}
+
+pub(crate) fn reconcile_exposure_snapshots(
+    store: &WorkerStore,
+    exposures: &[CloudWorkerExposureSnapshot],
+) -> Result<(), WorkerError> {
+    let cached_exposures = exposures
+        .iter()
+        .map(cached_exposure_snapshot)
+        .collect::<Vec<_>>();
+    let max_revision = exposures
         .iter()
         .filter_map(|snapshot| snapshot.revision)
         .max();
-    let first_target_id = response
-        .exposures
+    let first_target_id = exposures
         .first()
         .map(|snapshot| snapshot.target_id.as_str());
-    let first_cloud_workspace_id = response
-        .exposures
+    let first_cloud_workspace_id = exposures
         .first()
         .map(|snapshot| snapshot.cloud_workspace_id.as_str());
-    let exposure_count = response.exposures.len();
-    let workspace_exposure_count = response
-        .exposures
+    let exposure_count = exposures.len();
+    let workspace_exposure_count = exposures
         .iter()
         .filter(|snapshot| snapshot.anyharness_session_id.is_none())
         .count();
-    let cursors = response
-        .exposures
+    let cursors = exposures
         .iter()
-        .filter_map(projection_cursor_upsert)
+        .map(cached_exposure_snapshot)
+        .filter_map(|snapshot| projection_cursor_upsert(&snapshot))
         .collect::<Vec<_>>();
     let session_cursor_count = cursors.len();
-    store.reconcile_projection_cursors(&cursors)?;
+    store.reconcile_exposure_snapshots(&cached_exposures, &cursors)?;
     debug!(
         exposure_count,
         workspace_exposure_count,
@@ -115,7 +154,32 @@ async fn reconcile_projection_cursors(
         first_cloud_workspace_id,
         "reconciled worker projection cursors"
     );
-    Ok(response.exposures)
+    Ok(())
+}
+
+fn is_retryable_exposure_refresh_error(error: &WorkerError) -> bool {
+    match error {
+        WorkerError::Cloud { status, .. } => {
+            status.is_server_error()
+                || *status == StatusCode::REQUEST_TIMEOUT
+                || *status == StatusCode::TOO_MANY_REQUESTS
+        }
+        WorkerError::Http(source) => source.is_timeout() || source.is_connect(),
+        _ => false,
+    }
+}
+
+#[derive(Default)]
+struct ExposureRefreshState {
+    last_refresh: Option<Instant>,
+}
+
+impl ExposureRefreshState {
+    fn should_refresh(&self) -> bool {
+        self.last_refresh
+            .map(|last_refresh| last_refresh.elapsed() >= EXPOSURE_REFRESH_INTERVAL)
+            .unwrap_or(true)
+    }
 }
 
 async fn discover_workspace_sessions(
@@ -123,7 +187,7 @@ async fn discover_workspace_sessions(
     anyharness: &AnyHarnessClient,
     cloud: &CloudClient,
     identity: &WorkerIdentity,
-    exposures: &[WorkerExposureSnapshot],
+    exposures: &[CachedWorkerExposureSnapshot],
 ) {
     let min_interval_ms = duration_ms(WORKSPACE_DISCOVERY_INTERVAL);
     for exposure in exposures {
@@ -153,7 +217,7 @@ async fn discover_workspace_sessions_for_exposure(
     anyharness: &AnyHarnessClient,
     cloud: &CloudClient,
     identity: &WorkerIdentity,
-    exposure: &WorkerExposureSnapshot,
+    exposure: &CachedWorkerExposureSnapshot,
     min_interval_ms: i64,
 ) -> Result<(), WorkerError> {
     if exposure.status != "active" || exposure.anyharness_session_id.is_some() {
@@ -306,7 +370,27 @@ async fn sync_projection_cursor(
     Ok(())
 }
 
-fn projection_cursor_upsert(snapshot: &WorkerExposureSnapshot) -> Option<ProjectionCursorUpsert> {
+fn cached_exposure_snapshot(
+    snapshot: &CloudWorkerExposureSnapshot,
+) -> CachedWorkerExposureSnapshot {
+    CachedWorkerExposureSnapshot {
+        exposure_id: snapshot.exposure_id.clone(),
+        target_id: snapshot.target_id.clone(),
+        cloud_workspace_id: snapshot.cloud_workspace_id.clone(),
+        session_projection_id: snapshot.session_projection_id.clone(),
+        anyharness_workspace_id: snapshot.anyharness_workspace_id.clone(),
+        anyharness_session_id: snapshot.anyharness_session_id.clone(),
+        projection_level: snapshot.projection_level.clone(),
+        commandable: snapshot.commandable,
+        status: snapshot.status.clone(),
+        revision: snapshot.revision,
+        last_uploaded_seq: snapshot.last_uploaded_seq,
+    }
+}
+
+fn projection_cursor_upsert(
+    snapshot: &CachedWorkerExposureSnapshot,
+) -> Option<ProjectionCursorUpsert> {
     Some(ProjectionCursorUpsert {
         exposure_id: snapshot.exposure_id.clone(),
         session_projection_id: snapshot.session_projection_id.clone()?,
@@ -379,11 +463,22 @@ fn first_sequence_gap(
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        path::PathBuf,
+        sync::atomic::{AtomicU64, Ordering},
+    };
+
     use serde_json::json;
 
-    use crate::{anyharness_client::events::SessionEventEnvelope, store::ProjectionCursor};
+    use crate::{
+        anyharness_client::events::SessionEventEnvelope,
+        cloud_client::exposures::WorkerExposureSnapshot,
+        store::{ProjectionCursor, WorkerStore},
+    };
 
-    use super::{first_sequence_gap, worker_event, EventSequenceGap};
+    use super::{first_sequence_gap, reconcile_exposure_snapshots, worker_event, EventSequenceGap};
+
+    static NEXT_DB_ID: AtomicU64 = AtomicU64::new(1);
 
     #[test]
     fn worker_event_uses_projection_cursor_workspace() {
@@ -430,6 +525,60 @@ mod tests {
         assert_eq!(first_sequence_gap(4, &events), None);
     }
 
+    #[test]
+    fn reconciles_exposure_snapshots_into_projection_cursors() {
+        let store = test_store();
+        reconcile_exposure_snapshots(
+            &store,
+            &[
+                exposure_snapshot(
+                    Some("projection-1"),
+                    Some("session-1"),
+                    "workspace-1",
+                    "active",
+                    4,
+                ),
+                exposure_snapshot(None, None, "workspace-1", "active", 0),
+            ],
+        )
+        .expect("reconcile exposures");
+
+        let cursors = store
+            .list_active_projection_cursors()
+            .expect("active cursors");
+        assert_eq!(cursors.len(), 1);
+        assert_eq!(cursors[0].session_projection_id, "projection-1");
+        assert_eq!(cursors[0].anyharness_session_id, "session-1");
+        assert_eq!(cursors[0].last_uploaded_seq, 4);
+        let cached = store
+            .list_cached_exposure_snapshots()
+            .expect("cached exposures");
+        assert_eq!(cached.len(), 2);
+        assert_eq!(
+            cached
+                .iter()
+                .filter(|snapshot| snapshot.anyharness_session_id.is_none())
+                .count(),
+            1
+        );
+        assert!(
+            store
+                .load_worker_control_state()
+                .expect("control state")
+                .exposure_cache_initialized
+        );
+
+        reconcile_exposure_snapshots(&store, &[]).expect("reconcile empty exposures");
+        let cursors = store
+            .list_active_projection_cursors()
+            .expect("active cursors after revoke");
+        assert!(cursors.is_empty());
+        assert!(store
+            .list_cached_exposure_snapshots()
+            .expect("cached exposures after revoke")
+            .is_empty());
+    }
+
     fn event(session_id: &str, seq: i64) -> SessionEventEnvelope {
         SessionEventEnvelope {
             session_id: session_id.to_string(),
@@ -456,5 +605,37 @@ mod tests {
             last_uploaded_seq,
             last_ack_seq: last_uploaded_seq,
         }
+    }
+
+    fn exposure_snapshot(
+        session_projection_id: Option<&str>,
+        anyharness_session_id: Option<&str>,
+        workspace_id: &str,
+        status: &str,
+        last_uploaded_seq: i64,
+    ) -> WorkerExposureSnapshot {
+        WorkerExposureSnapshot {
+            exposure_id: "exposure-1".to_string(),
+            target_id: "target-1".to_string(),
+            cloud_workspace_id: "cloud-workspace-1".to_string(),
+            session_projection_id: session_projection_id.map(str::to_string),
+            anyharness_workspace_id: workspace_id.to_string(),
+            anyharness_session_id: anyharness_session_id.map(str::to_string),
+            projection_level: "live".to_string(),
+            commandable: true,
+            status: status.to_string(),
+            revision: Some(1),
+            last_uploaded_seq,
+        }
+    }
+
+    fn test_store() -> WorkerStore {
+        let id = NEXT_DB_ID.fetch_add(1, Ordering::Relaxed);
+        let dir: PathBuf = std::env::temp_dir().join(format!(
+            "proliferate-worker-tailer-test-{}-{id}.sqlite3",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        WorkerStore::open(dir.join("worker.sqlite3")).expect("store")
     }
 }

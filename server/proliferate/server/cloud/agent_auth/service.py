@@ -56,6 +56,7 @@ from proliferate.db.store.cloud_agent_auth.records import (
     SandboxProfileRecord,
 )
 from proliferate.db.store.cloud_sync import commands as commands_store
+from proliferate.db.store.cloud_sync import worker_control as worker_control_store
 from proliferate.integrations.aws import (
     AwsIntegrationError,
     validate_bedrock_assume_role_payload,
@@ -100,7 +101,10 @@ from proliferate.server.cloud.agent_auth.models import (
 )
 from proliferate.server.cloud.agent_auth.protected_env import reject_unallowed_protected_env
 from proliferate.server.cloud.commands.domain.rules import compact_command_json
-from proliferate.server.cloud.live.service import publish_command_status_after_commit
+from proliferate.server.cloud.live.service import (
+    publish_command_status_after_commit,
+    publish_worker_control_after_commit,
+)
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
 from proliferate.server.cloud.worker.slot_guard import require_current_managed_worker_slot
 from proliferate.utils.crypto import decrypt_json, decrypt_text, encrypt_json, encrypt_text
@@ -2114,6 +2118,12 @@ async def record_worker_agent_auth_status(
         last_worker_id=auth.worker_id,
         last_error_code=error_code,
         last_error_message=error_message,
+    )
+    await worker_control_store.bump_control_revision(db, target_id=auth.target_id)
+    await publish_worker_control_after_commit(
+        db,
+        target_id=auth.target_id,
+        reason="state_changed",
     )
     return WorkerAgentAuthStatusResponse(
         sandboxProfileId=profile.id,

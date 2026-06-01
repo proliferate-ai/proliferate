@@ -2,6 +2,7 @@ pub mod agent_auth;
 pub mod auth;
 pub mod backfill;
 pub mod commands;
+pub mod control;
 pub mod events;
 pub mod exposures;
 pub mod heartbeat;

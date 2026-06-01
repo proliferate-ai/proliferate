@@ -14,12 +14,15 @@ from proliferate.server.cloud.events.models import (
     WorkerEventBatchRequest,
     WorkerEventBatchResponse,
 )
+from proliferate.server.cloud.worker.control.service import wait_for_worker_control
 from proliferate.server.cloud.worker.models import (
     WorkerCommandDeliveryRequest,
     WorkerCommandLeaseRequest,
     WorkerCommandLeaseResponse,
     WorkerCommandResultRequest,
     WorkerCommandStatusResponse,
+    WorkerControlWaitRequest,
+    WorkerControlWaitResponse,
     WorkerEnrollRequest,
     WorkerEnrollResponse,
     WorkerExposureListResponse,
@@ -126,6 +129,17 @@ async def worker_command_lease_endpoint(
     try:
         auth = await authenticate_worker(db, authorization=authorization)
         return await lease_worker_command(db, auth=auth, body=body)
+    except CloudApiError as error:
+        raise_cloud_error(error)
+
+
+@router.post("/control/wait", response_model=WorkerControlWaitResponse)
+async def worker_control_wait_endpoint(
+    body: WorkerControlWaitRequest,
+    authorization: str | None = Header(default=None),
+) -> WorkerControlWaitResponse:
+    try:
+        return await wait_for_worker_control(body=body, authorization=authorization)
     except CloudApiError as error:
         raise_cloud_error(error)
 

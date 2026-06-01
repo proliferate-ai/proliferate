@@ -18,6 +18,7 @@ from proliferate.db.store.cloud_mobility import (
 from proliferate.db.store.cloud_sync.exposures import archive_workspace_exposure
 from proliferate.db.store.cloud_sync.projections import end_session_projection_by_id
 from proliferate.db.store.cloud_workspaces import archive_cloud_workspace_record_by_id
+from proliferate.server.cloud.live.service import publish_worker_control_after_commit
 from proliferate.server.cloud.mobility.domain.lifecycle import (
     HANDOFF_PHASE_CLEANUP_FAILED,
     LIFECYCLE_CLEANUP_FAILED,
@@ -90,9 +91,21 @@ async def execute_server_cleanup_item(
         if item.item_kind == "cloud_workspace" and item.object_id is not None:
             await archive_cloud_workspace_record_by_id(db, workspace_id=item.object_id)
         elif item.item_kind == "cloud_exposure" and item.object_id is not None:
-            await archive_workspace_exposure(db, exposure_id=item.object_id)
+            exposure = await archive_workspace_exposure(db, exposure_id=item.object_id)
+            if exposure is not None:
+                await publish_worker_control_after_commit(
+                    db,
+                    target_id=exposure.target_id,
+                    reason="exposures",
+                )
         elif item.item_kind == "cloud_session_projection" and item.object_id is not None:
-            await end_session_projection_by_id(db, projection_id=item.object_id)
+            projection = await end_session_projection_by_id(db, projection_id=item.object_id)
+            if projection is not None:
+                await publish_worker_control_after_commit(
+                    db,
+                    target_id=projection.target_id,
+                    reason="exposures",
+                )
         elif item.item_kind in {"worker_projection_cursor", "cloud_transcript_projection"}:
             pass
         await update_cleanup_item_status(db, cleanup_item=item, status="completed")

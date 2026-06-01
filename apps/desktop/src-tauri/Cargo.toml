@@ -28,6 +28,7 @@ tracing-subscriber.workspace = true
 tracing-appender.workspace = true
 file-rotate.workspace = true
 chrono.workspace = true
+fs2.workspace = true
 sha2.workspace = true
 url.workspace = true
 regex.workspace = true

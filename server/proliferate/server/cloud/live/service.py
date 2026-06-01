@@ -32,6 +32,7 @@ from proliferate.server.cloud.events.models import (
 from proliferate.server.cloud.live.domain.channels import (
     session_channel,
     target_channel,
+    worker_control_channel,
     workspace_channel,
 )
 from proliferate.server.cloud.live.domain.rules import clamp_live_cursor
@@ -118,6 +119,18 @@ async def publish_command_status_after_commit(
     await _publish_live_after_commit(db, lambda: publish_command_status(command))
 
 
+async def publish_worker_control_after_commit(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+    reason: str,
+) -> None:
+    await _publish_live_after_commit(
+        db,
+        lambda: publish_worker_control(target_id=target_id, reason=reason),
+    )
+
+
 async def publish_target_patch(target: targets_store.CloudTargetSnapshot) -> None:
     detail = target_detail_payload(target)
     await _live_bus.publish(
@@ -149,6 +162,22 @@ async def publish_command_status(command: commands_store.CloudCommandSnapshot) -
             session_channel(target_id=command.target_id, session_id=command.session_id),
             PubSubMessage(event="command_status", event_id=event_id, data=data),
         )
+    await publish_worker_control(target_id=command.target_id, reason="command")
+
+
+async def publish_worker_control(
+    *,
+    target_id: UUID,
+    reason: str,
+) -> None:
+    await _live_bus.publish(
+        worker_control_channel(target_id=target_id),
+        PubSubMessage(
+            event=reason,
+            event_id=_live_event_id(),
+            data={"targetId": str(target_id), "reason": reason},
+        ),
+    )
 
 
 async def _publish_live_after_commit(

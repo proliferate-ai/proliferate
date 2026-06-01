@@ -7,6 +7,7 @@ import hmac
 import json
 import secrets
 from datetime import datetime, timedelta
+from time import monotonic
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,6 +35,8 @@ from proliferate.db.store.cloud_sync import inventory as inventory_store
 from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
+from proliferate.db.store.cloud_sync import worker_control as worker_control_store
+from proliferate.db.store.cloud_sync import worker_exposures as worker_exposures_store
 from proliferate.db.store.users import get_user_with_oauth_accounts_by_id
 from proliferate.server.cloud._logging import log_cloud_event
 from proliferate.server.cloud.commands import service as command_service
@@ -47,6 +50,7 @@ from proliferate.server.cloud.live.service import (
     defer_live_publishes_until_commit,
     publish_command_status_after_commit,
     publish_target_patch_after_commit,
+    publish_worker_control_after_commit,
 )
 from proliferate.server.cloud.observability import log_worker_update_status
 from proliferate.server.cloud.target_git_identity.service import materialize_target_git_identity
@@ -103,6 +107,8 @@ from proliferate.utils.time import utcnow
 
 _REVOKED_JTI_PAGE_SIZE = 500
 _REVOKED_JTI_CURSOR_ZERO_ID = UUID("00000000-0000-0000-0000-000000000000")
+_LEGACY_EXPOSURE_CACHE_TTL_SECONDS = 2.0
+_legacy_exposure_cache: dict[UUID, tuple[float, WorkerExposureListResponse]] = {}
 _UNSET = object()
 
 
@@ -483,6 +489,7 @@ async def enroll_worker(
         target_id=worker.target_id,
         status_value=CloudTargetStatus.online.value,
     )
+    await worker_control_store.get_or_create_control_state(db, target_id=worker.target_id)
     if (
         enrollment.sandbox_profile_id is not None
         and worker.cloud_sandbox_id is not None
@@ -933,12 +940,18 @@ async def record_materialization_report(
         **updates,
     )
     if state == "dehydrated" and body.anyharness_workspace_id:
-        await exposures_store.clear_workspace_exposure_materialization(
+        cleared_exposure = await exposures_store.clear_workspace_exposure_materialization(
             db,
             target_id=auth.target_id,
             cloud_workspace_id=workspace.id,
             anyharness_workspace_id=body.anyharness_workspace_id,
         )
+        if cleared_exposure is not None:
+            await publish_worker_control_after_commit(
+                db,
+                target_id=auth.target_id,
+                reason="exposures",
+            )
     await db.commit()
     return WorkerMaterializationReportResponse(
         cloud_workspace_id=str(workspace.id),
@@ -1301,62 +1314,47 @@ async def list_worker_exposures(
     *,
     auth: WorkerAuthContext,
 ) -> WorkerExposureListResponse:
-    exposures = await exposures_store.list_active_workspace_exposures_for_target(
+    cached = _legacy_exposure_cache.get(auth.target_id)
+    now = monotonic()
+    if cached is not None and cached[0] > now:
+        return cached[1]
+    exposures = await worker_exposures_store.list_worker_exposure_snapshots_for_target(
         db,
         target_id=auth.target_id,
     )
-    cursors = await projections_store.list_active_projection_cursors_for_target(
-        db,
-        target_id=auth.target_id,
+    response = _worker_exposure_response_from_snapshots(exposures)
+    _legacy_exposure_cache[auth.target_id] = (
+        now + _LEGACY_EXPOSURE_CACHE_TTL_SECONDS,
+        response,
     )
-    responses: list[WorkerExposureSnapshotResponse] = []
-    for cursor in cursors:
-        workspace = await cloud_workspaces.get_cloud_workspace_by_id(
-            db,
-            cursor.cloud_workspace_id,
-        )
-        if workspace is None or workspace.archived_at is not None:
-            continue
-        responses.append(
+    return response
+
+
+def _worker_exposure_response_from_snapshots(
+    exposures: tuple[worker_exposures_store.WorkerExposureSnapshot, ...],
+) -> WorkerExposureListResponse:
+    return WorkerExposureListResponse(
+        exposures=[
             WorkerExposureSnapshotResponse(
-                exposure_id=str(cursor.exposure_id),
-                target_id=str(cursor.target_id),
-                cloud_workspace_id=str(cursor.cloud_workspace_id),
-                session_projection_id=str(cursor.session_projection_id),
-                anyharness_workspace_id=cursor.anyharness_workspace_id,
-                anyharness_session_id=cursor.anyharness_session_id,
-                projection_level=cursor.projection_level,
-                commandable=cursor.commandable,
-                status=cursor.exposure_status,
-                revision=cursor.exposure_revision,
-                last_uploaded_seq=cursor.last_uploaded_seq,
-            )
-        )
-    for exposure in exposures:
-        if not exposure.anyharness_workspace_id:
-            continue
-        workspace = await cloud_workspaces.get_cloud_workspace_by_id(
-            db,
-            exposure.cloud_workspace_id,
-        )
-        if workspace is None or workspace.archived_at is not None:
-            continue
-        responses.append(
-            WorkerExposureSnapshotResponse(
-                exposure_id=str(exposure.id),
+                exposure_id=str(exposure.exposure_id),
                 target_id=str(exposure.target_id),
                 cloud_workspace_id=str(exposure.cloud_workspace_id),
-                session_projection_id=None,
+                session_projection_id=(
+                    str(exposure.session_projection_id)
+                    if exposure.session_projection_id is not None
+                    else None
+                ),
                 anyharness_workspace_id=exposure.anyharness_workspace_id,
-                anyharness_session_id=None,
-                projection_level=exposure.default_projection_level,
+                anyharness_session_id=exposure.anyharness_session_id,
+                projection_level=exposure.projection_level,
                 commandable=exposure.commandable,
                 status=exposure.status,
                 revision=exposure.revision,
-                last_uploaded_seq=0,
+                last_uploaded_seq=exposure.last_uploaded_seq,
             )
-        )
-    return WorkerExposureListResponse(exposures=responses)
+            for exposure in exposures
+        ]
+    )
 
 
 async def record_event_batch(

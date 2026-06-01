@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -85,6 +86,35 @@ class CloudEventIngestState(Base):
     workspace_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     last_contiguous_seq: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class CloudWorkerTargetControlState(Base):
+    __tablename__ = "cloud_worker_target_control_state"
+
+    target_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cloud_targets.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    control_revision: Mapped[int] = mapped_column(
+        BigInteger,
+        default=0,
+        server_default=text("0"),
+    )
+    exposure_revision: Mapped[int] = mapped_column(
+        BigInteger,
+        default=0,
+        server_default=text("0"),
+    )
+    exposure_fingerprint_hash: Mapped[str] = mapped_column(
+        String(64),
+        default="",
+        server_default=text("''"),
+    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    exposure_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
 
 class CloudSyncedWorkspace(Base):

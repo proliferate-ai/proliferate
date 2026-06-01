@@ -30,6 +30,7 @@ from proliferate.db.models.cloud.sync import CloudSessionProjection
 from proliferate.db.models.cloud.targets import CloudTarget, CloudWorker
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_profile_target_guard import managed_profile_target_requires_slot
+from proliferate.db.store.cloud_sync import worker_control
 from proliferate.utils.time import utcnow
 
 ACTIVE_SLOT_STATUSES: tuple[str, ...] = (
@@ -197,6 +198,7 @@ async def create_command(
     )
     db.add(row)
     await db.flush()
+    await worker_control.bump_control_revision(db, target_id=target_id, now=now)
     return _snapshot(row)
 
 
@@ -273,6 +275,7 @@ async def expire_command_if_not_terminal(
     row.error_message = error_message
     row.updated_at = now
     await db.flush()
+    await worker_control.bump_control_revision(db, target_id=row.target_id, now=now)
     return _snapshot(row)
 
 
@@ -331,6 +334,8 @@ async def expire_stale_queued_commands(
         row.error_message = error_message
         row.updated_at = now
     await db.flush()
+    for expired_target_id in {row.target_id for row in rows}:
+        await worker_control.bump_control_revision(db, target_id=expired_target_id, now=now)
     return tuple(_snapshot(row) for row in rows)
 
 
@@ -371,6 +376,12 @@ async def supersede_workspace_commands(
         row.lease_expires_at = None
         row.updated_at = marked_at
     await db.flush()
+    for superseded_target_id in {row.target_id for row in rows}:
+        await worker_control.bump_control_revision(
+            db,
+            target_id=superseded_target_id,
+            now=marked_at,
+        )
     return tuple(_snapshot(row) for row in rows)
 
 
@@ -383,6 +394,7 @@ async def lease_next_command(
     lease_id: str,
     lease_expires_at: datetime,
     now: datetime,
+    blocked_commands: list[CloudCommandSnapshot] | None = None,
 ) -> CloudCommandSnapshot | None:
     worker = await db.get(CloudWorker, worker_id)
     if worker is None:
@@ -460,6 +472,8 @@ async def lease_next_command(
             row.rejected_at = now
             row.updated_at = now
             await db.flush()
+            if blocked_commands is not None:
+                blocked_commands.append(_snapshot(row))
             continue
         lifecycle_error = await _workspace_lifecycle_lease_blocker(db, row)
         if lifecycle_error is not None:
@@ -471,6 +485,8 @@ async def lease_next_command(
                 row.rejected_at = now
             row.updated_at = now
             await db.flush()
+            if blocked_commands is not None:
+                blocked_commands.append(_snapshot(row))
             continue
         exposure_error = await _exposure_lease_blocker(db, row)
         if exposure_error is not None:
@@ -482,6 +498,8 @@ async def lease_next_command(
                 row.rejected_at = now
             row.updated_at = now
             await db.flush()
+            if blocked_commands is not None:
+                blocked_commands.append(_snapshot(row))
             continue
         runtime_config_error = await _runtime_config_lease_blocker(db, row, target=target)
         if runtime_config_error is not None:
@@ -493,6 +511,8 @@ async def lease_next_command(
                 row.rejected_at = now
             row.updated_at = now
             await db.flush()
+            if blocked_commands is not None:
+                blocked_commands.append(_snapshot(row))
             continue
         agent_auth_error = await _agent_auth_lease_blocker(db, row, target=target)
         if agent_auth_error is not None:
@@ -504,6 +524,8 @@ async def lease_next_command(
                 row.rejected_at = now
             row.updated_at = now
             await db.flush()
+            if blocked_commands is not None:
+                blocked_commands.append(_snapshot(row))
             continue
         row.status = CloudCommandStatus.leased.value
         row.lease_id = lease_id

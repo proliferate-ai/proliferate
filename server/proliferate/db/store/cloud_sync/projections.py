@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.exposures import CloudWorkspaceExposure
 from proliferate.db.models.cloud.sync import CloudSessionProjection
+from proliferate.db.store.cloud_sync import worker_control
 from proliferate.utils.time import utcnow
 
 
@@ -98,6 +99,7 @@ async def upsert_session_projection_metadata(
         session_id=session_id,
         lock=True,
     )
+    changed = False
     if row is None:
         row = CloudSessionProjection(
             target_id=target_id,
@@ -115,17 +117,31 @@ async def upsert_session_projection_metadata(
             updated_at=now,
         )
         db.add(row)
+        changed = True
     else:
-        row.exposure_id = exposure_id if exposure_id is not None else row.exposure_id
-        row.cloud_workspace_id = cloud_workspace_id or row.cloud_workspace_id
-        row.workspace_id = workspace_id or row.workspace_id
-        row.status = status
-        row.projection_level = projection_level
-        row.commandable = commandable
-        if row.agent_run_config_snapshot_json is None:
+        values = {
+            "exposure_id": exposure_id if exposure_id is not None else row.exposure_id,
+            "cloud_workspace_id": cloud_workspace_id or row.cloud_workspace_id,
+            "workspace_id": workspace_id or row.workspace_id,
+            "status": status,
+            "projection_level": projection_level,
+            "commandable": commandable,
+        }
+        for attr, value in values.items():
+            if getattr(row, attr) != value:
+                setattr(row, attr, value)
+                changed = True
+        if (
+            row.agent_run_config_snapshot_json is None
+            and agent_run_config_snapshot_json is not None
+        ):
             row.agent_run_config_snapshot_json = agent_run_config_snapshot_json
+            changed = True
+    if changed:
         row.updated_at = now
     await db.flush()
+    if changed:
+        await worker_control.bump_exposure_revision(db, target_id=target_id, now=now)
     return _snapshot(row)
 
 
@@ -206,12 +222,16 @@ async def end_session_projection_by_id(
     ).scalar_one_or_none()
     if row is None:
         return None
+    if row.ended_at is not None and row.status == "ended" and not row.commandable:
+        return _snapshot(row)
+    now = utcnow()
     row.status = "ended"
     row.phase = "ended"
     row.commandable = False
-    row.ended_at = ended_at or utcnow().isoformat()
-    row.updated_at = utcnow()
+    row.ended_at = ended_at or now.isoformat()
+    row.updated_at = now
     await db.flush()
+    await worker_control.bump_exposure_revision(db, target_id=row.target_id, now=now)
     return _snapshot(row)
 
 

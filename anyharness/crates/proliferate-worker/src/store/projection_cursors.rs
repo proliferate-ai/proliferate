@@ -37,6 +37,7 @@ struct ProjectionCursorGap {
 }
 
 impl WorkerStore {
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn reconcile_projection_cursors(
         &self,
         cursors: &[ProjectionCursorUpsert],

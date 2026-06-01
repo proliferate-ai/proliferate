@@ -8,6 +8,7 @@ mod inventory;
 mod logging;
 mod materialization;
 mod observability;
+mod process_lock;
 mod runtime;
 mod store;
 mod sync;
