@@ -104,6 +104,7 @@ Also set these non-secret GitHub variables once projects exist (used by
 `release-desktop.yml` and the mobile sourcemap script):
 
 - `SENTRY_URL=https://sentry.io/`
+- `SENTRY_DESKTOP_RENDERER_PROJECT=proliferate-desktop`
 - `SENTRY_WEB_PROJECT=proliferate-web`
 - `SENTRY_DESKTOP_NATIVE_PROJECT=proliferate-desktop-native`
 - `SENTRY_ANYHARNESS_PROJECT=anyharness`
