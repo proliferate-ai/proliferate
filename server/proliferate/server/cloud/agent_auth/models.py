@@ -22,15 +22,6 @@ from proliferate.db.store.cloud_agent_auth.records import (
 from proliferate.server.cloud.agent_auth.domain.types import SyncedCredentialAuthMode
 
 AgentKind = Literal["claude", "codex", "opencode", "gemini"]
-OwnerScope = Literal["personal", "organization"]
-
-
-class EnsurePersonalSandboxProfileRequest(BaseModel):
-    pass
-
-
-class EnsureOrganizationSandboxProfileRequest(BaseModel):
-    pass
 
 
 class GatewayModelDeploymentRequest(BaseModel):
