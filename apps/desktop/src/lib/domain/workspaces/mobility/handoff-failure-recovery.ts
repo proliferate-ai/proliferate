@@ -1,5 +1,3 @@
-import { getCloudMobilityWorkspaceDetail } from "@proliferate/cloud-sdk/client/mobility";
-
 export type HandoffFinalizationResolution =
   | "finalized"
   | "not_finalized"
@@ -48,30 +46,4 @@ export function deriveHandoffFailureRecovery(args: {
     shouldRestoreSourceRuntimeState: false,
     shouldRefreshWorkspaceSelection: false,
   };
-}
-
-export async function resolveHandoffFinalizationAfterAmbiguousCutover(args: {
-  mobilityWorkspaceId: string;
-  handoffOpId: string;
-}): Promise<HandoffFinalizationResolution> {
-  try {
-    const detail = await getCloudMobilityWorkspaceDetail(args.mobilityWorkspaceId);
-    const handoff = detail.activeHandoff;
-    if (!handoff || handoff.id !== args.handoffOpId) {
-      return "finalized";
-    }
-    if (
-      handoff.finalizedAt
-      || handoff.canonicalSide === "destination"
-      || handoff.phase === "cutover_committed"
-      || handoff.phase === "cleanup_pending"
-      || handoff.phase === "cleanup_failed"
-      || handoff.phase === "completed"
-    ) {
-      return "finalized";
-    }
-    return "not_finalized";
-  } catch {
-    return "unknown";
-  }
 }

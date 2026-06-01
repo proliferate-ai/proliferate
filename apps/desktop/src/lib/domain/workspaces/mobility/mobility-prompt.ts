@@ -1,9 +1,9 @@
 import type { WorkspaceMobilityConfirmSnapshot } from "@/lib/domain/workspaces/mobility/types";
 import type { WorkspaceMobilityStatusModel } from "@/lib/domain/workspaces/mobility/mobility-state-machine";
 import type { WorkspaceMobilityDirection } from "@/lib/domain/workspaces/mobility/types";
+import { mobilityBlockerCopy } from "@/lib/domain/workspaces/mobility/mobility-blocker-presentation";
 import {
   mobilityActionableCopy,
-  mobilityBlockerCopy,
   mobilityBranchSyncLoadingCopy,
   mobilityLocationLabel,
 } from "@/lib/domain/workspaces/mobility/presentation";

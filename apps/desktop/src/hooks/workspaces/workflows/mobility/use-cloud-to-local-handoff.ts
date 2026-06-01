@@ -8,7 +8,7 @@ import {
   useWorkspaceMobilityPreflightQuery,
 } from "@anyharness/sdk-react";
 import { useCallback, useMemo, useState } from "react";
-import type { WorkspaceMobilityPreflightResponse } from "@anyharness/sdk";
+import type { WorkspaceMobilityConfirmSnapshot } from "@/lib/domain/workspaces/mobility/types";
 import { useCloudWorkspaceHandoffPreflight } from "@/hooks/access/cloud/use-cloud-workspace-handoff-preflight";
 import { useCompleteCloudWorkspaceHandoffCleanup } from "@/hooks/access/cloud/use-complete-cloud-workspace-handoff-cleanup";
 import { useEnsureCloudMobilityWorkspace } from "@/hooks/access/cloud/use-ensure-cloud-mobility-workspace";
@@ -23,39 +23,13 @@ import { useToastStore } from "@/stores/toast/toast-store";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import type { LogicalWorkspace } from "@/lib/domain/workspaces/cloud/logical-workspace-model";
 import { describeMobilityPreflightLoadFailure } from "@/lib/domain/workspaces/mobility/mobility-preflight-error";
+import { withRequiredWorkspaceMobilitySourceMetadata } from "@/lib/domain/workspaces/mobility/mobility-handoff-eligibility";
 import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/measurement/debug-latency";
+import { resolveHandoffFinalizationAfterAmbiguousCutover } from "@/lib/access/cloud/workspace-mobility-handoff";
 import {
-  deriveHandoffFailureRecovery,
-  resolveHandoffFinalizationAfterAmbiguousCutover,
-} from "./handoff-failure-recovery";
-
-function withRequiredSourceMetadata(
-  preflight: WorkspaceMobilityPreflightResponse,
-  fallbackBranch: string,
-): WorkspaceMobilityPreflightResponse {
-  const blockers = [...(preflight.blockers ?? [])];
-  if (!preflight.branchName?.trim()) {
-    blockers.push({
-      code: "missing_branch_name",
-      message: "Workspace mobility requires a resolved branch name.",
-      sessionId: undefined,
-    });
-  }
-  if (!preflight.baseCommitSha?.trim()) {
-    blockers.push({
-      code: "missing_base_commit_sha",
-      message: "Workspace mobility requires a resolved base commit.",
-      sessionId: undefined,
-    });
-  }
-
-  return {
-    ...preflight,
-    branchName: preflight.branchName?.trim() || fallbackBranch,
-    blockers,
-    canMove: preflight.canMove && blockers.length === 0,
-  };
-}
+  runCloudToLocalHandoff,
+  type RunCloudToLocalHandoffDeps,
+} from "@/lib/workflows/workspaces/mobility/run-cloud-to-local-handoff";
 
 export function useCloudToLocalHandoff(args: {
   logicalWorkspace: LogicalWorkspace | null;
@@ -155,7 +129,7 @@ export function useCloudToLocalHandoff(args: {
           fetchStatus: sourcePreflightResult.fetchStatus,
         }));
       }
-      const sourcePreflight = withRequiredSourceMetadata(
+      const sourcePreflight = withRequiredWorkspaceMobilitySourceMetadata(
         sourcePreflightData,
         args.logicalWorkspace.branchKey,
       );
@@ -235,231 +209,36 @@ export function useCloudToLocalHandoff(args: {
     sourcePreflightQuery,
   ]);
 
-  const confirm = useCallback(async (snapshot: {
-    logicalWorkspaceId: string;
-    mobilityWorkspaceId: string;
-    sourceWorkspaceId: string;
-    sourcePreflight: WorkspaceMobilityPreflightResponse;
-  }) => {
-    const branchName = snapshot.sourcePreflight.branchName?.trim();
-    const baseCommitSha = snapshot.sourcePreflight.baseCommitSha?.trim();
-    const repoRootId = args.logicalWorkspace?.repoRoot?.id ?? null;
-    if (!branchName || !baseCommitSha || !repoRootId) {
-      showToast("Workspace mobility requires a local repo root, branch, and base commit.");
-      return;
-    }
-
-    let handoffOpId: string | null = null;
-      let destinationWorkspaceId: string | null = null;
-      let destinationCreatedForHandoff = false;
-      let finalized = false;
-      let cleanupCompleted = false;
-      let sourceRemoteOwned = false;
-
-    clearMcpNotice(snapshot.logicalWorkspaceId);
-    clearConfirmSnapshot(snapshot.logicalWorkspaceId);
-    setIsRunning(true);
-
-    try {
-      const handoff = await startHandoff.mutateAsync({
-        mobilityWorkspaceId: snapshot.mobilityWorkspaceId,
-        input: {
-          direction: "cloud_to_local",
-          requestedBranch: branchName,
-          requestedBaseSha: baseCommitSha,
-          excludePaths: [],
-        },
-      });
-      handoffOpId = handoff.id;
-
-      const destination = await prepareDestination.mutateAsync({
-        repoRootId,
-        input: {
-          requestedBranch: branchName,
-          requestedBaseSha: baseCommitSha,
-          preferredWorkspaceName: args.logicalWorkspace?.displayName ?? undefined,
-        },
-      });
-      destinationWorkspaceId = destination.workspace.id;
-      destinationCreatedForHandoff = destination.created;
-
-      await updateRuntimeState.mutateAsync({
-        workspaceId: snapshot.sourceWorkspaceId,
-        input: {
-          mode: "frozen_for_handoff",
-          handoffOpId,
-        },
-      });
-      await updatePhase.mutateAsync({
-        mobilityWorkspaceId: snapshot.mobilityWorkspaceId,
-        handoffOpId,
-        input: {
-          phase: "source_frozen",
-          statusDetail: "Cloud source frozen",
-        },
-      });
-
-      await updatePhase.mutateAsync({
-        mobilityWorkspaceId: snapshot.mobilityWorkspaceId,
-        handoffOpId,
-        input: {
-          phase: "destination_ready",
-          statusDetail: "Local destination ready",
-        },
-      });
-
-      const archive = await exportArchive.mutateAsync({
-        workspaceId: snapshot.sourceWorkspaceId,
-        input: {
-          excludePaths: [],
-          expectedHandoffOpId: handoffOpId,
-          expectedBaseCommitSha: baseCommitSha,
-          expectedBranchName: branchName,
-          requireCleanGitState: true,
-        },
-      });
-      await installArchive.mutateAsync({
-        workspaceId: destinationWorkspaceId,
-        archive,
-        operationId: handoffOpId,
-      });
-
-      await updatePhase.mutateAsync({
-        mobilityWorkspaceId: snapshot.mobilityWorkspaceId,
-        handoffOpId,
-        input: {
-          phase: "install_succeeded",
-          statusDetail: "Archive installed locally",
-        },
-      });
-
-      await updateRuntimeState.mutateAsync({
-        workspaceId: snapshot.sourceWorkspaceId,
-        input: {
-          mode: "remote_owned",
-          handoffOpId,
-        },
-      });
-      sourceRemoteOwned = true;
-
-      await finalizeHandoff.mutateAsync({
-        mobilityWorkspaceId: snapshot.mobilityWorkspaceId,
-        handoffOpId,
-        input: {},
-      });
-      finalized = true;
-
-      await clearWorkspaceOwnerFlipCache({
-        logicalWorkspaceId: snapshot.logicalWorkspaceId,
-        previousWorkspaceId: snapshot.sourceWorkspaceId,
-        previousCloudWorkspaceId: args.logicalWorkspace?.cloudWorkspace?.id
-          ?? args.logicalWorkspace?.mobilityWorkspace?.cloudWorkspaceId
-          ?? null,
-      });
-      clearWorkspaceRuntimeState(snapshot.sourceWorkspaceId, { clearSelection: true });
-      await refreshWorkspaceCollections();
-      await selectWorkspace(destinationWorkspaceId, { force: true });
-
-      showMcpNotice(snapshot.logicalWorkspaceId);
-      void (async () => {
-        try {
-          await cleanupWorkspace.mutateAsync({
-            workspaceId: snapshot.sourceWorkspaceId,
-          });
-          clearWorkspaceRuntimeState(snapshot.sourceWorkspaceId);
-          await completeCleanup.mutateAsync({
-            mobilityWorkspaceId: snapshot.mobilityWorkspaceId,
-            handoffOpId,
-          });
-          cleanupCompleted = true;
-          await invalidateWorkspaceCollections().catch(() => undefined);
-        } catch (cleanupError) {
-          if (cleanupCompleted) {
-            await invalidateWorkspaceCollections().catch(() => undefined);
-            return;
-          }
-          await failHandoff.mutateAsync({
-            mobilityWorkspaceId: snapshot.mobilityWorkspaceId,
-            handoffOpId,
-            input: {
-              failureCode: "cleanup_failed",
-              failureDetail: cleanupError instanceof Error
-                ? cleanupError.message
-                : "Source cleanup failed after finalize.",
-            },
-          }).catch(() => undefined);
-          await invalidateWorkspaceCollections().catch(() => undefined);
-          showMcpNotice(snapshot.logicalWorkspaceId);
-          showToast(cleanupError instanceof Error
-            ? cleanupError.message
-            : "The workspace moved, but source cleanup needs retry.");
-        }
-      })();
-    } catch (error) {
-      const finalizationResolution = !finalized && sourceRemoteOwned && handoffOpId
-        ? await resolveHandoffFinalizationAfterAmbiguousCutover({
-          mobilityWorkspaceId: snapshot.mobilityWorkspaceId,
-          handoffOpId,
-        })
-        : "not_finalized";
-      const effectiveFinalized = finalized || finalizationResolution === "finalized";
-      const failureRecovery = deriveHandoffFailureRecovery({
-        handoffStarted: handoffOpId !== null,
-        finalized: effectiveFinalized,
-        finalizationUnresolved: finalizationResolution === "unknown",
-        cleanupCompleted,
-      });
-
-      if (handoffOpId && failureRecovery.shouldMarkHandoffFailed) {
-        await failHandoff.mutateAsync({
-          mobilityWorkspaceId: snapshot.mobilityWorkspaceId,
-          handoffOpId,
-          input: {
-            failureCode: "handoff_failed",
-            failureDetail: error instanceof Error
-              ? error.message
-              : "Workspace handoff failed.",
-          },
-        }).catch(() => undefined);
-      }
-
-      if (failureRecovery.shouldRestoreSourceRuntimeState) {
-        await updateRuntimeState.mutateAsync({
-          workspaceId: snapshot.sourceWorkspaceId,
-          input: {
-            mode: "normal",
-            handoffOpId: null,
-          },
-        }).catch(() => undefined);
-      }
-
-      if (!effectiveFinalized && destinationWorkspaceId && destinationCreatedForHandoff) {
-        await purgePreparedDestination.mutateAsync(destinationWorkspaceId).catch(() => undefined);
-      }
-
-      if (failureRecovery.shouldRefreshWorkspaceSelection) {
-        await invalidateWorkspaceCollections();
-        await selectWorkspace(snapshot.logicalWorkspaceId, { force: true }).catch(() => undefined);
-      }
-
-      showToast(error instanceof Error ? error.message : "Workspace handoff failed.");
-      throw error;
-    } finally {
-      setIsRunning(false);
-    }
-  }, [
-    args.logicalWorkspace,
+  const handoffDeps = useMemo<RunCloudToLocalHandoffDeps>(() => ({
+    startHandoff: (input) => startHandoff.mutateAsync(input),
+    prepareDestination: (input) => prepareDestination.mutateAsync(input),
+    updateRuntimeState: (input) => updateRuntimeState.mutateAsync(input),
+    updatePhase: (input) => updatePhase.mutateAsync(input),
+    exportArchive: (input) => exportArchive.mutateAsync(input),
+    installArchive: (input) => installArchive.mutateAsync(input),
+    finalizeHandoff: (input) => finalizeHandoff.mutateAsync(input),
+    clearWorkspaceOwnerFlipCache,
+    clearWorkspaceRuntimeState,
+    refreshWorkspaceCollections,
+    selectWorkspace,
+    showMcpNotice,
+    cleanupWorkspace: (input) => cleanupWorkspace.mutateAsync(input),
+    completeCleanup: (input) => completeCleanup.mutateAsync(input),
+    failHandoff: (input) => failHandoff.mutateAsync(input),
+    purgePreparedDestination: (workspaceId) => purgePreparedDestination.mutateAsync(workspaceId),
+    invalidateWorkspaceCollections,
+    resolveFinalizationAfterAmbiguousCutover: resolveHandoffFinalizationAfterAmbiguousCutover,
+    showToast,
+  }), [
     cleanupWorkspace,
-    clearConfirmSnapshot,
-    clearMcpNotice,
     clearWorkspaceOwnerFlipCache,
     clearWorkspaceRuntimeState,
     completeCleanup,
     exportArchive,
     failHandoff,
     finalizeHandoff,
-    invalidateWorkspaceCollections,
     installArchive,
+    invalidateWorkspaceCollections,
     prepareDestination,
     purgePreparedDestination,
     refreshWorkspaceCollections,
@@ -469,6 +248,32 @@ export function useCloudToLocalHandoff(args: {
     startHandoff,
     updatePhase,
     updateRuntimeState,
+  ]);
+
+  const confirm = useCallback(async (snapshot: WorkspaceMobilityConfirmSnapshot) => {
+    clearMcpNotice(snapshot.logicalWorkspaceId);
+    clearConfirmSnapshot(snapshot.logicalWorkspaceId);
+    setIsRunning(true);
+    try {
+      await runCloudToLocalHandoff({
+        snapshot,
+        repoRootId: args.logicalWorkspace?.repoRoot?.id ?? null,
+        preferredWorkspaceName: args.logicalWorkspace?.displayName ?? undefined,
+        previousCloudWorkspaceId: args.logicalWorkspace?.cloudWorkspace?.id
+          ?? args.logicalWorkspace?.mobilityWorkspace?.cloudWorkspaceId
+          ?? null,
+      }, handoffDeps);
+    } finally {
+      setIsRunning(false);
+    }
+  }, [
+    args.logicalWorkspace?.cloudWorkspace?.id,
+    args.logicalWorkspace?.displayName,
+    args.logicalWorkspace?.mobilityWorkspace?.cloudWorkspaceId,
+    args.logicalWorkspace?.repoRoot?.id,
+    clearConfirmSnapshot,
+    clearMcpNotice,
+    handoffDeps,
   ]);
 
   return {

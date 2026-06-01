@@ -5,38 +5,21 @@ import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
 import { useComputeTargetOptions } from "@/hooks/compute/derived/use-compute-target-options";
 import { useMobilityFooterContext } from "@/hooks/workspaces/derived/mobility/use-mobility-footer-context";
 import { useToastStore } from "@/stores/toast/toast-store";
-import { useWorkspaceMobilityUiStore } from "@/stores/workspaces/workspace-mobility-ui-store";
-import { useMobilityPromptState } from "@/hooks/workspaces/derived/mobility/use-mobility-prompt-state";
-import { useWorkspaceMobilityHandoffActions } from "@/hooks/workspaces/workflows/mobility/use-workspace-mobility-handoff-actions";
 import { useWorkspaceMobilityGitPrepWorkflow } from "@/hooks/workspaces/workflows/mobility/use-workspace-mobility-git-prep-workflow";
 import { useWorkspaceMobilityState } from "@/hooks/workspaces/derived/mobility/use-workspace-mobility-state";
 import { isWorkspaceMobilityTransitionPhase } from "@/lib/domain/workspaces/mobility/mobility-state-machine";
 import { resolveMobilityFooterProgressStatus } from "@/lib/domain/workspaces/mobility/mobility-footer-progress";
-import type {
-  WorkspaceMobilityConfirmSnapshot,
-  WorkspaceMobilityDirection,
-} from "@/lib/domain/workspaces/mobility/types";
-import { isMobilityPromptPrimaryActionPending } from "@/lib/domain/workspaces/mobility/mobility-prompt";
+import type { WorkspaceMobilityDirection } from "@/lib/domain/workspaces/mobility/types";
+import { isMobilityFooterPromptActionPending } from "@/lib/domain/workspaces/mobility/mobility-footer-flow";
 import {
   buildWorkspaceMobilityDestinationOptions,
   type WorkspaceMobilityDestinationId,
   type WorkspaceMobilityDestinationOption,
 } from "@/lib/domain/workspaces/mobility/mobility-destinations";
 import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/proliferate-auth";
-import { elapsedMs, logLatency, startLatencyTimer } from "@/lib/infra/measurement/debug-latency";
-import { rightPanelToolHeaderKey } from "@/lib/domain/workspaces/shell/right-panel-model";
-import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
-import { useGitPanelUiStore } from "@/stores/editor/git-panel-ui-store";
-
-function snapshotReadyToMove(snapshot: WorkspaceMobilityConfirmSnapshot | null): snapshot is WorkspaceMobilityConfirmSnapshot {
-  return Boolean(
-    snapshot
-    && snapshot.sourcePreflight.canMove
-    && snapshot.cloudPreflight.canStart
-    && (snapshot.sourcePreflight.blockers?.length ?? 0) === 0
-    && (snapshot.cloudPreflight.blockers?.length ?? 0) === 0,
-  );
-}
+import { logLatency } from "@/lib/infra/measurement/debug-latency";
+import { useWorkspaceMobilityFooterGitPanelAction } from "@/hooks/workspaces/ui/mobility/use-workspace-mobility-footer-git-panel-action";
+import { useWorkspaceMobilityFooterPromptPreparation } from "@/hooks/workspaces/ui/mobility/use-workspace-mobility-footer-prompt-preparation";
 
 export function useWorkspaceMobilityFooterFlow() {
   const { openExternal } = useTauriShellActions();
@@ -53,33 +36,13 @@ export function useWorkspaceMobilityFooterFlow() {
   const computeTargets = useComputeTargetOptions({
     enabled: Boolean(footerContext),
   });
-  const {
-    activatePromptRequest,
-    clearPrompt,
-    clearPromptRequest,
-    confirmMove,
-    isSyncingBranch,
-    preparePrompt,
-    syncBranchForSelectedMove,
-  } = useWorkspaceMobilityHandoffActions(mobilityState);
-  const setRightPanelMaterializedForWorkspace = useWorkspaceUiStore(
-    (state) => state.setRightPanelMaterializedForWorkspace,
-  );
-  const setRightPanelOpenForWorkspace = useWorkspaceUiStore(
-    (state) => state.setRightPanelOpenForWorkspace,
-  );
-  const requestGitPanelMode = useGitPanelUiStore((state) => state.requestModeForWorkspace);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [gitPrepDialogOpen, setGitPrepDialogOpen] = useState(false);
-  const [isPreparing, setIsPreparing] = useState(false);
-  const [hasResolvedPrompt, setHasResolvedPrompt] = useState(false);
-  const [preparationError, setPreparationError] = useState<string | null>(null);
   const [selectedDestinationId, setSelectedDestinationId] =
     useState<WorkspaceMobilityDestinationId | null>(null);
   const [isOpeningGitHubAccess, setIsOpeningGitHubAccess] = useState(false);
   const [optimisticProgressDirection, setOptimisticProgressDirection] =
     useState<WorkspaceMobilityDirection | null>(null);
-  const prepareRequestTokenRef = useRef(0);
   const preservePromptOnPopoverCloseRef = useRef(false);
   const destinationOptions = useMemo(() => (
     footerContext
@@ -98,13 +61,6 @@ export function useWorkspaceMobilityFooterFlow() {
     destinationOptions,
     selectedDestinationId,
   ]);
-  const rawPrompt = useMobilityPromptState(
-    isPreparing,
-    hasResolvedPrompt,
-    popoverOpen && selectedDestination !== null && !mobilityState.selectionLocked,
-    preparationError,
-  );
-  const prompt = mobilityState.selectionLocked ? null : rawPrompt;
   const gitPrepWorkflow = useWorkspaceMobilityGitPrepWorkflow({
     workspaceId: mobilityState.confirmSnapshot?.sourceWorkspaceId ?? null,
     direction: mobilityState.confirmSnapshot?.direction ?? null,
@@ -121,151 +77,34 @@ export function useWorkspaceMobilityFooterFlow() {
     statusDirection: mobilityState.status.direction,
     statusPhase: mobilityState.status.phase,
   });
-
-  const resetPromptState = useCallback(() => {
-    prepareRequestTokenRef.current += 1;
-    setIsPreparing(false);
-    setHasResolvedPrompt(false);
-    setPreparationError(null);
-  }, []);
-
-  const readFreshConfirmSnapshot = useCallback(() => {
-    const logicalWorkspaceId = mobilityState.selectedLogicalWorkspaceId;
-    if (!logicalWorkspaceId) {
-      return null;
-    }
-    return useWorkspaceMobilityUiStore.getState().confirmSnapshotByLogicalWorkspaceId[
-      logicalWorkspaceId
-    ] ?? null;
-  }, [mobilityState.selectedLogicalWorkspaceId]);
-
-  const runPromptPreparation = useCallback(async () => {
-    const requestToken = prepareRequestTokenRef.current + 1;
-    prepareRequestTokenRef.current = requestToken;
-    const startedAt = startLatencyTimer();
-    logLatency("mobility.footer.prepare.start", {
-      requestId: requestToken,
-      logicalWorkspaceId: mobilityState.selectedLogicalWorkspaceId,
-      selectionLocked: mobilityState.selectionLocked,
-      canMoveToCloud: mobilityState.canMoveToCloud,
-      canBringBackLocal: mobilityState.canBringBackLocal,
-    });
-    activatePromptRequest(requestToken);
-    clearPrompt();
-    setPreparationError(null);
-    setIsPreparing(true);
-    setHasResolvedPrompt(false);
-    try {
-      await preparePrompt(requestToken);
-    } catch (error) {
-      if (prepareRequestTokenRef.current !== requestToken) {
-        return;
-      }
-      setIsPreparing(false);
-      setHasResolvedPrompt(true);
-      setPreparationError(error instanceof Error ? error.message : "Failed to load workspace mobility details.");
-      return;
-    }
-    const activeRequestId = mobilityState.selectedLogicalWorkspaceId
-      ? useWorkspaceMobilityUiStore.getState().activePromptRequestIdByLogicalWorkspaceId[
-        mobilityState.selectedLogicalWorkspaceId
-      ] ?? null
-      : null;
-    if (
-      prepareRequestTokenRef.current !== requestToken
-      || activeRequestId !== requestToken
-    ) {
-      logLatency("mobility.footer.prepare.stale", {
-        requestId: requestToken,
-        logicalWorkspaceId: mobilityState.selectedLogicalWorkspaceId,
-        activeRequestId,
-        elapsedMs: elapsedMs(startedAt),
-      });
-      return;
-    }
-    setIsPreparing(false);
-    setHasResolvedPrompt(true);
-    const confirmSnapshot = mobilityState.selectedLogicalWorkspaceId
-      ? useWorkspaceMobilityUiStore.getState().confirmSnapshotByLogicalWorkspaceId[
-        mobilityState.selectedLogicalWorkspaceId
-      ] ?? null
-      : null;
-    logLatency("mobility.footer.prepare.complete", {
-      requestId: requestToken,
-      logicalWorkspaceId: mobilityState.selectedLogicalWorkspaceId,
-      hasConfirmSnapshot: Boolean(confirmSnapshot),
-      elapsedMs: elapsedMs(startedAt),
-    });
-  }, [
-    activatePromptRequest,
-    clearPrompt,
-    mobilityState.canBringBackLocal,
-    mobilityState.canMoveToCloud,
-    mobilityState.selectedLogicalWorkspaceId,
-    mobilityState.selectionLocked,
-    preparePrompt,
-  ]);
-
-  const rerunPreparationAndAutoMove = useCallback(async () => {
-    const requestToken = prepareRequestTokenRef.current + 1;
-    prepareRequestTokenRef.current = requestToken;
-    activatePromptRequest(requestToken);
-    clearPrompt();
-    setPreparationError(null);
-    setIsPreparing(true);
-    setHasResolvedPrompt(false);
-    try {
-      await preparePrompt(requestToken);
-    } catch (error) {
-      if (prepareRequestTokenRef.current === requestToken) {
-        setPreparationError(error instanceof Error ? error.message : "Failed to load workspace mobility details.");
-        setHasResolvedPrompt(true);
-        setIsPreparing(false);
-      }
-      return false;
-    }
-
-    if (prepareRequestTokenRef.current !== requestToken) {
-      return false;
-    }
-
-    setIsPreparing(false);
-    setHasResolvedPrompt(true);
-    const freshSnapshot = readFreshConfirmSnapshot();
-    if (!snapshotReadyToMove(freshSnapshot)) {
-      setPopoverOpen(true);
-      return false;
-    }
-
-    setOptimisticProgressDirection(freshSnapshot.direction);
-    setPopoverOpen(false);
-    setSelectedDestinationId(null);
-    clearPromptRequest();
-    try {
-      await confirmMove(freshSnapshot);
-      return true;
-    } catch {
-      setOptimisticProgressDirection(null);
-      return false;
-    } finally {
-      clearPrompt();
-    }
-  }, [
-    activatePromptRequest,
+  const {
+    prompt,
+    isPreparing,
+    hasResolvedPrompt,
+    isSyncingBranch,
+    resetPromptState,
+    setPreparationFailure,
+    resolvePromptWithoutPreparation,
+    runPromptPreparation,
+    rerunPreparationAndAutoMove,
     clearPrompt,
     clearPromptRequest,
-    confirmMove,
-    preparePrompt,
-    readFreshConfirmSnapshot,
-  ]);
+    syncBranchForSelectedMove,
+  } = useWorkspaceMobilityFooterPromptPreparation({
+    mobilityState,
+    popoverOpen,
+    selectedDestinationId,
+    setPopoverOpen,
+    setSelectedDestinationId,
+    setOptimisticProgressDirection,
+  });
+  const openGitPanel = useWorkspaceMobilityFooterGitPanelAction(mobilityState);
 
-  const isPromptActionPending = prompt
-    ? isMobilityPromptPrimaryActionPending(prompt, {
-      isBranchSyncing: isSyncingBranch,
-    })
-      || (prompt.primaryActionKind === "connect_github" && githubSignInSubmitting)
-      || (prompt.primaryActionKind === "manage_github_access" && isOpeningGitHubAccess)
-    : false;
+  const isPromptActionPending = isMobilityFooterPromptActionPending(prompt, {
+    isBranchSyncing: isSyncingBranch,
+    isGitHubSignInSubmitting: githubSignInSubmitting,
+    isOpeningGitHubAccess,
+  });
 
   useEffect(() => {
     resetPromptState();
@@ -294,9 +133,7 @@ export function useWorkspaceMobilityFooterFlow() {
     }
 
     if (mobilityState.selectionLocked || !selectedDestination.direction || !canPrepare) {
-      setIsPreparing(false);
-      setHasResolvedPrompt(true);
-      setPreparationError(null);
+      resolvePromptWithoutPreparation();
       return;
     }
 
@@ -311,6 +148,7 @@ export function useWorkspaceMobilityFooterFlow() {
     isPreparing,
     mobilityState.selectionLocked,
     popoverOpen,
+    resolvePromptWithoutPreparation,
     runPromptPreparation,
     selectedDestination,
   ]);
@@ -418,33 +256,6 @@ export function useWorkspaceMobilityFooterFlow() {
     resetPromptState,
   ]);
 
-  const openGitPanel = useCallback(() => {
-    const sourceWorkspaceId = mobilityState.confirmSnapshot?.sourceWorkspaceId
-      ?? mobilityState.resolvedWorkspaceId;
-    const workspaceUiKey = mobilityState.selectedLogicalWorkspaceId
-      ?? sourceWorkspaceId;
-    if (!sourceWorkspaceId || !workspaceUiKey) {
-      return;
-    }
-    const gitEntryKey = rightPanelToolHeaderKey("git");
-    setRightPanelMaterializedForWorkspace(sourceWorkspaceId, (previous) => ({
-      ...previous,
-      activeEntryKey: gitEntryKey,
-      headerOrder: previous.headerOrder.includes(gitEntryKey)
-        ? previous.headerOrder
-        : [...previous.headerOrder, gitEntryKey],
-    }));
-    setRightPanelOpenForWorkspace(workspaceUiKey, true);
-    requestGitPanelMode(sourceWorkspaceId, "unstaged");
-  }, [
-    mobilityState.confirmSnapshot?.sourceWorkspaceId,
-    mobilityState.resolvedWorkspaceId,
-    mobilityState.selectedLogicalWorkspaceId,
-    requestGitPanelMode,
-    setRightPanelMaterializedForWorkspace,
-    setRightPanelOpenForWorkspace,
-  ]);
-
   const handleOpenGitPanelFromPrep = useCallback(() => {
     preservePromptOnPopoverCloseRef.current = false;
     setGitPrepDialogOpen(false);
@@ -487,8 +298,7 @@ export function useWorkspaceMobilityFooterFlow() {
         return;
       case "connect_github":
         if (!githubSignInAvailable) {
-          setPreparationError(signInUnavailableDescription);
-          setHasResolvedPrompt(true);
+          setPreparationFailure(signInUnavailableDescription);
           return;
         }
         try {
@@ -497,8 +307,7 @@ export function useWorkspaceMobilityFooterFlow() {
           clearPrompt();
           await runPromptPreparation();
         } catch (error) {
-          setPreparationError(error instanceof Error ? error.message : "GitHub sign-in failed.");
-          setHasResolvedPrompt(true);
+          setPreparationFailure(error instanceof Error ? error.message : "GitHub sign-in failed.");
         }
         return;
       case "manage_github_access":
@@ -541,15 +350,13 @@ export function useWorkspaceMobilityFooterFlow() {
   }, [
     closePopover,
     clearPrompt,
-    clearPromptRequest,
-    confirmMove,
     githubAuthAvailability?.clientId,
     githubSignInAvailable,
-    mobilityState.confirmSnapshot?.direction,
-    mobilityState.status.direction,
+    openExternal,
     prompt,
     resetPromptState,
     runPromptPreparation,
+    setPreparationFailure,
     showToast,
     signInUnavailableDescription,
     signInWithGitHub,
