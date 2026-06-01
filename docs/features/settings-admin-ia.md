@@ -126,8 +126,9 @@ SETTINGS_CONTENT_SECTIONS = [
 ]
 ```
 
-**Sidebar config**: `apps/desktop/src/components/settings/settings-navigation.ts`
-exports `SETTINGS_NAV_GROUPS` (icon, label, id per item). **Current
+**Sidebar navigation presentation**:
+`apps/desktop/src/lib/domain/settings/navigation-presentation.ts` exports
+`SETTINGS_NAV_GROUPS` (icon id, label, id per item). **Current
 groups (5)**:
 
 ```text
@@ -746,7 +747,7 @@ apps/desktop/src/lib/domain/settings/navigation.ts
   - remove hardcoded cloud/cloudRepo behavior or map it through the new focus
     model
 
-apps/desktop/src/components/settings/settings-navigation.ts
+apps/desktop/src/lib/domain/settings/navigation-presentation.ts
   - new groups: Preferences | Organization & Account | Workspace |
     Agents | Slack bot | Help
   - new items: agent-authentication, shared-environments, slack-bot
@@ -837,7 +838,7 @@ stub cards, or "coming soon" panels.
 
 ```text
 Chunk A  Sidebar + nav + redirects
-  - settings-navigation.ts rewrite
+  - navigation-presentation.ts rewrite
   - SETTINGS_CONTENT_SECTIONS update
   - redirect map for renamed ids
   - SettingsSidebar admin-tag rendering
