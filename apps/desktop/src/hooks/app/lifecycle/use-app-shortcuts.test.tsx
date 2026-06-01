@@ -2,7 +2,7 @@
 
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AppCommandActions } from "@/hooks/app/workflows/use-app-command-actions";
+import type { AppCommandActions } from "@/hooks/app/workflows/app-command-action-types";
 import { useAppShortcuts } from "@/hooks/app/lifecycle/use-app-shortcuts";
 import {
   clearShortcutHandlerRegistryForTests,

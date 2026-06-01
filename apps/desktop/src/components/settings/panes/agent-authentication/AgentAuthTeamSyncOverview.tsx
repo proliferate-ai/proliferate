@@ -3,12 +3,12 @@ import { Badge } from "@proliferate/ui/primitives/Badge";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { agentAuthenticationCopy } from "@/copy/settings/agent-authentication-copy";
 import { AgentAuthAdminTag } from "@/components/settings/panes/agent-authentication/AgentAuthAdminTag";
+import { agentAuthAgentLabel } from "@/lib/domain/agent-auth/agent-auth-agent-presentation";
 import {
-  agentAuthAgentLabel,
   agentAuthCredentialKindLabel,
   agentAuthCredentialStatusLabel,
   agentAuthCredentialStatusTone,
-} from "@/lib/domain/agent-auth/agent-auth-presentation";
+} from "@/lib/domain/agent-auth/agent-auth-credential-presentation";
 
 interface AgentAuthTeamSyncOverviewProps {
   credentials: AgentAuthCredential[];

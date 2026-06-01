@@ -6,7 +6,7 @@ import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
 import { SidebarWorkspaceVariantIcon } from "@/components/workspace/shell/sidebar/SidebarWorkspaceVariantIcon";
-import { SHORTCUTS } from "@/config/shortcuts";
+import { SHORTCUTS } from "@/config/shortcuts/registry";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import type { NewWorkspaceCommandScope } from "@/lib/domain/workspaces/creation/new-workspace-command";
 import {

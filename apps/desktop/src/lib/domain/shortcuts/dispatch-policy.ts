@@ -1,4 +1,5 @@
-import { SHORTCUTS, type ShortcutDef } from "@/config/shortcuts";
+import { SHORTCUTS } from "@/config/shortcuts/registry";
+import type { ShortcutDef } from "@/config/shortcuts/types";
 import { getFocusZone } from "@/lib/domain/focus-zone";
 import {
   isTextEntryTarget,

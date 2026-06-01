@@ -22,14 +22,16 @@ import type {
 import {
   AGENT_AUTH_AGENT_ORDER,
   agentAuthAgentLabel,
+  agentAuthHarnessDescription,
+} from "@/lib/domain/agent-auth/agent-auth-agent-presentation";
+import {
   agentAuthCredentialAvailability,
   agentAuthCredentialDisplayLabel,
   agentAuthCredentialKindLabel,
-  agentAuthHarnessDescription,
   credentialSelectableReason,
   credentialSummaryDetails,
   selectionByAgentKind,
-} from "@/lib/domain/agent-auth/agent-auth-presentation";
+} from "@/lib/domain/agent-auth/agent-auth-credential-presentation";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 
 interface CloudAgentAuthLibraryProps {

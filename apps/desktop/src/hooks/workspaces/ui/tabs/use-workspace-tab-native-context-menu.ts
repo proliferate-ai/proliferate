@@ -1,4 +1,4 @@
-import { SHORTCUTS } from "@/config/shortcuts";
+import { SHORTCUTS } from "@/config/shortcuts/registry";
 import { useNativeContextMenu } from "@/hooks/ui/native/use-native-context-menu";
 import { getShortcutNativeAccelerator } from "@/lib/domain/shortcuts/native-accelerators";
 import type {

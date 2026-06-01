@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SHORTCUTS } from "@/config/shortcuts";
+import { SHORTCUTS } from "@/config/shortcuts/registry";
 import { shouldDispatchKeyboardShortcut } from "@/lib/domain/shortcuts/dispatch-policy";
 
 describe("shortcut dispatch policy", () => {

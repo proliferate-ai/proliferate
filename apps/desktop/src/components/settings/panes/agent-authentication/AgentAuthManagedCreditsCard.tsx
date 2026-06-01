@@ -6,7 +6,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
-import { agentAuthManagedCreditsCapabilityLabel } from "@/lib/domain/agent-auth/agent-auth-presentation";
+import { agentAuthManagedCreditsCapabilityLabel } from "@/lib/domain/agent-auth/agent-auth-gateway-capabilities";
 
 interface AgentAuthManagedCreditsCardProps {
   capabilities: AgentGatewayCapabilities | null;

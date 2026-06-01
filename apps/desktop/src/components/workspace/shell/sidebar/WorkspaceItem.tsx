@@ -3,7 +3,7 @@ import {
   CLOUD_SIDEBAR_STATUS_DEFINITIONS,
   type CloudSidebarStatus,
 } from "@/config/cloud-sidebar";
-import { SHORTCUTS } from "@/config/shortcuts";
+import { SHORTCUTS } from "@/config/shortcuts/registry";
 import {
   Archive,
   Folder,
