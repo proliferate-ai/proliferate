@@ -73,7 +73,7 @@ vi.mock("@/hooks/chat/derived/use-configured-launch-readiness", () => ({
   }),
 }));
 
-vi.mock("@/hooks/chat/derived/use-active-chat-session-selectors", () => ({
+vi.mock("@/hooks/chat/derived/use-active-session-config-state", () => ({
   useActiveSessionLaunchState: () => ({
     currentLaunchIdentity: null,
   }),

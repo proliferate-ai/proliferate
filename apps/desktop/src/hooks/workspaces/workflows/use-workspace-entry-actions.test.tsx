@@ -66,7 +66,7 @@ vi.mock("./use-workspace-entry-flow", async (importOriginal) => {
   };
 });
 
-vi.mock("@/hooks/chat/derived/use-active-chat-session-selectors", () => ({
+vi.mock("@/hooks/chat/derived/use-active-session-config-state", () => ({
   useActiveSessionLaunchState: () => ({
     currentLaunchIdentity: null,
   }),

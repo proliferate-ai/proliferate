@@ -14,7 +14,7 @@ import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
-import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-chat-session-selectors";
+import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-session-config-state";
 
 export type ChatAvailabilityState = ChatInputAvailabilityState;
 

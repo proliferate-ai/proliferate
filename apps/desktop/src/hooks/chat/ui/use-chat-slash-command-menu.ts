@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useActiveSessionTranscript } from "@/hooks/chat/derived/use-active-chat-session-selectors";
+import { useActiveSessionTranscript } from "@/hooks/chat/derived/use-active-session-transcript-state";
 import {
   filterDesktopRunnableSessionSlashCommands,
   matchSessionSlashCommandQuery,

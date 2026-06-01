@@ -9,7 +9,7 @@ const workspaceStatusPanelState = vi.hoisted(() => ({
   value: { kind: "pending" } as unknown,
 }));
 
-vi.mock("@/hooks/chat/derived/use-active-chat-session-selectors", () => ({
+vi.mock("@/hooks/chat/derived/use-active-pending-session-interactions", () => ({
   useActivePendingInteractionState: () => ({ primaryPendingInteraction: null }),
   useActivePendingPrompts: () => [],
 }));

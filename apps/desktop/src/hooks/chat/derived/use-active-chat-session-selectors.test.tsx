@@ -5,10 +5,14 @@ import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   useActivePendingPrompts,
-  useActiveSessionLaunchState,
+} from "@/hooks/chat/derived/use-active-pending-session-interactions";
+import {
   useActiveSessionConfigState,
+  useActiveSessionLaunchState,
+} from "@/hooks/chat/derived/use-active-session-config-state";
+import {
   useActiveTranscriptPaneState,
-} from "@/hooks/chat/derived/use-active-chat-session-selectors";
+} from "@/hooks/chat/derived/use-active-session-transcript-state";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
