@@ -13,7 +13,7 @@ import {
 } from "@proliferate/product-domain/chats/cloud/composer-controls";
 
 import type { PendingHomePrompt } from "../../../lib/access/cloud/pending-home-prompt-store";
-import type { WebCloudPromptIntent } from "../../../stores/cloud/web-cloud-chat-state-store";
+import type { WebCloudPromptIntent } from "../../../stores/cloud/web-cloud-prompt-intent-store";
 
 export function useWebCloudTranscriptLifecycle(input: {
   session: CloudSessionProjection | null;

@@ -13,15 +13,19 @@ import {
 } from "@proliferate/product-domain/chats/cloud/composer-controls";
 
 import { shouldSuppressWorkspaceSessionRedirect } from "../../../lib/domain/chat/cloud-chat-session-model";
-import type { SendPromptPayload, StartSessionPayload, UpdateSessionConfigPayload } from "../../../lib/access/cloud/pending-home-prompt-dispatch";
+import type { SendPromptPayload, StartSessionPayload, UpdateSessionConfigPayload } from "../../../lib/access/cloud/cloud-command-payloads";
 import { loadPendingHomePrompt, type PendingHomePrompt } from "../../../lib/access/cloud/pending-home-prompt-store";
 import {
-  loadWebCloudPendingConfigChanges,
   loadWebCloudPromptIntents,
-  loadWebCloudSessionDraftFromSearch,
   type WebCloudPromptIntent,
+} from "../../../stores/cloud/web-cloud-prompt-intent-store";
+import {
+  loadWebCloudPendingConfigChanges,
+} from "../../../stores/cloud/web-cloud-pending-config-change-store";
+import {
+  loadWebCloudSessionDraftFromSearch,
   type WebCloudSessionDraft,
-} from "../../../stores/cloud/web-cloud-chat-state-store";
+} from "../../../stores/cloud/web-cloud-session-draft-store";
 import { useWebCloudHarnessAvailability } from "../derived/use-web-cloud-harness-availability";
 import { useWebCloudLaunchSelection } from "../derived/use-web-cloud-launch-selection";
 import { useWebCloudTranscriptProjection } from "../derived/use-web-cloud-transcript-projection";

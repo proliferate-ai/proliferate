@@ -29,22 +29,26 @@ import {
 import { removeRetryReplacedFailedPrompts } from "../../../lib/domain/chat/cloud-chat-prompt-projection";
 import {
   dispatchPendingHomePrompt,
-  enqueuePromptCommandWithRetry,
-  prepareManagedWorkspaceForCloudCommands,
-  type SendPromptPayload,
-  type StartSessionPayload,
-  type UpdateSessionConfigPayload,
 } from "../../../lib/access/cloud/pending-home-prompt-dispatch";
+import { enqueuePromptCommandWithRetry } from "../../../lib/access/cloud/pending-home-prompt-send";
+import { prepareManagedWorkspaceForCloudCommands } from "../../../lib/access/cloud/managed-workspace-command-readiness";
+import type {
+  SendPromptPayload,
+  StartSessionPayload,
+  UpdateSessionConfigPayload,
+} from "../../../lib/access/cloud/cloud-command-payloads";
 import {
   clearPendingHomePrompt,
   savePendingHomePrompt,
   type PendingHomePrompt,
 } from "../../../lib/access/cloud/pending-home-prompt-store";
 import {
-  clearWebCloudSessionDraft,
   type WebCloudPromptIntent,
+} from "../../../stores/cloud/web-cloud-prompt-intent-store";
+import {
+  clearWebCloudSessionDraft,
   type WebCloudSessionDraft,
-} from "../../../stores/cloud/web-cloud-chat-state-store";
+} from "../../../stores/cloud/web-cloud-session-draft-store";
 
 type EnqueueCommand<TPayload> = (
   command: CloudCommandEnvelope<TPayload>,

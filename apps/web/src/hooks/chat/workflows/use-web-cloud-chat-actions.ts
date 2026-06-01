@@ -19,12 +19,14 @@ import type {
   SendPromptPayload,
   StartSessionPayload,
   UpdateSessionConfigPayload,
-} from "../../../lib/access/cloud/pending-home-prompt-dispatch";
+} from "../../../lib/access/cloud/cloud-command-payloads";
 import type { PendingHomePrompt } from "../../../lib/access/cloud/pending-home-prompt-store";
 import type {
   WebCloudPromptIntent,
+} from "../../../stores/cloud/web-cloud-prompt-intent-store";
+import type {
   WebCloudSessionDraft,
-} from "../../../stores/cloud/web-cloud-chat-state-store";
+} from "../../../stores/cloud/web-cloud-session-draft-store";
 import { useWebCloudPlanDecisionActions } from "./use-web-cloud-plan-decision-actions";
 import { useWebCloudPromptActions } from "./use-web-cloud-prompt-actions";
 import { useWebCloudSessionConfigActions } from "./use-web-cloud-session-config-actions";
