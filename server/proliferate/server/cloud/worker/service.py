@@ -25,7 +25,6 @@ from proliferate.constants.cloud import (
     CloudWorkspaceCleanupState,
     CloudWorkspaceStatus,
 )
-from proliferate.db import session_ops as db_session
 from proliferate.db.store import cloud_workspaces
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_claims import tokens as claim_tokens_store
@@ -953,7 +952,6 @@ async def record_materialization_report(
                 target_id=auth.target_id,
                 reason="exposures",
             )
-    await db_session.commit_session(db)
     return WorkerMaterializationReportResponse(
         cloud_workspace_id=str(workspace.id),
         updated=True,
@@ -1042,12 +1040,12 @@ async def record_update_status(
     )
 
 
-async def lease_worker_command(
+async def prepare_worker_command_lease(
     db: AsyncSession,
     *,
     auth: WorkerAuthContext,
     body: WorkerCommandLeaseRequest,
-) -> WorkerCommandLeaseResponse:
+) -> tuple[WorkerCommandLeaseResponse, bool]:
     supported_kinds = normalize_supported_command_kinds(body.supported_kinds)
     lease_seconds = clamp_command_lease_seconds(body.lease_timeout_seconds)
     now = utcnow()
@@ -1090,12 +1088,11 @@ async def lease_worker_command(
         # must be committed before the HTTP response is returned, otherwise the
         # delivery request can race the request-session commit and fail closed as
         # "not leased by this worker."
-    if command is not None or expired_commands:
-        await db_session.commit_session(db)
-    return WorkerCommandLeaseResponse(
+    response = WorkerCommandLeaseResponse(
         command=_command_envelope(command) if command is not None else None,
         server_time=now.isoformat(),
     )
+    return response, bool(command is not None or expired_commands)
 
 
 async def record_command_delivery(

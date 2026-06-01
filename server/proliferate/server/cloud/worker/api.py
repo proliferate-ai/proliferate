@@ -41,7 +41,6 @@ from proliferate.server.cloud.worker.models import (
 from proliferate.server.cloud.worker.service import (
     authenticate_worker,
     enroll_worker,
-    lease_worker_command,
     list_revoked_jtis,
     list_worker_exposures,
     record_command_delivery,
@@ -49,9 +48,12 @@ from proliferate.server.cloud.worker.service import (
     record_event_batch,
     record_heartbeat,
     record_inventory,
-    record_materialization_report,
     record_projection_gap,
     record_update_status,
+)
+from proliferate.server.cloud.worker.transactions import (
+    lease_worker_command_and_commit_if_needed,
+    record_materialization_report_and_commit,
 )
 
 router = APIRouter(prefix="/worker", tags=["cloud-worker"])
@@ -102,7 +104,7 @@ async def worker_materialization_report_endpoint(
 ) -> WorkerMaterializationReportResponse:
     try:
         auth = await authenticate_worker(db, authorization=authorization)
-        return await record_materialization_report(db, auth=auth, body=body)
+        return await record_materialization_report_and_commit(db, auth=auth, body=body)
     except CloudApiError as error:
         raise_cloud_error(error)
 
@@ -128,7 +130,7 @@ async def worker_command_lease_endpoint(
 ) -> WorkerCommandLeaseResponse:
     try:
         auth = await authenticate_worker(db, authorization=authorization)
-        return await lease_worker_command(db, auth=auth, body=body)
+        return await lease_worker_command_and_commit_if_needed(db, auth=auth, body=body)
     except CloudApiError as error:
         raise_cloud_error(error)
 

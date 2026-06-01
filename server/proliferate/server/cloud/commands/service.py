@@ -17,7 +17,7 @@ from proliferate.constants.cloud import (
     CloudTargetStatus,
     CloudWorkspaceStatus,
 )
-from proliferate.db import session_ops as db_session
+from proliferate.db.session_ops import is_integrity_error
 from proliferate.db.store import cloud_runtime_environments, cloud_sandboxes, cloud_workspaces
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_profile_target_guard import managed_profile_target_requires_slot
@@ -28,10 +28,10 @@ from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud._logging import log_cloud_event
-from proliferate.server.cloud.agent_auth.service import (
-    request_agent_auth_refresh_for_profile_target,
-)
 from proliferate.server.cloud.claims.access import require_workspace_interact
+from proliferate.server.cloud.commands.agent_auth_refresh import (
+    queue_agent_auth_refresh_for_not_ready_preflight,
+)
 from proliferate.server.cloud.commands.domain.rules import (
     compact_command_json,
     validate_active_command_kind,
@@ -40,6 +40,7 @@ from proliferate.server.cloud.commands.domain.rules import (
     validate_command_source,
 )
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
+from proliferate.server.cloud.commands.wake import schedule_managed_slot_wake_after_commit
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.live.service import (
     publish_command_status_after_commit,
@@ -980,7 +981,7 @@ async def enqueue_command(
         )
         return command
     except Exception as exc:
-        if not db_session.is_integrity_error(exc):
+        if not is_integrity_error(exc):
             raise
         duplicate = await commands_store.get_command_by_idempotency(
             db,
@@ -990,17 +991,6 @@ async def enqueue_command(
         if duplicate is not None:
             return duplicate
         raise
-
-
-async def enqueue_command_and_commit(
-    db: AsyncSession,
-    *,
-    user: ActorIdentity,
-    body: CreateCloudCommandRequest,
-) -> commands_store.CloudCommandSnapshot:
-    command = await enqueue_command(db, user=user, body=body)
-    await db_session.commit_session(db)
-    return command
 
 
 async def _record_pending_prompt_interaction_for_command(
@@ -1130,7 +1120,7 @@ async def _validate_agent_auth_preflight(
         )
         or (requires_slot and active_slot is None)
     ):
-        await _queue_agent_auth_refresh_for_not_ready_preflight(
+        await queue_agent_auth_refresh_for_not_ready_preflight(
             sandbox_profile_id=profile.id,
             target_id=target.id,
             actor_user_id=actor_user_id,
@@ -1145,31 +1135,6 @@ async def _validate_agent_auth_preflight(
             "cloud_command_agent_auth_restart_required",
             "Agent auth changes require the session to restart before this command can run.",
             status_code=409,
-        )
-
-
-async def _queue_agent_auth_refresh_for_not_ready_preflight(
-    *,
-    sandbox_profile_id: UUID,
-    target_id: UUID,
-    actor_user_id: UUID,
-) -> None:
-    try:
-        async with db_session.open_async_transaction() as refresh_db:
-            await request_agent_auth_refresh_for_profile_target(
-                refresh_db,
-                sandbox_profile_id=sandbox_profile_id,
-                target_id=target_id,
-                actor_user_id=actor_user_id,
-                reason="command_preflight",
-                force_restart=False,
-            )
-    except Exception as exc:
-        log_cloud_event(
-            "cloud command preflight agent auth refresh request failed",
-            target_id=target_id,
-            sandbox_profile_id=sandbox_profile_id,
-            error=str(exc),
         )
 
 
@@ -1724,10 +1689,12 @@ async def kick_off_command_wake_after_commit_if_required(
     if not _command_requires_managed_slot_wake(target, command):
         return
 
-    async def _wake_after_commit() -> None:
-        kick_off_managed_slot_wake(target.id, command.id)
-
-    await db_session.run_after_commit(db, _wake_after_commit)
+    await schedule_managed_slot_wake_after_commit(
+        db,
+        target_id=target.id,
+        command_id=command.id,
+        wake=kick_off_managed_slot_wake,
+    )
 
 
 def is_terminal_command_status(status: str) -> bool:

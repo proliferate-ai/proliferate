@@ -57,6 +57,12 @@ AGENT_AUTH_SERVICE_CONCERN_EXCLUDED_FILES = {
     "models.py",
     "reconciler.py",
 }
+SERVICE_BOUNDARY_DEBT_MODULES = {
+    "server/proliferate/server/cloud/commands/agent_auth_refresh.py",
+    "server/proliferate/server/cloud/commands/transactions.py",
+    "server/proliferate/server/cloud/commands/wake.py",
+    "server/proliferate/server/cloud/worker/transactions.py",
+}
 
 
 @dataclass(frozen=True)
@@ -88,6 +94,7 @@ class AllowlistEntry:
 class SourceKind:
     is_api: bool = False
     is_service: bool = False
+    is_service_boundary_debt: bool = False
     is_domain: bool = False
     is_product_models: bool = False
     is_store: bool = False
@@ -155,6 +162,7 @@ def classify_path(path: Path) -> SourceKind:
     is_orm_model = _starts_with(parts, ("server", "proliferate", "db", "models"))
     is_integration = _starts_with(parts, ("server", "proliferate", "integrations"))
     name = path.name
+    relative = relative_path(path)
     is_agent_auth_service_concern = (
         _starts_with(
             parts,
@@ -170,6 +178,7 @@ def classify_path(path: Path) -> SourceKind:
         is_service=(
             is_product and (name == "service.py" or is_agent_auth_service_concern)
         ),
+        is_service_boundary_debt=relative in SERVICE_BOUNDARY_DEBT_MODULES,
         is_domain=is_product and "domain" in path.parts,
         is_product_models=is_product and name == "models.py",
         is_store=is_store,
@@ -283,7 +292,7 @@ class BoundaryChecker(ast.NodeVisitor):
     ) -> None:
         if self.kind.is_api:
             self._check_api_import(node, module, names)
-        if self.kind.is_service:
+        if self.kind.is_service or self.kind.is_service_boundary_debt:
             self._check_service_import(node, module, names)
         if self.kind.is_domain:
             self._check_domain_import(node, module, names)
@@ -513,7 +522,7 @@ class BoundaryChecker(ast.NodeVisitor):
                     f"api.py must not call session method .{func.attr}()",
                 )
             if (
-                self.kind.is_service
+                (self.kind.is_service or self.kind.is_service_boundary_debt)
                 and func.attr in SERVICE_DB_METHODS
                 and looks_like_db_handle(func.value)
             ):
@@ -523,7 +532,7 @@ class BoundaryChecker(ast.NodeVisitor):
                     f"service.py must not call session method .{func.attr}()",
                 )
             if (
-                self.kind.is_service
+                (self.kind.is_service or self.kind.is_service_boundary_debt)
                 and func.attr in SERVICE_DB_SESSION_OPS_METHODS
                 and isinstance(func.value, ast.Name)
                 and func.value.id in {"db_session", "session_ops"}
