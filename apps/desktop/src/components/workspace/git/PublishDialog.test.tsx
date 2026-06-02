@@ -23,6 +23,7 @@ afterEach(() => {
 });
 
 describe("PublishDialog", () => {
+
   it("does not render a right-panel diff review action", () => {
     render(
       <PublishDialog

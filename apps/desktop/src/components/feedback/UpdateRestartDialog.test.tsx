@@ -25,6 +25,7 @@ afterEach(() => {
 });
 
 describe("UpdateRestartDialog", () => {
+
   it("renders the compact restart prompt when the update is ready", () => {
     render(<UpdateRestartDialog />);
 

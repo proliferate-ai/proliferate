@@ -70,6 +70,7 @@ function renderEditor({
 }
 
 describe("ComposerCommandEditor", () => {
+
   beforeEach(() => {
     slashCommandMock.commands = [];
     slashCommandMock.moveHighlight.mockClear();

@@ -27,6 +27,7 @@ const FREEFORM_ONLY: UserInputQuestion[] = [{
 }];
 
 describe("UserInputCard", () => {
+
   afterEach(() => {
     cleanup();
   });

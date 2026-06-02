@@ -36,6 +36,7 @@ afterEach(() => {
 });
 
 describe("CollapsedActions", () => {
+
   it("keeps the action ledger hidden until the summary row is clicked", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {

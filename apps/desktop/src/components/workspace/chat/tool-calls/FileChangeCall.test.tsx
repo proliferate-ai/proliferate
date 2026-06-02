@@ -26,7 +26,7 @@ vi.mock("@/hooks/workspaces/workflows/files/use-file-reference-actions", () => (
 }));
 
 describe("FileChangeCall", () => {
-  it("renders the edit row before completed diff cards without an aggregate files-changed header", () => {
+  it("renders expanded edit diffs as file cards without an aggregate files-changed header", () => {
     const html = renderToStaticMarkup(
       createElement(FileChangeCall, {
         operation: "edit",

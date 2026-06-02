@@ -5,6 +5,7 @@ import { createTranscriptState } from "./transcript.js";
 import { deriveCanonicalPlan } from "./canonical-plan.js";
 
 describe("canonical plan derivation", () => {
+
   it("derives canonical plans from structured plan items for non-Claude agents", () => {
     const transcript = transcriptWithItems({
       "plan-1": {

@@ -23,6 +23,7 @@ const branchFilesResponse: GitBranchDiffFilesResponse = {
 };
 
 describe("GitClient diff URLs", () => {
+
   it("keeps the old getDiff URL shape when options are omitted", async () => {
     const calls: string[] = [];
     const transport = {

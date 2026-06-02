@@ -5,6 +5,7 @@ import type { AnyHarnessTransport } from "./core.js";
 import { WorkspacesClient } from "./workspaces.js";
 
 const preflightResponse: WorkspaceRetirePreflightResponse = {
+
   workspaceId: "workspace/1",
   workspaceKind: "worktree",
   lifecycleState: "active",

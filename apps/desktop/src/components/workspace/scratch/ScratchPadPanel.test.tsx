@@ -98,6 +98,7 @@ afterEach(() => {
 });
 
 describe("ScratchPadPanel", () => {
+
   it("renders loaded scratch content and debounces writes", async () => {
     vi.useFakeTimers();
     scratchQueryMocks.record = {

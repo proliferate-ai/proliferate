@@ -30,6 +30,7 @@ afterEach(() => {
 });
 
 describe("ChatLaunchIntentPane", () => {
+
   it("renders pending thinking outside the right-aligned user message", () => {
     useChatLaunchIntentStore.getState().begin(intent());
 

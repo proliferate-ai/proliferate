@@ -32,7 +32,7 @@ export async function handleDesktopCallbackUrl(
   url: string,
   deps: AuthOrchestrationDeps,
 ): Promise<boolean> {
-  if (handleDesktopNavigationUrl(url)) {
+  if (handleDesktopNavigationUrl(url, deps)) {
     return true;
   }
 
