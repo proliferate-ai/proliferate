@@ -89,11 +89,24 @@ export function selectedModelIdForVisibility(
   agentKind: string,
   modelId: string,
 ): string {
+  if (agentKind === "claude") {
+    if (
+      modelId === "opus[1m]"
+      || isClaudeOpus48LongContextAlias(modelId)
+    ) {
+      return "us.anthropic.claude-opus-4-8[1m]";
+    }
+
+    if (modelId === "claude-opus-4-8" || modelId === "us.anthropic.claude-opus-4-8") {
+      return "us.anthropic.claude-opus-4-8";
+    }
+  }
+
   const normalizedModelId = normalizeLaunchModelId(agentKind, modelId);
-  const equivalenceKey = resolveModelSelectionEquivalenceKey(agentKind, normalizedModelId);
-  return equivalenceKey === "claude:opus-4-8"
-    ? "us.anthropic.claude-opus-4-8"
-    : normalizedModelId;
+  if (agentKind === "claude" && normalizedModelId === "opus[1m]") {
+    return "us.anthropic.claude-opus-4-8[1m]";
+  }
+  return normalizedModelId;
 }
 
 export function normalizeLaunchModelId(agentKind: string, modelId: string): string {
@@ -113,12 +126,11 @@ function resolveModelSelectionEquivalenceKey(
     return null;
   }
 
-  if (
-    modelId === "opus"
-    || modelId === "opus[1m]"
-    || isClaudeOpus48ModelId(modelId)
-    || isClaudeOpus48LongContextAlias(modelId)
-  ) {
+  if (modelId === "opus[1m]" || isClaudeOpus48LongContextAlias(modelId)) {
+    return "claude:opus-4-8-1m";
+  }
+
+  if (modelId === "opus" || isClaudeOpus48ModelId(modelId)) {
     return "claude:opus-4-8";
   }
 
@@ -131,6 +143,10 @@ function resolveModelCandidateEquivalenceKey(
 ): string | null {
   if (agentKind !== "claude") {
     return null;
+  }
+
+  if (isClaudeOpus48LongContextAlias(modelId)) {
+    return "claude:opus-4-8-1m";
   }
 
   return isClaudeOpus48ModelId(modelId) ? "claude:opus-4-8" : null;

@@ -10,8 +10,9 @@ import {
   PopoverButton,
 } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { useNativeContextMenu } from "@/hooks/ui/native/use-native-context-menu";
-import type { NativeContextMenuItem } from "@/lib/access/tauri/context-menu";
+import {
+  useChatDiffLineWrapNativeContextMenu,
+} from "@/hooks/ui/native/use-chat-diff-line-wrap-native-context-menu";
 import { useChatDiffPreferencesStore } from "@/stores/chat/chat-diff-preferences-store";
 
 interface ChatDiffLineWrapContextMenuProps {
@@ -29,12 +30,10 @@ export function ChatDiffLineWrapContextMenu({
 }: ChatDiffLineWrapContextMenuProps) {
   const wrapLongLines = useChatDiffPreferencesStore((state) => state.wrapLongLines);
   const toggleWrapLongLines = useChatDiffPreferencesStore((state) => state.toggleWrapLongLines);
-  const nativeContextMenu = useNativeContextMenu(() =>
-    buildChatDiffLineWrapNativeContextMenuItems({
-      wrapLongLines,
-      onToggleWrapLongLines: toggleWrapLongLines,
-    })
-  );
+  const nativeContextMenu = useChatDiffLineWrapNativeContextMenu({
+    wrapLongLines,
+    onToggleWrapLongLines: toggleWrapLongLines,
+  });
   const previousOnContextMenuCapture = trigger.props.onContextMenuCapture;
   const triggerWithNativeContextMenu = cloneElement(trigger, {
     onContextMenuCapture: (event) => {
@@ -62,20 +61,4 @@ export function ChatDiffLineWrapContextMenu({
       )}
     </PopoverButton>
   );
-}
-
-export function buildChatDiffLineWrapNativeContextMenuItems({
-  wrapLongLines,
-  onToggleWrapLongLines,
-}: {
-  wrapLongLines: boolean;
-  onToggleWrapLongLines: () => void;
-}): NativeContextMenuItem[] {
-  return [
-    {
-      id: "toggle-chat-diff-line-wrap",
-      label: wrapLongLines ? "Turn line wrapping off" : "Turn line wrapping on",
-      onSelect: onToggleWrapLongLines,
-    },
-  ];
 }

@@ -276,6 +276,7 @@ provider rule belongs in a harness doc or an integration guide:
 
 - [harnesses/claude.md](harnesses/claude.md)
 - [harnesses/codex.md](harnesses/codex.md)
+- [harnesses/gemini.md](harnesses/gemini.md)
 
 Also read:
 

@@ -15,7 +15,7 @@ export function PaneOptionsMenuItem({
   reserveIconSlot = Boolean(icon),
   trailing,
   className = "",
-  role = "menuitem",
+  role,
   type = "button",
   ...props
 }: PaneOptionsMenuItemProps) {

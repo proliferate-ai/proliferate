@@ -148,7 +148,7 @@ function ChatGutterColumn({
     <div
       data-gutter=""
       style={{ gridColumn: "1", gridRow: `1 / span ${rowCount}` }}
-      className="sticky left-0 z-10 grid [grid-template-rows:subgrid]"
+      className="sticky left-0 z-10 grid bg-[var(--diffs-bg)] [grid-template-rows:subgrid]"
     >
       {rows.map((row) =>
         row.kind === "line" ? (

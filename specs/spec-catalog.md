@@ -34,7 +34,7 @@ Guides: `components`, `hooks`, `state`, `lib`, `access`, `config`, `copy`, `styl
 ### Desktop Native
 **`specs/codebase/structures/desktop-native/README.md`** — `apps/desktop/src-tauri/**`.
 
-Sub-specs: `specs/anyharness-sidecar.md` (sidecar launch), `specs/agent-seeds.md` (bundled seed artifacts).
+Sub-specs: `specs/codebase/structures/desktop-native/specs/anyharness-sidecar.md` (sidecar launch), `specs/codebase/structures/desktop-native/specs/agent-seeds.md` (bundled seed artifacts).
 
 ### AnyHarness
 **`specs/codebase/structures/anyharness/README.md`** — `anyharness/crates/**`.
@@ -49,7 +49,7 @@ MCP is a vertical: `domains/sessions/mcp_bindings/` (user bindings + assembly), 
 
 Crates: `anyharness` (thin binary), `anyharness-contract` (wire schemas), `anyharness-credential-discovery` (credential files), `anyharness-lib` (all runtime behavior).
 
-Guides: `system-architecture`, `crates`, `api`, `app`, `domains`, `live-runtime`, `adapters`, `integrations`, `harnesses`, `persistence`, `observability`, `repo-shape`. Active specs: `session-engine.md`, `session-actor.md`. Harness docs: `harnesses/claude.md`, `harnesses/codex.md`.
+Guides: `system-architecture`, `crates`, `api`, `app`, `domains`, `live-runtime`, `adapters`, `integrations`, `harnesses`, `persistence`, `observability`, `repo-shape`. Active specs: `specs/codebase/structures/anyharness/specs/session-engine.md`, `specs/codebase/structures/anyharness/specs/session-actor.md`. Harness docs: `harnesses/claude.md`, `harnesses/codex.md`, `harnesses/gemini.md`.
 
 ### Proliferate Worker
 **`specs/codebase/structures/proliferate-worker/README.md`** — `anyharness/crates/proliferate-worker/**`.
@@ -75,7 +75,12 @@ Domain shape: `api.py` (transport) → `service.py` (orchestration) → `domain/
 Guides: `domains`, `database`, `auth`, `errors`, `integrations`, `config`, `workers`. Audits: `phase6-billing-reconciler`, `phase6-cloud-runtime-background-loops`, `server-structure-hygiene`.
 
 ### SDK
-**`specs/codebase/structures/sdk/README.md`** — `anyharness/sdk/**`, `cloud/sdk/**`, and their React wrappers.
+**`specs/codebase/structures/sdk/README.md`** — `anyharness/sdk/**` and `anyharness/sdk-react/**`.
+
+Cloud SDK generated artifacts under `cloud/sdk/**` and `cloud/sdk-react/**`
+are owned by the Cloud API/server surface and the primitive specs that change
+Cloud contracts; regenerate them with the owning Cloud SDK generation flow when
+server OpenAPI changes.
 
 ### Auth Gateway — split ownership, no standalone structure spec
 No `specs/codebase/structures/auth-gateway/` exists today. The explicit
@@ -389,7 +394,7 @@ analytics systems, local dev, and deploying.
 | Touching | Read |
 | --- | --- |
 | Frontend components / hooks / stores | `structures/frontend/README.md` + relevant guide |
-| AnyHarness session logic | `structures/anyharness/README.md` + `specs/session-engine.md` |
+| AnyHarness session logic | `structures/anyharness/README.md` + `structures/anyharness/specs/session-engine.md` |
 | Cloud provisioning / sandbox creation | `primitives/sandbox-provisioning.md` |
 | Managed workspace creation | `primitives/workspace-provisioning.md` |
 | Cloud workspace commands / wake / projection | `primitives/cloud-commands.md` |

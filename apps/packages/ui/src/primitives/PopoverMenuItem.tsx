@@ -26,7 +26,7 @@ export function PopoverMenuItem({
   trailingClassName = "",
   className = "",
   children,
-  role = "menuitem",
+  role,
   type = "button",
   onClick,
   ...props

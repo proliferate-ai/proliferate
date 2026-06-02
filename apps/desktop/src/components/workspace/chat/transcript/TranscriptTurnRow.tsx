@@ -5,6 +5,7 @@ import type {
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useRevertGitPatchesMutation } from "@anyharness/sdk-react";
 import { TurnDiffPanel } from "./TurnDiffPanel";
+import { TranscriptPatchTurnDiffPanel } from "./TranscriptPatchTurnDiffPanel";
 import {
   TranscriptActivityDensityProvider,
   type TranscriptActivityDensity,
@@ -32,6 +33,9 @@ import {
 import {
   collectTurnFileRevertPatchEntries,
 } from "@proliferate/product-domain/chats/transcript/turn-file-patches";
+import {
+  latestCompletedTurn,
+} from "@proliferate/product-domain/chats/transcript/last-turn-file-changes";
 import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 import type { TurnDisplayBlock } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
@@ -76,8 +80,19 @@ export function TranscriptTurnRow({
 }) {
   const isLatestTurn = row.turnId === latestTurnId;
   const isLatestTurnInProgress = isLatestTurn && !turn.completedAt;
+  const latestCompletedTurnId = useMemo(
+    () => latestCompletedTurn(transcript)?.turnId ?? null,
+    [transcript],
+  );
+  const diffPanelKind = resolveTranscriptTurnDiffPanelKind({
+    rowIsLastTurnRow: row.isLastTurnRow,
+    turnCompleted: !!turn.completedAt,
+    turnId: turn.turnId,
+    latestCompletedTurnId,
+    hasFileBadges: turn.fileBadges.length > 0,
+  });
+  const isLatestCompletedTurnRow = diffPanelKind === "current";
   const activityDensity: TranscriptActivityDensity = isLatestTurnInProgress ? "compact" : "normal";
-  const hasFileBadges = turn.fileBadges.length > 0;
   const presentation = row.presentation;
   const renderPresentation = row.renderPresentation;
   const liveExplorationBlock = isLatestTurn ? latestLiveExplorationBlock : null;
@@ -132,10 +147,10 @@ export function TranscriptTurnRow({
   const showToast = useToastStore((state) => state.show);
   const [undoneTurnIds, setUndoneTurnIds] = useState<ReadonlySet<string>>(() => new Set());
   const turnRevertPatches = useMemo(
-    () => row.isLastTurnRow && turn.completedAt
+    () => isLatestCompletedTurnRow
       ? collectTurnFileRevertPatchEntries(turn, transcript)
       : { entries: [], blockedReason: null },
-    [row.isLastTurnRow, transcript, turn],
+    [isLatestCompletedTurnRow, transcript, turn],
   );
   const turnUndoCompleted = undoneTurnIds.has(turn.turnId);
   const undoDisabledReason = turnUndoCompleted
@@ -201,7 +216,7 @@ export function TranscriptTurnRow({
             onHandOffPlanToNewSession={onHandOffPlanToNewSession}
           />
         </TranscriptActivityDensityProvider>
-        {row.isLastTurnRow && turn.completedAt && hasFileBadges && (
+        {diffPanelKind === "current" ? (
           <TurnDiffPanel
             turn={turn}
             transcript={transcript}
@@ -212,7 +227,13 @@ export function TranscriptTurnRow({
             undoDisabledReason={undoDisabledReason}
             undoBusy={revertPatchesMutation.isPending}
           />
-        )}
+        ) : diffPanelKind === "transcript" ? (
+          <TranscriptPatchTurnDiffPanel
+            turn={turn}
+            transcript={transcript}
+            onOpenFile={onOpenFile}
+          />
+        ) : null}
         <TurnAssistantActionRow
           content={tailAssistantCopyContent}
           showCopyButton={row.isLastTurnRow && !!turn.completedAt}
@@ -225,6 +246,25 @@ export function TranscriptTurnRow({
       </div>
     </TurnShell>
   );
+}
+
+export function resolveTranscriptTurnDiffPanelKind({
+  rowIsLastTurnRow,
+  turnCompleted,
+  turnId,
+  latestCompletedTurnId,
+  hasFileBadges,
+}: {
+  rowIsLastTurnRow: boolean;
+  turnCompleted: boolean;
+  turnId: string;
+  latestCompletedTurnId: string | null;
+  hasFileBadges: boolean;
+}): "current" | "transcript" | null {
+  if (!rowIsLastTurnRow || !turnCompleted || !hasFileBadges) {
+    return null;
+  }
+  return turnId === latestCompletedTurnId ? "current" : "transcript";
 }
 
 function formatUndoError(error: unknown): string {

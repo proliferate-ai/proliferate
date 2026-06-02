@@ -391,9 +391,7 @@ pub(in crate::live::sessions::actor) async fn apply_model_via_direct_setter(
     ))
     .await?;
 
-    startup_state.set_current_model_id(desired_model_id.to_string());
-
-    Ok(ConfigApplyOutcome::AppliedAuthoritative)
+    Ok(ConfigApplyOutcome::AppliedRequested)
 }
 
 pub(in crate::live::sessions::actor) fn should_apply_model_via_direct_setter(

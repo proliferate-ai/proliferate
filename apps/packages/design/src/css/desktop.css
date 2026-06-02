@@ -290,14 +290,14 @@
   --color-diff-surface: color-mix(in srgb, var(--color-diff-main-surface) 94%, var(--color-foreground));
   --color-diff-panel-surface: color-mix(in oklab, var(--color-foreground) 3%, transparent);
   --color-diff-header-surface: var(--color-diff-surface);
-  --color-diff-chat-turn-header-surface: #232323;
+  --color-diff-chat-turn-header-surface: color-mix(in srgb, var(--color-diff-main-surface) 86%, var(--color-foreground));
   --color-diff-chat-turn-header-hover-surface: color-mix(in srgb, var(--color-diff-chat-turn-header-surface) 97%, var(--color-foreground));
-  --color-diff-chat-turn-icon-surface: #151515;
-  --color-diff-chat-inline-tool-header-surface: #232323;
+  --color-diff-chat-turn-icon-surface: color-mix(in srgb, var(--color-diff-main-surface) 94%, var(--color-foreground));
+  --color-diff-chat-inline-tool-header-surface: color-mix(in srgb, var(--color-diff-main-surface) 86%, var(--color-foreground));
   --color-diff-chat-inline-tool-header-hover-surface: color-mix(in srgb, var(--color-diff-chat-inline-tool-header-surface) 97%, var(--color-foreground));
   --color-diff-sidebar-file-header-surface: var(--color-diff-chat-inline-tool-header-surface);
   --color-diff-sidebar-file-header-hover-surface: color-mix(in srgb, var(--color-diff-sidebar-file-header-surface) 97%, var(--color-foreground));
-  --color-diff-chat-file-header-surface: #2b2b2b;
+  --color-diff-chat-file-header-surface: color-mix(in srgb, var(--color-diff-main-surface) 82%, var(--color-foreground));
   --color-diff-chat-file-header-hover-surface: color-mix(in srgb, var(--color-diff-chat-file-header-surface) 97%, var(--color-foreground));
   --color-code-block-background: var(--color-diff-surface);
   --color-diff-added: var(--color-git-new-line);

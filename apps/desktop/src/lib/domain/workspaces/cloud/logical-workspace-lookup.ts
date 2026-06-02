@@ -19,6 +19,7 @@ export function logicalWorkspaceMatchesId(
   const localSlotWorkspaceId = parseLocalSlotWorkspaceId(candidateId);
   return candidateId === workspace.id
     || candidateId === workspace.localWorkspace?.id
+    || (workspace.aliasIds ?? []).includes(candidateId)
     || (!!localSlotWorkspaceId && localSlotWorkspaceId === workspace.localWorkspace?.id)
     || candidateId === (
       workspace.localWorkspace
@@ -32,7 +33,12 @@ export function logicalWorkspaceMatchesId(
 export function logicalWorkspaceRelatedIds(
   workspace: Pick<
     LogicalWorkspace,
-    "id" | "localWorkspace" | "cloudWorkspace" | "mobilityWorkspace" | "preferredMaterializationId"
+    | "id"
+    | "localWorkspace"
+    | "cloudWorkspace"
+    | "mobilityWorkspace"
+    | "aliasIds"
+    | "preferredMaterializationId"
   >,
 ): string[] {
   const ids: string[] = [];
@@ -47,6 +53,9 @@ export function logicalWorkspaceRelatedIds(
   if (workspace.localWorkspace) {
     pushId(buildLocalSlotLogicalWorkspaceId(workspace.localWorkspace.id));
   }
+  for (const aliasId of workspace.aliasIds ?? []) {
+    pushId(aliasId);
+  }
   pushId(logicalWorkspaceCloudMaterializationId(workspace));
   pushId(logicalWorkspaceTargetMaterializationId(workspace));
   pushId(workspace.preferredMaterializationId);
@@ -56,7 +65,12 @@ export function logicalWorkspaceRelatedIds(
 export function expandLogicalWorkspaceRelatedIdSet(
   workspaces: readonly Pick<
     LogicalWorkspace,
-    "id" | "localWorkspace" | "cloudWorkspace" | "mobilityWorkspace" | "preferredMaterializationId"
+    | "id"
+    | "localWorkspace"
+    | "cloudWorkspace"
+    | "mobilityWorkspace"
+    | "aliasIds"
+    | "preferredMaterializationId"
   >[],
   ids: Iterable<string>,
 ): Set<string> {
@@ -78,7 +92,12 @@ export function latestLogicalWorkspaceTimestamp(
   timestamps: Record<string, string>,
   workspace: Pick<
     LogicalWorkspace,
-    "id" | "localWorkspace" | "cloudWorkspace" | "mobilityWorkspace" | "preferredMaterializationId"
+    | "id"
+    | "localWorkspace"
+    | "cloudWorkspace"
+    | "mobilityWorkspace"
+    | "aliasIds"
+    | "preferredMaterializationId"
   >,
 ): string | null {
   let latestTimestamp: string | null = null;

@@ -9,7 +9,9 @@ import {
   CHAT_DIFF_PREFERENCES_STORAGE_KEY,
   useChatDiffPreferencesStore,
 } from "@/stores/chat/chat-diff-preferences-store";
-import { buildChatDiffLineWrapNativeContextMenuItems } from "./ChatDiffLineWrapContextMenu";
+import {
+  buildChatDiffLineWrapNativeContextMenuItems,
+} from "@/hooks/ui/native/use-chat-diff-line-wrap-native-context-menu";
 
 const LONG_LINE_PATCH = `diff --git a/src/long.ts b/src/long.ts
 index 1111111..2222222 100644

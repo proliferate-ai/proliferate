@@ -127,4 +127,35 @@ describe("launch selection availability", () => {
       modelId: "custom-local-model",
     });
   });
+
+  it("keeps Claude Opus 4.8 base and 1M aliases on separate launch rows", () => {
+    const agents = [
+      launchAgent("claude", [
+        model("us.anthropic.claude-opus-4-8", "Opus 4.8", false, ["claude-opus-4-8"]),
+        model(
+          "us.anthropic.claude-opus-4-8[1m]",
+          "Opus 4.8 (1M context)",
+          false,
+          ["opus[1m]", "claude-opus-4-8-1m"],
+        ),
+      ]),
+    ];
+
+    expect(resolveAvailableLaunchSelection(
+      agents,
+      { kind: "claude", modelId: "claude-opus-4-8" },
+      null,
+    )).toEqual({
+      kind: "claude",
+      modelId: "us.anthropic.claude-opus-4-8",
+    });
+    expect(resolveAvailableLaunchSelection(
+      agents,
+      { kind: "claude", modelId: "opus[1m]" },
+      null,
+    )).toEqual({
+      kind: "claude",
+      modelId: "us.anthropic.claude-opus-4-8[1m]",
+    });
+  });
 });

@@ -62,7 +62,7 @@ export function collectLatestCompletedTurnTouchedFiles(
   };
 }
 
-function latestCompletedTurn(transcript: TranscriptState | null): TurnRecord | null {
+export function latestCompletedTurn(transcript: TranscriptState | null): TurnRecord | null {
   if (!transcript) {
     return null;
   }

@@ -43,6 +43,7 @@ pub(in crate::live::sessions) enum ConfigPurpose {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::live::sessions::actor) enum ConfigApplyOutcome {
     NoChange,
+    AppliedRequested,
     AppliedAuthoritative,
     NotApplied,
 }

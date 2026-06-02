@@ -266,6 +266,23 @@ fn pending_config_rank_keeps_collaboration_mode_in_standard_order() {
 }
 
 #[test]
+fn pending_config_rank_treats_synthetic_acp_model_control_as_model() {
+    let startup_state = SessionStartupState {
+        current_mode_id: None,
+        legacy_mode_state: None,
+        config_options: Vec::new(),
+        current_model_id: Some("sonnet".to_string()),
+        available_models: session_model_options(&["sonnet", "haiku"]),
+        prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+    };
+
+    assert_eq!(
+        pending_config_rank(&startup_state, "model"),
+        normalized_key_rank(NormalizedControlKind::Model)
+    );
+}
+
+#[test]
 fn direct_model_setter_only_applies_exact_live_ids_or_legacy_empty_lists() {
     let mut startup_state = SessionStartupState {
         current_mode_id: None,

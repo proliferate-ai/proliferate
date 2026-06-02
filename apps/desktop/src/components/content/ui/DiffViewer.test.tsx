@@ -52,6 +52,7 @@ describe("DiffViewer chat variant", () => {
     expect(html).toContain("data-code=\"\"");
     expect(html).toContain("data-gutter=\"\"");
     expect(html).toContain("sticky left-0 z-10");
+    expect(html).toContain("sticky left-0 z-10 grid bg-[var(--diffs-bg)]");
     expect(html).toContain("data-content=\"\"");
     expect(html.match(/data-gutter=\"\"/g)).toHaveLength(1);
     expect(html.match(/data-content=\"\"/g)).toHaveLength(1);

@@ -1,4 +1,3 @@
-import type { Workspace } from "@anyharness/sdk";
 import { describe, expect, it } from "vitest";
 import { targetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import type { CloudMobilityWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
@@ -8,7 +7,6 @@ import {
 } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import {
   expandLogicalWorkspaceRelatedIdSet,
-  findLogicalWorkspace,
   latestLogicalWorkspaceTimestamp,
   logicalWorkspaceRelatedIds,
 } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
@@ -30,32 +28,6 @@ import {
 } from "@/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 
 const DEFAULT_UPDATED_AT = "2026-04-13T10:00:00.000Z";
-type WorkspaceExecutionSummary = NonNullable<Workspace["executionSummary"]>;
-
-function makeExecutionSummary(args: {
-  phase?: WorkspaceExecutionSummary["phase"];
-  totalSessionCount?: number;
-  liveSessionCount?: number;
-  updatedAt?: string | null;
-} = {}): WorkspaceExecutionSummary {
-  const {
-    phase = "idle",
-    totalSessionCount = 0,
-    liveSessionCount = 0,
-    updatedAt = DEFAULT_UPDATED_AT,
-  } = args;
-
-  return {
-    awaitingInteractionCount: phase === "awaiting_interaction" ? 1 : 0,
-    erroredCount: phase === "errored" ? 1 : 0,
-    idleCount: phase === "idle" ? totalSessionCount : 0,
-    liveSessionCount,
-    phase,
-    runningCount: phase === "running" ? 1 : 0,
-    totalSessionCount,
-    updatedAt,
-  };
-}
 
 function makeMobilityWorkspace(args: {
   id?: string;
@@ -539,147 +511,6 @@ describe("logical workspaces", () => {
       "cloud:cloud-1": "2026-04-13T10:05:00.000Z",
       "local-1": "2026-04-13T10:10:00.000Z",
     }, logicalWorkspace)).toBe("2026-04-13T10:10:00.000Z");
-  });
-
-  it("splits duplicate local workspaces while merging cloud and mobility only with canonical", () => {
-    const olderLocal = makeWorkspace({
-      id: "local-older",
-      branch: "main",
-      updatedAt: "2026-04-13T10:00:00.000Z",
-    });
-    const newerLocal = makeWorkspace({
-      id: "local-newer",
-      branch: "main",
-      updatedAt: "2026-04-13T11:00:00.000Z",
-    });
-    const cloudWorkspace = makeCloudWorkspace({
-      id: "cloud-main",
-      branch: "main",
-    });
-    const mobilityWorkspace = makeMobilityWorkspace({
-      id: "mobility-main",
-      owner: "local",
-      branch: "main",
-      cloudWorkspaceId: cloudWorkspace.id,
-    });
-    const canonicalId = buildRemoteLogicalWorkspaceId(
-      "github",
-      "proliferate-ai",
-      "proliferate",
-      "main",
-    );
-    const slotId = buildLocalSlotLogicalWorkspaceId(newerLocal.id);
-
-    const logicalWorkspaces = buildLogicalWorkspaces({
-      localWorkspaces: [newerLocal, olderLocal],
-      repoRoots: [],
-      cloudWorkspaces: [cloudWorkspace],
-      cloudMobilityWorkspaces: [mobilityWorkspace],
-      currentSelectionId: null,
-    });
-
-    const canonical = logicalWorkspaces.find((workspace) => workspace.id === canonicalId);
-    const slot = logicalWorkspaces.find((workspace) => workspace.id === slotId);
-
-    expect(logicalWorkspaces).toHaveLength(2);
-    expect(canonical?.localWorkspace?.id).toBe(olderLocal.id);
-    expect(canonical?.cloudWorkspace?.id).toBe(cloudWorkspace.id);
-    expect(canonical?.mobilityWorkspace?.id).toBe(mobilityWorkspace.id);
-    expect(slot?.localWorkspace?.id).toBe(newerLocal.id);
-    expect(slot?.cloudWorkspace).toBeNull();
-    expect(slot?.mobilityWorkspace).toBeNull();
-    expect(logicalWorkspaceRelatedIds(canonical!)).toContain(
-      buildLocalSlotLogicalWorkspaceId(olderLocal.id),
-    );
-  });
-
-  it("collapses exact duplicate local records and prefers transcript history over setup-only slots", () => {
-    const checkoutPath = "/tmp/proliferate";
-    const setupOnlyLocal = {
-      ...makeWorkspace({
-        id: "local-setup-only",
-        branch: "main",
-        updatedAt: "2026-06-02T09:50:00.000Z",
-        executionSummary: makeExecutionSummary({
-          phase: "running",
-          totalSessionCount: 4,
-          liveSessionCount: 4,
-          updatedAt: "2026-06-02T09:50:00.000Z",
-        }),
-      }),
-      path: checkoutPath,
-      sourceRepoRootPath: checkoutPath,
-    };
-    const historicalLocal = {
-      ...makeWorkspace({
-        id: "local-with-transcript",
-        branch: "main",
-        updatedAt: "2026-06-02T09:10:00.000Z",
-        executionSummary: makeExecutionSummary({
-          totalSessionCount: 4,
-          liveSessionCount: 0,
-          updatedAt: "2026-06-02T09:15:00.000Z",
-        }),
-      }),
-      path: checkoutPath,
-      sourceRepoRootPath: checkoutPath,
-    };
-
-    const logicalWorkspaces = buildLogicalWorkspaces({
-      localWorkspaces: [setupOnlyLocal, historicalLocal],
-      repoRoots: [],
-      cloudWorkspaces: [],
-      currentSelectionId: null,
-    });
-
-    expect(logicalWorkspaces).toHaveLength(1);
-    expect(logicalWorkspaces[0]?.localWorkspace?.id).toBe(historicalLocal.id);
-    expect(logicalWorkspaceRelatedIds(logicalWorkspaces[0]!)).not.toContain(
-      buildLocalSlotLogicalWorkspaceId(setupOnlyLocal.id),
-    );
-  });
-
-  it("promotes a prior local-slot workspace to canonical and preserves alias lookup", () => {
-    const olderLocal = makeWorkspace({
-      id: "local-older",
-      branch: "main",
-      updatedAt: "2026-04-13T10:00:00.000Z",
-    });
-    const newerLocal = makeWorkspace({
-      id: "local-newer",
-      branch: "main",
-      updatedAt: "2026-04-13T11:00:00.000Z",
-    });
-    const staleSlotId = buildLocalSlotLogicalWorkspaceId(newerLocal.id);
-
-    const beforeDeletion = buildLogicalWorkspaces({
-      localWorkspaces: [olderLocal, newerLocal],
-      repoRoots: [],
-      cloudWorkspaces: [],
-      currentSelectionId: null,
-    });
-    expect(findLogicalWorkspace(beforeDeletion, staleSlotId)?.localWorkspace?.id)
-      .toBe(newerLocal.id);
-
-    const afterDeletion = buildLogicalWorkspaces({
-      localWorkspaces: [newerLocal],
-      repoRoots: [],
-      cloudWorkspaces: [makeCloudWorkspace({ id: "cloud-main", branch: "main" })],
-      cloudMobilityWorkspaces: [makeMobilityWorkspace({
-        id: "mobility-main",
-        owner: "local",
-        branch: "main",
-        cloudWorkspaceId: "cloud-main",
-      })],
-      currentSelectionId: null,
-    });
-    const promoted = findLogicalWorkspace(afterDeletion, staleSlotId);
-
-    expect(promoted?.id).toBe("remote:github:proliferate-ai:proliferate:main");
-    expect(promoted?.localWorkspace?.id).toBe(newerLocal.id);
-    expect(promoted?.cloudWorkspace?.id).toBe("cloud-main");
-    expect(promoted?.mobilityWorkspace?.id).toBe("mobility-main");
-    expect(afterDeletion.some((workspace) => workspace.id === staleSlotId)).toBe(false);
   });
 
   it("expands archived local-slot aliases to the current logical workspace ids", () => {

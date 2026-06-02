@@ -89,7 +89,43 @@ function compareExactLocalWorkspaceDuplicateOrder(left: Workspace, right: Worksp
   return compareLocalWorkspaceCanonicalOrder(left, right);
 }
 
-function collapseExactLocalWorkspaceDuplicates(workspaces: readonly Workspace[]): Workspace[] {
+interface CollapsedLocalWorkspace {
+  workspace: Workspace;
+  aliasIds: string[];
+}
+
+function localWorkspaceIdentityIds(workspace: Workspace): string[] {
+  return [
+    workspace.id,
+    buildLocalSlotLogicalWorkspaceId(workspace.id),
+  ];
+}
+
+function localWorkspaceMatchesSelection(
+  workspace: Workspace,
+  currentSelectionId: string | null,
+): boolean {
+  return currentSelectionId !== null
+    && localWorkspaceIdentityIds(workspace).includes(currentSelectionId);
+}
+
+function compareExactLocalWorkspaceDuplicateOrderForSelection(
+  currentSelectionId: string | null,
+): (left: Workspace, right: Workspace) => number {
+  return (left, right) => {
+    const leftSelected = localWorkspaceMatchesSelection(left, currentSelectionId);
+    const rightSelected = localWorkspaceMatchesSelection(right, currentSelectionId);
+    if (leftSelected !== rightSelected) {
+      return leftSelected ? -1 : 1;
+    }
+    return compareExactLocalWorkspaceDuplicateOrder(left, right);
+  };
+}
+
+function collapseExactLocalWorkspaceDuplicates(
+  workspaces: readonly Workspace[],
+  currentSelectionId: string | null,
+): CollapsedLocalWorkspace[] {
   const byMaterialization = new Map<string, Workspace[]>();
   for (const workspace of workspaces) {
     const key = localWorkspaceExactMaterializationKey(workspace);
@@ -101,11 +137,24 @@ function collapseExactLocalWorkspaceDuplicates(workspaces: readonly Workspace[])
     }
   }
 
-  return Array.from(byMaterialization.values()).map((bucket) => (
-    bucket.length === 1
-      ? bucket[0]!
-      : [...bucket].sort(compareExactLocalWorkspaceDuplicateOrder)[0]!
-  ));
+  return Array.from(byMaterialization.values()).map((bucket) => {
+    if (bucket.length === 1) {
+      return {
+        workspace: bucket[0]!,
+        aliasIds: [],
+      };
+    }
+
+    const workspace = [...bucket]
+      .sort(compareExactLocalWorkspaceDuplicateOrderForSelection(currentSelectionId))[0]!;
+    const aliasIds = bucket
+      .filter((candidate) => candidate.id !== workspace.id)
+      .flatMap(localWorkspaceIdentityIds);
+    return {
+      workspace,
+      aliasIds,
+    };
+  });
 }
 
 export function buildLogicalWorkspaces(args: {
@@ -136,6 +185,7 @@ export function buildLogicalWorkspaces(args: {
     localWorkspace: Workspace | null;
     cloudWorkspace: CloudWorkspaceSummary | null;
     mobilityWorkspace: CloudMobilityWorkspaceSummary | null;
+    aliasIds: string[];
   }>();
 
   const localBuckets = new Map<string, Workspace[]>();
@@ -151,9 +201,13 @@ export function buildLogicalWorkspaces(args: {
   }
 
   for (const [baseLogicalId, bucket] of localBuckets) {
-    const sortedBucket = collapseExactLocalWorkspaceDuplicates(bucket)
-      .sort(compareLocalWorkspaceCanonicalOrder);
-    sortedBucket.forEach((workspace, index) => {
+    const sortedBucket = collapseExactLocalWorkspaceDuplicates(
+      bucket,
+      args.currentSelectionId ?? null,
+    )
+      .sort((left, right) => compareLocalWorkspaceCanonicalOrder(left.workspace, right.workspace));
+    sortedBucket.forEach((collapsed, index) => {
+      const { workspace } = collapsed;
       const logicalId = index === 0
         ? baseLogicalId
         : buildLocalSlotLogicalWorkspaceId(workspace.id);
@@ -161,6 +215,7 @@ export function buildLogicalWorkspaces(args: {
         localWorkspace: workspace,
         cloudWorkspace: null,
         mobilityWorkspace: null,
+        aliasIds: collapsed.aliasIds,
       });
     });
   }
@@ -180,6 +235,7 @@ export function buildLogicalWorkspaces(args: {
         localWorkspace: null,
         cloudWorkspace: workspace,
         mobilityWorkspace: null,
+        aliasIds: [],
       });
       continue;
     }
@@ -206,6 +262,7 @@ export function buildLogicalWorkspaces(args: {
           ? cloudWorkspacesById.get(workspace.cloudWorkspaceId) ?? null
           : null,
         mobilityWorkspace: workspace,
+        aliasIds: [],
       });
       continue;
     }
@@ -305,6 +362,7 @@ export function buildLogicalWorkspaces(args: {
         localWorkspace: entry.localWorkspace,
         cloudWorkspace: entry.cloudWorkspace,
         mobilityWorkspace: entry.mobilityWorkspace,
+        aliasIds: entry.aliasIds,
         preferredMaterializationId: materialization.workspaceId,
         effectiveOwner: effectiveOwnerHint ?? materialization.owner,
         lifecycle: inferLifecycle(

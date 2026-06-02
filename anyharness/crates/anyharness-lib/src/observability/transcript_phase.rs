@@ -11,7 +11,7 @@ struct ActiveTranscriptItem {
     kind: &'static str,
     source_agent_kind: String,
     native_tool_name: Option<String>,
-    title: Option<String>,
+    title_present: Option<bool>,
     is_transient: Option<bool>,
 }
 
@@ -32,7 +32,7 @@ struct TranscriptPhaseDescription {
     item_kind: Option<&'static str>,
     item_status: Option<&'static str>,
     native_tool_name: Option<String>,
-    title: Option<String>,
+    title_present: Option<bool>,
     is_transient: Option<bool>,
     item_duration_ms: Option<i64>,
 }
@@ -64,7 +64,7 @@ pub fn record_transcript_phase_event(
             item_kind = description.item_kind,
             item_status = description.item_status,
             native_tool_name = description.native_tool_name.as_deref(),
-            title = description.title.as_deref(),
+            title_present = description.title_present,
             is_transient = description.is_transient,
             "[transcript-phase] anyharness normalized event"
         );
@@ -85,7 +85,7 @@ fn describe_event(
             item_kind: None,
             item_status: None,
             native_tool_name: None,
-            title: None,
+            title_present: None,
             is_transient: None,
             item_duration_ms: None,
         },
@@ -98,7 +98,7 @@ fn describe_event(
             item_kind: Some(item_kind_label(&payload.item.kind)),
             item_status: Some(item_status_label(&payload.item.status)),
             native_tool_name: payload.item.native_tool_name.clone(),
-            title: payload.item.title.clone(),
+            title_present: Some(has_title(payload.item.title.as_deref())),
             is_transient: Some(payload.item.is_transient),
             item_duration_ms: None,
         },
@@ -118,11 +118,8 @@ fn describe_event(
                     .native_tool_name
                     .clone()
                     .or_else(|| previous.and_then(|item| item.native_tool_name.clone())),
-                title: payload
-                    .item
-                    .title
-                    .clone()
-                    .or_else(|| previous.and_then(|item| item.title.clone())),
+                title_present: title_presence(payload.item.title.as_deref())
+                    .or_else(|| previous.and_then(|item| item.title_present)),
                 is_transient: Some(payload.item.is_transient),
                 item_duration_ms: previous
                     .and_then(|item| diff_ms(event_timestamp_ms, Some(item.started_at_ms))),
@@ -144,11 +141,12 @@ fn describe_event(
                     .native_tool_name
                     .clone()
                     .or_else(|| previous.and_then(|item| item.native_tool_name.clone())),
-                title: payload
+                title_present: payload
                     .delta
                     .title
-                    .clone()
-                    .or_else(|| previous.and_then(|item| item.title.clone())),
+                    .as_deref()
+                    .map(|title| has_title(Some(title)))
+                    .or_else(|| previous.and_then(|item| item.title_present)),
                 is_transient: payload
                     .delta
                     .is_transient
@@ -181,7 +179,7 @@ fn update_state(
                         kind: item_kind_label(&payload.item.kind),
                         source_agent_kind: payload.item.source_agent_kind.clone(),
                         native_tool_name: payload.item.native_tool_name.clone(),
-                        title: payload.item.title.clone(),
+                        title_present: Some(has_title(payload.item.title.as_deref())),
                         is_transient: Some(payload.item.is_transient),
                     },
                 );
@@ -195,7 +193,12 @@ fn update_state(
                         .native_tool_name
                         .clone()
                         .or_else(|| item.native_tool_name.clone());
-                    item.title = payload.delta.title.clone().or_else(|| item.title.clone());
+                    item.title_present = payload
+                        .delta
+                        .title
+                        .as_deref()
+                        .map(|title| has_title(Some(title)))
+                        .or(item.title_present);
                     item.is_transient = payload.delta.is_transient.or(item.is_transient);
                 }
             }
@@ -223,10 +226,18 @@ fn basic_description(
         item_kind: None,
         item_status: None,
         native_tool_name: None,
-        title: None,
+        title_present: None,
         is_transient: None,
         item_duration_ms: None,
     }
+}
+
+fn has_title(title: Option<&str>) -> bool {
+    title.map(|value| !value.trim().is_empty()).unwrap_or(false)
+}
+
+fn title_presence(title: Option<&str>) -> Option<bool> {
+    title.map(|value| !value.trim().is_empty())
 }
 
 fn phase_kind_for_item_kind(kind: &TranscriptItemKind) -> &'static str {

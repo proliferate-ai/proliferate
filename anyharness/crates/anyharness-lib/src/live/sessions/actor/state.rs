@@ -99,13 +99,6 @@ impl From<NativeSessionStartupState> for SessionStartupState {
 }
 
 impl SessionStartupState {
-    pub(in crate::live::sessions) fn set_current_model_id(
-        &mut self,
-        current_model_id: impl Into<String>,
-    ) {
-        self.current_model_id = Some(current_model_id.into());
-    }
-
     pub(in crate::live::sessions) fn set_current_mode_id(
         &mut self,
         current_mode_id: impl Into<String>,
@@ -122,6 +115,10 @@ impl SessionStartupState {
             .as_ref()
             .map(|state| !state.available_modes.is_empty())
             .unwrap_or(false)
+    }
+
+    pub(in crate::live::sessions) fn has_direct_model_control(&self) -> bool {
+        self.current_model_id.is_some() || !self.available_models.is_empty()
     }
 
     pub(in crate::live::sessions) fn has_raw_or_legacy_mode_control(&self) -> bool {

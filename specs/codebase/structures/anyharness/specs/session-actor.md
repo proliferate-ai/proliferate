@@ -3,8 +3,9 @@
 Status: authoritative for the split live session actor.
 
 This spec is specific to the actor portion of the AnyHarness session engine. It
-assumes the broader architecture in `guides/system-architecture.md` and the
-session engine overview in `specs/session-engine.md`.
+assumes the broader architecture in
+[guides/system-architecture.md](../guides/system-architecture.md) and the
+session engine overview in [session-engine.md](session-engine.md).
 
 Current implementation:
 

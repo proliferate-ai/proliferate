@@ -168,8 +168,6 @@ export function PopoverButton({
         <>
           <div className="fixed inset-0 z-50" onClick={close} />
           <FixedPositionLayer
-            role="menu"
-            aria-orientation="vertical"
             data-state="open"
             data-align={align}
             className={`fixed z-50 ${className}`}

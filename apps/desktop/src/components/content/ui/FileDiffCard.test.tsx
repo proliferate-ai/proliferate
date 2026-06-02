@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -44,6 +45,22 @@ describe("FileChangesCard and FileDiffCard", () => {
     expect(html).toContain("text-sidebar-foreground");
     expect(html).toContain("hover:bg-sidebar-accent");
     expect(html).toContain("diff body");
+  });
+
+  it("keeps diff header theme variables free of hard-coded dark surfaces", () => {
+    const desktopCss = readFileSync(
+      new URL("../../../../../packages/design/src/css/desktop.css", import.meta.url),
+      "utf8",
+    );
+    const rootDiffVariables =
+      desktopCss.match(/\/\* -- Git diff backgrounds[\s\S]*?:root \{(?<body>[\s\S]*?)--diffs-min-number-column-width:/)
+        ?.groups?.body ?? "";
+
+    expect(rootDiffVariables).not.toContain("#232323");
+    expect(rootDiffVariables).not.toContain("#2b2b2b");
+    expect(rootDiffVariables).toContain(
+      "--color-diff-chat-file-header-surface: color-mix(in srgb, var(--color-diff-main-surface) 82%, var(--color-foreground));",
+    );
   });
 
   it("keeps absolute paths compact in diff headers", () => {
