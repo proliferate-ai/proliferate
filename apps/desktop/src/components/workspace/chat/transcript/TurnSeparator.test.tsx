@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { TurnSeparator } from "./TurnSeparator";
 
 describe("TurnSeparator", () => {
+
   it("keeps interactive history summaries on the same chat font size as final-message separators", () => {
     const html = renderToStaticMarkup(
       createElement(TurnSeparator, {

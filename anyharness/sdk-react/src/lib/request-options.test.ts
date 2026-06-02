@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { requestOptionsWithSignal } from "./request-options.js";
 
 describe("sdk-react request options", () => {
+
   it("uses the query signal when no caller signal is provided", () => {
     const queryController = new AbortController();
 

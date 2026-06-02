@@ -36,6 +36,7 @@ vi.mock("@proliferate/cloud-sdk/client/workspaces", () => ({
 }));
 
 describe("useWorkspaces", () => {
+
   beforeEach(() => {
     useHarnessConnectionStore.setState({
       runtimeUrl: "http://runtime.test",

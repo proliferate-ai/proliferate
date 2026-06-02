@@ -9,6 +9,7 @@ afterEach(() => {
 });
 
 describe("CopyMessageButton", () => {
+
   it("renders the timestamp before the copy button by default", () => {
     const { container } = render(
       <CopyMessageButton

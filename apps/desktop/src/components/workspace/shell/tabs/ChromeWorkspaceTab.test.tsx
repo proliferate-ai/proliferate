@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChromeWorkspaceTab } from "@/components/workspace/shell/tabs/ChromeWorkspaceTab";
 
 describe("ChromeWorkspaceTab", () => {
+
   afterEach(cleanup);
 
   it("reveals a provided shortcut badge without changing tab label rendering", () => {

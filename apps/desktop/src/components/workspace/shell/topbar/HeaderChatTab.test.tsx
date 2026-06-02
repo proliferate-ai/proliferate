@@ -10,6 +10,7 @@ vi.mock("@/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
 }));
 
 describe("HeaderChatTab", () => {
+
   afterEach(cleanup);
 
   it("activates an inactive tab on primary pointer down and suppresses the follow-up click", () => {

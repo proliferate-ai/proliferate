@@ -5,6 +5,7 @@ import type { AnyHarnessTransport } from "./core.js";
 import { RepoRootsClient } from "./repo-roots.js";
 
 describe("RepoRootsClient.readFile", () => {
+
   it("URL-encodes the repo root id and relative path", async () => {
     const calls: string[] = [];
     const response: ReadWorkspaceFileResponse = {

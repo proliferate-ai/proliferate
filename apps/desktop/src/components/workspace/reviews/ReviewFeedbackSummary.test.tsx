@@ -8,6 +8,7 @@ import { ReviewFeedbackSummaryView } from "./ReviewFeedbackSummary";
 afterEach(cleanup);
 
 describe("ReviewFeedbackSummaryView", () => {
+
   it("renders all-approved terminal results as a sentence receipt", () => {
     render(
       <ReviewFeedbackSummaryView

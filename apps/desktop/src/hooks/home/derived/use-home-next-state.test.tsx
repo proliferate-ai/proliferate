@@ -125,6 +125,7 @@ function renderHomeNextState({
 }
 
 describe("useHomeNextState", () => {
+
   beforeEach(() => {
     resetMocks();
   });

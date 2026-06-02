@@ -7,6 +7,7 @@ import {
 } from "./query-keys.js";
 
 describe("sdk-react query keys", () => {
+
   it("uses a session-events scope key for broad invalidation", () => {
     expect(
       anyHarnessSessionEventsKey("http://runtime.test", "workspace-1", "session-1"),

@@ -7,6 +7,7 @@ import {
 } from "./chat-layout";
 
 describe("chat layout", () => {
+
   it("keeps the baseline padding before the dock is measured", () => {
     expect(computeChatSurfaceBottomInsetPx({
       dockHeightPx: 0,

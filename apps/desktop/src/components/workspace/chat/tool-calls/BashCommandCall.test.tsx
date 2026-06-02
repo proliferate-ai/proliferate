@@ -9,6 +9,7 @@ afterEach(() => {
 });
 
 describe("BashCommandCall", () => {
+
   it("keeps command output hidden until the row is clicked", () => {
     render(
       <BashCommandCall

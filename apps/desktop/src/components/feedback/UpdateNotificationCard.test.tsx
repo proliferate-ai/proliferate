@@ -35,6 +35,7 @@ afterEach(() => {
 });
 
 describe("UpdateNotificationCard", () => {
+
   it("renders update actions and links to the changelog", () => {
     render(<UpdateNotificationCard />);
 

@@ -19,6 +19,7 @@ function terminalResponse(overrides: Partial<TerminalRecord> = {}): TerminalReco
 }
 
 describe("TerminalsClient.updateTitle", () => {
+
   it("patches the terminal title endpoint", async () => {
     const calls: Array<{ path: string; body: unknown }> = [];
     const transport = {

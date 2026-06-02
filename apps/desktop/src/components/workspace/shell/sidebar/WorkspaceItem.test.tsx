@@ -10,6 +10,7 @@ vi.mock("@/lib/access/tauri/context-menu", () => ({
 }));
 
 describe("WorkspaceItem", () => {
+
   afterEach(() => {
     cleanup();
   });

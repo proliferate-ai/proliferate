@@ -47,6 +47,7 @@ function renderGlyph(kind: GlyphTestKind): ReactNode {
 }
 
 describe("SidebarStatusGlyph", () => {
+
   it("keeps user-input blockers visually distinct from progress", () => {
     const glyph = renderGlyph("waiting_input");
 
