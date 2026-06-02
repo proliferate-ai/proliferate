@@ -43,6 +43,7 @@ export interface AuthOrchestrationDeps {
   clearSessionRuntimeState(): void;
   closeRepoSetupModal(): void;
   showToast(message: string): void;
+  navigateDesktopRoute(target: string): void;
 }
 
 export function applyDevBypassState(deps: AuthOrchestrationDeps): void {
@@ -176,13 +177,16 @@ export function reportBackgroundAuthError(
   });
 }
 
-export function handleDesktopNavigationUrl(url: string): boolean {
+export function handleDesktopNavigationUrl(
+  url: string,
+  deps: AuthOrchestrationDeps,
+): boolean {
   const target = desktopNavigationTarget(url);
   if (!target) {
     return false;
   }
 
-  window.location.assign(target);
+  deps.navigateDesktopRoute(target);
   return true;
 }
 
