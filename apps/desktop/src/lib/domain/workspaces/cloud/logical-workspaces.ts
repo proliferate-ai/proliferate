@@ -38,6 +38,76 @@ import {
   preferCloudWorkspaceForLogicalSlot,
 } from "@/lib/domain/workspaces/cloud/logical-workspace-slot";
 
+function timestampValue(timestamp: string | null | undefined): number {
+  return timestamp ? new Date(timestamp).getTime() : 0;
+}
+
+function localWorkspaceExactMaterializationKey(workspace: Workspace): string {
+  return `${workspace.path.trim()}\0${workspaceBranchKey(workspace)}`;
+}
+
+function workspaceExecutionPriority(workspace: Workspace): number {
+  const summary = workspace.executionSummary;
+  if (!summary) {
+    return 0;
+  }
+
+  if (summary.totalSessionCount > summary.liveSessionCount) {
+    return 3;
+  }
+
+  if (summary.phase === "running" || summary.phase === "awaiting_interaction") {
+    return 2;
+  }
+
+  if (summary.totalSessionCount > 0) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function compareExactLocalWorkspaceDuplicateOrder(left: Workspace, right: Workspace): number {
+  const byExecutionPriority = workspaceExecutionPriority(right) - workspaceExecutionPriority(left);
+  if (byExecutionPriority !== 0) {
+    return byExecutionPriority;
+  }
+
+  const byExecutionUpdatedAt = (
+    timestampValue(right.executionSummary?.updatedAt)
+    - timestampValue(left.executionSummary?.updatedAt)
+  );
+  if (byExecutionUpdatedAt !== 0) {
+    return byExecutionUpdatedAt;
+  }
+
+  const byWorkspaceUpdatedAt = timestampValue(right.updatedAt) - timestampValue(left.updatedAt);
+  if (byWorkspaceUpdatedAt !== 0) {
+    return byWorkspaceUpdatedAt;
+  }
+
+  return compareLocalWorkspaceCanonicalOrder(left, right);
+}
+
+function collapseExactLocalWorkspaceDuplicates(workspaces: readonly Workspace[]): Workspace[] {
+  const byMaterialization = new Map<string, Workspace[]>();
+  for (const workspace of workspaces) {
+    const key = localWorkspaceExactMaterializationKey(workspace);
+    const bucket = byMaterialization.get(key);
+    if (bucket) {
+      bucket.push(workspace);
+    } else {
+      byMaterialization.set(key, [workspace]);
+    }
+  }
+
+  return Array.from(byMaterialization.values()).map((bucket) => (
+    bucket.length === 1
+      ? bucket[0]!
+      : [...bucket].sort(compareExactLocalWorkspaceDuplicateOrder)[0]!
+  ));
+}
+
 export function buildLogicalWorkspaces(args: {
   localWorkspaces: Workspace[];
   repoRoots: RepoRoot[];
@@ -81,7 +151,8 @@ export function buildLogicalWorkspaces(args: {
   }
 
   for (const [baseLogicalId, bucket] of localBuckets) {
-    const sortedBucket = [...bucket].sort(compareLocalWorkspaceCanonicalOrder);
+    const sortedBucket = collapseExactLocalWorkspaceDuplicates(bucket)
+      .sort(compareLocalWorkspaceCanonicalOrder);
     sortedBucket.forEach((workspace, index) => {
       const logicalId = index === 0
         ? baseLogicalId

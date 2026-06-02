@@ -5,6 +5,7 @@ interface ToolActionDetailsPanelProps {
   className?: string;
 }
 
+// Shared wrapper card used by tool-call detail bodies.
 export function ToolActionDetailsPanel({
   children,
   className = "",

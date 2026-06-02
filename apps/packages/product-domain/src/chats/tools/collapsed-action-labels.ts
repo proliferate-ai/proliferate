@@ -147,7 +147,7 @@ export function formatRunningCommandLabel(command: string): string {
   if (!normalizedCommand || normalizedCommand === "command") {
     return "Running command";
   }
-  return `Running command ${normalizedCommand}`;
+  return `Running: ${normalizedCommand}`;
 }
 
 export function formatEditVerb(operation: FileChangeContentPart["operation"]): string {

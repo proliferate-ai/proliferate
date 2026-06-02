@@ -233,7 +233,8 @@ function shouldSplitTurnIntoRows(
   turn: TurnRecord,
   presentation: TurnPresentation,
 ): boolean {
-  return turn.itemOrder.length >= SPLIT_TURN_MIN_ITEM_COUNT
+  return !!turn.completedAt
+    && turn.itemOrder.length >= SPLIT_TURN_MIN_ITEM_COUNT
     && presentation.displayBlocks.length > 1;
 }
 
@@ -295,11 +296,16 @@ function blockBelongsToCompletedHistory(
 }
 
 function getTurnDisplayBlockKey(block: TurnDisplayBlock): string {
-  if (
-    block.kind === "collapsed_actions"
-    || block.kind === "inline_tools"
-    || block.kind === "subagent_creations"
-  ) {
+  if (block.kind === "collapsed_actions") {
+    return block.itemIds[0] ?? block.blockId;
+  }
+  if (block.kind === "inline_tool") {
+    return block.itemId;
+  }
+  if (block.kind === "inline_tools") {
+    return block.itemIds[0] ?? block.blockId;
+  }
+  if (block.kind === "subagent_creations") {
     return block.blockId;
   }
   return block.itemId;

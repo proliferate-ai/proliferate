@@ -23,9 +23,23 @@ the area docs under `specs/codebase/structures/**`.
     freshness expectations
 - [qa/README.md](qa/README.md)
   - release QA process and per-surface verification checklist
-- [runbooks/billing-pro-promo-codes.md](runbooks/billing-pro-promo-codes.md)
-  - granting free / discounted Pro via Stripe coupons and per-person promotion
-    codes
+- [runbooks/README.md](runbooks/README.md)
+  - specific, repeatable operational runbooks (billing promo codes, and future
+    cloud/worker/sandbox operational procedures)
+- [reference/README.md](reference/README.md)
+  - canonical environment variable inventory, secrets matrix, and workspace
+    command environment reference
+
+## Developer Process Map
+
+| Process bucket | Current owner |
+| --- | --- |
+| Deploying / updating to production / infra | [deploying/README.md](deploying/README.md), [deploying/ci-cd.md](deploying/ci-cd.md), and self-hosted deploy docs. |
+| Environment variables and where they live | [reference/README.md](reference/README.md), [reference/env-vars.yaml](reference/env-vars.yaml), and [reference/env-secrets-matrix.md](reference/env-secrets-matrix.md). |
+| Developing locally with profiles, Stripe, and mobile | [local/README.md](local/README.md), [local/dev-profiles.md](local/dev-profiles.md), [local/stripe-local-testing.md](local/stripe-local-testing.md), and [local/mobile.md](local/mobile.md). |
+| Debugging and support issue triage | [debugging/README.md](debugging/README.md), [debugging/support-reports.md](debugging/support-reports.md), and [debugging/performance-profiling.md](debugging/performance-profiling.md). |
+| Analytics and keeping observability fresh | [analytics/README.md](analytics/README.md) plus the Customer.io, Metabase, PostHog, Sentry, and anonymous telemetry docs in that folder. |
+| QA and release verification | [qa/README.md](qa/README.md), with feature-specific acceptance criteria under [../codebase/features/](../codebase/features/) and primitive smoke expectations under [../codebase/primitives/](../codebase/primitives/). |
 
 PR title, label, release-note, and checklist rules live in
 [`deploying/ci-cd.md`](deploying/ci-cd.md) and

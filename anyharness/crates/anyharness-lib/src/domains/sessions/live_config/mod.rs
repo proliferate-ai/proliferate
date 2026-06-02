@@ -8,7 +8,15 @@ mod raw;
 #[cfg(test)]
 mod tests;
 
+pub const ACP_MODEL_COMPAT_CONFIG_ID: &str = "model";
 pub const LEGACY_MODE_COMPAT_CONFIG_ID: &str = "mode";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionModelOption {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LegacyModeOption {
@@ -46,6 +54,8 @@ const NORMALIZED_ORDER: &[NormalizedControlKind] = &[
 pub fn build_live_config_snapshot(
     _agent_kind: &str,
     config_options: &[acp::SessionConfigOption],
+    current_model_id: Option<&str>,
+    available_models: &[SessionModelOption],
     legacy_mode_state: Option<&LegacyModeState>,
     prompt_capabilities: PromptCapabilities,
     source_seq: i64,
@@ -55,7 +65,12 @@ pub fn build_live_config_snapshot(
         .iter()
         .filter_map(raw::into_raw_option)
         .collect::<Vec<_>>();
-    let normalized_controls = controls::normalize_controls(&raw_config_options, legacy_mode_state);
+    let normalized_controls = controls::normalize_controls(
+        &raw_config_options,
+        current_model_id,
+        available_models,
+        legacy_mode_state,
+    );
 
     SessionLiveConfigSnapshot {
         raw_config_options,

@@ -55,7 +55,7 @@ edge cases, and focused verification for a specific cross-cutting flow such as
 billing, runtime provisioning, or MCP. None are written yet.
 
 When a change touches `server/artifact-runtime/**`, also read
-[../../../server/artifact-runtime/README.md](../../../server/artifact-runtime/README.md).
+[../../../../server/artifact-runtime/README.md](../../../../server/artifact-runtime/README.md).
 That README owns the hosted artifact viewer contract, the desktop/runtime
 `postMessage` protocol, and the per-type renderer behavior.
 

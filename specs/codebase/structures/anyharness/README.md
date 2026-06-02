@@ -251,10 +251,10 @@ Specs:
   seed artifacts, and launch resolution.
 - [../../primitives/mcp-runtime.md](../../primitives/mcp-runtime.md) for user MCP bindings, product MCP servers,
   session extensions, capability tokens, and MCP elicitation.
-- [../../features/product-mcps/servers.md](../../features/product-mcps/servers.md) for the repeatable product
+- [../../features/agent-features/servers.md](../../features/agent-features/servers.md) for the repeatable product
   MCP server pattern: definition, auth, injection, context, tools, calls, UI
   exposure, and session MCP selection.
-- [../../features/product-mcps/definitions/README.md](../../features/product-mcps/definitions/README.md) for the concrete product
+- [../../features/agent-features/definitions/README.md](../../features/agent-features/definitions/README.md) for the concrete product
   MCP definitions currently being standardized: subagents, artifacts, reviews,
   and workspace naming.
 
@@ -305,9 +305,13 @@ which guide to read and where the code belongs.
 | Hosting and process helpers around local workspace capabilities | `anyharness-lib/src/adapters/hosting/**`, `anyharness-lib/src/adapters/processes/**` | `adapters/hosting/**`, `adapters/processes/**` | [guides/adapters.md](guides/adapters.md) |
 | Terminal durable records, PTY lifecycle, terminal stream handles, terminal registry | `anyharness-lib/src/domains/terminals/**`, `anyharness-lib/src/live/terminals/**` | durable `domains/terminals/**` plus live `live/terminals/**` | [guides/live-runtime.md](guides/live-runtime.md) |
 | MCP user bindings attached to a session | `anyharness-lib/src/domains/sessions/mcp_bindings/**` | `domains/sessions/mcp_bindings/**` | [../../primitives/mcp-runtime.md](../../primitives/mcp-runtime.md), [guides/domains.md](guides/domains.md) |
-| Product MCP tool servers for artifacts, reviews, subagents, workspace naming | `domains/cowork/**`, `domains/reviews/**`, `domains/sessions/subagents/**`, `domains/sessions/workspace_naming/**` | owning product domain | [../../features/product-mcps/servers.md](../../features/product-mcps/servers.md), [../../features/product-mcps/definitions/README.md](../../features/product-mcps/definitions/README.md), [guides/domains.md](guides/domains.md) |
+| Product MCP tool servers for artifacts, reviews, subagents, workspace naming | `domains/cowork/**`, `domains/reviews/**`, `domains/sessions/subagents/**`, `domains/sessions/workspace_naming/**` | owning product domain | [../../features/agent-features/servers.md](../../features/agent-features/servers.md), [../../features/agent-features/definitions/README.md](../../features/agent-features/definitions/README.md), [guides/domains.md](guides/domains.md) |
 | Shared MCP JSON-RPC, capability-token, tool-formatting scaffolding | `anyharness-lib/src/integrations/mcp/**` plus any remaining feature-local wrappers | `integrations/mcp/**` | [guides/integrations.md](guides/integrations.md), [../../primitives/mcp-runtime.md](../../primitives/mcp-runtime.md) |
+| Artifact durable model, manifest, protection, or runtime behavior | `anyharness-lib/src/domains/artifacts/**` | `domains/artifacts/**` | [guides/domains.md](guides/domains.md), [../../features/agent-features/definitions/artifacts.md](../../features/agent-features/definitions/artifacts.md) |
 | Cowork artifacts, delegation, or cowork-owned tools | `anyharness-lib/src/domains/cowork/**` | `domains/cowork/**` | [guides/domains.md](guides/domains.md), [../../features/cowork-artifacts.md](../../features/cowork-artifacts.md) |
+| Plugin expansion: MCP plugin auth/definitions/tools or skill rendering for sessions | `anyharness-lib/src/domains/plugins/**` | `domains/plugins/**` | [guides/domains.md](guides/domains.md), [../../primitives/mcp-skills.md](../../primitives/mcp-skills.md) |
+| Applied runtime config for a session: MCP/skill/plugin manifest, credential values, session context | `anyharness-lib/src/domains/runtime_config/**` | `domains/runtime_config/**` | [guides/domains.md](guides/domains.md), [../../primitives/mcp-skills.md](../../primitives/mcp-skills.md) |
+| Session link graph: subagent, cowork, review-agent, fork relationships | `anyharness-lib/src/domains/sessions/links/**` | `domains/sessions/links/**` | [guides/domains.md](guides/domains.md), [specs/session-engine.md](specs/session-engine.md) |
 | Reviews, plans, mobility, or repo-root product behavior | `domains/reviews/**`, `domains/plans/**`, `domains/mobility/**`, `domains/repo_roots/**` | owning `domains/<domain>/**` | [guides/domains.md](guides/domains.md) |
 | Latency tracing, request measurement, diagnostic ids | `observability/latency.rs` and scattered measurement helpers | `observability/**` | [guides/observability.md](guides/observability.md) |
 | Splitting large files, moving modules, or creating new folders | any AnyHarness path | target layer from this table | [guides/repo-shape.md](guides/repo-shape.md) |
@@ -347,10 +351,14 @@ anyharness/crates/
         workspaces/
         agents/
         repo_roots/
+        artifacts/
         cowork/
         reviews/
         plans/
         mobility/
+        terminals/
+        plugins/
+        runtime_config/
       live/
         sessions/
         terminals/
@@ -383,9 +391,12 @@ domains/workspaces/    -> target domains/workspaces/
 current domains/agents/ -> target domains/agents/ plus integrations/agent_cli/
 domains/repo_roots/    -> target domains/repo_roots/
 current cowork/        -> target domains/cowork/
+domains/artifacts/    -> target domains/artifacts/
 domains/reviews/      -> target domains/reviews/
 domains/plans/        -> target domains/plans/
 current mobility/      -> target domains/mobility/
+domains/plugins/      -> target domains/plugins/ (MCP plugin defs + skill rendering)
+domains/runtime_config/ -> target domains/runtime_config/ (applied MCP/skill/plugin session context)
 current live/sessions/ -> current and target live session runtime
 current acp/           -> remaining ACP permission/payload/error helpers; target integrations/acp only if reusable protocol mechanics earn it
 current domains/terminals/ + live/terminals/ -> current and target terminal durable/live split

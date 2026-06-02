@@ -48,6 +48,42 @@ Use this folder to answer four deployment questions:
      changelog/release notes, or in-app copy when the shipped behavior changes
      those surfaces
 
+## Tools And Permissions
+
+The lane-specific source of truth is [ci-cd.md](ci-cd.md). This entrypoint
+names the minimum operator surface before choosing a lane.
+
+Required tools and surfaces:
+
+- GitHub MCP, `gh`, or GitHub web access for Actions runs, environment
+  approvals, PR labels, release notes, release artifacts, and deploy logs.
+- Local shell access for helper scripts, release dry runs, SDK/runtime builds,
+  Docker checks, and deployment verification commands.
+- Browser or Chrome access with the right logged-in profile for GitHub, AWS,
+  Vercel, E2B, Stripe, Cloudflare, Expo, Apple, and public docs or landing-page
+  verification.
+- AWS CLI or console access for ECS, ECR, RDS, S3, CloudFront, IAM, SSM, and
+  updater or self-hosted release infrastructure when those lanes are in scope.
+- Vercel, E2B, Expo/EAS, App Store Connect, Stripe, and Cloudflare access only
+  for release lanes that touch those providers.
+
+Required permissions by lane:
+
+| Lane | Permissions |
+| --- | --- |
+| Hosted staging / production | GitHub Actions access, required GitHub environment approval rights, and AWS/Vercel/E2B access for the selected surfaces |
+| Desktop updater | repo write access, release-artifact access, desktop signing/updater infra access, and permission to verify updater manifests |
+| Runtime / SDK / server image | repo write access, GitHub release/workflow access, registry access for the published artifact, and permission to run the owning build workflow |
+| Mobile / TestFlight | Expo/EAS access and App Store Connect access for build submission, review metadata, or TestFlight verification |
+| Environment variables | GitHub environment admin or maintainer access, plus AWS SSM access when ECS runtime secrets must be inspected or repaired |
+| Landing page / public docs | repo or hosted CMS access for the public surface, plus release-note ownership for user-visible changes |
+
+Do not paste secret values, deploy tokens, signing credentials, webhook
+secrets, private keys, AWS credentials, or provider refresh tokens into chat,
+docs, PRs, issues, or logs. Use
+[`../reference/env-vars.yaml`](../reference/env-vars.yaml) for canonical
+deployment variable ownership.
+
 ## Operator Rules
 
 - For hosted staging or production, start with the agent deployment runbook in

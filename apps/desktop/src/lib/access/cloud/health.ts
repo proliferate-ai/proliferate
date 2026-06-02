@@ -7,6 +7,7 @@ import {
 } from "@/lib/infra/measurement/debug-startup";
 
 let lastKnownControlPlaneReachable: boolean | null = null;
+const CONTROL_PLANE_HEALTH_TIMEOUT_MS = 2_500;
 
 export function getLastKnownControlPlaneReachable(): boolean | null {
   return lastKnownControlPlaneReachable;
@@ -15,12 +16,22 @@ export function getLastKnownControlPlaneReachable(): boolean | null {
 export async function checkControlPlaneReachable(): Promise<boolean> {
   const startedAt = startStartupTimer();
   logStartupDebug("control_plane.health.start");
+  const abortController = typeof AbortController !== "undefined"
+    ? new AbortController()
+    : null;
+  const timeoutId = abortController
+    ? globalThis.setTimeout(
+      () => abortController.abort(),
+      CONTROL_PLANE_HEALTH_TIMEOUT_MS,
+    )
+    : null;
 
   try {
     const response = await fetch(buildProliferateApiUrl("/health"), {
       headers: {
         Accept: "application/json",
       },
+      signal: abortController?.signal,
     });
     const reachable = response.ok;
     lastKnownControlPlaneReachable = reachable;
@@ -34,8 +45,14 @@ export async function checkControlPlaneReachable(): Promise<boolean> {
     lastKnownControlPlaneReachable = false;
     logStartupDebug("control_plane.health.failed", {
       elapsedMs: elapsedStartupMs(startedAt),
+      timedOut: abortController?.signal.aborted === true,
+      timeoutMs: CONTROL_PLANE_HEALTH_TIMEOUT_MS,
       ...summarizeStartupError(error),
     });
     return false;
+  } finally {
+    if (timeoutId) {
+      globalThis.clearTimeout(timeoutId);
+    }
   }
 }

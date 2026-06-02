@@ -11,7 +11,7 @@ import type {
   TranscriptState,
 } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ChevronRight } from "@proliferate/ui/icons";
+import { Robot } from "@proliferate/ui/icons";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { MarkdownRenderer } from "@/components/content/ui/MarkdownRenderer";
 import { SubagentLaunchLedger } from "@/components/workspace/chat/transcript/SubagentLaunchLedger";
@@ -153,16 +153,19 @@ export function TranscriptAgentGroupBlock({
             : "cursor-default text-muted-foreground"
         }`}
       >
-        {headerExpandable && (
-          <ChevronRight
-            className={`size-2.5 shrink-0 text-faint transition-transform duration-200 ${
-              expanded ? "rotate-90" : ""
-            }`}
-          />
-        )}
-        <span className="font-[460] text-foreground/90">{headerVerb}</span>
+        <Robot
+          aria-hidden="true"
+          className={`size-3 shrink-0 transition-colors ${
+            expanded
+              ? "text-foreground/70"
+              : headerExpandable
+                ? "text-faint group-hover/tool-action-row:text-muted-foreground"
+                : "text-muted-foreground"
+          }`}
+        />
+        <span className="text-inherit">{headerVerb}</span>
         {shouldShowDescription && (
-          <span className="min-w-0 truncate text-foreground/90">{description}</span>
+          <span className="min-w-0 truncate text-inherit">{description}</span>
         )}
         {!expanded && collapsedSummary && (
           <span className="ml-1 text-sm text-muted-foreground">

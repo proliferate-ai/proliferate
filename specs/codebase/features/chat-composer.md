@@ -57,6 +57,29 @@ Non-negotiable:
 - **The composer surface stays unchanged and paints the seam.** There is no `flatTop` mode. Dock-region panels are narrower attached trays that sit directly above the composer: rounded top corners, side/top borders, no bottom border, and no gap. The composer surface paints after the dock regions so its own top outline remains visible at the seam.
 - **Composer command overlays are composer-local, not dock-region inhabitants.** The slash-command tray renders from `ChatInput` in a small host directly above `ChatComposerSurface` while a prompt-leading `/` trigger is active. It is transient editor UI and does not participate in `useComposerDockSlots` precedence.
 
+## 1.1 Model Selector Semantics
+
+The composer model selector presents the model-catalog contract from
+`specs/codebase/primitives/model-catalog.md`. It must not infer identity from
+display labels or from one provider's raw runtime id shape.
+
+Rules:
+
+- The current composer chip uses the active session's effective runtime model
+  once AnyHarness reports one. Pending launches may show requested model intent.
+- Picker selected state, dedupe, visibility, and display labels use canonical
+  catalog identity after alias/normalization resolution.
+- Runtime live config values are preserved for update calls, but they are not
+  the rendered product name when a catalog match exists.
+- "New chat" means the active session lacks a settable model path for that row.
+  It does not mean the row failed catalog matching.
+- Action kind derives from switchability: current row is selected, switchable
+  rows update the running session, and non-switchable rows start a new chat.
+
+Any provider-specific compatibility mapping in Desktop must be backed by a
+domain-level selector test and, when possible, a recorded AnyHarness fixture
+showing the raw session values that required the mapping.
+
 ## 2. Dock Regions
 
 `resolveComposerDockSlots`

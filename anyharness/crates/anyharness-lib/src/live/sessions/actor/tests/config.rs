@@ -1,5 +1,15 @@
 use super::*;
 
+fn session_model_options(ids: &[&str]) -> Vec<SessionModelOption> {
+    ids.iter()
+        .map(|id| SessionModelOption {
+            id: (*id).to_string(),
+            name: (*id).to_string(),
+            description: None,
+        })
+        .collect()
+}
+
 #[test]
 fn load_startup_restore_snapshot_captures_pre_restart_controls_before_overwrite() {
     let db = Db::open_in_memory().expect("open db");
@@ -245,7 +255,7 @@ fn pending_config_rank_keeps_collaboration_mode_in_standard_order() {
         legacy_mode_state: None,
         config_options: vec![collaboration_mode],
         current_model_id: None,
-        available_model_ids: Vec::new(),
+        available_models: Vec::new(),
         prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
     };
 
@@ -262,12 +272,7 @@ fn direct_model_setter_only_applies_exact_live_ids_or_legacy_empty_lists() {
         legacy_mode_state: None,
         config_options: Vec::new(),
         current_model_id: None,
-        available_model_ids: vec![
-            "default".to_string(),
-            "sonnet".to_string(),
-            "sonnet[1m]".to_string(),
-            "haiku".to_string(),
-        ],
+        available_models: session_model_options(&["default", "sonnet", "sonnet[1m]", "haiku"]),
         prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
     };
 
@@ -284,10 +289,34 @@ fn direct_model_setter_only_applies_exact_live_ids_or_legacy_empty_lists() {
         "claude-opus-4-6"
     ));
 
-    startup_state.available_model_ids.clear();
+    startup_state.available_models.clear();
     assert!(should_apply_model_via_direct_setter(
         &startup_state,
         "legacy-agent-model"
+    ));
+}
+
+#[test]
+fn model_config_request_without_raw_option_rejects_values_outside_acp_models() {
+    let db = Db::open_in_memory().expect("open db");
+    let store = SessionStore::new(db);
+    let startup_state = SessionStartupState {
+        current_mode_id: None,
+        legacy_mode_state: None,
+        config_options: Vec::new(),
+        current_model_id: Some("sonnet".to_string()),
+        available_models: session_model_options(&["sonnet", "haiku"]),
+        prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
+    };
+
+    let error =
+        queue_pending_config_change(&store, "session-1", &startup_state, "model", "opus[1m]")
+            .expect_err("unlisted model values should be rejected");
+
+    assert!(matches!(
+        error,
+        crate::live::sessions::actor::command::SetConfigOptionCommandError::Rejected(detail)
+            if detail == "Value 'opus[1m]' is not valid for config option 'model'."
     ));
 }
 
@@ -330,7 +359,7 @@ fn model_config_request_rejects_values_outside_live_select_options() {
         legacy_mode_state: None,
         config_options: vec![option],
         current_model_id: Some("sonnet".to_string()),
-        available_model_ids: vec!["sonnet".to_string(), "haiku".to_string()],
+        available_models: session_model_options(&["sonnet", "haiku"]),
         prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
     };
 

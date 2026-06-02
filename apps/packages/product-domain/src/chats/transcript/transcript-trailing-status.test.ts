@@ -8,7 +8,7 @@ import {
 } from "./transcript-trailing-status";
 
 describe("transcript trailing status", () => {
-  it("suppresses trailing status only while tail assistant prose is streaming", () => {
+  it("suppresses trailing status while assistant prose is the visible tail", () => {
     const { transcript, turn } = transcriptWithTurn([
       assistantItem("assistant", true),
     ]);
@@ -25,6 +25,34 @@ describe("transcript trailing status", () => {
 
     expect(lastTopLevelItemIsAssistantProseWithText(turn, transcript)).toBe(true);
     expect(lastTopLevelItemIsStreamingAssistantProse(turn, transcript)).toBe(false);
+    expect(shouldAllowTurnTrailingStatus({
+      turn,
+      transcript,
+      isLatestTurnInProgress: true,
+    })).toBe(false);
+  });
+
+  it("ignores later transient thoughts when assistant prose is the visible tail", () => {
+    const { transcript, turn } = transcriptWithTurn([
+      assistantItem("assistant", false),
+      transientThoughtItem("status", "Checking the next action"),
+    ]);
+
+    expect(lastTopLevelItemIsAssistantProseWithText(turn, transcript)).toBe(true);
+    expect(latestTransientStatusText(turn, transcript)).toBe("Checking the next action");
+    expect(shouldAllowTurnTrailingStatus({
+      turn,
+      transcript,
+      isLatestTurnInProgress: true,
+    })).toBe(false);
+  });
+
+  it("allows trailing status after transient thought when no prose is visible", () => {
+    const { transcript, turn } = transcriptWithTurn([
+      transientThoughtItem("status", "Checking the next action"),
+    ]);
+
+    expect(lastTopLevelItemIsAssistantProseWithText(turn, transcript)).toBe(false);
     expect(shouldAllowTurnTrailingStatus({
       turn,
       transcript,

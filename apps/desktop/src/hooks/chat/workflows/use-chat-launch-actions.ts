@@ -10,6 +10,8 @@ import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-session-config-state";
+import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
+import { resolveAvailableLaunchSelection } from "@/lib/domain/chat/models/launch-selection-defaults";
 import {
   EMPTY_CHAT_DRAFT,
   serializeChatDraftToPrompt,
@@ -52,6 +54,7 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
   const scopedCurrentLaunchIdentity = suppressActiveSessionState ? null : currentLaunchIdentity;
   const scopedCurrentModelConfigId = suppressActiveSessionState ? null : currentModelConfigId;
   const scopedModelControl = suppressActiveSessionState ? null : modelControl;
+  const configuredLaunch = useConfiguredLaunchReadiness(scopedCurrentLaunchIdentity);
 
   const handleLaunchSelect = useCallback((selection: ModelSelectorSelection) => {
     if (
@@ -77,7 +80,17 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
         .catch((error) => {
           const message = error instanceof Error ? error.message : String(error);
           showToast(`Failed to switch model: ${message}`);
-      });
+        });
+      return;
+    }
+
+    const launchSelection = resolveAvailableLaunchSelection(
+      configuredLaunch.launchCatalog.launchAgents,
+      selection,
+      null,
+    );
+    if (!launchSelection) {
+      showToast(configuredLaunch.disabledReason ?? "Choose a ready model before opening a new chat.");
       return;
     }
 
@@ -88,8 +101,8 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
         targetWorkspaceId: selectedWorkspaceId,
       });
       void createThreadFromSelection({
-        agentKind: selection.kind,
-        modelId: selection.modelId,
+        agentKind: launchSelection.kind,
+        modelId: launchSelection.modelId,
         draftText: currentDraft,
         sourceWorkspaceId: selectedWorkspaceId,
       })
@@ -109,8 +122,8 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
       targetWorkspaceId: selectedWorkspaceId,
     });
     void createEmptySessionWithResolvedConfig({
-      agentKind: selection.kind,
-      modelId: selection.modelId,
+      agentKind: launchSelection.kind,
+      modelId: launchSelection.modelId,
       latencyFlowId,
     })
       .then(() => {
@@ -121,6 +134,8 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
         showToast(formatSessionCreateToastMessage(error, "Failed to open chat"));
       });
   }, [
+    configuredLaunch.disabledReason,
+    configuredLaunch.launchCatalog.launchAgents,
     createThreadFromSelection,
     currentDraft,
     createEmptySessionWithResolvedConfig,

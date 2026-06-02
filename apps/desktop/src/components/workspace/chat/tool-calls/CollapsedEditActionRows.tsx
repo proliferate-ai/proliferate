@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState, type KeyboardEvent } from "react";
 import type {
   FileChangeContentPart,
   ToolCallItem,
@@ -9,10 +9,8 @@ import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
 import { HighlightedCodePanel } from "@/components/content/ui/HighlightedCodePanel";
 import { useFileReferenceActions } from "@/hooks/workspaces/workflows/files/use-file-reference-actions";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
-import {
-  basename,
-  formatEditVerb,
-} from "@proliferate/product-domain/chats/tools/collapsed-action-labels";
+import { ChevronRight, FilePen } from "@proliferate/ui/icons";
+import { basename } from "@proliferate/product-domain/chats/tools/collapsed-action-labels";
 import { ActionFileLink } from "./CollapsedActionRowPrimitives";
 import { GenericActionRow } from "./CollapsedGenericActionRow";
 
@@ -55,9 +53,13 @@ function EditActionRow({
 }) {
   const pathLabel = part.newWorkspacePath ?? part.workspacePath ?? part.newPath ?? part.path;
   const displayName = part.newBasename ?? part.basename ?? basename(pathLabel);
-  const action = failed ? "Failed editing" : formatEditVerb(part.operation);
+  const action = failed
+    ? formatFailedEditActionTitle(part.operation)
+    : formatEditActionTitle(part.operation);
   const additions = part.additions ?? 0;
   const deletions = part.deletions ?? 0;
+  const hasDetails = !!part.patch || !!part.preview;
+  const [expanded, setExpanded] = useState(false);
   const workspacePath = part.newWorkspacePath ?? part.workspacePath ?? null;
   const fileReferenceActions = useFileReferenceActions({
     rawPath: pathLabel,
@@ -66,33 +68,65 @@ function EditActionRow({
   const handleOpen = useCallback(() => {
     void fileReferenceActions.openPrimary();
   }, [fileReferenceActions]);
-  const showActionRow = failed || !part.patch;
+  const toggleExpanded = () => setExpanded((next) => !next);
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!hasDetails) return;
+    if (
+      event.target === event.currentTarget
+      && (event.key === "Enter" || event.key === " ")
+    ) {
+      event.preventDefault();
+      toggleExpanded();
+    }
+  };
 
   return (
     <div>
-      {showActionRow && (
-        <div
-          className={`group/action-row flex min-w-0 items-center gap-1.5 rounded-lg bg-[var(--color-diff-chat-inline-tool-header-surface)] px-3 py-2 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground/80 transition-colors hover:bg-[var(--color-diff-chat-inline-tool-header-hover-surface)] hover:text-foreground ${action === "Edited" ? "my-1" : ""}`}
-        >
-          <span className={failed ? "shrink-0 text-destructive/80" : "shrink-0 group-hover/action-row:text-foreground"}>
-            {action}
-          </span>
-          <ActionFileLink
-            pathLabel={pathLabel}
-            workspacePath={workspacePath}
-            displayName={displayName}
+      <div
+        {...(hasDetails
+          ? {
+            role: "button",
+            tabIndex: 0,
+            "data-chat-transcript-ignore": true,
+            "aria-expanded": expanded,
+            onClick: toggleExpanded,
+            onKeyDown: handleKeyDown,
+          }
+          : {})}
+        className={`group/action-row inline-flex min-w-0 max-w-full items-center gap-1 rounded-none bg-transparent p-0 text-left text-chat leading-[var(--text-chat--line-height)] font-normal text-muted-foreground/60 outline-none transition-colors hover:text-foreground focus-visible:underline ${hasDetails ? "cursor-pointer" : ""}`}
+      >
+        <FilePen
+          aria-hidden="true"
+          className={`size-3 shrink-0 transition-colors ${
+            failed
+              ? "text-destructive/70"
+              : "text-faint group-hover/action-row:text-muted-foreground group-focus-visible/action-row:text-muted-foreground"
+          }`}
+        />
+        <span className={failed ? "shrink-0 text-destructive/80" : "shrink-0 text-inherit"}>
+          {action}
+        </span>
+        <ActionFileLink
+          pathLabel={pathLabel}
+          workspacePath={workspacePath}
+          displayName={displayName}
+        />
+        {(additions > 0 || deletions > 0) && (
+          <FileChangeStats
+            additions={additions}
+            deletions={deletions}
+            className="text-sm"
           />
-          {(additions > 0 || deletions > 0) && (
-            <FileChangeStats
-              additions={additions}
-              deletions={deletions}
-              className="text-sm"
-            />
-          )}
-        </div>
-      )}
-      {part.patch ? (
-        <div className={showActionRow ? "mt-1.5" : ""}>
+        )}
+        {hasDetails && (
+          <ChevronRight
+            aria-hidden="true"
+            className={`size-2.5 shrink-0 text-faint transition-transform group-hover/action-row:text-muted-foreground group-focus-visible/action-row:text-muted-foreground ${expanded ? "rotate-90" : ""}`}
+          />
+        )}
+      </div>
+      {expanded && part.patch ? (
+        <div className="mt-1.5">
           <FileDiffCard
             filePath={pathLabel}
             additions={additions}
@@ -115,7 +149,7 @@ function EditActionRow({
             />
           </FileDiffCard>
         </div>
-      ) : part.preview ? (
+      ) : expanded && part.preview ? (
         <HighlightedCodePanel
           code={part.preview}
           filename={pathLabel}
@@ -126,4 +160,32 @@ function EditActionRow({
       ) : null}
     </div>
   );
+}
+
+function formatEditActionTitle(operation: FileChangeContentPart["operation"]): string {
+  switch (operation) {
+    case "create":
+      return "Create";
+    case "delete":
+      return "Delete";
+    case "move":
+      return "Move";
+    case "edit":
+    default:
+      return "Edit";
+  }
+}
+
+function formatFailedEditActionTitle(operation: FileChangeContentPart["operation"]): string {
+  switch (operation) {
+    case "create":
+      return "Failed creating";
+    case "delete":
+      return "Failed deleting";
+    case "move":
+      return "Failed moving";
+    case "edit":
+    default:
+      return "Failed editing";
+  }
 }

@@ -129,6 +129,7 @@ export function ModelSelector({
                   <ProviderModelGroup
                     key={group.kind}
                     group={group}
+                    currentKind={currentModel?.kind ?? null}
                     onSelect={(selection) => {
                       onSelect(selection);
                       handleClose();
@@ -194,13 +195,17 @@ export function ModelSelector({
 
 function ProviderModelGroup({
   group,
+  currentKind,
   onSelect,
   showSeparator,
 }: {
   group: ModelSelectorGroupData;
+  currentKind: string | null;
   onSelect: (selection: ModelSelectorSelection) => void;
   showSeparator: boolean;
 }) {
+  const hasSelectedModel = group.models.some((model) => model.isSelected);
+
   return (
     <>
       {showSeparator && <div className="mx-2 my-1 border-t border-border/60" />}
@@ -211,9 +216,14 @@ function ProviderModelGroup({
         <ModelRow
           key={model.modelId}
           kind={group.kind}
-          actionKind={model.actionKind}
           displayName={model.displayName}
           isSelected={model.isSelected}
+          showNewChatBadge={
+            model.actionKind === "open_new_chat"
+            && !model.isSelected
+            && !hasSelectedModel
+            && group.kind !== currentKind
+          }
           onSelect={() => onSelect({ kind: group.kind, modelId: model.modelId })}
         />
       ))}
@@ -223,19 +233,17 @@ function ProviderModelGroup({
 
 function ModelRow({
   kind,
-  actionKind,
   displayName,
   isSelected,
+  showNewChatBadge,
   onSelect,
 }: {
   kind: string;
-  actionKind: ModelSelectorGroupData["models"][number]["actionKind"];
   displayName: string;
   isSelected: boolean;
+  showNewChatBadge: boolean;
   onSelect: () => void;
 }) {
-  const showNewChatBadge = actionKind === "open_new_chat" && !isSelected;
-
   return (
     <PopoverMenuItem
       density="compact"

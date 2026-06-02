@@ -206,6 +206,11 @@ export function findTrailingLiveWorkBlock(
     return null;
   }
 
+  const trailingBlock = displayBlocks[displayBlocks.length - 1];
+  if (trailingBlock?.kind === "inline_tool" || trailingBlock?.kind === "inline_tools") {
+    return trailingBlock;
+  }
+
   for (let index = displayBlocks.length - 1; index >= 0; index--) {
     const block = displayBlocks[index];
     if (blockContainsActiveToolWork(block, transcript)) {
@@ -214,6 +219,15 @@ export function findTrailingLiveWorkBlock(
   }
 
   return null;
+}
+
+export function turnHasActiveToolWork(
+  turn: Pick<TurnRecord, "itemOrder">,
+  transcript: TranscriptState,
+): boolean {
+  return turn.itemOrder.some((itemId) =>
+    isActiveToolItem(transcript.itemsById[itemId])
+  );
 }
 
 function blockContainsActiveToolWork(
@@ -230,7 +244,6 @@ function blockContainsActiveToolWork(
   if (block.kind === "inline_tools") {
     return block.itemIds.some((itemId) => isActiveToolItem(transcript.itemsById[itemId]));
   }
-
   return isActiveToolItem(transcript.itemsById[block.itemId]);
 }
 
@@ -249,7 +262,8 @@ export function blockBelongsToCompletedHistory(
     || block.kind === "inline_tools"
     || block.kind === "subagent_creations"
   ) {
-    return block.itemIds.every((itemId) => completedHistoryRootIds.has(itemId));
+    return block.itemIds.length > 0
+      && block.itemIds.every((itemId) => completedHistoryRootIds.has(itemId));
   }
   return completedHistoryRootIds.has(block.itemId);
 }

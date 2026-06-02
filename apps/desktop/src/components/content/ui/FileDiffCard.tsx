@@ -94,9 +94,7 @@ export function FileDiffCard({
   const headerInnerClass = isSidebar
     ? "group/diff-header @container/diff-header relative flex min-h-9 items-center gap-2.5 px-[calc(var(--codex-diffs-header-padding-x,0.75rem)+0.5rem)] py-1.5 text-chat leading-[var(--text-chat--line-height)] hover:bg-[var(--codex-diffs-separator-surface)]"
     : `group/diff-header @container/diff-header relative flex min-h-7 items-center gap-2 px-[var(--codex-diffs-header-padding-x,1rem)] py-[var(--codex-diffs-header-padding-y,0.25rem)] text-chat leading-[var(--text-chat--line-height)] transition-colors ${chatHeaderHoverClass}`;
-  const actionRevealClass = isSidebar
-    ? "opacity-0 transition-opacity duration-200 group-hover/file-diff:opacity-100 group-focus-within/file-diff:opacity-100"
-    : "hidden group-hover/diff-header:block group-focus-within/diff-header:block";
+  const actionRevealClass = "opacity-0 transition-opacity duration-200 group-hover/file-diff:opacity-100 group-focus-within/file-diff:opacity-100 group-hover/diff-header:opacity-100 group-focus-within/diff-header:opacity-100";
   const statsClass = isSidebar
     ? "leading-none"
     : "text-chat leading-none text-muted-foreground";

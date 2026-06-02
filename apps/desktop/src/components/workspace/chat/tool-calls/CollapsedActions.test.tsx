@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
-import { createElement } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { createTranscriptState } from "@anyharness/sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { toolItem } from "@proliferate/product-domain/chats/transcript/transcript-presentation-test-fixtures";
-import { CollapsedActions, InlineToolActions } from "./CollapsedActions";
+import {
+  terminalItem,
+  toolItem,
+} from "@proliferate/product-domain/chats/transcript/transcript-presentation-test-fixtures";
+import { CollapsedActions } from "./CollapsedActions";
 
 vi.mock("@/hooks/workspaces/workflows/files/use-file-reference-actions", () => ({
   useFileReferenceActions: ({ rawPath }: { rawPath: string }) => ({
@@ -51,9 +52,83 @@ describe("CollapsedActions", () => {
 
     expect(screen.queryByText("Reading read.ts")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /Explored 1 file/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Exploring 1 file/i }));
 
     expect(screen.getByText("Reading read.ts")).toBeTruthy();
+  });
+
+  it("marks active action batches with the live row affordance", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      read: toolItem("read", "turn-1", 1, "file_read", "in_progress"),
+    };
+
+    render(
+      <CollapsedActions
+        itemIds={["read"]}
+        transcript={transcript}
+      />,
+    );
+
+    const activeButton = screen.getByRole("button", { name: /Exploring 1 file/i });
+    expect(activeButton.getAttribute("data-active")).toBe("true");
+    expect(activeButton.innerHTML).toContain("thinking-text");
+    expect(activeButton.innerHTML).toContain("data-text=\"Exploring 1 file\"");
+    expect(activeButton.innerHTML).not.toContain("motion-safe:animate-pulse");
+
+    cleanup();
+
+    transcript.itemsById.read = toolItem("read", "turn-1", 1, "file_read", "completed");
+    render(
+      <CollapsedActions
+        itemIds={["read"]}
+        transcript={transcript}
+      />,
+    );
+
+    const completedButton = screen.getByRole("button", { name: /Explored 1 file/i });
+    expect(completedButton.getAttribute("data-active")).toBeNull();
+    expect(completedButton.innerHTML).not.toContain("thinking-text");
+    expect(completedButton.innerHTML).not.toContain("motion-safe:animate-pulse");
+  });
+
+  it("keeps the trailing action batch live while waiting for the next stream event", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      edit: toolItem("edit", "turn-1", 1, "file_change", "completed"),
+    };
+
+    render(
+      <CollapsedActions
+        itemIds={["edit"]}
+        transcript={transcript}
+        autoFollow
+      />,
+    );
+
+    const liveButton = screen.getByRole("button", { name: /Editing 1 file/i });
+    expect(liveButton.getAttribute("data-active")).toBe("true");
+    expect(liveButton.innerHTML).toContain("thinking-text");
+    expect(liveButton.innerHTML).not.toContain("motion-safe:animate-pulse");
+  });
+
+  it("animates live command counts with the thinking text treatment", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      command: terminalItem("command", "turn-1", 1, "pnpm test", "in_progress"),
+    };
+
+    render(
+      <CollapsedActions
+        itemIds={["command"]}
+        transcript={transcript}
+      />,
+    );
+
+    const liveButton = screen.getByRole("button", { name: /Running 1 command/i });
+    expect(liveButton.getAttribute("data-active")).toBe("true");
+    expect(liveButton.innerHTML).toContain("thinking-text");
+    expect(liveButton.innerHTML).toContain("data-text=\"Running 1 command\"");
   });
 
   it("does not cap the expanded ledger when it contains edits", () => {
@@ -72,10 +147,11 @@ describe("CollapsedActions", () => {
 
     const html = document.body.innerHTML;
     expect(html).toContain("data-collapsed-actions-ledger");
-    expect(html).toContain("Edited");
+    expect(html).toContain("Edit");
     expect(html).not.toContain("max-h-80");
     expect(html).not.toContain("max-h-[7.5rem]");
     expect(html).not.toContain("overflow-y-auto overflow-x-hidden");
+    expect(html).not.toContain("pl-4");
     expect(html).toContain("flex flex-col gap-0");
   });
 
@@ -92,16 +168,38 @@ describe("CollapsedActions", () => {
         autoFollow
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Explored 1 file/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Exploring 1 file/i }));
 
     const html = document.body.innerHTML;
     expect(html).toContain("data-collapsed-actions-ledger");
     expect(html).toContain("Read read.ts");
     expect(html).toContain("overflow-y-auto overflow-x-hidden");
     expect(html).toContain("max-h-[7.5rem]");
+    expect(html).not.toContain("pl-4");
   });
 
-  it("uses tight spacing for grouped inline edit actions", () => {
+  it("renders dropdownable command rows brighter than plain ledger rows", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      read: toolItem("read", "turn-1", 1, "file_read"),
+      command: terminalItem("command", "turn-1", 2, "pnpm test"),
+    };
+
+    render(
+      <CollapsedActions
+        itemIds={["read", "command"]}
+        transcript={transcript}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /command/i }));
+
+    const commandRow = screen.getByRole("button", { name: /Running: pnpm test/i });
+    const readRow = screen.getByText("Read read.ts");
+    expect(commandRow.className).toContain("text-muted-foreground/75");
+    expect(readRow.className).toContain("text-muted-foreground/60");
+  });
+
+  it("starts grouped edit cards closed inside the expanded action batch", () => {
     const transcript = createTranscriptState("session-1");
     const firstEdit = toolItem("edit-1", "turn-1", 1, "file_change");
     const firstEditPart = firstEdit.contentParts[0];
@@ -113,19 +211,47 @@ describe("CollapsedActions", () => {
       "edit-2": toolItem("edit-2", "turn-1", 2, "file_change"),
     };
 
-    const html = renderToStaticMarkup(
-      createElement(InlineToolActions, {
-        itemIds: ["edit-1", "edit-2"],
-        transcript,
-      }),
+    render(
+      <CollapsedActions
+        itemIds={["edit-1", "edit-2"]}
+        transcript={transcript}
+      />,
     );
+    fireEvent.click(screen.getByRole("button", { name: /Edited 2 files/i }));
 
-    expect(html).toContain("flex flex-col gap-0");
-    expect(html).not.toContain("flex flex-col gap-1");
-    expect(html).toContain("--codex-diffs-header-surface:var(--color-diff-chat-inline-tool-header-surface)");
-    expect(html).toContain("data-diff-surface=\"chat\"");
+    const html = document.body.innerHTML;
+    const ledger = document.querySelector("[data-collapsed-actions-ledger]");
+    expect(ledger?.firstElementChild?.className).toContain("flex flex-col gap-0");
+    expect(html).toContain("Edit");
+    expect(html).toContain("edit-1.ts");
+    expect(html).toContain("aria-expanded=\"false\"");
+    expect(html).not.toContain("data-diff-surface=\"chat\"");
     expect(html).not.toContain("Toggle file diff");
     expect(html).not.toContain("data-app-action-review-file-toggle");
     expect(html).not.toContain("aria-label=\"Open edit-1.ts\"");
+  });
+
+  it("opens grouped edit cards from the edit action row", () => {
+    const transcript = createTranscriptState("session-1");
+    const firstEdit = toolItem("edit-1", "turn-1", 1, "file_change");
+    const firstEditPart = firstEdit.contentParts[0];
+    if (firstEditPart?.type === "file_change") {
+      firstEditPart.patch = "@@ -1 +1 @@\n-old\n+new";
+    }
+    transcript.itemsById = {
+      "edit-1": firstEdit,
+    };
+
+    render(
+      <CollapsedActions
+        itemIds={["edit-1"]}
+        transcript={transcript}
+      />,
+    );
+
+    expect(document.body.innerHTML).not.toContain("data-diff-surface=\"chat\"");
+    fireEvent.click(screen.getByRole("button", { name: /Edited 1 file/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Edit edit-1\.ts/i }));
+    expect(document.body.innerHTML).toContain("data-diff-surface=\"chat\"");
   });
 });

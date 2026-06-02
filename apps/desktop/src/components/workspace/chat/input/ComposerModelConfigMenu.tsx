@@ -39,7 +39,6 @@ export function ComposerModelConfigMenu({
   agentKind,
   filteredGroups,
   groups,
-  harnessLabel,
   menuRootRef,
   notReadyAgents,
   search,
@@ -61,7 +60,6 @@ export function ComposerModelConfigMenu({
   agentKind: string | null;
   filteredGroups: ModelSelectorGroup[];
   groups: ModelSelectorGroup[];
-  harnessLabel: string;
   menuRootRef: RefObject<HTMLDivElement | null>;
   notReadyAgents: ModelSelectorProps["notReadyAgents"];
   search: string;
@@ -91,6 +89,7 @@ export function ComposerModelConfigMenu({
       <ComposerPopoverSurface className="w-72 max-w-[calc(100vw-1rem)] p-1">
         <div className="flex max-h-[min(20rem,calc(100vh-8rem))] min-h-0 flex-col">
           <ComposerModelPickerContent
+            activeKind={activeKind}
             filteredGroups={filteredGroups}
             groups={activeModelGroups}
             search={search}
@@ -114,7 +113,7 @@ export function ComposerModelConfigMenu({
               {showHarnessSubmenu && (
                 <ComposerSubmenuMenuItem
                   active={activeSubmenu?.kind === "harness"}
-                  label={harnessLabel}
+                  label="Agent"
                   onOpen={(anchorElement) => onOpenSubmenu({ kind: "harness" }, anchorElement)}
                 />
               )}

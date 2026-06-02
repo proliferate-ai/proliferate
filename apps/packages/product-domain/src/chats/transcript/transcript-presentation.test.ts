@@ -101,8 +101,7 @@ describe("buildTurnPresentation", () => {
       childrenByParentId,
       isComplete: false,
     })).toEqual([
-      { kind: "collapsed_actions", blockId: "read-search", itemIds: ["read", "search"] },
-      { kind: "inline_tool", itemId: "command" },
+      { kind: "collapsed_actions", blockId: "read-command", itemIds: ["read", "search", "command"] },
       { kind: "item", itemId: "nested" },
     ]);
   });
@@ -404,7 +403,7 @@ describe("buildTurnPresentation", () => {
     )).toBe("Explored 2 files, 1 search, edited 1 file");
   });
 
-  it("renders active tools inline until they complete", () => {
+  it("keeps active tools in the existing collapsed action block as they stream", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       read: toolItem("read", "turn-1", 1, "file_read"),
@@ -414,8 +413,7 @@ describe("buildTurnPresentation", () => {
     const turn = turnRecord(["read", "command", "edit"]);
 
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
-      { kind: "collapsed_actions", blockId: "read-read", itemIds: ["read"] },
-      { kind: "inline_tools", blockId: "command-edit", itemIds: ["command", "edit"] },
+      { kind: "collapsed_actions", blockId: "read-edit", itemIds: ["read", "command", "edit"] },
     ]);
 
     transcript.itemsById.command = {
@@ -428,8 +426,7 @@ describe("buildTurnPresentation", () => {
     };
 
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
-      { kind: "collapsed_actions", blockId: "read-read", itemIds: ["read"] },
-      { kind: "inline_tools", blockId: "command-edit", itemIds: ["command", "edit"] },
+      { kind: "collapsed_actions", blockId: "read-edit", itemIds: ["read", "command", "edit"] },
     ]);
   });
 
@@ -442,14 +439,14 @@ describe("buildTurnPresentation", () => {
     const turn = turnRecord(["sqlite", "ps"]);
 
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
-      { kind: "inline_tools", blockId: "sqlite-ps", itemIds: ["sqlite", "ps"] },
+      { kind: "collapsed_actions", blockId: "sqlite-ps", itemIds: ["sqlite", "ps"] },
     ]);
 
     transcript.itemsById.pending = terminalItem("pending", "turn-1", 3, undefined, "in_progress");
     turn.itemOrder = ["sqlite", "ps", "pending"];
 
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
-      { kind: "inline_tools", blockId: "sqlite-pending", itemIds: ["sqlite", "ps", "pending"] },
+      { kind: "collapsed_actions", blockId: "sqlite-pending", itemIds: ["sqlite", "ps", "pending"] },
     ]);
 
     transcript.itemsById.read = toolItem("read", "turn-1", 3, "file_read", "in_progress");
@@ -480,7 +477,7 @@ describe("buildTurnPresentation", () => {
     ]);
   });
 
-  it("treats ls and find shell commands as quiet exploration", () => {
+  it("keeps active shell commands in the existing exploration block", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       list: terminalItem("list", "turn-1", 1, "ls -la", "in_progress"),
@@ -492,15 +489,14 @@ describe("buildTurnPresentation", () => {
     const presentation = buildTurnPresentation(turn, transcript);
 
     expect(presentation.displayBlocks).toEqual([
-      { kind: "collapsed_actions", blockId: "list-find", itemIds: ["list", "find"] },
-      { kind: "inline_tool", itemId: "command" },
+      { kind: "collapsed_actions", blockId: "list-command", itemIds: ["list", "find", "command"] },
     ]);
     expect(formatCollapsedActionsSummary(
-      summarizeCollapsedActions(["list", "find"], transcript),
-    )).toBe("Explored 1 listing, 1 search");
+      summarizeCollapsedActions(["list", "find", "command"], transcript),
+    )).toBe("Explored 1 listing, 1 search, ran 1 command");
   });
 
-  it("treats raw cmd grep and read shell commands as quiet exploration", () => {
+  it("keeps raw grep/read command batches with later active commands", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       grep: terminalCmdItem("grep", "turn-1", 1, "rg useEffect apps/desktop/src -n", "in_progress"),
@@ -516,12 +512,11 @@ describe("buildTurnPresentation", () => {
     const turn = turnRecord(["grep", "read", "command"]);
 
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
-      { kind: "collapsed_actions", blockId: "grep-read", itemIds: ["grep", "read"] },
-      { kind: "inline_tool", itemId: "command" },
+      { kind: "collapsed_actions", blockId: "grep-command", itemIds: ["grep", "read", "command"] },
     ]);
     expect(formatCollapsedActionsSummary(
-      summarizeCollapsedActions(["grep", "read"], transcript),
-    )).toBe("Explored 1 file, 1 search");
+      summarizeCollapsedActions(["grep", "read", "command"], transcript),
+    )).toBe("Explored 1 file, 1 search, ran 1 command");
   });
 
   it("keeps active terminal calls in a subtle inline row while command details stream in", () => {
@@ -532,7 +527,7 @@ describe("buildTurnPresentation", () => {
     const turn = turnRecord(["command"]);
 
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
-      { kind: "inline_tool", itemId: "command" },
+      { kind: "collapsed_actions", blockId: "command-command", itemIds: ["command"] },
     ]);
 
     transcript.itemsById.command = {
@@ -565,8 +560,34 @@ describe("buildTurnPresentation", () => {
     };
 
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
-      { kind: "inline_tool", itemId: "command" },
+      { kind: "collapsed_actions", blockId: "command-command", itemIds: ["command"] },
     ]);
+  });
+
+  it("keeps pending commands inside an existing collapsed action block", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      read: toolItem("read", "turn-1", 1, "file_read"),
+      search: toolItem("search", "turn-1", 2, "search"),
+      command: terminalItem("command", "turn-1", 3, undefined, "in_progress"),
+    };
+    const turn = turnRecord(["read", "search", "command"]);
+
+    expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
+      { kind: "collapsed_actions", blockId: "read-command", itemIds: ["read", "search", "command"] },
+    ]);
+
+    transcript.itemsById.command = {
+      ...transcript.itemsById.command as ToolCallItem,
+      rawInput: { command: "rg buildTranscriptDisplayBlocks apps/packages/product-domain/src" },
+    };
+
+    expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
+      { kind: "collapsed_actions", blockId: "read-command", itemIds: ["read", "search", "command"] },
+    ]);
+    expect(formatCollapsedActionsSummary(
+      summarizeCollapsedActions(["read", "search", "command"], transcript),
+    )).toBe("Explored 1 file, 2 searches");
   });
 
   it("keeps completed terminal calls without commands in collapsed command history", () => {
@@ -579,9 +600,6 @@ describe("buildTurnPresentation", () => {
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
       { kind: "collapsed_actions", blockId: "command-command", itemIds: ["command"] },
     ]);
-    expect(formatCollapsedActionsSummary(
-      summarizeCollapsedActions(["command"], transcript),
-    )).toBe("Running 1 command");
   });
 
   it("shows active Codex parsed read and search batches as collapsed exploration", () => {
@@ -644,7 +662,7 @@ describe("buildTurnPresentation", () => {
     )).toBe("Explored 1 file, 2 searches");
   });
 
-  it("keeps active parsed real commands inline until an exploration boundary arrives", () => {
+  it("keeps active parsed real commands in the existing block when exploration follows", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       sqlite: parsedCommandItem("sqlite", "turn-1", 1, [
@@ -657,7 +675,7 @@ describe("buildTurnPresentation", () => {
     const turn = turnRecord(["sqlite", "ps"]);
 
     expect(buildTurnPresentation(turn, transcript).displayBlocks).toEqual([
-      { kind: "inline_tools", blockId: "sqlite-ps", itemIds: ["sqlite", "ps"] },
+      { kind: "collapsed_actions", blockId: "sqlite-ps", itemIds: ["sqlite", "ps"] },
     ]);
 
     transcript.itemsById.sqlite = parsedCommandItem("sqlite", "turn-1", 1, [
@@ -685,7 +703,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["sqlite", "ps", "read"], transcript),
-    )).toBe("Explored 1 file, running 2 commands");
+    )).toBe("Explored 1 file, ran 2 commands");
   });
 });
 

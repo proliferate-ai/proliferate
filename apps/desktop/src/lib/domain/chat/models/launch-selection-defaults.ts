@@ -49,22 +49,41 @@ export function launchSelectionIsAvailable(
   agents: readonly DesktopAgentLaunchAgent[],
   selection: ModelSelectorSelection | null | undefined,
 ): boolean {
+  return resolveLaunchableModelSelection(agents, selection) !== null;
+}
+
+export function resolveLaunchableModelSelection(
+  agents: readonly DesktopAgentLaunchAgent[],
+  selection: ModelSelectorSelection | null | undefined,
+): ModelSelectorSelection | null {
   if (!selection) {
-    return false;
+    return null;
   }
 
   const agent = agents.find((candidate) => candidate.kind === selection.kind);
   if (!agent) {
-    return false;
+    return null;
+  }
+
+  const catalogModel = findLaunchModelByIdOrAlias(agent, selection.modelId);
+  if (catalogModel) {
+    return {
+      kind: selection.kind,
+      modelId: catalogModel.id,
+    };
   }
 
   if (dynamicLaunchAgentAcceptsModel(agent)) {
-    return selection.modelId.trim().length > 0;
+    const modelId = selection.modelId.trim();
+    return modelId
+      ? {
+        kind: selection.kind,
+        modelId,
+      }
+      : null;
   }
 
-  return agent.models.some((model) =>
-    model.id === selection.modelId || model.aliases.includes(selection.modelId)
-  );
+  return null;
 }
 
 export function resolveAvailableLaunchSelection(
@@ -72,9 +91,8 @@ export function resolveAvailableLaunchSelection(
   preferredSelection: ModelSelectorSelection | null | undefined,
   fallbackSelection: ModelSelectorSelection | null | undefined,
 ): ModelSelectorSelection | null {
-  return launchSelectionIsAvailable(agents, preferredSelection)
-    ? preferredSelection ?? null
-    : fallbackSelection ?? null;
+  return resolveLaunchableModelSelection(agents, preferredSelection)
+    ?? resolveLaunchableModelSelection(agents, fallbackSelection);
 }
 
 export function resolveConfiguredLaunchAgentSelection(

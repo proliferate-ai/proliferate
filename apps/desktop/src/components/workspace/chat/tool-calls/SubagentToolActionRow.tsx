@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
-import { ChevronRight, Robot } from "@proliferate/ui/icons";
+import { Robot } from "@proliferate/ui/icons";
 import { ToolActionDetailsPanel } from "@/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { DelegatedAgentHoverCard } from "@/components/workspace/shell/tabs/DelegatedAgentHoverCard";
 import { useTranscriptOpenSession } from "@/components/workspace/chat/transcript/TranscriptContexts";
@@ -98,7 +98,7 @@ export function SubagentToolActionRow({
       <div
         {...(expandable ? { "data-chat-transcript-ignore": true } : {})}
         className={`group/subagent-action inline-flex min-w-0 max-w-full items-center gap-1 overflow-hidden whitespace-nowrap rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal ${
-          failed ? "text-destructive/80" : "text-muted-foreground/80"
+          failed ? "text-destructive/80" : "text-muted-foreground/60"
         }`}
       >
         {expandable && (
@@ -111,9 +111,9 @@ export function SubagentToolActionRow({
             aria-expanded={expanded}
             onClick={() => setExpanded((next) => !next)}
           >
-            <ChevronRight
-              className={`size-3 shrink-0 text-faint transition-transform duration-200 ${
-                expanded ? "rotate-90" : ""
+            <Robot
+              className={`size-3 shrink-0 transition-colors ${
+                expanded ? "text-foreground/70" : "text-faint hover:text-muted-foreground"
               }`}
             />
           </Button>

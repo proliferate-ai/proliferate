@@ -1,3 +1,4 @@
+import type { Workspace } from "@anyharness/sdk";
 import { describe, expect, it } from "vitest";
 import { targetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import type { CloudMobilityWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
@@ -27,6 +28,34 @@ import {
   makeRepoRoot,
   makeWorkspace,
 } from "@/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
+
+const DEFAULT_UPDATED_AT = "2026-04-13T10:00:00.000Z";
+type WorkspaceExecutionSummary = NonNullable<Workspace["executionSummary"]>;
+
+function makeExecutionSummary(args: {
+  phase?: WorkspaceExecutionSummary["phase"];
+  totalSessionCount?: number;
+  liveSessionCount?: number;
+  updatedAt?: string | null;
+} = {}): WorkspaceExecutionSummary {
+  const {
+    phase = "idle",
+    totalSessionCount = 0,
+    liveSessionCount = 0,
+    updatedAt = DEFAULT_UPDATED_AT,
+  } = args;
+
+  return {
+    awaitingInteractionCount: phase === "awaiting_interaction" ? 1 : 0,
+    erroredCount: phase === "errored" ? 1 : 0,
+    idleCount: phase === "idle" ? totalSessionCount : 0,
+    liveSessionCount,
+    phase,
+    runningCount: phase === "running" ? 1 : 0,
+    totalSessionCount,
+    updatedAt,
+  };
+}
 
 function makeMobilityWorkspace(args: {
   id?: string;
@@ -561,6 +590,52 @@ describe("logical workspaces", () => {
     expect(slot?.mobilityWorkspace).toBeNull();
     expect(logicalWorkspaceRelatedIds(canonical!)).toContain(
       buildLocalSlotLogicalWorkspaceId(olderLocal.id),
+    );
+  });
+
+  it("collapses exact duplicate local records and prefers transcript history over setup-only slots", () => {
+    const checkoutPath = "/tmp/proliferate";
+    const setupOnlyLocal = {
+      ...makeWorkspace({
+        id: "local-setup-only",
+        branch: "main",
+        updatedAt: "2026-06-02T09:50:00.000Z",
+        executionSummary: makeExecutionSummary({
+          phase: "running",
+          totalSessionCount: 4,
+          liveSessionCount: 4,
+          updatedAt: "2026-06-02T09:50:00.000Z",
+        }),
+      }),
+      path: checkoutPath,
+      sourceRepoRootPath: checkoutPath,
+    };
+    const historicalLocal = {
+      ...makeWorkspace({
+        id: "local-with-transcript",
+        branch: "main",
+        updatedAt: "2026-06-02T09:10:00.000Z",
+        executionSummary: makeExecutionSummary({
+          totalSessionCount: 4,
+          liveSessionCount: 0,
+          updatedAt: "2026-06-02T09:15:00.000Z",
+        }),
+      }),
+      path: checkoutPath,
+      sourceRepoRootPath: checkoutPath,
+    };
+
+    const logicalWorkspaces = buildLogicalWorkspaces({
+      localWorkspaces: [setupOnlyLocal, historicalLocal],
+      repoRoots: [],
+      cloudWorkspaces: [],
+      currentSelectionId: null,
+    });
+
+    expect(logicalWorkspaces).toHaveLength(1);
+    expect(logicalWorkspaces[0]?.localWorkspace?.id).toBe(historicalLocal.id);
+    expect(logicalWorkspaceRelatedIds(logicalWorkspaces[0]!)).not.toContain(
+      buildLocalSlotLogicalWorkspaceId(setupOnlyLocal.id),
     );
   });
 

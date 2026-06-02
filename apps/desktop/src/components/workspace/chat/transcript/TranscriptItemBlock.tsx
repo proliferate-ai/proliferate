@@ -28,6 +28,7 @@ import { ConnectedProposedPlanItem } from "./ConnectedProposedPlanItem";
 import { SessionErrorItem } from "./SessionErrorItem";
 import { SubagentWakeBadge } from "./SubagentWakeBadge";
 import { SystemMessage } from "./SystemMessage";
+import { TranscriptActivityBlock } from "./TranscriptActivityBlock";
 import { TranscriptToolCallItemBlock } from "./TranscriptToolCallItemBlock";
 import { UserMessage } from "./UserMessage";
 import { UserMessageProvenanceChrome } from "./UserMessageProvenanceChrome";
@@ -186,9 +187,11 @@ export function TranscriptItemBlock({
 
     case "thought":
       return (
-        <div className="flex justify-start relative">
+        <div data-transcript-activity-shell className="flex justify-start relative">
           <div className="flex flex-col w-full max-w-full space-y-1 break-words">
-            <ReasoningBlock content={item.text || undefined} />
+            <TranscriptActivityBlock>
+              <ReasoningBlock content={item.text || undefined} />
+            </TranscriptActivityBlock>
           </div>
         </div>
       );
@@ -200,24 +203,28 @@ export function TranscriptItemBlock({
         }
         const body = extractClaudePlanBody(item) ?? "";
         return (
-          <div className="flex justify-start relative">
+          <div data-transcript-activity-shell className="flex justify-start relative">
             <div className="flex flex-col w-full max-w-full space-y-1 break-words">
-              <ClaudePlanCard
-                content={body}
-                isStreaming={item.status === "in_progress"}
-              />
+              <TranscriptActivityBlock>
+                <ClaudePlanCard
+                  content={body}
+                  isStreaming={item.status === "in_progress"}
+                />
+              </TranscriptActivityBlock>
             </div>
           </div>
         );
       }
       return (
-        <div className="flex justify-start relative">
+        <div data-transcript-activity-shell className="flex justify-start relative">
           <div className="flex flex-col w-full max-w-full space-y-1 break-words">
-            <TranscriptToolCallItemBlock
-              item={item}
-              workspaceId={workspaceId}
-              onOpenArtifact={onOpenArtifact}
-            />
+            <TranscriptActivityBlock>
+              <TranscriptToolCallItemBlock
+                item={item}
+                workspaceId={workspaceId}
+                onOpenArtifact={onOpenArtifact}
+              />
+            </TranscriptActivityBlock>
           </div>
         </div>
       );

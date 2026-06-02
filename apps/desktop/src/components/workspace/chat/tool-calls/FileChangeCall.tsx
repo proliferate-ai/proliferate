@@ -87,7 +87,15 @@ export function FileChangeCall({
 
     return (
       <div className="flex min-w-0 flex-col">
-        <div className="mb-1">
+        <ToolActionRow
+          icon={getOperationIcon(operation)}
+          label={label}
+          hint={statsHint}
+          status={status}
+          duration={duration}
+          expandable={false}
+        />
+        <div className="mt-1.5">
           <FileDiffCard
             filePath={displayPath}
             additions={nextAdditions}
@@ -204,7 +212,7 @@ function buildLabel(
     const nextPathLabel = newWorkspacePath ?? newPath ?? path;
     return (
       <div className="flex min-w-0 items-center gap-2">
-        <span className="shrink-0 font-[460] text-foreground/90">{actionLabel}</span>
+        <span className="shrink-0 text-inherit">{actionLabel}</span>
         {primaryChip}
         <ArrowRight className="size-3 shrink-0 text-muted-foreground" />
         <ToolFileChip
@@ -218,7 +226,7 @@ function buildLabel(
 
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <span className="shrink-0 font-[460] text-foreground/90">{actionLabel}</span>
+      <span className="shrink-0 text-inherit">{actionLabel}</span>
       {primaryChip}
     </div>
   );

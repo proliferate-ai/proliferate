@@ -71,6 +71,29 @@ describe("TranscriptPendingPromptRow", () => {
 
     expect(actions.retryPrompt).toHaveBeenCalledWith("prompt-1");
   });
+
+  it("renders transcript waits as quiet transcript text", () => {
+    const { container } = render(
+      <TranscriptPendingPromptRow
+        activeSessionId="session-1"
+        rowIndex={0}
+        prompt={createOptimisticPendingPrompt("Still waiting", "prompt-1", NOW)}
+        outboxEntry={acceptedRunningOutboxEntry()}
+        optimisticTrailingStatus={null}
+        outboxActions={{
+          retryPrompt: vi.fn(),
+          dismissPrompt: vi.fn(),
+        }}
+      />,
+    );
+
+    const status = screen.getByText("Waiting for transcript…");
+    const statusLine = status.closest("div");
+    expect(statusLine?.className).toContain("text-chat");
+    expect(statusLine?.className).toContain("font-normal");
+    expect(statusLine?.className).toContain("text-muted-foreground");
+    expect(container.innerHTML).not.toContain("thinking-text");
+  });
 });
 
 function failedOutboxEntry(errorMessage: string): PromptOutboxEntry {
@@ -86,5 +109,22 @@ function failedOutboxEntry(errorMessage: string): PromptOutboxEntry {
     deliveryState: "failed_before_dispatch",
     errorMessage,
     updatedAt: NOW,
+  };
+}
+
+function acceptedRunningOutboxEntry(): PromptOutboxEntry {
+  return {
+    ...createPromptOutboxEntry({
+      clientPromptId: "prompt-1",
+      clientSessionId: "session-1",
+      text: "Queued prompt text",
+      blocks: [{ type: "text", text: "Queued prompt text" }],
+      now: "2026-05-20T16:59:00.000Z",
+    }),
+    status: "accepted",
+    deliveryState: "accepted_running",
+    acceptedAt: "2026-05-20T16:59:00.000Z",
+    dispatchedAt: "2026-05-20T16:59:00.000Z",
+    updatedAt: "2026-05-20T16:59:00.000Z",
   };
 }

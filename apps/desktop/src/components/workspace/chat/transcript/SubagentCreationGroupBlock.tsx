@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ToolCallItem, TranscriptState } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ChevronRight, Robot } from "@proliferate/ui/icons";
+import { Robot } from "@proliferate/ui/icons";
 import { DelegatedAgentHoverCard } from "@/components/workspace/shell/tabs/DelegatedAgentHoverCard";
 import {
   parseSubagentLaunchResult,
@@ -45,12 +45,15 @@ export function SubagentCreationGroupBlock({
         aria-expanded={expanded}
         onClick={() => setExpanded((next) => !next)}
       >
-        <span className="min-w-0 truncate">{summary}</span>
-        <ChevronRight
-          className={`size-3 shrink-0 text-faint opacity-0 transition-all duration-200 group-hover/collapsed-actions:opacity-100 group-focus-visible/collapsed-actions:opacity-100 ${
-            expanded ? "rotate-90 opacity-100" : ""
+        <Robot
+          aria-hidden="true"
+          className={`size-3 shrink-0 transition-colors ${
+            expanded
+              ? "text-foreground/70"
+              : "text-faint group-hover/collapsed-actions:text-muted-foreground group-focus-visible/collapsed-actions:text-muted-foreground"
           }`}
         />
+        <span className="min-w-0 truncate">{summary}</span>
       </Button>
       {expanded && (
         <div className="ml-1 space-y-1 border-l border-border/70 pl-2">

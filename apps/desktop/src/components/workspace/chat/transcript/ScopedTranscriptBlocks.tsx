@@ -1,14 +1,13 @@
 import { Fragment, type ReactNode } from "react";
 import {
   CollapsedActions,
-  InlineToolAction,
-  InlineToolActions,
 } from "@/components/workspace/chat/tool-calls/CollapsedActions";
 import type {
   TranscriptState,
 } from "@anyharness/sdk";
 import type { TurnDisplayBlock } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
 import { SubagentCreationGroupBlock } from "./SubagentCreationGroupBlock";
+import { TranscriptActivityBlock } from "./TranscriptActivityBlock";
 
 export function ScopedTranscriptBlocks({
   displayBlocks,
@@ -49,37 +48,48 @@ export function TurnDisplayBlockNode({
 }) {
   if (block.kind === "collapsed_actions") {
     return (
-      <CollapsedActions
-        itemIds={block.itemIds}
-        transcript={transcript}
-        autoFollow={block.blockId === autoFollowCollapsedActionBlockId}
-      />
+      <TranscriptActivityBlock>
+        <CollapsedActions
+          itemIds={block.itemIds}
+          transcript={transcript}
+          autoFollow={block.blockId === autoFollowCollapsedActionBlockId}
+        />
+      </TranscriptActivityBlock>
     );
   }
 
   if (block.kind === "inline_tool") {
-    const item = transcript.itemsById[block.itemId];
-    if (item?.kind !== "tool_call") {
-      throw new Error(`Inline tool block ${block.itemId} does not reference a tool call item.`);
-    }
-    return <InlineToolAction item={item} />;
+    return (
+      <TranscriptActivityBlock>
+        <CollapsedActions
+          itemIds={[block.itemId]}
+          transcript={transcript}
+          autoFollow={block.itemId === autoFollowCollapsedActionBlockId}
+        />
+      </TranscriptActivityBlock>
+    );
   }
 
   if (block.kind === "inline_tools") {
     return (
-      <InlineToolActions
-        itemIds={block.itemIds}
-        transcript={transcript}
-      />
+      <TranscriptActivityBlock>
+        <CollapsedActions
+          itemIds={block.itemIds}
+          transcript={transcript}
+          autoFollow={block.blockId === autoFollowCollapsedActionBlockId}
+        />
+      </TranscriptActivityBlock>
     );
   }
 
   if (block.kind === "subagent_creations") {
     return (
-      <SubagentCreationGroupBlock
-        itemIds={block.itemIds}
-        transcript={transcript}
-      />
+      <TranscriptActivityBlock>
+        <SubagentCreationGroupBlock
+          itemIds={block.itemIds}
+          transcript={transcript}
+        />
+      </TranscriptActivityBlock>
     );
   }
 
@@ -92,13 +102,13 @@ export function TurnDisplayBlockNode({
 
 export function getTurnDisplayBlockKey(block: TurnDisplayBlock): string {
   if (block.kind === "collapsed_actions") {
-    return `collapsed-actions-${block.blockId}`;
+    return `collapsed-actions-${block.itemIds[0] ?? block.blockId}`;
   }
   if (block.kind === "inline_tool") {
-    return `inline-tool-${block.itemId}`;
+    return `collapsed-actions-${block.itemId}`;
   }
   if (block.kind === "inline_tools") {
-    return `inline-tools-${block.blockId}`;
+    return `collapsed-actions-${block.itemIds[0] ?? block.blockId}`;
   }
   if (block.kind === "subagent_creations") {
     return `subagent-creations-${block.blockId}`;

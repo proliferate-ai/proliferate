@@ -65,7 +65,8 @@ describe("FileChangesCard and FileDiffCard", () => {
     expect(html).toContain("thread-diff-virtualized");
     expect(html).toContain("--codex-diffs-header-surface:var(--color-diff-chat-file-header-surface)");
     expect(html).toContain("hover:bg-[var(--color-diff-chat-file-header-hover-surface)]");
-    expect(html).toContain("group-hover/diff-header:block");
+    expect(html).toContain("group-hover/diff-header:opacity-100");
+    expect(html).not.toContain("group-hover/diff-header:block");
 
     const rightActionsIndex = html.indexOf("ms-auto flex shrink-0 items-center gap-1.5");
     expect(rightActionsIndex).toBeGreaterThan(-1);

@@ -1,7 +1,7 @@
 import { Button } from "@proliferate/ui/primitives/Button";
 import { MarkdownRenderer } from "@/components/content/ui/MarkdownRenderer";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
-import { ChevronRight, ExternalLink } from "@proliferate/ui/icons";
+import { ExternalLink, StickyNote } from "@proliferate/ui/icons";
 import { ToolActionDetailsPanel } from "@/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import { useState } from "react";
@@ -57,16 +57,17 @@ export function SubagentLaunchLedger({
             variant="ghost"
             size="sm"
             data-chat-transcript-ignore
-            className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/80 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
+            className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
             aria-expanded={promptExpanded}
             onClick={() => setPromptExpanded((next) => !next)}
           >
-            <span className="min-w-0 truncate">View initial prompt</span>
-            <ChevronRight
-              className={`size-2.5 shrink-0 text-faint transition-transform duration-200 ${
-                promptExpanded ? "rotate-90" : ""
+            <StickyNote
+              aria-hidden="true"
+              className={`size-2.5 shrink-0 transition-colors ${
+                promptExpanded ? "text-foreground/70" : "text-faint"
               }`}
             />
+            <span className="min-w-0 truncate">View initial prompt</span>
           </Button>
           {promptExpanded && (
             <div className="mt-1.5">
@@ -115,7 +116,7 @@ function SubagentSessionActionRow({
       variant="ghost"
       size="sm"
       data-chat-transcript-ignore
-      className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/80 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
+      className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
       onClick={() => onOpenChild(childSessionId)}
     >
       <span className="min-w-0 truncate">Open subagent</span>
@@ -135,7 +136,7 @@ function PlainSubagentActionRow({
     <div
       title={label}
       className={`truncate ${CHAT_ACTION_TEXT_CLASS} ${
-        tone === "failed" ? "text-destructive/80" : "text-muted-foreground/80"
+        tone === "failed" ? "text-destructive/80" : "text-muted-foreground/60"
       }`}
     >
       {label}

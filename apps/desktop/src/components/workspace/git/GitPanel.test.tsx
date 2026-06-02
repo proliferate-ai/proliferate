@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GitPanel } from "./GitPanel";
 import { GitPanelHeader } from "./GitPanelHeader";
+import { GitReviewTargetSelector } from "./GitReviewTargetSelector";
 
 const mockGitPanelState = vi.hoisted(() => vi.fn());
 const gitDiffQuery = vi.hoisted(() => ({
@@ -214,6 +215,26 @@ describe("GitPanel", () => {
     expect(html).toContain("data-[state=open]:bg-surface-elevated-secondary");
     expect(html).not.toContain("hover:border-sidebar-border");
     expect(html).not.toContain("data-[state=open]:border-sidebar-border");
+  });
+
+  it("renders the branch target selector as plain text until hover or open", () => {
+    const html = renderToStaticMarkup(
+      createElement(GitReviewTargetSelector, {
+        mode: "branch",
+        baseRef: "origin/main",
+        branchRefs: [{ name: "origin/main", isDefault: true, isHead: false, isRemote: true, upstream: null }],
+        isRuntimeReady: true,
+        onSelect: vi.fn(),
+      }),
+    );
+
+    expect(html).toContain("origin/main");
+    expect(html).toContain("border-transparent bg-transparent");
+    expect(html).toContain("hover:bg-surface-elevated-secondary");
+    expect(html).toContain("data-[state=open]:bg-surface-elevated-secondary");
+    expect(html).not.toContain("border-sidebar-border bg-surface-elevated-secondary");
+    expect(html).not.toContain("hover:bg-sidebar-accent");
+    expect(html).not.toContain("data-[state=open]:bg-sidebar-accent");
   });
 
   it("keeps the Changes header options before the sidebar controls", () => {

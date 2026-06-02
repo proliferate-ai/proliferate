@@ -213,6 +213,94 @@ Launch resolution:
 
 Do not collapse these into one data source.
 
+## Active Session Model Identity
+
+Running-session UI must keep these identities separate:
+
+```text
+requestedModelId
+  The launch or saved-intent model requested by the user. It may be an Auto
+  alias, a legacy alias, or a provider-specific id chosen before runtime
+  materialization.
+
+effectiveModelId
+  The current model reported by the running AnyHarness/ACP session. This is
+  active-session truth after the session exists.
+
+canonicalModelId
+  The Proliferate catalog identity used for display, dedupe, visibility,
+  selected state, and saved preference migration.
+
+liveConfigModelValue
+  The exact raw value accepted by the running session's model/config control.
+  It may be config-shaped or provider-shaped and is preserved for writes back
+  to the running session.
+```
+
+Rules:
+
+- Pending and materializing sessions may show `requestedModelId` because the
+  runtime has not reported an effective model yet.
+- Once a running session reports `effectiveModelId` or live config model state,
+  the current model chip, selected row, and visible picker state use the
+  effective model, normalized to `canonicalModelId` when possible.
+- Product UI should prefer curated catalog display names after normalization.
+  Runtime labels are useful enrichment, but raw id-shaped labels must not
+  replace catalog names when the catalog match is known.
+- Raw live config values are used only when applying a runtime model/config
+  update. They are not product display identity.
+- New session creation must resolve the selected intent through the launch
+  catalog before calling AnyHarness. If the active session reports a raw live
+  config value that maps to a known catalog model, send the canonical launch
+  model id, not the raw live config value.
+- Normalization and alias handling belong at the catalog/runtime boundary in
+  shared domain logic. Component-local fixes are compatibility shims only and
+  must include regression tests.
+
+Switchability is a separate question from model identity:
+
+```text
+current row
+  Shows selected/current state when the normalized effective model matches.
+
+non-current row with live model setter
+  Updates the running session by sending the exact live config/control value.
+
+non-current row without live model setter
+  Starts a new chat/session with that requested model intent.
+```
+
+A model row should use an `open_new_chat` action because the active session
+cannot switch to that row, not because the provider differs or the model id
+failed to normalize. Visible "New chat" badges should be reserved for rows
+outside the current selected provider group or other places where the context
+would otherwise be ambiguous. Do not stamp "New chat" on every sibling of the
+current model inside the active provider group; that makes a normal model menu
+look broken even when the click behavior is correct.
+
+Observed compatibility cases that must stay covered by tests:
+
+- Cursor may report a live config value such as
+  `composer-2.5[fast=true]` with a raw-looking label such as `composer-2.5`.
+  The product should normalize it to the canonical `composer-2.5-fast`, render
+  the curated label `Composer 2.5 Fast`, and keep the raw live config value
+  available for runtime updates.
+- Gemini may be launched with requested intent such as `auto-gemini-3` while
+  the running session reports effective model `gemini-3-flash-preview` and no
+  settable model live-config control. The current chip should show the
+  canonical effective model such as `Gemini 3 Flash`; other Gemini rows remain
+  new-chat actions unless the runtime exposes a switch path.
+
+Regression coverage for model selector changes should include:
+
+- pure selector/domain tests for config-shaped ids, aliases, display fallback,
+  dedupe, and visibility
+- hook/view-model tests for requested-vs-effective precedence in active
+  sessions
+- runtime/catalog merge tests for provider-discovered ids and aliases
+- recorded AnyHarness SQLite or event fixtures when adding a new provider
+  behavior that is not represented in the static catalog
+
 ## Truth Sources
 
 ### Cloud Product Catalog

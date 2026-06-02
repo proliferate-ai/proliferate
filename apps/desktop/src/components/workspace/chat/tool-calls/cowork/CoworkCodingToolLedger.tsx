@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
-import { ChevronRight, ExternalLink } from "@proliferate/ui/icons";
+import { ExternalLink, MessageSquare } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { MarkdownRenderer } from "@/components/content/ui/MarkdownRenderer";
 import { ToolActionDetailsPanel } from "@/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
@@ -11,10 +11,12 @@ const CHAT_ACTION_TEXT_CLASS =
   "text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)]";
 
 export function shouldShowCoworkCodingLedger(action: CoworkCodingAction): boolean {
-  return action === "create_workspace"
+  return (
+    action === "create_workspace"
     || action === "create_session"
     || action === "send_message"
-    || action === "schedule_wake";
+    || action === "schedule_wake"
+  );
 }
 
 export function CoworkCodingLedger({
@@ -93,7 +95,7 @@ function CodingWorkspaceActionRow({
       variant="ghost"
       size="sm"
       data-chat-transcript-ignore
-      className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/80 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
+      className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
       onClick={onOpen}
     >
       <span className="min-w-0 truncate">Created coding workspace</span>
@@ -118,16 +120,17 @@ function PromptActionRow({
         variant="ghost"
         size="sm"
         data-chat-transcript-ignore
-        className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/80 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
+        className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
         aria-expanded={expanded}
         onClick={() => setExpanded((next) => !next)}
       >
-        <span className="min-w-0 truncate">{label}</span>
-        <ChevronRight
-          className={`size-2.5 shrink-0 text-faint transition-transform duration-200 ${
-            expanded ? "rotate-90" : ""
+        <MessageSquare
+          aria-hidden="true"
+          className={`size-2.5 shrink-0 transition-colors ${
+            expanded ? "text-foreground/70" : "text-faint"
           }`}
         />
+        <span className="min-w-0 truncate">{label}</span>
       </Button>
       {expanded && (
         <div className="mt-1.5">
@@ -174,7 +177,7 @@ function CodingSessionActionRow({
       variant="ghost"
       size="sm"
       data-chat-transcript-ignore
-      className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/80 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
+      className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_ACTION_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
       onClick={onOpen}
     >
       <span className="min-w-0 truncate">Created coding session</span>
@@ -194,7 +197,7 @@ function PlainCoworkCodingActionRow({
     <div
       title={label}
       className={`truncate ${CHAT_ACTION_TEXT_CLASS} ${
-        tone === "failed" ? "text-destructive/80" : "text-muted-foreground/80"
+        tone === "failed" ? "text-destructive/80" : "text-muted-foreground/60"
       }`}
     >
       {label}

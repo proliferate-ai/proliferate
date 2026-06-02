@@ -20,5 +20,6 @@ export function shouldStickToVirtualBottom(input: {
   totalVirtualSize: number;
   thresholdPx: number;
 }): boolean {
-  return resolveVirtualBottomDistance(input) <= input.thresholdPx;
+  const distance = resolveVirtualBottomDistance(input);
+  return distance <= input.thresholdPx;
 }

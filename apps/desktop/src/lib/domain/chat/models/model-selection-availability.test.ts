@@ -8,14 +8,23 @@ import {
 function launchAgent(
   kind: string,
   models: DesktopAgentLaunchAgent["models"],
+  options?: {
+    dynamicModels?: boolean;
+  },
 ): DesktopAgentLaunchAgent {
   return {
     kind,
     displayName: kind === "claude" ? "Claude" : "Codex",
     defaultModelId: models[0]?.id ?? null,
     defaultModeId: null,
-    dynamicModels: false,
-    modelDisplayPolicy: null,
+    dynamicModels: options?.dynamicModels ?? false,
+    modelDisplayPolicy: options?.dynamicModels
+      ? {
+        defaultVisibleModelIds: models.map((candidate) => candidate.id),
+        allowUserVisibleModelSelection: true,
+        moreModelsSource: "lastKnownLiveSnapshot",
+      }
+      : null,
     promptCapabilities: null,
     models,
     launchControls: [],
@@ -26,11 +35,12 @@ function model(
   id: string,
   displayName: string,
   isDefault: boolean,
+  aliases: string[] = [],
 ) {
   return {
     id,
     displayName,
-    aliases: [],
+    aliases,
     status: "active" as const,
     isDefault,
     tags: [],
@@ -70,6 +80,51 @@ describe("launch selection availability", () => {
     )).toEqual({
       kind: "codex",
       modelId: "gpt-5.4",
+    });
+  });
+
+  it("returns a canonical launch id for config-shaped Cursor live model values", () => {
+    const agents = [
+      launchAgent(
+        "cursor",
+        [
+          model("composer-2.5", "Composer 2.5", false),
+          model("composer-2.5-fast", "Composer 2.5 Fast", true),
+        ],
+        { dynamicModels: true },
+      ),
+    ];
+
+    expect(launchSelectionIsAvailable(agents, {
+      kind: "cursor",
+      modelId: "composer-2.5[fast=true]",
+    })).toBe(true);
+    expect(resolveAvailableLaunchSelection(
+      agents,
+      { kind: "cursor", modelId: "composer-2.5[fast=true]" },
+      null,
+    )).toEqual({
+      kind: "cursor",
+      modelId: "composer-2.5-fast",
+    });
+  });
+
+  it("keeps truly dynamic model ids only when they do not map to the catalog", () => {
+    const agents = [
+      launchAgent(
+        "cursor",
+        [model("composer-2.5-fast", "Composer 2.5 Fast", true)],
+        { dynamicModels: true },
+      ),
+    ];
+
+    expect(resolveAvailableLaunchSelection(
+      agents,
+      { kind: "cursor", modelId: "custom-local-model" },
+      null,
+    )).toEqual({
+      kind: "cursor",
+      modelId: "custom-local-model",
     });
   });
 });

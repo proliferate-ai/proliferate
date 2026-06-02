@@ -1,7 +1,7 @@
 export const TRANSCRIPT_VIRTUALIZATION_STORAGE_KEY =
   "proliferate:transcriptVirtualization";
 
-export const TRANSCRIPT_VIRTUALIZATION_AUTO_ROW_THRESHOLD = 16;
+export const TRANSCRIPT_VIRTUALIZATION_AUTO_ROW_THRESHOLD = 20;
 
 export type TranscriptVirtualizationMode = "auto" | "on" | "off";
 

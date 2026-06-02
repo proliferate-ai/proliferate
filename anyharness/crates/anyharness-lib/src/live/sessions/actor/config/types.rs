@@ -44,7 +44,6 @@ pub(in crate::live::sessions) enum ConfigPurpose {
 pub(in crate::live::sessions::actor) enum ConfigApplyOutcome {
     NoChange,
     AppliedAuthoritative,
-    RequestedOnly,
     NotApplied,
 }
 

@@ -31,6 +31,28 @@ describe("choosePreferredWorkspaceSession", () => {
 
     expect(choosePreferredWorkspaceSession(sessions, "session-1")?.id).toBe("session-1");
   });
+
+  it("prefers prompted sessions over newer setup-only sessions", () => {
+    const sessions = [
+      { id: "setup-only", updatedAt: "2026-04-07T20:00:00.000Z" },
+      {
+        id: "prompted",
+        lastPromptAt: "2026-04-07T19:00:00.000Z",
+        updatedAt: "2026-04-07T19:30:00.000Z",
+      },
+    ];
+
+    expect(choosePreferredWorkspaceSession(sessions, null)?.id).toBe("prompted");
+  });
+
+  it("does not auto-select setup-only sessions", () => {
+    const sessions = [
+      { id: "session-1", updatedAt: "2026-04-07T18:00:00.000Z" },
+      { id: "session-2", updatedAt: "2026-04-07T19:00:00.000Z" },
+    ];
+
+    expect(choosePreferredWorkspaceSession(sessions, null)).toBeNull();
+  });
 });
 
 describe("getLatestWorkspaceInteractionTimestamp", () => {

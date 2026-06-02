@@ -26,7 +26,7 @@ vi.mock("@/hooks/workspaces/workflows/files/use-file-reference-actions", () => (
 }));
 
 describe("FileChangeCall", () => {
-  it("renders expanded edit diffs as file cards without an aggregate files-changed header", () => {
+  it("renders the edit row before completed diff cards without an aggregate files-changed header", () => {
     const html = renderToStaticMarkup(
       createElement(FileChangeCall, {
         operation: "edit",
@@ -40,12 +40,13 @@ describe("FileChangeCall", () => {
     );
 
     expect(html).toContain("README.md");
+    expect(html).toContain("Edited");
     expect(html).toContain("--codex-diffs-header-surface:var(--color-diff-chat-inline-tool-header-surface)");
     expect(html).toContain("hover:bg-[var(--color-diff-chat-inline-tool-header-hover-surface)]");
     expect(html).toContain("data-diff-surface=\"chat\"");
     expect(html).toContain("thread-diff-virtualized");
     expect(html).toContain("overflow-x-auto overflow-y-auto");
-    expect(html).toContain("max-h-[220px]");
+    expect(html).toContain("max-h-[224px]");
     expect(html).not.toContain("Expand file diff");
     expect(html).not.toContain("Collapse file diff");
     expect(html).not.toContain("Toggle file diff");
@@ -68,7 +69,7 @@ describe("FileChangeCall", () => {
     );
 
     expect(html).toContain("Long preview body");
-    expect(html).toContain("max-h-[220px]");
+    expect(html).toContain("max-h-[224px]");
   });
 
   it("does not render oversized completed patches inline", () => {

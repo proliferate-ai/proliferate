@@ -230,8 +230,8 @@ impl SessionEventSink {
 
 fn map_tool_status(status: &str) -> TranscriptItemStatus {
     match status {
-        "completed" => TranscriptItemStatus::Completed,
-        "failed" => TranscriptItemStatus::Failed,
+        "completed" | "done" => TranscriptItemStatus::Completed,
+        "failed" | "error" => TranscriptItemStatus::Failed,
         _ => TranscriptItemStatus::InProgress,
     }
 }

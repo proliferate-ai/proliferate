@@ -1,6 +1,7 @@
 import type { TranscriptState } from "@anyharness/sdk";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
 import { isSubagentItem } from "./TranscriptToolGroupUtils";
+import { TranscriptActivityBlock } from "./TranscriptActivityBlock";
 import { TranscriptItemBlock } from "./TranscriptItemBlock";
 import { TranscriptToolCallGroupBlock } from "./TranscriptToolCallGroupBlock";
 
@@ -27,24 +28,26 @@ export function TranscriptTreeNode({
   const childIds = childrenByParentId.get(itemId) ?? [];
   if (item.kind === "tool_call" && (childIds.length > 0 || isSubagentItem(item))) {
     return (
-      <TranscriptToolCallGroupBlock
-        item={item}
-        childIds={childIds}
-        transcript={transcript}
-        childrenByParentId={childrenByParentId}
-        workspaceId={workspaceId}
-        onOpenArtifact={onOpenArtifact}
-        renderChild={(childId) => (
-          <TranscriptTreeNode
-            itemId={childId}
-            transcript={transcript}
-            childrenByParentId={childrenByParentId}
-            workspaceId={workspaceId}
-            onOpenArtifact={onOpenArtifact}
-            onHandOffPlanToNewSession={onHandOffPlanToNewSession}
-          />
-        )}
-      />
+      <TranscriptActivityBlock>
+        <TranscriptToolCallGroupBlock
+          item={item}
+          childIds={childIds}
+          transcript={transcript}
+          childrenByParentId={childrenByParentId}
+          workspaceId={workspaceId}
+          onOpenArtifact={onOpenArtifact}
+          renderChild={(childId) => (
+            <TranscriptTreeNode
+              itemId={childId}
+              transcript={transcript}
+              childrenByParentId={childrenByParentId}
+              workspaceId={workspaceId}
+              onOpenArtifact={onOpenArtifact}
+              onHandOffPlanToNewSession={onHandOffPlanToNewSession}
+            />
+          )}
+        />
+      </TranscriptActivityBlock>
     );
   }
 

@@ -3,6 +3,7 @@ use super::SessionEventSink;
 use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionError, RuntimeInjectedSessionEvent,
 };
+use crate::observability::transcript_phase::record_transcript_phase_event;
 use anyharness_contract::v1::SessionEventEnvelope;
 
 impl SessionEventSink {
@@ -11,7 +12,7 @@ impl SessionEventSink {
         event: RuntimeInjectedSessionEvent,
     ) -> Result<SessionEventEnvelope, RuntimeEventInjectionError> {
         let touch_session_activity = event.updates_session_activity_at();
-        publish_session_event_strict(
+        let envelope = publish_session_event_strict(
             &self.session_id,
             &mut self.next_seq,
             &self.event_tx,
@@ -20,6 +21,8 @@ impl SessionEventSink {
             None,
             None,
             touch_session_activity,
-        )
+        )?;
+        record_transcript_phase_event(&mut self.transcript_phase_debug, &envelope);
+        Ok(envelope)
     }
 }

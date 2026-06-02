@@ -9,7 +9,9 @@ import { CHAT_MODEL_SELECTOR_LABELS } from "@/copy/chat/chat-copy";
 import { summarizeComposerModelConfigControls } from "@/lib/domain/chat/session-controls/composer-control-groups";
 import { sortComposerConfigSubmenuControls } from "@/lib/domain/chat/session-controls/composer-config-submenu-presentation";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
-import { filterComposerModelGroups } from "@/lib/domain/chat/models/model-selector-filtering";
+import {
+  filterComposerModelGroups,
+} from "@/lib/domain/chat/models/model-selector-filtering";
 import type { ModelSelectorProps } from "@/lib/domain/chat/models/model-selector-types";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
@@ -62,10 +64,6 @@ export function ComposerModelConfigSelector({
     () => activeGroup ? [activeGroup] : [],
     [activeGroup],
   );
-  const harnessLabel =
-    activeGroup?.providerDisplayName
-    ?? currentModel?.kind
-    ?? "Harness";
   const triggerLabel = resolveTriggerLabel(modelSelectorProps);
   const triggerDetail = summarizeComposerModelConfigControls(agentKind, controls);
   const pendingState =
@@ -203,7 +201,6 @@ export function ComposerModelConfigSelector({
             agentKind={agentKind}
             filteredGroups={filteredGroups}
             groups={groups}
-            harnessLabel={harnessLabel}
             menuRootRef={menuRootRef}
             notReadyAgents={notReadyAgents}
             search={search}

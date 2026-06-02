@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ToolCallItem } from "@anyharness/sdk";
+import { Terminal } from "@proliferate/ui/icons";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import {
@@ -21,6 +22,7 @@ export function CommandActionRow({ item }: { item: ToolCallItem }) {
     <div>
       <ActionDisclosureRow
         label={label}
+        icon={<Terminal />}
         expanded={expanded}
         failed={item.status === "failed"}
         onToggle={() => setExpanded((value) => !value)}

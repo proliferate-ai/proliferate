@@ -1,5 +1,6 @@
 import type { DesktopAgentLaunchAgent } from "@/lib/domain/agents/cloud-launch-catalog";
 import { filterVisibleLaunchModels } from "@/lib/domain/chat/models/model-visibility";
+import { selectedModelIdForVisibility } from "@/lib/domain/chat/models/model-selection-ids";
 import type { ModelSelectorSelection } from "@/lib/domain/chat/models/model-selector-types";
 import type { ChatModelVisibilityOverridesByAgentKind } from "@/lib/domain/preferences/user/session-defaults";
 
@@ -32,7 +33,9 @@ export function agentWithVisibleModels(
     ...agent,
     models: filterVisibleLaunchModels({
       agent,
-      selectedModelId: selected?.kind === agent.kind ? selected.modelId : null,
+      selectedModelId: selected?.kind === agent.kind
+        ? selectedModelIdForVisibility(agent.kind, selected.modelId)
+        : null,
       overrides: visibilityOverrides ?? {},
     }),
   };

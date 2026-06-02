@@ -18,6 +18,7 @@ impl SessionEventSink {
         self.close_tool_items();
 
         let turn_id = uuid::Uuid::new_v4().to_string();
+        tracing::debug!(turn_id = %turn_id, "event_sink: beginning turn");
         self.current_turn_id = Some(turn_id.clone());
         self.emit_with_ids(
             SessionEvent::TurnStarted(TurnStartedEvent::default()),

@@ -18,12 +18,17 @@ export const TRAILING_STATUS_MIN_HEIGHT =
 export function TurnShell({
   children,
   isFirst = false,
+  density = "normal",
 }: {
   children: ReactNode;
   isFirst?: boolean;
+  density?: "normal" | "compact";
 }) {
+  const verticalPadding = density === "compact"
+    ? `${isFirst ? "pt-0" : "pt-1"} pb-1`
+    : `${isFirst ? "pt-0" : "pt-2"} pb-2`;
   return (
-    <div className={`${TURN_HORIZONTAL_PADDING} w-full max-w-full ${isFirst ? "pt-0" : "pt-2"} pb-2`}>
+    <div className={`${TURN_HORIZONTAL_PADDING} w-full max-w-full ${verticalPadding}`}>
       {children}
     </div>
   );
@@ -46,7 +51,7 @@ export function TurnAssistantActionRow({
 
   return (
     <div className="flex justify-start relative">
-      <div className={`pl-1 pt-0.5 ${ASSISTANT_ACTION_SLOT_HEIGHT}`}>
+      <div className={`pt-0.5 ${ASSISTANT_ACTION_SLOT_HEIGHT}`}>
         {showCopyButton && (
           <CopyMessageButton
             content={content}

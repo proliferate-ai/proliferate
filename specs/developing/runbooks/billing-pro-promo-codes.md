@@ -14,7 +14,7 @@ there is no app-side "make this account Pro" toggle.
   `duration_in_months=2`. Because the Pro seat price and the metered overage
   price live on the same Stripe product, a redeemer gets the seat **and** any
   usage overage free for those two months (intentional: liberal early access).
-- **Script** [`server/scripts/mint_pro_promo_codes.py`](../../server/scripts/mint_pro_promo_codes.py):
+- **Script** [`server/scripts/mint_pro_promo_codes.py`](../../../server/scripts/mint_pro_promo_codes.py):
   mints one unique, single-use code per person off the coupon.
 - Checkout already passes `allow_promotion_codes=true`
   (`server/proliferate/integrations/stripe/client.py`), so codes are

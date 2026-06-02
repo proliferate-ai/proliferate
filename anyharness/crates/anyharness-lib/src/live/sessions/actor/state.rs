@@ -8,6 +8,7 @@ use crate::domains::agents::model::ResolvedAgent;
 use crate::domains::plans::service::PlanService;
 use crate::domains::reviews::service::ReviewService;
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
+use crate::domains::sessions::live_config::SessionModelOption;
 use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::store::SessionStore;
@@ -80,7 +81,7 @@ pub(in crate::live::sessions) struct SessionStartupState {
         Option<crate::domains::sessions::live_config::LegacyModeState>,
     pub(in crate::live::sessions) config_options: Vec<acp::SessionConfigOption>,
     pub(in crate::live::sessions) current_model_id: Option<String>,
-    pub(in crate::live::sessions) available_model_ids: Vec<String>,
+    pub(in crate::live::sessions) available_models: Vec<SessionModelOption>,
     pub(in crate::live::sessions) prompt_capabilities: anyharness_contract::v1::PromptCapabilities,
 }
 
@@ -91,13 +92,20 @@ impl From<NativeSessionStartupState> for SessionStartupState {
             legacy_mode_state: native.legacy_mode_state,
             config_options: native.config_options,
             current_model_id: native.current_model_id,
-            available_model_ids: native.available_model_ids,
+            available_models: native.available_models,
             prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
         }
     }
 }
 
 impl SessionStartupState {
+    pub(in crate::live::sessions) fn set_current_model_id(
+        &mut self,
+        current_model_id: impl Into<String>,
+    ) {
+        self.current_model_id = Some(current_model_id.into());
+    }
+
     pub(in crate::live::sessions) fn set_current_mode_id(
         &mut self,
         current_mode_id: impl Into<String>,
