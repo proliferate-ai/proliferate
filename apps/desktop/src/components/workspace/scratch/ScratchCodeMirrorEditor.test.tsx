@@ -19,6 +19,7 @@ function collectStyleText() {
 }
 
 describe("ScratchCodeMirrorEditor", () => {
+
   it("keeps empty-state typography and caret sizing independent from diff styling", () => {
     render(
       <ScratchCodeMirrorEditor

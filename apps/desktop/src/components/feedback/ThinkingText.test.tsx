@@ -4,6 +4,7 @@ import { ThinkingText } from "@/components/feedback/ThinkingText";
 import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
 
 describe("ThinkingText", () => {
+
   it("renders static Thinking text with the shimmer class hook", () => {
     const html = renderToStaticMarkup(<ThinkingText />);
 

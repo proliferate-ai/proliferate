@@ -14,6 +14,7 @@ vi.mock("@/hooks/chat/derived/use-chat-launch-catalog", () => ({
 }));
 
 describe("useConfiguredLaunchReadiness", () => {
+
   beforeEach(() => {
     useUserPreferencesStore.setState({
       defaultChatAgentKind: "opencode",

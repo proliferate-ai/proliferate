@@ -137,6 +137,7 @@ afterEach(() => {
 });
 
 describe("RightPanel terminal activation", () => {
+
   it("creates one default terminal lazily without leaving the Scratch panel", async () => {
     render(<RightPanelHarness isWorkspaceReady />);
 

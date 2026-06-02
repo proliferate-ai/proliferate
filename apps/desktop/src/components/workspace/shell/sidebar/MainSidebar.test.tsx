@@ -254,6 +254,7 @@ function renderMainSidebar() {
 }
 
 describe("MainSidebar support window", () => {
+
   it("opens the support report window from Support", async () => {
     renderMainSidebar();
 

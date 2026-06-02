@@ -44,6 +44,7 @@ function NativeOverlayObserver() {
 }
 
 describe("ModelSelector", () => {
+
   it("registers as a native overlay while its menu portal is open", async () => {
     modelSelectorMenuMock.state = {
       ...modelSelectorMenuMock.createState(),

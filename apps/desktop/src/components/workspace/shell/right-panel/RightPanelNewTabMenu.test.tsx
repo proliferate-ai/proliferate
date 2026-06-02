@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { RightPanelNewTabMenu } from "@/components/workspace/shell/right-panel/RightPanelNewTabMenu";
 
 describe("RightPanelNewTabMenu", () => {
+
   afterEach(cleanup);
 
   it("does not advertise a global browser-tab shortcut", () => {

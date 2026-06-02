@@ -9,6 +9,7 @@ import type { SessionEventEnvelope } from "../../types/events.js";
 const originalFetch = globalThis.fetch;
 
 describe("streamSession", () => {
+
   afterEach(() => {
     globalThis.fetch = originalFetch;
     setAnyHarnessTimingObserver(null);

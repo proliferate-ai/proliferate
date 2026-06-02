@@ -16,6 +16,7 @@ function NativeOverlayObserver() {
 }
 
 describe("ManualChatGroupEditorPopover", () => {
+
   it("registers as a native overlay while mounted", async () => {
     const onClose = vi.fn();
     const onConfirm = vi.fn();

@@ -20,6 +20,7 @@ function sessionResponse(): Session {
 }
 
 describe("SessionsClient.resume", () => {
+
   it("preserves the old options-only overload", async () => {
     const calls: Array<{
       body: unknown;

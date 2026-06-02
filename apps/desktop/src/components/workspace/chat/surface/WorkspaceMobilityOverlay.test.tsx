@@ -18,6 +18,7 @@ function countElementsByType(node: ReactNode, targetType: unknown): number {
 }
 
 describe("WorkspaceMobilityOverlayView", () => {
+
   it("keeps completion as a notice overlay", () => {
     const element = WorkspaceMobilityOverlayView({
       description: "This workspace has moved to the cloud.",

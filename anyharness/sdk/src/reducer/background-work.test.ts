@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseToolBackgroundWork } from "./background-work.js";
 
 describe("parseToolBackgroundWork", () => {
+
   it("parses structured background work metadata from raw output", () => {
     expect(
       parseToolBackgroundWork({

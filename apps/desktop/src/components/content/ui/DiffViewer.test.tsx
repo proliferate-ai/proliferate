@@ -22,6 +22,7 @@ index 1111111..2222222 100644
 +const message = "${"new ".repeat(80)}";`;
 
 describe("DiffViewer chat variant", () => {
+
   it("renders Codex-style data attributes and dynamic gutter width", () => {
     const html = renderToStaticMarkup(
       createElement(DiffViewer, {

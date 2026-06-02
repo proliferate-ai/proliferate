@@ -9,6 +9,7 @@ import { toolCallItem } from "@/lib/domain/chat/__fixtures__/playground/tool-cal
 import { TurnDiffPanel } from "./TurnDiffPanel";
 
 describe("TurnDiffPanel", () => {
+
   it("renders multi-file end-of-turn diffs with a clean aggregate header", () => {
     const turn = PLAYGROUND_END_TURN_DIFF_TRANSCRIPT.turnsById["turn-end-diff"];
     const html = renderToStaticMarkup(

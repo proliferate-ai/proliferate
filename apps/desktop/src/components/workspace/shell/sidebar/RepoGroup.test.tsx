@@ -108,6 +108,7 @@ const scope: NewWorkspaceCommandScope = {
 };
 
 describe("RepoGroup new workspace command scope", () => {
+
   beforeEach(() => {
     useNewWorkspaceCommandScopeStore.setState({ activeScope: null });
   });
