@@ -17,7 +17,7 @@ export interface LogicalWorkspace {
   localWorkspace: Workspace | null;
   cloudWorkspace: CloudWorkspaceSummary | null;
   mobilityWorkspace: CloudMobilityWorkspaceSummary | null;
-  aliasIds: string[];
+  aliasIds?: string[];
   preferredMaterializationId: string | null;
   effectiveOwner: "local" | "cloud";
   lifecycle:

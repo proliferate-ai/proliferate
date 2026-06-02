@@ -27,8 +27,6 @@ import {
   makeWorkspace,
 } from "@/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 
-const DEFAULT_UPDATED_AT = "2026-04-13T10:00:00.000Z";
-
 function makeMobilityWorkspace(args: {
   id?: string;
   owner: "local" | "cloud" | "personal_cloud";
