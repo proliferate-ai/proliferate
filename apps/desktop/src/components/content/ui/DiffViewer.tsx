@@ -5,6 +5,7 @@ import { SplitDiffViewer } from "@/components/content/ui/diff/SplitDiffViewer";
 import { UnifiedDiffViewer } from "@/components/content/ui/diff/UnifiedDiffViewer";
 import { useDiffHighlight } from "@/hooks/ui/highlighting/use-diff-highlight";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import { useChatDiffPreferencesStore } from "@/stores/chat/chat-diff-preferences-store";
 
 interface DiffViewerProps {
   patch: string;
@@ -30,7 +31,7 @@ export function DiffViewer({
   filePath,
   className,
   viewportClassName,
-  wrapLongLines = false,
+  wrapLongLines,
   variant = "default",
   layout = "unified",
   operationId,
@@ -41,6 +42,10 @@ export function DiffViewer({
   chainVerticalWheel,
 }: DiffViewerProps) {
   const { parsed, tokens } = useDiffHighlight(patch, filePath, operationId);
+  const chatWrapLongLines = useChatDiffPreferencesStore((state) =>
+    variant === "chat" ? state.wrapLongLines : false
+  );
+  const effectiveWrapLongLines = wrapLongLines ?? chatWrapLongLines;
 
   if (variant === "chat") {
     return (
@@ -50,7 +55,7 @@ export function DiffViewer({
           tokens={tokens}
           className={className}
           viewportClassName={viewportClassName}
-          wrapLongLines={wrapLongLines}
+          wrapLongLines={effectiveWrapLongLines}
           filePath={filePath}
           contentSearchUnitId={contentSearchUnitId}
           overscrollBehavior={overscrollBehavior}
@@ -72,7 +77,7 @@ export function DiffViewer({
           tokens={tokens}
           className={rootClass}
           viewportClassName={viewportClassName}
-          wrapLongLines={wrapLongLines}
+          wrapLongLines={effectiveWrapLongLines}
           overscrollBehavior={overscrollBehavior}
           overscrollBehaviorX={overscrollBehaviorX}
           overscrollBehaviorY={overscrollBehaviorY}
@@ -89,7 +94,7 @@ export function DiffViewer({
         tokens={tokens}
         className={rootClass}
         viewportClassName={viewportClassName}
-        wrapLongLines={wrapLongLines}
+        wrapLongLines={effectiveWrapLongLines}
         variant={variant}
         overscrollBehavior={overscrollBehavior}
         overscrollBehaviorX={overscrollBehaviorX}

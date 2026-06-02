@@ -21,6 +21,10 @@ describe("TurnDiffPanel", () => {
 
     expect(html).toContain("Edited 2 files");
     expect(html).toContain("bg-[var(--color-diff-panel-surface)]");
+    expect(html).toContain("data-chat-diff-wrap-context-trigger=\"turn-header\"");
+    expect(html).toContain("bg-[var(--color-diff-chat-turn-header-surface)]");
+    expect(html).toContain("hover:bg-[var(--color-diff-chat-turn-header-hover-surface)]");
+    expect(html).toContain("bg-[var(--color-diff-chat-turn-icon-surface)]");
     expect(html).toContain("border border-border");
     expect(html).toContain(">+2</span>");
     expect(html).toContain(">-1</span>");

@@ -10,37 +10,33 @@ import {
   type IconProps,
 } from "@proliferate/ui/icons";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import type { GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-diff";
 
 type GitReviewBaseMode = Exclude<GitPanelMode, "working_tree_composite">;
 
 const GIT_REVIEW_SELECTOR_TRIGGER_CLASS =
-  "h-6 min-w-0 gap-1 rounded-lg border border-sidebar-border bg-surface-elevated-secondary px-2 py-0 text-[10px] leading-[18px] text-sidebar-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-foreground";
+  "h-6 min-w-0 gap-1 rounded-lg border border-transparent bg-transparent px-2 py-0 text-[10px] leading-[18px] text-sidebar-foreground hover:bg-surface-elevated-secondary hover:text-sidebar-foreground data-[state=open]:bg-surface-elevated-secondary data-[state=open]:text-sidebar-foreground";
 
 const GIT_REVIEW_BASE_OPTIONS: {
   id: GitReviewBaseMode;
   label: string;
-  icon: ComponentType<IconProps>;
 }[] = [
   {
     id: "unstaged",
     label: "Unstaged",
-    icon: FilePen,
   },
   {
     id: "staged",
     label: "Staged",
-    icon: ClipboardList,
   },
   {
     id: "branch",
     label: "Branch",
-    icon: GitBranchIcon,
   },
   {
     id: "last_turn",
     label: "Last turn",
-    icon: Clock,
   },
 ];
 
@@ -56,7 +52,7 @@ export function GitReviewBaseSelector({
   const normalizedMode = normalizeBaseMode(activeMode);
   const activeOption = GIT_REVIEW_BASE_OPTIONS.find((option) => option.id === normalizedMode)
     ?? GIT_REVIEW_BASE_OPTIONS[0];
-  const ActiveIcon = activeOption.icon;
+  const ActiveIcon = iconForBaseMode(normalizedMode);
 
   return (
     <PopoverButton
@@ -74,33 +70,33 @@ export function GitReviewBaseSelector({
         </Button>
       }
       align="start"
-      className={`w-48 ${POPOVER_SURFACE_CLASS}`}
+      className={`min-w-[200px] ${POPOVER_SURFACE_CLASS}`}
     >
       {(close) => (
         <div className="flex flex-col gap-px">
           {GIT_REVIEW_BASE_OPTIONS.map((option) => {
-            const OptionIcon = option.icon;
             const selected = option.id === normalizedMode;
             return (
-              <Button
+              <PopoverMenuItem
                 key={option.id}
-                type="button"
-                variant="ghost"
-                size="sm"
+                label={(
+                  <GitReviewBaseOptionContent
+                    label={option.label}
+                    count={selected ? changedCount : null}
+                  />
+                )}
+                trailing={
+                  <Check
+                    className={`size-3.5 ${selected ? "" : "opacity-0"}`}
+                    aria-hidden={selected ? undefined : true}
+                  />
+                }
                 onClick={() => {
                   onSelect(option.id);
                   close();
                 }}
-                className={`h-7 w-full justify-between gap-2 rounded-lg px-2 py-0 text-left text-xs hover:bg-accent ${
-                  selected ? "text-foreground" : "text-muted-foreground"
-                }`}
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <OptionIcon className="size-3 shrink-0" />
-                  <span className="min-w-0 truncate">{option.label}</span>
-                </span>
-                {selected && <Check className="size-3 shrink-0 text-foreground" />}
-              </Button>
+                trailingClassName="opacity-75 group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100"
+              />
             );
           })}
         </div>
@@ -109,6 +105,42 @@ export function GitReviewBaseSelector({
   );
 }
 
+function GitReviewBaseOptionContent({
+  label,
+  count,
+}: {
+  label: string;
+  count: number | null;
+}) {
+  return (
+    <span className="grid w-full min-w-0 grid-cols-[6.25rem_2.5rem] items-center gap-2">
+      <span className="min-w-0 truncate">{label}</span>
+      <span className="flex min-w-0 justify-start">
+        {count && count > 0 ? (
+          <span className="inline-flex h-5 items-center rounded-sm bg-muted px-1.5 text-[10px] font-medium leading-none text-muted-foreground tabular-nums">
+            {count}
+          </span>
+        ) : (
+          <span aria-hidden="true" className="block h-5 w-0" />
+        )}
+      </span>
+    </span>
+  );
+}
+
 function normalizeBaseMode(mode: GitPanelMode): GitReviewBaseMode {
   return mode === "working_tree_composite" ? "unstaged" : mode;
+}
+
+function iconForBaseMode(mode: GitReviewBaseMode): ComponentType<IconProps> {
+  switch (mode) {
+    case "staged":
+      return ClipboardList;
+    case "branch":
+      return GitBranchIcon;
+    case "last_turn":
+      return Clock;
+    case "unstaged":
+      return FilePen;
+  }
 }

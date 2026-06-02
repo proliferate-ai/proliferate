@@ -185,6 +185,37 @@ describe("GitPanel", () => {
     expect(branchHtml).not.toContain("col-span-2");
   });
 
+  it("renders the active changes filter as plain text until hover or open", () => {
+    const html = renderToStaticMarkup(
+      createElement(GitPanelHeader, {
+        visibleChangedCount: 1,
+        additions: 1,
+        deletions: 0,
+        isRuntimeReady: true,
+        branchRefs: [],
+        baseRef: null,
+        layout: "unified",
+        wrapLongLines: false,
+        fileTreeOpen: false,
+        allFilesCollapsed: false,
+        changesFilter: "unstaged",
+        onFilterChange: vi.fn(),
+        onBaseRefChange: vi.fn(),
+        onToggleLayout: vi.fn(),
+        onToggleWrap: vi.fn(),
+        onToggleFileTree: vi.fn(),
+        onToggleAllFiles: vi.fn(),
+        onRefresh: vi.fn(),
+      }),
+    );
+
+    expect(html).toContain("border-transparent bg-transparent");
+    expect(html).toContain("hover:bg-surface-elevated-secondary");
+    expect(html).toContain("data-[state=open]:bg-surface-elevated-secondary");
+    expect(html).not.toContain("hover:border-sidebar-border");
+    expect(html).not.toContain("data-[state=open]:border-sidebar-border");
+  });
+
   it("keeps the Changes header options before the sidebar controls", () => {
     const html = renderToStaticMarkup(createElement(GitPanel));
     const layoutIndex = html.indexOf("Use split diff");

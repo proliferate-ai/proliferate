@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -22,6 +23,21 @@ index 1111111..2222222 100644
 +const message = "${"new ".repeat(80)}";`;
 
 describe("DiffViewer chat variant", () => {
+  it("lets chat and sidebar diff unchanged rows reveal the diff body surface", () => {
+    const desktopCss = readFileSync(
+      new URL("../../../../../packages/design/src/css/desktop.css", import.meta.url),
+      "utf8",
+    );
+    const sharedSurfaceRule =
+      desktopCss.match(/\[data-diff-surface="chat"\] \.composer-diff-simple-line,\s*\[data-diff-surface="sidebar"\] \.composer-diff-simple-line \{(?<body>[\s\S]*?)\}/)
+        ?.groups?.body ?? "";
+
+    expect(sharedSurfaceRule).toContain("--codex-diffs-surface: var(--color-diff-main-surface);");
+    expect(sharedSurfaceRule).toContain("--codex-diffs-context-number: transparent;");
+    expect(sharedSurfaceRule).toContain("--diffs-bg-context-override: transparent;");
+    expect(sharedSurfaceRule).toContain("background-color: var(--color-diff-code-surface);");
+  });
+
   it("renders Codex-style data attributes and dynamic gutter width", () => {
     const html = renderToStaticMarkup(
       createElement(DiffViewer, {

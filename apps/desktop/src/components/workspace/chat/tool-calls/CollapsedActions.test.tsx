@@ -103,8 +103,13 @@ describe("CollapsedActions", () => {
 
   it("uses tight spacing for grouped inline edit actions", () => {
     const transcript = createTranscriptState("session-1");
+    const firstEdit = toolItem("edit-1", "turn-1", 1, "file_change");
+    const firstEditPart = firstEdit.contentParts[0];
+    if (firstEditPart?.type === "file_change") {
+      firstEditPart.patch = "@@ -1 +1 @@\n-old\n+new";
+    }
     transcript.itemsById = {
-      "edit-1": toolItem("edit-1", "turn-1", 1, "file_change"),
+      "edit-1": firstEdit,
       "edit-2": toolItem("edit-2", "turn-1", 2, "file_change"),
     };
 
@@ -117,5 +122,10 @@ describe("CollapsedActions", () => {
 
     expect(html).toContain("flex flex-col gap-0");
     expect(html).not.toContain("flex flex-col gap-1");
+    expect(html).toContain("--codex-diffs-header-surface:var(--color-diff-chat-inline-tool-header-surface)");
+    expect(html).toContain("data-diff-surface=\"chat\"");
+    expect(html).not.toContain("Toggle file diff");
+    expect(html).not.toContain("data-app-action-review-file-toggle");
+    expect(html).not.toContain("aria-label=\"Open edit-1.ts\"");
   });
 });

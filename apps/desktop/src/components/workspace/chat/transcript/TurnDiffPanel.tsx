@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { ChatDiffLineWrapContextMenu } from "@/components/content/ui/diff/ChatDiffLineWrapContextMenu";
 import { DiffViewer } from "@/components/content/ui/DiffViewer";
 import { FileChangeStats } from "@/components/content/ui/FileChangeStats";
 import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
@@ -76,68 +77,75 @@ export function TurnDiffPanel({
     });
   };
 
+  const header = (
+    <div
+      data-chat-diff-wrap-context-trigger="turn-header"
+      className="group/turn-diff-header relative bg-[var(--color-diff-chat-turn-header-surface)] transition-colors hover:bg-[var(--color-diff-chat-turn-header-hover-surface)] focus-within:[&_.turn-diff-default-subtitle]:hidden hover:[&_.turn-diff-default-subtitle]:hidden focus-within:[&_.turn-diff-hover-subtitle]:inline-flex hover:[&_.turn-diff-hover-subtitle]:inline-flex"
+    >
+      <div className="pointer-events-none relative z-10 flex min-w-0 items-center gap-3 px-[var(--turn-diff-row-padding-x)] py-2.5 text-left">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--color-diff-chat-turn-icon-surface)] text-secondary-foreground">
+          <FilePen className="size-4" />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-chat font-medium leading-[var(--text-chat--line-height)] text-foreground">
+            {title}
+          </span>
+          <span className="turn-diff-default-subtitle truncate text-xs text-muted-foreground">
+            <FileChangeStats
+              additions={totalAdditions}
+              deletions={totalDeletions}
+              className="text-xs"
+            />
+          </span>
+          {onOpenReviewPane && (
+            <span className="turn-diff-hover-subtitle hidden min-w-0 items-center gap-1 truncate text-xs text-muted-foreground">
+              Review changes
+              <ArrowRight className="size-3" />
+            </span>
+          )}
+        </span>
+        <span className="pointer-events-auto flex shrink-0 items-center gap-1">
+          {showUndo && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={!canUndo}
+              title={undoDisabledReason ?? "Undo last turn changes"}
+              onClick={(event) => {
+                event.stopPropagation();
+                onUndoTurnChanges?.();
+              }}
+              className="h-8 gap-1.5 rounded-md px-2.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <Undo className="size-4" />
+              Undo
+            </Button>
+          )}
+          {onOpenReviewPane && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenReviewPane();
+              }}
+              className="h-8 rounded-md px-2.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              Review
+            </Button>
+          )}
+        </span>
+      </div>
+    </div>
+  );
+
   return (
     <div
       className="mb-2 flex max-w-full flex-col overflow-hidden rounded-lg border border-border bg-[var(--color-diff-panel-surface)] text-base text-foreground shadow-sm [--turn-diff-row-padding-x:0.75rem] [--turn-diff-row-padding-y:0.25rem]"
     >
-      <div className="group/turn-diff-header relative focus-within:[&_.turn-diff-default-subtitle]:hidden hover:[&_.turn-diff-default-subtitle]:hidden focus-within:[&_.turn-diff-hover-subtitle]:inline-flex hover:[&_.turn-diff-hover-subtitle]:inline-flex">
-        <div className="pointer-events-none relative z-10 flex min-w-0 items-center gap-3 px-[var(--turn-diff-row-padding-x)] py-2.5 text-left">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground">
-            <FilePen className="size-4" />
-          </span>
-          <span className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-chat font-medium leading-[var(--text-chat--line-height)] text-foreground">
-              {title}
-            </span>
-            <span className="turn-diff-default-subtitle truncate text-xs text-muted-foreground">
-              <FileChangeStats
-                additions={totalAdditions}
-                deletions={totalDeletions}
-                className="text-xs"
-              />
-            </span>
-            {onOpenReviewPane && (
-              <span className="turn-diff-hover-subtitle hidden min-w-0 items-center gap-1 truncate text-xs text-muted-foreground">
-                Review changes
-                <ArrowRight className="size-3" />
-              </span>
-            )}
-          </span>
-          <span className="pointer-events-auto flex shrink-0 items-center gap-1">
-            {showUndo && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={!canUndo}
-                title={undoDisabledReason ?? "Undo last turn changes"}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onUndoTurnChanges?.();
-                }}
-                className="h-7 gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                <Undo className="size-3.5" />
-                Undo
-              </Button>
-            )}
-            {onOpenReviewPane && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onOpenReviewPane();
-                }}
-                className="h-7 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                Review
-              </Button>
-            )}
-          </span>
-        </div>
-      </div>
+      <ChatDiffLineWrapContextMenu trigger={header} />
       <div className="flex flex-col border-t border-border [--codex-diffs-header-padding-x:var(--turn-diff-row-padding-x)] [--codex-diffs-header-padding-y:var(--turn-diff-row-padding-y)]">
         {visibleFilePatches.map((fp) => {
           const isExpanded = expandedPaths.has(fp.path);

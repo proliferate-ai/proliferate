@@ -7,6 +7,7 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import { DiffLineContent } from "@/components/content/ui/diff/DiffLineContent";
+import { ChatDiffLineWrapContextMenu } from "@/components/content/ui/diff/ChatDiffLineWrapContextMenu";
 import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
 import {
   buildContentSearchLineMatchIds,
@@ -325,56 +326,61 @@ export function ChatDiffViewer({
     unregisterContentSearchUnit,
   ]);
 
-  return (
-    <div className={className ?? ""}>
-      <div
-        style={viewportStyle}
-        onWheel={handleViewportWheel}
-        className={`relative [contain:content] composer-diff-simple-line ${
-          wrapLongLines ? "overflow-x-hidden" : "overflow-x-auto"
-        } overflow-y-auto ${
-          viewportClassName ?? ""
+  const viewport = (
+    <div
+      data-chat-diff-wrap-context-trigger="body"
+      style={viewportStyle}
+      onWheel={handleViewportWheel}
+      className={`relative [contain:content] composer-diff-simple-line ${
+        wrapLongLines ? "overflow-x-hidden" : "overflow-x-auto"
+      } overflow-y-auto ${
+        viewportClassName ?? ""
+      }`}
+    >
+      <pre
+        data-diff=""
+        data-theme-type={resolvedMode === "dark" ? "dark" : "light"}
+        data-indicators="bars"
+        data-background=""
+        data-diff-type="single"
+        data-overflow="scroll"
+        data-interactive-lines=""
+        data-interactive-line-numbers=""
+        tabIndex={0}
+        style={CHAT_DIFF_PRE_STYLE}
+        className={`m-0 w-full bg-[var(--codex-diffs-surface)] p-0 font-[family:var(--diffs-font-family)] text-[length:var(--diffs-font-size)] leading-[var(--diffs-line-height)] text-[color:var(--diffs-fg)] ${
+          wrapLongLines ? "min-w-0" : "min-w-max"
         }`}
       >
-        <pre
-          data-diff=""
-          data-theme-type={resolvedMode === "dark" ? "dark" : "light"}
-          data-indicators="bars"
-          data-background=""
-          data-diff-type="single"
-          data-overflow="scroll"
-          data-interactive-lines=""
-          data-interactive-line-numbers=""
-          tabIndex={0}
-          style={CHAT_DIFF_PRE_STYLE}
-          className={`m-0 w-full bg-[var(--codex-diffs-surface)] p-0 font-[family:var(--diffs-font-family)] text-[length:var(--diffs-font-size)] leading-[var(--diffs-line-height)] text-[color:var(--diffs-fg)] ${
-            wrapLongLines ? "min-w-0" : "min-w-max"
+        <code
+          data-code=""
+          data-unified=""
+          style={codeStyle}
+          className={`grid ${
+            wrapLongLines
+              ? "grid-cols-[var(--diffs-column-number-width)_minmax(0,1fr)]"
+              : "grid-cols-[var(--diffs-column-number-width)_minmax(max-content,1fr)]"
           }`}
         >
-          <code
-            data-code=""
-            data-unified=""
-            style={codeStyle}
-            className={`grid ${
-              wrapLongLines
-                ? "grid-cols-[var(--diffs-column-number-width)_minmax(0,1fr)]"
-                : "grid-cols-[var(--diffs-column-number-width)_minmax(max-content,1fr)]"
-            }`}
-          >
-            <ChatGutterColumn rows={rows} rowCount={rowCount} />
-            <ChatContentColumn
-              rows={rows}
-              rowCount={rowCount}
-              tokens={tokens}
-              wrapLongLines={wrapLongLines}
-              contentSearchQuery={contentSearchQuery}
-              activeMatchId={activeMatchId}
-              contentSearchUnitId={contentSearchUnitId}
-              onExpandCollapsedRow={expandCollapsedRow}
-            />
-          </code>
-        </pre>
-      </div>
+          <ChatGutterColumn rows={rows} rowCount={rowCount} />
+          <ChatContentColumn
+            rows={rows}
+            rowCount={rowCount}
+            tokens={tokens}
+            wrapLongLines={wrapLongLines}
+            contentSearchQuery={contentSearchQuery}
+            activeMatchId={activeMatchId}
+            contentSearchUnitId={contentSearchUnitId}
+            onExpandCollapsedRow={expandCollapsedRow}
+          />
+        </code>
+      </pre>
+    </div>
+  );
+
+  return (
+    <div className={className ?? ""}>
+      <ChatDiffLineWrapContextMenu trigger={viewport} />
     </div>
   );
 }
