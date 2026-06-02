@@ -10,11 +10,11 @@ const NOW = new Date("2026-04-28T20:30:00Z");
 
 describe("transcript action time", () => {
   it("formats same-day local times", () => {
-    expect(formatTranscriptActionTime("2026-04-28T18:05:00Z", NOW)).toMatch(/^\d{1,2}:05 [AP]M$/);
+    expect(formatTranscriptActionTime("2026-04-28T18:05:00Z", NOW)).toMatch(/^\d{1,2}:05 [ap]m$/);
   });
 
   it("formats other local dates with a month and day", () => {
-    expect(formatTranscriptActionTime("2026-04-27T18:05:00Z", NOW)).toMatch(/^Apr \d{1,2}, \d{1,2}:05 [AP]M$/);
+    expect(formatTranscriptActionTime("2026-04-27T18:05:00Z", NOW)).toMatch(/^Apr \d{1,2} . \d{1,2}:05 [ap]m$/);
   });
 
   it("returns null for invalid dates", () => {
@@ -22,11 +22,11 @@ describe("transcript action time", () => {
   });
 
   it("uses user message timestamps", () => {
-    expect(resolveUserMessageActionTime({ timestamp: "2026-04-28T18:05:00Z" }, NOW)).toMatch(/:05 [AP]M$/);
+    expect(resolveUserMessageActionTime({ timestamp: "2026-04-28T18:05:00Z" }, NOW)).toMatch(/:05 [ap]m$/);
   });
 
   it("uses queued optimistic prompt times", () => {
-    expect(resolveOptimisticPromptActionTime({ queuedAt: "2026-04-28T18:06:00Z" }, NOW)).toMatch(/:06 [AP]M$/);
+    expect(resolveOptimisticPromptActionTime({ queuedAt: "2026-04-28T18:06:00Z" }, NOW)).toMatch(/:06 [ap]m$/);
   });
 
   it("prefers assistant item completion before item timestamp and turn time", () => {
@@ -40,6 +40,6 @@ describe("transcript action time", () => {
         startedAt: "2026-04-28T18:04:00Z",
       },
       now: NOW,
-    })).toMatch(/:07 [AP]M$/);
+    })).toMatch(/:07 [ap]m$/);
   });
 });
