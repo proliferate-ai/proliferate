@@ -213,11 +213,11 @@ export function TranscriptToolCallItemBlock({
 
   if (rows.length === 0 && normalizedResultText) {
     rows.push(
-      <GenericToolResultRow
-        key="result"
-        icon={<ToolKindIcon iconKey={fallbackDisplay.iconKey} />}
-        label={<span className="font-[460] text-foreground/90">{fallbackDisplay.label}</span>}
-        status={status}
+        <GenericToolResultRow
+          key="result"
+          icon={<ToolKindIcon iconKey={fallbackDisplay.iconKey} />}
+          label={fallbackDisplay.label}
+          status={status}
         hint={fallbackDisplay.hint}
         resultText={normalizedResultText}
       />,
@@ -226,11 +226,11 @@ export function TranscriptToolCallItemBlock({
 
   if (rows.length === 0) {
     rows.push(
-      <GenericToolResultRow
-        key="tool"
-        icon={<ToolKindIcon iconKey={fallbackDisplay.iconKey} />}
-        label={<span className="font-[460] text-foreground/90">{fallbackDisplay.label}</span>}
-        status={status}
+        <GenericToolResultRow
+          key="tool"
+          icon={<ToolKindIcon iconKey={fallbackDisplay.iconKey} />}
+          label={fallbackDisplay.label}
+          status={status}
         hint={fallbackDisplay.hint}
       />,
     );

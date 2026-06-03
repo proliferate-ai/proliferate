@@ -6,7 +6,7 @@ import type {
   SessionUpdateConfigIntent,
 } from "@proliferate/product-domain/sessions/intents/session-intent-model";
 import { sessionIntentsForSession } from "@proliferate/product-domain/sessions/intents/session-intent-state";
-import type { TranscriptState } from "@anyharness/sdk";
+import type { SessionEventEnvelope, TranscriptState } from "@anyharness/sdk";
 import { useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { resolveCurrentModeLabel } from "@/lib/domain/chat/composer/chat-input";
@@ -19,6 +19,13 @@ const EMPTY_CONFIG_INTENTS: readonly SessionUpdateConfigIntent[] = [];
 
 type NormalizedSessionControls = NonNullable<TranscriptState["liveConfig"]>["normalizedControls"];
 type NormalizedSessionModelControl = NormalizedSessionControls["model"];
+
+interface LatestSessionStateUpdate {
+  modelId: string | null;
+  requestedModelId: string | null;
+  hasModelId: boolean;
+  hasRequestedModelId: boolean;
+}
 
 export interface ActiveLaunchIdentity {
   kind: string;
@@ -57,6 +64,13 @@ export function useActiveSessionLaunchState(): {
       modelControl,
     };
   }));
+  const latestSessionStateUpdate = useSessionTranscriptStore(useShallow((state) =>
+    latestSessionStateUpdateFromEvents(
+      activeSessionId
+        ? state.entriesById[activeSessionId]?.events ?? null
+        : null,
+    )
+  ));
   const stableModelControl = useStableModelControl(slice.modelControl);
   const pendingConfigChanges = useMemo(
     () => mergePendingConfigChanges(
@@ -80,12 +94,39 @@ export function useActiveSessionLaunchState(): {
     if (!slice.agentKind) {
       return null;
     }
-    const modelId = pendingModelId ?? slice.requestedModelId ?? slice.modelId ?? null;
+    const effectiveModelId = latestSessionStateUpdate.hasModelId
+      ? latestSessionStateUpdate.modelId
+      : slice.modelId;
+    const effectiveRequestedModelId = latestSessionStateUpdate.hasRequestedModelId
+      ? latestSessionStateUpdate.requestedModelId
+      : slice.requestedModelId;
+    const modelId =
+      pendingModelId
+      ?? slice.modelControl?.currentValue
+      ?? resolveActiveSessionLaunchModelId(
+        slice.agentKind,
+        effectiveModelId,
+        effectiveRequestedModelId,
+      )
+      ?? null;
     return modelId ? { kind: slice.agentKind, modelId } : null;
-  }, [pendingModelId, slice.agentKind, slice.modelId, slice.requestedModelId]);
+  }, [
+    latestSessionStateUpdate.hasModelId,
+    latestSessionStateUpdate.hasRequestedModelId,
+    latestSessionStateUpdate.modelId,
+    latestSessionStateUpdate.requestedModelId,
+    pendingModelId,
+    slice.agentKind,
+    slice.modelControl?.currentValue,
+    slice.modelId,
+    slice.requestedModelId,
+  ]);
 
   return {
     ...slice,
+    modelId: latestSessionStateUpdate.hasModelId
+      ? latestSessionStateUpdate.modelId
+      : slice.modelId,
     modelControl: stableModelControl,
     currentLaunchIdentity,
     pendingConfigChanges,
@@ -206,6 +247,17 @@ function useStableBySignature<T>(
   return value;
 }
 
+function resolveActiveSessionLaunchModelId(
+  agentKind: string,
+  modelId: string | null,
+  requestedModelId: string | null,
+): string | null {
+  if (agentKind === "gemini") {
+    return modelId ?? requestedModelId;
+  }
+  return requestedModelId ?? modelId;
+}
+
 function normalizedControlsSignature(controls: NormalizedSessionControls | null): string {
   if (!controls) {
     return "null";
@@ -223,6 +275,36 @@ function normalizedControlsSignature(controls: NormalizedSessionControls | null)
 
 function modelControlSignature(control: NormalizedSessionModelControl | null): string {
   return control ? JSON.stringify(control) : "null";
+}
+
+function latestSessionStateUpdateFromEvents(
+  events: readonly SessionEventEnvelope[] | null,
+): LatestSessionStateUpdate {
+  let modelId: string | null | undefined;
+  let requestedModelId: string | null | undefined;
+
+  for (let index = (events?.length ?? 0) - 1; index >= 0; index -= 1) {
+    const event = events?.[index]?.event;
+    if (event?.type !== "session_state_update") {
+      continue;
+    }
+    if (modelId === undefined && event.modelId !== undefined) {
+      modelId = event.modelId ?? null;
+    }
+    if (requestedModelId === undefined && event.requestedModelId !== undefined) {
+      requestedModelId = event.requestedModelId ?? null;
+    }
+    if (modelId !== undefined && requestedModelId !== undefined) {
+      break;
+    }
+  }
+
+  return {
+    modelId: modelId ?? null,
+    requestedModelId: requestedModelId ?? null,
+    hasModelId: modelId !== undefined,
+    hasRequestedModelId: requestedModelId !== undefined,
+  };
 }
 
 function configIntentsForSession(

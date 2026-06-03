@@ -72,7 +72,9 @@ export function buildRowsFromTurnRow(
         const historyRows: CloudChatTranscriptRowView[] = [];
         for (const historyBlock of row.renderPresentation.displayBlocks) {
           if (blockBelongsToCompletedHistory(historyBlock, completedHistoryRootIds)) {
-            appendDisplayBlockRows(historyBlock, row, transcript, historyRows);
+            appendDisplayBlockRows(historyBlock, row, transcript, historyRows, {
+              preserveCollapsedGroups: true,
+            });
           }
         }
         rows.push({
@@ -87,15 +89,6 @@ export function buildRowsFromTurnRow(
       continue;
     }
 
-    if (
-      block.kind === "collapsed_actions"
-      || block.kind === "inline_tools"
-      || block.kind === "subagent_creations"
-    ) {
-      appendDisplayBlockRows(block, row, transcript, rows);
-      continue;
-    }
-
     appendDisplayBlockRows(block, row, transcript, rows);
   }
 
@@ -107,14 +100,20 @@ function appendDisplayBlockRows(
   row: Extract<TranscriptVirtualRow, { kind: "turn" }>,
   transcript: TranscriptState,
   rows: CloudChatTranscriptRowView[],
+  options: { preserveCollapsedGroups?: boolean } = {},
 ): void {
   if (block.kind === "collapsed_actions") {
+    if (!options.preserveCollapsedGroups && block.itemIds.length === 1) {
+      appendItemRows(block.itemIds[0] ?? "", row, transcript, rows);
+      return;
+    }
     const summary = summarizeCollapsedActions(block.itemIds, transcript);
+    const status = resolveGroupStatus(block.itemIds, transcript);
     rows.push({
       id: `${row.key}:${block.blockId}`,
       kind: "tool_group",
-      title: formatCollapsedActionsSummary(summary),
-      status: resolveGroupStatus(block.itemIds, transcript),
+      title: formatCollapsedActionsSummary(summary, { active: status === "running" }),
+      status,
     });
     return;
   }

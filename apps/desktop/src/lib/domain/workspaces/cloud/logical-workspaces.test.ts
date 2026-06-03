@@ -7,7 +7,6 @@ import {
 } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import {
   expandLogicalWorkspaceRelatedIdSet,
-  findLogicalWorkspace,
   latestLogicalWorkspaceTimestamp,
   logicalWorkspaceRelatedIds,
 } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
@@ -510,101 +509,6 @@ describe("logical workspaces", () => {
       "cloud:cloud-1": "2026-04-13T10:05:00.000Z",
       "local-1": "2026-04-13T10:10:00.000Z",
     }, logicalWorkspace)).toBe("2026-04-13T10:10:00.000Z");
-  });
-
-  it("splits duplicate local workspaces while merging cloud and mobility only with canonical", () => {
-    const olderLocal = makeWorkspace({
-      id: "local-older",
-      branch: "main",
-      updatedAt: "2026-04-13T10:00:00.000Z",
-    });
-    const newerLocal = makeWorkspace({
-      id: "local-newer",
-      branch: "main",
-      updatedAt: "2026-04-13T11:00:00.000Z",
-    });
-    const cloudWorkspace = makeCloudWorkspace({
-      id: "cloud-main",
-      branch: "main",
-    });
-    const mobilityWorkspace = makeMobilityWorkspace({
-      id: "mobility-main",
-      owner: "local",
-      branch: "main",
-      cloudWorkspaceId: cloudWorkspace.id,
-    });
-    const canonicalId = buildRemoteLogicalWorkspaceId(
-      "github",
-      "proliferate-ai",
-      "proliferate",
-      "main",
-    );
-    const slotId = buildLocalSlotLogicalWorkspaceId(newerLocal.id);
-
-    const logicalWorkspaces = buildLogicalWorkspaces({
-      localWorkspaces: [newerLocal, olderLocal],
-      repoRoots: [],
-      cloudWorkspaces: [cloudWorkspace],
-      cloudMobilityWorkspaces: [mobilityWorkspace],
-      currentSelectionId: null,
-    });
-
-    const canonical = logicalWorkspaces.find((workspace) => workspace.id === canonicalId);
-    const slot = logicalWorkspaces.find((workspace) => workspace.id === slotId);
-
-    expect(logicalWorkspaces).toHaveLength(2);
-    expect(canonical?.localWorkspace?.id).toBe(olderLocal.id);
-    expect(canonical?.cloudWorkspace?.id).toBe(cloudWorkspace.id);
-    expect(canonical?.mobilityWorkspace?.id).toBe(mobilityWorkspace.id);
-    expect(slot?.localWorkspace?.id).toBe(newerLocal.id);
-    expect(slot?.cloudWorkspace).toBeNull();
-    expect(slot?.mobilityWorkspace).toBeNull();
-    expect(logicalWorkspaceRelatedIds(canonical!)).toContain(
-      buildLocalSlotLogicalWorkspaceId(olderLocal.id),
-    );
-  });
-
-  it("promotes a prior local-slot workspace to canonical and preserves alias lookup", () => {
-    const olderLocal = makeWorkspace({
-      id: "local-older",
-      branch: "main",
-      updatedAt: "2026-04-13T10:00:00.000Z",
-    });
-    const newerLocal = makeWorkspace({
-      id: "local-newer",
-      branch: "main",
-      updatedAt: "2026-04-13T11:00:00.000Z",
-    });
-    const staleSlotId = buildLocalSlotLogicalWorkspaceId(newerLocal.id);
-
-    const beforeDeletion = buildLogicalWorkspaces({
-      localWorkspaces: [olderLocal, newerLocal],
-      repoRoots: [],
-      cloudWorkspaces: [],
-      currentSelectionId: null,
-    });
-    expect(findLogicalWorkspace(beforeDeletion, staleSlotId)?.localWorkspace?.id)
-      .toBe(newerLocal.id);
-
-    const afterDeletion = buildLogicalWorkspaces({
-      localWorkspaces: [newerLocal],
-      repoRoots: [],
-      cloudWorkspaces: [makeCloudWorkspace({ id: "cloud-main", branch: "main" })],
-      cloudMobilityWorkspaces: [makeMobilityWorkspace({
-        id: "mobility-main",
-        owner: "local",
-        branch: "main",
-        cloudWorkspaceId: "cloud-main",
-      })],
-      currentSelectionId: null,
-    });
-    const promoted = findLogicalWorkspace(afterDeletion, staleSlotId);
-
-    expect(promoted?.id).toBe("remote:github:proliferate-ai:proliferate:main");
-    expect(promoted?.localWorkspace?.id).toBe(newerLocal.id);
-    expect(promoted?.cloudWorkspace?.id).toBe("cloud-main");
-    expect(promoted?.mobilityWorkspace?.id).toBe("mobility-main");
-    expect(afterDeletion.some((workspace) => workspace.id === staleSlotId)).toBe(false);
   });
 
   it("expands archived local-slot aliases to the current logical workspace ids", () => {

@@ -26,6 +26,37 @@ Use this folder to answer three local-development questions:
    - profile-backed mobile web, native mobile OAuth, Expo overrides, and the
      dev refresh-token path live in [`mobile.md`](mobile.md)
 
+## Tools And Permissions
+
+Required tools and surfaces:
+
+- Local shell access with Rust stable, Node 22+, pnpm, Python 3.12, and `uv`.
+- Browser or Chrome access for local Web, Desktop renderer, OAuth callbacks,
+  provider consoles, Stripe, and hosted dashboards when a local flow depends on
+  a logged-in external account.
+- GitHub MCP, `gh`, or GitHub web access when local reproduction starts from a
+  PR, issue, Actions artifact, release artifact, or support report.
+- Stripe CLI for checkout, portal, subscription, refill, meter, webhook, or
+  billing-state tests.
+- Expo tooling, an iOS simulator, Android emulator, or physical device for
+  native mobile flows.
+- Optional tunnel tooling, such as ngrok, when testing native mobile OAuth,
+  public callbacks, or agent gateway behavior that needs an external URL.
+
+Required permissions depend on the local surface:
+
+| Surface | Permissions |
+| --- | --- |
+| Baseline profile development | repo checkout access and permission to create local profile state under `~/.proliferate-local/` |
+| GitHub-linked product flows | access to a test GitHub account and any provider app configuration needed for the callback under test |
+| Billing | Stripe test-mode access and permission to run `stripe listen`; production Stripe access is not required for local QA |
+| Native mobile OAuth | provider-console access for callback registration, plus Expo/EAS access only when build or submit behavior is in scope |
+| Agent gateway / public tunnel | access to the relevant local env values and tunnel account; never paste gateway keys or callback secrets into chat, docs, PRs, or logs |
+
+Keep real secrets in ignored env files and use
+[`../reference/env-vars.yaml`](../reference/env-vars.yaml) for canonical
+deployment variable ownership.
+
 ## Quick Start
 
 From a repo worktree:
@@ -281,5 +312,5 @@ cargo test --workspace
 ```
 
 For release/deploy changes, read
-[`ci-cd.md`](ci-cd.md) and run the workflow/helper checks
-documented there.
+[`../deploying/ci-cd.md`](../deploying/ci-cd.md) and run the workflow/helper
+checks documented there.

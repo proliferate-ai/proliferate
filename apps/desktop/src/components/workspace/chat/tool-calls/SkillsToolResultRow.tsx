@@ -18,7 +18,7 @@ export function SkillsToolResultRow({
   return (
     <ToolActionRow
       icon={<ProliferateIcon className="size-3 text-faint" />}
-      label={<span className="font-[460] text-foreground/90">{labelFor(presentation)}</span>}
+      label={labelFor(presentation)}
       hint={hintFor(presentation)}
       status={status}
       expandable
@@ -167,11 +167,11 @@ function MetadataPill({ children }: { children: string }) {
 function labelFor(presentation: SkillsToolResultPresentation): string {
   switch (presentation.kind) {
     case "list":
-      return "Listed skills";
+      return "Skills listed";
     case "activate":
-      return "Activated skill";
+      return "Skill activated";
     case "resource":
-      return "Loaded skill resource";
+      return "Skill resource loaded";
   }
 }
 

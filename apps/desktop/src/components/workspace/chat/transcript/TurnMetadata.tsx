@@ -24,7 +24,7 @@ export function TurnMetadata({
   onUndo,
 }: TurnMetadataProps) {
   return (
-    <div className="flex items-center gap-2 group/meta">
+    <div className="flex items-center gap-1.5 group/meta">
       {duration && (
         <span className="text-xs text-muted-foreground">{duration}</span>
       )}

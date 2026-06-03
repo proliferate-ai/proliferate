@@ -727,7 +727,7 @@ cloud. Routing changes; product behavior should not fork.
 ## Adding A New Product MCP
 
 Concrete definitions for the MCPs currently being standardized live under
-[../product-mcps/](../product-mcps/). Add or update that definition before
+[definitions/](definitions/). Add or update that definition before
 implementing code.
 
 Required steps:

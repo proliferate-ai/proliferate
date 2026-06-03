@@ -1,5 +1,4 @@
 import { useState, type KeyboardEvent, type ReactNode } from "react";
-import { ChevronRight } from "@proliferate/ui/icons";
 
 export type ToolActionStatus = "running" | "completed" | "failed";
 
@@ -61,7 +60,7 @@ export function ToolActionRow({
           className={`group/tool-action-row inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1 rounded-none bg-transparent p-0 text-left text-chat leading-[var(--text-chat--line-height)] font-normal outline-none focus-visible:underline ${
             status === "failed"
               ? "text-destructive/80 hover:text-destructive"
-              : "text-muted-foreground/80 hover:text-foreground"
+              : "text-muted-foreground/60 hover:text-foreground"
           }`}
           onClick={() => setExpanded(!expanded)}
           onKeyDown={handleKeyDown}
@@ -78,7 +77,7 @@ export function ToolActionRow({
       ) : (
         <div
           className={`inline-flex min-w-0 max-w-full items-center gap-1 text-chat leading-[var(--text-chat--line-height)] ${
-            status === "failed" ? "text-destructive/80" : "text-muted-foreground/80"
+            status === "failed" ? "text-destructive/80" : "text-muted-foreground/60"
           }`}
         >
           <ToolActionRowContent
@@ -147,30 +146,15 @@ export function ToolActionLeadingAffordance({
   return (
     <span className="relative flex h-3 w-3 shrink-0 items-center justify-center">
       <span
-        className={`absolute inset-0 flex items-center justify-center transition-all duration-150 ${
-          expandable
-            ? expanded
-              ? "scale-75 opacity-0"
-              : "scale-100 opacity-100 group-hover/tool-action-row:scale-75 group-hover/tool-action-row:opacity-0 group-focus-visible/tool-action-row:scale-75 group-focus-visible/tool-action-row:opacity-0"
-            : "scale-100 opacity-100"
+        className={`absolute inset-0 flex items-center justify-center text-xs leading-none transition-colors [&_svg]:size-2.5 ${
+          expanded
+            ? "[&_svg]:text-foreground/75"
+            : expandable
+              ? "[&_svg]:text-faint group-hover/tool-action-row:[&_svg]:text-muted-foreground group-focus-visible/tool-action-row:[&_svg]:text-muted-foreground"
+              : "[&_svg]:text-faint"
         }`}
       >
-        <span className="flex h-3 w-3 items-center justify-center text-xs leading-none transition-colors [&_svg]:size-2.5 [&_svg]:text-muted-foreground group-hover/tool-action-row:[&_svg]:text-foreground/70">
-          {icon}
-        </span>
-      </span>
-      <span
-        className={`absolute inset-0 flex items-center justify-center transition-all duration-150 ${
-          expandable
-            ? expanded
-              ? "scale-100 opacity-100"
-              : "scale-75 opacity-0 group-hover/tool-action-row:scale-100 group-hover/tool-action-row:opacity-100 group-focus-visible/tool-action-row:scale-100 group-focus-visible/tool-action-row:opacity-100"
-            : "scale-75 opacity-0"
-        }`}
-      >
-        <ChevronRight
-          className={`size-2.5 shrink-0 text-faint transition-transform ${expanded ? "rotate-90" : ""}`}
-        />
+        {icon}
       </span>
     </span>
   );

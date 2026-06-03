@@ -7,10 +7,10 @@ interface StreamingIndicatorProps {
 }
 
 export function StreamingIndicator({ startedAt: _startedAt }: StreamingIndicatorProps) {
-  useDebugRenderCount("thinking-text");
+  useDebugRenderCount("streaming-indicator");
 
   return (
-    <DebugProfiler id="thinking-text">
+    <DebugProfiler id="streaming-indicator">
       <div className="flex min-h-5 items-end py-1 text-muted-foreground">
         <ThinkingText />
       </div>

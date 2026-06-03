@@ -9,7 +9,7 @@ interface ReasoningBlockProps {
 
 function deriveHint(content?: string): string | undefined {
   if (!content) return undefined;
-  const firstLine = content.trimStart().split("\n")[0].trim();
+  const firstLine = content.trimStart().split("\n")[0]!.trim();
   if (!firstLine) return undefined;
   return firstLine;
 }
@@ -18,7 +18,7 @@ export function ReasoningBlock({ content }: ReasoningBlockProps) {
   return (
     <ToolActionRow
       icon={<ThinkingGlyph />}
-      label={<span className="font-[460] text-foreground/90">Thinking</span>}
+      label="Thinking"
       hint={deriveHint(content)}
       status="completed"
       defaultExpanded={false}

@@ -3,14 +3,20 @@ use anyharness_contract::v1::{
     RawSessionConfigOption,
 };
 
-use super::{LegacyModeState, NormalizedControlKind, LEGACY_MODE_COMPAT_CONFIG_ID};
+use super::{
+    LegacyModeState, NormalizedControlKind, SessionModelOption, ACP_MODEL_COMPAT_CONFIG_ID,
+    LEGACY_MODE_COMPAT_CONFIG_ID,
+};
 
 pub(super) fn normalize_controls(
     raw_options: &[RawSessionConfigOption],
+    current_model_id: Option<&str>,
+    available_models: &[SessionModelOption],
     legacy_mode_state: Option<&LegacyModeState>,
 ) -> NormalizedSessionControls {
     let mut claimed = vec![false; raw_options.len()];
-    let model = claim_control(raw_options, &mut claimed, NormalizedControlKind::Model);
+    let model = claim_control(raw_options, &mut claimed, NormalizedControlKind::Model)
+        .or_else(|| into_acp_model_control(current_model_id, available_models));
     let collaboration_mode = claim_control(
         raw_options,
         &mut claimed,
@@ -52,6 +58,43 @@ fn claim_control(
         .map(|(idx, _)| idx)?;
     claimed[index] = true;
     Some(into_normalized_control(&raw_options[index], Some(key)))
+}
+
+fn into_acp_model_control(
+    current_model_id: Option<&str>,
+    available_models: &[SessionModelOption],
+) -> Option<NormalizedSessionControl> {
+    if current_model_id.is_none() && available_models.is_empty() {
+        return None;
+    }
+
+    let mut values = available_models
+        .iter()
+        .map(|model| NormalizedSessionControlValue {
+            value: model.id.clone(),
+            label: model.name.clone(),
+            description: model.description.clone(),
+        })
+        .collect::<Vec<_>>();
+
+    if let Some(current_model_id) = current_model_id {
+        if !values.iter().any(|value| value.value == current_model_id) {
+            values.push(NormalizedSessionControlValue {
+                value: current_model_id.to_string(),
+                label: current_model_id.to_string(),
+                description: None,
+            });
+        }
+    }
+
+    Some(NormalizedSessionControl {
+        key: "model".to_string(),
+        raw_config_id: ACP_MODEL_COMPAT_CONFIG_ID.to_string(),
+        label: "Model".to_string(),
+        current_value: current_model_id.map(str::to_string),
+        settable: values.len() > 1,
+        values,
+    })
 }
 
 fn into_legacy_mode_control(

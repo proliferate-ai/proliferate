@@ -2,7 +2,8 @@ use agent_client_protocol as acp;
 
 use crate::domains::sessions::live_config::controls::option_matches_key;
 use crate::domains::sessions::live_config::{
-    normalized_key_rank, NormalizedControlKind, LEGACY_MODE_COMPAT_CONFIG_ID,
+    normalized_key_rank, NormalizedControlKind, ACP_MODEL_COMPAT_CONFIG_ID,
+    LEGACY_MODE_COMPAT_CONFIG_ID,
 };
 use crate::live::sessions::actor::config::types::ConfigPurpose;
 use crate::live::sessions::actor::state::SessionStartupState;
@@ -38,7 +39,11 @@ pub(in crate::live::sessions::actor) fn pending_config_rank(
             }
         })
         .unwrap_or_else(|| {
-            if config_id == LEGACY_MODE_COMPAT_CONFIG_ID
+            if config_id == ACP_MODEL_COMPAT_CONFIG_ID
+                && startup_state.has_direct_model_control()
+            {
+                NormalizedControlKind::Model
+            } else if config_id == LEGACY_MODE_COMPAT_CONFIG_ID
                 && startup_state.has_raw_or_legacy_mode_control()
             {
                 NormalizedControlKind::Mode

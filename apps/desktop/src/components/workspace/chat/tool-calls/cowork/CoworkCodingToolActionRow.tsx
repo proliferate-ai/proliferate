@@ -74,7 +74,7 @@ export function CoworkCodingToolActionRow({
         ) : (
           <CoworkCodingIcon action={presentation.action} />
         )}
-        label={<span className="font-[460] text-foreground/90">{presentation.label}</span>}
+        label={presentation.label}
         status={mapStatus(item.status)}
         hint={(
           <CoworkCodingHint

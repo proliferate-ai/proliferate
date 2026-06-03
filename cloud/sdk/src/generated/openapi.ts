@@ -2586,6 +2586,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/worker/control/wait": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Worker Control Wait Endpoint */
+        post: operations["worker_control_wait_endpoint_v1_cloud_worker_control_wait_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/worker/commands/{command_id}/delivery": {
         parameters: {
             query?: never;
@@ -8216,6 +8233,29 @@ export interface components {
             status: string;
             /** Updated */
             updated: boolean;
+        };
+        /** WorkerControlWaitRequest */
+        WorkerControlWaitRequest: {
+            /** Supportedkinds */
+            supportedKinds?: string[];
+            /** Leasetimeoutseconds */
+            leaseTimeoutSeconds?: number | null;
+            /** Controlcursor */
+            controlCursor?: string | null;
+            /** Waitseconds */
+            waitSeconds?: number | null;
+        };
+        /** WorkerControlWaitResponse */
+        WorkerControlWaitResponse: {
+            command?: components["schemas"]["WorkerCommandEnvelope"] | null;
+            /** Exposures */
+            exposures?: components["schemas"]["WorkerExposureSnapshotResponse"][] | null;
+            /** Controlcursor */
+            controlCursor: string;
+            /** Reason */
+            reason: string;
+            /** Servertime */
+            serverTime: string;
         };
         /** WorkerDesiredVersionsResponse */
         WorkerDesiredVersionsResponse: {
@@ -14481,6 +14521,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkerCommandLeaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_control_wait_endpoint_v1_cloud_worker_control_wait_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkerControlWaitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerControlWaitResponse"];
                 };
             };
             /** @description Validation Error */

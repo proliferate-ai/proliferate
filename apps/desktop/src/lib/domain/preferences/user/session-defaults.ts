@@ -33,6 +33,7 @@ const LEGACY_CLAUDE_MODEL_IDS: Record<string, string> = {
 
 const LEGACY_CURSOR_MODEL_IDS: Record<string, string> = {
   "default[]": "auto",
+  "composer-2.5[fast=true]": "composer-2.5-fast",
   "composer-2[fast=true]": "composer-2.5-fast",
   "composer-2-fast": "composer-2.5-fast",
   "composer-1.5[]": "composer-2.5",
@@ -45,6 +46,7 @@ const LEGACY_CURSOR_MODEL_IDS: Record<string, string> = {
   "claude-sonnet-4-6[thinking=true,context=200k,effort=medium]": "claude-4.6-sonnet-medium-thinking",
   "gpt-5.5[context=272k,reasoning=medium,fast=false]": "gpt-5.5-medium",
   "claude-opus-4-7[thinking=true,context=300k,effort=xhigh]": "claude-opus-4-7-thinking-xhigh",
+  "claude-opus-4-8[thinking=true,context=300k,effort=high,fast=false]": "claude-opus-4-8-thinking-high",
   "gpt-5.4[context=272k,reasoning=medium,fast=false]": "gpt-5.4-medium",
   "claude-opus-4-6[thinking=true,context=200k,effort=high,fast=false]": "claude-4.6-opus-high-thinking",
   "claude-opus-4-5[thinking=true]": "claude-4.5-opus-high-thinking",
@@ -66,6 +68,10 @@ const LEGACY_CURSOR_MODEL_IDS: Record<string, string> = {
   "gpt-5-mini[]": "gpt-5-mini",
   "gemini-2.5-flash[]": "gemini-3-flash",
   "kimi-k2.5[]": "kimi-k2.5",
+};
+
+const LEGACY_GEMINI_MODEL_IDS: Record<string, string> = {
+  "gemini-3-flash-preview": "gemini-3-flash",
 };
 
 const DEFAULT_LIVE_SESSION_CONTROL_KEYS = new Set<DefaultLiveSessionControlKey>([
@@ -202,6 +208,9 @@ export function normalizeDefaultChatModelId(agentKind: string, modelId: string):
   }
   if (agentKind === "cursor") {
     return LEGACY_CURSOR_MODEL_IDS[modelId] ?? modelId;
+  }
+  if (agentKind === "gemini") {
+    return LEGACY_GEMINI_MODEL_IDS[modelId] ?? modelId;
   }
   return modelId;
 }

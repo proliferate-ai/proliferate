@@ -64,6 +64,7 @@ export type MeasurementSurface =
   | "file-tree"
   | "chat-loading-hero"
   | "thinking-text"
+  | "streaming-indicator"
   | "send-button"
   | "stop-button"
   | "header-tab"

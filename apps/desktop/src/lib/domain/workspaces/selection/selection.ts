@@ -31,7 +31,12 @@ export function choosePreferredWorkspaceSession<T extends WorkspaceSelectionSess
     return preferredSession;
   }
 
-  return [...sessions].sort((left, right) => sessionTimestamp(right) - sessionTimestamp(left))[0] ?? null;
+  const promptedSessions = sessions.filter((session) => session.lastPromptAt);
+  if (promptedSessions.length === 0) {
+    return null;
+  }
+
+  return [...promptedSessions].sort((left, right) => sessionTimestamp(right) - sessionTimestamp(left))[0] ?? null;
 }
 
 export function getLatestWorkspaceInteractionTimestamp<T extends WorkspaceSelectionSessionLike>(

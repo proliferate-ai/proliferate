@@ -101,7 +101,7 @@ export function UserMessage({
           </div>
         ) : null}
         {showCopyButton && content && shouldRenderTextBubble && (
-          <div className="pr-1 pt-0.5">
+          <div className="pt-0.5">
             <CopyMessageButton
               content={content}
               timestampLabel={timestampLabel}

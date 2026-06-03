@@ -30,7 +30,7 @@ use super::turn::start::prepend_system_prompt_append_to_acp_blocks;
 use crate::domains::agents::model::AgentKind;
 use crate::domains::plans::{service::PlanService, store::PlanStore};
 use crate::domains::sessions::live_config::{
-    normalized_key_rank, snapshot_to_record, NormalizedControlKind,
+    normalized_key_rank, snapshot_to_record, NormalizedControlKind, SessionModelOption,
 };
 use crate::domains::sessions::{model::SessionRecord, store::SessionStore};
 use crate::live::sessions::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};

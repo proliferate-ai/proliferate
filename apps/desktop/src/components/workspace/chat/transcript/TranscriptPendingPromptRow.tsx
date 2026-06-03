@@ -159,19 +159,27 @@ function resolveOutboxPromptTrailingStatus(
     case "failed_before_dispatch":
       return formatOutboxPromptFailureLabel(entry);
     case "unknown_after_dispatch":
-      return "Waiting for confirmation…";
+      return <OutboxPromptPlainStatus label="Waiting for confirmation…" />;
     case "preparing":
     case "dispatching":
     case "waiting_for_session":
       return resolvePendingPromptTrailingStatus(entry.createdAt, "working", true);
     case "accepted_running":
       if (hasAcceptedRunningOutboxEntryExceededEchoGrace(entry, nowMs)) {
-        return "Waiting for transcript…";
+        return <OutboxPromptPlainStatus label="Waiting for transcript…" />;
       }
       return resolvePendingPromptTrailingStatus(entry.createdAt, "working", true);
     default:
       return null;
   }
+}
+
+function OutboxPromptPlainStatus({ label }: { label: string }) {
+  return (
+    <div className="flex min-h-5 items-end py-1 text-chat font-normal leading-[var(--text-chat--line-height)] text-muted-foreground">
+      <span>{label}</span>
+    </div>
+  );
 }
 
 function OutboxPromptFailureLine({

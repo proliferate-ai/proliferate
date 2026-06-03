@@ -1,4 +1,6 @@
-use crate::domains::sessions::live_config::{LegacyModeOption, LegacyModeState};
+use crate::domains::sessions::live_config::{
+    LegacyModeOption, LegacyModeState, SessionModelOption,
+};
 use agent_client_protocol as acp;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,7 +24,7 @@ pub(in crate::live::sessions) struct NativeSessionStartupState {
     pub(in crate::live::sessions) legacy_mode_state: Option<LegacyModeState>,
     pub(in crate::live::sessions) config_options: Vec<acp::SessionConfigOption>,
     pub(in crate::live::sessions) current_model_id: Option<String>,
-    pub(in crate::live::sessions) available_model_ids: Vec<String>,
+    pub(in crate::live::sessions) available_models: Vec<SessionModelOption>,
 }
 
 impl NativeSessionStartupState {
@@ -38,16 +40,10 @@ impl NativeSessionStartupState {
                 .models
                 .as_ref()
                 .map(|models| models.current_model_id.to_string()),
-            available_model_ids: response
+            available_models: response
                 .models
                 .as_ref()
-                .map(|models| {
-                    models
-                        .available_models
-                        .iter()
-                        .map(|model| model.model_id.to_string())
-                        .collect()
-                })
+                .map(into_session_model_options)
                 .unwrap_or_default(),
         }
     }
@@ -66,16 +62,10 @@ impl NativeSessionStartupState {
                 .models
                 .as_ref()
                 .map(|models| models.current_model_id.to_string()),
-            available_model_ids: response
+            available_models: response
                 .models
                 .as_ref()
-                .map(|models| {
-                    models
-                        .available_models
-                        .iter()
-                        .map(|model| model.model_id.to_string())
-                        .collect()
-                })
+                .map(into_session_model_options)
                 .unwrap_or_default(),
         }
     }
@@ -94,16 +84,10 @@ impl NativeSessionStartupState {
                 .models
                 .as_ref()
                 .map(|models| models.current_model_id.to_string()),
-            available_model_ids: response
+            available_models: response
                 .models
                 .as_ref()
-                .map(|models| {
-                    models
-                        .available_models
-                        .iter()
-                        .map(|model| model.model_id.to_string())
-                        .collect()
-                })
+                .map(into_session_model_options)
                 .unwrap_or_default(),
         }
     }
@@ -122,4 +106,16 @@ fn into_legacy_mode_state(modes: &acp::SessionModeState) -> LegacyModeState {
             })
             .collect(),
     }
+}
+
+fn into_session_model_options(models: &acp::SessionModelState) -> Vec<SessionModelOption> {
+    models
+        .available_models
+        .iter()
+        .map(|model| SessionModelOption {
+            id: model.model_id.to_string(),
+            name: model.name.clone(),
+            description: model.description.clone(),
+        })
+        .collect()
 }

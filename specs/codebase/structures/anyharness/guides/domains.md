@@ -63,13 +63,14 @@ Examples:
 ```text
 sessions/
   model.rs
+  runtime_event.rs
+  extensions.rs
   store/
   service/
   runtime/
   prompt/
-  events/
+  live_config/
   mcp_bindings/
-  extensions/
   links/
   subagents/
   workspace_naming/
@@ -87,6 +88,7 @@ workspaces/
 ### Product Surface Domains
 
 ```text
+artifacts
 cowork
 reviews
 plans
@@ -95,6 +97,20 @@ mobility
 
 These are product workflows built on core primitives. They may depend on core
 domains. They should not be imported by core domains directly.
+
+### Runtime Infrastructure Domains
+
+```text
+plugins
+runtime_config
+```
+
+These own runtime infrastructure that sits between core domains and product
+surfaces. `plugins` expands cloud-configured MCP plugins and skills into
+session-ready MCP server definitions and skill rendering. `runtime_config`
+owns the applied MCP/skill/plugin config revision for a session: manifest
+storage, credential values, and the session context handed to session launch.
+These are not product surface domains and should not own product tool behavior.
 
 Expected shape:
 

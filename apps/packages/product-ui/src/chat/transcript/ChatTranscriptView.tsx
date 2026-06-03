@@ -50,7 +50,7 @@ const NOOP_OUTBOX_ACTIONS: ChatTranscriptOutboxActions = {
   retryPrompt: noop,
   dismissPrompt: noop,
 };
-const LIVE_STATUS_GRACE_MS = 700;
+const LIVE_STATUS_GRACE_MS = 750;
 
 export interface ChatTranscriptOutboxActions {
   retryPrompt: (clientPromptId: string) => void;
@@ -214,6 +214,9 @@ export function ChatTranscriptView({
       : null,
     [latestTurnInProgress, latestTurnPresentation, transcript],
   );
+  const latestTurnHasActiveToolWork = latestTurn
+    ? turnHasActiveToolWork(latestTurn, transcript)
+    : false;
   const latestTransientText = latestTurn
     ? latestTransientStatusText(latestTurn, transcript)
     : null;
@@ -222,7 +225,9 @@ export function ChatTranscriptView({
     : null;
   const shouldShowDelayedLatestLiveStatus = !!latestTurn
     && latestTurnInProgress
+    && !latestLiveExplorationBlock
     && !latestLiveWorkBlock
+    && !latestTurnHasActiveToolWork
     && transcript.isStreaming
     && sessionViewState === "working"
     && shouldAllowTurnTrailingStatus({
@@ -382,4 +387,16 @@ function useSharedTranscriptRowModel(input: {
       input.visibleOutboxEntries,
     ],
   );
+}
+
+function turnHasActiveToolWork(
+  turn: Pick<TurnRecord, "itemOrder">,
+  transcript: TranscriptState,
+): boolean {
+  return turn.itemOrder.some((itemId) => {
+    const item = transcript.itemsById[itemId];
+    return item?.kind === "tool_call"
+      && item.status !== "completed"
+      && item.status !== "failed";
+  });
 }

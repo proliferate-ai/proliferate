@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ChevronRight } from "@proliferate/ui/icons";
+import { Settings } from "@proliferate/ui/icons";
 
 export interface SystemMessageProps {
   content: string;
@@ -18,9 +18,10 @@ export function SystemMessage({ content }: SystemMessageProps) {
         onClick={() => setSystemExpanded(!systemExpanded)}
         className="flex h-auto w-full justify-start gap-2 rounded-none bg-transparent px-3 py-1.5 text-left font-sans text-xs text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground"
       >
-        <ChevronRight
-          className={`size-3 shrink-0 transition-transform duration-150 ${
-            systemExpanded ? "rotate-90" : ""
+        <Settings
+          aria-hidden="true"
+          className={`size-3 shrink-0 transition-colors ${
+            systemExpanded ? "text-foreground/70" : "text-faint"
           }`}
         />
         <span>System message</span>

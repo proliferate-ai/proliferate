@@ -12,7 +12,7 @@ export function shouldAllowTurnTrailingStatus({
   isLatestTurnInProgress: boolean;
 }): boolean {
   return isLatestTurnInProgress
-    && !lastTopLevelItemIsStreamingAssistantProse(turn, transcript);
+    && !lastTopLevelItemIsAssistantProseWithText(turn, transcript);
 }
 
 export function lastTopLevelItemIsAssistantProseWithText(
@@ -36,7 +36,8 @@ export function latestTransientStatusText(
   transcript: TranscriptState,
 ): string | null {
   for (let i = turn.itemOrder.length - 1; i >= 0; i--) {
-    const item = transcript.itemsById[turn.itemOrder[i]];
+    const itemId = turn.itemOrder[i];
+    const item = itemId ? transcript.itemsById[itemId] : undefined;
     if (item?.kind === "thought" && item.isTransient && item.text.trim()) {
       return item.text.trim();
     }
@@ -51,6 +52,7 @@ function findLastTopLevelItem(
   for (let i = turn.itemOrder.length - 1; i >= 0; i--) {
     const item = transcript.itemsById[turn.itemOrder[i]];
     if (!item) continue;
+    if (item.kind === "thought" && item.isTransient) continue;
     if ("parentToolCallId" in item && item.parentToolCallId) {
       const parent = transcript.itemsById[item.parentToolCallId];
       if (parent?.kind === "tool_call") continue;

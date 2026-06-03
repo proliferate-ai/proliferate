@@ -29,7 +29,7 @@ export function formatTranscriptActionTime(
     return time;
   }
 
-  return `${MONTHS[date.getMonth()]} ${date.getDate()}, ${time}`;
+  return `${MONTHS[date.getMonth()]} ${date.getDate()} · ${time}`;
 }
 
 export function resolveUserMessageActionTime(
@@ -75,7 +75,7 @@ function parseValidDate(value: string | null | undefined): Date | null {
 function formatLocalTime(date: Date): string {
   const hours = date.getHours();
   const minutes = date.getMinutes().toString().padStart(2, "0");
-  const period = hours >= 12 ? "PM" : "AM";
+  const period = hours >= 12 ? "pm" : "am";
   const displayHour = hours % 12 || 12;
   return `${displayHour}:${minutes} ${period}`;
 }

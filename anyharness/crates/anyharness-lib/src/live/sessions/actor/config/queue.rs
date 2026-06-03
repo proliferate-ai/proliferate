@@ -6,7 +6,9 @@ use tokio::sync::Mutex;
 use crate::domains::sessions::model::PendingConfigChangeRecord;
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::command::SetConfigOptionCommandError;
-use crate::live::sessions::actor::config::apply::apply_specific_config_option;
+use crate::live::sessions::actor::config::apply::{
+    apply_specific_config_option, should_apply_model_via_direct_setter,
+};
 use crate::live::sessions::actor::config::selection::{
     current_select_value, find_select_option_for_request, is_mode_config_request,
     is_model_config_request, pending_config_rank, select_option_contains_value,
@@ -39,6 +41,15 @@ pub(in crate::live::sessions::actor) fn queue_pending_config_change(
                 "Value '{value}' is not valid for config option '{config_id}'."
             )));
         }
+    }
+
+    if is_model_request
+        && option.is_none()
+        && !should_apply_model_via_direct_setter(startup_state, value)
+    {
+        return Err(SetConfigOptionCommandError::Rejected(format!(
+            "Value '{value}' is not valid for config option '{config_id}'."
+        )));
     }
 
     if is_mode_request && !startup_state.legacy_mode_contains_value(value) {

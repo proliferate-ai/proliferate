@@ -80,10 +80,20 @@ fn legacy_mode_state(values: &[(&str, &str)]) -> LegacyModeState {
     }
 }
 
+fn session_model_option(id: &str, name: &str) -> SessionModelOption {
+    SessionModelOption {
+        id: id.to_string(),
+        name: name.to_string(),
+        description: None,
+    }
+}
+
 #[test]
 fn normalize_controls_preserves_all_live_model_values() {
     let controls = normalize_controls(
         &[model_option(&["default", "sonnet", "sonnet[1m]", "haiku"])],
+        None,
+        &[],
         None,
     );
 
@@ -102,6 +112,8 @@ fn normalize_controls_preserves_uncurated_live_model_values() {
     let controls = normalize_controls(
         &[model_option(&["default", "sonnet", "unlisted-live-model"])],
         None,
+        &[],
+        None,
     );
 
     let model = controls.model.expect("model control");
@@ -115,8 +127,49 @@ fn normalize_controls_preserves_uncurated_live_model_values() {
 }
 
 #[test]
+fn normalize_controls_synthesizes_model_from_acp_model_state_when_no_raw_model_option_exists() {
+    let controls = normalize_controls(
+        &[],
+        Some("gemini-3-pro-preview"),
+        &[
+            session_model_option("gemini-3-pro-preview", "Gemini 3 Pro"),
+            session_model_option("gemini-3-flash-preview", "Gemini 3 Flash"),
+        ],
+        None,
+    );
+
+    let model = controls.model.expect("model control");
+    let labels = model
+        .values
+        .iter()
+        .map(|value| value.label.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(model.raw_config_id, ACP_MODEL_COMPAT_CONFIG_ID);
+    assert_eq!(model.current_value.as_deref(), Some("gemini-3-pro-preview"));
+    assert!(model.settable);
+    assert_eq!(labels, vec!["Gemini 3 Pro", "Gemini 3 Flash"]);
+}
+
+#[test]
+fn normalize_controls_prefers_raw_model_option_over_acp_model_state() {
+    let controls = normalize_controls(
+        &[model_option(&["sonnet", "haiku"])],
+        Some("gemini-3-pro-preview"),
+        &[session_model_option("gemini-3-pro-preview", "Gemini 3 Pro")],
+        None,
+    );
+
+    let model = controls.model.expect("model control");
+
+    assert_eq!(model.raw_config_id, "model");
+    assert_eq!(model.current_value.as_deref(), Some("sonnet"));
+    assert_eq!(model.values[0].label, "sonnet");
+}
+
+#[test]
 fn normalize_controls_preserves_effort_values_including_max() {
-    let controls = normalize_controls(&[effort_option(&["low", "high", "max"])], None);
+    let controls = normalize_controls(&[effort_option(&["low", "high", "max"])], None, &[], None);
 
     let effort = controls.effort.expect("effort control");
     let values = effort
@@ -132,6 +185,8 @@ fn normalize_controls_preserves_effort_values_including_max() {
 fn normalize_controls_synthesizes_legacy_mode_when_no_raw_mode_option_exists() {
     let controls = normalize_controls(
         &[model_option(&["default", "sonnet"])],
+        None,
+        &[],
         Some(&legacy_mode_state(&[
             ("default", "Default"),
             ("auto_edit", "Auto Edit"),
@@ -157,6 +212,8 @@ fn normalize_controls_prefers_raw_mode_option_over_legacy_modes() {
             model_option(&["default", "sonnet"]),
             mode_option(&["ask", "code"]),
         ],
+        None,
+        &[],
         Some(&legacy_mode_state(&[
             ("default", "Default"),
             ("auto_edit", "Auto Edit"),
@@ -193,6 +250,8 @@ fn normalize_controls_detects_mode_from_approval_label_without_mode_category() {
             ],
         }],
         None,
+        &[],
+        None,
     );
 
     let mode = controls.mode.expect("mode control");
@@ -216,6 +275,8 @@ fn build_live_config_snapshot_keeps_raw_options_exact_when_mode_is_synthesized()
     let snapshot = build_live_config_snapshot(
         "gemini",
         &[model],
+        None,
+        &[],
         Some(&legacy_mode_state(&[
             ("default", "Default"),
             ("auto_edit", "Auto Edit"),
@@ -283,6 +344,8 @@ fn normalize_controls_keeps_collaboration_mode_distinct_from_mode() {
             },
         ],
         None,
+        &[],
+        None,
     );
 
     assert_eq!(
@@ -346,6 +409,8 @@ fn normalize_controls_keeps_fast_mode_distinct_from_mode() {
                 ],
             },
         ],
+        None,
+        &[],
         None,
     );
 

@@ -112,6 +112,8 @@ pub(in crate::live::sessions::actor) async fn emit_live_config_update(
     let snapshot = build_live_config_snapshot(
         source_agent_kind,
         &startup_state.config_options,
+        startup_state.current_model_id.as_deref(),
+        &startup_state.available_models,
         startup_state.legacy_mode_state.as_ref(),
         startup_state.prompt_capabilities,
         next_seq,

@@ -24,9 +24,7 @@ export function BashCommandCall({
   return (
     <ToolActionRow
       icon={<Terminal />}
-      label={
-        <span className="font-[460] text-foreground/90">{label}</span>
-      }
+      label={label}
       hint={command}
       status={status}
       duration={duration}

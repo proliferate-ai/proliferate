@@ -18,7 +18,7 @@ export function CoworkArtifactTurnCard({
     return null;
   }
 
-  const completedActionLabel = presentation.action === "create" ? "Artifact created" : "Artifact updated";
+  const completedActionLabel = presentation.action === "create" ? "Created artifact" : "Updated artifact";
   const fallbackTitle = presentation.provisional.title?.trim()
     || presentation.provisional.path?.trim()
     || (presentation.action === "create" ? "New artifact" : "Artifact");
@@ -34,7 +34,7 @@ export function CoworkArtifactTurnCard({
     <div className="space-y-1.5 py-0.5">
       <div className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-md pl-0.5 pr-1.5 text-sm leading-5 text-muted-foreground">
         <FileText className="size-3 text-faint" />
-        <span className="font-[460] text-foreground/90">{completedActionLabel}</span>
+        <span className="text-inherit">{completedActionLabel}</span>
       </div>
 
       <div className="rounded-md border border-border/60 bg-muted/25 px-3 py-2">

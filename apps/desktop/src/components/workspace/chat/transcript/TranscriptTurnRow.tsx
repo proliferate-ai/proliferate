@@ -5,6 +5,11 @@ import type {
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useRevertGitPatchesMutation } from "@anyharness/sdk-react";
 import { TurnDiffPanel } from "./TurnDiffPanel";
+import { TranscriptPatchTurnDiffPanel } from "./TranscriptPatchTurnDiffPanel";
+import {
+  TranscriptActivityDensityProvider,
+  type TranscriptActivityDensity,
+} from "./TranscriptActivityBlock";
 import {
   TRAILING_STATUS_MIN_HEIGHT,
   TurnAssistantActionRow,
@@ -28,6 +33,9 @@ import {
 import {
   collectTurnFileRevertPatchEntries,
 } from "@proliferate/product-domain/chats/transcript/turn-file-patches";
+import {
+  latestCompletedTurn,
+} from "@proliferate/product-domain/chats/transcript/last-turn-file-changes";
 import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 import type { TurnDisplayBlock } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
@@ -35,6 +43,9 @@ import type { SessionViewState } from "@proliferate/product-domain/sessions/acti
 import { useToastStore } from "@/stores/toast/toast-store";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
+
+const ACTIVITY_ADJACENCY_CLASSNAME =
+  "[&>[data-transcript-activity-shell]+[data-transcript-activity-shell]]:pt-0 [&>[data-transcript-activity-shell]+[data-transcript-activity-shell]_[data-transcript-activity-block]]:pt-0";
 
 export function TranscriptTurnRow({
   row,
@@ -69,7 +80,19 @@ export function TranscriptTurnRow({
 }) {
   const isLatestTurn = row.turnId === latestTurnId;
   const isLatestTurnInProgress = isLatestTurn && !turn.completedAt;
-  const hasFileBadges = turn.fileBadges.length > 0;
+  const latestCompletedTurnId = useMemo(
+    () => latestCompletedTurn(transcript)?.turnId ?? null,
+    [transcript],
+  );
+  const diffPanelKind = resolveTranscriptTurnDiffPanelKind({
+    rowIsLastTurnRow: row.isLastTurnRow,
+    turnCompleted: !!turn.completedAt,
+    turnId: turn.turnId,
+    latestCompletedTurnId,
+    hasFileBadges: turn.fileBadges.length > 0,
+  });
+  const isLatestCompletedTurnRow = diffPanelKind === "current";
+  const activityDensity: TranscriptActivityDensity = isLatestTurnInProgress ? "compact" : "normal";
   const presentation = row.presentation;
   const renderPresentation = row.renderPresentation;
   const liveExplorationBlock = isLatestTurn ? latestLiveExplorationBlock : null;
@@ -124,10 +147,10 @@ export function TranscriptTurnRow({
   const showToast = useToastStore((state) => state.show);
   const [undoneTurnIds, setUndoneTurnIds] = useState<ReadonlySet<string>>(() => new Set());
   const turnRevertPatches = useMemo(
-    () => row.isLastTurnRow && turn.completedAt
+    () => isLatestCompletedTurnRow
       ? collectTurnFileRevertPatchEntries(turn, transcript)
       : { entries: [], blockedReason: null },
-    [row.isLastTurnRow, transcript, turn],
+    [isLatestCompletedTurnRow, transcript, turn],
   );
   const turnUndoCompleted = undoneTurnIds.has(turn.turnId);
   const undoDisabledReason = turnUndoCompleted
@@ -174,31 +197,43 @@ export function TranscriptTurnRow({
   ]);
 
   return (
-    <TurnShell isFirst={rowIndex === 0}>
-      <div className={`flex flex-col gap-2 ${tailAssistantCopyContent ? "group/turn" : ""}`}>
-        <TurnItemSequence
-          turn={turn}
-          transcript={transcript}
-          isTurnComplete={!!turn.completedAt}
-          presentation={renderPresentation}
-          autoFollowCollapsedActionBlockId={liveExplorationBlock?.blockId ?? null}
-          tailAssistantProseRootId={tailAssistantProseRootId}
-          showCompletedArtifactFallback={row.isLastTurnRow}
-          workspaceId={selectedWorkspaceId}
-          onOpenArtifact={onOpenArtifact}
-          onHandOffPlanToNewSession={onHandOffPlanToNewSession}
-        />
-        {row.isLastTurnRow && turn.completedAt && hasFileBadges && (
+    <TurnShell
+      isFirst={rowIndex === 0}
+      density={activityDensity}
+    >
+      <div className={`flex flex-col ${isLatestTurnInProgress ? "gap-1" : "gap-2"} ${tailAssistantCopyContent ? "group/turn" : ""} ${ACTIVITY_ADJACENCY_CLASSNAME}`}>
+        <TranscriptActivityDensityProvider density={activityDensity}>
+          <TurnItemSequence
+            turn={turn}
+            transcript={transcript}
+            isTurnComplete={!!turn.completedAt}
+            presentation={renderPresentation}
+            autoFollowCollapsedActionBlockId={liveExplorationBlock?.blockId ?? null}
+            tailAssistantProseRootId={tailAssistantProseRootId}
+            showCompletedArtifactFallback={row.isLastTurnRow}
+            workspaceId={selectedWorkspaceId}
+            onOpenArtifact={onOpenArtifact}
+            onHandOffPlanToNewSession={onHandOffPlanToNewSession}
+          />
+        </TranscriptActivityDensityProvider>
+        {diffPanelKind === "current" ? (
           <TurnDiffPanel
             turn={turn}
             transcript={transcript}
+            workspaceId={selectedWorkspaceId}
             onOpenFile={onOpenFile}
             onOpenReviewPane={onOpenTurnChanges}
             onUndoTurnChanges={undoDisabledReason ? undefined : handleUndoTurnChanges}
             undoDisabledReason={undoDisabledReason}
             undoBusy={revertPatchesMutation.isPending}
           />
-        )}
+        ) : diffPanelKind === "transcript" ? (
+          <TranscriptPatchTurnDiffPanel
+            turn={turn}
+            transcript={transcript}
+            onOpenFile={onOpenFile}
+          />
+        ) : null}
         <TurnAssistantActionRow
           content={tailAssistantCopyContent}
           showCopyButton={row.isLastTurnRow && !!turn.completedAt}
@@ -211,6 +246,25 @@ export function TranscriptTurnRow({
       </div>
     </TurnShell>
   );
+}
+
+export function resolveTranscriptTurnDiffPanelKind({
+  rowIsLastTurnRow,
+  turnCompleted,
+  turnId,
+  latestCompletedTurnId,
+  hasFileBadges,
+}: {
+  rowIsLastTurnRow: boolean;
+  turnCompleted: boolean;
+  turnId: string;
+  latestCompletedTurnId: string | null;
+  hasFileBadges: boolean;
+}): "current" | "transcript" | null {
+  if (!rowIsLastTurnRow || !turnCompleted || !hasFileBadges) {
+    return null;
+  }
+  return turnId === latestCompletedTurnId ? "current" : "transcript";
 }
 
 function formatUndoError(error: unknown): string {

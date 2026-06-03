@@ -34,6 +34,10 @@ export function formatMcpServerHint(server: string): string {
   return toTitleCase(server);
 }
 
+export function isMcpToolName(value: string | null | undefined): boolean {
+  return !!value?.trim().startsWith("mcp__");
+}
+
 function toSentenceCase(value: string): string {
   const normalized = value
     .replace(/[_-]+/g, " ")

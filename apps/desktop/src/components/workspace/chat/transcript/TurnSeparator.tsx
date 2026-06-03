@@ -1,5 +1,4 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ChevronRight } from "@proliferate/ui/icons";
 
 interface TurnSeparatorProps {
   label: string;
@@ -8,10 +7,7 @@ interface TurnSeparatorProps {
   onClick?: () => void;
 }
 
-/**
- * Centered separator with horizontal lines on both sides.
- * Matches Codex's "Worked for 3m 10s" / "Final message" pattern.
- */
+/** Centered separator with horizontal rules on both sides. */
 export function TurnSeparator({
   label,
   interactive = false,
@@ -23,11 +19,6 @@ export function TurnSeparator({
       <div className="flex-1 border-t border-current/20" />
       <span className="flex items-center gap-1 whitespace-nowrap">
         <span className="text-foreground/60">{label}</span>
-        {interactive && (
-          <ChevronRight
-            className={`size-3 text-foreground/40 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`}
-          />
-        )}
       </span>
       <div className="flex-1 border-t border-current/20" />
     </>

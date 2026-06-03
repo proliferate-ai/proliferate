@@ -25,6 +25,8 @@ export const MODEL_DISPLAY_ALIASES: Record<string, string> = {
   "codex:gpt-5.1-codex-max": "GPT 5.1 Codex Max",
   "codex:gpt-5.2": "GPT 5.2",
   "codex:gpt-5.1-codex-mini": "GPT 5.1 Codex Mini",
+  "cursor:composer-2.5": "Composer 2.5",
+  "cursor:composer-2.5-fast": "Composer 2.5 Fast",
 };
 
 function modelKey(agentKind: string, modelId: string): string {

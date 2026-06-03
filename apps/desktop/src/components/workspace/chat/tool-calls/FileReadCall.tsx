@@ -53,7 +53,7 @@ export function FileReadCall({
     : null;
   const fileLabel = (
     <div className="flex min-w-0 items-center gap-2">
-      <span className="shrink-0 font-[460] text-foreground/90">
+      <span className="shrink-0 text-inherit">
         {status === "running" ? "Reading" : "Read"}
       </span>
       <ToolFileChip
@@ -107,6 +107,7 @@ function extractBasename(path: string): string {
 }
 
 function resolvePreviewStartLine(
+
   line: number | null,
   startLine: number | null,
 ): number {

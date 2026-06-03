@@ -191,7 +191,10 @@ describe("transcript actions", () => {
       actions: 0,
     });
     expect(formatCollapsedActionsSummary(summary)).toBe(
-      "Explored 2 files, 1 listing, 1 search, 1 fetch, running 2 commands, edited 1 file",
+      "Explored 2 files, 1 listing, 1 search, 1 fetch, ran 2 commands, edited 1 file",
+    );
+    expect(formatCollapsedActionsSummary(summary, { active: true })).toBe(
+      "Exploring 2 files, 1 listing, 1 search, 1 fetch, running 2 commands, editing 1 file",
     );
     expect(formatCollapsedActionsSummary({
       reads: 0,
@@ -201,6 +204,6 @@ describe("transcript actions", () => {
       commands: 0,
       edits: 0,
       actions: 0,
-    })).toBe("Worked");
+    })).toBe("Working");
   });
 });

@@ -2,6 +2,7 @@ import { type CSSProperties, type ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowUpRight, ChevronDown } from "@proliferate/ui/icons";
 import { FileChangeStats } from "@/components/content/ui/FileChangeStats";
+import { ChatDiffLineWrapContextMenu } from "@/components/content/ui/diff/ChatDiffLineWrapContextMenu";
 
 interface FileDiffCardProps {
   filePath: string;
@@ -20,6 +21,8 @@ interface FileDiffCardProps {
   metadata?: ReactNode;
   embedded?: boolean;
   collapsible?: boolean;
+  headerTone?: "default" | "inlineTool";
+  showOpenAction?: boolean;
   surface?: "chat" | "sidebar";
 }
 
@@ -40,6 +43,8 @@ export function FileDiffCard({
   metadata,
   embedded = false,
   collapsible = true,
+  headerTone = "default",
+  showOpenAction = true,
   surface = "chat",
 }: FileDiffCardProps) {
   const canExpand =
@@ -68,12 +73,14 @@ export function FileDiffCard({
     "--codex-diffs-surface":
       "var(--codex-diffs-surface-override, var(--color-diff-panel-surface))",
     "--codex-diffs-header-surface": isSidebar
-      ? "color-mix(in srgb, var(--codex-diffs-surface) 98%, var(--color-foreground))"
-      : "var(--codex-diffs-surface)",
+      ? "var(--color-diff-sidebar-file-header-surface)"
+      : headerTone === "inlineTool"
+        ? "var(--color-diff-chat-inline-tool-header-surface)"
+        : "var(--color-diff-chat-file-header-surface)",
     ...(isSidebar
       ? {
           "--codex-diffs-separator-surface":
-            "color-mix(in srgb, var(--codex-diffs-surface) 94%, var(--color-foreground))",
+            "var(--color-diff-sidebar-file-header-hover-surface)",
         }
       : {}),
     backgroundColor: "var(--codex-diffs-surface)",
@@ -81,12 +88,13 @@ export function FileDiffCard({
   const headerShellClass = isSidebar
     ? "bg-[var(--codex-diffs-header-surface)]"
     : "bg-[var(--codex-diffs-header-surface)]";
+  const chatHeaderHoverClass = headerTone === "inlineTool"
+    ? "hover:bg-[var(--color-diff-chat-inline-tool-header-hover-surface)]"
+    : "hover:bg-[var(--color-diff-chat-file-header-hover-surface)]";
   const headerInnerClass = isSidebar
     ? "group/diff-header @container/diff-header relative flex min-h-9 items-center gap-2.5 px-[calc(var(--codex-diffs-header-padding-x,0.75rem)+0.5rem)] py-1.5 text-chat leading-[var(--text-chat--line-height)] hover:bg-[var(--codex-diffs-separator-surface)]"
-    : "group/diff-header @container/diff-header relative flex min-h-7 items-center gap-2 px-[var(--codex-diffs-header-padding-x,1rem)] py-[var(--codex-diffs-header-padding-y,0.25rem)] text-chat leading-[var(--text-chat--line-height)] hover:bg-foreground/5";
-  const actionRevealClass = isSidebar
-    ? "opacity-0 transition-opacity duration-200 group-hover/file-diff:opacity-100 group-focus-within/file-diff:opacity-100"
-    : "hidden group-hover/diff-header:block group-focus-within/diff-header:block";
+    : `group/diff-header @container/diff-header relative flex min-h-7 items-center gap-2 px-[var(--codex-diffs-header-padding-x,1rem)] py-[var(--codex-diffs-header-padding-y,0.25rem)] text-chat leading-[var(--text-chat--line-height)] transition-colors ${chatHeaderHoverClass}`;
+  const actionRevealClass = "opacity-0 transition-opacity duration-200 group-hover/file-diff:opacity-100 group-focus-within/file-diff:opacity-100 group-hover/diff-header:opacity-100 group-focus-within/diff-header:opacity-100";
   const statsClass = isSidebar
     ? "leading-none"
     : "text-chat leading-none text-muted-foreground";
@@ -101,126 +109,127 @@ export function FileDiffCard({
     </>
   );
 
+  const header = (
+    <div
+      role={canExpand ? "button" : undefined}
+      tabIndex={canExpand ? 0 : undefined}
+      aria-expanded={canExpand ? isExpanded : undefined}
+      onClick={canExpand ? onToggleExpand : undefined}
+      onKeyDown={
+        canExpand
+          ? (e) => {
+              if (
+                e.target === e.currentTarget
+                && (e.key === "Enter" || e.key === " ")
+              ) {
+                e.preventDefault();
+                onToggleExpand();
+              }
+            }
+          : undefined
+      }
+      data-chat-diff-wrap-context-trigger={isSidebar ? undefined : "file-header"}
+      className={`z-10 select-none bg-[var(--codex-diffs-header-surface)] ${isSidebar ? "sticky top-0" : ""} ${canExpand ? "cursor-pointer" : ""}`}
+    >
+      <div className={headerShellClass}>
+        <div className={headerInnerClass}>
+          <div className={`flex min-w-0 flex-1 items-center gap-2 ${surfaceTextClass}`}>
+            {onOpenFile ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                title={filePath}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenFile();
+                }}
+                className={`h-auto min-w-0 truncate rounded-none border-0 bg-transparent p-0 text-start text-chat font-normal leading-[var(--text-chat--line-height)] shadow-none select-text [direction:rtl] hover:bg-transparent focus-visible:ring-1 ${
+                  isSidebar ? "text-sidebar-foreground hover:text-sidebar-foreground focus-visible:ring-sidebar-ring" : chatPathButtonClass
+                }`}
+              >
+                {pathContent}
+              </Button>
+            ) : (
+              <span
+                className="min-w-0 truncate text-start text-chat leading-[var(--text-chat--line-height)] [direction:rtl]"
+                title={filePath}
+              >
+                {pathContent}
+              </span>
+            )}
+          </div>
+
+          <div className="ms-auto flex shrink-0 items-center gap-1.5">
+            {showStats && (
+              <FileChangeStats
+                additions={additions}
+                deletions={deletions}
+                className={statsClass}
+              />
+            )}
+            {actions && (
+              <div className={`flex items-center ${actionRevealClass}`}>
+                {actions}
+              </div>
+            )}
+            {!additions && !deletions && metadata}
+            {showOpenAction && handleOpenAction && (
+              <div className={`shrink-0 ${actionRevealClass}`}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleOpenAction();
+                  }}
+                  className={`size-6 rounded-lg border-0 bg-transparent p-0 transition-colors focus-visible:ring-1 ${surfaceActionClass}`}
+                  aria-label={openActionLabel ?? `Open ${filePath}`}
+                  title={openActionTitle ?? "Open file"}
+                >
+                  <ArrowUpRight className="size-3.5" />
+                </Button>
+              </div>
+            )}
+            {canExpand && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleExpand();
+                }}
+                className={`size-6 shrink-0 rounded-lg border-0 bg-transparent p-0 transition-colors focus-visible:ring-1 ${surfaceActionClass}`}
+                aria-label="Toggle file diff"
+                aria-expanded={isExpanded}
+                data-app-action-review-file-expanded={isExpanded ? "true" : "false"}
+                data-app-action-review-file-toggle=""
+              >
+                <ChevronDown
+                  className={`size-3.5 transition-transform duration-200 ${
+                    isExpanded ? "rotate-180" : "rotate-0"
+                  }`}
+                />
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+  const headerWithContextMenu = isSidebar
+    ? header
+    : <ChatDiffLineWrapContextMenu trigger={header} />;
+
   const card = (
     <div
       data-diff-surface={surface}
       style={cardStyle}
       className={`group/file-diff flex flex-col overflow-clip bg-[var(--codex-diffs-surface)] ${cardClass}`}
     >
-      <div
-        role={canExpand ? "button" : undefined}
-        tabIndex={canExpand ? 0 : undefined}
-        aria-expanded={canExpand ? isExpanded : undefined}
-        onClick={canExpand ? onToggleExpand : undefined}
-        onKeyDown={
-          canExpand
-            ? (e) => {
-                if (
-                  e.target === e.currentTarget
-                  && (e.key === "Enter" || e.key === " ")
-                ) {
-                  e.preventDefault();
-                  onToggleExpand();
-                }
-              }
-            : undefined
-        }
-        className={`z-10 select-none bg-[var(--codex-diffs-surface)] ${isSidebar ? "sticky top-0" : ""} ${canExpand ? "cursor-pointer" : ""}`}
-      >
-        <div className={headerShellClass}>
-          <div className={headerInnerClass}>
-            <div className={`flex min-w-0 flex-1 items-center gap-2 ${surfaceTextClass}`}>
-              {onOpenFile ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  title={filePath}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onOpenFile();
-                  }}
-                  className={`h-auto min-w-0 truncate rounded-none border-0 bg-transparent p-0 text-start text-chat font-normal leading-[var(--text-chat--line-height)] shadow-none select-text [direction:rtl] hover:bg-transparent focus-visible:ring-1 ${
-                    isSidebar ? "text-sidebar-foreground hover:text-sidebar-foreground focus-visible:ring-sidebar-ring" : chatPathButtonClass
-                  }`}
-                >
-                  {pathContent}
-                </Button>
-              ) : (
-                <span
-                  className="min-w-0 truncate text-start text-chat leading-[var(--text-chat--line-height)] [direction:rtl]"
-                  title={filePath}
-                >
-                  {pathContent}
-                </span>
-              )}
-              {!isSidebar && showStats && (
-                <FileChangeStats
-                  additions={additions}
-                  deletions={deletions}
-                  className={statsClass}
-                />
-              )}
-            </div>
-
-            <div className="ms-auto flex shrink-0 items-center gap-1.5">
-              {actions && (
-                <div className={`flex items-center ${actionRevealClass}`}>
-                  {actions}
-                </div>
-              )}
-              {isSidebar && showStats && (
-                <FileChangeStats
-                  additions={additions}
-                  deletions={deletions}
-                  className={statsClass}
-                />
-              )}
-              {!additions && !deletions && metadata}
-              {handleOpenAction && (
-                <div className={`shrink-0 ${actionRevealClass}`}>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleOpenAction();
-                    }}
-                    className={`size-6 rounded-lg border-0 bg-transparent p-0 transition-colors focus-visible:ring-1 ${surfaceActionClass}`}
-                    aria-label={openActionLabel ?? `Open ${filePath}`}
-                    title={openActionTitle ?? "Open file"}
-                  >
-                    <ArrowUpRight className="size-3.5" />
-                  </Button>
-                </div>
-              )}
-              {canExpand && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleExpand();
-                  }}
-                  className={`size-6 shrink-0 rounded-lg border-0 bg-transparent p-0 transition-colors focus-visible:ring-1 ${surfaceActionClass}`}
-                  aria-label="Toggle file diff"
-                  aria-expanded={isExpanded}
-                  data-app-action-review-file-expanded={isExpanded ? "true" : "false"}
-                  data-app-action-review-file-toggle=""
-                >
-                  <ChevronDown
-                    className={`size-3.5 transition-transform duration-200 ${
-                      isExpanded ? "rotate-180" : "rotate-0"
-                    }`}
-                  />
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+      {headerWithContextMenu}
 
       {showChildren && (
         <div className="relative overflow-hidden">

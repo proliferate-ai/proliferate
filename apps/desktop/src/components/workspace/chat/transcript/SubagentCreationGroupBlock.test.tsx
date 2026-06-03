@@ -25,6 +25,6 @@ describe("SubagentCreationGroupBlock", () => {
     expect(html).toContain("text-[length:var(--text-chat)]");
     expect(html).toContain("text-muted-foreground/60");
     expect(html).toContain("Created 2 subagents");
-    expect(html).toContain("group-hover/collapsed-actions:opacity-100");
+    expect(html).toContain("group-hover/collapsed-actions:text-muted-foreground");
   });
 });

@@ -12,6 +12,10 @@ import {
   parseTranscriptVirtualizationMode,
   resolveTranscriptVirtualizationEnabled,
 } from "./transcript-virtualization-config";
+import {
+  terminalItem,
+  thoughtItem,
+} from "./transcript-presentation-test-fixtures";
 
 describe("buildTranscriptRowModel", () => {
   it("creates stable turn rows for large transcripts", () => {
@@ -149,8 +153,8 @@ describe("buildTranscriptRowModel", () => {
 
   it("splits large turns into stable display-block rows", () => {
     const transcript = createTranscriptState("session-1");
-    addTurn(transcript, "turn-large", false);
-    addAssistantItems(transcript, "turn-large", 30);
+    addTurn(transcript, "turn-large", true);
+    addThoughtItems(transcript, "turn-large", 30);
 
     const rows = buildTranscriptRowModel({
       activeSessionId: "session-1",
@@ -176,6 +180,52 @@ describe("buildTranscriptRowModel", () => {
       blockKey: "item-29",
       isFirstTurnRow: false,
       isLastTurnRow: true,
+    }));
+  });
+
+  it("keeps large in-progress turns in one row so live action phases do not remount", () => {
+    const transcript = createTranscriptState("session-1");
+    addTurn(transcript, "turn-live", false);
+    addAssistantItems(transcript, "turn-live", 30);
+
+    const rows = buildTranscriptRowModel({
+      activeSessionId: "session-1",
+      transcript,
+      visibleOptimisticPrompt: null,
+      latestTurnId: "turn-live",
+      latestTurnHasAssistantRenderableContent: true,
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toEqual(expect.objectContaining({
+      kind: "turn",
+      key: "turn:turn-live:block:content",
+      turnId: "turn-live",
+      blockKey: "content",
+      isFirstTurnRow: true,
+      isLastTurnRow: true,
+    }));
+  });
+
+  it("keys split collapsed action rows by the first action in the run", () => {
+    const transcript = createTranscriptState("session-1");
+    addTurn(transcript, "turn-large", true);
+    addCommandItem(transcript, "turn-large", "command-0", 1);
+    addCommandItem(transcript, "turn-large", "command-1", 2);
+    addThoughtItems(transcript, "turn-large", 22, 3);
+
+    const rows = buildTranscriptRowModel({
+      activeSessionId: "session-1",
+      transcript,
+      visibleOptimisticPrompt: null,
+      latestTurnId: "turn-large",
+      latestTurnHasAssistantRenderableContent: true,
+    });
+
+    expect(rows[0]).toEqual(expect.objectContaining({
+      kind: "turn",
+      key: "turn:turn-large:block:command-0",
+      blockKey: "command-0",
     }));
   });
 
@@ -318,6 +368,7 @@ function addAssistantItems(
   transcript: TranscriptState,
   turnId: string,
   count: number,
+  startedSeqOffset = 1,
 ) {
   const turn = transcript.turnsById[turnId];
   if (!turn) {
@@ -332,9 +383,50 @@ function addAssistantItems(
       turnId,
       text: `message ${index}`,
       isStreaming: false,
-      startedSeq: index + 1,
+      startedSeq: startedSeqOffset + index,
     } as TranscriptState["itemsById"][string];
   }
+}
+
+function addThoughtItems(
+  transcript: TranscriptState,
+  turnId: string,
+  count: number,
+  startedSeqOffset = 1,
+) {
+  const turn = transcript.turnsById[turnId];
+  if (!turn) {
+    throw new Error(`missing test turn ${turnId}`);
+  }
+  for (let index = 0; index < count; index += 1) {
+    const itemId = `item-${index}`;
+    turn.itemOrder.push(itemId);
+    transcript.itemsById[itemId] = thoughtItem(
+      itemId,
+      turnId,
+      startedSeqOffset + index,
+      false,
+    );
+  }
+}
+
+function addCommandItem(
+  transcript: TranscriptState,
+  turnId: string,
+  itemId: string,
+  startedSeq: number,
+) {
+  const turn = transcript.turnsById[turnId];
+  if (!turn) {
+    throw new Error(`missing test turn ${turnId}`);
+  }
+  turn.itemOrder.push(itemId);
+  transcript.itemsById[itemId] = terminalItem(
+    itemId,
+    turnId,
+    startedSeq,
+    `echo ${itemId}`,
+  );
 }
 
 function addUserItem(

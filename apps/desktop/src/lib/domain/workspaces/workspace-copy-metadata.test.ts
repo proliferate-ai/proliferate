@@ -19,6 +19,7 @@ function makeLogicalWorkspace(overrides: Partial<LogicalWorkspace> = {}): Logica
     localWorkspace: null,
     cloudWorkspace: null,
     mobilityWorkspace: null,
+    aliasIds: [],
     preferredMaterializationId: null,
     effectiveOwner: "local",
     lifecycle: "local_active",

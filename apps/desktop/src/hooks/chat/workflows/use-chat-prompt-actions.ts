@@ -19,6 +19,7 @@ import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-ses
 import { useActiveSessionSurfaceSnapshot } from "@/hooks/chat/derived/use-active-session-transcript-state";
 import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
+import { resolveAvailableLaunchSelection } from "@/lib/domain/chat/models/launch-selection-defaults";
 import {
   EMPTY_CHAT_DRAFT,
   serializeChatDraftToPrompt,
@@ -103,7 +104,11 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
       return false;
     }
 
-    const launchSelection = scopedLaunchIdentity ?? configuredLaunch.selection;
+    const launchSelection = resolveAvailableLaunchSelection(
+      configuredLaunch.launchCatalog.launchAgents,
+      scopedLaunchIdentity,
+      configuredLaunch.selection,
+    );
     const targetSessionId = !forceNewSession && hasSlot ? activeSessionId : null;
     const promptId = createPromptId();
     const latencyFlowId = targetSessionId
@@ -246,6 +251,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   }, [
     activeSessionId,
     clearDraft,
+    configuredLaunch.launchCatalog.launchAgents,
     configuredLaunch.selection,
     createSessionWithResolvedConfig,
     findOrCreateSession,

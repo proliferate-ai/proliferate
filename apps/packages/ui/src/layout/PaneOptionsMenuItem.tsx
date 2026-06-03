@@ -15,22 +15,24 @@ export function PaneOptionsMenuItem({
   reserveIconSlot = Boolean(icon),
   trailing,
   className = "",
+  role,
   type = "button",
   ...props
 }: PaneOptionsMenuItemProps) {
   return (
     <Button
       type={type}
+      role={role}
       variant="ghost"
       size="sm"
       className={twMerge(
-        "h-7 w-full justify-start gap-2 rounded-lg px-2 py-0 text-xs text-popover-foreground/80 hover:bg-popover-accent hover:text-popover-foreground",
+        "group/menu-item min-h-8 w-full justify-start gap-1.5 rounded-lg px-2 py-1.5 text-sm font-normal leading-4 text-popover-foreground hover:bg-list-hover hover:text-popover-foreground focus:bg-list-hover",
         className,
       )}
       {...props}
     >
       {reserveIconSlot && (
-        <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground [&>svg]:size-3.5 [&>svg]:shrink-0">
+        <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100 [&>svg]:size-3.5 [&>svg]:shrink-0">
           {icon}
         </span>
       )}

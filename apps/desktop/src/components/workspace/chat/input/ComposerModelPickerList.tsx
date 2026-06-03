@@ -8,12 +8,14 @@ import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { Check } from "@proliferate/ui/icons";
 
 export function ComposerModelPickerContent({
+  activeKind,
   filteredGroups,
   groups,
   search,
   onSearchChange,
   onSelect,
 }: {
+  activeKind: string | null;
   filteredGroups: ModelSelectorGroup[];
   groups: ModelSelectorGroup[];
   search: string;
@@ -39,6 +41,7 @@ export function ComposerModelPickerContent({
         {filteredGroups.map((group, index) => (
           <ComposerModelGroup
             key={group.kind}
+            activeKind={activeKind}
             group={group}
             showSeparator={index > 0}
             onSelect={onSelect}
@@ -70,14 +73,18 @@ export function ComposerMenuSeparator() {
 }
 
 function ComposerModelGroup({
+  activeKind,
   group,
   showSeparator,
   onSelect,
 }: {
+  activeKind: string | null;
   group: ModelSelectorGroup;
   showSeparator: boolean;
   onSelect: (selection: ModelSelectorSelection) => void;
 }) {
+  const hasSelectedModel = group.models.some((model) => model.isSelected);
+
   return (
     <>
       {showSeparator && <div className="mx-2 my-1 border-t border-border/60" />}
@@ -90,7 +97,10 @@ function ComposerModelGroup({
           label={model.displayName}
           trailing={
             <span className="flex items-center gap-1">
-              {model.actionKind === "open_new_chat" && !model.isSelected && (
+              {model.actionKind === "open_new_chat"
+                && !model.isSelected
+                && !hasSelectedModel
+                && group.kind !== activeKind && (
                 <span className="text-xs text-muted-foreground/70">
                   {CHAT_MODEL_SELECTOR_LABELS.newChatBadge}
                 </span>

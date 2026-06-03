@@ -6,6 +6,7 @@ use tokio::sync::broadcast;
 use self::state::{PlanItemState, StreamingItemState, ToolItemState};
 use crate::domains::plans::service::PlanEventContext;
 use crate::domains::sessions::store::SessionStore;
+use crate::observability::transcript_phase::TranscriptPhaseDebugState;
 use anyharness_contract::v1::SessionEventEnvelope;
 
 mod assistant;
@@ -44,6 +45,7 @@ pub struct SessionEventSink {
     open_reasoning_item: Option<StreamingItemState>,
     open_plan_item: Option<PlanItemState>,
     tool_items: HashMap<String, ToolItemState>,
+    transcript_phase_debug: TranscriptPhaseDebugState,
 }
 
 impl SessionEventSink {
@@ -66,6 +68,7 @@ impl SessionEventSink {
             open_reasoning_item: None,
             open_plan_item: None,
             tool_items: HashMap::new(),
+            transcript_phase_debug: TranscriptPhaseDebugState::default(),
         }
     }
 
@@ -89,6 +92,7 @@ impl SessionEventSink {
             open_reasoning_item: None,
             open_plan_item: None,
             tool_items: HashMap::new(),
+            transcript_phase_debug: TranscriptPhaseDebugState::default(),
         }
     }
 

@@ -25,7 +25,7 @@ export function PaneOptionsMenu({
         </PaneIconButton>
       )}
       align={align}
-      className={twMerge("w-44", POPOVER_SURFACE_CLASS, className)}
+      className={twMerge("min-w-[200px]", POPOVER_SURFACE_CLASS, className)}
     >
       {children}
     </PopoverButton>

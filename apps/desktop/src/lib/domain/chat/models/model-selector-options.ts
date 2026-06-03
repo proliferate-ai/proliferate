@@ -10,6 +10,7 @@ import { agentsWithVisibleModels } from "@/lib/domain/chat/models/launch-visible
 import {
   findLaunchModelByIdOrAlias,
   modelSelectionMatchesModel,
+  resolveModelSelectionMatchKind,
 } from "@/lib/domain/chat/models/model-selection-ids";
 import type {
   ActiveModelSelectorControl,
@@ -59,23 +60,30 @@ export function buildModelSelectorGroups(
         activeModelControl,
         selected,
         sourceAgentsByKind.get(agent.kind) ?? agent,
-      ).map((model) => ({
-        kind: agent.kind,
-        modelId: model.id,
-        displayName: model.displayName,
-        actionKind: resolveModelSelectionActionKindForModel(
-          activeSelection,
-          sourceAgentsByKind.get(agent.kind) ?? agent,
-          agent.kind,
-          model,
-        ),
-        isSelected: modelSelectionMatchesModel(
+      ).map((model) => {
+        const sourceAgent = sourceAgentsByKind.get(agent.kind) ?? agent;
+        const selectionMatchKind = resolveModelSelectionMatchKind(
           selected,
-          sourceAgentsByKind.get(agent.kind) ?? agent,
+          sourceAgent,
           agent.kind,
           model.id,
-        ),
-      })),
+        );
+        const isSelected = selectionMatchKind !== "none";
+        return {
+          kind: agent.kind,
+          modelId: selectionMatchKind === "equivalent"
+            ? selected?.modelId ?? model.id
+            : model.id,
+          displayName: model.displayName,
+          actionKind: resolveModelSelectionActionKindForModel(
+            activeSelection,
+            sourceAgent,
+            agent.kind,
+            model,
+          ),
+          isSelected,
+        };
+      }),
     }));
 }
 
@@ -104,16 +112,22 @@ function resolveSelectorModels(
 function resolveCatalogSelectorModels(
   agent: DesktopAgentLaunchAgent,
 ): SelectorModel[] {
-  return agent.models.map((model) => ({
-    id: model.id,
-    displayName: resolveModelDisplayName({
-      agentKind: agent.kind,
-      modelId: model.id,
-      sourceLabels: [model.displayName],
-      preferKnownAlias: shouldPreferStaticModelAlias(model.displayName),
-    }) ?? model.displayName,
-    liveSwitchable: false,
-  }));
+  return agent.models.flatMap((model) => {
+    if (shouldHideCatalogSelectorModel(agent.kind, model.id)) {
+      return [];
+    }
+
+    return [{
+      id: model.id,
+      displayName: resolveModelDisplayName({
+        agentKind: agent.kind,
+        modelId: model.id,
+        sourceLabels: [model.displayName],
+        preferKnownAlias: shouldPreferStaticModelAlias(model.displayName),
+      }) ?? model.displayName,
+      liveSwitchable: false,
+    }];
+  });
 }
 
 function resolveActiveControlSelectorModels(
@@ -143,12 +157,16 @@ function resolveActiveControlSelectorModels(
       return [];
     }
 
+    const displayModel = knownModel ?? visibleModel;
     const displayName = resolveModelDisplayName({
       agentKind: agent.kind,
-      modelId: value.value,
-      sourceLabels: [value.label],
+      modelId: displayModel?.id ?? value.value,
+      sourceLabels: [
+        displayModel?.displayName,
+        value.label,
+      ],
       preferKnownAlias: !isHiddenByProductPolicy,
-    }) ?? value.label;
+    }) ?? displayModel?.displayName ?? value.label;
 
     return [{
       id: value.value,
@@ -245,4 +263,12 @@ function shouldHideSelectorModel(
 
 function shouldPreferStaticModelAlias(displayName: string): boolean {
   return !/\b\d+(?:\.\d+)?\b/.test(displayName);
+}
+
+function shouldHideCatalogSelectorModel(
+  agentKind: string,
+  modelId: string,
+): boolean {
+  return shouldHideModel(agentKind, modelId)
+    || (agentKind === "claude" && modelId === "opus");
 }

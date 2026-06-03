@@ -290,6 +290,15 @@
   --color-diff-surface: color-mix(in srgb, var(--color-diff-main-surface) 94%, var(--color-foreground));
   --color-diff-panel-surface: color-mix(in oklab, var(--color-foreground) 3%, transparent);
   --color-diff-header-surface: var(--color-diff-surface);
+  --color-diff-chat-turn-header-surface: color-mix(in srgb, var(--color-diff-main-surface) 86%, var(--color-foreground));
+  --color-diff-chat-turn-header-hover-surface: color-mix(in srgb, var(--color-diff-chat-turn-header-surface) 97%, var(--color-foreground));
+  --color-diff-chat-turn-icon-surface: color-mix(in srgb, var(--color-diff-main-surface) 94%, var(--color-foreground));
+  --color-diff-chat-inline-tool-header-surface: color-mix(in srgb, var(--color-diff-main-surface) 86%, var(--color-foreground));
+  --color-diff-chat-inline-tool-header-hover-surface: color-mix(in srgb, var(--color-diff-chat-inline-tool-header-surface) 97%, var(--color-foreground));
+  --color-diff-sidebar-file-header-surface: var(--color-diff-chat-inline-tool-header-surface);
+  --color-diff-sidebar-file-header-hover-surface: color-mix(in srgb, var(--color-diff-sidebar-file-header-surface) 97%, var(--color-foreground));
+  --color-diff-chat-file-header-surface: color-mix(in srgb, var(--color-diff-main-surface) 82%, var(--color-foreground));
+  --color-diff-chat-file-header-hover-surface: color-mix(in srgb, var(--color-diff-chat-file-header-surface) 97%, var(--color-foreground));
   --color-code-block-background: var(--color-diff-surface);
   --color-diff-added: var(--color-git-new-line);
   --color-diff-deleted: var(--color-git-removed-line);
@@ -1444,6 +1453,18 @@ mark.codex-thread-find-active {
 
 .composer-diff-simple-line:hover {
   scrollbar-color: var(--color-scrollbar-thumb-active) transparent;
+}
+
+[data-diff-surface="chat"] .composer-diff-simple-line,
+[data-diff-surface="sidebar"] .composer-diff-simple-line {
+  --codex-diffs-surface: var(--color-diff-main-surface);
+  --codex-diffs-context-surface: transparent;
+  --codex-diffs-context-number: transparent;
+  --codex-diffs-empty-surface: transparent;
+  --codex-diffs-separator-surface: transparent;
+  --diffs-bg-context-override: transparent;
+  --diffs-bg-separator-override: transparent;
+  background-color: var(--color-diff-code-surface);
 }
 
 .composer-diff-simple-line [data-diff] {

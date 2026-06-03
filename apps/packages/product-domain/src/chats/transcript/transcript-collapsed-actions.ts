@@ -18,6 +18,10 @@ export interface CollapsedActionSummary {
   actions: number;
 }
 
+export interface CollapsedActionSummaryFormatOptions {
+  active?: boolean;
+}
+
 export function summarizeCollapsedActions(
   itemIds: readonly string[],
   transcript: TranscriptState,
@@ -69,7 +73,11 @@ export function summarizeCollapsedActions(
   );
 }
 
-export function formatCollapsedActionsSummary(summary: CollapsedActionSummary): string {
+export function formatCollapsedActionsSummary(
+  summary: CollapsedActionSummary,
+  options: CollapsedActionSummaryFormatOptions = {},
+): string {
+  const active = options.active === true;
   const fragments: string[] = [];
   const explored = [
     formatPlural(summary.reads, "file"),
@@ -79,20 +87,20 @@ export function formatCollapsedActionsSummary(summary: CollapsedActionSummary): 
   ].filter((value): value is string => value !== null);
 
   if (explored.length > 0) {
-    fragments.push(`explored ${explored.join(", ")}`);
+    fragments.push(`${active ? "exploring" : "explored"} ${explored.join(", ")}`);
   }
   if (summary.commands > 0) {
-    fragments.push(`running ${formatPlural(summary.commands, "command")}`);
+    fragments.push(`${active ? "running" : "ran"} ${formatPlural(summary.commands, "command")}`);
   }
   if (summary.actions > 0) {
-    fragments.push(`running ${formatPlural(summary.actions, "action")}`);
+    fragments.push(`${active ? "running" : "ran"} ${formatPlural(summary.actions, "action")}`);
   }
   if (summary.edits > 0) {
-    fragments.push(`edited ${formatPlural(summary.edits, "file")}`);
+    fragments.push(`${active ? "editing" : "edited"} ${formatPlural(summary.edits, "file")}`);
   }
 
   if (fragments.length === 0) {
-    return "Worked";
+    return "Working";
   }
 
   const sentence = fragments.join(", ");

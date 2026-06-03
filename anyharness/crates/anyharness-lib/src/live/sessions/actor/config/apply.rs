@@ -155,6 +155,15 @@ pub(in crate::live::sessions::actor) async fn apply_specific_config_option(
         }
     }
 
+    if is_model_request
+        && option.is_none()
+        && !should_apply_model_via_direct_setter(startup_state, desired_value)
+    {
+        return Err(SetConfigOptionCommandError::Rejected(format!(
+            "Value '{desired_value}' is not valid for config option '{config_id}'."
+        )));
+    }
+
     let outcome = apply_config_option_if_possible(
         conn,
         native_session_id,
@@ -382,18 +391,18 @@ pub(in crate::live::sessions::actor) async fn apply_model_via_direct_setter(
     ))
     .await?;
 
-    Ok(ConfigApplyOutcome::RequestedOnly)
+    Ok(ConfigApplyOutcome::AppliedRequested)
 }
 
 pub(in crate::live::sessions::actor) fn should_apply_model_via_direct_setter(
     startup_state: &SessionStartupState,
     desired_model_id: &str,
 ) -> bool {
-    startup_state.available_model_ids.is_empty()
+    startup_state.available_models.is_empty()
         || startup_state
-            .available_model_ids
+            .available_models
             .iter()
-            .any(|id| id == desired_model_id)
+            .any(|model| model.id == desired_model_id)
 }
 
 pub(in crate::live::sessions::actor) async fn apply_mode_via_direct_setter_legacy(

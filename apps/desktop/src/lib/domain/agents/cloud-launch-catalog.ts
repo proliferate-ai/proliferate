@@ -15,6 +15,9 @@ import type {
   ProjectCloudAgentCatalogOptions,
   RuntimeAgentLaunchOptions,
 } from "./cloud-launch-catalog-types";
+import {
+  normalizeDefaultChatModelId,
+} from "@/lib/domain/preferences/user/session-defaults";
 
 export type {
   CloudAgentCatalogResponseInput,
@@ -130,18 +133,22 @@ export function mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
       modelDisplayPolicy: cloud?.modelDisplayPolicy ?? null,
       promptCapabilities: cloud?.promptCapabilities ?? null,
       models: agent.models.map((model) => {
-        const cloudModel =
-          cloudModelsByIdOrAlias.get(model.id)
-          ?? model.aliases?.map((alias) => cloudModelsByIdOrAlias.get(alias)).find(Boolean)
-          ?? null;
+        const modelIdCandidates = runtimeModelCatalogLookupCandidates(
+          agent.kind,
+          model.id,
+          model.aliases ?? [],
+        );
+        const cloudModel = modelIdCandidates
+          .map((candidate) => cloudModelsByIdOrAlias.get(candidate))
+          .find(Boolean) ?? null;
         return {
           ...cloudModel,
           id: model.id,
-          displayName: model.displayName,
+          displayName: resolveRuntimeMergedModelDisplayName(model, cloudModel),
           description: cloudModel?.description ?? null,
           aliases: mergeModelAliases(model.id, model.aliases ?? [], cloudModel),
           status: cloudModel?.status ?? "active",
-          isDefault: model.isDefault || model.id === defaultModelId,
+          isDefault: model.isDefault || modelIdCandidates.includes(defaultModelId ?? ""),
           defaultOptIn: model.defaultOptIn ?? cloudModel?.defaultOptIn ?? null,
           provider: cloudModel?.provider ?? null,
           tags: cloudModel?.tags ?? [],
@@ -161,6 +168,38 @@ export function mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
     ...mergedAgents,
     ...cloudAgents.filter((agent) => !runtimeKinds.has(agent.kind)),
   ];
+}
+
+function runtimeModelCatalogLookupCandidates(
+  agentKind: string,
+  runtimeModelId: string,
+  runtimeAliases: readonly string[],
+): string[] {
+  const candidates = new Set<string>();
+  for (const modelId of [runtimeModelId, ...runtimeAliases]) {
+    candidates.add(modelId);
+    candidates.add(normalizeDefaultChatModelId(agentKind, modelId));
+  }
+  return [...candidates];
+}
+
+function resolveRuntimeMergedModelDisplayName(
+  runtimeModel: RuntimeAgentLaunchOptions["models"][number],
+  cloudModel: DesktopAgentLaunchModel | null,
+): string {
+  const runtimeDisplayName = runtimeModel.displayName.trim();
+  return runtimeDisplayName
+    && !isRawRuntimeModelDisplayName(runtimeDisplayName, runtimeModel.id)
+    ? runtimeModel.displayName
+    : cloudModel?.displayName ?? runtimeModel.displayName;
+}
+
+function isRawRuntimeModelDisplayName(displayName: string, modelId: string): boolean {
+  if (displayName === modelId) {
+    return true;
+  }
+  return displayName === displayName.toLowerCase()
+    && /[-/:[\]=]/.test(displayName);
 }
 
 function buildCloudModelLookup(

@@ -314,4 +314,110 @@ describe("mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents", () => {
       defaultOptIn: true,
     });
   });
+
+  it("uses curated catalog labels when runtime models report their id as the label", () => {
+    const base = cloudCatalog();
+    const baseAgent = base.agents[0]!;
+    const projected = projectCloudAgentCatalogToDesktopLaunchCatalog({
+      ...base,
+      agents: [{
+        ...baseAgent,
+        kind: "cursor",
+        displayName: "Cursor",
+        session: {
+          ...baseAgent.session,
+          defaultModelId: "composer-2.5",
+          models: [{
+            id: "composer-2.5",
+            displayName: "Composer 2.5",
+            aliases: [],
+            status: "active",
+            isDefault: true,
+            defaultOptIn: true,
+            provider: "cursor",
+            tags: ["recommended"],
+            capabilities: null,
+            compatibility: null,
+            launchRemediation: null,
+          }],
+        },
+      }],
+    });
+
+    const merged = mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+      projected.agents,
+      [{
+        kind: "cursor",
+        displayName: "Cursor",
+        defaultModelId: "composer-2.5",
+        models: [{
+          id: "composer-2.5",
+          displayName: "composer-2.5",
+          isDefault: true,
+          defaultOptIn: null,
+        }],
+      }],
+    );
+
+    expect(merged[0]?.models[0]).toMatchObject({
+      id: "composer-2.5",
+      displayName: "Composer 2.5",
+      provider: "cursor",
+      tags: ["recommended"],
+    });
+  });
+
+  it("matches config-shaped runtime ids to canonical catalog models", () => {
+    const base = cloudCatalog();
+    const baseAgent = base.agents[0]!;
+    const projected = projectCloudAgentCatalogToDesktopLaunchCatalog({
+      ...base,
+      agents: [{
+        ...baseAgent,
+        kind: "cursor",
+        displayName: "Cursor",
+        session: {
+          ...baseAgent.session,
+          defaultModelId: "composer-2.5-fast",
+          models: [{
+            id: "composer-2.5-fast",
+            displayName: "Composer 2.5 Fast",
+            aliases: ["composer-2[fast=true]"],
+            status: "active",
+            isDefault: true,
+            defaultOptIn: true,
+            provider: "cursor",
+            tags: ["recommended"],
+            capabilities: null,
+            compatibility: null,
+            launchRemediation: null,
+          }],
+        },
+      }],
+    });
+
+    const merged = mergeRuntimeLaunchOptionsIntoDesktopLaunchAgents(
+      projected.agents,
+      [{
+        kind: "cursor",
+        displayName: "Cursor",
+        defaultModelId: "composer-2.5[fast=true]",
+        models: [{
+          id: "composer-2.5[fast=true]",
+          displayName: "composer-2.5",
+          isDefault: true,
+          defaultOptIn: null,
+        }],
+      }],
+    );
+
+    expect(merged[0]?.models[0]).toMatchObject({
+      id: "composer-2.5[fast=true]",
+      displayName: "Composer 2.5 Fast",
+      aliases: ["composer-2.5-fast", "composer-2[fast=true]"],
+      provider: "cursor",
+      tags: ["recommended"],
+      defaultOptIn: true,
+    });
+  });
 });

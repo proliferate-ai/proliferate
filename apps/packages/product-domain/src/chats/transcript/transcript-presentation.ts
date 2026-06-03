@@ -3,12 +3,6 @@ import type {
   TranscriptState,
   TurnRecord,
 } from "@anyharness/sdk";
-import { classifyCollapsedAction } from "./transcript-collapsed-actions";
-import {
-  getToolCallParsedCommands,
-  getToolCallShellCommand,
-  isExplorationParsedCommand,
-} from "./transcript-tool-commands";
 import { isSubagentCreationAction } from "../subagents/subagent-tool-presentation";
 
 export type TurnDisplayBlock =
@@ -37,7 +31,6 @@ export function buildTranscriptDisplayBlocks({
   rootIds,
   transcript,
   childrenByParentId,
-  isComplete,
 }: {
   rootIds: readonly string[];
   transcript: TranscriptState;
@@ -49,14 +42,7 @@ export function buildTranscriptDisplayBlocks({
   );
   const blocks: TurnDisplayBlock[] = [];
   let pendingActionIds: string[] = [];
-  let pendingInlineActionIds: string[] = [];
   let pendingSubagentCreationIds: string[] = [];
-  const trailingInlineActionIds = collectTrailingInlineActionIds(
-    visibleRootIds,
-    transcript,
-    childrenByParentId,
-    isComplete,
-  );
 
   const flushActions = () => {
     if (pendingActionIds.length === 0) return;
@@ -68,22 +54,6 @@ export function buildTranscriptDisplayBlocks({
       itemIds: pendingActionIds,
     });
     pendingActionIds = [];
-  };
-  const flushInlineActions = () => {
-    if (pendingInlineActionIds.length === 0) return;
-    const firstId = pendingInlineActionIds[0];
-    if (!firstId) return;
-    if (pendingInlineActionIds.length === 1) {
-      blocks.push({ kind: "inline_tool", itemId: firstId });
-    } else {
-      const lastId = pendingInlineActionIds[pendingInlineActionIds.length - 1] ?? firstId;
-      blocks.push({
-        kind: "inline_tools",
-        blockId: `${firstId}-${lastId}`,
-        itemIds: pendingInlineActionIds,
-      });
-    }
-    pendingInlineActionIds = [];
   };
   const flushSubagentCreations = () => {
     if (pendingSubagentCreationIds.length === 0) return;
@@ -103,35 +73,23 @@ export function buildTranscriptDisplayBlocks({
 
     if (item.kind === "tool_call" && isSubagentCreationAction(item)) {
       flushActions();
-      flushInlineActions();
       pendingSubagentCreationIds.push(itemId);
       continue;
     }
 
     if (item.kind === "tool_call" && isCollapsibleAction(item, childrenByParentId)) {
       flushSubagentCreations();
-      if (
-        trailingInlineActionIds.has(itemId)
-        || (isActiveToolCall(item) && (isKnownRealAction(item) || isPendingCommand(item)))
-      ) {
-        flushActions();
-        pendingInlineActionIds.push(itemId);
-      } else {
-        flushInlineActions();
-        pendingActionIds.push(itemId);
-      }
+      pendingActionIds.push(itemId);
       continue;
     }
 
     flushSubagentCreations();
     flushActions();
-    flushInlineActions();
     blocks.push({ kind: "item", itemId });
   }
 
   flushSubagentCreations();
   flushActions();
-  flushInlineActions();
   return blocks;
 }
 
@@ -310,39 +268,6 @@ function flattenItemIds(
   return flattened;
 }
 
-function collectTrailingInlineActionIds(
-  rootIds: readonly string[],
-  transcript: TranscriptState,
-  childrenByParentId: Map<string, string[]>,
-  isTurnComplete: boolean,
-): Set<string> {
-  if (isTurnComplete) {
-    return new Set();
-  }
-
-  const actionIds: string[] = [];
-  for (let i = rootIds.length - 1; i >= 0; i--) {
-    const itemId = rootIds[i];
-    const item = transcript.itemsById[itemId];
-    if (
-      item?.kind === "tool_call"
-      && isCollapsibleAction(item, childrenByParentId)
-    ) {
-      if (isPendingCommand(item)) {
-        continue;
-      }
-      if (!isKnownRealAction(item)) {
-        break;
-      }
-      actionIds.unshift(itemId);
-      continue;
-    }
-    break;
-  }
-
-  return new Set(actionIds);
-}
-
 function isCollapsibleAction(
   item: Extract<TranscriptItem, { kind: "tool_call" }>,
   childrenByParentId: Map<string, string[]>,
@@ -355,27 +280,4 @@ function isCollapsibleAction(
     && item.semanticKind !== "cowork_artifact_create"
     && item.semanticKind !== "cowork_artifact_update"
     && item.nativeToolName !== "Agent";
-}
-
-function isActiveToolCall(item: Extract<TranscriptItem, { kind: "tool_call" }>): boolean {
-  return item.status !== "completed" && item.status !== "failed";
-}
-
-function isKnownRealAction(item: Extract<TranscriptItem, { kind: "tool_call" }>): boolean {
-  const parsedCommands = getToolCallParsedCommands(item);
-  if (parsedCommands.length > 0) {
-    return parsedCommands.some((command) => !isExplorationParsedCommand(command.kind));
-  }
-
-  const kind = classifyCollapsedAction(item);
-  if (kind === "command") {
-    return getToolCallShellCommand(item) !== null;
-  }
-  return kind === "edit" || kind === "action";
-}
-
-function isPendingCommand(item: Extract<TranscriptItem, { kind: "tool_call" }>): boolean {
-  return isActiveToolCall(item)
-    && classifyCollapsedAction(item) === "command"
-    && getToolCallShellCommand(item) === null;
 }

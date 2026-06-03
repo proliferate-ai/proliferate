@@ -19,14 +19,10 @@ export interface LastTurnTouchedFilesResult {
   files: LastTurnTouchedFile[];
 }
 
-export function collectLatestCompletedTurnTouchedFiles(
-  transcript: TranscriptState | null,
-): LastTurnTouchedFilesResult {
-  const turn = latestCompletedTurn(transcript);
-  if (!turn || !transcript) {
-    return { turn: null, files: [] };
-  }
-
+export function collectTurnTouchedFiles(
+  turn: TurnRecord,
+  transcript: TranscriptState,
+): LastTurnTouchedFile[] {
   const byPath = new Map<string, LastTurnTouchedFile>();
   for (const itemId of turn.itemOrder) {
     const item = transcript.itemsById[itemId];
@@ -49,13 +45,24 @@ export function collectLatestCompletedTurnTouchedFiles(
     }
   }
 
+  return [...byPath.values()].sort((left, right) => left.path.localeCompare(right.path));
+}
+
+export function collectLatestCompletedTurnTouchedFiles(
+  transcript: TranscriptState | null,
+): LastTurnTouchedFilesResult {
+  const turn = latestCompletedTurn(transcript);
+  if (!turn || !transcript) {
+    return { turn: null, files: [] };
+  }
+
   return {
     turn,
-    files: [...byPath.values()].sort((left, right) => left.path.localeCompare(right.path)),
+    files: collectTurnTouchedFiles(turn, transcript),
   };
 }
 
-function latestCompletedTurn(transcript: TranscriptState | null): TurnRecord | null {
+export function latestCompletedTurn(transcript: TranscriptState | null): TurnRecord | null {
   if (!transcript) {
     return null;
   }

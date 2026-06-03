@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -35,11 +36,31 @@ describe("FileChangesCard and FileDiffCard", () => {
     expect(html).toContain("--codex-diffs-surface:var(--codex-diffs-surface-override, var(--color-diff-panel-surface))");
     expect(html).toContain("data-diff-surface=\"sidebar\"");
     expect(html).toContain("codex-review-diff-card");
+    expect(html).toContain("--codex-diffs-header-surface:var(--color-diff-sidebar-file-header-surface)");
+    expect(html).toContain("--codex-diffs-separator-surface:var(--color-diff-sidebar-file-header-hover-surface)");
+    expect(html).toContain("bg-[var(--codex-diffs-header-surface)]");
+    expect(html).not.toContain("#1c1c1c");
     expect(html).toContain("data-app-action-review-file-expanded=\"true\"");
     expect(html).toContain("data-app-action-review-file-toggle=\"\"");
     expect(html).toContain("text-sidebar-foreground");
     expect(html).toContain("hover:bg-sidebar-accent");
     expect(html).toContain("diff body");
+  });
+
+  it("keeps diff header theme variables free of hard-coded dark surfaces", () => {
+    const desktopCss = readFileSync(
+      new URL("../../../../../packages/design/src/css/desktop.css", import.meta.url),
+      "utf8",
+    );
+    const rootDiffVariables =
+      desktopCss.match(/\/\* -- Git diff backgrounds[\s\S]*?:root \{(?<body>[\s\S]*?)--diffs-min-number-column-width:/)
+        ?.groups?.body ?? "";
+
+    expect(rootDiffVariables).not.toContain("#232323");
+    expect(rootDiffVariables).not.toContain("#2b2b2b");
+    expect(rootDiffVariables).toContain(
+      "--color-diff-chat-file-header-surface: color-mix(in srgb, var(--color-diff-main-surface) 82%, var(--color-foreground));",
+    );
   });
 
   it("keeps absolute paths compact in diff headers", () => {
@@ -59,7 +80,14 @@ describe("FileChangesCard and FileDiffCard", () => {
     expect(html).not.toContain(">/Users/pablo/.claude/plans/sorry-im-eant-liek-moonlit-goose.md</span>");
     expect(html).not.toContain("hover:underline");
     expect(html).toContain("thread-diff-virtualized");
-    expect(html).toContain("group-hover/diff-header:block");
+    expect(html).toContain("--codex-diffs-header-surface:var(--color-diff-chat-file-header-surface)");
+    expect(html).toContain("hover:bg-[var(--color-diff-chat-file-header-hover-surface)]");
+    expect(html).toContain("group-hover/diff-header:opacity-100");
+    expect(html).not.toContain("group-hover/diff-header:block");
+
+    const rightActionsIndex = html.indexOf("ms-auto flex shrink-0 items-center gap-1.5");
+    expect(rightActionsIndex).toBeGreaterThan(-1);
+    expect(html.indexOf(">+20</span>")).toBeGreaterThan(rightActionsIndex);
   });
 
   it("marks truncated absolute path prefixes with an ellipsis", () => {

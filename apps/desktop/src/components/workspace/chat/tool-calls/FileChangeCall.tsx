@@ -1,6 +1,5 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, type ReactNode } from "react";
 import { DiffViewer } from "@/components/content/ui/DiffViewer";
-import { FileChangeInlineRow } from "@/components/content/ui/FileChangeInlineRow";
 import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
 import { HighlightedCodePanel } from "@/components/content/ui/HighlightedCodePanel";
 import {
@@ -53,8 +52,6 @@ export function FileChangeCall({
   contentSearchUnitId,
 }: FileChangeCallProps) {
   const hasDiff = !!patch;
-  const [rowExpanded, setRowExpanded] = useState(defaultExpanded);
-  const [diffExpanded, setDiffExpanded] = useState(true);
   const actionLabel = getOperationLabel(operation, status);
   const displayPath = newWorkspacePath || workspacePath || newPath || path;
   const fileReferenceActions = useFileReferenceActions({
@@ -90,47 +87,44 @@ export function FileChangeCall({
 
     return (
       <div className="flex min-w-0 flex-col">
-        <FileChangeInlineRow
-          label={actionLabel}
-          filePath={displayPath}
-          additions={nextAdditions}
-          deletions={nextDeletions}
-          isExpanded={rowExpanded}
-          onToggle={() => setRowExpanded((expanded) => !expanded)}
-          onOpenFile={fileReferenceActions.canOpenInSidebar || fileReferenceActions.canOpenExternal
-            ? handleOpenFile
-            : undefined}
+        <ToolActionRow
+          icon={getOperationIcon(operation)}
+          label={label}
+          hint={statsHint}
+          status={status}
+          duration={duration}
+          expandable={false}
         />
-        {rowExpanded && (
-          <div className="mt-1.5 mb-1">
-            <FileDiffCard
-              filePath={displayPath}
-              additions={nextAdditions}
-              deletions={nextDeletions}
-              isExpanded={diffExpanded}
-              onToggleExpand={() => setDiffExpanded((expanded) => !expanded)}
-              onOpenFile={fileReferenceActions.canOpenInSidebar || fileReferenceActions.canOpenExternal
-                ? handleOpenFile
-                : undefined}
-            >
-              {diffDisplayPolicy && !diffDisplayPolicy.canRenderInline ? (
-                <DiffDisplayPolicyPlaceholder
-                  title={diffDisplayPolicy.placeholderTitle}
-                  description={diffDisplayPolicy.placeholderDescription}
-                />
-              ) : (
-                <DiffViewer
-                  patch={patch!}
-                  filePath={displayPath}
-                  contentSearchUnitId={contentSearchUnitId}
-                  className="w-full"
-                  viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
-                  variant="chat"
-                />
-              )}
-            </FileDiffCard>
-          </div>
-        )}
+        <div className="mt-1.5">
+          <FileDiffCard
+            filePath={displayPath}
+            additions={nextAdditions}
+            deletions={nextDeletions}
+            isExpanded
+            collapsible={false}
+            headerTone="inlineTool"
+            showOpenAction={false}
+            onOpenFile={fileReferenceActions.canOpenInSidebar || fileReferenceActions.canOpenExternal
+              ? handleOpenFile
+              : undefined}
+          >
+            {diffDisplayPolicy && !diffDisplayPolicy.canRenderInline ? (
+              <DiffDisplayPolicyPlaceholder
+                title={diffDisplayPolicy.placeholderTitle}
+                description={diffDisplayPolicy.placeholderDescription}
+              />
+            ) : (
+              <DiffViewer
+                patch={patch!}
+                filePath={displayPath}
+                contentSearchUnitId={contentSearchUnitId}
+                className="w-full"
+                viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
+                variant="chat"
+              />
+            )}
+          </FileDiffCard>
+        </div>
       </div>
     );
   }
@@ -218,7 +212,7 @@ function buildLabel(
     const nextPathLabel = newWorkspacePath ?? newPath ?? path;
     return (
       <div className="flex min-w-0 items-center gap-2">
-        <span className="shrink-0 font-[460] text-foreground/90">{actionLabel}</span>
+        <span className="shrink-0 text-inherit">{actionLabel}</span>
         {primaryChip}
         <ArrowRight className="size-3 shrink-0 text-muted-foreground" />
         <ToolFileChip
@@ -232,7 +226,7 @@ function buildLabel(
 
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <span className="shrink-0 font-[460] text-foreground/90">{actionLabel}</span>
+      <span className="shrink-0 text-inherit">{actionLabel}</span>
       {primaryChip}
     </div>
   );

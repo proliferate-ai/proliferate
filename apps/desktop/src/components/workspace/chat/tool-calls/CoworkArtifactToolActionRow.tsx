@@ -23,7 +23,7 @@ export function CoworkArtifactToolActionRow({
   }
 
   const status = mapStatus(item.status);
-  const label = presentation.action === "create" ? "Create artifact" : "Update artifact";
+  const label = presentation.action === "create" ? "Creating artifact" : "Updating artifact";
   const chipPath = presentation.summary?.path ?? presentation.provisional.path ?? null;
   const chipBasename = chipPath?.split("/").pop() ?? chipPath ?? null;
   const canOpenArtifact = !!presentation.summary?.id && !!onOpenArtifact;
@@ -35,7 +35,7 @@ export function CoworkArtifactToolActionRow({
       ) : (
         <FileText className="size-3 text-faint" />
       )}
-      label={<span className="font-[460] text-foreground/90">{label}</span>}
+      label={label}
       status={status}
       hint={chipBasename && chipPath ? (
         <ArtifactChip

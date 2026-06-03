@@ -100,7 +100,7 @@ export function describeToolCallDisplay(
       };
     case "file_change":
       return {
-        label: "Changed file",
+        label: "File change",
         hint: cleanedToolName && normalizedToolName !== "edit" ? cleanedToolName : undefined,
         iconKey: "file-pen",
       };

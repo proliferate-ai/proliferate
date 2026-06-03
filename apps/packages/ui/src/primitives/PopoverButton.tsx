@@ -22,7 +22,7 @@ const DEFAULT_AUTO_VERTICAL_SPACE = 320;
 
 export const POPOVER_FRAME_CLASS =
   "m-px rounded-xl bg-popover/90 text-popover-foreground shadow-popover ring-[0.5px] ring-popover-ring backdrop-blur-sm";
-export const POPOVER_SURFACE_CLASS = `${POPOVER_FRAME_CLASS} flex select-none flex-col overflow-y-auto p-1`;
+export const POPOVER_SURFACE_CLASS = `${POPOVER_FRAME_CLASS} flex max-h-[calc(100vh-1rem)] min-w-[200px] max-w-[320px] select-none flex-col overflow-y-auto p-1`;
 
 interface PopoverButtonProps {
   /** The trigger element — receives onClick and ref. */
@@ -168,6 +168,8 @@ export function PopoverButton({
         <>
           <div className="fixed inset-0 z-50" onClick={close} />
           <FixedPositionLayer
+            data-state="open"
+            data-align={align}
             className={`fixed z-50 ${className}`}
             position={pos}
           >

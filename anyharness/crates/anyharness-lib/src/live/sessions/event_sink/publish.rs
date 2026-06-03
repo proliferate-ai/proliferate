@@ -4,6 +4,7 @@ use super::SessionEventSink;
 use crate::domains::sessions::model::SessionEventRecord;
 use crate::domains::sessions::runtime_event::RuntimeEventInjectionError;
 use crate::domains::sessions::store::SessionStore;
+use crate::observability::transcript_phase::record_transcript_phase_event;
 use anyharness_contract::v1::{SessionEvent, SessionEventEnvelope};
 
 impl SessionEventSink {
@@ -13,7 +14,7 @@ impl SessionEventSink {
         turn_id: Option<String>,
         item_id: Option<String>,
     ) {
-        publish_session_event(
+        let envelope = publish_session_event(
             &self.session_id,
             &mut self.next_seq,
             &self.event_tx,
@@ -22,6 +23,7 @@ impl SessionEventSink {
             turn_id,
             item_id,
         );
+        record_transcript_phase_event(&mut self.transcript_phase_debug, &envelope);
     }
 }
 

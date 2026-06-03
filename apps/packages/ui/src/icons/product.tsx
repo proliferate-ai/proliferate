@@ -2,7 +2,7 @@ import type { IconProps } from "./types";
 
 export function Robot({ className, ...props }: IconProps) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
       <path d="M12 8V4" />
       <circle cx="12" cy="4" r="1" />
       <rect x="5" y="8" width="14" height="11" rx="3" />
@@ -129,8 +129,22 @@ export function Brain({ className, ...props }: IconProps) {
 
 export function ThinkingGlyph({ className, ...props }: IconProps) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" {...props}>
-      <path d="M11.75 3.25c4.56 0 8.25 3.09 8.25 6.9c0 3.8-3.69 6.88-8.25 6.88c-.72 0-1.42-.08-2.08-.23L5.9 19.85a.75.75 0 0 1-1.2-.7l.78-3.5C4.24 14.43 3.5 12.5 3.5 10.15c0-3.81 3.69-6.9 8.25-6.9Zm-3 7.65a1.05 1.05 0 1 0 0-2.1a1.05 1.05 0 0 0 0 2.1Zm3 0a1.05 1.05 0 1 0 0-2.1a1.05 1.05 0 0 0 0 2.1Zm3 0a1.05 1.05 0 1 0 0-2.1a1.05 1.05 0 0 0 0 2.1Z" />
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M8.25 11.25a4.75 4.75 0 1 1 7.5 3.88c-.62.45-1 .99-1.13 1.62H9.38c-.13-.63-.51-1.17-1.13-1.62a4.72 4.72 0 0 1-2-3.88Z" />
+      <path d="M9.5 19h5" />
+      <path d="M10.25 21h3.5" />
+      <path d="M12 3V2" />
+      <path d="M18.75 5.25 18 6" />
+      <path d="M5.25 5.25 6 6" />
     </svg>
   );
 }

@@ -1,11 +1,25 @@
 // @vitest-environment jsdom
 
 import { cleanup, render } from "@testing-library/react";
-import { createTranscriptState, type ToolCallItem } from "@anyharness/sdk";
-import { afterEach, describe, expect, it } from "vitest";
-import { toolItem } from "@proliferate/product-domain/chats/transcript/transcript-presentation-test-fixtures";
+import { createTranscriptState, type ThoughtItem, type ToolCallItem } from "@anyharness/sdk";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  thoughtItem,
+  toolItem,
+} from "@proliferate/product-domain/chats/transcript/transcript-presentation-test-fixtures";
 import { ProposedPlanToolCallIdsProvider } from "./ProposedPlanToolCallIdsContext";
+import { TranscriptActivityDensityProvider } from "./TranscriptActivityBlock";
 import { TranscriptItemBlock } from "./TranscriptItemBlock";
+
+vi.mock("@/hooks/cowork/workflows/use-open-cowork-coding-session", () => ({
+  useOpenCoworkCodingSession: () => vi.fn(),
+}));
+
+vi.mock("@/hooks/workspaces/workflows/selection/use-workspace-selection", () => ({
+  useWorkspaceSelection: () => ({
+    selectWorkspace: vi.fn(),
+  }),
+}));
 
 afterEach(() => {
   cleanup();
@@ -49,6 +63,73 @@ describe("TranscriptItemBlock", () => {
 
     expect(container.textContent).toContain("Fallback plan body");
   });
+
+  it("gives tool calls transcript activity spacing", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = genericToolCall();
+    transcript.itemsById = { [item.itemId]: item };
+
+    const { container } = render(
+      <ProposedPlanToolCallIdsProvider value={new Set()}>
+        <TranscriptItemBlock
+          item={item}
+          transcript={transcript}
+          workspaceId={null}
+          onOpenArtifact={() => {}}
+        />
+      </ProposedPlanToolCallIdsProvider>,
+    );
+
+    expect(container.innerHTML).toContain("data-transcript-activity-block");
+    expect(container.innerHTML).toContain("data-transcript-activity-shell");
+    expect(container.innerHTML).toContain("py-2");
+    expect(container.textContent).toContain("Tool call");
+  });
+
+  it("gives thinking blocks transcript activity spacing", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = genericThought();
+    transcript.itemsById = { [item.itemId]: item };
+
+    const { container } = render(
+      <ProposedPlanToolCallIdsProvider value={new Set()}>
+        <TranscriptItemBlock
+          item={item}
+          transcript={transcript}
+          workspaceId={null}
+          onOpenArtifact={() => {}}
+        />
+      </ProposedPlanToolCallIdsProvider>,
+    );
+
+    expect(container.innerHTML).toContain("data-transcript-activity-block");
+    expect(container.innerHTML).toContain("data-transcript-activity-shell");
+    expect(container.innerHTML).toContain("py-2");
+    expect(container.textContent).toContain("Thinking");
+  });
+
+  it("keeps the same transcript activity spacing while the active turn is iterating", () => {
+    const transcript = createTranscriptState("session-1");
+    const item = genericThought();
+    transcript.itemsById = { [item.itemId]: item };
+
+    const { container } = render(
+      <ProposedPlanToolCallIdsProvider value={new Set()}>
+        <TranscriptActivityDensityProvider density="compact">
+          <TranscriptItemBlock
+            item={item}
+            transcript={transcript}
+            workspaceId={null}
+            onOpenArtifact={() => {}}
+          />
+        </TranscriptActivityDensityProvider>
+      </ProposedPlanToolCallIdsProvider>,
+    );
+
+    expect(container.innerHTML).toContain("data-transcript-activity-density=\"compact\"");
+    expect(container.innerHTML).toContain("py-2");
+    expect(container.textContent).toContain("Thinking");
+  });
 });
 
 function claudeExitPlanFallback(): ToolCallItem {
@@ -58,5 +139,20 @@ function claudeExitPlanFallback(): ToolCallItem {
     nativeToolName: "ExitPlanMode",
     toolCallId: null,
     contentParts: [{ type: "tool_result_text", text: "Fallback plan body" }],
+  };
+}
+
+function genericToolCall(): ToolCallItem {
+  return {
+    ...toolItem("tool-1", "turn-1", 1, "other"),
+    title: "Tool call",
+    nativeToolName: "TodoWrite",
+  };
+}
+
+function genericThought(): ThoughtItem {
+  return {
+    ...thoughtItem("thought-1", "turn-1", 1, false),
+    text: "Inspecting the transcript stack.",
   };
 }

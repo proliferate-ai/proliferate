@@ -80,7 +80,7 @@ async fn handle_notification_persists_raw_acp_notifications() {
         legacy_mode_state: None,
         config_options: vec![],
         current_model_id: None,
-        available_model_ids: vec![],
+        available_models: vec![],
         prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
     };
     let mut persisted_config_state = PersistedSessionConfigState {
@@ -280,7 +280,7 @@ async fn replay_filter_keeps_raw_notifications_but_skips_normalized_transcript_e
         legacy_mode_state: None,
         config_options: vec![],
         current_model_id: None,
-        available_model_ids: vec![],
+        available_models: vec![],
         prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
     };
     let mut persisted_config_state = PersistedSessionConfigState {
