@@ -72,7 +72,7 @@ Folders: `process/`, `install/`, `update/` (manifest, staging, rollback).
 
 Domain shape: `api.py` (transport) → `service.py` (orchestration) → `domain/policy.py` (pure rules) + `db/store/` (queries). Type pipeline: ORM → frozen `@dataclass` → Pydantic; ORM never leaves the store.
 
-Guides: `domains`, `database`, `auth`, `errors`, `integrations`, `config`, `workers`. Audits: `phase6-billing-reconciler`, `phase6-cloud-runtime-background-loops`, `server-structure-hygiene`.
+Guides: `domains`, `database`, `auth`, `errors`, `integrations`, `config`, `workers`.
 
 ### SDK
 **`specs/codebase/structures/sdk/README.md`** — `anyharness/sdk/**` and `anyharness/sdk-react/**`.

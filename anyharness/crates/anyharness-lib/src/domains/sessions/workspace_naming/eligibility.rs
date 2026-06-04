@@ -1,7 +1,11 @@
 use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::store::SessionStore;
+use crate::domains::sessions::workspace_naming::mcp::definition::{
+    ACP_SERVER_NAME, BINDING_SUMMARY_ID,
+};
 use crate::domains::workspaces::model::WorkspaceRecord;
 use crate::origin::{OriginContext, OriginEntrypoint, OriginKind};
+use anyharness_contract::v1::{SessionMcpBindingOutcome, SessionMcpBindingSummary};
 
 #[derive(Debug, thiserror::Error)]
 pub enum WorkspaceNamingAvailabilityError {
@@ -59,8 +63,17 @@ pub fn validate_tool_call_availability(
             "workspace already has a display name".to_string(),
         ));
     }
-    if !current_session_is_visible_and_first_prompted(session_store, &workspace.id, &session.id)
+    let has_launch_binding = session_has_applied_workspace_naming_binding(session);
+    if !current_session_is_visible(session_store, &workspace.id, &session.id)
         .map_err(WorkspaceNamingAvailabilityError::Internal)?
+    {
+        return Err(WorkspaceNamingAvailabilityError::Unavailable(
+            "workspace naming is only available for visible sessions".to_string(),
+        ));
+    }
+    if !has_launch_binding
+        && !current_session_is_visible_and_first_prompted(session_store, &workspace.id, &session.id)
+            .map_err(WorkspaceNamingAvailabilityError::Internal)?
     {
         return Err(WorkspaceNamingAvailabilityError::Unavailable(
             "workspace naming is only available before another visible session starts work"
@@ -85,6 +98,35 @@ pub fn validate_tool_call_availability(
         ));
     }
     Ok(())
+}
+
+fn session_has_applied_workspace_naming_binding(session: &SessionRecord) -> bool {
+    let Some(value) = session
+        .mcp_binding_summaries_json
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return false;
+    };
+    let Ok(summaries) = serde_json::from_str::<Vec<SessionMcpBindingSummary>>(value) else {
+        return false;
+    };
+    summaries.iter().any(|summary| {
+        summary.outcome == SessionMcpBindingOutcome::Applied
+            && (summary.id == BINDING_SUMMARY_ID || summary.server_name == ACP_SERVER_NAME)
+    })
+}
+
+fn current_session_is_visible(
+    session_store: &SessionStore,
+    workspace_id: &str,
+    session_id: &str,
+) -> anyhow::Result<bool> {
+    Ok(session_store
+        .list_visible_by_workspace(workspace_id)?
+        .iter()
+        .any(|record| record.id == session_id))
 }
 
 fn current_session_is_visible_and_first_prompted(
@@ -226,6 +268,13 @@ mod tests {
         }
     }
 
+    fn attach_workspace_naming_binding(session: &mut SessionRecord) {
+        session.mcp_binding_summaries_json = Some(
+            r#"[{"id":"internal:workspace_naming","serverName":"workspace_naming","displayName":"Workspace Naming","transport":"http","outcome":"applied"}]"#
+                .to_string(),
+        );
+    }
+
     fn append_event(store: &SessionStore, session_id: &str, seq: i64, event_type: &str) {
         store
             .append_event(&SessionEventRecord {
@@ -315,6 +364,31 @@ mod tests {
 
         validate_tool_call(&session_store, &workspace, &first_session)
             .expect("empty visible sessions should not block the first prompted session");
+    }
+
+    #[test]
+    fn tool_call_honors_launch_binding_when_another_session_prompts_after_launch() {
+        let db = Db::open_in_memory().expect("db");
+        let workspace_store = WorkspaceStore::new(db.clone());
+        let session_store = SessionStore::new(db);
+        let workspace = workspace("workspace-1");
+        let mut first_session = session("session-1", &workspace.id);
+        attach_workspace_naming_binding(&mut first_session);
+        let mut second_session = session("session-2", &workspace.id);
+        second_session.last_prompt_at = Some("2026-01-01T00:00:30Z".to_string());
+        workspace_store
+            .insert(&workspace)
+            .expect("insert workspace");
+        session_store
+            .insert(&first_session)
+            .expect("insert session");
+        session_store
+            .insert(&second_session)
+            .expect("insert second session");
+        append_event(&session_store, &first_session.id, 1, "turn_started");
+
+        validate_tool_call(&session_store, &workspace, &first_session)
+            .expect("launch-selected naming session should remain valid during first open turn");
     }
 
     #[test]

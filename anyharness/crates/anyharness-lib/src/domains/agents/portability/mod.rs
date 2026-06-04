@@ -11,6 +11,8 @@ const SAFE_ARTIFACT_FILE_MODE: u32 = 0o600;
 #[cfg(not(unix))]
 const SAFE_ARTIFACT_FILE_MODE: u32 = 0;
 
+mod codex;
+
 #[derive(Debug, Clone)]
 pub struct AgentArtifactFileData {
     pub relative_path: String,
@@ -21,6 +23,7 @@ pub struct AgentArtifactFileData {
 pub fn collect_agent_artifacts(
     session: &SessionRecord,
     workspace_path: &Path,
+    runtime_home: Option<&Path>,
 ) -> anyhow::Result<Vec<AgentArtifactFileData>> {
     let Some(home_dir) = dirs::home_dir() else {
         anyhow::bail!("unable to resolve the current user's home directory");
@@ -28,7 +31,7 @@ pub fn collect_agent_artifacts(
 
     match session.agent_kind.as_str() {
         "claude" => collect_claude_artifacts(&home_dir, session, workspace_path),
-        "codex" => collect_codex_artifacts(&home_dir, session),
+        "codex" => codex::collect_codex_artifacts(&home_dir, runtime_home, session),
         _ => Ok(Vec::new()),
     }
 }
@@ -87,15 +90,19 @@ pub fn validate_session_agent_artifacts(
 pub fn delete_session_agent_artifacts(
     session: &SessionRecord,
     workspace_path: &Path,
+    runtime_home: Option<&Path>,
 ) -> anyhow::Result<()> {
-    let files = collect_agent_artifacts(session, workspace_path)?;
-    if files.is_empty() {
-        return Ok(());
-    }
-
     let Some(home_dir) = dirs::home_dir() else {
         anyhow::bail!("unable to resolve the current user's home directory");
     };
+    if session.agent_kind.as_str() == "codex" {
+        return codex::delete_codex_artifacts(&home_dir, runtime_home, session);
+    }
+
+    let files = collect_agent_artifacts(session, workspace_path, runtime_home)?;
+    if files.is_empty() {
+        return Ok(());
+    }
 
     for file in files {
         let target = match session.agent_kind.as_str() {
@@ -201,28 +208,6 @@ fn install_agent_artifacts(
     }
 
     Ok(())
-}
-
-fn collect_codex_artifacts(
-    home_dir: &Path,
-    session: &SessionRecord,
-) -> anyhow::Result<Vec<AgentArtifactFileData>> {
-    let Some(native_session_id) = session.native_session_id.as_deref() else {
-        return Ok(Vec::new());
-    };
-
-    let sessions_root = home_dir.join(".codex").join("sessions");
-    let Some(rollout_path) = find_codex_rollout_path(&sessions_root, native_session_id)? else {
-        tracing::warn!(
-            session_id = %session.id,
-            native_session_id = %native_session_id,
-            sessions_root = %sessions_root.display(),
-            "Codex rollout file missing; continuing without portable Codex artifacts"
-        );
-        return Ok(Vec::new());
-    };
-
-    Ok(vec![read_file_relative_to_home(home_dir, &rollout_path)?])
 }
 
 fn read_tree_relative_to_home(
@@ -508,7 +493,7 @@ mod tests {
         let home = TempDirGuard::new("missing-codex-rollout");
         let session = codex_session("native-123");
 
-        let artifacts = collect_codex_artifacts(home.path(), &session)
+        let artifacts = codex::collect_codex_artifacts(home.path(), None, &session)
             .expect("missing rollout should not fail");
 
         assert!(artifacts.is_empty());
@@ -523,8 +508,8 @@ mod tests {
         let rollout_path = rollout_dir.join("rollout-native-123.jsonl");
         fs::write(&rollout_path, b"{\"event\":\"ok\"}\n").expect("write rollout");
 
-        let artifacts =
-            collect_codex_artifacts(home.path(), &session).expect("collect rollout artifact");
+        let artifacts = codex::collect_codex_artifacts(home.path(), None, &session)
+            .expect("collect rollout artifact");
 
         assert_eq!(artifacts.len(), 1);
         assert_eq!(
@@ -532,5 +517,32 @@ mod tests {
             ".codex/sessions/2026/rollout-native-123.jsonl"
         );
         assert_eq!(artifacts[0].content, b"{\"event\":\"ok\"}\n");
+    }
+
+    #[test]
+    fn collect_codex_artifacts_reads_runtime_local_codex_home() {
+        let home = TempDirGuard::new("codex-empty-home");
+        let runtime_home = TempDirGuard::new("codex-runtime-home");
+        let session = codex_session("native-123");
+        let rollout_dir = runtime_home
+            .path()
+            .join("agent-auth")
+            .join("codex-local")
+            .join("sessions")
+            .join("2026");
+        fs::create_dir_all(&rollout_dir).expect("create runtime rollout dir");
+        fs::write(rollout_dir.join("rollout-native-123.jsonl"), b"runtime\n")
+            .expect("write runtime rollout");
+
+        let artifacts =
+            codex::collect_codex_artifacts(home.path(), Some(runtime_home.path()), &session)
+                .expect("collect runtime rollout artifact");
+
+        assert_eq!(artifacts.len(), 1);
+        assert_eq!(
+            artifacts[0].relative_path,
+            ".codex/sessions/2026/rollout-native-123.jsonl"
+        );
+        assert_eq!(artifacts[0].content, b"runtime\n");
     }
 }

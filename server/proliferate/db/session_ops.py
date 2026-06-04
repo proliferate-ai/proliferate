@@ -19,14 +19,27 @@ type AfterCommitCallback = Callable[[], Awaitable[None]]
 
 @asynccontextmanager
 async def open_async_session() -> AsyncIterator[AsyncSession]:
-    async with db_engine.async_session_factory() as db:
+    db = db_engine.async_session_factory()
+    try:
         yield db
+    except BaseException:
+        await db_engine.rollback_session(db)
+        raise
+    finally:
+        await db_engine.close_session(db)
 
 
 @asynccontextmanager
 async def open_async_transaction() -> AsyncIterator[AsyncSession]:
-    async with db_engine.async_session_factory() as db, db.begin():
-        yield db
+    db = db_engine.async_session_factory()
+    try:
+        async with db.begin():
+            yield db
+    except BaseException:
+        await db_engine.rollback_session(db)
+        raise
+    finally:
+        await db_engine.close_session(db)
 
 
 async def commit_session(db: AsyncSession) -> None:
@@ -34,7 +47,7 @@ async def commit_session(db: AsyncSession) -> None:
 
 
 async def rollback_session(db: AsyncSession) -> None:
-    await db.rollback()
+    await db_engine.rollback_session(db)
 
 
 async def run_after_commit(

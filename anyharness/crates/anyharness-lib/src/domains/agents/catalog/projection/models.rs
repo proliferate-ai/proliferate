@@ -279,8 +279,7 @@ mod tests {
             Some("composer-2.5-fast")
         );
         assert!(cursor.models.iter().any(|model| {
-            model.id == "claude-opus-4-8-thinking-high"
-                && model.default_opt_in == Some(true)
+            model.id == "claude-opus-4-8-thinking-high" && model.default_opt_in == Some(true)
         }));
         let cursor_default_opt_in_ids = cursor
             .models
@@ -315,10 +314,7 @@ mod tests {
             .iter()
             .find(|config| config.kind == "gemini")
             .expect("gemini registry");
-        assert_eq!(
-            gemini.default_model_id.as_deref(),
-            Some("auto-gemini-3")
-        );
+        assert_eq!(gemini.default_model_id.as_deref(), Some("auto-gemini-3"));
 
         let opencode = registries
             .iter()

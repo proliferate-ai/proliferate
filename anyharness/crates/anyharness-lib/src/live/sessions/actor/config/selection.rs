@@ -39,9 +39,7 @@ pub(in crate::live::sessions::actor) fn pending_config_rank(
             }
         })
         .unwrap_or_else(|| {
-            if config_id == ACP_MODEL_COMPAT_CONFIG_ID
-                && startup_state.has_direct_model_control()
-            {
+            if config_id == ACP_MODEL_COMPAT_CONFIG_ID && startup_state.has_direct_model_control() {
                 NormalizedControlKind::Model
             } else if config_id == LEGACY_MODE_COMPAT_CONFIG_ID
                 && startup_state.has_raw_or_legacy_mode_control()

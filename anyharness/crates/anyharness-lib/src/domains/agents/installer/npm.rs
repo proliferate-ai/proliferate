@@ -20,6 +20,7 @@ pub(super) fn install_managed_npm_package(
     launcher_path: &Path,
     version_override: Option<&str>,
     force_reinstall: bool,
+    launcher_args: &[String],
     path_prefixes: &[PathBuf],
     launcher_env: &std::collections::HashMap<String, String>,
     source: &str,
@@ -83,7 +84,13 @@ pub(super) fn install_managed_npm_package(
         return Err(InstallError::MissingManagedArtifact(exec_path));
     }
 
-    generate_launcher_script(launcher_path, &exec_path, &[], launcher_env, path_prefixes)?;
+    generate_launcher_script(
+        launcher_path,
+        &exec_path,
+        launcher_args,
+        launcher_env,
+        path_prefixes,
+    )?;
 
     let version = installed_npm_package_version(&versioned_package, managed_dir)
         .or_else(|| npm_package_version(&versioned_package));

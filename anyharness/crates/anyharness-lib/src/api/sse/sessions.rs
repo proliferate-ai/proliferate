@@ -58,6 +58,16 @@ pub async fn stream_session(
         measurement_operation_id = latency_fields.measurement_operation_id,
         "[workspace-latency] session.sse.request_received"
     );
+    let session_record = state
+        .session_service
+        .get_session(&session_id)
+        .map_err(|e| ApiError::internal(e.to_string()))?
+        .ok_or_else(|| {
+            ApiError::not_found(
+                format!("Session not found: {session_id}"),
+                "SESSION_NOT_FOUND",
+            )
+        })?;
     let acp_manager = state.acp_manager.clone();
     let live_handle_started = Instant::now();
     let live_handle = acp_manager.get_handle(&session_id).await;
@@ -123,6 +133,7 @@ pub async fn stream_session(
         after_seq,
         backlog_count = backlog.len(),
         has_live_handle = live_handle.is_some(),
+        session_status = %session_record.status,
         elapsed_ms = started.elapsed().as_millis(),
         flow_id = latency_fields.flow_id,
         flow_kind = latency_fields.flow_kind,
@@ -138,11 +149,12 @@ pub async fn stream_session(
 
     let live_stream: BoxStream<'static, Result<Event, Infallible>> = if let Some(rx) = live_rx {
         live_receiver_stream(rx, max_sent_seq.clone())
-    } else {
+    } else if should_wait_for_live_handle_attach(&session_record.status) {
         let session_service = state.session_service.clone();
         tracing::info!(
             session_id = %session_id,
             after_seq,
+            session_status = %session_record.status,
             timeout_ms = LIVE_HANDLE_ATTACH_TIMEOUT.as_millis(),
             "[workspace-latency] session.sse.await_live_handle.start"
         );
@@ -198,6 +210,14 @@ pub async fn stream_session(
                     .boxed()
             })
             .boxed()
+    } else {
+        tracing::info!(
+            session_id = %session_id,
+            after_seq,
+            session_status = %session_record.status,
+            "[workspace-latency] session.sse.await_live_handle.skipped"
+        );
+        stream::empty().boxed()
     };
     let stream = backlog_stream.chain(live_stream).boxed();
 
@@ -227,6 +247,10 @@ async fn wait_for_live_receiver(
         "[workspace-latency] session.sse.await_live_handle.timeout"
     );
     None
+}
+
+fn should_wait_for_live_handle_attach(session_status: &str) -> bool {
+    matches!(session_status, "starting" | "running" | "idle")
 }
 
 fn live_receiver_stream(
@@ -271,4 +295,20 @@ fn envelope_to_event(envelope: SessionEventEnvelope) -> Option<Result<Event, Inf
         .id(envelope.seq.to_string())
         .event(envelope.event.event_type())
         .data(json)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_wait_for_live_handle_attach;
+
+    #[test]
+    fn waits_for_live_handle_for_attachable_live_session_statuses() {
+        assert!(should_wait_for_live_handle_attach("starting"));
+        assert!(should_wait_for_live_handle_attach("running"));
+        assert!(should_wait_for_live_handle_attach("idle"));
+
+        for status in ["completed", "errored", "closed", "unknown"] {
+            assert!(!should_wait_for_live_handle_attach(status));
+        }
+    }
 }
