@@ -45,7 +45,7 @@ blocking runtime path is delivered through the SDK's internal
 `request_user_dialog` control request and does not currently expose a public
 callback for the ACP adapter to answer.
 
-Until that SDK callback exists, AnyHarness does not advertise
+Because the public SDK callback is absent, AnyHarness does not advertise
 `claude.requestUserInput` and the adapter keeps `AskUserQuestion` disallowed.
 This prevents an unsupported control request from failing the turn mid-stream.
 

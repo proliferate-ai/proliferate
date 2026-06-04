@@ -700,7 +700,7 @@ When closing the investigation, update the GitHub issue with:
 - linked PR or deploy
 - whether S3 diagnostics, Sentry, CloudWatch, Linear, or GitHub tracker state
   were checked
-- user-facing follow-up needed
+- user-facing owner needed
 
 Do not include private S3 object names, bundle contents, attachment bodies, or
 raw user diagnostics in the public closeout.

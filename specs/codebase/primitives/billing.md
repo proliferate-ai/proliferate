@@ -67,11 +67,11 @@ Out of scope:
   per-subject opt-in.
 - A managed LLM credits overage path. LLM credits remain hard-
   capped in V1 (per spec 02 §1).
-- Mobile billing UI. Desktop has the canonical billing pane; web
-  gains parity. Mobile defers.
+- Mobile billing UI. Desktop has the canonical billing pane and web gains
+  parity.
 - Per-org compute hard cap distinct from `overage_cap_cents_per_seat`.
-  Today's per-seat cap is the cap; if product needs an additional
-  org-wide ceiling, follow-up spec.
+  Today's per-seat cap is the cap; an additional org-wide ceiling requires a
+  separate product spec.
 
 ## 2. Mental Model
 
@@ -812,7 +812,7 @@ doesn't fully — web uses a subset of the design tokens; spec 08
 already wired `useCloudBilling`-style hooks indirectly via
 existing SDK).
 
-Mobile billing UI is deferred (spec 08 §10 decision #5).
+Mobile billing UI is outside this spec (spec 08 §10 decision #5).
 
 ### 5.9 Vocabulary alignment
 
@@ -930,57 +930,6 @@ apps/desktop/src/components/workspace/shell/sidebar/
 ```
 
 Mobile: no changes in V1.
-
-## 7. Implementation Chunks
-
-```text
-Chunk A  Wake hook integration (smallest first)
-  - load_billing_subject_for_target helper
-  - run_managed_slot_wake_job calls authorize_sandbox_start
-  - failed wake transitions queued commands to failed_delivery
-    with sandbox_wake_blocked + start_block_reason
-  - tests: paused slot + credits_exhausted hold -> command fails
-
-Chunk B  Managed credits budget from plan
-  - _managed_credit_entitlement_budget rewrite
-  - settings.agent_gateway_managed_budget_{free,pro,unlimited}_usd
-  - retire agent_gateway_default_managed_budget_usd
-  - subscription.updated triggers budget reconcile
-  - tests: pro upgrade increases budget; cancel restores free at
-    period end
-
-Chunk C  Free trial dedup
-  - free_cloud_allocation table
-  - ensure_free_cloud_allocation helper
-  - free_trial_v2 grant issuance gated on GitHub identity
-  - reject second-account trial with typed error
-  - tests: same GitHub id across two billing subjects -> deny
-
-Chunk D  Billing envelope in workspace responses + SSE patches
-  - response builder includes billing
-  - publish_billing_patch_for_subject helper
-  - workspace SSE pumps billing_patch events
-  - tests: hold insert publishes patch; clearing publishes again
-
-Chunk E  Web billing UI
-  - mirror Desktop BillingPane structure
-  - hooks in apps/web/src/hooks/access/cloud/billing/
-  - manage/upgrade buttons route to Stripe portal
-
-Chunk F  New webhook events
-  - invoice.upcoming handler
-  - customer.subscription.trial_will_end handler
-  - E2B timeout event closes segment
-
-Chunk G  Sidebar billing badge (small Desktop polish)
-  - workspace listing -> billing envelope -> badge
-  - "Compute exhausted" / "Credits exhausted" / "Payment failed"
-    labels via copy/settings/billing-copy.ts
-
-Chunk H  Tests + smoke
-```
-
-Preferred implementation is one PR per spec. Chunks are review checkpoints inside that PR and may be split only when the split does not leave duplicate models, dead paths, partially wired security checks, or visible inert UI.
 
 ## 8. Acceptance Criteria
 
@@ -1192,99 +1141,3 @@ Manual smoke:
    - usage_segment ended_at matches event.timestamp
    - no billing_hold inserted
 ```
-
-## 10. Final Decisions / Deferred Questions
-
-1. **Should the free trial dedup also gate `team_trial`?**
-
-   V1 only `personal_free` is in use. `team_trial` would gate
-   when teams get a trial. Decision: yes, mirror the personal logic
-   when team trial ships; same table, different `allocation_kind`.
-
-2. **`customer.subscription.deleted` is reason-sensitive.**
-
-   The current handler always applies a payment_failed hold. That's
-   wrong for clean cancellations. Refined rule:
-
-   ```text
-   - Scheduled cancel reaches period end (cancel_at_period_end=true
-     terminating naturally):
-       downgrade now (no managed-credit budget refresh delay; we
-       are at the period boundary anyway). NO payment_failed hold.
-
-   - Payment failure / Stripe deletion driven by unpaid state
-     (subscription.status was 'unpaid' or 'past_due' before
-     deletion):
-       apply payment_failed hold. Keep current managed-credit
-       budget until current_period_end (already paid for).
-       At period_end the budget downgrades anyway.
-
-   - Immediate admin/user cancellation before period end
-     (Stripe effective_at < current_period_end):
-       honor Stripe's effective end. If no paid entitlement
-       remains for the rest of the period, downgrade immediately.
-       Apply payment_failed hold only if the cancellation was
-       driven by a payment problem.
-   ```
-
-   The handler reads `subscription.cancellation_details.reason`
-   from Stripe (when set) plus the prior `subscription.status` to
-   decide.
-
-3. **Mobile billing UI in V1?**
-
-   No. Spec 08 already deferred. Mobile users tap a "Manage in
-   web" deep-link that opens app.proliferate.ai/settings on the
-   browser (which then opens Stripe portal).
-
-4. **Should the GitHub-identity dedup also apply to anonymous-
-   to-authenticated transitions (e.g. user signs up email-first
-   then links GitHub)?**
-
-   Yes, at link-time — but **do not refuse the GitHub link
-   itself**. The dedup check denies the *free trial allocation*,
-   not the identity link.
-
-   Concretely, on the GitHub-link path:
-     1. Link the OAuth identity normally. (Cross-account linking
-        of the same GitHub identity to a second Proliferate user
-        is handled by the auth-identity uniqueness path, which is
-        a separate concern.)
-     2. After linking, run `ensure_free_cloud_allocation` for the
-        user's billing subject.
-     3. If the GitHub identity has already allocated a free trial
-        on a different `billing_subject_id`: do NOT issue a new
-        `free_trial_v2` grant. Surface
-        `github_identity_already_used` in the UI so the user
-        knows why they aren't on the trial. The link itself
-        remains intact.
-
-   This protects against the "create account with email,
-   exhaust trial, link GitHub later" abuse without blocking
-   legitimate identity linking (e.g. a user adopting GitHub
-   sign-in for an account whose trial is already in flight on a
-   matching identity).
-
-5. **Should `invoice.upcoming` and `trial_will_end` immediately
-   publish billing patches, or batch?**
-
-   Decision: immediate publish. UI surfaces these as banners; latency
-   matters more than throughput here.
-
-6. **Should the LLM credits hard cap stay forever, or is V2
-   overage path eventually allowed?**
-
-   Spec 02 §1 keeps managed LLM credits hard-capped. V2 with
-   per-org spend cap + opt-in overage is conceivable; deferred to
-   product decision. Schema is forward-compatible (the
-   `agent_gateway_budget_subject` already has a `status` enum
-   that can grow `overage_enabled` later).
-
-7. **Should the new `agent_gateway_managed_budget_*_usd` settings
-   be per-deployment (self-hosted operators choose) or per-plan
-   constants?**
-
-   Both. Plan constants are the canonical defaults; per-deploy
-   settings override (especially useful for self-hosted who may
-   ship without managed credits at all). Existing pattern in
-   `policy.py` and constants matches.

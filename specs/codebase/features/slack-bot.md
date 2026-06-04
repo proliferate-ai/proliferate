@@ -47,14 +47,12 @@ In scope:
 
 Out of scope:
 
-- Slash commands (V1 is `@mention` only). Slash commands fit the
-  same handler but are a follow-up.
-- Per-channel routing rules (allowlist is org-wide; per-channel is
-  a follow-up).
+- Slash commands. V1 is `@mention` only.
+- Per-channel routing rules. V1 uses an org-wide allowlist.
 - Live (token-by-token) streaming to Slack threads. V1 posts on
   end-of-turn and on completed tool-summary boundaries only.
 - Interactive Slack components (buttons, modals) beyond the basic
-  ack/done messages. Follow-up.
+  ack/done messages.
 - Multi-org Slack workspace installs. One Slack workspace can be
   connected to one Proliferate organization in V1.
 - Slack as a personal automation entrypoint. Slack is team-only.
@@ -869,66 +867,6 @@ apps/desktop/src/hooks/access/cloud/slack/                                (new)
   use-slack-repo-routing-profiles.ts
 ```
 
-## 7. Implementation Chunks
-
-```text
-Chunk A  Slack DB models
-  - slack_workspace_connection
-  - slack_bot_config
-  - slack_thread_work
-  - slack_event_envelope_seen
-  - slack_outbound_message_queue
-  - cloud_repo_routing_profile
-  - cloud_repo_config owner_scope extension
-  - one migration
-
-Chunk B  OAuth install flow
-  - GET /v1/cloud/slack/oauth/start  -> redirect
-  - GET /v1/cloud/slack/oauth/callback -> exchange + persist
-  - signed state HMAC; expiry 10m
-  - settings additions
-
-Chunk C  Inbound event handler
-  - POST /v1/cloud/slack/events
-  - signature.py HMAC verify
-  - parse + dedupe via slack_event_envelope_seen
-  - enqueue slack_inbound_event_job and defer worker/main.py entry point
-  - 200 OK fast path
-
-Chunk D  Mention handler + thread follow-up handler
-  - worker/events.py background processor for inbound jobs
-  - ensure_organization_sandbox_profile
-  - repo router (fixed + auto)
-  - managed_profile_launch with origin='slack'
-  - slack_thread_work insert
-  - ack message via outbound queue
-  - worker/commands.py start_session + send_prompt enqueue
-  - follow-up: send_prompt on existing session
-
-Chunk E  End-of-turn hook + post-session processor
-  - END_OF_TURN_KINDS in events/service.py
-  - enqueue_post_session_event after _apply_projection
-  - worker/post_session.py looks up slack_thread_work; formats reply;
-    inserts into outbound queue
-
-Chunk F  Outbound queue + sender
-  - worker/main.py periodic entry point
-  - worker/outbound.py sender
-  - Slack chat.postMessage call (httpx)
-  - rate-limit/Retry-After handling
-  - exponential backoff
-  - status transitions
-
-Chunk G  Desktop UI
-  - SlackBotPane sections (replace stub)
-  - hooks
-  - use AgentRunConfigSelector + CloudRepoConfigSelector +
-    RuntimeReadinessPanel primitives
-  - admin gate via useIsAdmin
-
-Chunk H  Tests + smoke
-```
-
 ## 8. Acceptance Criteria
 
 1. `slack_workspace_connection` exists with UNIQUE
@@ -1087,7 +1025,7 @@ Manual smoke:
    - Slack returns Retry-After: 5
    - outbound row stays queued; next_attempt_at = now + 5s
    - attempt count NOT incremented (rate limits aren't failures)
-   - eventually sends
+   - sends after retry
 
 7. Auto repo routing - undecidable
    - org has 3 repos; user mention has no keyword hits
@@ -1102,80 +1040,3 @@ Manual smoke:
    - settings UI shows banner
    - inbound events return 200 but skip processing; no work created
 ```
-
-## 10. Final Decisions / Deferred Questions
-
-1. **Slack user → Proliferate user identity linking.**
-
-   When a user @mentions the bot, the event carries a
-   `slack_user_id`. Today we don't have an `OAuthIdentity` row
-   for Slack (only GitHub/Google/Apple). For V1, the bot acts on
-   behalf of the org for `shared_unclaimed` work; the Slack user
-   id is recorded in `authorization_context_json` for audit but
-   not resolved.
-
-   Implications:
-     - claiming works because any org member can claim
-       (spec 05); the Slack user can claim via Cloud once they
-       sign in
-     - if a non-org-member's slack_user_id appears (Slack
-       Connect / guest), the bot should ignore the event. V1
-       check: only act when the Slack team_id matches an
-       installed connection AND the channel is allowed.
-
-   Decision: defer identity-linking to a follow-up. V1 explicitly
-   does not resolve Slack -> Proliferate user; the trail in
-   `authorization_context_json` is enough for audit.
-
-2. **Slash commands and interactive components.**
-
-   The mention path is enough for V1. Slash commands and buttons
-   (e.g. for the auto-router's "which repo?" question) require
-   Slack interactive endpoints (`/interactivity` payload format).
-   Decision: defer. The "undecidable" fallback in V1 is a text reply
-   asking the user to add a `--repo` hint.
-
-3. **One Slack workspace per Proliferate org, or many?**
-
-   V1: one. Multi-team installation under a single org adds
-   significant complexity (which bot config applies; which token
-   to use for outbound). If demand arises, lift the UNIQUE on
-   `(organization_id)` and add a connection selector.
-
-4. **Per-channel routing rules.**
-
-   `allowed_slack_channel_ids` is org-wide. Per-channel routing
-   (e.g. #frontend → frontend repo) is a follow-up: add a
-   `slack_channel_routing` table referencing `slack_bot_config`
-   and `cloud_repo_config`. Decision: defer; the auto-router covers
-   the same intent without channel-pinning.
-
-5. **README cache freshness.**
-
-   `cloud_repo_routing_profile.cached_at` + a 24h refresh job is
-   the V1 plan. If repos change often and the router routes wrong,
-   admins can edit `description` manually. Decision: keep the cache
-   refresh simple; trust admins for ground truth via the description
-   field.
-
-6. **End-of-turn streaming.**
-
-   V1 posts on completed turn boundaries. Live streaming (one
-   message per token) is bandwidth-heavy and runs into Slack's
-   chat.update edit limits. Decision: ship turn-boundary posting;
-   add live streaming behind a feature flag when usage data
-   demands it.
-
-7. **Cascade attempt cap for Slack runs.**
-
-   `slack_run_cascade_max_attempts` defaults 3. Same as
-   automations. Decision: keep symmetric.
-
-8. **Should Slack have per-org outbound rate overrides?**
-
-   For ops, sometimes one org needs a lower rate (rate-limited by
-   Slack at the app level). Decision: keep the rate global in V1
-   (`settings.slack_outbound_rate_per_team_per_sec`). If per-org
-   override is needed later, add an `outbound_rate_per_sec`
-   column to `slack_bot_config` rather than introducing a generic
-   jsonb table just for that one field.

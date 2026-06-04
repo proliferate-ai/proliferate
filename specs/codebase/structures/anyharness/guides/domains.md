@@ -304,10 +304,6 @@ domains/sessions/subagents/session_extension.rs
 domains/sessions/workspace_naming/session_extension.rs
 ```
 
-Current implementations are still transitional in places:
-`domains/cowork/runtime.rs`, `domains/reviews/hooks.rs`,
-`domains/sessions/subagents/hooks.rs`, and `domains/sessions/workspace_naming/hooks.rs`.
-
 `app/` wires implementations into the core. The core domain depends only on the
 trait.
 

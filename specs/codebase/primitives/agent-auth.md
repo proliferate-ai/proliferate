@@ -42,7 +42,7 @@ In scope:
 Out of scope:
 
 - BYOK provider validation (Anthropic API key, OpenAI API key, Bedrock
-  STS assume-role, OpenAI-compatible live probing). Deferred to a V2
+  STS assume-role, OpenAI-compatible live probing). This belongs to the V2
   product-scope decision.
 - Self-hosted Bifrost lifecycle.
 - Additional per-request usage ledger surfaces beyond the Bifrost usage importer.
@@ -344,7 +344,7 @@ env var name today (the gap in §4.2).
 apps/desktop/src/components/settings/panes/agent-authentication/CloudAgentAuthLibrary.tsx
 apps/desktop/src/components/settings/panes/compute/ComputeTargetAgentAuthCard.tsx
 apps/desktop/src/hooks/access/cloud/agent-auth/use-agent-auth.ts
-  (transitional shim re-exporting from @proliferate/cloud-sdk-react)
+  (re-exporting from @proliferate/cloud-sdk-react)
 apps/desktop/src/lib/domain/agent-auth/agent-auth-presentation.ts
 apps/desktop/src/config/agent-auth.ts
   -- AGENT_GATEWAY_BYOK_ENABLED = false   (hardcoded today; gap in §4.2)
@@ -769,17 +769,16 @@ apps/desktop/src/lib/access/cloud/agent-auth-sync.ts
   surface needs_resync in CloudAgentAuthLibrary
 ```
 
-Spec 02 ships the framework + the desktop_sync signals. Provider 401
-detection and harness-native checks ship as later phases (cheap once the
-framework exists).
+Spec 02 owns the framework and the desktop-sync signals. Provider 401 detection
+and harness-native checks belong to the validation policy layer.
 
-### 5.9 BYOK gating (deferred to V2 product decision)
+### 5.9 BYOK gating
 
 The schema and dormant service code exist; UI hides BYOK behind the
 capability flag. This spec does NOT make BYOK launchable. The capability
 API lets self-hosted operators enable BYOK explicitly.
 
-When BYOK is enabled (future PR):
+When BYOK is enabled by product capability:
 
 ```text
 - live validation per provider (Anthropic /models, OpenAI /models,
@@ -1022,68 +1021,6 @@ apps/desktop/src/hooks/access/cloud/agent-auth/
 
 Tests in §9.
 
-## 7. Implementation Phases
-
-Preferred implementation is one PR per spec. Chunks are review
-checkpoints inside that PR and may be split only when the split does
-not leave duplicate models, dead paths, partially wired security
-checks, or visible inert UI. Phases here describe build-order inside
-that PR, not staged rollout.
-
-```text
-Chunk A  Rebind to spec 00
-  - drop SandboxProfile.managed_target_id readers
-  - load_primary_target_for_profile helper using
-    cloud_targets.profile_target_role = 'primary'
-  - update all agent-auth store/service references to the renamed
-    sandbox_profile_target_state columns
-
-Chunk B  Worker scope synthesis + AnyHarness no-selection fail-closed
-  - Cloud command builder populates sandboxProfileId +
-    requiredAgentAuthRevision on start_session / send_prompt
-  - worker dispatcher synthesizes AgentAuthExternalScope on start_session
-  - AnyHarness AGENT_AUTH_SELECTION_REQUIRED typed error
-  - end-to-end test: scoped launch fails closed when no selection
-
-Chunk C  Cleanup-on-revoke (conservative)
-  - server emits cleanup_paths in plan ONLY on revoke / share-revoke /
-    profile-disabled
-  - worker executes cleanup under allowlist; aborts apply on
-    out-of-allowlist paths
-  - status report includes applied_cleanup_paths
-  - tests for revoke -> file removed; share revoke -> file removed;
-    selection replacement -> no cleanup emitted
-
-Chunk D  Protected env allowlist
-  - per (agent_kind, materialization_mode) allowlist module
-  - server validates before persisting plan
-  - worker validates defense-in-depth
-  - AnyHarness validates on apply
-  - tests for valid combos pass; invalid combos rejected
-
-Chunk E  Proactive grant rotation
-  - reconciler tick reconcile_runtime_grant_freshness
-  - refresh_window = 2 days; refresh when expires_at <= now + refresh_window
-  - reuses existing reconciler-enabled gate
-
-Chunk F  Capability API + Desktop selector cleanup
-  - GET /v1/cloud/capabilities
-  - Desktop hooks + selectors over capabilities snapshot
-  - remove hardcoded AGENT_GATEWAY_BYOK_ENABLED
-  - operator runbook update (specs/developing/deploying/self-hosted-deploy.md)
-
-Chunk G  Freshness framework + Desktop sync signals
-  - freshness.py module
-  - apply_signal hooks at Desktop sync sites
-  - CloudAgentAuthLibrary surfaces needs_resync
-
-Follow-ups (separate PRs, scope additions, not migration ceremony)
-  - provider 401 detection at the gateway (feeds freshness signals)
-  - OpenCode native sync via Desktop agent-auth export
-  - BYOK enablement (V2 product decision; live validation and Bifrost key
-    isolation)
-```
-
 ## 8. Acceptance Criteria
 
 1. `SandboxProfile.managed_target_id` is no longer read by agent-auth
@@ -1304,60 +1241,3 @@ Manual smoke cases:
      -> profile target state apply still 'applied' for that revision but
         the next scoped launch fails closed; UI prompts reconnect
 ```
-
-## 10. Final Decisions / Deferred Questions
-
-1. **Should `auth_status != 'ready'` on a publicized MCP be blocker or
-   warning?** That belongs in spec 01 — answered there. For agent auth,
-   credentials with `status != 'ready'` always block selection writes
-   in V1.
-
-2. **Should the rename of agent-auth target state columns ship inside
-   the spec 00 migration or as a Phase 0 follow-up here?**
-
-   Decision: ship in spec 00's migration so the agent-auth service does not
-   live across two table shapes. Spec 02's Phase 0 is purely the
-   Python/Rust code path update.
-
-3. **Where does the freshness framework run for provider 401 detection?**
-
-   Deferred to a follow-up PR after this spec ships. When added, the
-   integration point will be the cloud agent-auth gateway response layer
-   (`server/proliferate/server/cloud/agent_auth/`) feeding back via
-   `freshness.apply_signal` on the credential. Spec 02 ships the
-   framework + Desktop sync signals only; the 401 path is a clean
-   addition with no rework needed.
-
-4. **Cleanup of revoked synced files in a new sandbox slot?**
-
-   The new slot starts empty, so no cleanup is required there. But the
-   `last_applied_at` audit trail should still record that no cleanup ran
-   because the slot is fresh.
-
-5. **Should the capability API also expose runtime config flags
-   (per-spec-01)?**
-
-   Decision: keep `GET /v1/cloud/capabilities` narrow to gateway/agent-auth
-   in V1. Spec 01 can add a sibling endpoint or expand this one in
-   Phase 5; either is fine.
-
-6. **Should V1 allow shared sandboxes to select synced files at all?**
-
-   Yes, gated by `agent_auth_credential_share`. The product reason is
-   that some orgs only have native CLI auth available; managed credits
-   may not cover all harnesses. The share consent flow is the
-   user-protection control.
-
-7. **Should we add a `force_restart_required` query parameter on the
-   selection PUT for admins?**
-
-   Decision: yes — admin "force rotate" is a known UX need. Default false;
-   when true, bump revision and queue `refresh_agent_auth_config` with
-   `force_restart=true`.
-
-8. **Should `included_budget_usd` be moved out of
-   `settings.agent_gateway_default_managed_budget_usd` in this spec?**
-
-   No — that is spec 09's call (plan/entitlement). This spec keeps the
-   stand-in and the capability API reflects whatever value is in
-   effect.

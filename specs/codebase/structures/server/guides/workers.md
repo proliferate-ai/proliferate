@@ -248,29 +248,6 @@ process entry, scheduler loop, worker-facing orchestration, and one or more
 server-side executors. The promoted shape should separate API-facing
 operations from worker-process operations.
 
-### Migration exception
-
-```text
-server/<domain>/
-  api.py
-  service.py                    # API-facing service
-  models.py
-  worker.py                     # process entry point
-  schedule.py                   # pure recurrence logic in the wrong layer
-  cloud_executor.py             # worker-process executor implementation
-  <external_executor_surface>.py # API-facing surface for an external executor
-```
-
-This flat shape is an exception because:
-
-- Pure parsing logic belongs in `domain/`, not at the worker-shaped layer.
-- Worker-process executors and scheduler logic sit alongside API-facing
-  service code with no organizational separation.
-- API-facing services for external executors must not be mistaken for
-  server-side worker executors.
-
-### Canonical shape
-
 ```text
 server/<domain>/
   api.py                         # API routes
@@ -321,21 +298,3 @@ The parent `service.py` remains API-facing. Worker-process concerns move into
   both at the same nesting.
 - A worker subfolder with only `main.py`. Promote when there's substantial
   content; otherwise keep `worker.py` at the parent.
-
-## Migration Exceptions
-
-Existing domains may still keep worker-only files at the parent domain level.
-When promoting that layout to `worker/`:
-
-1. Identify worker-only files (executors, scheduler loop bodies, queue
-   handlers).
-2. Identify pure logic that's shared between API and worker — move to
-   `domain/`.
-3. Create `worker/` and move worker-only files inside.
-4. Create `worker/main.py` for the process entry point. The old `worker.py`
-   becomes `worker/main.py`.
-5. Create `worker/service.py` for worker-facing orchestration extracted
-   from the old worker file or executors.
-6. Verify no file at the parent level still does worker-only work.
-7. Verify both `service.py` files don't share names with each other for the
-   same operation (each owns its surface).

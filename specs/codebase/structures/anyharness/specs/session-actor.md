@@ -40,8 +40,7 @@ mechanics currently embedded in actor startup paths.
 live/sessions/handle.rs owns the public command/subscription port into one
 actor.
 
-acp/session_actor.rs is deleted, or exists only as a temporary compatibility
-re-export during the same migration PR and is deleted before the PR is done.
+acp/session_actor.rs is deleted. No top-level actor behavior remains there.
 ```
 
 Do not stop after moving types, small helpers, or diagnostics out of the old

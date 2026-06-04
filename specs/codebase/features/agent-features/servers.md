@@ -123,8 +123,7 @@ domains/computer_use/mcp/
 domains/browser/mcp/
 ```
 
-Legacy migration notes may mention old `mcp_server/` paths. New product MCP
-code uses `mcp/`.
+Product MCP code uses `mcp/`.
 
 ## Shared Protocol Kit
 
@@ -516,8 +515,7 @@ parent session with subagent support
   receives subagents MCP with parent-session scope
 
 cowork session
-  receives artifacts MCP with cowork thread/artifact scope during the
-  transitional cowork-owned artifact implementation
+  receives artifacts MCP with cowork thread/artifact scope
 
 workspace naming session
   receives workspace_naming MCP with workspace/session scope
@@ -568,7 +566,7 @@ Preferred generic endpoint:
 /v1/workspaces/{workspace_id}/sessions/{session_id}/mcp/{product_mcp_id}
 ```
 
-Migration routes may remain temporarily:
+Compatibility aliases:
 
 ```text
 /v1/workspaces/{workspace_id}/sessions/{session_id}/reviews/mcp
@@ -593,8 +591,7 @@ agent MCP client
   -> SessionEventSink persists and broadcasts transcript events
 ```
 
-GET may remain `204 No Content` for endpoint liveness unless a future MCP
-transport requires a different handshake.
+GET returns `204 No Content` for endpoint liveness.
 
 ## Event And Transcript Behavior
 
@@ -743,8 +740,7 @@ Required steps:
 8. Add selection policy in domains/sessions/mcp_bindings/selection.rs.
 9. Add injection behavior in domains/sessions/mcp_bindings/injection.rs if the
    default HTTP injection helper is insufficient.
-10. Add endpoint routing through the generic product MCP endpoint or a temporary
-    explicit route.
+10. Add endpoint routing through the generic product MCP endpoint.
 11. Add UI exposure decision: internal-only or user-selectable.
 12. Add tests for definition, auth, context, tools/list, tools/call, selection,
     injection, and endpoint dispatch.
@@ -816,9 +812,9 @@ domains/<domain>/mcp
   product behavior
 ```
 
-## Migration Acceptance
+## Acceptance
 
-The product MCP structure is fully migrated when:
+The product MCP structure is complete when:
 
 - shared JSON-RPC/product-server scaffolding lives in
   `integrations/mcp/product_server/**`.
@@ -832,7 +828,6 @@ The product MCP structure is fully migrated when:
   `domains/sessions/mcp_bindings/injection.rs` plus product auth wrappers.
 - the actor receives final concrete MCP server configs and has no product MCP
   policy branches.
-- endpoint routing can dispatch by product MCP id through one shared path, even
-  if temporary explicit routes still exist.
+- endpoint routing dispatches by product MCP id through one shared path.
 - tests prove selection, injection, auth, tools/list, and tools/call behavior
   for every product MCP.
