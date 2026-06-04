@@ -1,5 +1,5 @@
 /** Rem value; keep aligned with the chat composer textarea line-height. */
-export const CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM = 1.125;
+export const CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM = 1;
 
 export const WORKSPACE_CHAT_COMPOSER_INPUT = {
   minRows: 2,
