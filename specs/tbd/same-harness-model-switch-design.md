@@ -148,15 +148,47 @@ session* or a *real runtime rejection*.
    (`activeSelection.kind !== agentKind`). `liveSwitchable` can still drive *UI
    hints* (e.g. a label), but must no longer gate session creation.
 
-### Open item to verify before implementing
+### Runtime guard — resolved (the frontend fix is sufficient only for the
+### fully-non-advertising case)
 
-Does the runtime accept a `set_session_model` on the compat config id when the
-provider **did not advertise** that model — i.e. does
-`should_apply_model_via_direct_setter` (`apply.rs`) permit the write, letting the
-provider be the authority? If that guard itself filters on the advertised set, it
-must be relaxed too so the provider (not our projection) is the one that
-accepts/rejects. This is the single dependency that decides whether the frontend
-change is sufficient on its own.
+`apply.rs:397-406` — `should_apply_model_via_direct_setter`:
+
+```rust
+fn should_apply_model_via_direct_setter(startup_state, desired_model_id) -> bool {
+    startup_state.available_models.is_empty()                        // (a) provider advertised NOTHING → allow
+        || startup_state.available_models.iter()
+            .any(|m| m.id == desired_model_id)                       // (b) model IS in advertised set → allow
+}
+```
+
+So the runtime is **authority-deferring only when the advertised set is empty**:
+
+- **Harness advertises nothing** (empty `available_models`): guard returns `true`,
+  `set_session_model` is attempted, the **provider** accepts/rejects. The frontend
+  reactive fix works end-to-end on its own. ✅
+- **Harness advertises a partial set** that excludes the target catalog model: the
+  guard returns `false` ⇒ `apply_model_via_direct_setter` returns `NotApplied`
+  (`apply.rs:384-386`) ⇒ `apply_specific_config_option` rejects with *"not valid for
+  config option"* (`apply.rs:158-165`). The runtime — **not** the provider — does the
+  rejecting, filtering on our own projection.
+- (Same restriction via the select-option path: `select_option_contains_value`,
+  `apply.rs:148-156` / `297-344`.)
+
+**Consequence.** The frontend change alone converts the bug from "silent new chat"
+to "clear *Failed to switch model* toast" in the partial-advertise case — an
+improvement, but still not the in-place switch the principle demands. To make the
+**provider** the sole authority (per §2, any same-harness model is switchable),
+the runtime guard must also be relaxed for the model case:
+
+- Drop the membership requirement in `should_apply_model_via_direct_setter` for the
+  model purpose (always attempt `set_session_model`, let the ACP provider be the one
+  to reject), **and** relax the corresponding `select_option_contains_value`
+  rejection on the model select-option path.
+- Rejection stays clean either way (§4), so attempting-and-deferring is safe.
+
+**Bottom line.** Frontend change = necessary and sufficient for non-advertising
+harnesses; the partial-advertise harnesses additionally need the runtime guard
+relaxed so membership in our projected set stops gating the write.
 
 ---
 
@@ -176,9 +208,13 @@ change is sufficient on its own.
 ## 7. Test plan
 
 - Same harness, model present in live control → switches in place (regression).
-- Same harness, model **absent** from live control (under-advertising harness) →
-  switches in place (the fix).
+- Same harness, harness advertises **nothing** (empty `available_models`) →
+  switches in place via frontend fix alone (runtime guard permits — §5).
+- Same harness, harness advertises a **partial** set excluding the target →
+  switches in place **only after** the runtime guard is relaxed; pre-relaxation,
+  expect a clean *Failed to switch model* toast and **no** new chat.
 - Same harness, single-model live control (`settable == false`) → switches in place.
-- Provider rejects the switch → toast shown, session stays healthy, **no** new chat.
+- Provider genuinely rejects the switch → toast shown, session stays healthy,
+  **no** new chat.
 - Different harness → new chat (unchanged).
 - No active session → new chat / first launch (unchanged).
