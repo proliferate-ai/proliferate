@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
+  CHAT_COMPOSER_INPUT_LINE_HEIGHT_CSS,
   HOME_CHAT_COMPOSER_INPUT,
 } from "@/config/chat";
 import { HomeModePicker } from "@/components/home/screen/HomeModePicker";
@@ -70,6 +70,8 @@ export function HomeNextScreen() {
     launchControlValues: homeLaunchControls.launchControlValues,
     launchTarget: homeNext.launchTarget,
   });
+  const homeComposerInputMaxHeight =
+    `calc(${CHAT_COMPOSER_INPUT_LINE_HEIGHT_CSS} * ${HOME_CHAT_COMPOSER_INPUT.maxRows})`;
 
   const promptTarget = destination === "repository"
     ? homeNext.selectedRepository?.name?.trim()
@@ -112,7 +114,7 @@ export function HomeNextScreen() {
                 className="mt-3 mb-2 flex-grow select-text overflow-y-auto px-4"
                 style={{
                   minHeight: `${HOME_CHAT_COMPOSER_INPUT.minHeightRem}rem`,
-                  maxHeight: `${HOME_CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
+                  maxHeight: homeComposerInputMaxHeight,
                 }}
               >
                 <ComposerTextarea
@@ -130,7 +132,7 @@ export function HomeNextScreen() {
                   autoCapitalize="off"
                   style={{
                     minHeight: `${HOME_CHAT_COMPOSER_INPUT.minHeightRem}rem`,
-                    maxHeight: `${HOME_CHAT_COMPOSER_INPUT.maxRows * CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM}rem`,
+                    maxHeight: homeComposerInputMaxHeight,
                   }}
                 />
               </div>
