@@ -25,7 +25,7 @@ Area-specific rules and workstream inventories live in their owning docs, such
 as:
 
 - `specs/tbd/frontend-structure-alignment-migration.md`
-- `specs/codebase/structures/server/audits/server-structure-hygiene.md`
+- `specs/codebase/structures/server/README.md`
 - `specs/tbd/anyharness-structure-alignment-swarms.md`
 
 Canonical architecture rules remain in each area doc under `specs/codebase/structures/**`
@@ -109,8 +109,6 @@ Examples:
     `specs/codebase/structures/frontend/guides/**`,
     `specs/codebase/structures/frontend/packages/README.md`
 - Server:
-  - area migration plan:
-    `specs/codebase/structures/server/audits/server-structure-hygiene.md`
   - canonical docs:
     `specs/codebase/structures/server/README.md`,
     `specs/codebase/structures/server/guides/**`

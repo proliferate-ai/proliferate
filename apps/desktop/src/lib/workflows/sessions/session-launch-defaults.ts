@@ -88,8 +88,12 @@ export async function applySessionLaunchDefaults({
   const metadataByKey = buildDefaultControlMetadataByKey(
     model?.sessionDefaultControls ?? [],
   );
-  const defaults =
+  const configuredDefaults =
     defaultLiveSessionControlValuesByAgentKind[agentKind] ?? {};
+  const defaults = buildEffectiveDefaultControlValues(
+    metadataByKey,
+    configuredDefaults,
+  );
   if (metadataByKey.size === 0 && !defaults.collaboration_mode?.trim()) {
     return {
       session: attachLiveConfig(workingSession, workingLiveConfig),
@@ -173,6 +177,35 @@ function buildDefaultControlMetadataByKey(
   }
 
   return metadataByKey;
+}
+
+function buildEffectiveDefaultControlValues(
+  metadataByKey: Map<DefaultLiveSessionControlKey, DesktopSessionDefaultControl>,
+  configuredDefaults: Partial<Record<DefaultLiveSessionControlKey, string>>,
+): Partial<Record<DefaultLiveSessionControlKey, string>> {
+  const defaults = { ...configuredDefaults };
+  for (const [controlKey, metadata] of metadataByKey) {
+    if (defaults[controlKey]?.trim()) {
+      continue;
+    }
+    const catalogDefault = catalogDefaultControlValue(metadata);
+    if (catalogDefault) {
+      defaults[controlKey] = catalogDefault;
+    }
+  }
+  return defaults;
+}
+
+function catalogDefaultControlValue(
+  control: DesktopSessionDefaultControl,
+): string | null {
+  const explicitDefault = control.defaultValue?.trim();
+  if (explicitDefault) {
+    return explicitDefault;
+  }
+  return control.values.find((value) => value.isDefault)?.value.trim()
+    || control.values[0]?.value.trim()
+    || null;
 }
 
 function isDefaultLiveSessionControlKey(

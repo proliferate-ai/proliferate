@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::domains::agents::portability::delete_session_agent_artifacts;
@@ -36,6 +36,7 @@ pub struct WorkspacePurgeService {
     operation_gate: Arc<WorkspaceOperationGate>,
     checkout_gate: Arc<CheckoutDeletionGate>,
     preflight_checker: Arc<RetirePreflightChecker>,
+    runtime_home: PathBuf,
 }
 
 impl WorkspacePurgeService {
@@ -47,6 +48,7 @@ impl WorkspacePurgeService {
         operation_gate: Arc<WorkspaceOperationGate>,
         checkout_gate: Arc<CheckoutDeletionGate>,
         preflight_checker: Arc<RetirePreflightChecker>,
+        runtime_home: PathBuf,
     ) -> Self {
         Self {
             workspace_runtime,
@@ -56,6 +58,7 @@ impl WorkspacePurgeService {
             operation_gate,
             checkout_gate,
             preflight_checker,
+            runtime_home,
         }
     }
 
@@ -132,9 +135,14 @@ impl WorkspacePurgeService {
             .collect::<Vec<_>>();
         let artifact_cleanup = {
             let workspace_path = pending.path.clone();
+            let runtime_home = self.runtime_home.clone();
             tokio::task::spawn_blocking(move || {
                 for session in sessions {
-                    delete_session_agent_artifacts(&session, Path::new(&workspace_path))?;
+                    delete_session_agent_artifacts(
+                        &session,
+                        Path::new(&workspace_path),
+                        Some(&runtime_home),
+                    )?;
                 }
                 anyhow::Ok(())
             })

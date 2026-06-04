@@ -1,9 +1,8 @@
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::domains::agents::model::{AgentKind, ResolvedAgent};
+use crate::domains::agents::model::AgentKind;
 use crate::domains::agents::readiness::resolver::resolve_agent_with_env;
 use crate::domains::agents::registry::built_in_registry;
 use crate::domains::sessions::extensions::SessionTurnFinishedContext;
@@ -22,8 +21,8 @@ use crate::live::sessions::SessionStartupStrategy;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 
 use super::{
-    CreateAndStartSessionError, EnsureLiveSessionError, SessionLifecycleError, SessionMcpRefresh,
-    SessionRuntime, StartSessionError,
+    launch_env::build_session_launch_env, CreateAndStartSessionError, EnsureLiveSessionError,
+    SessionLifecycleError, SessionMcpRefresh, SessionRuntime, StartSessionError,
 };
 
 pub(super) fn choose_session_startup_strategy(
@@ -384,7 +383,12 @@ impl SessionRuntime {
             prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.runtime.start_live_session.agent_resolved"
         );
-        let session_launch_env = build_session_launch_env(&resolved_agent);
+        let session_launch_env = build_session_launch_env(
+            &resolved_agent,
+            &self.runtime_home,
+            &agent_auth_overlay.protected_env,
+        )
+        .map_err(StartSessionError::Internal)?;
         let session_store = self.session_service.store().clone();
         let attachment_storage = self.session_service.attachment_storage().clone();
         let mcp_launch = assemble_session_mcp_launch(
@@ -456,25 +460,6 @@ impl SessionRuntime {
 
         Ok((handle, ready.native_session_id))
     }
-}
-
-pub(super) fn build_session_launch_env(resolved_agent: &ResolvedAgent) -> BTreeMap<String, String> {
-    if resolved_agent.descriptor.kind != AgentKind::Claude {
-        return BTreeMap::new();
-    }
-
-    let Some(path) = resolved_agent
-        .native
-        .as_ref()
-        .and_then(|artifact| artifact.path.as_ref())
-    else {
-        return BTreeMap::new();
-    };
-
-    BTreeMap::from([(
-        "CLAUDE_CODE_EXECUTABLE".to_string(),
-        path.to_string_lossy().into_owned(),
-    )])
 }
 
 pub(super) fn map_start_session_error_to_anyhow(error: StartSessionError) -> anyhow::Error {
