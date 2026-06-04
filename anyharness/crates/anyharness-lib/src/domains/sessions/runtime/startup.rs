@@ -387,6 +387,7 @@ impl SessionRuntime {
             &resolved_agent,
             &self.runtime_home,
             &agent_auth_overlay.protected_env,
+            record.requested_model_id.as_deref(),
         )
         .map_err(StartSessionError::Internal)?;
         let session_store = self.session_service.store().clone();

@@ -30,14 +30,25 @@ pub(in crate::live::sessions::actor) async fn try_apply_model_preference(
         find_select_option_by_purpose(&startup_state.config_options, ConfigPurpose::Model)
     {
         let config_id = option.id.to_string();
-        return apply_select_config_option(
+        let option_contains_desired = select_option_contains_value(option, desired_model_id);
+        let outcome = apply_select_config_option(
             conn,
             native_session_id,
             startup_state,
             &config_id,
             desired_model_id,
         )
-        .await;
+        .await?;
+        if outcome == ConfigApplyOutcome::NotApplied && !option_contains_desired {
+            return apply_model_via_direct_setter(
+                conn,
+                native_session_id,
+                startup_state,
+                desired_model_id,
+            )
+            .await;
+        }
+        return Ok(outcome);
     }
 
     apply_model_via_direct_setter(conn, native_session_id, startup_state, desired_model_id).await
@@ -390,6 +401,13 @@ pub(in crate::live::sessions::actor) async fn apply_model_via_direct_setter(
         desired_model_id.to_string(),
     ))
     .await?;
+
+    startup_state.current_model_id = Some(desired_model_id.to_string());
+    set_select_option_current_value_for_purpose(
+        &mut startup_state.config_options,
+        ConfigPurpose::Model,
+        desired_model_id,
+    );
 
     Ok(ConfigApplyOutcome::AppliedRequested)
 }

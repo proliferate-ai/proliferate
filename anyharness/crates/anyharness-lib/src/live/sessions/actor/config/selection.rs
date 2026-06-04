@@ -214,3 +214,23 @@ pub(in crate::live::sessions::actor) fn select_option_contains_value(
         _ => false,
     }
 }
+
+pub(in crate::live::sessions::actor) fn select_option_values(
+    option: &acp::SessionConfigOption,
+) -> Vec<String> {
+    match &option.kind {
+        acp::SessionConfigKind::Select(select) => match &select.options {
+            acp::SessionConfigSelectOptions::Ungrouped(options) => options
+                .iter()
+                .map(|candidate| candidate.value.to_string())
+                .collect(),
+            acp::SessionConfigSelectOptions::Grouped(groups) => groups
+                .iter()
+                .flat_map(|group| group.options.iter())
+                .map(|candidate| candidate.value.to_string())
+                .collect(),
+            _ => Vec::new(),
+        },
+        _ => Vec::new(),
+    }
+}
