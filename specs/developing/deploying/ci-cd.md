@@ -115,7 +115,7 @@ Before deploying:
 5. For user-facing releases, confirm whether the landing page, public docs,
    changelog/release notes, in-app copy, install docs, or support docs need to
    change with the release. Update them before deployment when they are part of
-   the shipped behavior, or record an explicit follow-up when they are not.
+   the shipped behavior, or record the owner when they are not.
 6. Do not print or document secret values. If a secret is invalid, update the
    GitHub environment secret and mention only that it was refreshed.
 
@@ -240,7 +240,7 @@ Confirm the deploy job promoted the expected rolling tag (`staging` or
 ```
 
 When reporting back, include the workflow run URL, commit SHA, surfaces that
-ran, skipped lanes, verification results, release/docs/landing-page follow-up,
+ran, skipped lanes, verification results, release/docs/landing-page ownership,
 and any remaining owner.
 
 ### Failure Rules

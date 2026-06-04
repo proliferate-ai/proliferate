@@ -50,7 +50,7 @@ Each provider doc should answer:
 - what ACP extensions or provider metadata AnyHarness supports
 - what live controls exist and whether they persist
 - how provider-specific events map into AnyHarness transcript surfaces
-- what limitations are intentional so future work does not accidentally remove
+- what limitations are intentional so later changes do not accidentally remove
   safety guards
 
 If a provider rule affects multiple layers, document the provider-specific

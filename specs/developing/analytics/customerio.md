@@ -4,7 +4,7 @@
 Customer.io is Proliferate's server-owned lifecycle messaging integration.
 It identifies a desktop GitHub-authenticated user, tracks the
 `desktop_authenticated` event, and sends a one-time transactional welcome
-email so Customer.io can own any follow-up journeys or communication.
+email so Customer.io can own any post-signup journeys or communication.
 
 ## Used For
 - Upserting a user into Customer.io after successful desktop GitHub auth

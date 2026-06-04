@@ -155,7 +155,7 @@ staircase.
 - It uses `ComposerControlButton`, not ad hoc button treatments.
 - The location control is the only footer control that opens UI, via `PopoverButton` + `ComposerPopoverSurface`; the opened card owns preflight, preparation errors, blockers, and the final handoff action.
 - The detail and branch controls are direct utility actions: local workspaces copy a filesystem path, cloud workspaces copy repository identity, and branch copies the branch name.
-- In-flight workspace mobility replaces the normal footer controls with one inline progress status. Completion, cleanup recovery, and MCP reconnect follow-up use the dedicated `ChatView` overlay.
+- In-flight workspace mobility replaces the normal footer controls with one inline progress status. Completion, cleanup recovery, and MCP reconnect prompts use the dedicated `ChatView` overlay.
 
 ## 3. The three composer-area components
 

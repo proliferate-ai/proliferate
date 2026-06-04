@@ -229,17 +229,15 @@ The 2026-05-20 consistency + critique passes flagged several cross-cutting
 items that span multiple specs and are not fully resolved by any single
 spec. Implementers should treat these as the open coordination work.
 
-1. **`useIsAdmin(org_id)` shape is defined in spec 03 §5.5 but consumed by
-   specs 05, 06, 07, 09 with no shared import contract.** The hook lives
+1. **`useIsAdmin(org_id)` shape is defined in spec 03 §5.5 and consumed by
+   specs 05, 06, 07, 09 through one shared import contract.** The hook lives
    at `apps/desktop/src/hooks/access/cloud/organizations/use-is-admin.ts`
-   (doesn't exist yet). Downstream specs must import from there;
-   anyone who inlines the role check violates spec 03 acceptance #14.
+   Downstream specs must import from there; anyone who inlines the role check
+   violates spec 03 acceptance #14.
 
 2. **`apps/desktop/src/lib/domain/vocabulary.ts` is a hard transitive
-   dependency for specs 04-10.** It doesn't exist yet. If any feature
-   spec ships before spec 03's Chunk E, vocabulary imports fail.
-   Recommendation: ship the vocabulary file as its own small PR ahead
-   of every other UI-touching spec.
+   dependency for specs 04-10.** UI-touching specs import vocabulary from this
+   file instead of creating feature-local copies.
 
 3. **`managed_profile_launch` (spec 04 §6) is now formalized with a
    concrete signature.** Specs 06, 07, 08, 10 import it. If any of them
@@ -308,14 +306,12 @@ Each spec follows this layout:
 4.  Current Repo State            (verified against code at the spec date)
 5.  Target Model — DB / API / Runtime Contracts
 6.  Files To Change
-7.  Implementation Phases / Chunks
-8.  Acceptance Criteria
-9.  Verification / Tests
-10. Final Decisions / Deferred Questions
+7.  Acceptance Criteria
+8.  Verification / Tests
 ```
 
 Each section is grounded in the current repository code as of `2026-05-20`.
-Where a planning note describes something that does not yet exist in code,
-the spec says so explicitly under "Current Repo State" and treats it as new
-work. Section 10 is not a place for unresolved blockers: it records final V1
-decisions and explicitly deferred V2/follow-up questions.
+Where a planning note describes something absent from code, the spec says so
+explicitly under "Current Repo State" and treats it as new work. Section 10 is
+not a place for unresolved blockers: it records final V1 decisions and V2
+decision owners.

@@ -48,9 +48,8 @@ In scope:
 
 Out of scope:
 
-- Push notifications (APNs, FCM). Surface and lifecycle deferred
-  to a follow-up spec; spec 08 adds typed events that a future
-  push system can consume, but no push infrastructure here.
+- Push notifications (APNs, FCM). Spec 08 adds typed events that a push system
+  can consume, but no push infrastructure.
 - Token-by-token live streaming on web/mobile. V1 uses the
   existing session-patch SSE flow; on-turn updates are sufficient
   for the UI. (Live token streams are bandwidth-heavy and add
@@ -280,8 +279,8 @@ for shared cloud work; that is spec 05.
   no SSH variant.
 - Mobile uses fixtures, not live API.
 - No Cowork API key model.
-- No push notifications (deferred; spec 08 emits a typed event
-  the future spec can consume).
+- No push notifications. Spec 08 emits a typed event that a push surface can
+  consume.
 
 ## 5. Target Model
 
@@ -747,21 +746,22 @@ apps/mobile/src/lib/access/cloud/                                 use existing S
 Mobile keeps its in-memory token model. No push notifications in
 V1.
 
-### 5.11 Push notifications (deferred)
+### 5.11 Push notifications
 
 Spec 08 does NOT add APNs / FCM infrastructure. It does emit a
-typed event the future push spec can consume:
+typed event a push surface can consume:
 
 ```text
 post-session-event registry (spec 07 §5.8) already exists.
-Future push spec registers a processor that:
+A push surface registers a processor that:
   - looks up affected users (claimer for claimed; org members for
     shared_unclaimed)
   - looks up their device tokens (future table)
   - posts via APNs/FCM
 ```
 
-The hook is there; the implementation is a follow-up.
+The hook exists so a push system can consume the typed events when that surface
+has an owner.
 
 ### 5.12 SSH variant in `SidebarWorkspaceVariant`
 
@@ -910,53 +910,6 @@ apps/mobile/app.json
 apps/mobile/src/lib/deep-links.ts                                         (new)
 
 apps/mobile/src/lib/fixtures/mobile-fixtures.ts                           kept for tests only
-```
-
-## 7. Implementation Chunks
-
-```text
-Chunk A  Live React hooks
-  - useSessionLive / useWorkspaceLive / useTargetLive
-  - pure reducer
-  - React Query interop (snapshot mirror)
-  - reconnect + StrictMode safety
-
-Chunk B  Workspace listing scope=exposed + response extensions
-  - server: add scope handler; include exposure +
-    last_session_summary in response
-  - SDK: extend types
-  - web + mobile + Desktop consume
-
-Chunk C  Web / mobile transcript + prompt + claim
-  - web ChatPage live transcript + composer
-  - mobile MobileChatScreen live + composer
-  - claim button calls spec 05 endpoint
-  - mobile cuts over from fixtures
-
-Chunk D  Desktop verbs + deep links
-  - context menu: Continue remotely / Disable remote access /
-    Open in web / Open on mobile / Open in Desktop (direct)
-  - deep-link generators (shared module)
-  - mobile universal links + Desktop URL scheme config
-
-Chunk E  "Open in Desktop (direct)" for shared cloud
-  - shared_cloud runtime location in runtime-target.ts
-  - use-direct-attach-token consumer
-  - CTA visibility gates
-
-Chunk F  Workspace sidebar enhancements
-  - ssh variant
-  - personal_cloud / shared_cloud subkinds
-  - exposure / slack / claimed / shared_unclaimed indicators
-
-Chunk G  Cowork API keys
-  - cloud_api_key table
-  - bearer classifier in auth middleware
-  - CRUD endpoints + token mint
-  - auto_cascade query param + handler shared with spec 06
-  - Desktop + web Settings sections
-
-Chunk H  Tests + smoke
 ```
 
 ## 8. Acceptance Criteria
@@ -1176,59 +1129,3 @@ Manual smoke:
    - web/mobile listing drops the workspace
    - Desktop local view unaffected
 ```
-
-## 10. Final Decisions / Deferred Questions
-
-1. **Live token-by-token streaming on web/mobile?**
-
-   V1 uses session-patch SSE. Token streaming would be lighter
-   latency but adds reconnect complexity and bandwidth. Decision:
-   defer until usage data shows the patch cadence is too coarse.
-
-2. **Should mobile keep fixtures around at all?**
-
-   Decision: only for unit tests / Storybook stories. Production
-   reads always go through the Cloud SDK. Remove
-   `mobile-fixtures.ts` from prod bundle paths.
-
-3. **Cowork API key environment (`pk_live_` vs `pk_test_`)?**
-
-   Decision: ship `pk_live_` only in V1. Test-mode keys are useful
-   when there is a sandbox environment to test against; we
-   don't have a separated test surface. Add `pk_test_` if and
-   when ops needs it.
-
-4. **Should the cowork API auto-cascade query param apply to
-   web/mobile?**
-
-   Decision: no. Web/mobile have UI affordances to fix stale state
-   (deep-link to Settings → Compute, or "Open in Desktop"). Auto-
-   cascade is an opt-in for programmatic callers that can't.
-
-5. **Push notification surface in V1?**
-
-   No. Spec 08 stops at the post-session-event registry hook
-   (spec 07 §5.8). A future spec adds device tokens + APNs/FCM.
-
-6. **Multi-org session listing in mobile?**
-
-   Mobile shows the active org's exposed work today. Multi-org
-   picker is a follow-up.
-
-7. **Should `Open in web` and `Open on mobile` collapse into one
-   "Share link" menu item?**
-
-   Decision: separate items. The QR-for-mobile vs URL-for-web flows
-   have different ergonomics; a single dialog with both options
-   is fine if UX prefers.
-
-8. **`shared_cloud` runtime location: how is the AnyHarness URL
-   resolved if `cloud_target_runtime_access` is stale (slot
-   replaced)?**
-
-   The JWT carries `target_id`; AnyHarness checks
-   `target_id == AppState.target_id`. If the slot was replaced
-   and AnyHarness booted with a new target_id, old JWTs fail
-   target check and Desktop refreshes via
-   `use-direct-attach-token`. Spec 05 §10 decision #4 already
-   covered this.

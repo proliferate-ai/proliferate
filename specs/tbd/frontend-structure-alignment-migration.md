@@ -1,6 +1,6 @@
-# Frontend Structure Alignment Migration
+# Frontend Structure Alignment
 
-Status: migration tracking. This document is not a canonical frontend
+Status: alignment planning note. This document is not a canonical frontend
 standard. The canonical rules remain in `specs/codebase/structures/frontend/README.md`,
 the focused guides under `specs/codebase/structures/frontend/guides/`, and
 `specs/codebase/structures/frontend/packages/README.md`.
@@ -28,19 +28,19 @@ doc clarification needed to make the code alignment unambiguous.
 - Prefer narrow PRs with one structure boundary fixed at a time.
 - Do not create new abstractions just to move code. Extract only when the new
   owner is clearer under the frontend docs.
-- When a workstream cannot remove a violation safely, leave a named migration
-  exception with the canonical owner and follow-up workstream.
+- When a workstream cannot remove a violation safely, leave a named exception
+  with the canonical owner and resolution path.
 - The guardrails workstream should merge early in report-only mode so all
   later workstreams can reduce the same inventory.
 
-## Migration Policy Decisions
+## Alignment Policy Decisions
 
 - The existing frontend structure docs are clear enough to start. This
-  migration is primarily code alignment with those docs, not a prerequisite doc
+  alignment is primarily code alignment with those docs, not a prerequisite doc
   rewrite.
-- Temporary migration exceptions are allowed when a workstream cannot remove a
-  violation safely in its PR, but they should be rare. Each exception must name
-  the path, rule, owning workstream, reason, and target follow-up PR or branch.
+- Exceptions are allowed only when a workstream cannot remove a violation
+  safely in its PR, and they must be rare. Each exception must name the path,
+  rule, owning workstream, reason, and resolution owner.
 - Guardrails start in report-only mode and move to enforcement only after the
   remaining exception list is small, intentional, and owned.
 - Product hook folders should move to the existing documented responsibility
@@ -58,8 +58,8 @@ doc clarification needed to make the code alignment unambiguous.
   requires companion hook changes. Hooks gather React, store, access,
   navigation, toast, cache, and telemetry capabilities; workflows receive them.
 - Large-file thresholds guide priority rather than forcing mechanical splits.
-  Split mixed-ownership files first. A pure large file may remain temporarily
-  only with a named reason and owner.
+  Split mixed-ownership files first. A pure large file requires a named reason
+  and owner before it is excluded from a split.
 
 ## PR Series
 
@@ -99,18 +99,18 @@ doc clarification needed to make the code alignment unambiguous.
   - Large frontend files over the documented thresholds.
 - Report command:
   - `python3 scripts/report_frontend_structure.py`
-  - The command is report-only by default and exits zero while the migration
+  - The command is report-only by default and exits zero while the alignment
     inventory is still broad.
-  - `python3 scripts/report_frontend_structure.py --strict` is the future
-    opt-in enforcement mode once remaining violations are small and owned.
+  - `python3 scripts/report_frontend_structure.py --strict` is the opt-in
+    enforcement mode for small, owned violation inventories.
   - The report skips tests, generated output, and declaration files so the
     inventory tracks product source ownership drift.
 - Done when:
   - A local command prints a grouped violation inventory.
   - The report identifies existing violations without failing CI.
-  - Temporary exceptions, if any, include path, rule, owner/workstream, reason,
-    and target follow-up PR or branch.
-  - The output is stable enough for each follow-up PR to show progress.
+  - Exceptions, if any, include path, rule, owner/workstream, reason, and
+    resolution owner.
+  - The output is stable enough for each PR to show progress.
 
 ### `frontend-ui-primitives`
 
@@ -364,7 +364,7 @@ doc clarification needed to make the code alignment unambiguous.
   - High-risk Desktop workspace surfaces have clear owning hooks and render
     components.
   - Large mixed-ownership modules are below the documented threshold or have a
-    named temporary reason and owning follow-up workstream to remain whole.
+    named reason and owner to remain whole.
   - Targeted workspace/file/session tests still pass.
 
 ### `frontend-final-enforcement`
@@ -460,9 +460,9 @@ Implementation expectations:
 - Delete replaced dead code; do not leave duplicate old and new paths.
 - If a rule is ambiguous, make the smallest doc clarification needed in the
   same PR, or report the ambiguity if it would change the stream scope.
-- Temporary migration exceptions are allowed only when removing the violation is
-  unsafe in this PR. Each exception must name path, rule, owner/workstream,
-  reason, and target follow-up PR or branch.
+- Exceptions are allowed only when removing the violation is unsafe in this PR.
+  Each exception must name path, rule, owner/workstream, reason, and resolution
+  owner.
 - Do not preserve nonstandard hook folders by default. Move to documented
   responsibility folders unless you also update the docs with a narrow reason.
 - Do not add raw DOM control exceptions by default. Extend or use
@@ -544,7 +544,7 @@ Finding format:
   - P0: blocks merge, data loss/security/major breakage
   - P1: likely regression or clear doc-contract violation
   - P2: important maintainability/ownership issue
-  - P3: minor issue or follow-up suggestion
+  - P3: minor maintainability suggestion
 - Include file path and exact line when possible.
 - Explain the impact and the requested fix.
 - Do not leave comments for subjective style preferences that are not tied to
@@ -553,7 +553,7 @@ Finding format:
 Final review output:
 
 - Findings, ordered by severity.
-- Open questions, if any.
+- Questions that affect merge readiness, if any.
 - Checks you ran or inspected.
 - Short merge-readiness assessment.
 ```
