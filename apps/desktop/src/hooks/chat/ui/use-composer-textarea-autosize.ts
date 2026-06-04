@@ -74,5 +74,25 @@ export function useComposerTextareaAutosize({
     resizeTextarea();
   }, [resizeTextarea, value]);
 
+  useLayoutEffect(() => {
+    if (typeof MutationObserver === "undefined") {
+      return;
+    }
+
+    const root = document.documentElement;
+    const observer = new MutationObserver(() => {
+      cachedSizingRef.current = null;
+      resizeTextarea();
+    });
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ["style", "data-ui-font-size"],
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [resizeTextarea]);
+
   return { resizeTextarea };
 }
