@@ -10,10 +10,18 @@ archetype decides what it *becomes* in the new system.
 
 | Archetype | Shape | Question it answers | Target in new system |
 | --- | --- | --- | --- |
-| **Scheduler** | poll on a clock | "what's due *now*?" | stays a DB-poll loop; runs in a dedicated process; made HA (single-leader / `redbeat`). Materializes work; does not execute it. |
-| **Reconciler** | periodic idempotent loop | "expected vs actual — fix the gap" | stays a reconciler; **lifted out of the API process**; may *enqueue* the heavy corrective work as tasks instead of doing it inline. |
-| **Task** | a discrete unit of work | "run this one job" | becomes a **Celery task** behind broker + outbox; idempotent on a job id; retried; observable. |
-| **Control-plane API** | request-driven HTTP | "an *external* process wants to claim/heartbeat/report" | **not a worker** — stays API-facing. Out of scope for Celery (dispatch model may converge later). |
+| **Scheduler** | poll on a clock | "what's due *now*?" | a **Beat-fired periodic task** (no bespoke loop) that polls due work and materializes runs + outbox rows; does not execute. HA via `redbeat`. |
+| **Reconciler** | periodic idempotent pass | "expected vs actual — fix the gap" | a **Beat-fired periodic task**; survives only for *external-truth* drift; enqueues heavy corrective work as on-demand tasks. The broker absorbs internal-loss cases, so this set shrinks. |
+| **Task** | a discrete unit of work | "run this one job" | a **Celery task** fired by the outbox relay; idempotent on a job id; retried; observable. |
+| **Control-plane API** | request-driven HTTP | "an *external* process wants to claim/heartbeat/report" | **not a worker** — stays an external-pull API (Postgres-backed claim/lease). Out of scope for Celery. |
+
+**Unified implementation.** In Celery there is one unit — the task — and only
+the *trigger* differs: **Beat** fires the periodic ones (scheduler poll,
+surviving reconciler passes, telemetry); the **outbox relay** fires the
+on-demand ones (execution). So *scheduler* and *reconciler* are not bespoke
+`while True` loops in the target — they are periodic tasks. See the RFC's "Code
+Structure" for the `background/` layout, `beat_schedule.py`, and a reference
+`tasks.py`.
 
 Two cross-cutting facts the sweep revealed:
 
@@ -97,11 +105,27 @@ Tiers 1–2 is gated on the DB session-threading work (Swarm 2/3), because the
 outbox insert must ride in the same caller-owned transaction as the state
 change. Tier 0 has no such dependency.
 
+## Resolved Decisions
+
+- **Reconcilers/schedulers become Beat-fired periodic tasks**, not bespoke
+  loops or lifted loops. (See RFC "Unified Task Model".)
+- **Reconcilers survive only for external-truth drift.** The broker (acks +
+  retries + DLX) absorbs internal lost-work, which is what most current
+  reconcilers compensate for. Billing keeps one; automations likely loses its
+  reconciler entirely (the broker covers stuck runs).
+- **Anonymous telemetry (9): a Beat-fired periodic task** — it's a simple "every
+  N min, send the batch," exactly Beat's job; no lifted loop needed.
+- **Stage pipeline (2): one idempotent task per run** (stages internal),
+  revisit a Celery chain only if stage-level retry isolation proves necessary.
+- **External executors keep the Postgres claim API (items 3, 13).** Do not back
+  it with RabbitMQ: the broker is for connected consumers we push to, not for
+  request/response HTTP pulls; claims/leases are a natural fit for DB rows.
+
 ## Open Questions
 
-1. Do the lifted reconcilers run as one dedicated process or several?
-2. Does cloud command dispatch (item 13) eventually move to the broker, or stay
-   an external-executor claim API indefinitely? (Two distributed-execution
-   models — automations claims and cloud command claims — coexist today.)
-3. Anonymous telemetry (9): Beat-scheduled task vs a lifted periodic loop?
-4. Stage pipeline (item 2): single idempotent task vs Celery chain.
+1. Which queue/fleet runs the periodic (Beat-fired) tasks — a shared `periodic`
+   lane, or per-weight-class lanes?
+2. Does cloud command dispatch (item 13) ever move to the broker, or stay an
+   external-executor claim API indefinitely? (Two distributed-execution models —
+   automations claims and cloud command claims — coexist today.)
+3. Scheduler HA: `redbeat` vs a leader-elected Beat.

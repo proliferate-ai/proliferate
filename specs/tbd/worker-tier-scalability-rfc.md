@@ -96,12 +96,112 @@ recovery, idempotency everywhere, a real scheduler for time.**
 
 ### What does NOT change
 
-- **Reconcilers stay.** They are the correctness backstop; more important at
-  scale, not less. Reconcile-shaped work (drift correction) stays a reconciler,
-  not a task.
+- **External-truth reconcilers stay** (billing provider/usage, AnyHarness setup
+  runs, gateway state). They are the correctness backstop for systems we do not
+  control and that change without notifying us. The broker covers *internal*
+  lost work, so reconcilers shrink to this irreducible external-drift core.
 - **Existing claim/lease/fence primitives** (`automations` run claims,
   `cloud/worker` command leasing, `specs/codebase/primitives/claiming.md`) are
   reused for idempotency, not rebuilt.
+
+### The Unified Task Model
+
+In Celery there is one unit — the task. Only the **trigger** differs:
+
+- **Periodic tasks** are fired by **Beat** on a clock: the scheduler poll
+  ("what's due?"), the surviving reconciler passes ("what's drifted?"), and
+  telemetry sends. A scheduler and a reconciler are *both just Beat-fired
+  periodic tasks* — not bespoke `while True` loops.
+- **On-demand tasks** are fired by the **outbox relay** when work is created:
+  execute a run, wake a slot, send a notification.
+
+So the four archetypes collapse in implementation terms: *scheduler* and
+*reconciler* are periodic tasks; *executor* is an on-demand task; the
+*control-plane API* stays an external-pull HTTP surface (not a task).
+
+### Code Structure
+
+```text
+proliferate/background/
+  celery_app.py        # the single Celery() app
+  config.py            # broker, durability chain, task_routes, queues
+  beat_schedule.py     # periodic triggers (scheduler tick, reconciler passes, telemetry)
+  relay.py             # outbox → enqueue (on-demand triggers)
+  tasks/
+    automations/tasks.py   # schedule_due_runs (Beat) + execute_run (enqueued)
+    billing/tasks.py       # reconcile_pass (Beat)
+    cloud_runtime/tasks.py # wake_slot (enqueued) + setup_reconcile_pass (Beat)
+
+proliferate/server/<domain>/    # UNCHANGED: service.py + domain/ own all logic
+```
+
+`tasks/*` files are thin shells: each task opens its own session at entry,
+threads `db` into a public service function, and is idempotent on its job id.
+No business logic lives in a task.
+
+`beat_schedule.py` — the periodic triggers:
+
+```python
+from celery.schedules import crontab
+
+beat_schedule = {
+    "automations-schedule-tick": {        # the scheduler poll
+        "task": "automations.schedule_due_runs",
+        "schedule": 15.0,
+    },
+    "billing-reconcile": {                # a surviving external-drift reconciler
+        "task": "billing.reconcile_pass",
+        "schedule": 60.0,
+    },
+    "anonymous-telemetry": {
+        "task": "telemetry.send_anonymous_batch",
+        "schedule": crontab(minute="*/5"),
+    },
+}
+```
+
+Reference `tasks/automations/tasks.py` — both trigger types, both thin shells:
+
+```python
+import asyncio
+
+from proliferate.background.celery_app import app
+from proliferate.db import engine
+from proliferate.server.automations import service
+from proliferate.server.automations.worker import service as worker_service
+
+
+# PERIODIC — Beat fires this ~every 15s. The scheduler poll.
+@app.task(name="automations.schedule_due_runs", acks_late=True)
+def schedule_due_runs() -> None:
+    asyncio.run(_schedule_due_runs())
+
+
+async def _schedule_due_runs() -> None:
+    async with engine.async_session_factory() as db, db.begin():
+        await worker_service.run_scheduler_tick(db)   # creates run rows + outbox rows
+
+
+# ON-DEMAND — the relay fires this per pending run. The executor.
+@app.task(
+    name="automations.execute_run",
+    bind=True,
+    acks_late=True,
+    max_retries=5,
+    retry_backoff=True,
+)
+def execute_run(self, run_id: str) -> None:
+    asyncio.run(_execute_run(run_id))                 # idempotent on run_id
+
+
+async def _execute_run(run_id: str) -> None:
+    async with engine.async_session_factory() as db, db.begin():
+        await service.execute_run(db, run_id=run_id)  # stage pipeline lives in service
+```
+
+The scheduler tick writes runs + outbox rows in one transaction; the relay
+later reads committed outbox rows and calls `execute_run.delay(run_id)`. That
+keeps the enqueue transactionally consistent with run creation (no dual write).
 
 ## 4. The Hard Prerequisite (Sequencing Constraint)
 
