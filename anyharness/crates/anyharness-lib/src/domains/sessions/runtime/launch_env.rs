@@ -22,9 +22,10 @@ pub(super) fn build_session_launch_env(
     resolved_agent: &ResolvedAgent,
     runtime_home: &Path,
     protected_agent_auth_env: &BTreeMap<String, String>,
+    requested_model_id: Option<&str>,
 ) -> anyhow::Result<BTreeMap<String, String>> {
     match resolved_agent.descriptor.kind {
-        AgentKind::Claude => build_claude_session_launch_env(resolved_agent),
+        AgentKind::Claude => build_claude_session_launch_env(resolved_agent, requested_model_id),
         AgentKind::Codex => {
             if protected_agent_auth_env.contains_key("CODEX_HOME") {
                 return Ok(BTreeMap::new());
@@ -41,19 +42,29 @@ pub(super) fn build_session_launch_env(
 
 fn build_claude_session_launch_env(
     resolved_agent: &ResolvedAgent,
+    requested_model_id: Option<&str>,
 ) -> anyhow::Result<BTreeMap<String, String>> {
-    let Some(path) = resolved_agent
+    let mut env = BTreeMap::new();
+
+    if let Some(path) = resolved_agent
         .native
         .as_ref()
         .and_then(|artifact| artifact.path.as_ref())
-    else {
-        return Ok(BTreeMap::new());
-    };
+    {
+        env.insert(
+            "CLAUDE_CODE_EXECUTABLE".to_string(),
+            path.to_string_lossy().into_owned(),
+        );
+    }
 
-    Ok(BTreeMap::from([(
-        "CLAUDE_CODE_EXECUTABLE".to_string(),
-        path.to_string_lossy().into_owned(),
-    )]))
+    if let Some(model_id) = requested_model_id
+        .map(str::trim)
+        .filter(|model_id| !model_id.is_empty())
+    {
+        env.insert("ANTHROPIC_MODEL".to_string(), model_id.to_string());
+    }
+
+    Ok(env)
 }
 
 fn prepare_local_codex_home(runtime_home: &Path) -> anyhow::Result<PathBuf> {

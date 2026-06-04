@@ -358,6 +358,25 @@ fn generic_model_request_can_resolve_model_option_by_purpose() {
 }
 
 #[test]
+fn select_option_values_flattens_grouped_options() {
+    let option = acp::SessionConfigOption::select(
+        "model",
+        "Model",
+        "sonnet",
+        vec![acp::SessionConfigSelectGroup::new(
+            "claude",
+            "Claude",
+            vec![
+                acp::SessionConfigSelectOption::new("sonnet", "Sonnet"),
+                acp::SessionConfigSelectOption::new("opus[1m]", "Opus"),
+            ],
+        )],
+    );
+
+    assert_eq!(select_option_values(&option), vec!["sonnet", "opus[1m]"]);
+}
+
+#[test]
 fn model_config_request_rejects_values_outside_live_select_options() {
     let db = Db::open_in_memory().expect("open db");
     let store = SessionStore::new(db);

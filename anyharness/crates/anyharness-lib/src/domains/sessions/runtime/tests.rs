@@ -194,9 +194,31 @@ fn build_session_launch_env_sets_claude_code_executable_for_claude() {
         &resolved_agent(AgentKind::Claude, Some("/tmp/managed/claude")),
         runtime_home.path(),
         &BTreeMap::new(),
+        None,
     )
     .expect("build env");
 
+    assert_eq!(
+        env.get("CLAUDE_CODE_EXECUTABLE").map(String::as_str),
+        Some("/tmp/managed/claude")
+    );
+}
+
+#[test]
+fn build_session_launch_env_sets_requested_model_for_claude() {
+    let runtime_home = TempDirGuard::new("claude-model-home");
+    let env = build_session_launch_env(
+        &resolved_agent(AgentKind::Claude, Some("/tmp/managed/claude")),
+        runtime_home.path(),
+        &BTreeMap::new(),
+        Some("opus[1m]"),
+    )
+    .expect("build env");
+
+    assert_eq!(
+        env.get("ANTHROPIC_MODEL").map(String::as_str),
+        Some("opus[1m]")
+    );
     assert_eq!(
         env.get("CLAUDE_CODE_EXECUTABLE").map(String::as_str),
         Some("/tmp/managed/claude")
@@ -210,10 +232,29 @@ fn build_session_launch_env_ignores_claude_without_native_path() {
         &resolved_agent(AgentKind::Claude, None),
         runtime_home.path(),
         &BTreeMap::new(),
+        None,
     )
     .expect("build env");
 
     assert!(env.is_empty());
+}
+
+#[test]
+fn build_session_launch_env_sets_requested_model_without_claude_native_path() {
+    let runtime_home = TempDirGuard::new("claude-model-only-home");
+    let env = build_session_launch_env(
+        &resolved_agent(AgentKind::Claude, None),
+        runtime_home.path(),
+        &BTreeMap::new(),
+        Some("sonnet"),
+    )
+    .expect("build env");
+
+    assert_eq!(
+        env.get("ANTHROPIC_MODEL").map(String::as_str),
+        Some("sonnet")
+    );
+    assert!(!env.contains_key("CLAUDE_CODE_EXECUTABLE"));
 }
 
 #[test]
@@ -231,6 +272,7 @@ fn build_session_launch_env_sets_clean_codex_home_for_local_codex() {
         &resolved_agent(AgentKind::Codex, Some("/tmp/managed/codex")),
         runtime_home.path(),
         &BTreeMap::new(),
+        None,
     )
     .expect("build env");
 
@@ -262,6 +304,7 @@ fn build_session_launch_env_does_not_override_protected_codex_home() {
         &resolved_agent(AgentKind::Codex, Some("/tmp/managed/codex")),
         runtime_home.path(),
         &protected_env,
+        Some("ignored"),
     )
     .expect("build env");
 
@@ -276,6 +319,7 @@ fn build_session_launch_env_ignores_other_agents() {
         &resolved_agent(AgentKind::Gemini, Some("/tmp/managed/gemini")),
         runtime_home.path(),
         &BTreeMap::new(),
+        Some("ignored"),
     )
     .expect("build env");
 
