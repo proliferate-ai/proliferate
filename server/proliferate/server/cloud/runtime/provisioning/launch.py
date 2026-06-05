@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import secrets
 import shlex
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
@@ -24,6 +25,7 @@ from proliferate.server.cloud.agent_auth.service import (
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.bootstrap import (
     build_detached_supervisor_launch_command,
+    build_runtime_env,
     build_supervisor_config,
     build_worker_config,
     local_anyharness_base_url,
@@ -31,12 +33,21 @@ from proliferate.server.cloud.runtime.bootstrap import (
     worker_config_path,
 )
 from proliferate.server.cloud.runtime.config_sync.runtime_config import apply_remote_runtime_config
+from proliferate.server.cloud.runtime.config_sync.worktree_policy import (
+    sync_cloud_worktree_policy_to_runtime,
+)
+from proliferate.server.cloud.runtime.liveness.health import (
+    verify_runtime_auth_enforced,
+    wait_for_runtime_health,
+)
 from proliferate.server.cloud.runtime.models import (
     CloudProvisionInput,
     ConnectedSandbox,
     ProvisionStep,
+    RuntimeHandshake,
 )
 from proliferate.server.cloud.runtime.provisioning.step_tracker import ProvisionStepTracker
+from proliferate.server.cloud.runtime.provisioning.workspace import prepare_workspace_in_runtime
 from proliferate.server.cloud.runtime.sandbox_exec import (
     assert_command_succeeded,
     run_sandbox_command_logged,
@@ -50,6 +61,7 @@ from proliferate.server.cloud.runtime_config.service import (
 from proliferate.utils.time import utcnow
 
 SetWorkspaceStatus = Callable[..., Awaitable[None]]
+LogRuntimeDiagnostics = Callable[..., Awaitable[None]]
 
 
 async def launch_supervised_runtime_bundle(
@@ -128,6 +140,125 @@ async def launch_supervised_runtime_bundle(
     )
     tracker.complete(target_id=str(enrollment.target_id))
     return enrollment.target_id
+
+
+async def launch_and_connect_runtime(
+    tracker: ProvisionStepTracker,
+    ctx: CloudProvisionInput,
+    provider: SandboxProvider,
+    connected: ConnectedSandbox,
+    *,
+    cloud_base_url: str,
+    set_workspace_status: SetWorkspaceStatus,
+    log_runtime_diagnostics: LogRuntimeDiagnostics,
+) -> tuple[ConnectedSandbox, RuntimeHandshake]:
+    runtime_token = secrets.token_urlsafe(32)
+    runtime_env = build_runtime_env(
+        runtime_token,
+        anyharness_data_key=ctx.anyharness_data_key,
+        target_id=ctx.target_id,
+        repo_env_vars=ctx.repo_env_vars,
+    )
+
+    target_id = await launch_supervised_runtime_bundle(
+        tracker,
+        ctx,
+        provider,
+        connected,
+        runtime_env=runtime_env,
+        runtime_token=runtime_token,
+        cloud_base_url=cloud_base_url,
+    )
+
+    connected = ConnectedSandbox(
+        handle=connected.handle,
+        sandbox=connected.sandbox,
+        endpoint=await provider.resolve_runtime_endpoint(connected.sandbox),
+        runtime_context=connected.runtime_context,
+    )
+
+    await set_workspace_status(
+        ctx.workspace_id,
+        CloudWorkspaceStatus.materializing,
+        detail="Waiting for AnyHarness health",
+    )
+    tracker.begin(
+        ProvisionStep.wait_for_runtime_health,
+        runtime_url=connected.endpoint.runtime_url,
+    )
+    try:
+        await wait_for_runtime_health(
+            connected.endpoint.runtime_url,
+            workspace_id=ctx.workspace_id,
+            required_successes=1,
+            total_attempts=30,
+            delay_seconds=0.5,
+        )
+    except Exception:
+        await log_runtime_diagnostics(
+            "cloud runtime launch diagnostics",
+            provider=provider,
+            connected=connected,
+            workspace_id=ctx.workspace_id,
+        )
+        raise
+    tracker.complete(runtime_url=connected.endpoint.runtime_url)
+    await verify_runtime_auth_enforced(
+        connected.endpoint.runtime_url,
+        runtime_token,
+        workspace_id=ctx.workspace_id,
+    )
+    await set_workspace_status(
+        ctx.workspace_id,
+        CloudWorkspaceStatus.materializing,
+        detail="Waiting for Proliferate Worker enrollment",
+    )
+    tracker.begin(ProvisionStep.start_worker_process, target_id=str(target_id))
+    try:
+        await wait_for_worker_target_online(target_id, workspace_id=ctx.workspace_id)
+    except Exception:
+        await log_runtime_diagnostics(
+            "cloud worker enrollment diagnostics",
+            provider=provider,
+            connected=connected,
+            workspace_id=ctx.workspace_id,
+        )
+        raise
+    tracker.complete(target_id=str(target_id))
+    await request_agent_auth_refresh_and_wait(
+        tracker,
+        ctx,
+        reason="workspace_provision",
+        force_restart=False,
+        set_workspace_status=set_workspace_status,
+    )
+    await refresh_runtime_config_and_apply(
+        tracker,
+        ctx,
+        runtime_url=connected.endpoint.runtime_url,
+        access_token=runtime_token,
+        reason="workspace_provision",
+        set_workspace_status=set_workspace_status,
+    )
+    await sync_cloud_worktree_policy_to_runtime(
+        user_id=ctx.user_id,
+        runtime_url=connected.endpoint.runtime_url,
+        access_token=runtime_token,
+        workspace_id=ctx.workspace_id,
+        run_deferred_startup_cleanup=True,
+        await_deferred_startup_cleanup=False,
+    )
+
+    handshake = await prepare_workspace_in_runtime(
+        tracker,
+        ctx,
+        provider,
+        connected,
+        runtime_token=runtime_token,
+        set_workspace_status=set_workspace_status,
+    )
+
+    return connected, handshake
 
 
 def target_has_current_worker(target: targets_store.CloudTargetSnapshot | None) -> bool:

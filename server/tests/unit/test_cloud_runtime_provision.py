@@ -905,23 +905,21 @@ class TestLaunchAndConnectRuntime:
 
         provider.write_file = _write_file
         provider.resolve_runtime_endpoint = _resolve_runtime_endpoint
-
-        monkeypatch.setattr(runtime_provision, "_set_workspace_status", _set_workspace_status)
         monkeypatch.setattr(
             runtime_launch, "run_sandbox_command_logged", _run_sandbox_command_logged
         )
         monkeypatch.setattr(
             runtime_launch, "assert_command_succeeded", lambda *_args, **_kwargs: None
         )
-        monkeypatch.setattr(runtime_provision, "wait_for_runtime_health", _wait_for_runtime_health)
+        monkeypatch.setattr(runtime_launch, "wait_for_runtime_health", _wait_for_runtime_health)
         monkeypatch.setattr(
-            runtime_provision,
+            runtime_launch,
             "verify_runtime_auth_enforced",
             _verify_runtime_auth_enforced,
         )
         monkeypatch.setattr(
-            runtime_provision,
-            "_wait_for_worker_target_online",
+            runtime_launch,
+            "wait_for_worker_target_online",
             _wait_for_worker_target_online,
         )
         monkeypatch.setattr(runtime_workspace, "reconcile_remote_agents", _reconcile_remote_agents)
@@ -939,18 +937,18 @@ class TestLaunchAndConnectRuntime:
             _prepare_remote_mobility_destination,
         )
         monkeypatch.setattr(
-            runtime_provision,
+            runtime_launch,
             "sync_cloud_worktree_policy_to_runtime",
             _sync_cloud_worktree_policy_to_runtime,
         )
         monkeypatch.setattr(
-            runtime_provision,
-            "_request_agent_auth_refresh_and_wait",
+            runtime_launch,
+            "request_agent_auth_refresh_and_wait",
             _request_agent_auth_refresh_and_wait,
         )
         monkeypatch.setattr(
-            runtime_provision,
-            "_refresh_runtime_config_and_apply",
+            runtime_launch,
+            "refresh_runtime_config_and_apply",
             _refresh_runtime_config_and_apply,
         )
         monkeypatch.setattr(
@@ -965,6 +963,8 @@ class TestLaunchAndConnectRuntime:
             provider,
             connected,
             cloud_base_url="https://worker-control.invalid",
+            set_workspace_status=_set_workspace_status,
+            log_runtime_diagnostics=_set_workspace_status,
         )
 
         assert calls == [
