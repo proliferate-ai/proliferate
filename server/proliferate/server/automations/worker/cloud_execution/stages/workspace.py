@@ -54,7 +54,9 @@ from proliferate.server.automations.worker.cloud_executor_config import (
     automation_branch_name,
 )
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.workspaces.service import create_cloud_workspace_for_automation_run
+from proliferate.server.cloud.workspaces.provisioning.service import (
+    create_cloud_workspace_for_automation_run,
+)
 from proliferate.utils.time import utcnow
 
 

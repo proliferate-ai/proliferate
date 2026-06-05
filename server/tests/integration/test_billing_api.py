@@ -64,7 +64,8 @@ from proliferate.server.billing.service import (
     maybe_create_organization_seat_adjustment as maybe_create_org_seat_adjustment,
     process_pending_seat_adjustments,
 )
-from proliferate.server.cloud.workspaces import service as cloud_service
+from proliferate.server.cloud.workspaces.provisioning import preflight as provisioning_preflight
+from proliferate.server.cloud.workspaces.provisioning import service as provisioning_service
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 
@@ -1959,9 +1960,7 @@ class TestBillingApi:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(
-            cloud_service,
-            "schedule_workspace_provision",
-            lambda _workspace_id, **_kwargs: None,
+            provisioning_service, "schedule_workspace_provision", lambda *_args, **_kwargs: None
         )
         monkeypatch.setattr(settings, "cloud_billing_mode", "enforce")
         monkeypatch.setattr(settings, "cloud_free_sandbox_hours", 1.0)
@@ -1972,7 +1971,7 @@ class TestBillingApi:
                 branches=["main"],
             )
 
-        monkeypatch.setattr(cloud_service, "get_github_repo_branches", _repo_branches)
+        monkeypatch.setattr(provisioning_preflight, "get_github_repo_branches", _repo_branches)
 
         session = await _register_and_login(client, "billing-blocked@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}

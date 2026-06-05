@@ -94,7 +94,7 @@ from proliferate.server.cloud.mobility.models import (
     mobility_workspace_detail_payload,
 )
 from proliferate.server.cloud.repos.service import get_repo_branches_for_user
-from proliferate.server.cloud.workspaces.service import (
+from proliferate.server.cloud.workspaces.provisioning.service import (
     ensure_cloud_workspace_for_existing_branch,
     start_cloud_workspace,
 )
