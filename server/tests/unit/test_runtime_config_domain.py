@@ -19,13 +19,13 @@ from proliferate.server.cloud.runtime_config.domain.manifest import (
     _content_hash,
     compile_runtime_config_manifest,
 )
-from proliferate.server.cloud.runtime_config.domain.resolver import (
+from proliferate.server.cloud.runtime_config.domain.resolver import resolve_runtime_config
+from proliferate.server.cloud.runtime_config.domain.types import (
     McpConnectionSnapshot,
     PluginConfiguredItemSnapshot,
     ResolverInput,
     SandboxProfileResolverSnapshot,
     SkillConfiguredItemSnapshot,
-    resolve_runtime_config,
 )
 from proliferate.server.cloud.runtime_config.models import (
     RuntimeConfigArtifactRefModel,
