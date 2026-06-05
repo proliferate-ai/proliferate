@@ -382,7 +382,7 @@ async def test_materialize_workspace_rejects_mismatched_cloud_workspace_result(
     target_id = uuid.UUID(profile["primaryTargetId"])
     profile_record = await agent_auth_store.get_sandbox_profile(db_session, profile_id)
     assert profile_record is not None
-    sandbox = await ensure_managed_sandbox_for_target(
+    await ensure_managed_sandbox_for_target(
         db_session,
         sandbox_profile_id=profile_id,
         target_id=target_id,

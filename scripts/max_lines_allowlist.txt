@@ -16,8 +16,8 @@ anyharness/crates/anyharness-lib/src/domains/mobility/service.rs 1534 existing A
 anyharness/crates/anyharness-lib/src/domains/plans/service.rs 628 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/reviews/service/service_tests.rs 1519 existing AnyHarness oversized test file
 anyharness/crates/anyharness-lib/src/domains/runtime_config/service.rs 1057 existing AnyHarness oversized file
-anyharness/crates/proliferate-worker/src/commands/dispatcher.rs 1718 existing Proliferate worker oversized file
-anyharness/crates/proliferate-worker/src/commands/mapping.rs 954 existing Proliferate worker oversized file
+anyharness/crates/proliferate-worker/src/commands/dispatcher.rs 1710 existing Proliferate worker oversized file
+anyharness/crates/proliferate-worker/src/commands/mapping.rs 953 existing Proliferate worker oversized file
 anyharness/sdk-react/src/hooks/sessions.ts 653 existing SDK React oversized file
 anyharness/sdk/src/reducer/__tests__/transcript.test.ts 1880 existing SDK oversized test file
 anyharness/sdk/src/reducer/transcript.ts 1575 existing SDK oversized file
@@ -27,34 +27,34 @@ apps/desktop/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 663 exis
 apps/desktop/src/lib/workflows/mcp/connector-persistence.test.ts 704 existing desktop oversized test file
 server/proliferate/auth/identity/service.py 809 existing auth service exceeds repo max-lines threshold
 server/proliferate/db/store/automations.py 801 server structure migration debt for oversized store file
-server/proliferate/db/store/billing.py 2602 server structure migration debt for oversized store file
+server/proliferate/db/store/billing.py 2605 server structure migration debt for oversized store file
 server/proliferate/db/store/cloud_mobility.py 1410 server structure migration debt for oversized store file
 server/proliferate/db/store/cloud_repo_config.py 719 server structure migration debt for oversized store file
-server/proliferate/db/store/cloud_sync/commands.py 1689 server structure migration debt for oversized store file
+server/proliferate/db/store/cloud_sync/commands.py 1565 server structure migration debt for oversized store file
 server/proliferate/db/store/cloud_sync/events.py 1109 server structure migration debt for oversized store file
-server/proliferate/db/store/cloud_workspaces.py 1639 server structure migration debt for oversized store file
+server/proliferate/db/store/cloud_workspaces.py 1621 server structure migration debt for oversized store file
 server/proliferate/server/billing/service.py 2459 server structure migration debt for oversized service file during billing orchestration consolidation
 server/proliferate/server/cloud/commands/domain/rules.py 607 server structure migration debt for oversized pure-domain file
-server/proliferate/server/cloud/commands/service.py 1708 server structure migration debt for oversized service file
+server/proliferate/server/cloud/commands/service.py 1648 server structure migration debt for oversized service file
 server/proliferate/server/cloud/mobility/service.py 1208 server structure migration debt for oversized service file
 server/proliferate/server/cloud/runtime/bootstrap.py 922 server structure migration debt for oversized domain-adjacent file
-server/proliferate/server/cloud/runtime/provision.py 1715 server structure migration debt for oversized domain-adjacent file
+server/proliferate/server/cloud/runtime/provision.py 1688 server structure migration debt for oversized domain-adjacent file
 server/proliferate/server/cloud/runtime_config/domain/resolver.py 611 server structure migration debt for oversized pure-domain file
-server/proliferate/server/cloud/runtime_config/service.py 1094 server structure migration debt for oversized service file
-server/proliferate/server/cloud/worker/service.py 1434 server structure migration debt for oversized service file
+server/proliferate/server/cloud/runtime_config/service.py 1096 server structure migration debt for oversized service file
+server/proliferate/server/cloud/worker/service.py 1363 server structure migration debt for oversized service file
 server/proliferate/server/cloud/workspaces/models.py 934 server structure migration debt for oversized API models file
 server/proliferate/server/cloud/workspaces/service.py 2643 server structure migration debt for oversized service file
-server/tests/integration/schema_migration_assertions.py 869 existing server oversized test helper
+server/tests/integration/schema_migration_assertions.py 879 existing server oversized test helper
 server/tests/integration/test_auth_flow.py 2057 existing server oversized integration test
 server/tests/integration/test_billing_accounting.py 871 existing server oversized integration test
-server/tests/integration/test_billing_api.py 2056 existing server oversized integration test
-server/tests/integration/test_cloud_agent_auth_api.py 1670 existing server oversized integration test
-server/tests/integration/test_cloud_api.py 2377 existing server oversized integration test
-server/tests/integration/test_cloud_commands_api.py 5139 existing server oversized integration test
-server/tests/integration/test_sandbox_profile_foundation.py 1400 existing server oversized integration test
+server/tests/integration/test_billing_api.py 2053 existing server oversized integration test
+server/tests/integration/test_cloud_agent_auth_api.py 1664 existing server oversized integration test
+server/tests/integration/test_cloud_api.py 2373 existing server oversized integration test
+server/tests/integration/test_cloud_commands_api.py 4928 existing server oversized integration test
+server/tests/integration/test_sandbox_profile_foundation.py 1170 existing server oversized integration test
 server/tests/integration/test_schema_migrations.py 925 existing server oversized integration test
 server/tests/integration/test_stripe_webhooks.py 1456 existing server oversized integration test
 server/tests/unit/test_cloud_mobility_service.py 806 existing server oversized unit test
-server/tests/unit/test_cloud_runtime_ensure_running.py 876 existing server oversized unit test
-server/tests/unit/test_cloud_runtime_provision.py 1803 existing server oversized unit test
+server/tests/unit/test_cloud_runtime_ensure_running.py 872 existing server oversized unit test
+server/tests/unit/test_cloud_runtime_provision.py 1826 existing server oversized unit test
 server/tests/unit/test_cloud_workspace_service.py 1319 existing server oversized unit test

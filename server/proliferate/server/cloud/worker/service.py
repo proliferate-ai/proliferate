@@ -99,9 +99,6 @@ from proliferate.server.cloud.worker.models import (
     WorkerUpdateStatusResponse,
 )
 from proliferate.server.cloud.worker.target_validation import (
-    require_active_worker_target as _require_active_worker_target,
-)
-from proliferate.server.cloud.worker.target_validation import (
     require_current_worker_target as _require_current_worker_target,
 )
 from proliferate.utils.time import utcnow
