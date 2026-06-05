@@ -31,7 +31,9 @@ from proliferate.server.cloud.runtime_config.models import (
     RuntimeConfigArtifactRefModel,
     RuntimeConfigMaterializationFragment,
 )
-from proliferate.server.cloud.runtime_config.service import _credential_value_from_payload
+from proliferate.server.cloud.runtime_config.domain.credentials import (
+    credential_value_from_payload,
+)
 from proliferate.server.cloud.target_config.models import TargetConfigMaterializationPlan
 
 
@@ -529,14 +531,14 @@ def test_runtime_config_materialization_fragment_alias_round_trips() -> None:
 
 def test_runtime_config_credential_payload_resolution() -> None:
     assert (
-        _credential_value_from_payload(
+        credential_value_from_payload(
             {"secretFields": {"api_key": "secret-value"}},
             "api_key",
         )
         == "secret-value"
     )
     assert (
-        _credential_value_from_payload(
+        credential_value_from_payload(
             {"accessToken": "oauth-token"},
             "access_token",
         )
