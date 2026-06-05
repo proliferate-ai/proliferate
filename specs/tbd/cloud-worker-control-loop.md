@@ -16,6 +16,12 @@ implementation lands, the durable contract should move to
 `specs/codebase/primitives/cloud-worker-control-loop.md` or be folded into
 `specs/codebase/primitives/cloud-commands.md` plus the worker focused guides.
 
+Redis/wake ownership is ratified in
+`specs/tbd/shared-redis-wake-ownership.md`. In short: the worker control-loop
+owns the worker-control doorbell semantics through the shared `PubSubBus`
+contract; worker-tier durable jobs conform to that boundary and keep RabbitMQ,
+not Redis, as the durable job broker.
+
 ## 1. Purpose
 
 Production web requests became slow because the Cloud API DB pool saturated
@@ -339,6 +345,13 @@ Control cursor invalidation must be owned at concrete mutation surfaces:
 | Agent-auth/runtime-config applied state clears a lease blocker | worker report/status service | target-wide | yes |
 
 ### 6.2 Wake Publishing
+
+The shared Redis/wake decision is ratified in
+`specs/tbd/shared-redis-wake-ownership.md`: this control-loop owns the
+worker-control doorbell semantics and uses the shared `PubSubBus` integration
+contract. Worker-tier durable jobs may use the same Redis deployment for
+redbeat/locks/rate limits, but they do not redefine this channel or use Redis
+as the job broker.
 
 Add a worker control channel:
 

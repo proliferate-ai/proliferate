@@ -120,12 +120,14 @@ change. Tier 0 has no such dependency.
 - **External executors keep the Postgres claim API (items 3, 13).** Do not back
   it with RabbitMQ: the broker is for connected consumers we push to, not for
   request/response HTTP pulls; claims/leases are a natural fit for DB rows.
+- **Worker-control doorbells belong to the control-loop.** See
+  `shared-redis-wake-ownership.md`: Celery tasks that change command/target/
+  exposure/projection state publish through the existing worker-control
+  after-commit path, but RabbitMQ does not become the cloud-worker command
+  delivery channel.
 
 ## Open Questions
 
 1. Which queue/fleet runs the periodic (Beat-fired) tasks — a shared `periodic`
    lane, or per-weight-class lanes?
-2. Does cloud command dispatch (item 13) ever move to the broker, or stay an
-   external-executor claim API indefinitely? (Two distributed-execution models —
-   automations claims and cloud command claims — coexist today.)
-3. Scheduler HA: `redbeat` vs a leader-elected Beat.
+2. Scheduler HA: `redbeat` vs a leader-elected Beat.
