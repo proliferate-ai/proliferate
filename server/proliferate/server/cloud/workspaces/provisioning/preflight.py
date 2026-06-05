@@ -18,10 +18,12 @@ from proliferate.db.store.cloud_workspaces import (
     get_existing_managed_cloud_workspace_for_profile,
     load_any_cloud_workspace_for_repo,
 )
-from proliferate.server.billing.models import SandboxStartAuthorization
-from proliferate.server.billing.service import (
+from proliferate.server.billing.authorization import (
     authorize_sandbox_start,
     authorize_sandbox_start_for_billing_subject,
+)
+from proliferate.server.billing.models import SandboxStartAuthorization
+from proliferate.server.billing.snapshots import (
     get_billing_snapshot_for_subject,
     repo_limit_for_billing_snapshot,
 )

@@ -40,7 +40,7 @@ from proliferate.db.store.organization_records import (
 from proliferate.server.billing.seat_reconciliation import (
     maybe_create_organization_seat_adjustment,
 )
-from proliferate.server.billing.service import (
+from proliferate.server.billing.subjects import (
     ensure_organization_billing_subject_state,
     ensure_personal_billing_subject_state,
 )

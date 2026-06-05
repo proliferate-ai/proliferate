@@ -29,7 +29,7 @@ from proliferate.db.store.cloud_runtime_environments import (
 from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.billing.models import BillingSnapshot
-from proliferate.server.billing.service import (
+from proliferate.server.billing.snapshots import (
     get_billing_snapshot_for_subject,
     get_billing_snapshot_for_subject_in_session,
 )

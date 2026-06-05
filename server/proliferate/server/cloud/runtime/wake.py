@@ -25,7 +25,7 @@ from proliferate.db.store.cloud_sync import pending_interactions as pending_inte
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_control as worker_control_store
 from proliferate.integrations.sentry import capture_server_sentry_exception
-from proliferate.server.billing.service import authorize_sandbox_start_for_billing_subject
+from proliferate.server.billing.authorization import authorize_sandbox_start_for_billing_subject
 from proliferate.server.cloud.live.service import (
     publish_command_status_after_commit,
     publish_worker_control_after_commit,
