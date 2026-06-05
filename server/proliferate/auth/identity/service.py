@@ -3,21 +3,14 @@
 from __future__ import annotations
 
 import hashlib
-import hmac
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
-from uuid import UUID
 
 from fastapi import HTTPException, Request
-from fastapi_users.jwt import decode_jwt, generate_jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.identity import providers
-from proliferate.auth.identity.models import (
-    AccountReadinessResponse,
-    AuthSessionResponse,
-    PasswordCredentialResponse,
-)
+from proliferate.auth.identity.sessions import mint_auth_session
 from proliferate.auth.identity.store import (
     consume_auth_challenge,
     create_auth_challenge,
@@ -26,75 +19,30 @@ from proliferate.auth.identity.store import (
     get_identity_by_provider_subject,
     get_user_by_email,
     get_user_by_id,
-    linked_provider_payloads,
     merge_auth_user_into_user,
     mirror_legacy_oauth_account,
     upsert_identity_for_user,
     upsert_provider_grant,
 )
 from proliferate.auth.identity.types import (
-    AUTH_PROVIDERS,
-    AccountReadiness,
     AuthChallengeSnapshot,
     AuthProviderName,
     AuthSession,
     VerifiedProviderIdentity,
 )
-from proliferate.auth.jwt import get_jwt_strategy
-from proliferate.auth.models import (
-    AuthLinkedProvider,
-    AuthPasswordCredential,
-    AuthProviderAvailability,
-    UserRead,
-)
-from proliferate.auth.passwords import (
-    PasswordValidationError,
-    harden_password_failure,
-    hash_password,
-    normalize_password_email,
-    validate_new_password,
-    verify_password,
-)
-from proliferate.auth.pkce import verify_pkce
 from proliferate.config import settings
 from proliferate.constants.auth import (
-    AUTH_CODE_LIFETIME_SECONDS,
     DESKTOP_REDIRECT_SCHEMES,
-    JWT_LIFETIME_SECONDS,
-    PASSWORD_LOGIN_EMAIL_BUCKET,
-    PASSWORD_LOGIN_IP_BUCKET,
-    REFRESH_TOKEN_LIFETIME_SECONDS,
     SUPPORTED_CODE_CHALLENGE_METHODS,
 )
 from proliferate.db.models.auth import User
-from proliferate.db.store.auth import consume_auth_code, create_auth_code
-from proliferate.db.store.auth_passwords import (
-    PasswordLoginBucket,
-    active_password_login_blocks,
-    clear_password_login_failures,
-    get_user_by_normalized_email,
-    record_password_login_failure,
-    update_user_password_hash,
-)
+from proliferate.db.store.auth import create_auth_code
 
 AUTH_CHALLENGE_LIFETIME_SECONDS = 600
-WEB_REFRESH_COOKIE = "proliferate_web_refresh"
-WEB_CSRF_COOKIE = "proliferate_web_csrf"
-WEB_CSRF_HEADER = "x-proliferate-csrf"
-PASSWORD_BAD_CREDENTIALS_MESSAGE = "Email or password is incorrect."
-PASSWORD_RATE_LIMIT_MESSAGE = "Too many attempts. Wait a moment, then try again."
 
 
 def hash_secret(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
-
-
-def hash_password_login_bucket(kind: str, value: str) -> str:
-    return hmac.new(
-        settings.jwt_secret.encode(),
-        f"{kind}:{value}".encode(),
-        hashlib.sha256,
-    ).hexdigest()
 
 
 def append_query(base_url: str, **params: str) -> str:
@@ -165,127 +113,6 @@ def _loopback_origin_aliases(scheme: str, hostname: str | None, port: int | None
 def _ensure_active_user(user: User) -> None:
     if not user.is_active:
         raise HTTPException(status_code=403, detail="User is inactive.")
-
-
-def _ensure_password_auth_enabled() -> None:
-    if not settings.password_auth_enabled:
-        raise HTTPException(status_code=404, detail="Email sign-in is not enabled.")
-
-
-def password_login_buckets(
-    *,
-    email: str,
-    client_ip: str | None,
-) -> tuple[PasswordLoginBucket, ...]:
-    normalized_email = normalize_password_email(email)
-    buckets = [
-        PasswordLoginBucket(
-            kind=PASSWORD_LOGIN_EMAIL_BUCKET,
-            key=hash_password_login_bucket(PASSWORD_LOGIN_EMAIL_BUCKET, normalized_email),
-        )
-    ]
-    if client_ip:
-        normalized_ip = client_ip.strip().lower()
-        buckets.append(
-            PasswordLoginBucket(
-                kind=PASSWORD_LOGIN_IP_BUCKET,
-                key=hash_password_login_bucket(PASSWORD_LOGIN_IP_BUCKET, normalized_ip),
-            )
-        )
-    return tuple(buckets)
-
-
-async def authenticate_password_login(
-    db: AsyncSession,
-    *,
-    email: str,
-    password: str,
-    client_ip: str | None,
-) -> AuthSession:
-    _ensure_password_auth_enabled()
-    normalized_email = normalize_password_email(email)
-    buckets = password_login_buckets(email=normalized_email, client_ip=client_ip)
-    now = datetime.now(UTC)
-    if await active_password_login_blocks(db, buckets=buckets, now=now):
-        raise HTTPException(status_code=429, detail=PASSWORD_RATE_LIMIT_MESSAGE)
-
-    user = await get_user_by_normalized_email(db, normalized_email)
-    if user is None or not user.is_active or user.password_set_at is None:
-        harden_password_failure(password)
-        await record_password_login_failure(db, buckets=buckets, now=now)
-        raise HTTPException(status_code=401, detail=PASSWORD_BAD_CREDENTIALS_MESSAGE)
-
-    verification = verify_password(password, user.hashed_password)
-    if not verification.verified:
-        await record_password_login_failure(db, buckets=buckets, now=now)
-        raise HTTPException(status_code=401, detail=PASSWORD_BAD_CREDENTIALS_MESSAGE)
-
-    if verification.updated_hash is not None:
-        updated = await update_user_password_hash(
-            db,
-            user_id=user.id,
-            hashed_password=verification.updated_hash,
-            password_set_at=_aware_password_set_at(user.password_set_at),
-        )
-        if updated is not None:
-            user = updated
-    await clear_password_login_failures(
-        db,
-        buckets=password_login_buckets(email=normalized_email, client_ip=None),
-    )
-    return await mint_auth_session(db, user=user)
-
-
-async def set_password_credential(
-    db: AsyncSession,
-    *,
-    user: User,
-    current_password: str | None,
-    new_password: str,
-) -> PasswordCredentialResponse:
-    _ensure_password_auth_enabled()
-    if user.password_set_at is not None:
-        if not current_password:
-            raise HTTPException(status_code=400, detail="Current password is required.")
-        verification = verify_password(current_password, user.hashed_password)
-        if not verification.verified:
-            raise HTTPException(status_code=401, detail="Current password is incorrect.")
-
-    try:
-        validate_new_password(new_password)
-    except PasswordValidationError as exc:
-        raise HTTPException(status_code=400, detail=exc.reason) from exc
-
-    now = datetime.now(UTC)
-    updated_user = await update_user_password_hash(
-        db,
-        user_id=user.id,
-        hashed_password=hash_password(new_password),
-        password_set_at=now,
-    )
-    if updated_user is None:
-        raise HTTPException(status_code=400, detail="User not found.")
-    return password_credential_response(updated_user)
-
-
-def password_credential_response(user: User) -> PasswordCredentialResponse:
-    set_at = _password_set_at_iso(user.password_set_at)
-    return PasswordCredentialResponse(enabled=set_at is not None, set_at=set_at)
-
-
-def auth_password_credential(user: User) -> AuthPasswordCredential:
-    set_at = _password_set_at_iso(user.password_set_at)
-    return AuthPasswordCredential(enabled=set_at is not None, set_at=set_at)
-
-
-def _password_set_at_iso(value: datetime | None) -> str | None:
-    if value is None:
-        return None
-    return _aware_password_set_at(value).isoformat()
-
-
-def _aware_password_set_at(value: datetime) -> datetime:
-    return value if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 async def start_provider_auth(
@@ -648,160 +475,3 @@ async def attach_verified_identity(
     if verified.display_name and not user.display_name:
         user.display_name = verified.display_name
     await db.flush()
-
-
-async def exchange_auth_code(
-    db: AsyncSession,
-    *,
-    code: str,
-    code_verifier: str,
-) -> AuthSession:
-    auth_code = await consume_auth_code(db, code=code)
-    if auth_code is None:
-        raise HTTPException(status_code=400, detail="Invalid, expired, or consumed auth code.")
-    if not verify_pkce(
-        code_verifier,
-        auth_code.code_challenge,
-        auth_code.code_challenge_method,
-    ):
-        raise HTTPException(status_code=400, detail="PKCE verification failed.")
-    if _auth_code_expired(auth_code.created_at):
-        raise HTTPException(status_code=400, detail="Auth code expired.")
-    user = await get_user_by_id(db, auth_code.user_id)
-    if user is None:
-        raise HTTPException(status_code=400, detail="User not found.")
-    return await mint_auth_session(db, user=user)
-
-
-def _auth_code_expired(created_at: datetime) -> bool:
-    created = created_at if created_at.tzinfo else created_at.replace(tzinfo=UTC)
-    return datetime.now(UTC) > created + timedelta(seconds=AUTH_CODE_LIFETIME_SECONDS)
-
-
-async def mint_auth_session(db: AsyncSession, *, user: User) -> AuthSession:
-    _ensure_active_user(user)
-    access_token = await get_jwt_strategy().write_token(user)
-    refresh_token = generate_jwt(
-        data={"sub": str(user.id), "aud": "proliferate:refresh"},
-        secret=settings.jwt_secret,
-        lifetime_seconds=REFRESH_TOKEN_LIFETIME_SECONDS,
-    )
-    readiness = await get_account_readiness(db, user_id=user.id)
-    return AuthSession(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        expires_in=JWT_LIFETIME_SECONDS,
-        user_id=user.id,
-        email=user.email,
-        is_active=user.is_active,
-        is_superuser=user.is_superuser,
-        is_verified=user.is_verified,
-        display_name=user.display_name,
-        github_login=user.github_login,
-        avatar_url=user.avatar_url,
-        readiness=readiness,
-    )
-
-
-async def refresh_auth_session(db: AsyncSession, *, refresh_token: str) -> AuthSession:
-    try:
-        payload = decode_jwt(
-            refresh_token,
-            secret=settings.jwt_secret,
-            audience=["proliferate:refresh"],
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=401, detail="Invalid or expired refresh token.") from exc
-    user_id = payload.get("sub")
-    if not isinstance(user_id, str):
-        raise HTTPException(status_code=401, detail="Invalid refresh token payload.")
-    user = await get_user_by_id(db, UUID(user_id))
-    if user is None:
-        raise HTTPException(status_code=401, detail="User not found.")
-    return await mint_auth_session(db, user=user)
-
-
-async def auth_viewer_payload(
-    db: AsyncSession,
-    *,
-    user: User,
-) -> tuple[
-    bool,
-    str,
-    list[AuthLinkedProvider],
-    list[AuthProviderAvailability],
-    AuthPasswordCredential,
-]:
-    readiness = await get_account_readiness(db, user_id=user.id)
-    identities = await linked_provider_payloads(db, user_id=user.id)
-    linked = [
-        AuthLinkedProvider(
-            provider=identity.provider,  # type: ignore[arg-type]
-            connected=True,
-            account_email=identity.email,
-            account_id=identity.provider_subject,
-        )
-        for identity in identities
-    ]
-    connected_providers = {identity.provider for identity in identities}
-    linked.extend(
-        AuthLinkedProvider(
-            provider=provider,
-            connected=False,
-            account_email=None,
-            account_id=None,
-        )
-        for provider in AUTH_PROVIDERS
-        if provider not in connected_providers
-    )
-    availability = [
-        AuthProviderAvailability(
-            provider=provider,  # type: ignore[arg-type]
-            enabled=providers.provider_enabled(provider, surface="web"),  # type: ignore[arg-type]
-            reason=(
-                None if providers.provider_enabled(provider, surface="web") else "not_configured"
-            ),
-        )
-        for provider in ("github", "google", "apple")
-    ]
-    return (
-        readiness.product_ready,
-        "active" if readiness.product_ready else "needs_github",
-        linked,
-        availability,
-        auth_password_credential(user),
-    )
-
-
-def auth_session_response(
-    session: AuthSession,
-    *,
-    include_refresh_token: bool,
-) -> AuthSessionResponse:
-    return AuthSessionResponse(
-        access_token=session.access_token,
-        refresh_token=session.refresh_token if include_refresh_token else None,
-        expires_in=session.expires_in,
-        user=UserRead(
-            id=session.user_id,
-            email=session.email,
-            is_active=session.is_active,
-            is_superuser=session.is_superuser,
-            is_verified=session.is_verified,
-            display_name=session.display_name,
-            github_login=session.github_login,
-            avatar_url=session.avatar_url,
-        ),
-        readiness=readiness_response(session.readiness),
-    )
-
-
-def readiness_response(readiness: AccountReadiness) -> AccountReadinessResponse:
-    return AccountReadinessResponse(
-        product_ready=readiness.product_ready,
-        missing_requirements=list(readiness.missing_requirements),
-        github_identity_id=(
-            str(readiness.github_identity_id) if readiness.github_identity_id else None
-        ),
-        github_grant_status=readiness.github_grant_status,
-    )

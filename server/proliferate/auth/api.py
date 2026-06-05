@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_limited_user
-from proliferate.auth.identity.service import auth_viewer_payload
+from proliferate.auth.identity.sessions import auth_viewer_payload
 from proliferate.auth.models import AuthViewerResponse, UserRead
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
