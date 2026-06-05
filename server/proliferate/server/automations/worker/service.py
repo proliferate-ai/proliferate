@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db.store.automation_run_claims import (
     sweep_expired_dispatching_runs,
 )
-from proliferate.db.store.automations import (
+from proliferate.db.store.automation_runs import (
     AutomationScheduleAdvance,
     AutomationScheduleFields,
     create_due_scheduled_runs_batch,

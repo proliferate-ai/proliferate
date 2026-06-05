@@ -17,7 +17,7 @@ from proliferate.db.models.automations import Automation, AutomationRun
 from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
 from proliferate.db.store.cloud_agent_run_config import CloudAgentRunConfigRecord
-from proliferate.db.store.automations import (
+from proliferate.db.store.automation_runs import (
     AutomationScheduleAdvance,
     create_due_scheduled_runs_batch,
 )

@@ -26,7 +26,6 @@ apps/desktop/src/components/workspace/shell/right-panel/RightPanel.test.tsx 733 
 apps/desktop/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 663 existing desktop oversized test file
 apps/desktop/src/lib/workflows/mcp/connector-persistence.test.ts 704 existing desktop oversized test file
 server/proliferate/auth/identity/service.py 807 existing auth service exceeds repo max-lines threshold
-server/proliferate/db/store/automations.py 816 server structure migration debt for oversized store file
 server/proliferate/db/store/billing.py 2605 server structure migration debt for oversized store file
 server/proliferate/db/store/cloud_workspaces.py 1187 server structure migration debt for oversized store file
 server/proliferate/server/billing/service.py 2459 server structure migration debt for oversized service file during billing orchestration consolidation
