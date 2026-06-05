@@ -19,6 +19,7 @@ from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnviron
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_sandbox_profiles import load_sandbox_profile_by_id
 from proliferate.db.store.cloud_sync import command_records
+from proliferate.db.store.cloud_sync import command_results as command_results_store
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import pending_interactions as pending_interactions_store
 from proliferate.db.store.cloud_sync import targets as targets_store
@@ -107,7 +108,7 @@ async def run_managed_target_wake_job(target_id: UUID, command_id: UUID | None =
                 or _WAKE_BLOCKED_FALLBACK_MESSAGE
             )
             marked_at = utcnow()
-            commands = await commands_store.mark_queued_commands_failed_delivery_for_target(
+            commands = await command_results_store.mark_queued_commands_failed_delivery_for_target(
                 db,
                 target_id=target_id,
                 command_kinds=WAKE_REQUIRED_CLOUD_COMMAND_KINDS,

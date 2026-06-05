@@ -28,7 +28,6 @@ apps/desktop/src/lib/workflows/mcp/connector-persistence.test.ts 704 existing de
 server/proliferate/auth/identity/service.py 807 existing auth service exceeds repo max-lines threshold
 server/proliferate/db/store/automations.py 816 server structure migration debt for oversized store file
 server/proliferate/db/store/billing.py 2605 server structure migration debt for oversized store file
-server/proliferate/db/store/cloud_sync/commands.py 944 server structure migration debt for oversized store file
 server/proliferate/db/store/cloud_workspaces.py 1187 server structure migration debt for oversized store file
 server/proliferate/server/billing/service.py 2459 server structure migration debt for oversized service file during billing orchestration consolidation
 server/tests/integration/schema_migration_assertions.py 878 existing server oversized test helper

@@ -34,7 +34,7 @@ from proliferate.db.store.cloud_sandboxes import (
     mark_managed_sandbox_terminal,
 )
 from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
-from proliferate.db.store.cloud_sync import command_leases, commands as commands_store
+from proliferate.db.store.cloud_sync import command_leases, command_results, commands
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.db.store.cloud_workspaces import (
@@ -415,7 +415,7 @@ async def test_materialize_workspace_rejects_mismatched_cloud_workspace_result(
         origin_json=None,
         template_version="managed-cloud-v1",
     )
-    command = await commands_store.create_command(
+    command = await commands.create_command(
         db_session,
         idempotency_scope="test",
         idempotency_key="materialize-mismatch",
@@ -448,7 +448,7 @@ async def test_materialize_workspace_rejects_mismatched_cloud_workspace_result(
     assert leased.target_id == target_id
 
     mismatched_cloud_workspace_id = uuid.uuid4()
-    result = await commands_store.record_command_result(
+    result = await command_results.record_command_result(
         db_session,
         command_id=command.id,
         worker_id=worker.id,
@@ -519,7 +519,7 @@ async def test_managed_materialize_workspace_requires_cloud_workspace_id(
     assert response.json()["detail"]["code"] == "cloud_command_cloud_workspace_required"
 
     with pytest.raises(RuntimeError):
-        await commands_store.create_command(
+        await commands.create_command(
             db_session,
             idempotency_scope="missing-cloud-workspace",
             idempotency_key="store-create",
@@ -675,7 +675,7 @@ async def test_archived_managed_worker_agent_auth_side_channel_fails_closed(
         force_restart=False,
     )
     assert profile is not None
-    command = await commands_store.create_command(
+    command = await commands.create_command(
         db_session,
         idempotency_scope="side-channel-stale",
         idempotency_key="agent-auth-refresh",
@@ -779,7 +779,7 @@ async def test_lease_supersedes_launch_when_agent_auth_revision_stales(
         last_error_code=None,
         last_error_message=None,
     )
-    command = await commands_store.create_command(
+    command = await commands.create_command(
         db_session,
         idempotency_scope="stale-agent-auth-lease",
         idempotency_key="stale-agent-auth-lease",
@@ -888,7 +888,7 @@ async def test_lease_supersedes_launch_when_runtime_config_revision_stales(
     state.applied_runtime_config_revision_id = str(revision.id)
     state.applied_runtime_config_sequence = revision.sequence
     state.runtime_config_status = "applied"
-    command = await commands_store.create_command(
+    command = await commands.create_command(
         db_session,
         idempotency_scope="stale-runtime-config-lease",
         idempotency_key="stale-runtime-config-lease",
