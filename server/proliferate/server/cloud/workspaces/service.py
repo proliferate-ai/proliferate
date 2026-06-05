@@ -153,6 +153,7 @@ from proliferate.server.cloud.runtime.scheduler import schedule_workspace_provis
 from proliferate.server.cloud.runtime.service import (
     get_workspace_connection,
 )
+from proliferate.server.cloud.worker.revoked_jti import mark_revoked_jtis_changed
 from proliferate.server.cloud.workspaces.access import (
     cloud_workspace_user_can_archive_with_db,
     cloud_workspace_user_can_interact_with_db,
@@ -2396,11 +2397,10 @@ async def _revoke_claim_tokens_for_workspace(
         claim = await claims_store.get_claim_for_workspace(db, workspace.id)
         if claim is None:
             return
-        await claim_tokens_store.revoke_active_tokens_for_claim(
-            db,
-            claim_id=claim.id,
-            reason=reason,
-        )
+        if await claim_tokens_store.revoke_active_tokens_for_claim(
+            db, claim_id=claim.id, reason=reason
+        ):
+            await mark_revoked_jtis_changed(db, target_id=claim.target_id)
 
 
 # These helpers own the interaction with the persisted sandbox provider

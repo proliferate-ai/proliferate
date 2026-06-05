@@ -46,6 +46,7 @@ from proliferate.server.cloud.claims.models import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.live.service import publish_worker_control_after_commit
+from proliferate.server.cloud.worker.revoked_jti import mark_revoked_jtis_changed
 from proliferate.utils.time import utcnow
 
 _ACTIVE_TOKEN_CAP = 5
@@ -262,12 +263,19 @@ async def issue_direct_access_token(
         algorithm="RS256",
         headers={"kid": settings.cloud_jwt_signing_key_id},
     )
-    await tokens_store.revoke_oldest_active_tokens_for_claim(
+    revoked_count = await tokens_store.revoke_oldest_active_tokens_for_claim(
         db,
         claim_id=claim.id,
         keep_latest=max(0, _ACTIVE_TOKEN_CAP - 1),
         reason="active_token_cap",
+        revoked_at=issued_at,
     )
+    if revoked_count:
+        await mark_revoked_jtis_changed(
+            db,
+            target_id=claim.target_id,
+            now=issued_at,
+        )
     token_row = await tokens_store.insert_claim_token(
         db,
         claim_id=claim.id,
@@ -338,6 +346,7 @@ async def revoke_direct_access_token(
     )
     if isinstance(verdict, PolicyDenied):
         raise_policy_denied(verdict)
+    token_was_active = token.status == "active"
     revoked = await tokens_store.revoke_claim_token(
         db,
         token_id=token.id,
@@ -348,6 +357,12 @@ async def revoke_direct_access_token(
             "claim_token_not_found",
             "Direct attach token not found.",
             status_code=404,
+        )
+    if token_was_active:
+        await mark_revoked_jtis_changed(
+            db,
+            target_id=revoked.target_id,
+            now=revoked.revoked_at,
         )
     return RevokeClaimTokenResponse(
         token_id=str(revoked.id),

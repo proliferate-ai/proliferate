@@ -129,6 +129,8 @@ class WorkerCommandLeaseRequest(BaseModel):
 
 class WorkerControlWaitRequest(WorkerCommandLeaseRequest):
     control_cursor: str | None = Field(default=None, alias="controlCursor")
+    revoked_jti_cursor: str | None = Field(default=None, alias="revokedJtiCursor")
+    lease_commands: bool = Field(default=True, alias="leaseCommands")
     wait_seconds: int | None = Field(default=None, alias="waitSeconds")
 
 
@@ -201,9 +203,27 @@ class WorkerExposureListResponse(BaseModel):
     exposures: list[WorkerExposureSnapshotResponse]
 
 
+class WorkerRevokedJtiEntry(BaseModel):
+    jti_hash: str = Field(serialization_alias="jtiHash")
+    hash_key_id: str = Field(serialization_alias="hashKeyId")
+    expires_at: str = Field(serialization_alias="expiresAt")
+    revoked_at: str = Field(serialization_alias="revokedAt")
+
+
+class WorkerRevokedJtisResponse(BaseModel):
+    revoked_jtis: list[WorkerRevokedJtiEntry] = Field(serialization_alias="revokedJtis")
+    server_time: str = Field(serialization_alias="serverTime")
+    next_cursor: str = Field(serialization_alias="nextCursor")
+    has_more: bool = Field(serialization_alias="hasMore")
+
+
 class WorkerControlWaitResponse(BaseModel):
     command: WorkerCommandEnvelope | None = None
     exposures: list[WorkerExposureSnapshotResponse] | None = None
+    revoked_jtis: WorkerRevokedJtisResponse | None = Field(
+        default=None,
+        serialization_alias="revokedJtis",
+    )
     control_cursor: str = Field(serialization_alias="controlCursor")
     reason: str
     server_time: str = Field(serialization_alias="serverTime")
@@ -226,17 +246,3 @@ class WorkerProjectionGapRequest(BaseModel):
 
 class WorkerProjectionGapResponse(BaseModel):
     updated: bool
-
-
-class WorkerRevokedJtiEntry(BaseModel):
-    jti_hash: str = Field(serialization_alias="jtiHash")
-    hash_key_id: str = Field(serialization_alias="hashKeyId")
-    expires_at: str = Field(serialization_alias="expiresAt")
-    revoked_at: str = Field(serialization_alias="revokedAt")
-
-
-class WorkerRevokedJtisResponse(BaseModel):
-    revoked_jtis: list[WorkerRevokedJtiEntry] = Field(serialization_alias="revokedJtis")
-    server_time: str = Field(serialization_alias="serverTime")
-    next_cursor: str = Field(serialization_alias="nextCursor")
-    has_more: bool = Field(serialization_alias="hasMore")

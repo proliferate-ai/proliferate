@@ -117,6 +117,21 @@ impl WorkerStore {
                     THEN 'pending'
                     ELSE applied_revisions.status
                 END,
+                next_attempt_unix_ms = CASE
+                    WHEN excluded.desired_revision > applied_revisions.desired_revision
+                    THEN NULL
+                    ELSE applied_revisions.next_attempt_unix_ms
+                END,
+                error_code = CASE
+                    WHEN excluded.desired_revision > applied_revisions.desired_revision
+                    THEN NULL
+                    ELSE applied_revisions.error_code
+                END,
+                error_message = CASE
+                    WHEN excluded.desired_revision > applied_revisions.desired_revision
+                    THEN NULL
+                    ELSE applied_revisions.error_message
+                END,
                 updated_at = CURRENT_TIMESTAMP
             "#,
             params![domain.as_str(), desired_revision],
@@ -256,6 +271,34 @@ mod tests {
         assert_eq!(state.failure_count, 0);
         assert_eq!(state.next_attempt_unix_ms, None);
         assert_eq!(state.status, "applied");
+    }
+
+    #[test]
+    fn newer_desired_revision_clears_backoff_state() {
+        let store = test_store();
+        store
+            .note_desired_revision(ReconcileDomain::RevokedJti, 3)
+            .expect("desired");
+        store
+            .mark_revision_failed(
+                ReconcileDomain::RevokedJti,
+                RevisionFailure {
+                    next_attempt_unix_ms: Some(1000),
+                    terminal: false,
+                    error_code: Some("temporary"),
+                    error_message: Some("temporary failure"),
+                },
+            )
+            .expect("failed");
+
+        let state = store
+            .note_desired_revision(ReconcileDomain::RevokedJti, 4)
+            .expect("new desired");
+        assert_eq!(state.desired_revision, 4);
+        assert_eq!(state.next_attempt_unix_ms, None);
+        assert_eq!(state.error_code, None);
+        assert_eq!(state.error_message, None);
+        assert_eq!(state.status, "pending");
     }
 
     fn test_store() -> WorkerStore {

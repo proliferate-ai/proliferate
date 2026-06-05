@@ -24,6 +24,7 @@ from proliferate.db.store.cloud_sandboxes import ensure_managed_sandbox_for_targ
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
+from proliferate.db.store.cloud_sync import worker_control as worker_control_store
 from proliferate.db.store.cloud_workspaces import (
     create_managed_cloud_workspace_for_profile,
     get_cloud_workspace_by_id,
@@ -286,12 +287,24 @@ async def test_direct_access_token_is_desktop_only_and_signed(
     assert decoded["anyharness_session_id"] == "session-direct"
     assert decoded["permissions"] == ["read", "write"]
 
+    before_revoke_control = await worker_control_store.get_or_create_control_state(
+        db_session,
+        target_id=_target_id,
+    )
     revoked = await client.delete(
         f"/v1/cloud/workspaces/{workspace_id}/direct-access-tokens/{body['tokenId']}",
         headers=owner.headers,
     )
     assert revoked.status_code == 200
     assert revoked.json()["status"] == "revoked"
+    db_session.expire_all()
+    after_revoke_control = await worker_control_store.get_or_create_control_state(
+        db_session,
+        target_id=_target_id,
+    )
+    assert (
+        after_revoke_control.revoked_jti_revision == before_revoke_control.revoked_jti_revision + 1
+    )
 
 
 async def _seed_claimable_workspace(
