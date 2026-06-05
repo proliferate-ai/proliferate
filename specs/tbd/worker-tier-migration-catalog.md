@@ -1,7 +1,8 @@
 # Worker Tier Migration Catalog + Mental Model
 
 Status: inventory + classification for the worker-tier migration. Companion to
-`worker-tier-scalability-rfc.md`. Grounded in a sweep of `server/proliferate/**`.
+`worker-tier-scalability-rfc.md`. First-slice decisions are ratified in
+`worker-tier-durable-jobs-ratification.md`.
 
 ## Mental Model: Four Archetypes
 
@@ -31,8 +32,10 @@ Two cross-cutting facts the sweep revealed:
   die/restart with the API.
 - **The fire-and-forget problem.** Several request paths spawn
   `asyncio.create_task(...)` with **no durability** — lost on restart, no
-  retry, no backpressure, no visibility. These are the sharpest "jobs lost"
-  risk in the codebase.
+  retry, no backpressure, no visibility. Some after-commit callbacks also
+  dispatch with `loop.create_task(...)`, which has the same process-lifetime
+  risk once the commit has succeeded. These are the sharpest "jobs lost" risk
+  in the codebase.
 
 ## Inventory
 
@@ -41,17 +44,20 @@ Two cross-cutting facts the sweep revealed:
 | 1 | Automations scheduler | `automations/worker/scheduler.py`, `worker/service.py` | separate process | poll due automations (RRULE) → create run rows + advance `next_run_at` | OK (DB-backed) | **Scheduler** — keep poll; dedicated proc; HA |
 | 2 | Automations cloud executor | `automations/worker/cloud_executor*.py`, `cloud_execution/**` | separate process | claim pending runs → run stage pipeline (target→git→workspace→env→session→prompt) | claim/lease; DB-as-queue polling load | **Task** — broker-delivered, idempotent on `run_id` — **PRIORITY** |
 | 3 | Automations local executor | `automations/local_executor.py` | API (request-driven) | external **desktop** executors claim/heartbeat/record local runs | n/a (it's an API) | **Control-plane API** — stays API-facing |
-| 4 | Billing reconciler | `billing/reconciler.py` | in-process (lifespan) | reconcile usage segments, provider state, quota/spend enforcement | idempotent loop, but in API process | **Reconciler** — lift; enqueue corrective work |
-| 5 | Cloud setup monitor | `cloud/runtime/setup_monitor.py` | in-process (lifespan) | claim + poll remote AnyHarness setup runs; finalize/timeout | idempotent; in API process; tightly coupled (audit-flagged) | **Reconciler** — lift carefully |
-| 6 | Agent gateway reconciler | `cloud/agent_auth/reconciler.py`, `reconciliation.py`, `worker_*.py`, `budget_reconciliation.py` | in-process (lifespan) | reconcile agent-auth gateway router state, budgets, materialization | idempotent; in API process | **Reconciler** — lift |
+| 4 | Billing reconciler | `billing/reconciler.py` | in-process (lifespan) | reconcile usage segments, provider state, quota/spend enforcement | idempotent loop, but in API process | **Reconciler** — Beat-fired task; enqueue corrective work |
+| 5 | Cloud setup monitor | `cloud/runtime/setup_monitor.py` | in-process (lifespan) | claim + poll remote AnyHarness setup runs; finalize/timeout | idempotent; in API process; tightly coupled (audit-flagged) | **Reconciler** — Beat-fired task after careful extraction |
+| 6 | Agent gateway reconciler | `cloud/agent_auth/reconciler.py`, `reconciliation.py`, `worker_*.py`, `budget_reconciliation.py` | in-process (lifespan) | reconcile agent-auth gateway router state, budgets, materialization | idempotent; in API process | **Reconciler** — Beat-fired task |
 | 7 | Mobility cleanup reconciler | `cloud/mobility/reconciler.py`, `cleanup_executor.py` | in-process (lifespan) | find due cleanup items → execute per-item (own session each) | idempotent; in API process | **Reconciler** (poll) + per-item exec → **Task** candidate |
-| 8 | Support tracker reconciler | `support/reconciler.py` | in-process (lifespan) | reconcile support report tracking | idempotent; in API process | **Reconciler** — lift |
-| 9 | Anonymous telemetry sender | `anonymous_telemetry/worker.py` | in-process (lifespan) | periodic batched send of anonymous telemetry | in API process | **Scheduler/periodic Task** — Beat task or lifted loop |
-| 10 | Runtime wake jobs | `cloud/runtime/wake.py` | **fire-and-forget `create_task`** in request path | wake a managed runtime (sandbox) for a command | ⚠️ no durability/retry; lost on restart | **Task** — durable queued — **Tier 1** |
+| 8 | Support tracker reconciler | `support/reconciler.py` | in-process (lifespan) | reconcile support report tracking | idempotent; in API process | **Reconciler** — Beat-fired task |
+| 9 | Anonymous telemetry sender | `anonymous_telemetry/worker.py` | in-process (lifespan) | periodic batched send of anonymous telemetry | in API process | **Scheduler/periodic Task** — Beat-fired task |
+| 10 | Runtime wake jobs | `cloud/runtime/wake.py` | **fire-and-forget `create_task`** in request path | wake a managed target runtime for a command | ⚠️ no durability/retry; lost on restart | **Task** — durable queued — **Tier 1** |
 | 11 | Deferred worktree cleanup | `cloud/runtime/config_sync/worktree_policy.py` | **fire-and-forget `create_task`** | deferred cleanup after worktree policy sync | ⚠️ no durability/retry | **Task** — durable queued — **Tier 1** |
-| 12 | Slack notifications | `notifications.py` (`schedule_*_slack_notification`) | **fire-and-forget `create_task`** | send signup / billing Slack notifications | ⚠️ no durability/retry; lost on restart | **Task** — durable queued — **Tier 1** (loose consistency OK) |
-| 13 | Cloud command worker control | `cloud/worker/**` (`api.py`, `control/`, `service.py`, `slot_guard.py`, `transactions.py`) | API (request-driven) | external runtime workers claim cloud commands, heartbeat, slot-guard, report progress | n/a (it's an API) | **Control-plane API** — stays; decide later if dispatch moves to broker |
+| 12 | Signup Slack notification | `notifications.py` (`schedule_signup_slack_notification`) | **fire-and-forget `create_task`** | send signup Slack notification | ⚠️ no durability/retry; lost on restart | **Task** — durable queued — **Tier 1** (loose consistency OK) |
+| 13 | Cloud command worker control | `cloud/worker/**` (`api.py`, `control/`, `service.py`, `transactions.py`) | API (request-driven) | external runtime workers claim cloud commands, heartbeat, and report progress | n/a (it's an API) | **Control-plane API** — stays; decide later if dispatch moves to broker |
 | 14 | Slack bot worker (parked) | `cloud/slack/worker/**` | disabled | deferred Slack event/command/outbound/post-session handlers | parked | **Deferred** — revisit on revive |
+| 15 | Cloud workspace provisioning | `cloud/runtime/scheduler.py`, `cloud/runtime/provision.py`, `cloud/workspaces/service.py` | **fire-and-forget `create_task`** in workspace paths | provision/start cloud workspaces and update workspace state | ⚠️ long-lived work lost on API restart | **Task** — durable queued — **Tier 1** |
+| 16 | Customer.io desktop-auth side effects | `auth/desktop/service.py`, `auth/identity/service.py` | **fire-and-forget `create_task`** after desktop auth | identify/track/welcome-email Customer.io user events | ⚠️ no durability/retry; duplicate external effects need keys | **Task** — durable queued — **Tier 1** (loose consistency with idempotency keys) |
+| 17 | Support diagnostics and immediate tracker kicks | `support/jobs.py`, `support/api.py`, `support/service.py`, `db/engine.py` | after-commit callback dispatched via `loop.create_task(...)` | collect support diagnostics and kick support tracking promptly | ⚠️ committed state may not get its follow-up work on restart | **Task** — durable queued or Beat-backed reconciler — **Tier 1** |
 
 ## Automations Deep-Dive (the priority)
 
@@ -82,28 +88,35 @@ cancellation semantics need care. Recommend: **one idempotent task per run** to
 start (stages as internal steps), revisit a chain only if stage-level retry
 isolation proves necessary.
 
-## Migration Ordering (derived from risk)
+## Migration Ordering (ratified)
 
-- **Tier 0 — Lift in-process loops (no broker; do now).** Move items 4–9 out of
-  the API server into dedicated worker process(es). Pure win; unblocked by the
-  DB-threading work; removes API-latency coupling.
-- **Tier 1 — Kill fire-and-forget `create_task` (items 10–12).** Highest
-  correctness risk (silent loss today), smallest/cleanest Celery conversions.
-  wake (10) and worktree cleanup (11) want outbox consistency with their
-  triggering state change; notifications (12) are loose enough to enqueue
-  directly.
+- **Slice 1 — Infrastructure skeleton.** Add Celery/RabbitMQ/redbeat config,
+  app wiring, and a no-op task. Do not move business work.
+- **Slice 2 — Transactional outbox foundation.** Add outbox rows, store
+  helpers, and relay semantics before correctness-sensitive on-demand work.
+- **Tier 1 — Kill fire-and-forget/after-commit detached work (items 10–12,
+  15–17).** Highest correctness risk (silent loss today), smallest/cleanest
+  Celery conversions. Runtime wake (10), worktree cleanup (11), workspace
+  provisioning (15), and support work that drives report state (17) want outbox
+  consistency with their triggering state change; Slack (12) and Customer.io
+  lifecycle events (16) are loose enough to enqueue directly when duplicate and
+  missed delivery semantics are explicit.
+- **Tier 0 periodic work — Convert, do not lift by default.** Items 4–9 should
+  move to Beat-fired periodic tasks once the skeleton is ready. Dedicated
+  bespoke loop processes are reserved for emergency production brakes.
 - **Tier 2 — Migrate automations execution (item 2) to the broker.** The
   throughput win and the stated priority. Keep the scheduler (1) as a poll.
-- **Tier 3 — Refine reconcilers.** Have the lifted reconcilers *enqueue*
+- **Tier 3 — Refine reconcilers.** Have the Beat-fired reconcilers *enqueue*
   corrective tasks instead of executing heavy work inline (item 7's per-item
   execution becomes tasks).
 - **Out of scope (decide separately):** external-executor control-plane APIs
   (items 3, 13) and the parked Slack worker (14).
 
 Dependency reminder: any **transactionally-consistent enqueue** (outbox) for
-Tiers 1–2 is gated on the DB session-threading work (Swarm 2/3), because the
-outbox insert must ride in the same caller-owned transaction as the state
-change. Tier 0 has no such dependency.
+Tiers 1–2 is gated on explicit transaction ownership, because the outbox insert
+must ride in the same caller-owned transaction as the state change. Tier 0
+periodic work can move without an outbox when it calls an already-idempotent
+pass function, but it still needs the Celery/redbeat skeleton first.
 
 ## Resolved Decisions
 
@@ -125,9 +138,14 @@ change. Tier 0 has no such dependency.
   exposure/projection state publish through the existing worker-control
   after-commit path, but RabbitMQ does not become the cloud-worker command
   delivery channel.
+- **The current process-local doorbell is not enough for Celery-origin
+  mutations.** If a Celery worker changes worker-visible state, the PR must land
+  shared Redis/NATS worker-control pub/sub first, or explicitly accept
+  timeout-only wake behavior.
 
 ## Open Questions
 
 1. Which queue/fleet runs the periodic (Beat-fired) tasks — a shared `periodic`
    lane, or per-weight-class lanes?
-2. Scheduler HA: `redbeat` vs a leader-elected Beat.
+2. Which correctness-sensitive Tier 1 workload should move first after the
+   skeleton and outbox foundation?
