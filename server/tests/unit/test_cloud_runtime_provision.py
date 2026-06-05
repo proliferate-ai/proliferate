@@ -480,6 +480,7 @@ class TestCheckBinaryPreinstalled:
         binary_path.write_bytes(b"current-runtime")
 
         calls: list[str] = []
+
         async def _run_sandbox_command_logged(*args, **kwargs):
             calls.append(kwargs["label"])
             return SimpleNamespace(exit_code=1, stdout="", stderr="")
