@@ -35,10 +35,7 @@ from proliferate.db.store.cloud_workspace_lifecycle import (
     purge_cloud_workspace_record,
     restore_cloud_workspace_record,
 )
-from proliferate.db.store.cloud_workspaces import (
-    get_cloud_workspace_by_id,
-    load_cloud_workspace_by_id,
-)
+from proliferate.db.store.cloud_workspaces import get_cloud_workspace_by_id
 from proliferate.integrations.sandbox import get_sandbox_provider
 from proliferate.server.billing.service import record_cloud_sandbox_usage_stopped
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
@@ -258,7 +255,7 @@ async def delete_cloud_workspace(
     db.expunge(workspace)
     await _destroy_workspace_runtime(workspace)
     async with db_session.open_async_transaction() as delete_db:
-        if refreshed := await load_cloud_workspace_by_id(delete_db, workspace_record_id):
+        if refreshed := await get_cloud_workspace_by_id(delete_db, workspace_record_id):
             await delete_cloud_workspace_records_for_workspace(delete_db, refreshed)
 
 

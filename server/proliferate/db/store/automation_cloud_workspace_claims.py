@@ -19,7 +19,7 @@ from proliferate.db.store.automation_run_claims import (
     ClaimTransitionRule,
     load_claimed_run_for_update,
 )
-from proliferate.db.store.cloud_workspaces import (
+from proliferate.db.store.cloud_workspace_creation import (
     create_cloud_workspace_record,
     create_managed_cloud_workspace_for_profile,
 )

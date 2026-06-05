@@ -13,7 +13,7 @@ from proliferate.db.store.cloud_sandboxes import (
     load_cloud_sandbox_by_id,
 )
 from proliferate.db.store.cloud_sync import targets as targets_store
-from proliferate.db.store.cloud_workspaces import (
+from proliferate.db.store.cloud_workspace_runtime import (
     persist_runtime_reconnect_state_for_workspace,
 )
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError

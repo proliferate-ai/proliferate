@@ -12,11 +12,13 @@ from proliferate.db import session_ops as db_session
 from proliferate.db.store.automation_cloud_workspace_claims import (
     create_managed_cloud_workspace_for_claimed_run,
 )
-from proliferate.db.store.cloud_workspaces import (
+from proliferate.db.store.cloud_workspace_creation import (
     CloudRepoLimitExceededError,
     create_cloud_workspace_for_user,
-    load_existing_cloud_workspace,
-    save_workspace,
+)
+from proliferate.db.store.cloud_workspace_runtime import save_workspace
+from proliferate.db.store.cloud_workspaces import (
+    get_existing_cloud_workspace,
 )
 from proliferate.integrations.sandbox import get_configured_sandbox_provider
 from proliferate.server.automations.domain.claim_lifecycle import (
@@ -276,7 +278,7 @@ async def ensure_cloud_workspace_for_existing_branch(
             status_code=400,
         )
     async with db_session.open_async_session() as db:
-        existing_cloud_workspace = await load_existing_cloud_workspace(
+        existing_cloud_workspace = await get_existing_cloud_workspace(
             db,
             user_id=user.id,
             git_provider=git_provider,

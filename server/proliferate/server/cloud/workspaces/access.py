@@ -9,7 +9,6 @@ from proliferate.auth.authorization import PolicyDenied
 from proliferate.db import engine as db_engine
 from proliferate.db.store.cloud_workspaces import (
     get_cloud_workspace_by_id,
-    load_cloud_workspace_by_id,
 )
 from proliferate.server.cloud.claims.access import (
     load_workspace_exposure_and_claim,
@@ -44,7 +43,7 @@ async def cloud_workspace_user_can_read(
     # Transitional: the cloud workspace service still consumes ORM objects.
     # Keep lookup/policy ownership here until the store returns snapshots.
     async with db_engine.async_session_factory() as db:
-        workspace = await load_cloud_workspace_by_id(db, workspace_id)
+        workspace = await get_cloud_workspace_by_id(db, workspace_id)
         if workspace is None:
             _raise_workspace_not_found()
         exposure, _claim = await load_workspace_exposure_and_claim(

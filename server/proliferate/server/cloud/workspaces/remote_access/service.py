@@ -19,10 +19,9 @@ from proliferate.db.store.automation_runs import list_latest_runs_by_cloud_works
 from proliferate.db.store.cloud_sync import backfill as backfill_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as targets_store
+from proliferate.db.store.cloud_workspace_runtime import mark_workspace_error_by_id
 from proliferate.db.store.cloud_workspaces import (
     get_cloud_workspace_by_id,
-    load_cloud_workspace_by_id,
-    mark_workspace_error_by_id,
 )
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError
 from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kinds
@@ -362,7 +361,7 @@ async def get_cloud_connection(
         ) from exc
 
     async with db_session.open_async_session() as reload_db:
-        reloaded_workspace = await load_cloud_workspace_by_id(reload_db, workspace.id)
+        reloaded_workspace = await get_cloud_workspace_by_id(reload_db, workspace.id)
     if reloaded_workspace is not None:
         workspace = reloaded_workspace
     log_cloud_event(

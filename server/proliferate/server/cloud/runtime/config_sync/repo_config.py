@@ -16,11 +16,11 @@ from proliferate.db.store.cloud_repo_config import (
     CloudRepoConfigValue,
     load_cloud_repo_config_for_user,
 )
-from proliferate.db.store.cloud_workspace_setup_runs import create_cloud_workspace_setup_run
-from proliferate.db.store.cloud_workspaces import (
+from proliferate.db.store.cloud_workspace_runtime import (
     update_workspace_repo_apply_status_by_id,
     workspace_repo_apply_lock,
 )
+from proliferate.db.store.cloud_workspace_setup_runs import create_cloud_workspace_setup_run
 from proliferate.integrations.anyharness import (
     CloudRuntimeOperationError,
     read_remote_workspace_file_state,

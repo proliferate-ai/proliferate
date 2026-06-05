@@ -14,10 +14,8 @@ from proliferate.db import engine as db_engine
 from proliferate.db.store.automation_run_claims import (
     ClaimTransitionRule as StoreClaimTransitionRule,
 )
-from proliferate.db.store.cloud_workspaces import (
-    attach_anyharness_workspace_id,
-    load_cloud_workspace_by_id,
-)
+from proliferate.db.store.cloud_workspace_runtime import attach_anyharness_workspace_id
+from proliferate.db.store.cloud_workspaces import get_cloud_workspace_by_id
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
 from proliferate.server.automations.domain.claim_lifecycle import (
     ANYHARNESS_WORKSPACE_ATTACHMENT_TRANSITION,
@@ -139,7 +137,7 @@ async def materialize_workspace_stage(
 
     if ctx.claim.anyharness_workspace_id is not None:
         async with db_engine.async_session_factory() as db:
-            workspace = await load_cloud_workspace_by_id(db, ctx.claim.cloud_workspace_id)
+            workspace = await get_cloud_workspace_by_id(db, ctx.claim.cloud_workspace_id)
         branch_name = (
             workspace.git_branch
             if workspace is not None and workspace.git_branch
@@ -170,7 +168,7 @@ async def materialize_workspace_stage(
     ctx = ctx.with_claim(current)
 
     async with db_engine.async_session_factory() as db:
-        workspace = await load_cloud_workspace_by_id(db, current.cloud_workspace_id)
+        workspace = await get_cloud_workspace_by_id(db, current.cloud_workspace_id)
     if workspace is None:
         await fail_claim(current, code="workspace_missing")
         return None

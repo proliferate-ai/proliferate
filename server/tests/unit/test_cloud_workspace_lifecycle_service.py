@@ -53,7 +53,7 @@ async def test_delete_cloud_workspace_destroys_runtime_before_archiving(
         "_destroy_workspace_runtime",
         _destroy_workspace_runtime,
     )
-    monkeypatch.setattr(lifecycle_service, "load_cloud_workspace_by_id", load_workspace)
+    monkeypatch.setattr(lifecycle_service, "get_cloud_workspace_by_id", load_workspace)
     monkeypatch.setattr(
         lifecycle_service,
         "delete_cloud_workspace_records_for_workspace",

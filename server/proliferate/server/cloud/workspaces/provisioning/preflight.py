@@ -12,11 +12,11 @@ from proliferate.db.store.cloud_repo_config import (
     get_cloud_repo_config,
     get_organization_cloud_repo_config,
 )
+from proliferate.db.store.cloud_workspace_creation import CloudRepoLimitExceededError
 from proliferate.db.store.cloud_workspaces import (
-    CloudRepoLimitExceededError,
+    get_existing_cloud_workspace,
     get_existing_managed_cloud_workspace_for_profile,
     load_any_cloud_workspace_for_repo,
-    load_existing_cloud_workspace,
 )
 from proliferate.server.billing.models import SandboxStartAuthorization
 from proliferate.server.billing.service import (
@@ -197,7 +197,7 @@ async def resolve_new_cloud_workspace_create(
         )
 
     async with db_session.open_async_session() as db:
-        existing_cloud_workspace = await load_existing_cloud_workspace(
+        existing_cloud_workspace = await get_existing_cloud_workspace(
             db,
             user_id=user.id,
             git_provider=git_provider,

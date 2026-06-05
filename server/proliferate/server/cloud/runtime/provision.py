@@ -18,12 +18,12 @@ from proliferate.db.store.cloud_sandboxes import (
     load_cloud_sandbox_by_id,
     update_sandbox_status,
 )
-from proliferate.db.store.cloud_workspaces import (
+from proliferate.db.store.cloud_workspace_runtime import (
     finalize_workspace_provision_for_ids,
-    load_cloud_workspace_by_id,
     mark_workspace_error_by_id,
     update_workspace_status_by_id,
 )
+from proliferate.db.store.cloud_workspaces import get_cloud_workspace_by_id
 from proliferate.integrations.sandbox import (
     SandboxProvider,
     get_configured_sandbox_provider,
@@ -474,7 +474,7 @@ async def provision_workspace(
         )
         await _save_runtime_environment_updates(ctx.runtime_environment_id, runtime_state_updates)
         async with db_engine.async_session_factory() as db:
-            provisioned_workspace = await load_cloud_workspace_by_id(db, workspace_id)
+            provisioned_workspace = await get_cloud_workspace_by_id(db, workspace_id)
         if provisioned_workspace is not None:
             await apply_workspace_repo_config_after_provision(
                 provisioned_workspace,

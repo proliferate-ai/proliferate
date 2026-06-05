@@ -139,7 +139,7 @@ async def test_create_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     monkeypatch.setattr(provisioning_preflight, "get_github_repo_branches", _repo_branches)
     monkeypatch.setattr(
         provisioning_preflight,
-        "load_existing_cloud_workspace",
+        "get_existing_cloud_workspace",
         _existing_workspace,
     )
     monkeypatch.setattr(provisioning_preflight, "load_repo_config_value", _repo_config_value)
@@ -204,7 +204,7 @@ async def test_automation_workspace_requires_selected_agent_credentials(
     monkeypatch.setattr(provisioning_preflight, "get_github_repo_branches", _repo_branches)
     monkeypatch.setattr(
         provisioning_preflight,
-        "load_existing_cloud_workspace",
+        "get_existing_cloud_workspace",
         _existing_workspace,
     )
     monkeypatch.setattr(provisioning_preflight, "load_repo_config_value", _repo_config_value)
@@ -364,7 +364,7 @@ async def test_ensure_cloud_workspace_replaces_failed_unmaterialized_retry_targe
     archived: list[object] = []
     created: list[dict[str, object]] = []
 
-    async def _load_existing_cloud_workspace(*_args, **_kwargs):
+    async def _get_existing_cloud_workspace(*_args, **_kwargs):
         return failed_workspace
 
     async def _archive_failed(workspace_id):
@@ -393,8 +393,8 @@ async def test_ensure_cloud_workspace_replaces_failed_unmaterialized_retry_targe
     )
     monkeypatch.setattr(
         provisioning_service,
-        "load_existing_cloud_workspace",
-        _load_existing_cloud_workspace,
+        "get_existing_cloud_workspace",
+        _get_existing_cloud_workspace,
     )
     monkeypatch.setattr(
         provisioning_service.lifecycle_service,
@@ -451,7 +451,7 @@ async def test_ensure_cloud_workspace_reuses_materialized_error_workspace(
         last_error="agent runtime failed",
     )
 
-    async def _load_existing_cloud_workspace(*_args, **_kwargs):
+    async def _get_existing_cloud_workspace(*_args, **_kwargs):
         return existing_workspace
 
     async def _unexpected(*_args, **_kwargs) -> None:
@@ -464,8 +464,8 @@ async def test_ensure_cloud_workspace_reuses_materialized_error_workspace(
     )
     monkeypatch.setattr(
         provisioning_service,
-        "load_existing_cloud_workspace",
-        _load_existing_cloud_workspace,
+        "get_existing_cloud_workspace",
+        _get_existing_cloud_workspace,
     )
     monkeypatch.setattr(
         provisioning_service.lifecycle_service,
