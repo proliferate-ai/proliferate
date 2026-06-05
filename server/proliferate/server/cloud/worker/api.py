@@ -14,6 +14,10 @@ from proliferate.server.cloud.events.models import (
     WorkerEventBatchRequest,
     WorkerEventBatchResponse,
 )
+from proliferate.server.cloud.worker.commands import (
+    record_command_delivery,
+    record_command_result,
+)
 from proliferate.server.cloud.worker.control.service import wait_for_worker_control
 from proliferate.server.cloud.worker.models import (
     WorkerCommandDeliveryRequest,
@@ -43,8 +47,6 @@ from proliferate.server.cloud.worker.service import (
     authenticate_worker,
     enroll_worker,
     list_worker_exposures,
-    record_command_delivery,
-    record_command_result,
     record_event_batch,
     record_heartbeat,
     record_inventory,

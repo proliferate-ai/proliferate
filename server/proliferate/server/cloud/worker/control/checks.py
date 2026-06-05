@@ -16,6 +16,7 @@ from proliferate.server.cloud.commands import service as command_service
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.live.service import publish_command_status_after_commit
+from proliferate.server.cloud.worker.commands import command_envelope
 from proliferate.server.cloud.worker.domain.rules import (
     clamp_command_lease_seconds,
     normalize_supported_command_kinds,
@@ -26,10 +27,7 @@ from proliferate.server.cloud.worker.models import (
     WorkerExposureSnapshotResponse,
 )
 from proliferate.server.cloud.worker.revoked_jti import list_revoked_jtis_for_target
-from proliferate.server.cloud.worker.service import (
-    _command_envelope,
-    authenticate_worker,
-)
+from proliferate.server.cloud.worker.service import authenticate_worker
 from proliferate.server.cloud.worker.target_validation import (
     require_current_worker_target as _require_current_worker_target,
 )
@@ -174,7 +172,7 @@ async def check_worker_control(
                 revoked_jtis=include_revoked_jtis,
             )
             response = WorkerControlWaitResponse(
-                command=_command_envelope(command),
+                command=command_envelope(command),
                 exposures=(_exposure_responses(exposure_snapshots) if include_exposures else None),
                 revoked_jtis=revoked_jtis,
                 control_cursor=control_cursor,
