@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-organization-members";
+import { isSettingsAdminRole, isSettingsOwnerRole } from "@/lib/domain/settings/admin-roles";
 import { useAuthStore } from "@/stores/auth/auth-store";
 
 export function useIsAdmin(organizationId: string | null) {
@@ -10,8 +11,8 @@ export function useIsAdmin(organizationId: string | null) {
     [currentUserId, membersQuery.data?.members],
   );
   const role = currentMember?.role ?? null;
-  const isOwner = role === "owner";
-  const isAdmin = role === "owner" || role === "admin";
+  const isOwner = isSettingsOwnerRole(role);
+  const isAdmin = isSettingsAdminRole(role);
 
   return {
     isAdmin,
