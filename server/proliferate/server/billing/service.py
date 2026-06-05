@@ -71,23 +71,14 @@ from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store import users as user_store
 from proliferate.db.store.billing import (
     BillingSnapshotState,
-    BillingSubjectStripeState,
-    bind_stripe_customer_to_billing_subject,
     claim_pending_seat_adjustments,
     count_active_seats_for_billing_subject_id,
-    ensure_billing_grant_record,
-    get_billing_snapshot_state_for_subject,
-    get_billing_snapshot_state_for_user,
-    get_or_create_organization_stripe_customer_state,
-    get_or_create_user_stripe_customer_state,
     load_billing_subscription_by_id,
     mark_seat_adjustment_failed,
     mark_seat_adjustment_grant_issued,
     mark_seat_adjustment_stripe_confirmed,
     maybe_create_org_seat_adjustment,
     prepare_initial_org_seat_reconcile,
-    set_overage_policy_for_subject,
-    set_overage_policy_for_user,
     sum_meter_quantity_cents_for_subject,
     upsert_billing_subscription,
 )
@@ -96,7 +87,6 @@ from proliferate.db.store.billing_accounting import (
     ClaimedUsageExport,
     acquire_billing_subject_accounting_lock,
     create_usage_export,
-    get_billing_subject_by_id,
     get_or_create_overage_remainder,
     list_accountable_usage_ranges,
     list_billing_subject_ids_for_usage_accounting,
@@ -115,6 +105,16 @@ from proliferate.db.store.billing_runtime_usage import (
     record_billing_decision_event,
     remember_sandbox_event_receipt,
     resolve_billing_subject_id_for_workspace,
+)
+from proliferate.db.store.billing_subjects import (
+    BillingSubjectStripeState,
+    bind_stripe_customer_to_billing_subject,
+    ensure_billing_grant_record,
+    get_billing_subject_by_id,
+    get_or_create_organization_stripe_customer_state,
+    get_or_create_user_stripe_customer_state,
+    set_overage_policy_for_subject,
+    set_overage_policy_for_user,
 )
 from proliferate.db.store.organization_records import (
     CheckoutIntentRecord,
@@ -137,6 +137,7 @@ from proliferate.db.store.organizations import (
 from proliferate.errors import ProliferateError
 from proliferate.integrations import resend
 from proliferate.integrations import stripe as stripe_billing
+from proliferate.server.billing import snapshot_state
 from proliferate.server.billing.domain.accounting import (
     active_pro_period_start,
     next_accounting_boundary,
@@ -483,7 +484,7 @@ def _segment_seconds(segment: UsageSegment, now: datetime) -> float:
 
 async def get_billing_snapshot(user_id: UUID) -> BillingSnapshot:
     async with db_session.open_async_transaction() as db:
-        state = await get_billing_snapshot_state_for_user(db, user_id)
+        state = await snapshot_state.load_snapshot_state_for_user(db, user_id)
         state = await state_with_overage_usage(db, state)
     return _build_billing_snapshot(state)
 
@@ -497,7 +498,7 @@ async def get_billing_snapshot_for_request(
 
 async def get_billing_snapshot_for_subject(billing_subject_id: UUID) -> BillingSnapshot:
     async with db_session.open_async_transaction() as db:
-        state = await get_billing_snapshot_state_for_subject(db, billing_subject_id)
+        state = await snapshot_state.load_snapshot_state_for_subject(db, billing_subject_id)
         state = await state_with_overage_usage(db, state)
     return _build_billing_snapshot(state)
 
@@ -506,7 +507,7 @@ async def get_billing_snapshot_for_subject_in_session(
     db: AsyncSession,
     billing_subject_id: UUID,
 ) -> BillingSnapshot:
-    state = await get_billing_snapshot_state_for_subject(db, billing_subject_id)
+    state = await snapshot_state.load_snapshot_state_for_subject(db, billing_subject_id)
     state = await state_with_overage_usage(db, state)
     return _build_billing_snapshot(state)
 
@@ -515,7 +516,7 @@ async def _get_billing_snapshot_for_request(
     db: AsyncSession,
     user_id: UUID,
 ) -> BillingSnapshot:
-    state = await get_billing_snapshot_state_for_user(db, user_id)
+    state = await snapshot_state.load_snapshot_state_for_user(db, user_id)
     state = await state_with_overage_usage(db, state)
     return _build_billing_snapshot(state)
 
@@ -524,7 +525,7 @@ async def _get_billing_snapshot_for_subject_request(
     db: AsyncSession,
     billing_subject_id: UUID,
 ) -> BillingSnapshot:
-    state = await get_billing_snapshot_state_for_subject(db, billing_subject_id)
+    state = await snapshot_state.load_snapshot_state_for_subject(db, billing_subject_id)
     state = await state_with_overage_usage(db, state)
     return _build_billing_snapshot(state)
 
@@ -731,7 +732,7 @@ async def authorize_sandbox_start_for_billing_subject(
     workspace_id: UUID | None = None,
 ) -> SandboxStartAuthorization:
     async with db_session.open_async_transaction() as db:
-        state = await get_billing_snapshot_state_for_subject(db, billing_subject_id)
+        state = await snapshot_state.load_snapshot_state_for_subject(db, billing_subject_id)
         state = await state_with_overage_usage(db, state)
         snapshot = _build_billing_snapshot(state)
         return await _record_sandbox_start_authorization(
@@ -749,13 +750,13 @@ async def authorize_sandbox_start(
 ) -> SandboxStartAuthorization:
     async with db_session.open_async_transaction() as db:
         if workspace_id is None:
-            state = await get_billing_snapshot_state_for_user(db, user_id)
+            state = await snapshot_state.load_snapshot_state_for_user(db, user_id)
         else:
             billing_subject_id = await resolve_billing_subject_id_for_workspace(
                 db,
                 workspace_id,
             )
-            state = await get_billing_snapshot_state_for_subject(db, billing_subject_id)
+            state = await snapshot_state.load_snapshot_state_for_subject(db, billing_subject_id)
         state = await state_with_overage_usage(db, state)
         snapshot = _build_billing_snapshot(state)
         return await _record_sandbox_start_authorization(
@@ -2196,7 +2197,7 @@ async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
         )
     for billing_subject_id in subject_ids:
         async with db_session.open_async_transaction() as db:
-            state = await get_billing_snapshot_state_for_subject(db, billing_subject_id)
+            state = await snapshot_state.load_snapshot_state_for_subject(db, billing_subject_id)
             state = await state_with_overage_usage(db, state)
         now = utcnow()
         unlimited_state = _compute_unlimited_cloud_hours_state(

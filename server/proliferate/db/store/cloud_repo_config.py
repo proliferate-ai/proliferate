@@ -16,8 +16,8 @@ from proliferate.db.store.billing import (
     acquire_billing_subject_repo_limit_lock,
     cloud_repo_slot_exists,
     count_active_cloud_repo_environments,
-    ensure_personal_billing_subject,
 )
+from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.utils.crypto import decrypt_json, decrypt_text, encrypt_json, encrypt_text
 from proliferate.utils.time import utcnow
 

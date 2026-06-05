@@ -14,7 +14,7 @@ from proliferate.constants.cloud import (
     CloudTargetStatus,
 )
 from proliferate.db import session_ops as db_session
-from proliferate.db.store import billing as billing_store
+from proliferate.db.store import billing_subjects as billing_subject_store
 from proliferate.db.store.automation_runs import list_latest_runs_by_cloud_workspace_ids_for_user
 from proliferate.db.store.cloud_sync import backfill as backfill_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
@@ -141,7 +141,7 @@ async def bootstrap_workspace_remote_access(
             status_code=409,
         )
 
-    billing_subject = await billing_store.ensure_personal_billing_subject(db, user.id)
+    billing_subject = await billing_subject_store.ensure_personal_billing_subject(db, user.id)
     git_provider, git_owner, git_repo_name, git_branch, git_base_branch = (
         _remote_access_repo_fields(body)
     )

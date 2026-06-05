@@ -38,7 +38,7 @@ from proliferate.db.store.cloud_mcp.oauth_flows import (
     create_oauth_flow_canceling_existing,
 )
 from proliferate.db.store.cloud_mcp.oauth_clients import upsert_oauth_client
-from proliferate.db.store.billing import ensure_personal_billing_subject
+from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.integrations.github import (
     GitHubRepositoryPage,
     GitHubRepositorySummary,

@@ -15,7 +15,7 @@ from proliferate.constants.cloud import (
     CloudCommandStatus,
 )
 from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZATION_ROLE_OWNER
-from proliferate.db.store.billing import (
+from proliferate.db.store.billing_subjects import (
     ensure_agent_gateway_free_credit_allocation,
 )
 from proliferate.db.store.cloud_agent_auth import store

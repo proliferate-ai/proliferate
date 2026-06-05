@@ -16,7 +16,7 @@ from proliferate.constants.cloud import (
     CloudTargetStatus,
 )
 from proliferate.db import session_ops as db_session
-from proliferate.db.store import billing as billing_store
+from proliferate.db.store import billing_subjects as billing_subject_store
 from proliferate.db.store.cloud_repo_config import get_cloud_repo_config
 from proliferate.db.store.cloud_sync import commands as command_store
 from proliferate.db.store.cloud_sync import targets as targets_store
@@ -137,7 +137,7 @@ async def launch_workspace_on_target(
         target_kind=target.kind,
         workspace_root=target.default_workspace_root,
     )
-    billing_subject = await billing_store.ensure_personal_billing_subject(db, user.id)
+    billing_subject = await billing_subject_store.ensure_personal_billing_subject(db, user.id)
     workspace = await create_direct_target_cloud_workspace(
         db,
         target_id=target.id,

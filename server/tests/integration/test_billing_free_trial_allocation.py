@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.auth import AuthIdentity, User
 from proliferate.db.models.billing import BillingGrant, BillingSubject, FreeCloudAllocation
-from proliferate.db.store.billing import (
+from proliferate.db.store.billing_subjects import (
     ensure_free_trial_v2_grant,
     ensure_personal_billing_subject,
 )
