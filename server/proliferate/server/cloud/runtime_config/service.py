@@ -34,6 +34,7 @@ from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_control as worker_control_store
 from proliferate.server.cloud.claims.domain.pem import normalize_pem_setting
 from proliferate.server.cloud.commands.domain.rules import compact_command_json
+from proliferate.server.cloud.commands.wake import enqueue_managed_target_wake_outbox
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.live.service import (
     publish_command_status_after_commit,
@@ -812,10 +813,7 @@ async def _queue_primary_target_runtime_config_materialization(
         if queued is None:
             continue
         await _record_runtime_config_command(
-            db,
-            profile_id=profile.id,
-            target_id=target.id,
-            command_id=command.id,
+            db, profile_id=profile.id, target_id=target.id, command_id=command.id
         )
         await publish_command_status_after_commit(db, command)
 
@@ -955,6 +953,7 @@ async def _record_runtime_config_command(
         target_id=target_id,
         command_id=command_id,
     )
+    await enqueue_managed_target_wake_outbox(db, target_id=target_id, command_id=command_id)
 
 
 async def _require_worker_revision(

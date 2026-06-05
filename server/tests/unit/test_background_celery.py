@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID, uuid4
+
 from celery import Celery
 from kombu import Queue
 
@@ -37,7 +39,33 @@ def test_celery_app_import_registers_noop_task_without_broker_connection() -> No
     assert isinstance(celery_app, Celery)
     assert HEALTH_NOOP_TASK in celery_app.tasks
     assert NOTIFICATIONS_SEND_SLACK_TASK in celery_app.tasks
+    assert RUNTIME_WAKE_TARGET_TASK in celery_app.tasks
     assert celery_app.tasks[HEALTH_NOOP_TASK].run() == "ok"
+
+
+def test_runtime_wake_task_dispatches_payload(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from proliferate.background.tasks import runtime
+
+    calls: list[tuple[UUID, UUID | None]] = []
+    target_id = uuid4()
+    command_id = uuid4()
+
+    async def fake_run_managed_target_wake_job(
+        target_id: UUID,
+        *,
+        command_id: UUID | None = None,
+    ) -> None:
+        calls.append((target_id, command_id))
+
+    monkeypatch.setattr(
+        runtime,
+        "run_managed_target_wake_job",
+        fake_run_managed_target_wake_job,
+    )
+
+    runtime.wake_target.run(target_id=str(target_id), command_id=str(command_id))
+
+    assert calls == [(target_id, command_id)]
 
 
 def test_celery_routes_and_queues_match_ratified_names() -> None:

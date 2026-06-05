@@ -18,16 +18,14 @@ SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/agent_auth/session_load
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/commands/agent_auth_refresh.py 1 Lane 7 explicit transaction-boundary debt for best-effort preflight refresh
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/commands/service.py 1 remaining command idempotency integrity check still imports session_ops
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/commands/transactions.py 1 Lane 7 explicit API-facing command commit boundary debt
-SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/commands/wake.py 1 Lane 7 explicit after-commit command wake boundary debt
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/live/service.py 1 remaining service-owned live event session boundary debt through session_ops
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/worker/transactions.py 1 Lane 7 explicit worker API pre-response commit boundary debt
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/workspaces/service.py 1 remaining service-owned workspace lifecycle session boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/billing/service.py 34 remaining billing service-owned transaction/session boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/agent_auth/managed_credits.py 2 remaining agent-auth service concern managed-credit sync session boundary debt through session_ops
-SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/agent_auth/refresh.py 2 remaining agent-auth service concern refresh wake/error session boundary debt through session_ops
+SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/agent_auth/refresh.py 1 remaining agent-auth service concern error session boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/commands/agent_auth_refresh.py 1 Lane 7 explicit transaction-boundary debt for best-effort preflight refresh
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/commands/transactions.py 1 Lane 7 explicit API-facing command commit boundary debt
-SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/commands/wake.py 1 Lane 7 explicit after-commit command wake boundary debt
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/live/service.py 4 remaining live service-owned session/deferred boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/worker/transactions.py 2 Lane 7 explicit worker API pre-response commit boundary debt
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/workspaces/service.py 36 remaining workspace service-owned lifecycle transaction/session boundary debt through session_ops

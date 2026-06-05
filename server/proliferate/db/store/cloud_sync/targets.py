@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import and_, exists, or_, select
+from sqlalchemy import and_, exists, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -681,3 +681,18 @@ async def _get_worker_for_status(
     if status is None or status.worker_id is None:
         return None
     return await db.get(CloudWorker, status.worker_id)
+
+
+async def try_acquire_managed_target_wake_lock(db: AsyncSession, *, target_id: UUID) -> bool:
+    acquired = await db.scalar(
+        text("SELECT pg_try_advisory_lock(hashtextextended(:lock_key, 0))"),
+        {"lock_key": f"managed-target-wake:{target_id}"},
+    )
+    return acquired is True
+
+
+async def release_managed_target_wake_lock(db: AsyncSession, *, target_id: UUID) -> None:
+    await db.execute(
+        text("SELECT pg_advisory_unlock(hashtextextended(:lock_key, 0))"),
+        {"lock_key": f"managed-target-wake:{target_id}"},
+    )
