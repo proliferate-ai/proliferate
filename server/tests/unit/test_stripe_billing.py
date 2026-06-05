@@ -7,7 +7,7 @@ import pytest
 from proliferate.config import settings
 from proliferate.integrations import stripe
 from proliferate.integrations.stripe import client as stripe_client
-from proliferate.server.billing import service as billing_service
+from proliferate.server.billing import pricing as billing_pricing
 from proliferate.server.billing.models import BillingServiceError
 
 
@@ -159,7 +159,7 @@ async def test_cloud_subscription_price_validation_only_requires_monthly_price(
     monkeypatch.setattr(settings, "stripe_sandbox_overage_price_id", "")
     monkeypatch.setattr(stripe, "retrieve_price_details", _retrieve_price_details)
 
-    await billing_service.validate_cloud_subscription_price_configuration()
+    await billing_pricing.validate_cloud_subscription_price_configuration()
 
     assert requested_price_ids == ["price_cloud_monthly"]
 
@@ -178,7 +178,7 @@ async def test_pro_price_validation_requires_overage_price_id(
     monkeypatch.setattr(stripe, "retrieve_price_details", _retrieve_price_details)
 
     with pytest.raises(BillingServiceError) as exc_info:
-        await billing_service.validate_pro_subscription_price_configuration()
+        await billing_pricing.validate_pro_subscription_price_configuration()
 
     assert exc_info.value.code == "stripe_price_unconfigured"
 
@@ -253,7 +253,7 @@ async def test_pro_price_validation_rejects_misconfigured_prices(
     monkeypatch.setattr(stripe, "retrieve_price_details", _retrieve_price_details)
 
     with pytest.raises(BillingServiceError) as exc_info:
-        await billing_service.validate_pro_subscription_price_configuration()
+        await billing_pricing.validate_pro_subscription_price_configuration()
 
     assert exc_info.value.code == "stripe_price_misconfigured"
     assert exc_info.value.message == message
@@ -270,6 +270,6 @@ async def test_refill_price_validation_is_separate_from_subscription_validation(
     monkeypatch.setattr(stripe, "retrieve_price_details", _retrieve_price_details)
 
     with pytest.raises(BillingServiceError) as exc_info:
-        await billing_service.validate_refill_price_configuration()
+        await billing_pricing.validate_refill_price_configuration()
 
     assert exc_info.value.code == "stripe_refill_price_unconfigured"
