@@ -78,7 +78,7 @@ async def test_get_cloud_connection_uses_request_session_for_runtime_probe(
         _latest_runs,
     )
     monkeypatch.setattr(remote_access_service, "get_workspace_connection", _workspace_connection)
-    monkeypatch.setattr(remote_access_service, "load_cloud_workspace_by_id", _reload_workspace)
+    monkeypatch.setattr(remote_access_service, "get_cloud_workspace_by_id", _reload_workspace)
 
     connection = await remote_access_service.get_cloud_connection(
         request_db,

@@ -10,7 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudWorkspaceCleanupState, CloudWorkspaceStatus
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
-from proliferate.db.store.cloud_workspaces import persist_workspace_destroy, persist_workspace_stop
+from proliferate.db.store.cloud_workspace_runtime import (
+    persist_workspace_destroy,
+    persist_workspace_stop,
+)
 from proliferate.utils.time import utcnow
 
 _UNSET: Final = object()

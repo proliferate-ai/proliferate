@@ -19,8 +19,8 @@ from proliferate.db.store.cloud_workspace_setup_runs import (
     release_setup_run_claim,
 )
 from proliferate.db.store.cloud_sandboxes import reserve_sandbox_for_workspace
-from proliferate.db.store.cloud_workspaces import (
-    create_cloud_workspace_for_user,
+from proliferate.db.store.cloud_workspace_creation import create_cloud_workspace_for_user
+from proliferate.db.store.cloud_workspace_runtime import (
     finalize_workspace_provision,
     mark_workspace_error,
     persist_workspace_destroy,

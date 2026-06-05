@@ -36,12 +36,12 @@ from proliferate.db.store.cloud_mobility.workspaces import (
 from proliferate.db.store.cloud_sync.exposures import get_active_workspace_exposure
 from proliferate.db.store.cloud_sync.projections import list_session_projections_for_workspace
 from proliferate.db.store.cloud_workspaces import (
+    get_cloud_workspace_by_id,
     get_cloud_workspace_for_user,
-    load_cloud_workspace_by_id,
-    load_existing_cloud_workspace,
+    get_existing_cloud_workspace,
 )
 from proliferate.db.store.cloud_workspaces import (
-    list_cloud_workspaces_for_user as list_cloud_workspaces_store,
+    list_cloud_workspaces as list_cloud_workspaces_store,
 )
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
 from proliferate.server.cloud.errors import CloudApiError
@@ -155,7 +155,7 @@ async def _default_cleanup_items_for_cutover(
     ):
         return []
 
-    source_workspace = await load_cloud_workspace_by_id(db, source_cloud_workspace_id)
+    source_workspace = await get_cloud_workspace_by_id(db, source_cloud_workspace_id)
     if source_workspace is None:
         return []
 
@@ -281,7 +281,7 @@ async def ensure_cloud_workspace_mobility(
             status_code=400,
         )
 
-    existing_cloud_workspace = await load_existing_cloud_workspace(
+    existing_cloud_workspace = await get_existing_cloud_workspace(
         db,
         user_id=user_id,
         git_provider=git_provider,

@@ -1206,7 +1206,7 @@ class TestProvisionWorkspaceGitSetup:
         ) -> None:
             runtime_state_kwargs.append(updates)
 
-        async def _load_cloud_workspace_by_id(*args, **kwargs):
+        async def _get_cloud_workspace_by_id(*args, **kwargs):
             return None
 
         async def _apply_workspace_repo_config_after_provision(*args, **kwargs) -> None:
@@ -1278,8 +1278,8 @@ class TestProvisionWorkspaceGitSetup:
         )
         monkeypatch.setattr(
             runtime_provision,
-            "load_cloud_workspace_by_id",
-            _load_cloud_workspace_by_id,
+            "get_cloud_workspace_by_id",
+            _get_cloud_workspace_by_id,
         )
         monkeypatch.setattr(
             runtime_provision,
@@ -1381,7 +1381,7 @@ class TestProvisionWorkspaceGitSetup:
         ) -> None:
             runtime_state_kwargs.append(updates)
 
-        async def _load_cloud_workspace_by_id(*args, **kwargs):
+        async def _get_cloud_workspace_by_id(*args, **kwargs):
             return None
 
         async def _apply_workspace_repo_config_after_provision(*args, **kwargs) -> None:
@@ -1446,8 +1446,8 @@ class TestProvisionWorkspaceGitSetup:
         )
         monkeypatch.setattr(
             runtime_provision,
-            "load_cloud_workspace_by_id",
-            _load_cloud_workspace_by_id,
+            "get_cloud_workspace_by_id",
+            _get_cloud_workspace_by_id,
         )
         monkeypatch.setattr(
             runtime_provision,

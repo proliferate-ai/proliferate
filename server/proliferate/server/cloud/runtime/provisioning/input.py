@@ -17,7 +17,7 @@ from proliferate.db.store.cloud_runtime_environments import (
     save_runtime_environment_state,
 )
 from proliferate.db.store.cloud_sync import targets as targets_store
-from proliferate.db.store.cloud_workspaces import load_cloud_workspace_by_id
+from proliferate.db.store.cloud_workspaces import get_cloud_workspace_by_id
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.credentials.auth_status import (
@@ -61,7 +61,7 @@ async def load_provision_input(
     requested_base_sha: str | None = None,
 ) -> CloudProvisionInput | None:
     async with db_engine.async_session_factory() as db:
-        workspace = await load_cloud_workspace_by_id(db, workspace_id)
+        workspace = await get_cloud_workspace_by_id(db, workspace_id)
     if workspace is None:
         return None
 

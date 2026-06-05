@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.constants.billing import BILLING_MODE_ENFORCE
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_runtime_environments import load_runtime_environment_for_workspace
-from proliferate.db.store.cloud_workspaces import load_cloud_workspace_by_id
+from proliferate.db.store.cloud_workspaces import get_cloud_workspace_by_id
 from proliferate.server.billing.service import get_billing_snapshot_for_subject
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.config_sync.worktree_policy import (
@@ -78,7 +78,7 @@ async def get_workspace_connection(
         access_token=access_token,
     )
     db.expire_all()
-    reloaded_workspace = await load_cloud_workspace_by_id(db, workspace_id)
+    reloaded_workspace = await get_cloud_workspace_by_id(db, workspace_id)
     reloaded_environment = await load_runtime_environment_for_workspace(
         db,
         reloaded_workspace or workspace,

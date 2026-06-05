@@ -15,13 +15,16 @@ from proliferate.constants.cloud import (
     CloudCommandSource,
 )
 from proliferate.db import session_ops as db_session
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store import cloud_repo_config as repo_store
 from proliferate.db.store import cloud_sandbox_profiles as profile_store
-from proliferate.db.store import cloud_workspaces
 from proliferate.db.store.cloud_sync import command_records
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as target_store
+from proliferate.db.store.cloud_workspace_creation import (
+    create_managed_cloud_workspace_for_profile,
+)
 from proliferate.integrations.sandbox import get_configured_sandbox_provider
 from proliferate.server.automations.worker.cloud_execution.command_models import (
     EnsureRepoCheckoutPayload,
@@ -62,7 +65,7 @@ async def create_and_materialize_workspace(
     prompt: str,
     agent_kind: object,
     job_id: UUID,
-) -> tuple[cloud_workspaces.CloudWorkspace, str]:
+) -> tuple[CloudWorkspace, str]:
     profile = await profile_store.ensure_organization_sandbox_profile(
         db,
         organization_id=organization_id,
@@ -79,7 +82,7 @@ async def create_and_materialize_workspace(
         branch_name=branch_name,
         workspace_root=target.default_workspace_root,
     )
-    workspace = await cloud_workspaces.create_managed_cloud_workspace_for_profile(
+    workspace = await create_managed_cloud_workspace_for_profile(
         db,
         sandbox_profile_id=profile.id,
         target_id=target.id,

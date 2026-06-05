@@ -16,7 +16,7 @@ from proliferate.db.store.cloud_workspace_setup_runs import (
     mark_setup_run_timed_out,
     release_setup_run_claim,
 )
-from proliferate.db.store.cloud_workspaces import load_cloud_workspace_by_id
+from proliferate.db.store.cloud_workspaces import get_cloud_workspace_by_id
 from proliferate.integrations.anyharness import get_remote_terminal_command_run
 from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.runtime.service import get_workspace_connection
@@ -96,7 +96,7 @@ async def _poll_setup_run(setup_run_id: UUID) -> None:
         return
 
     async with db_engine.async_session_factory() as db:
-        workspace = await load_cloud_workspace_by_id(db, setup_run.workspace_id)
+        workspace = await get_cloud_workspace_by_id(db, setup_run.workspace_id)
     if workspace is None:
         await _finalize_setup_run(
             setup_run.id,

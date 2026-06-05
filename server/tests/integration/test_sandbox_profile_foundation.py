@@ -37,7 +37,7 @@ from proliferate.db.store.cloud_runtime_config import revisions as runtime_confi
 from proliferate.db.store.cloud_sync import command_leases, command_results, commands
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
-from proliferate.db.store.cloud_workspaces import (
+from proliferate.db.store.cloud_workspace_creation import (
     create_managed_cloud_workspace_for_profile,
 )
 from proliferate.server.cloud.runtime import wake as runtime_wake

@@ -20,11 +20,11 @@ from proliferate.db.store import billing as billing_store
 from proliferate.db.store.cloud_repo_config import get_cloud_repo_config
 from proliferate.db.store.cloud_sync import commands as command_store
 from proliferate.db.store.cloud_sync import targets as targets_store
+from proliferate.db.store.cloud_workspace_creation import create_direct_target_cloud_workspace
+from proliferate.db.store.cloud_workspace_runtime import mark_workspace_error_by_id
 from proliferate.db.store.cloud_workspaces import (
-    create_direct_target_cloud_workspace,
     get_cloud_workspace_by_id,
     get_existing_cloud_workspace,
-    mark_workspace_error_by_id,
 )
 from proliferate.server.automations.worker.cloud_execution.command_models import (
     EnsureRepoCheckoutPayload,

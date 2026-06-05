@@ -21,6 +21,7 @@ from proliferate.db.models.cloud.commands import CloudCommand
 from proliferate.db.models.cloud.exposures import CloudWorkspaceExposure
 from proliferate.db.models.cloud.sync import CloudPendingInteraction, CloudSessionProjection
 from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
+from proliferate.db.store import cloud_workspace_creation as workspace_creation
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
 from proliferate.db.store.cloud_sandboxes import (
@@ -34,9 +35,7 @@ from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_control as worker_control_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
-from proliferate.server.cloud.agent_auth.service import (
-    request_agent_auth_refresh_for_profile_target,
-)
+from proliferate.server.cloud.agent_auth import service as agent_auth_service
 from proliferate.server.cloud.runtime import wake as runtime_wake
 from proliferate.server.cloud.worker import auth as worker_auth
 from proliferate.utils.crypto import encrypt_json, encrypt_text
@@ -301,7 +300,7 @@ async def _create_ready_cloud_workspace(
     target_id: str,
     anyharness_workspace_id: str = "workspace-1",
 ) -> str:
-    workspace = await cloud_workspaces.create_cloud_workspace_record(
+    workspace = await workspace_creation.create_cloud_workspace_record(
         db_session,
         user_id=UUID(auth.user_id),
         display_name="Command Workspace",
@@ -339,7 +338,7 @@ async def _create_ready_managed_cloud_workspace(
     user_id: UUID,
     suffix: str,
 ) -> str:
-    workspace = await cloud_workspaces.create_managed_cloud_workspace_for_profile(
+    workspace = await workspace_creation.create_managed_cloud_workspace_for_profile(
         db_session,
         sandbox_profile_id=profile_id,
         target_id=target_id,
@@ -3593,7 +3592,7 @@ class TestCloudCommandsApi:
             force_restart=False,
         )
         assert profile is not None
-        await request_agent_auth_refresh_for_profile_target(
+        await agent_auth_service.request_agent_auth_refresh_for_profile_target(
             db_session,
             sandbox_profile_id=profile.id,
             target_id=target_uuid,
@@ -3671,7 +3670,7 @@ class TestCloudCommandsApi:
             force_restart=False,
         )
         assert profile is not None
-        await request_agent_auth_refresh_for_profile_target(
+        await agent_auth_service.request_agent_auth_refresh_for_profile_target(
             db_session,
             sandbox_profile_id=profile.id,
             target_id=target_uuid,
@@ -3722,7 +3721,7 @@ class TestCloudCommandsApi:
         )
         await db_session.commit()
 
-        await request_agent_auth_refresh_for_profile_target(
+        await agent_auth_service.request_agent_auth_refresh_for_profile_target(
             db_session,
             sandbox_profile_id=profile.id,
             target_id=target_uuid,
@@ -3782,7 +3781,7 @@ class TestCloudCommandsApi:
             force_restart=False,
         )
         assert profile is not None
-        await request_agent_auth_refresh_for_profile_target(
+        await agent_auth_service.request_agent_auth_refresh_for_profile_target(
             db_session,
             sandbox_profile_id=profile.id,
             target_id=first_target_uuid,
@@ -3838,7 +3837,7 @@ class TestCloudCommandsApi:
             user_id=UUID(auth.user_id),
             suffix="agent-auth-replaced-target-requeue",
         )
-        await request_agent_auth_refresh_for_profile_target(
+        await agent_auth_service.request_agent_auth_refresh_for_profile_target(
             db_session,
             sandbox_profile_id=profile.id,
             target_id=second_target_uuid,
@@ -3943,7 +3942,7 @@ class TestCloudCommandsApi:
             force_restart=False,
         )
         assert first_profile is not None
-        await request_agent_auth_refresh_for_profile_target(
+        await agent_auth_service.request_agent_auth_refresh_for_profile_target(
             db_session,
             sandbox_profile_id=profile.id,
             target_id=target_uuid,
@@ -3973,7 +3972,7 @@ class TestCloudCommandsApi:
             force_restart=False,
         )
         assert second_profile is not None
-        await request_agent_auth_refresh_for_profile_target(
+        await agent_auth_service.request_agent_auth_refresh_for_profile_target(
             db_session,
             sandbox_profile_id=profile.id,
             target_id=target_uuid,
@@ -4047,7 +4046,7 @@ class TestCloudCommandsApi:
             force_restart=False,
         )
         assert profile is not None
-        await request_agent_auth_refresh_for_profile_target(
+        await agent_auth_service.request_agent_auth_refresh_for_profile_target(
             db_session,
             sandbox_profile_id=profile.id,
             target_id=target_uuid,
