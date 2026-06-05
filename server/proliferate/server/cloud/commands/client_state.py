@@ -13,6 +13,7 @@ from proliferate.constants.cloud import (
     CloudCommandSource,
     CloudCommandStatus,
 )
+from proliferate.db.store.cloud_sync import command_records
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import pending_interactions as pending_interactions_store
 from proliferate.server.cloud.commands.domain.serialization import compact_command_json
@@ -43,7 +44,7 @@ def _str_or_none(value: object) -> str | None:
 
 async def record_pending_prompt_interaction_for_command(
     db: AsyncSession,
-    command: commands_store.CloudCommandSnapshot,
+    command: command_records.CloudCommandSnapshot,
 ) -> None:
     if (
         command.kind != CloudCommandKind.send_prompt.value
@@ -86,8 +87,8 @@ async def record_pending_prompt_interaction_for_command(
 
 async def expire_stale_client_command_if_needed(
     db: AsyncSession,
-    command: commands_store.CloudCommandSnapshot,
-) -> commands_store.CloudCommandSnapshot:
+    command: command_records.CloudCommandSnapshot,
+) -> command_records.CloudCommandSnapshot:
     if command.source not in _CLIENT_EXPIRABLE_QUEUED_COMMAND_SOURCES:
         return command
     if command.kind not in _CLIENT_EXPIRABLE_QUEUED_COMMAND_KINDS:
@@ -130,9 +131,9 @@ async def expire_stale_client_commands_for_target(
     db: AsyncSession,
     *,
     target_id: UUID,
-) -> tuple[commands_store.CloudCommandSnapshot, ...]:
+) -> tuple[command_records.CloudCommandSnapshot, ...]:
     now = utcnow()
-    expired_commands: list[commands_store.CloudCommandSnapshot] = []
+    expired_commands: list[command_records.CloudCommandSnapshot] = []
     for source in _CLIENT_EXPIRABLE_QUEUED_COMMAND_SOURCES:
         expired_commands.extend(
             await commands_store.expire_stale_queued_commands(
@@ -154,7 +155,7 @@ async def expire_stale_client_commands_for_target(
 
 async def mark_pending_prompt_interaction_failed_for_command(
     db: AsyncSession,
-    command: commands_store.CloudCommandSnapshot,
+    command: command_records.CloudCommandSnapshot,
 ) -> None:
     if command.kind != CloudCommandKind.send_prompt.value or command.session_id is None:
         return

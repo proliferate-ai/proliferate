@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
@@ -17,20 +16,27 @@ from proliferate.constants.cloud import (
     CloudWorkspaceCleanupState,
     CloudWorkspaceStatus,
 )
-from proliferate.db.models.cloud.agent_auth import SandboxProfile, SandboxProfileTargetState
 from proliferate.db.models.cloud.commands import CloudCommand
-from proliferate.db.models.cloud.exposures import CloudWorkspaceExposure
-from proliferate.db.models.cloud.runtime_config import (
-    SandboxProfileRuntimeConfigCurrent,
-    SandboxProfileRuntimeConfigRevision,
-)
 from proliferate.db.models.cloud.sync import CloudSessionProjection
-from proliferate.db.models.cloud.targets import CloudTarget, CloudWorker
+from proliferate.db.models.cloud.targets import CloudTarget
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_sync import worker_control
+from proliferate.db.store.cloud_sync.command_records import (
+    CloudCommandSnapshot,
+    is_terminal_status,
+    snapshot_command,
+)
+from proliferate.db.store.cloud_sync.command_scope import (
+    cloud_workspace_matches_command,
+    command_requires_managed_workspace,
+    leased_target_is_stale,
+    load_active_workspace_exposure,
+    target_is_managed_cloud,
+    workspace_matches_command_target,
+)
 from proliferate.utils.time import utcnow
 
-WORKSPACE_LIFECYCLE_GUARDED_COMMAND_KINDS: frozenset[str] = frozenset(
+ARCHIVE_SUPERSEDED_COMMAND_KINDS: frozenset[str] = frozenset(
     (
         CloudCommandKind.start_session.value,
         CloudCommandKind.send_prompt.value,
@@ -41,90 +47,13 @@ WORKSPACE_LIFECYCLE_GUARDED_COMMAND_KINDS: frozenset[str] = frozenset(
         CloudCommandKind.close_session.value,
         CloudCommandKind.materialize_workspace.value,
         CloudCommandKind.backfill_exposed_workspace.value,
-        CloudCommandKind.prune_workspace_worktree.value,
     )
-)
-
-ARCHIVE_SUPERSEDED_COMMAND_KINDS: frozenset[str] = frozenset(
-    WORKSPACE_LIFECYCLE_GUARDED_COMMAND_KINDS
-    - {
-        CloudCommandKind.prune_workspace_worktree.value,
-    }
 )
 
 SUPERSEDABLE_COMMAND_STATUSES: tuple[str, ...] = (
     CloudCommandStatus.queued.value,
     CloudCommandStatus.leased.value,
 )
-
-
-@dataclass(frozen=True)
-class CloudCommandSnapshot:
-    id: UUID
-    idempotency_scope: str
-    idempotency_key: str
-    target_id: UUID
-    organization_id: UUID | None
-    actor_user_id: UUID | None
-    actor_kind: str
-    source: str
-    workspace_id: str | None
-    cloud_workspace_id: UUID | None
-    session_id: str | None
-    kind: str
-    payload_json: str
-    observed_event_seq: int | None
-    preconditions_json: str | None
-    authorization_context_json: str | None
-    status: str
-    lease_id: str | None
-    leased_by_worker_id: UUID | None
-    attempt_count: int
-    lease_expires_at: datetime | None
-    delivered_at: datetime | None
-    accepted_at: datetime | None
-    rejected_at: datetime | None
-    expired_at: datetime | None
-    error_code: str | None
-    error_message: str | None
-    result_json: str | None
-    created_at: datetime
-    updated_at: datetime
-
-
-def _snapshot(row: CloudCommand) -> CloudCommandSnapshot:
-    return CloudCommandSnapshot(
-        id=row.id,
-        idempotency_scope=row.idempotency_scope,
-        idempotency_key=row.idempotency_key,
-        target_id=row.target_id,
-        organization_id=row.organization_id,
-        actor_user_id=row.actor_user_id,
-        actor_kind=row.actor_kind,
-        source=row.source,
-        workspace_id=row.workspace_id,
-        cloud_workspace_id=row.cloud_workspace_id,
-        session_id=row.session_id,
-        kind=row.kind,
-        payload_json=row.payload_json,
-        observed_event_seq=row.observed_event_seq,
-        preconditions_json=row.preconditions_json,
-        authorization_context_json=row.authorization_context_json,
-        status=row.status,
-        lease_id=row.lease_id,
-        leased_by_worker_id=row.leased_by_worker_id,
-        attempt_count=row.attempt_count,
-        lease_expires_at=row.lease_expires_at,
-        delivered_at=row.delivered_at,
-        accepted_at=row.accepted_at,
-        rejected_at=row.rejected_at,
-        expired_at=row.expired_at,
-        error_code=row.error_code,
-        error_message=row.error_message,
-        result_json=row.result_json,
-        created_at=row.created_at,
-        updated_at=row.updated_at,
-    )
 
 
 async def create_command(
@@ -154,7 +83,7 @@ async def create_command(
             CloudCommandKind.materialize_workspace.value,
             CloudCommandKind.backfill_exposed_workspace.value,
         }
-        and _target_is_managed_cloud(target)
+        and target_is_managed_cloud(target)
         and cloud_workspace_id is None
     ):
         raise RuntimeError(f"Managed {kind} commands require cloud_workspace_id.")
@@ -184,7 +113,7 @@ async def create_command(
     db.add(row)
     await db.flush()
     await worker_control.bump_control_revision(db, target_id=target_id, now=now)
-    return _snapshot(row)
+    return snapshot_command(row)
 
 
 async def get_command_by_id(
@@ -192,7 +121,7 @@ async def get_command_by_id(
     command_id: UUID,
 ) -> CloudCommandSnapshot | None:
     row = await db.get(CloudCommand, command_id)
-    return _snapshot(row) if row is not None else None
+    return snapshot_command(row) if row is not None else None
 
 
 async def get_command_by_idempotency(
@@ -208,7 +137,7 @@ async def get_command_by_idempotency(
             .where(CloudCommand.idempotency_key == idempotency_key)
         )
     ).scalar_one_or_none()
-    return _snapshot(row) if row is not None else None
+    return snapshot_command(row) if row is not None else None
 
 
 async def count_active_commands_for_target(
@@ -250,10 +179,10 @@ async def expire_command_if_not_terminal(
     ).scalar_one_or_none()
     if row is None:
         return None
-    if _is_terminal_status(row.status):
-        return _snapshot(row)
+    if is_terminal_status(row.status):
+        return snapshot_command(row)
     if eligible_statuses is not None and row.status not in eligible_statuses:
-        return _snapshot(row)
+        return snapshot_command(row)
     row.status = CloudCommandStatus.expired.value
     row.expired_at = now
     row.error_code = error_code
@@ -261,7 +190,7 @@ async def expire_command_if_not_terminal(
     row.updated_at = now
     await db.flush()
     await worker_control.bump_control_revision(db, target_id=row.target_id, now=now)
-    return _snapshot(row)
+    return snapshot_command(row)
 
 
 async def expire_stale_queued_commands(
@@ -321,7 +250,7 @@ async def expire_stale_queued_commands(
     await db.flush()
     for expired_target_id in {row.target_id for row in rows}:
         await worker_control.bump_control_revision(db, target_id=expired_target_id, now=now)
-    return tuple(_snapshot(row) for row in rows)
+    return tuple(snapshot_command(row) for row in rows)
 
 
 async def supersede_workspace_commands(
@@ -367,456 +296,7 @@ async def supersede_workspace_commands(
             target_id=superseded_target_id,
             now=marked_at,
         )
-    return tuple(_snapshot(row) for row in rows)
-
-
-async def lease_next_command(
-    db: AsyncSession,
-    *,
-    target_id: UUID,
-    worker_id: UUID,
-    supported_kinds: tuple[str, ...],
-    lease_id: str,
-    lease_expires_at: datetime,
-    now: datetime,
-    blocked_commands: list[CloudCommandSnapshot] | None = None,
-) -> CloudCommandSnapshot | None:
-    worker = await db.get(CloudWorker, worker_id)
-    if worker is None or worker.target_id != target_id:
-        return None
-    target = await db.get(CloudTarget, target_id)
-    if target is None or target.archived_at is not None:
-        return None
-    target_is_managed_cloud = _target_is_managed_cloud(target)
-    for _ in range(20):
-        query = (
-            select(CloudCommand)
-            .where(CloudCommand.target_id == target_id)
-            .where(CloudCommand.kind.in_(supported_kinds))
-            .where(
-                or_(
-                    CloudCommand.status == CloudCommandStatus.queued.value,
-                    and_(
-                        CloudCommand.status == CloudCommandStatus.leased.value,
-                        CloudCommand.lease_expires_at.is_not(None),
-                        CloudCommand.lease_expires_at <= now,
-                    ),
-                )
-            )
-        )
-        if CloudCommandKind.refresh_agent_auth_config.value not in supported_kinds:
-            query = query.where(
-                ~and_(
-                    CloudCommand.kind.in_(
-                        (
-                            CloudCommandKind.start_session.value,
-                            CloudCommandKind.send_prompt.value,
-                        )
-                    ),
-                    or_(
-                        CloudCommand.payload_json.contains('"sandboxProfileId"'),
-                        CloudCommand.payload_json.contains('"requiredAgentAuthRevision"'),
-                    ),
-                )
-            )
-        row = (
-            await db.execute(
-                query.order_by(CloudCommand.created_at.asc())
-                .with_for_update(skip_locked=True)
-                .limit(1)
-            )
-        ).scalar_one_or_none()
-        if row is None:
-            return None
-        if (
-            row.kind == CloudCommandKind.materialize_workspace.value
-            and target_is_managed_cloud
-            and row.cloud_workspace_id is None
-        ):
-            row.status = CloudCommandStatus.rejected.value
-            row.error_code = "cloud_workspace_required"
-            row.error_message = "Managed materialize_workspace command is missing Cloud workspace."
-            row.rejected_at = now
-            row.updated_at = now
-            await db.flush()
-            if blocked_commands is not None:
-                blocked_commands.append(_snapshot(row))
-            continue
-        lifecycle_error = await _workspace_lifecycle_lease_blocker(db, row)
-        if lifecycle_error is not None:
-            status, code, message = lifecycle_error
-            row.status = status
-            row.error_code = code
-            row.error_message = message
-            if status == CloudCommandStatus.rejected.value:
-                row.rejected_at = now
-            row.updated_at = now
-            await db.flush()
-            if blocked_commands is not None:
-                blocked_commands.append(_snapshot(row))
-            continue
-        exposure_error = await _exposure_lease_blocker(db, row)
-        if exposure_error is not None:
-            status, code, message = exposure_error
-            row.status = status
-            row.error_code = code
-            row.error_message = message
-            if status == CloudCommandStatus.rejected.value:
-                row.rejected_at = now
-            row.updated_at = now
-            await db.flush()
-            if blocked_commands is not None:
-                blocked_commands.append(_snapshot(row))
-            continue
-        runtime_config_error = await _runtime_config_lease_blocker(db, row, target=target)
-        if runtime_config_error is not None:
-            status, code, message = runtime_config_error
-            row.status = status
-            row.error_code = code
-            row.error_message = message
-            if status == CloudCommandStatus.rejected.value:
-                row.rejected_at = now
-            row.updated_at = now
-            await db.flush()
-            if blocked_commands is not None:
-                blocked_commands.append(_snapshot(row))
-            continue
-        agent_auth_error = await _agent_auth_lease_blocker(db, row, target=target)
-        if agent_auth_error is not None:
-            status, code, message = agent_auth_error
-            row.status = status
-            row.error_code = code
-            row.error_message = message
-            if status == CloudCommandStatus.rejected.value:
-                row.rejected_at = now
-            row.updated_at = now
-            await db.flush()
-            if blocked_commands is not None:
-                blocked_commands.append(_snapshot(row))
-            continue
-        row.status = CloudCommandStatus.leased.value
-        row.lease_id = lease_id
-        row.leased_by_worker_id = worker_id
-        row.lease_expires_at = lease_expires_at
-        row.attempt_count += 1
-        row.delivered_at = None
-        row.error_code = None
-        row.error_message = None
-        row.updated_at = now
-        await db.flush()
-        return _snapshot(row)
-    return None
-
-
-async def _workspace_lifecycle_lease_blocker(
-    db: AsyncSession,
-    row: CloudCommand,
-) -> tuple[str, str, str] | None:
-    if row.cloud_workspace_id is None or row.kind not in WORKSPACE_LIFECYCLE_GUARDED_COMMAND_KINDS:
-        return None
-    workspace = await db.get(CloudWorkspace, row.cloud_workspace_id)
-    if workspace is None:
-        return (
-            CloudCommandStatus.superseded.value,
-            "cloud_workspace_missing",
-            "Workspace command was superseded because the Cloud workspace no longer exists.",
-        )
-    if not await _workspace_matches_command_target(db, workspace=workspace, row=row):
-        return (
-            CloudCommandStatus.superseded.value,
-            "cloud_workspace_target_mismatch",
-            "Workspace command target no longer matches the Cloud workspace.",
-        )
-    if (
-        workspace.archived_at is not None
-        and row.kind != CloudCommandKind.prune_workspace_worktree.value
-    ):
-        return (
-            CloudCommandStatus.superseded.value,
-            "cloud_workspace_archived",
-            "Workspace command was superseded because the Cloud workspace is archived.",
-        )
-    return None
-
-
-async def _runtime_config_lease_blocker(
-    db: AsyncSession,
-    row: CloudCommand,
-    *,
-    target: CloudTarget | None,
-) -> tuple[str, str, str] | None:
-    if row.kind not in {
-        CloudCommandKind.start_session.value,
-        CloudCommandKind.send_prompt.value,
-        CloudCommandKind.decide_plan.value,
-    }:
-        return None
-    try:
-        payload = json.loads(row.payload_json or "{}")
-    except json.JSONDecodeError:
-        return (
-            CloudCommandStatus.rejected.value,
-            "runtime_config_payload_invalid",
-            "Launch command payload is not valid JSON.",
-        )
-    if not isinstance(payload, dict):
-        return (
-            CloudCommandStatus.rejected.value,
-            "runtime_config_payload_invalid",
-            "Launch command payload is invalid.",
-        )
-    sandbox_profile_id = payload.get("sandboxProfileId")
-    required_revision_id = payload.get("requiredRuntimeConfigRevisionId")
-    required_sequence = payload.get("requiredRuntimeConfigSequence")
-    required_content_hash = payload.get("requiredRuntimeConfigContentHash")
-    if (
-        required_revision_id is None
-        and required_sequence is None
-        and required_content_hash is None
-    ):
-        return None
-    try:
-        profile_id = UUID(str(sandbox_profile_id))
-    except (TypeError, ValueError):
-        return (
-            CloudCommandStatus.rejected.value,
-            "runtime_config_profile_invalid",
-            "Launch command runtime config profile is invalid.",
-        )
-    try:
-        revision_id = UUID(str(required_revision_id))
-    except (TypeError, ValueError):
-        return (
-            CloudCommandStatus.rejected.value,
-            "runtime_config_revision_invalid",
-            "Launch command runtime config revision is invalid.",
-        )
-    if not isinstance(required_sequence, int) or isinstance(required_sequence, bool):
-        return (
-            CloudCommandStatus.rejected.value,
-            "runtime_config_sequence_invalid",
-            "Launch command runtime config sequence is invalid.",
-        )
-    if not isinstance(required_content_hash, str) or not required_content_hash.strip():
-        return (
-            CloudCommandStatus.rejected.value,
-            "runtime_config_hash_invalid",
-            "Launch command runtime config content hash is invalid.",
-        )
-    if target is None or target.sandbox_profile_id != profile_id:
-        return (
-            CloudCommandStatus.superseded.value,
-            "runtime_config_target_mismatch",
-            "Launch command runtime config target no longer matches.",
-        )
-    current = await db.get(SandboxProfileRuntimeConfigCurrent, profile_id)
-    if current is None or current.current_revision_id != revision_id:
-        return (
-            CloudCommandStatus.superseded.value,
-            "runtime_config_revision_stale",
-            "Launch command runtime config revision was superseded before dispatch.",
-        )
-    revision = await db.get(SandboxProfileRuntimeConfigRevision, revision_id)
-    if (
-        revision is None
-        or revision.sandbox_profile_id != profile_id
-        or revision.sequence != required_sequence
-        or revision.content_hash != required_content_hash
-    ):
-        return (
-            CloudCommandStatus.superseded.value,
-            "runtime_config_revision_stale",
-            "Launch command runtime config revision was superseded before dispatch.",
-        )
-    if _runtime_config_has_blocking_errors(revision.manifest_json):
-        return (
-            CloudCommandStatus.superseded.value,
-            "runtime_config_blocked",
-            "Launch command runtime config is blocked by resolver errors.",
-        )
-    state = (
-        await db.execute(
-            select(SandboxProfileTargetState).where(
-                SandboxProfileTargetState.sandbox_profile_id == profile_id,
-                SandboxProfileTargetState.target_id == row.target_id,
-            )
-        )
-    ).scalar_one_or_none()
-    if (
-        state is None
-        or state.runtime_config_status != "applied"
-        or state.applied_runtime_config_revision_id != str(revision_id)
-        or state.applied_runtime_config_sequence < required_sequence
-    ):
-        return (
-            CloudCommandStatus.superseded.value,
-            "runtime_config_not_ready",
-            "Launch command runtime config was no longer current before dispatch.",
-        )
-    return None
-
-
-async def _exposure_lease_blocker(
-    db: AsyncSession,
-    row: CloudCommand,
-) -> tuple[str, str, str] | None:
-    if row.kind not in {
-        CloudCommandKind.backfill_exposed_workspace.value,
-        CloudCommandKind.materialize_workspace.value,
-    }:
-        return None
-    if (
-        row.kind == CloudCommandKind.materialize_workspace.value
-        and not await _command_requires_managed_workspace(
-            db,
-            row,
-        )
-    ):
-        return None
-    if row.cloud_workspace_id is None:
-        return (
-            CloudCommandStatus.rejected.value,
-            "cloud_workspace_required",
-            f"{row.kind} command is missing Cloud workspace.",
-        )
-    exposure = await _load_active_workspace_exposure(
-        db,
-        target_id=row.target_id,
-        cloud_workspace_id=row.cloud_workspace_id,
-    )
-    if exposure is None or exposure.status != "active":
-        return (
-            CloudCommandStatus.rejected.value,
-            "cloud_exposure_not_active",
-            f"{row.kind} command does not reference an active exposure.",
-        )
-    if row.kind == CloudCommandKind.materialize_workspace.value:
-        workspace = await db.get(CloudWorkspace, row.cloud_workspace_id)
-        can_rematerialize_pruned_workspace = (
-            workspace is not None
-            and workspace.archived_at is None
-            and workspace.anyharness_workspace_id is None
-            and workspace.status == CloudWorkspaceStatus.needs_rematerialization.value
-        )
-        if not exposure.commandable and not can_rematerialize_pruned_workspace:
-            return (
-                CloudCommandStatus.rejected.value,
-                "cloud_exposure_not_commandable",
-                "materialize_workspace exposure is read-only.",
-            )
-        return None
-    if not exposure.anyharness_workspace_id or (
-        row.workspace_id is not None and row.workspace_id != exposure.anyharness_workspace_id
-    ):
-        return (
-            CloudCommandStatus.rejected.value,
-            "cloud_exposure_not_active",
-            "backfill_exposed_workspace command does not reference an active exposure.",
-        )
-    return None
-
-
-def _runtime_config_has_blocking_errors(manifest_json: str) -> bool:
-    try:
-        manifest = json.loads(manifest_json)
-    except ValueError:
-        return False
-    if not isinstance(manifest, dict):
-        return False
-    blocking_errors = manifest.get("blockingErrors")
-    return isinstance(blocking_errors, list) and any(
-        isinstance(item, dict) for item in blocking_errors
-    )
-
-
-async def _agent_auth_lease_blocker(
-    db: AsyncSession,
-    row: CloudCommand,
-    *,
-    target: CloudTarget | None,
-) -> tuple[str, str, str] | None:
-    if row.kind not in {
-        CloudCommandKind.start_session.value,
-        CloudCommandKind.send_prompt.value,
-    }:
-        return None
-    try:
-        payload = json.loads(row.payload_json or "{}")
-    except json.JSONDecodeError:
-        return (
-            CloudCommandStatus.rejected.value,
-            "agent_auth_payload_invalid",
-            "Launch command payload is not valid JSON.",
-        )
-    if not isinstance(payload, dict):
-        return (
-            CloudCommandStatus.rejected.value,
-            "agent_auth_payload_invalid",
-            "Launch command payload is invalid.",
-        )
-    sandbox_profile_id = payload.get("sandboxProfileId")
-    required_revision = payload.get("requiredAgentAuthRevision")
-    if sandbox_profile_id is None and required_revision is None:
-        return None
-    try:
-        profile_id = UUID(str(sandbox_profile_id))
-    except (TypeError, ValueError):
-        return (
-            CloudCommandStatus.rejected.value,
-            "agent_auth_profile_invalid",
-            "Launch command agent auth profile is invalid.",
-        )
-    if not isinstance(required_revision, int) or isinstance(required_revision, bool):
-        return (
-            CloudCommandStatus.rejected.value,
-            "agent_auth_revision_invalid",
-            "Launch command agent auth revision is invalid.",
-        )
-    if target is None or target.sandbox_profile_id != profile_id:
-        return (
-            CloudCommandStatus.superseded.value,
-            "agent_auth_target_mismatch",
-            "Launch command agent auth target no longer matches.",
-        )
-    profile = await db.get(SandboxProfile, profile_id)
-    if profile is None or profile.archived_at is not None or profile.deleted_at is not None:
-        return (
-            CloudCommandStatus.superseded.value,
-            "agent_auth_profile_missing",
-            "Launch command agent auth profile is no longer available.",
-        )
-    if required_revision != profile.desired_agent_auth_revision:
-        return (
-            CloudCommandStatus.superseded.value,
-            "agent_auth_revision_stale",
-            "Launch command agent auth revision was superseded before dispatch.",
-        )
-    state = (
-        await db.execute(
-            select(SandboxProfileTargetState).where(
-                SandboxProfileTargetState.sandbox_profile_id == profile_id,
-                SandboxProfileTargetState.target_id == row.target_id,
-            )
-        )
-    ).scalar_one_or_none()
-    if (
-        state is None
-        or state.agent_auth_status != "applied"
-        or state.applied_agent_auth_revision is None
-        or state.applied_agent_auth_revision < required_revision
-    ):
-        return (
-            CloudCommandStatus.superseded.value,
-            "agent_auth_not_ready",
-            "Launch command agent auth config was no longer current before dispatch.",
-        )
-    if state.agent_auth_force_restart_required:
-        return (
-            CloudCommandStatus.superseded.value,
-            "agent_auth_restart_required",
-            "Launch command agent auth config requires restart before dispatch.",
-        )
-    return None
+    return tuple(snapshot_command(row) for row in rows)
 
 
 async def mark_command_delivered(
@@ -836,21 +316,21 @@ async def mark_command_delivered(
     if row is None:
         return None
     if row.status == CloudCommandStatus.delivered.value:
-        return _snapshot(row)
-    if _is_terminal_status(row.status) or row.status != CloudCommandStatus.leased.value:
+        return snapshot_command(row)
+    if is_terminal_status(row.status) or row.status != CloudCommandStatus.leased.value:
         return None
-    if await _leased_target_is_stale(db, row, worker_id=worker_id):
+    if await leased_target_is_stale(db, row, worker_id=worker_id):
         row.status = CloudCommandStatus.superseded.value
         row.error_code = "stale_target"
         row.error_message = "Command delivery came from an archived or mismatched target."
         row.updated_at = now
         await db.flush()
-        return _snapshot(row)
+        return snapshot_command(row)
     row.status = CloudCommandStatus.delivered.value
     row.delivered_at = now
     row.updated_at = now
     await db.flush()
-    return _snapshot(row)
+    return snapshot_command(row)
 
 
 async def mark_command_failed_delivery(
@@ -871,26 +351,26 @@ async def mark_command_failed_delivery(
     )
     if row is None:
         return None
-    if _is_terminal_status(row.status):
-        return _snapshot(row)
+    if is_terminal_status(row.status):
+        return snapshot_command(row)
     if row.status not in {
         CloudCommandStatus.leased.value,
         CloudCommandStatus.delivered.value,
     }:
         return None
-    if await _leased_target_is_stale(db, row, worker_id=worker_id):
+    if await leased_target_is_stale(db, row, worker_id=worker_id):
         row.status = CloudCommandStatus.superseded.value
         row.error_code = "stale_target"
         row.error_message = "Command delivery came from an archived or mismatched target."
         row.updated_at = now
         await db.flush()
-        return _snapshot(row)
+        return snapshot_command(row)
     row.status = CloudCommandStatus.failed_delivery.value
     row.error_code = error_code
     row.error_message = error_message
     row.updated_at = now
     await db.flush()
-    return _snapshot(row)
+    return snapshot_command(row)
 
 
 async def mark_queued_commands_failed_delivery_for_target(
@@ -924,7 +404,7 @@ async def mark_queued_commands_failed_delivery_for_target(
         row.error_message = error_message
         row.updated_at = now
     await db.flush()
-    return tuple(_snapshot(row) for row in rows)
+    return tuple(snapshot_command(row) for row in rows)
 
 
 async def record_command_result(
@@ -949,22 +429,22 @@ async def record_command_result(
     )
     if row is None:
         return None
-    if _is_terminal_status(row.status):
-        return _snapshot(row)
+    if is_terminal_status(row.status):
+        return snapshot_command(row)
     if row.status not in {
         CloudCommandStatus.leased.value,
         CloudCommandStatus.delivered.value,
     }:
         return None
-    stale_target = await _leased_target_is_stale(db, row, worker_id=worker_id)
+    stale_target = await leased_target_is_stale(db, row, worker_id=worker_id)
     if stale_target:
         row.status = CloudCommandStatus.superseded.value
         row.error_code = "stale_target"
         row.error_message = "Command result came from an archived or mismatched target."
         row.updated_at = now
         await db.flush()
-        return _snapshot(row)
-    command_requires_managed_workspace = await _command_requires_managed_workspace(db, row)
+        return snapshot_command(row)
+    requires_managed_workspace = await command_requires_managed_workspace(db, row)
     effective_status = status
     effective_error_code = error_code
     effective_error_message = error_message
@@ -976,7 +456,7 @@ async def record_command_result(
     result_cloud_workspace_id = cloud_workspace_id or _result_cloud_workspace_id(result_json)
     if (
         row.kind == CloudCommandKind.materialize_workspace.value
-        and command_requires_managed_workspace
+        and requires_managed_workspace
         and row.cloud_workspace_id is None
     ):
         effective_status = CloudCommandStatus.rejected.value
@@ -990,7 +470,7 @@ async def record_command_result(
         and (
             result_cloud_workspace_id is None
             or result_cloud_workspace_id != row.cloud_workspace_id
-            or not await _cloud_workspace_matches_command(db, row)
+            or not await cloud_workspace_matches_command(db, row)
         )
     ):
         effective_status = CloudCommandStatus.rejected.value
@@ -1066,69 +546,7 @@ async def record_command_result(
             result_json=result_json,
             now=now,
         )
-    return _snapshot(row)
-
-
-async def _leased_target_is_stale(
-    db: AsyncSession,
-    row: CloudCommand,
-    *,
-    worker_id: UUID,
-) -> bool:
-    worker = await db.get(CloudWorker, worker_id)
-    if worker is None:
-        return True
-    if worker.target_id != row.target_id:
-        return True
-    target = await db.get(CloudTarget, row.target_id)
-    return target is None or target.archived_at is not None
-
-
-async def _command_requires_managed_workspace(db: AsyncSession, row: CloudCommand) -> bool:
-    return _target_is_managed_cloud(await db.get(CloudTarget, row.target_id))
-
-
-def _target_is_managed_cloud(target: CloudTarget | None) -> bool:
-    return (
-        target is not None
-        and target.kind == "managed_cloud"
-        and target.sandbox_profile_id is not None
-        and target.profile_target_role == "primary"
-        and target.archived_at is None
-    )
-
-
-async def _cloud_workspace_matches_command(db: AsyncSession, row: CloudCommand) -> bool:
-    if row.cloud_workspace_id is None:
-        return True
-    workspace = await db.get(CloudWorkspace, row.cloud_workspace_id)
-    if (
-        workspace is None
-        or workspace.archived_at is not None
-        or not await _workspace_matches_command_target(db, workspace=workspace, row=row)
-    ):
-        return False
-    target = await db.get(CloudTarget, row.target_id)
-    if _target_is_managed_cloud(target):
-        if workspace.sandbox_profile_id != target.sandbox_profile_id:
-            return False
-        exposure = await _load_active_workspace_exposure(
-            db,
-            target_id=row.target_id,
-            cloud_workspace_id=workspace.id,
-        )
-        can_rematerialize_pruned_workspace = (
-            row.kind == CloudCommandKind.materialize_workspace.value
-            and workspace.archived_at is None
-            and workspace.anyharness_workspace_id is None
-            and workspace.status == CloudWorkspaceStatus.needs_rematerialization.value
-        )
-        return (
-            exposure is not None
-            and exposure.status == "active"
-            and (exposure.commandable or can_rematerialize_pruned_workspace)
-        )
-    return True
+    return snapshot_command(row)
 
 
 async def _record_materialized_cloud_workspace(
@@ -1150,7 +568,7 @@ async def _record_materialized_cloud_workspace(
     workspace.ready_at = now
     workspace.updated_at = now
     if workspace.target_id is not None:
-        exposure = await _load_active_workspace_exposure(
+        exposure = await load_active_workspace_exposure(
             db,
             target_id=workspace.target_id,
             cloud_workspace_id=workspace.id,
@@ -1170,17 +588,6 @@ async def _record_materialized_cloud_workspace(
                 exposure.revision += 1
                 exposure.updated_at = now
     await db.flush()
-
-
-async def _workspace_matches_command_target(
-    db: AsyncSession,
-    *,
-    workspace: CloudWorkspace,
-    row: CloudCommand,
-) -> bool:
-    if workspace.target_id is not None:
-        return workspace.target_id == row.target_id
-    return False
 
 
 async def _record_pruned_cloud_workspace(
@@ -1210,7 +617,7 @@ async def _record_pruned_cloud_workspace(
         await db.flush()
         return
     workspace = await db.get(CloudWorkspace, row.cloud_workspace_id)
-    if workspace is None or not await _workspace_matches_command_target(
+    if workspace is None or not await workspace_matches_command_target(
         db,
         workspace=workspace,
         row=row,
@@ -1261,7 +668,7 @@ async def _record_pruned_cloud_workspace(
         workspace.cleanup_last_error = None
         workspace.updated_at = now
         if workspace.target_id is not None:
-            exposure = await _load_active_workspace_exposure(
+            exposure = await load_active_workspace_exposure(
                 db,
                 target_id=workspace.target_id,
                 cloud_workspace_id=workspace.id,
@@ -1363,7 +770,7 @@ async def _record_started_cloud_session_projection(
     session_id = _started_session_id(result_json)
     if session_id is None:
         return
-    exposure = await _load_active_workspace_exposure(
+    exposure = await load_active_workspace_exposure(
         db,
         target_id=row.target_id,
         cloud_workspace_id=row.cloud_workspace_id,
@@ -1424,23 +831,6 @@ def _start_session_agent_kind(payload_json: str | None) -> str | None:
         return None
     normalized = value.strip()
     return normalized if normalized in SUPPORTED_CLOUD_AGENTS else None
-
-
-async def _load_active_workspace_exposure(
-    db: AsyncSession,
-    *,
-    target_id: UUID,
-    cloud_workspace_id: UUID,
-) -> CloudWorkspaceExposure | None:
-    return (
-        await db.execute(
-            select(CloudWorkspaceExposure)
-            .where(CloudWorkspaceExposure.target_id == target_id)
-            .where(CloudWorkspaceExposure.cloud_workspace_id == cloud_workspace_id)
-            .where(CloudWorkspaceExposure.archived_at.is_(None))
-            .limit(1)
-        )
-    ).scalar_one_or_none()
 
 
 def _materialized_workspace_id(
@@ -1534,17 +924,6 @@ def _safe_result_json(*, kind: str, result_json: str | None) -> str | None:
     ):
         safe["currentRevision"] = result["currentRevision"]
     return json.dumps(safe, separators=(",", ":"), sort_keys=True) if safe else None
-
-
-def _is_terminal_status(status: str) -> bool:
-    return status in {
-        CloudCommandStatus.accepted.value,
-        CloudCommandStatus.accepted_but_queued.value,
-        CloudCommandStatus.rejected.value,
-        CloudCommandStatus.expired.value,
-        CloudCommandStatus.superseded.value,
-        CloudCommandStatus.failed_delivery.value,
-    }
 
 
 async def _get_worker_leased_command(

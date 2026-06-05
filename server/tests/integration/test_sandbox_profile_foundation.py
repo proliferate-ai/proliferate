@@ -34,7 +34,7 @@ from proliferate.db.store.cloud_sandboxes import (
     mark_managed_sandbox_terminal,
 )
 from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
-from proliferate.db.store.cloud_sync import commands as commands_store
+from proliferate.db.store.cloud_sync import command_leases, commands as commands_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.db.store.cloud_workspaces import (
@@ -434,7 +434,7 @@ async def test_materialize_workspace_rejects_mismatched_cloud_workspace_result(
         authorization_context_json=None,
     )
     now = utcnow()
-    leased = await commands_store.lease_next_command(
+    leased = await command_leases.lease_next_command(
         db_session,
         target_id=target_id,
         worker_id=worker.id,
@@ -562,7 +562,7 @@ async def test_managed_materialize_workspace_requires_cloud_workspace_id(
     )
     db_session.add(legacy_command)
     await db_session.flush()
-    leased = await commands_store.lease_next_command(
+    leased = await command_leases.lease_next_command(
         db_session,
         target_id=target_id,
         worker_id=worker.id,
@@ -701,7 +701,7 @@ async def test_archived_managed_worker_agent_auth_side_channel_fails_closed(
         authorization_context_json=None,
     )
     lease_id = "side-channel-lease"
-    leased = await commands_store.lease_next_command(
+    leased = await command_leases.lease_next_command(
         db_session,
         target_id=target_id,
         worker_id=worker.id,
@@ -812,7 +812,7 @@ async def test_lease_supersedes_launch_when_agent_auth_revision_stales(
         force_restart=True,
     )
     assert stale_profile is not None
-    leased = await commands_store.lease_next_command(
+    leased = await command_leases.lease_next_command(
         db_session,
         target_id=target_id,
         worker_id=worker.id,
@@ -926,7 +926,7 @@ async def test_lease_supersedes_launch_when_runtime_config_revision_stales(
         generated_by_user_id=uuid.UUID(auth.user_id),
     )
 
-    leased = await commands_store.lease_next_command(
+    leased = await command_leases.lease_next_command(
         db_session,
         target_id=target_id,
         worker_id=worker.id,

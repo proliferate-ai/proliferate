@@ -10,7 +10,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from proliferate.constants.cloud import CloudCommandKind
-from proliferate.db.store.cloud_sync.commands import CloudCommandSnapshot
+from proliferate.db.store.cloud_sync.command_records import CloudCommandSnapshot
 
 
 def _to_iso(value: datetime | None) -> str | None:

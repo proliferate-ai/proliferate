@@ -18,6 +18,7 @@ from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_sandbox_profiles import load_sandbox_profile_by_id
+from proliferate.db.store.cloud_sync import command_records
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import pending_interactions as pending_interactions_store
 from proliferate.db.store.cloud_sync import targets as targets_store
@@ -175,7 +176,7 @@ async def _managed_target_wake_execution_lock(target_id: UUID) -> AsyncIterator[
 
 async def _fail_pending_prompt_interaction_for_command(
     db: AsyncSession,
-    command: commands_store.CloudCommandSnapshot,
+    command: command_records.CloudCommandSnapshot,
 ) -> None:
     if command.kind != CloudCommandKind.send_prompt.value or command.session_id is None:
         return

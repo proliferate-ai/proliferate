@@ -6,7 +6,7 @@ from datetime import timedelta
 from uuid import UUID
 
 from proliferate.constants.cloud import CloudCommandKind
-from proliferate.db.store.cloud_sync.commands import CloudCommandSnapshot
+from proliferate.db.store.cloud_sync.command_records import CloudCommandSnapshot
 from proliferate.server.automations.worker.cloud_execution.command_models import (
     EnsureRepoCheckoutPayload,
     EnsureRepoCheckoutResult,

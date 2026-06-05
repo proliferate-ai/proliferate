@@ -26,6 +26,7 @@ from proliferate.db.store.cloud_skills import (
     list_enabled_skills_for_organization_profile,
     list_enabled_skills_for_personal_profile,
 )
+from proliferate.db.store.cloud_sync import command_records
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
@@ -743,7 +744,7 @@ async def _enqueue_runtime_config_materialization_command(
     config: target_config_store.CloudTargetConfigSnapshot,
     revision: SandboxProfileRuntimeConfigRevisionSnapshot,
     actor_user_id: UUID | None,
-) -> commands_store.CloudCommandSnapshot:
+) -> command_records.CloudCommandSnapshot:
     idempotency_scope = f"target:{target.id}:runtime-config:config:{config.id}"
     idempotency_key = f"runtime-config:{revision.id}:config-v{config.config_version}"
     existing = await commands_store.get_command_by_idempotency(

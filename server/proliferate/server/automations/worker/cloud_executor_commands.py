@@ -19,6 +19,7 @@ from proliferate.constants.cloud import (
 from proliferate.db import engine as db_engine
 from proliferate.db.store.automation_run_claim_values import AutomationRunClaimValue
 from proliferate.db.store.cloud_profile_target_guard import managed_profile_target_requires_slot
+from proliferate.db.store.cloud_sync import command_records
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import projections as projections_store
@@ -44,7 +45,7 @@ _MANAGED_SESSION_COMMAND_KINDS = {
 
 @dataclass(frozen=True)
 class AutomationCommandResult:
-    command: commands_store.CloudCommandSnapshot
+    command: command_records.CloudCommandSnapshot
     result: dict[str, object]
     body: dict[str, object]
 
@@ -64,7 +65,7 @@ async def enqueue_automation_command(
     workspace_id: str | None = None,
     cloud_workspace_id: UUID | None = None,
     session_id: str | None = None,
-) -> commands_store.CloudCommandSnapshot:
+) -> command_records.CloudCommandSnapshot:
     idempotency_scope = _idempotency_scope(claim, target_id=target_id)
     idempotency_key = stage
     async with db_engine.async_session_factory() as db, db.begin():
@@ -245,17 +246,17 @@ def _target_requires_cloud_workspace(target: targets_store.CloudTargetSnapshot) 
 
 async def load_command(
     command_id: UUID,
-) -> commands_store.CloudCommandSnapshot | None:
+) -> command_records.CloudCommandSnapshot | None:
     async with db_engine.async_session_factory() as db:
         return await commands_store.get_command_by_id(db, command_id)
 
 
 async def expire_command(
-    command: commands_store.CloudCommandSnapshot,
+    command: command_records.CloudCommandSnapshot,
     *,
     error_code: str,
     error_message: str,
-) -> commands_store.CloudCommandSnapshot | None:
+) -> command_records.CloudCommandSnapshot | None:
     async with db_engine.async_session_factory() as db, db.begin():
         return await commands_store.expire_command_if_not_terminal(
             db,
@@ -267,7 +268,7 @@ async def expire_command(
 
 
 async def wait_for_command_result(
-    command: commands_store.CloudCommandSnapshot,
+    command: command_records.CloudCommandSnapshot,
     *,
     timeout: timedelta,
 ) -> AutomationCommandResult:
@@ -313,7 +314,7 @@ async def wait_for_command_result(
     raise TimeoutError("Timed out waiting for cloud command completion.")
 
 
-def _result_json(command: commands_store.CloudCommandSnapshot) -> dict[str, object]:
+def _result_json(command: command_records.CloudCommandSnapshot) -> dict[str, object]:
     if not command.result_json:
         return {}
     parsed = json.loads(command.result_json)
