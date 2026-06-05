@@ -13,7 +13,7 @@ from proliferate.server.cloud.mcp_catalog.domain.types import (
     StaticUrl,
     UrlBySetting,
 )
-from proliferate.server.cloud.runtime_config.domain.resolver import (
+from proliferate.server.cloud.runtime_config.domain.types import (
     ResolvedArtifactRef,
     ResolvedRuntimeConfigPlan,
 )

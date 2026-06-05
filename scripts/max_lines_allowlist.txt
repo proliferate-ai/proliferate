@@ -35,7 +35,6 @@ server/proliferate/db/store/cloud_sync/events.py 1109 server structure migration
 server/proliferate/db/store/cloud_workspaces.py 1187 server structure migration debt for oversized store file
 server/proliferate/server/billing/service.py 2459 server structure migration debt for oversized service file during billing orchestration consolidation
 server/proliferate/server/cloud/mobility/service.py 1208 server structure migration debt for oversized service file
-server/proliferate/server/cloud/runtime_config/domain/resolver.py 611 server structure migration debt for oversized pure-domain file
 server/tests/integration/schema_migration_assertions.py 878 existing server oversized test helper
 server/tests/integration/test_auth_flow.py 2057 existing server oversized integration test
 server/tests/integration/test_billing_accounting.py 871 existing server oversized integration test
