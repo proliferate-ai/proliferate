@@ -5,7 +5,8 @@ import pytest
 
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.server.cloud.workspaces import models as workspace_models
-from proliferate.server.cloud.workspaces.models import workspace_summary_payload
+from proliferate.server.cloud.workspaces import payloads as workspace_payloads
+from proliferate.server.cloud.workspaces.payloads import workspace_summary_payload
 
 
 def _workspace(*, origin_json: str | None) -> CloudWorkspace:
@@ -95,7 +96,7 @@ def test_workspace_summary_drops_malformed_origin(monkeypatch: pytest.MonkeyPatc
     def _capture_warning(message: str, **kwargs: object) -> None:
         warnings.append((message, kwargs))
 
-    monkeypatch.setattr(workspace_models.logger, "warning", _capture_warning)
+    monkeypatch.setattr(workspace_payloads.logger, "warning", _capture_warning)
 
     workspace = _workspace(origin_json='{"kind":"automation","entrypoint":"cloud"}')
     payload = workspace_summary_payload(workspace)
