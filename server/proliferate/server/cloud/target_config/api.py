@@ -27,7 +27,7 @@ from proliferate.server.cloud.target_config.service import (
     record_worker_target_config_status,
     worker_target_config_plan,
 )
-from proliferate.server.cloud.worker.service import authenticate_worker
+from proliferate.server.cloud.worker.auth import authenticate_worker
 
 router = APIRouter(prefix="/targets", tags=["cloud-target-config"])
 worker_router = APIRouter(prefix="/worker/target-configs", tags=["cloud-worker-target-config"])

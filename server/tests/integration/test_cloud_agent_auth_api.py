@@ -30,7 +30,7 @@ from proliferate.integrations.bifrost import (
     BifrostVirtualKeyResult,
 )
 from proliferate.server.cloud.agent_auth import service as agent_auth_service
-from proliferate.server.cloud.worker import service as worker_service
+from proliferate.server.cloud.worker import auth as worker_auth
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
 from proliferate.utils.crypto import encrypt_text
 from proliferate.utils.time import utcnow
@@ -520,7 +520,7 @@ async def test_revoked_synced_selection_materializes_invalid_cleanup_plan(
     await worker_auth_store.create_worker(
         db_session,
         target_id=target_id,
-        token_hash=worker_service._hash_token(
+        token_hash=worker_auth.hash_token(
             domain=CLOUD_WORKER_TOKEN_DOMAIN,
             token=worker_token,
         ),
@@ -1161,7 +1161,7 @@ async def test_bifrost_worker_materialization_uses_direct_virtual_key_env(
     await worker_auth_store.create_worker(
         db_session,
         target_id=profile.primary_target_id,
-        token_hash=worker_service._hash_token(
+        token_hash=worker_auth.hash_token(
             domain=CLOUD_WORKER_TOKEN_DOMAIN,
             token=worker_token,
         ),

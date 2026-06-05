@@ -55,7 +55,7 @@ from proliferate.server.cloud.agent_auth.service import (
     sync_synced_credential_for_user,
     worker_agent_auth_materialization_plan,
 )
-from proliferate.server.cloud.worker.service import authenticate_worker
+from proliferate.server.cloud.worker.auth import authenticate_worker
 
 router = APIRouter()
 worker_router = APIRouter(

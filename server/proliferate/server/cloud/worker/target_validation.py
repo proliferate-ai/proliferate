@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudTargetStatus
 from proliferate.db.store.cloud_sync import targets as targets_store
+from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
 
@@ -34,3 +37,53 @@ async def require_active_worker_target(
         )
     require_current_worker_target(current_target)
     return current_target
+
+
+def require_enrollment_profile_for_target(
+    *,
+    enrollment: worker_auth_store.CloudTargetEnrollmentSnapshot,
+    target: targets_store.CloudTargetSnapshot,
+) -> None:
+    if target.sandbox_profile_id is None:
+        return
+    if enrollment.sandbox_profile_id != target.sandbox_profile_id:
+        raise CloudApiError(
+            "cloud_worker_profile_identity_required",
+            "Managed cloud worker enrollment does not match the target sandbox profile.",
+            status_code=409,
+        )
+
+
+def _optional_uuid(value: str | None, *, field_name: str) -> UUID | None:
+    if value is None:
+        return None
+    try:
+        return UUID(value)
+    except ValueError as exc:
+        raise CloudApiError(
+            "cloud_worker_invalid_uuid",
+            f"{field_name} must be a UUID.",
+            status_code=400,
+        ) from exc
+
+
+def worker_request_profile_id(
+    *,
+    target: targets_store.CloudTargetSnapshot,
+    sandbox_profile_id: str | None,
+) -> UUID | None:
+    if target.sandbox_profile_id is None:
+        return None
+    if sandbox_profile_id is None:
+        return target.sandbox_profile_id
+    reported_profile_id = _optional_uuid(
+        sandbox_profile_id,
+        field_name="sandboxProfileId",
+    )
+    if reported_profile_id != target.sandbox_profile_id:
+        raise CloudApiError(
+            "cloud_worker_profile_identity_required",
+            "Managed cloud worker request must match the target sandboxProfileId.",
+            status_code=409,
+        )
+    return reported_profile_id

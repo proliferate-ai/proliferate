@@ -18,7 +18,7 @@ from proliferate.server.cloud.target_git_identity.service import (
     record_worker_target_git_identity_status,
     worker_target_git_identity_plan,
 )
-from proliferate.server.cloud.worker.service import authenticate_worker
+from proliferate.server.cloud.worker.auth import authenticate_worker
 
 worker_router = APIRouter(
     prefix="/worker/target-git-identities",
