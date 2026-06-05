@@ -13,7 +13,10 @@ from proliferate.constants.cloud import CloudCommandKind, CloudCommandStatus
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import targets as targets_store
-from proliferate.server.cloud.commands import service as command_service
+from proliferate.server.cloud.commands.client_state import (
+    expire_stale_client_commands_for_target,
+    mark_pending_prompt_interaction_failed_for_command,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.live.service import publish_command_status_after_commit
@@ -166,7 +169,7 @@ async def prepare_worker_command_lease(
             status_code=401,
         )
     _require_current_worker_target(target)
-    expired_commands = await command_service.expire_stale_client_commands_for_target(
+    expired_commands = await expire_stale_client_commands_for_target(
         db,
         target_id=auth.target_id,
     )
@@ -250,7 +253,7 @@ async def record_command_delivery(
         cloud_workspace_id=command.cloud_workspace_id,
     )
     if _command_result_should_fail_pending_prompt(command):
-        await command_service.mark_pending_prompt_interaction_failed_for_command(db, command)
+        await mark_pending_prompt_interaction_failed_for_command(db, command)
     await publish_command_status_after_commit(db, command)
     return WorkerCommandStatusResponse(
         command_id=str(command.id),
@@ -394,7 +397,7 @@ async def record_command_result(
         status=command.status,
     )
     if _command_result_should_fail_pending_prompt(command):
-        await command_service.mark_pending_prompt_interaction_failed_for_command(db, command)
+        await mark_pending_prompt_interaction_failed_for_command(db, command)
     await publish_command_status_after_commit(db, command)
     return WorkerCommandStatusResponse(
         command_id=str(command.id),
