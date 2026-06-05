@@ -28,7 +28,7 @@ SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/commands/agent_auth_refre
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/commands/transactions.py 1 Lane 7 explicit API-facing command commit boundary debt
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/live/service.py 4 remaining live service-owned session/deferred boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/worker/transactions.py 2 Lane 7 explicit worker API pre-response commit boundary debt
-SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/workspaces/service.py 36 remaining workspace service-owned lifecycle transaction/session boundary debt through session_ops
+SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/workspaces/service.py 33 remaining workspace service-owned lifecycle transaction/session boundary debt through session_ops
 DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/agent_run_config/domain/resolve.py 1 transitional agent run config resolver imports product constants
 DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/target_config/domain/policy.py 1 transitional target config policy imports product config during worker migration
 DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/targets/domain/policy.py 1 transitional target policy imports product config during worker migration
