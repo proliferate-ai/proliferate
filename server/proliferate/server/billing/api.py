@@ -27,7 +27,7 @@ from proliferate.server.billing.models import (
     PlanInfo,
     StripeWebhookAck,
 )
-from proliferate.server.billing.service import (
+from proliferate.server.billing.overview import (
     get_billing_overview,
     get_billing_overview_for_owner,
     get_cloud_plan,
