@@ -24,6 +24,7 @@ from proliferate.server.cloud.runtime import provision as runtime_provision
 from proliferate.server.cloud.runtime import sandbox_exec as runtime_sandbox_exec
 from proliferate.server.cloud.runtime.provisioning.data_key import generate_anyharness_data_key
 from proliferate.server.cloud.runtime.provisioning import launch as runtime_launch
+from proliferate.server.cloud.runtime.provisioning import workspace as runtime_workspace
 from proliferate.server.cloud.runtime.models import CloudProvisionInput
 from proliferate.utils.crypto import encrypt_json
 
@@ -927,17 +928,17 @@ class TestLaunchAndConnectRuntime:
             "_wait_for_worker_target_online",
             _wait_for_worker_target_online,
         )
-        monkeypatch.setattr(runtime_provision, "reconcile_remote_agents", _reconcile_remote_agents)
+        monkeypatch.setattr(runtime_workspace, "reconcile_remote_agents", _reconcile_remote_agents)
         monkeypatch.setattr(
-            runtime_provision, "resolve_remote_workspace", _resolve_remote_workspace
+            runtime_workspace, "resolve_remote_workspace", _resolve_remote_workspace
         )
         monkeypatch.setattr(
-            runtime_provision,
+            runtime_workspace,
             "resolve_runtime_root_head_sha",
             _resolve_runtime_root_head_sha,
         )
         monkeypatch.setattr(
-            runtime_provision,
+            runtime_workspace,
             "prepare_remote_mobility_destination",
             _prepare_remote_mobility_destination,
         )
@@ -1115,7 +1116,6 @@ class TestProvisionWorkspaceGitSetup:
             "_log_provision_summary",
             lambda *args, **kwargs: None,
         )
-
         with pytest.raises(CloudApiError) as exc_info:
             await runtime_provision.provision_workspace(ctx.workspace_id)
 
