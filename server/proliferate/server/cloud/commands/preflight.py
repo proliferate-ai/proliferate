@@ -15,7 +15,7 @@ from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.commands.agent_auth_refresh import (
     queue_agent_auth_refresh_for_not_ready_preflight,
 )
-from proliferate.server.cloud.commands.domain.rules import validate_command_payload
+from proliferate.server.cloud.commands.domain.payload import validate_command_payload
 from proliferate.server.cloud.errors import CloudApiError
 
 

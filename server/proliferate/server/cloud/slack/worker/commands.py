@@ -38,7 +38,7 @@ from proliferate.server.automations.worker.cloud_executor_commands import (
 from proliferate.server.automations.worker.cloud_executor_config import (
     default_cloud_executor_config,
 )
-from proliferate.server.cloud.commands.domain.rules import compact_command_json
+from proliferate.server.cloud.commands.domain.serialization import compact_command_json
 from proliferate.server.cloud.commands.preflight import stamp_and_validate_command_preflight
 from proliferate.server.cloud.commands.wake import (
     kick_off_command_wake_after_commit_if_required,

@@ -15,7 +15,7 @@ from proliferate.constants.cloud import (
 )
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import events as events_store
-from proliferate.server.cloud.commands.domain.rules import compact_command_json
+from proliferate.server.cloud.commands.domain.serialization import compact_command_json
 from proliferate.server.cloud.live.service import publish_command_status_after_commit
 from proliferate.utils.time import utcnow
 
