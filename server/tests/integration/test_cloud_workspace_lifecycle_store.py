@@ -26,11 +26,11 @@ from proliferate.db.store.cloud_workspaces import (
     persist_workspace_stop,
     reserve_sandbox_for_workspace,
 )
-from proliferate.server.cloud.workspaces import service as workspace_service
 from proliferate.server.cloud.workspaces.domain.setup_runs import (
     bounded_setup_monitor_error,
     classify_setup_run_finalization,
 )
+from proliferate.server.cloud.workspaces.lifecycle import service as lifecycle_service
 
 
 def _patch_global_session_factory(
@@ -389,29 +389,29 @@ async def test_stop_and_destroy_preserve_retry_state_after_provider_failure(
         await persist_workspace_destroy(_NoopDb(), _workspace)
 
     monkeypatch.setattr(
-        workspace_service,
+        lifecycle_service,
         "_load_workspace_owned_runtime_sandbox",
         _load_workspace_owned_runtime_sandbox,
     )
     monkeypatch.setattr(
-        workspace_service,
+        lifecycle_service,
         "get_sandbox_provider",
         lambda _kind: _FailingProvider(),
     )
-    monkeypatch.setattr(workspace_service, "update_sandbox_status", _update_sandbox_status)
+    monkeypatch.setattr(lifecycle_service, "update_sandbox_status", _update_sandbox_status)
     monkeypatch.setattr(
-        workspace_service,
+        lifecycle_service,
         "persist_workspace_stop_state",
         _persist_workspace_stop_state,
     )
     monkeypatch.setattr(
-        workspace_service,
+        lifecycle_service,
         "persist_workspace_destroy_state",
         _persist_workspace_destroy_state,
     )
-    monkeypatch.setattr(workspace_service, "log_cloud_event", lambda *args, **kwargs: None)
+    monkeypatch.setattr(lifecycle_service, "log_cloud_event", lambda *args, **kwargs: None)
 
-    await workspace_service._stop_workspace_runtime(workspace)
+    await lifecycle_service._stop_workspace_runtime(workspace)
 
     assert sandbox_statuses == ["error"]
     assert stopped == [workspace]
@@ -423,7 +423,7 @@ async def test_stop_and_destroy_preserve_retry_state_after_provider_failure(
 
     workspace.status = "ready"
     sandbox_statuses.clear()
-    await workspace_service._destroy_workspace_runtime(workspace)
+    await lifecycle_service._destroy_workspace_runtime(workspace)
 
     assert sandbox_statuses == ["error"]
     assert destroyed == [workspace]
