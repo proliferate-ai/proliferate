@@ -41,6 +41,13 @@ server/proliferate/
   config.py
   errors.py
 
+  background/
+    celery_app.py
+    config.py
+    beat_schedule.py
+    relay.py
+    tasks/
+
   constants/
     <area>.py
 
@@ -111,6 +118,7 @@ Use this as a routing map. The focused guides own the detailed rules.
 | App shell | `main.py`, `middleware/**` | FastAPI app construction, router mounting, exception handlers, cross-cutting request lifecycle. | This doc |
 | Settings and constants | `config.py`, `constants/<area>.py` | Env-derived runtime settings and shared hardcoded product/protocol values. | [guides/config.md](guides/config.md) |
 | Generic support | `utils/**` | Truly generic helpers with no product, HTTP, DB, or vendor ownership. | This doc |
+| Background substrate | `background/**` | Cross-domain Celery app, broker/queue/redbeat config, Beat schedule registry, outbox relay home, and thin task modules. | [guides/workers.md](guides/workers.md) |
 | Auth | `auth/**`, `server/<domain>/access.py`, `server/<domain>/domain/policy.py` | Authentication, shared authorization helpers, resource-access deps, pure product-policy verdicts. | [guides/auth.md](guides/auth.md) |
 | Database | `db/models/**`, `db/store/**` | ORM schema, query execution, transactions, row locks, ORM -> dataclass type boundary. | [guides/database.md](guides/database.md) |
 | Domain transport | `server/<domain>/api.py`, `server/<domain>/models.py` | HTTP route handling and Pydantic request/response schemas. | [guides/domains.md](guides/domains.md) |

@@ -35,6 +35,34 @@ Worker code follows the same layer law as HTTP code:
 - Worker entry points don't construct vendor clients. Worker services or
   executors call integrations through their public API.
 
+## Cross-Domain Background Substrate
+
+`server/proliferate/background/**` owns the shared Celery/RabbitMQ/redbeat
+substrate for broker-delivered jobs that cross domains. It is not a domain
+service layer.
+
+Allowed:
+
+- the single Celery app in `background/celery_app.py`
+- broker, queue, routing, retry, redbeat, and eager-test settings in
+  `background/config.py`
+- Beat schedule registration in `background/beat_schedule.py`
+- outbox-to-Celery relay wiring in `background/relay.py`
+- thin task modules in `background/tasks/**`
+
+Banned:
+
+- business logic in `background/tasks/**`
+- SQLAlchemy queries or ORM imports in task modules
+- raw vendor clients in task modules
+- moving HTTP request or external pull APIs behind Celery without a primitive
+  spec that owns the contract change
+
+Task modules call the owning domain's public service or worker-service entry
+point. They may open a database session only at the task boundary and then pass
+`db: AsyncSession` through the normal service/store layers. Correctness-sensitive
+task enqueue must use the outbox once that slice exists.
+
 ## Shape
 
 ### Default: sibling files at the domain root

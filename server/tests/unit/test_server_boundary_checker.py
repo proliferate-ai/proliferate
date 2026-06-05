@@ -157,6 +157,20 @@ def test_domain_rejects_async_export_and_framework_import(tmp_path: Path) -> Non
     assert any(item.rule_id == "HTTP_EXCEPTION_FORBIDDEN" for item in violations)
 
 
+def test_background_tasks_folder_allows_single_task_module(tmp_path: Path) -> None:
+    module = _load_checker_module()
+    root = tmp_path / "server" / "proliferate" / "background"
+    tasks = root / "tasks"
+    tasks.mkdir(parents=True)
+    (root / "__init__.py").write_text("")
+    (tasks / "__init__.py").write_text("")
+    (tasks / "health.py").write_text("def noop() -> str:\n    return 'ok'\n")
+
+    violations = module.check_structure(tmp_path)
+
+    assert violations == []
+
+
 def test_integration_rejects_database_import(tmp_path: Path) -> None:
     module = _load_checker_module()
     path = tmp_path / "server" / "proliferate" / "integrations" / "example.py"

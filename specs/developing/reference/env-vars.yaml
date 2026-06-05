@@ -53,6 +53,52 @@
   description: SQLAlchemy query echo/logging
   tags: [local-dev]
 
+# ═══════════════════════════════════════════════════════════════════════
+# Server: Background Jobs
+# ═══════════════════════════════════════════════════════════════════════
+
+- name: CELERY_BROKER_URL
+  secret: true
+  default: "amqp://guest:guest@127.0.0.1:5672//"
+  description: RabbitMQ broker URL for Celery workers and Beat
+  tags: [local-dev, self-hosted, production]
+
+- name: CELERY_WORKER_QUEUES
+  secret: false
+  default: "periodic.default,default,notifications,runtime.wake,automations.execution"
+  description: Comma-separated selector for the code-owned Celery queues this worker process consumes
+  tags: [local-dev, self-hosted, production]
+
+- name: CELERY_TASK_ALWAYS_EAGER
+  secret: false
+  default: "false"
+  description: Executes Celery tasks inline for isolated tests; keep false in deployed environments
+  tags: [local-dev, ci]
+
+- name: CELERY_TASK_TIME_LIMIT_SECONDS
+  secret: false
+  default: "3600"
+  description: Hard Celery task execution limit in seconds
+  tags: [local-dev, self-hosted, production]
+
+- name: CELERY_TASK_SOFT_TIME_LIMIT_SECONDS
+  secret: false
+  default: "3300"
+  description: Soft Celery task execution limit in seconds
+  tags: [local-dev, self-hosted, production]
+
+- name: REDBEAT_REDIS_URL
+  secret: true
+  default: "redis://127.0.0.1:6379/0"
+  description: Redis URL for redbeat scheduler metadata; not a Celery broker
+  tags: [local-dev, self-hosted, production]
+
+- name: REDBEAT_KEY_PREFIX
+  secret: false
+  default: "redbeat:proliferate:"
+  description: Redis key prefix for redbeat scheduler metadata
+  tags: [local-dev, self-hosted, production]
+
 - name: CORS_ALLOW_ORIGINS
   secret: false
   default: "desktop, web, mobile-web, Metro, and tauri local origins"

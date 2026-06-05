@@ -87,6 +87,27 @@ convenience, not a repo contract.
 - automation worker against the same profile database
 - Tauri desktop app with generated profile identity
 
+The Celery/RabbitMQ/redbeat worker-tier substrate is available for worker-tier
+migration testing, but the profile launcher does not start Celery workers yet.
+For Slice 1 substrate checks, start the local broker stores explicitly:
+
+```bash
+docker compose -f server/docker-compose.yml up -d rabbitmq redis
+```
+
+Then verify the no-op worker app imports from `server/` without opening a broker
+connection:
+
+```bash
+uv run python -c "from proliferate.background.celery_app import celery_app; print(celery_app.tasks['background.health.noop'].name)"
+```
+
+To run a local Celery worker for manual testing:
+
+```bash
+uv run celery -A proliferate.background.celery_app:celery_app worker -Q periodic.default --loglevel INFO
+```
+
 Profile state lives under:
 
 ```text

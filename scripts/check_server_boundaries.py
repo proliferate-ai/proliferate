@@ -13,6 +13,7 @@ import sys
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ALLOWLIST_PATH = REPO_ROOT / "scripts" / "server_boundaries_allowlist.txt"
 CHECK_ROOTS = [
+    REPO_ROOT / "server" / "proliferate" / "background",
     REPO_ROOT / "server" / "proliferate" / "server",
     REPO_ROOT / "server" / "proliferate" / "auth",
     REPO_ROOT / "server" / "proliferate" / "db" / "models",
@@ -255,6 +256,11 @@ def is_allowed_single_file_domain_folder(
         and not child_folders
         and is_meaningful_domain_module(source_files[0])
     )
+
+
+def is_background_tasks_folder(folder: Path) -> bool:
+    parts = logical_parts(folder)
+    return _starts_with(parts, ("server", "proliferate", "background", "tasks"))
 
 
 class BoundaryChecker(ast.NodeVisitor):
@@ -650,6 +656,8 @@ def check_structure(repo_root: Path = REPO_ROOT) -> list[Violation]:
             if path.is_dir() and not should_skip(path) and path.name != "__pycache__"
         ]
         if is_allowed_single_file_domain_folder(folder, source_files, child_folders):
+            continue
+        if is_background_tasks_folder(folder):
             continue
 
         if len(source_files) == 1 and not child_folders:
