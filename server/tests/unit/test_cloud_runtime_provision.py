@@ -480,6 +480,7 @@ class TestCheckBinaryPreinstalled:
         binary_path.write_bytes(b"current-runtime")
 
         calls: list[str] = []
+
         async def _run_sandbox_command_logged(*args, **kwargs):
             calls.append(kwargs["label"])
             return SimpleNamespace(exit_code=1, stdout="", stderr="")
@@ -1203,8 +1204,10 @@ class TestProvisionWorkspaceGitSetup:
         async def _finalize_workspace_provision_for_ids(*args, **kwargs) -> None:
             calls.append("finalize_workspace")
 
-        async def _save_runtime_environment_state(*args, **kwargs) -> None:
-            runtime_state_kwargs.append(kwargs)
+        async def _save_runtime_environment_updates(
+            _runtime_environment_id: uuid.UUID, updates: dict[str, object]
+        ) -> None:
+            runtime_state_kwargs.append(updates)
 
         async def _load_cloud_workspace_by_id(*args, **kwargs):
             return None
@@ -1268,8 +1271,8 @@ class TestProvisionWorkspaceGitSetup:
         )
         monkeypatch.setattr(
             runtime_provision,
-            "save_runtime_environment_state",
-            _save_runtime_environment_state,
+            "_save_runtime_environment_updates",
+            _save_runtime_environment_updates,
         )
         monkeypatch.setattr(
             runtime_provision,
@@ -1285,11 +1288,6 @@ class TestProvisionWorkspaceGitSetup:
             runtime_provision,
             "apply_workspace_repo_config_after_provision",
             _apply_workspace_repo_config_after_provision,
-        )
-        monkeypatch.setattr(
-            runtime_provision,
-            "save_runtime_environment_state",
-            _save_runtime_environment_state,
         )
         monkeypatch.setattr(runtime_provision, "log_cloud_event", lambda *args, **kwargs: None)
         monkeypatch.setattr(
@@ -1381,8 +1379,10 @@ class TestProvisionWorkspaceGitSetup:
         async def _finalize_workspace_provision_for_ids(*args, **kwargs) -> None:
             calls.append("finalize_workspace")
 
-        async def _save_runtime_environment_state(*args, **kwargs) -> None:
-            runtime_state_kwargs.append(kwargs)
+        async def _save_runtime_environment_updates(
+            _runtime_environment_id: uuid.UUID, updates: dict[str, object]
+        ) -> None:
+            runtime_state_kwargs.append(updates)
 
         async def _load_cloud_workspace_by_id(*args, **kwargs):
             return None
@@ -1444,8 +1444,8 @@ class TestProvisionWorkspaceGitSetup:
         )
         monkeypatch.setattr(
             runtime_provision,
-            "save_runtime_environment_state",
-            _save_runtime_environment_state,
+            "_save_runtime_environment_updates",
+            _save_runtime_environment_updates,
         )
         monkeypatch.setattr(
             runtime_provision,
