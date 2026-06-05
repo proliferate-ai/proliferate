@@ -6,13 +6,13 @@ from datetime import timedelta
 from uuid import UUID
 
 from proliferate.db import engine as db_engine
-from proliferate.db.store.cloud_mobility import (
-    CloudWorkspaceHandoffOpValue,
+from proliferate.db.store.cloud_mobility.handoffs import (
     create_cloud_workspace_handoff_op_for_user,
     fail_cloud_workspace_handoff_op_checkpoint_for_user,
-    list_cloud_workspace_mobility_for_user,
     update_cloud_workspace_handoff_phase_checkpoint_for_user,
 )
+from proliferate.db.store.cloud_mobility.records import CloudWorkspaceHandoffOpValue
+from proliferate.db.store.cloud_mobility.workspaces import list_cloud_workspace_mobility_for_user
 from proliferate.server.cloud.mobility.domain.lifecycle import (
     stale_handoff_outcome,
     visible_failure_last_error,

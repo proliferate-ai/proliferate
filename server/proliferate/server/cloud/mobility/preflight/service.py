@@ -7,10 +7,10 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.store.cloud_mobility import (
-    load_active_user_handoff_op_for_user,
+from proliferate.db.store.cloud_mobility.events import (
     record_cloud_workspace_mobility_event_for_user,
 )
+from proliferate.db.store.cloud_mobility.handoffs import load_active_user_handoff_op_for_user
 from proliferate.db.store.cloud_repo_config import load_cloud_repo_config_for_user
 from proliferate.db.store.users import load_user_with_oauth_accounts_by_id
 from proliferate.server.cloud.errors import CloudApiError

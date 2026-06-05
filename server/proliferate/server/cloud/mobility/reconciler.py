@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from proliferate.config import settings
 from proliferate.db import engine as db_engine
-from proliferate.db.store.cloud_mobility import load_due_cleanup_items
+from proliferate.db.store.cloud_mobility.cleanup_items import load_due_cleanup_items
 from proliferate.server.cloud.mobility.cleanup_executor import (
     SERVER_CLEANUP_ITEM_KINDS,
     execute_server_cleanup_item,

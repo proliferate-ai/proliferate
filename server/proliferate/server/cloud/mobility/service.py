@@ -8,23 +8,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudWorkspaceStatus
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
-from proliferate.db.store.cloud_mobility import (
-    CloudWorkspaceHandoffOpValue,
-    CloudWorkspaceMobilityValue,
-    CloudWorkspaceMoveCleanupItemInput,
-    backfill_cloud_workspace_mobility_for_workspace,
-    ensure_cloud_workspace_mobility_for_user,
+from proliferate.db.store.cloud_mobility.cleanup_items import (
+    insert_cleanup_items_for_handoff,
+    list_cleanup_items_for_handoff,
+)
+from proliferate.db.store.cloud_mobility.handoffs import (
     fail_cloud_workspace_handoff_op_checkpoint_for_user,
     fail_cloud_workspace_handoff_op_for_user,
     finalize_cloud_workspace_handoff_op_for_user,
     get_cloud_workspace_handoff_op,
     heartbeat_cloud_workspace_handoff_op_for_user,
-    insert_cleanup_items_for_handoff,
-    list_cleanup_items_for_handoff,
-    load_cloud_workspace_mobility_value,
     update_cloud_workspace_handoff_phase_for_user,
 )
-from proliferate.db.store.cloud_mobility import (
+from proliferate.db.store.cloud_mobility.records import (
+    CloudWorkspaceHandoffOpValue,
+    CloudWorkspaceMobilityValue,
+    CloudWorkspaceMoveCleanupItemInput,
+)
+from proliferate.db.store.cloud_mobility.workspaces import (
+    backfill_cloud_workspace_mobility_for_workspace,
+    ensure_cloud_workspace_mobility_for_user,
+    load_cloud_workspace_mobility_value,
+)
+from proliferate.db.store.cloud_mobility.workspaces import (
     list_cloud_workspace_mobility_for_user as list_cloud_workspace_mobility_store,
 )
 from proliferate.db.store.cloud_sync.events import list_session_projections_for_workspace

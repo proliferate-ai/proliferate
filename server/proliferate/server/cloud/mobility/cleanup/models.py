@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from proliferate.db.store.cloud_mobility import CloudWorkspaceMoveCleanupItemValue
+from proliferate.db.store.cloud_mobility.records import CloudWorkspaceMoveCleanupItemValue
 
 
 def _to_iso(value: datetime | None) -> str | None:

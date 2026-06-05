@@ -894,7 +894,7 @@ server/alembic/versions/<NEW>_mobility_v2.py
   - extend enum CHECK constraints
   - data migration: existing 'cloud' owner values -> 'personal_cloud'
 
-server/proliferate/db/store/cloud_mobility.py
+server/proliferate/db/store/cloud_mobility/cleanup_items.py
   + insert_cleanup_items_for_handoff(op_id, items)
   + load_cleanup_items_for_handoff(op_id)
   + update_cleanup_item_status(item_id, status, error?)
