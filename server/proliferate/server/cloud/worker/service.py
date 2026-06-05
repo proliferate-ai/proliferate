@@ -2,24 +2,19 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 import secrets
-from datetime import datetime
 from time import monotonic
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.config import settings
 from proliferate.constants.cloud import (
     CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN,
     CLOUD_TARGET_HEARTBEAT_STALE_SECONDS,
     CLOUD_WORKER_TOKEN_DOMAIN,
     CloudTargetStatus,
     CloudTargetUpdateStatus,
-    CloudWorkerStatus,
     CloudWorkspaceCleanupState,
     CloudWorkspaceStatus,
 )
@@ -45,6 +40,7 @@ from proliferate.server.cloud.live.service import (
 )
 from proliferate.server.cloud.observability import log_worker_update_status
 from proliferate.server.cloud.target_git_identity.service import materialize_target_git_identity
+from proliferate.server.cloud.worker.auth import hash_token
 from proliferate.server.cloud.worker.domain.rules import (
     compact_json,
     validate_update_component,
@@ -78,22 +74,21 @@ from proliferate.server.cloud.worker.models import (
     WorkerUpdateStatusRequest,
     WorkerUpdateStatusResponse,
 )
+from proliferate.server.cloud.worker.runtime_access import (
+    update_runtime_access_for_managed_worker,
+)
 from proliferate.server.cloud.worker.target_validation import (
     require_current_worker_target as _require_current_worker_target,
+)
+from proliferate.server.cloud.worker.target_validation import (
+    require_enrollment_profile_for_target,
+    worker_request_profile_id,
 )
 from proliferate.utils.time import utcnow
 
 _LEGACY_EXPOSURE_CACHE_TTL_SECONDS = 2.0
 _legacy_exposure_cache: dict[UUID, tuple[float, WorkerExposureListResponse]] = {}
 _UNSET = object()
-
-
-def _hash_token(*, domain: str, token: str) -> str:
-    return hmac.new(
-        settings.cloud_secret_key.encode("utf-8"),
-        f"{domain}:{token}".encode(),
-        hashlib.sha256,
-    ).hexdigest()
 
 
 async def _record_inventory_payload(
@@ -219,34 +214,6 @@ def _desired_versions_response(
     )
 
 
-def _require_enrollment_profile_for_target(
-    *,
-    enrollment: worker_auth_store.CloudTargetEnrollmentSnapshot,
-    target: targets_store.CloudTargetSnapshot,
-) -> None:
-    if target.sandbox_profile_id is None:
-        return
-    if enrollment.sandbox_profile_id != target.sandbox_profile_id:
-        raise CloudApiError(
-            "cloud_worker_profile_identity_required",
-            "Managed cloud worker enrollment does not match the target sandbox profile.",
-            status_code=409,
-        )
-
-
-def _optional_uuid(value: str | None, *, field_name: str) -> UUID | None:
-    if value is None:
-        return None
-    try:
-        return UUID(value)
-    except ValueError as exc:
-        raise CloudApiError(
-            "cloud_worker_invalid_uuid",
-            f"{field_name} must be a UUID.",
-            status_code=400,
-        ) from exc
-
-
 async def enroll_worker(
     db: AsyncSession,
     *,
@@ -255,7 +222,7 @@ async def enroll_worker(
     now = utcnow()
     enrollment = await worker_auth_store.consume_pending_enrollment_by_hash(
         db,
-        token_hash=_hash_token(
+        token_hash=hash_token(
             domain=CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN,
             token=body.enrollment_token,
         ),
@@ -275,12 +242,12 @@ async def enroll_worker(
             status_code=401,
         )
     _require_current_worker_target(target)
-    _require_enrollment_profile_for_target(enrollment=enrollment, target=target)
+    require_enrollment_profile_for_target(enrollment=enrollment, target=target)
     worker_token = secrets.token_urlsafe(48)
     worker = await worker_auth_store.create_worker(
         db,
         target_id=enrollment.target_id,
-        token_hash=_hash_token(domain=CLOUD_WORKER_TOKEN_DOMAIN, token=worker_token),
+        token_hash=hash_token(domain=CLOUD_WORKER_TOKEN_DOMAIN, token=worker_token),
         machine_fingerprint=body.machine_fingerprint,
         hostname=body.hostname,
         worker_version=body.worker_version,
@@ -302,7 +269,7 @@ async def enroll_worker(
     )
     await worker_control_store.get_or_create_control_state(db, target_id=worker.target_id)
     if enrollment.sandbox_profile_id is not None:
-        await _update_runtime_access_for_managed_worker(
+        await update_runtime_access_for_managed_worker(
             db,
             target_id=worker.target_id,
             sandbox_profile_id=enrollment.sandbox_profile_id,
@@ -334,59 +301,6 @@ async def enroll_worker(
     )
 
 
-async def authenticate_worker(
-    db: AsyncSession,
-    *,
-    authorization: str | None,
-) -> WorkerAuthContext:
-    if authorization is None or not authorization.startswith("Bearer "):
-        raise CloudApiError(
-            "cloud_worker_auth_required",
-            "Worker authentication is required.",
-            status_code=401,
-        )
-    token = authorization.removeprefix("Bearer ").strip()
-    if not token:
-        raise CloudApiError(
-            "cloud_worker_auth_required",
-            "Worker authentication is required.",
-            status_code=401,
-        )
-    worker = await worker_auth_store.get_worker_by_token_hash(
-        db,
-        token_hash=_hash_token(domain=CLOUD_WORKER_TOKEN_DOMAIN, token=token),
-    )
-    if worker is None:
-        raise CloudApiError(
-            "cloud_worker_auth_invalid",
-            "Worker token is invalid.",
-            status_code=401,
-        )
-    if worker.status == CloudWorkerStatus.archived.value:
-        raise CloudApiError(
-            "cloud_worker_archived",
-            "Worker token is archived.",
-            status_code=401,
-        )
-    target = await targets_store.get_target_by_id(db, worker.target_id)
-    if target is None:
-        raise CloudApiError(
-            "cloud_worker_target_missing",
-            "Worker target no longer exists.",
-            status_code=401,
-        )
-    if target.status == CloudTargetStatus.archived.value:
-        raise CloudApiError(
-            "cloud_worker_target_archived",
-            "Worker target is archived.",
-            status_code=409,
-        )
-    return WorkerAuthContext(
-        worker_id=worker.id,
-        target_id=worker.target_id,
-    )
-
-
 async def record_heartbeat(
     db: AsyncSession,
     *,
@@ -403,7 +317,7 @@ async def record_heartbeat(
             status_code=401,
         )
     _require_current_worker_target(target)
-    sandbox_profile_id = _worker_request_profile_id(
+    sandbox_profile_id = worker_request_profile_id(
         target=target,
         sandbox_profile_id=body.sandbox_profile_id,
     )
@@ -431,7 +345,7 @@ async def record_heartbeat(
     )
     await targets_store.set_target_status(db, target_id=auth.target_id, status_value=status_value)
     if sandbox_profile_id is not None:
-        await _update_runtime_access_for_managed_worker(
+        await update_runtime_access_for_managed_worker(
             db,
             target_id=auth.target_id,
             sandbox_profile_id=sandbox_profile_id,
@@ -463,54 +377,6 @@ async def record_heartbeat(
         server_time=now.isoformat(),
         desired_versions=desired_versions,
     )
-
-
-def _worker_request_profile_id(
-    *,
-    target: targets_store.CloudTargetSnapshot,
-    sandbox_profile_id: str | None,
-) -> UUID | None:
-    if target.sandbox_profile_id is None:
-        return None
-    if sandbox_profile_id is None:
-        return target.sandbox_profile_id
-    reported_profile_id = _optional_uuid(
-        sandbox_profile_id,
-        field_name="sandboxProfileId",
-    )
-    if reported_profile_id != target.sandbox_profile_id:
-        raise CloudApiError(
-            "cloud_worker_profile_identity_required",
-            "Managed cloud worker request must match the target sandboxProfileId.",
-            status_code=409,
-        )
-    return reported_profile_id
-
-
-async def _update_runtime_access_for_managed_worker(
-    db: AsyncSession,
-    *,
-    target_id: UUID,
-    sandbox_profile_id: UUID,
-    worker_id: UUID,
-    now: datetime,
-) -> None:
-    runtime_access = await targets_store.update_target_runtime_access(
-        db,
-        target_id=target_id,
-        sandbox_profile_id=sandbox_profile_id,
-        anyharness_base_url=None,
-        runtime_token_ciphertext=None,
-        anyharness_data_key_ciphertext=None,
-        worker_id=worker_id,
-        heartbeat_at=now,
-    )
-    if runtime_access is None:
-        raise CloudApiError(
-            "cloud_worker_target_stale",
-            "Worker target is no longer the active managed target.",
-            status_code=409,
-        )
 
 
 async def record_inventory(

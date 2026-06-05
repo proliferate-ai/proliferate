@@ -31,7 +31,7 @@ from proliferate.server.cloud.runtime_config.service import (
     worker_runtime_config_fragment,
 )
 from proliferate.server.cloud.sandbox_profiles.service import get_profile
-from proliferate.server.cloud.worker.service import authenticate_worker
+from proliferate.server.cloud.worker.auth import authenticate_worker
 
 router = APIRouter(prefix="/sandbox-profiles", tags=["cloud-runtime-config"])
 worker_router = APIRouter(prefix="/worker/runtime-configs", tags=["cloud-worker-runtime-config"])

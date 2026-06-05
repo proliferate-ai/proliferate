@@ -41,7 +41,7 @@ from proliferate.db.store.cloud_workspaces import (
     get_active_sandbox,
 )
 from proliferate.server.cloud.commands import service as command_service
-from proliferate.server.cloud.worker import service as worker_service
+from proliferate.server.cloud.worker import auth as worker_auth
 from proliferate.utils.time import utcnow
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 
@@ -658,7 +658,7 @@ async def test_archived_managed_worker_agent_auth_side_channel_fails_closed(
     worker = await worker_auth_store.create_worker(
         db_session,
         target_id=target_id,
-        token_hash=worker_service._hash_token(
+        token_hash=worker_auth.hash_token(
             domain=CLOUD_WORKER_TOKEN_DOMAIN,
             token=worker_token,
         ),
@@ -971,7 +971,7 @@ async def test_stale_worker_runtime_config_status_does_not_regress_target_state(
     worker = await worker_auth_store.create_worker(
         db_session,
         target_id=target_id,
-        token_hash=worker_service._hash_token(
+        token_hash=worker_auth.hash_token(
             domain=CLOUD_WORKER_TOKEN_DOMAIN,
             token=worker_token,
         ),
@@ -1062,7 +1062,7 @@ async def test_managed_profile_target_enrollment_requires_profile_identity(
     await worker_auth_store.create_enrollment(
         db_session,
         target_id=target_id,
-        token_hash=worker_service._hash_token(
+        token_hash=worker_auth.hash_token(
             domain=CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN,
             token=token,
         ),
@@ -1098,7 +1098,7 @@ async def test_managed_profile_target_heartbeat_derives_profile_identity(
     await worker_auth_store.create_enrollment(
         db_session,
         target_id=target_id,
-        token_hash=worker_service._hash_token(
+        token_hash=worker_auth.hash_token(
             domain=CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN,
             token=token,
         ),

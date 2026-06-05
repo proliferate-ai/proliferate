@@ -14,6 +14,7 @@ from proliferate.server.cloud.events.models import (
     WorkerEventBatchRequest,
     WorkerEventBatchResponse,
 )
+from proliferate.server.cloud.worker.auth import authenticate_worker
 from proliferate.server.cloud.worker.commands import (
     record_command_delivery,
     record_command_result,
@@ -44,7 +45,6 @@ from proliferate.server.cloud.worker.models import (
 )
 from proliferate.server.cloud.worker.revoked_jti import list_revoked_jtis
 from proliferate.server.cloud.worker.service import (
-    authenticate_worker,
     enroll_worker,
     list_worker_exposures,
     record_event_batch,

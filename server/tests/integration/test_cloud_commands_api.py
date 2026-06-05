@@ -39,7 +39,7 @@ from proliferate.server.cloud.agent_auth.service import (
 )
 from proliferate.server.cloud.commands import service as command_service
 from proliferate.server.cloud.runtime import wake as runtime_wake
-from proliferate.server.cloud.worker import service as worker_service
+from proliferate.server.cloud.worker import auth as worker_auth
 from proliferate.utils.crypto import encrypt_json, encrypt_text
 from proliferate.utils.time import utcnow
 from tests.e2e.cloud.helpers.auth import create_user_and_login
@@ -114,7 +114,7 @@ async def _create_managed_profile_target(
     await worker_auth_store.create_worker(
         db_session,
         target_id=target_id,
-        token_hash=worker_service._hash_token(
+        token_hash=worker_auth.hash_token(
             domain=CLOUD_WORKER_TOKEN_DOMAIN,
             token=worker_token,
         ),
@@ -160,7 +160,7 @@ async def _replace_managed_profile_target(
     worker = await worker_auth_store.create_worker(
         db_session,
         target_id=new_target.id,
-        token_hash=worker_service._hash_token(
+        token_hash=worker_auth.hash_token(
             domain=CLOUD_WORKER_TOKEN_DOMAIN,
             token=worker_token,
         ),
