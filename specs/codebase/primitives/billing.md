@@ -21,7 +21,7 @@ trial from re-creation abuse.
 
 In scope:
 
-- Wire spec 04's `kick_off_managed_slot_wake` to the existing
+- Wire spec 04's `kick_off_managed_sandbox_wake` to the existing
   `authorize_sandbox_start` gate. No new abstraction; the function
   is already the canonical billing check.
 - Tie `agent_gateway_budget_subject.included_budget_usd` to the
@@ -40,7 +40,7 @@ In scope:
 - Process additional Stripe webhook events that today's handler
   ignores: `invoice.upcoming`, `customer.subscription.trial_will_end`.
 - Acceptance tests that prove the wake gate consults billing
-  exactly as expected: paused slot + exhausted budget → command
+  exactly as expected: paused sandbox + exhausted budget → command
   transitions queued → `failed_delivery` with
   `error_code='sandbox_wake_blocked'`.
 
@@ -96,7 +96,7 @@ billing_grant                pre-paid compute time
   hours_granted, remaining_seconds
   effective_at, expires_at
 
-usage_segment                actual compute usage (one per slot run)
+usage_segment                actual compute usage (one per sandbox run)
   external_sandbox_id        E2B sandbox id
   started_at, ended_at
   is_billable
@@ -138,7 +138,7 @@ The flow:
 ```
 
 Spec 04's wake gate calls `authorize_sandbox_start` synchronously
-inside the background `run_managed_slot_wake_job`; if the result
+inside the background `run_managed_sandbox_wake_job`; if the result
 is `allowed=false`, queued wake-required commands transition to
 `failed_delivery` with `error_code='sandbox_wake_blocked'` and the
 `SandboxStartAuthorization.start_block_reason` populates the
@@ -164,9 +164,9 @@ offer free LLM credits — operational toggle).
 
 Hard:
 
-- Spec 00: `sandbox_profile`, `cloud_sandbox` slot lifecycle.
-  Billing snapshots reference the slot's `billing_subject_id`.
-- Spec 04: `kick_off_managed_slot_wake` is the V1 integration
+- Spec 00: `sandbox_profile`, `cloud_sandbox` lifecycle.
+  Billing snapshots reference the sandbox's `billing_subject_id`.
+- Spec 04: `kick_off_managed_sandbox_wake` is the V1 integration
   point. Spec 04 already names it as the spec-09 hook stub; spec
   09 fills it in.
 - Spec 02: `agent_gateway_budget_subject` exists; spec 09 wires
@@ -383,7 +383,7 @@ a fresh `free_trial_v2` grant.
 
 ### 4.2 Gaps spec 09 closes
 
-- `kick_off_managed_slot_wake` (spec 04) calls a stub billing
+- `kick_off_managed_sandbox_wake` (spec 04) calls a stub billing
   hook; spec 09 wires it to `authorize_sandbox_start`.
 - `agent_gateway_budget_subject.included_budget_usd` is a flat
   config value; spec 09 derives it from plan entitlement.
@@ -578,7 +578,7 @@ exactly:
 
 ```text
 server/proliferate/server/cloud/runtime/wake.py
-  run_managed_slot_wake_job(target_id):
+  run_managed_sandbox_wake_job(target_id):
     ...
     billing_subject = load_billing_subject_for_target(target_id)
     authorization = authorize_sandbox_start(
@@ -623,7 +623,7 @@ start_block_reason                error_code on the queued command
 'plan_not_allowed'                 'sandbox_wake_blocked'
 'subscription_required_for_team'   'sandbox_wake_blocked'
 'subject_not_allowed_for_cloud'    'sandbox_wake_blocked'
-(authorization_response.allowed=true but slot create fails)
+(authorization_response.allowed=true but sandbox create fails)
                                    'sandbox_wake_failed'
 (authorization_response.allowed=true but heartbeat times out)
                                    'sandbox_wake_timeout'
@@ -872,7 +872,7 @@ server/proliferate/server/billing/stripe_webhooks.py
 
 server/proliferate/server/cloud/runtime/wake.py
   - import authorize_sandbox_start
-  - call it inside run_managed_slot_wake_job
+  - call it inside run_managed_sandbox_wake_job
   - fail queued wake-required commands on block
 
 server/proliferate/server/cloud/agent_auth/service.py
@@ -931,9 +931,60 @@ apps/desktop/src/components/workspace/shell/sidebar/
 
 Mobile: no changes in V1.
 
+## 7. Implementation Chunks
+
+```text
+Chunk A  Wake hook integration (smallest first)
+  - load_billing_subject_for_target helper
+  - run_managed_sandbox_wake_job calls authorize_sandbox_start
+  - failed wake transitions queued commands to failed_delivery
+    with sandbox_wake_blocked + start_block_reason
+  - tests: paused sandbox + credits_exhausted hold -> command fails
+
+Chunk B  Managed credits budget from plan
+  - _managed_credit_entitlement_budget rewrite
+  - settings.agent_gateway_managed_budget_{free,pro,unlimited}_usd
+  - retire agent_gateway_default_managed_budget_usd
+  - subscription.updated triggers budget reconcile
+  - tests: pro upgrade increases budget; cancel restores free at
+    period end
+
+Chunk C  Free trial dedup
+  - free_cloud_allocation table
+  - ensure_free_cloud_allocation helper
+  - free_trial_v2 grant issuance gated on GitHub identity
+  - reject second-account trial with typed error
+  - tests: same GitHub id across two billing subjects -> deny
+
+Chunk D  Billing envelope in workspace responses + SSE patches
+  - response builder includes billing
+  - publish_billing_patch_for_subject helper
+  - workspace SSE pumps billing_patch events
+  - tests: hold insert publishes patch; clearing publishes again
+
+Chunk E  Web billing UI
+  - mirror Desktop BillingPane structure
+  - hooks in apps/web/src/hooks/access/cloud/billing/
+  - manage/upgrade buttons route to Stripe portal
+
+Chunk F  New webhook events
+  - invoice.upcoming handler
+  - customer.subscription.trial_will_end handler
+  - E2B timeout event closes segment
+
+Chunk G  Sidebar billing badge (small Desktop polish)
+  - workspace listing -> billing envelope -> badge
+  - "Compute exhausted" / "Credits exhausted" / "Payment failed"
+    labels via copy/settings/billing-copy.ts
+
+Chunk H  Tests + smoke
+```
+
+Preferred implementation is one PR per spec. Chunks are review checkpoints inside that PR and may be split only when the split does not leave duplicate models, dead paths, partially wired security checks, or visible inert UI.
+
 ## 8. Acceptance Criteria
 
-1. `kick_off_managed_slot_wake` (spec 04) calls
+1. `kick_off_managed_sandbox_wake` (spec 04) calls
    `authorize_sandbox_start` inside the background wake job.
    `allowed=false` transitions queued wake-required commands for
    the target to `failed_delivery` with
@@ -1017,9 +1068,9 @@ Targeted server tests:
 
 ```text
 server/tests/cloud/runtime/test_wake_hook_consults_billing.py
-  - paused slot + active billing_hold('credits_exhausted')
+  - paused sandbox + active billing_hold('credits_exhausted')
     -> command transitions to failed_delivery sandbox_wake_blocked
-  - paused slot + allowed -> wake proceeds
+  - paused sandbox + allowed -> wake proceeds
 server/tests/billing/test_free_trial_github_dedup.py
   - missing github_identity -> github_required_for_free_trial
   - first issuance succeeds

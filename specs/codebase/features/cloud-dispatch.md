@@ -1129,3 +1129,58 @@ Manual smoke:
    - web/mobile listing drops the workspace
    - Desktop local view unaffected
 ```
+## 10. Final Decisions / Deferred Questions
+
+1. **Live token-by-token streaming on web/mobile?**
+
+   V1 uses session-patch SSE. Token streaming would be lighter
+   latency but adds reconnect complexity and bandwidth. Decision:
+   defer until usage data shows the patch cadence is too coarse.
+
+2. **Should mobile keep fixtures around at all?**
+
+   Decision: only for unit tests / Storybook stories. Production
+   reads always go through the Cloud SDK. Remove
+   `mobile-fixtures.ts` from prod bundle paths.
+
+3. **Cowork API key environment (`pk_live_` vs `pk_test_`)?**
+
+   Decision: ship `pk_live_` only in V1. Test-mode keys are useful
+   when there is a sandbox environment to test against; we
+   don't have a separated test surface. Add `pk_test_` if and
+   when ops needs it.
+
+4. **Should the cowork API auto-cascade query param apply to
+   web/mobile?**
+
+   Decision: no. Web/mobile have UI affordances to fix stale state
+   (deep-link to Settings → Compute, or "Open in Desktop"). Auto-
+   cascade is an opt-in for programmatic callers that can't.
+
+5. **Push notification surface in V1?**
+
+   No. Spec 08 stops at the post-session-event registry hook
+   (spec 07 §5.8). A future spec adds device tokens + APNs/FCM.
+
+6. **Multi-org session listing in mobile?**
+
+   Mobile shows the active org's exposed work today. Multi-org
+   picker is a follow-up.
+
+7. **Should `Open in web` and `Open on mobile` collapse into one
+   "Share link" menu item?**
+
+   Decision: separate items. The QR-for-mobile vs URL-for-web flows
+   have different ergonomics; a single dialog with both options
+   is fine if UX prefers.
+
+8. **`shared_cloud` runtime location: how is the AnyHarness URL
+   resolved if `cloud_target_runtime_access` is stale (slot
+   replaced)?**
+
+   The JWT carries `target_id`; AnyHarness checks
+   `target_id == AppState.target_id`. If the target was replaced
+   and AnyHarness booted with a new target_id, old JWTs fail
+   target check and Desktop refreshes via
+   `use-direct-attach-token`. Spec 05 §10 decision #4 already
+   covered this.

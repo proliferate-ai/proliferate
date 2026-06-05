@@ -2,13 +2,32 @@
 
 Status: implementation-ready spec.
 
-Date: 2026-05-20.
+Date: 2026-06-05 (collapsed-identity revision; supersedes the 2026-05-20 slot
+model).
 
 Depends on: nothing. This is the foundation.
 
 This spec replaces the repo-scoped `CloudRuntimeEnvironment` root for managed
-cloud with a sandbox-profile / target / slot model. Every other spec in this
-pack assumes the foundation is in place.
+cloud with a **sandbox-profile / target** model where the managed **target is
+the sandbox** — one runtime = one sandbox = one Target, 1:1 and ephemeral. Every
+other spec in this pack assumes the foundation is in place.
+
+> **Collapsed identity (the core premise).** There is no slot layer, no
+> `slot_generation`, no supersession, and no fencing. A managed target is
+> ephemeral and co-terminates with its provider sandbox: when the sandbox dies,
+> the target is retired and a **new** target is provisioned — the worker enrolls
+> anew. `target_id` is therefore the identity *and* the epoch: a stale worker
+> holds a retired `target_id`, and nothing routes to a retired target, so there
+> is nothing to fence. Profiles are the stable thing; targets are disposable;
+> Cloud product rows (workspaces, session projections) are durable and rebind to
+> the current target.
+>
+> **Scope of this revision.** Spec 00 owns *identity* and the *data model*. It
+> removes the slot model and slot fencing. It does **not** re-architect command
+> *transport* — the move from per-endpoint polling to the single control
+> long-poll (two polls, not three) is owned by **spec 04**. Spec 00 keeps
+> command leasing as an at-least-once correlation by `target_id` and leaves the
+> wire/transport shape to spec 04.
 
 ## 1. Purpose & Scope
 
@@ -16,80 +35,84 @@ In scope:
 
 - One stable managed cloud sandbox profile per user (personal) and per
   organization (shared).
-- One primary managed cloud target per profile.
-- One active managed compute slot per `(sandbox_profile_id, target_id)`.
+- One active managed cloud target per profile — the target **is** the live
+  sandbox (1:1, ephemeral). Replacing the sandbox provisions a new target.
 - Durable `cloud_workspace` rows keyed by profile and target, created before
-  worker materialization.
+  worker materialization, that rebind to the current target.
 - Worker enrollment, heartbeat, command leasing, result ingest, and event
-  ingest fenced by an active slot id and `slot_generation`.
+  ingest correlated by `target_id` (no slot id, no `slot_generation`, no fence).
 - Target-scoped runtime access state (AnyHarness base URL, runtime token,
   data key) moved off of `CloudRuntimeEnvironment` / `CloudWorkspace`.
 - Profile/target applied-state row that both MCP/skill runtime config (spec
   01) and agent auth (spec 02) can hang their preflight off.
-- `org_cloud_not_ready` block removed only after the shared profile/target/
-  slot path can actually launch.
+- `org_cloud_not_ready` block removed only after the shared profile/target
+  path can actually launch.
 
 Out of scope:
 
 - Compiling or applying MCP/skill/plugin runtime config (spec 01).
 - Agent auth credential model, gateway routing, or selection UI (spec 02).
 - Settings/Admin IA placement of any of these surfaces (spec 03).
-- Cloud command queue cleanup beyond carrying `cloud_workspace_id` and slot
-  identity (spec 04).
+- Command-queue transport and the control long-poll (spec 04). Spec 00 only
+  carries `cloud_workspace_id` and `target_id` correlation on commands.
 - Claiming, automations, Slack, web/mobile, billing, migration.
 
 ## 2. Mental Model
 
-Three different objects, kept deliberately separate:
+Two objects, kept deliberately separate:
 
 ```text
 sandbox profile
   Stable product/config identity.
   Owns "what this personal/shared sandbox should be configured with."
-  Survives target re-enrollment and slot replacement.
+  Survives target replacement. This is the durable thing.
 
-cloud target
-  Addressable worker + AnyHarness runtime endpoint.
-  Owns "where commands go" and "what runtime state has actually been applied."
-  Stable across slot replacement when the worker identity is preserved.
-
-cloud sandbox slot
-  Managed compute/provider lifecycle row.
-  Owns "what E2B sandbox backs this managed cloud target right now."
-  Replaced (not edited) when E2B issues a new provider sandbox.
+cloud target  (= the managed sandbox)
+  An ephemeral addressable runtime: worker + AnyHarness + the E2B sandbox that
+  backs it, all 1:1 and co-terminating.
+  Owns "where commands go right now" and "what runtime state has been applied to
+  this runtime."
+  Replaced (not edited, not re-enrolled) when the provider sandbox is replaced:
+  the old target is archived and a new target is provisioned.
 ```
+
+The provider-lifecycle facts (E2B `external_sandbox_id`, status, pause/resume,
+timeouts) live in `cloud_sandbox`, kept as a separate row **1:1 with the
+managed target** so billing and provider audit stay clean — but the sandbox and
+its target are born and retired together. There is no slot generation and no
+supersession pointer.
 
 V1 invariant:
 
 ```text
 user
   -> one personal sandbox_profile
-    -> one primary cloud_target where profile_target_role = 'primary'
-      -> one active cloud_sandbox slot per (sandbox_profile_id, target_id)
+    -> at most one active primary cloud_target (managed_cloud), where the target
+       is the live sandbox; replaced as a new target when the sandbox is replaced
 
 organization
   -> one shared sandbox_profile
-    -> one primary cloud_target where profile_target_role = 'primary'
-      -> one active cloud_sandbox slot per (sandbox_profile_id, target_id)
+    -> at most one active primary cloud_target (managed_cloud), same rule
 ```
 
-Profiles are created lazily on explicit cloud intent. Compute is created even
-later.
+Profiles are created lazily on explicit cloud intent. The target (and the
+compute behind it) is created even later.
 
 After this foundation lands, downstream specs say:
 
 ```text
 spec 01  configure sandbox profile desired runtime config
 spec 02  configure sandbox profile desired agent auth
-spec 04  workspace/session launch requires applied current revisions
+spec 04  workspace/session launch requires applied current revisions; owns the
+         control long-poll transport
 spec 09  every wake-gated command requires billing_subject not blocked
 ```
 
 ### 2.1 Lifecycle and synchronicity
 
-Profile, target, and slot are created lazily at different latencies. The API
-returns as soon as a Cloud DB row exists; provisioning that touches E2B or
-waits on worker enrollment runs in the background.
+Profile and target are created lazily at different latencies. The API returns as
+soon as a Cloud DB row exists; provisioning that touches E2B or waits on worker
+enrollment runs in the background.
 
 **Synchronous (returns inside the request):**
 
@@ -105,8 +128,7 @@ ensure_organization_sandbox_profile(organization_id)
 ensure_primary_profile_target(sandbox_profile_id)
   INSERT cloud_targets (profile_target_role='primary', kind='managed_cloud',
                         status='enrolling')
-  mint enrollment token carrying (sandbox_profile_id, will-be-cloud_sandbox_id,
-                                  will-be-slot_generation)
+  mint enrollment token carrying (sandbox_profile_id, target_id)
   return CloudTargetSnapshot
 
 The two "ensure profile" helpers may also create the primary target in the
@@ -117,8 +139,9 @@ must be idempotent under concurrency.
 **Background (enqueued, polled or pushed):**
 
 ```text
-provision_profile_slot(sandbox_profile_id, target_id)
-  INSERT cloud_sandbox (status='creating', slot_generation = max(prev)+1)
+provision_managed_target(sandbox_profile_id, target_id)
+  INSERT cloud_sandbox (status='creating', target_id, sandbox_profile_id,
+                        billing_subject_id copied from profile)   -- 1:1 with the target
   call E2B SDK to create the provider sandbox; record external_sandbox_id
   boot supervisor + worker inside; wait for first enrollment + heartbeat
   cloud_target_runtime_access populated from enrollment payload
@@ -137,18 +160,33 @@ reconcile_sandbox_profile_target(sandbox_profile_id, target_id)
   re-enqueues materialize_environment / refresh_agent_auth_config
 ```
 
+**Target replacement** (the replacement for "slot replacement"):
+
+```text
+replace_managed_target(sandbox_profile_id, old_target_id)
+  archive old cloud_target (archived_at = now, status terminal) and its
+    1:1 cloud_sandbox (status -> 'killed'/'error')
+  ensure_primary_profile_target -> a NEW target_id with a fresh enrollment token
+  provision_managed_target for the new target
+  managed cloud_workspace rows for the profile are marked
+    rematerialization-required (their materialized_target_id no longer matches
+    the active primary target)
+  in-flight worker results/commands referencing old_target_id are inert: the
+  target is archived, so nothing routes to it — no fence needed
+```
+
 **Profile status state machine:**
 
 ```text
 configuring   profile row exists, no primary target yet
               -- transition: ensure_primary_profile_target succeeds
 
-provisioning  target exists; slot creation is in flight
-              -- transition: provision_profile_slot success -> active
-              --             provision_profile_slot failure -> blocked/error
+provisioning  target exists; sandbox creation is in flight
+              -- transition: provision_managed_target success -> active
+              --             provision_managed_target failure -> blocked/error
 
-active        at least one slot reached 'running' for the primary target;
-              runtime access populated; profile is usable
+active        the primary target reached 'online'; runtime access populated;
+              profile is usable
 
 blocked       billing/policy says no compute is allowed right now;
               cleared by spec 09 / spec 02 reconcilers
@@ -168,7 +206,7 @@ the target is reachable lives on `cloud_targets.status`,
 
 ```text
 GET /v1/cloud/sandbox-profiles/{id}                profile + status
-GET /v1/cloud/sandbox-profiles/{id}/target-state   runtime + auth + slot readiness
+GET /v1/cloud/sandbox-profiles/{id}/target-state   runtime + auth readiness
 GET /v1/cloud/sandbox-profiles/{id}/events         optional SSE for cheap UI updates
                                                    (defer to spec 04 if not trivial)
 ```
@@ -203,7 +241,9 @@ None.
 
 ## 4. Current Repo State
 
-Verified against the current repository worktree on 2026-05-20.
+Verified against the current repository worktree on 2026-05-20. (Current-state
+facts below describe what exists *before* this spec; the collapsed model is the
+target, not the current code.)
 
 ### 4.1 What already exists
 
@@ -261,7 +301,7 @@ migration away from workspace-owned sandboxes"), `provider`,
 `external_sandbox_id` (unique), `status`, `template_version`,
 `last_provider_event_at`/`_kind`, `started_at`, `stopped_at`,
 `last_heartbeat_at`. **No `sandbox_profile_id`, `target_id`,
-`billing_subject_id`, `slot_generation`, supersession fields.**
+`billing_subject_id`.**
 
 **`cloud_runtime_environment` table** — currently the managed-cloud root.
 Unique by `(user_id|organization_id, git_provider, git_owner_norm,
@@ -274,19 +314,17 @@ NULL), `active_sandbox_id` (text), `status`, `runtime_url`,
 `owner_scope`, `runtime_environment_id` (FK CloudRuntimeEnvironment, CASCADE),
 `active_sandbox_id`, `runtime_url`, `runtime_token_ciphertext`,
 `anyharness_workspace_id`, `status`, `display_name`, git fields. **No
-`sandbox_profile_id`, `target_id`, `materialized_slot_generation`,
-required-revision fields.**
+`sandbox_profile_id`, `target_id`, required-revision fields.**
 
 **`cloud_commands` table**. Has `target_id` (FK CloudTarget, CASCADE),
 `organization_id` (nullable), `actor_user_id` (nullable), `leased_by_worker_id`
 (nullable), `workspace_id` (text, nullable — "anyharness workspace id
 materialized at creation"), `session_id` (text, nullable), `kind`, `status`,
 `lease_id`, `lease_expires_at`, `attempt_count`, `payload_json`,
-`authorization_context_json`. **No `cloud_workspace_id`,
-`leased_cloud_sandbox_id`, `leased_slot_generation`.**
+`authorization_context_json`. **No `cloud_workspace_id`.**
 
-**`cloud_workers`, `cloud_target_enrollments`** — none currently carry
-`cloud_sandbox_id` or `slot_generation`.
+**`cloud_workers`, `cloud_target_enrollments`** — keyed to a target; none carry
+slot fields.
 
 **`org_cloud_not_ready` block** — implemented in:
 
@@ -335,9 +373,8 @@ Supported kinds today:
   sync_existing_workspace
 ```
 
-No envelope/result carries `cloudWorkspaceId`, `sandboxProfileId`, or
-`slotGeneration`. **No `materialize_environment_runtime_config` command exists
-today.**
+No envelope/result carries `cloudWorkspaceId` or `sandboxProfileId`. **No
+`materialize_environment_runtime_config` command exists today.**
 
 **Agent auth runtime already exists** (PRs #254-#258). The worker carries
 `refresh_agent_auth_config` with payload `{ sandbox_profile_id, revision,
@@ -356,9 +393,8 @@ Stated as plain facts to fix:
 - `cloud_targets` does not point to a profile; managed-cloud target identity
   is derived through `cloud_runtime_environment.target_id`.
 - `cloud_sandbox` is a provider-lifecycle row keyed off of
-  `cloud_runtime_environment`, not off of a profile/target pair.
-- There is no concept of `slot_generation`; stale workers across slot
-  replacement cannot be fenced.
+  `cloud_runtime_environment`, not off of a profile/target pair, and is not
+  1:1 with the target.
 - `cloud_target_runtime_access` does not exist. Runtime URL/token/data key
   live on `cloud_runtime_environment` and on `cloud_workspace`.
 - `cloud_workspace.sandbox_profile_id` and `cloud_workspace.target_id` do
@@ -371,6 +407,9 @@ Stated as plain facts to fix:
 - `materialize_environment_runtime_config` command is referenced in
   planning notes but does not exist in the worker contract.
 
+Note: the absence of `slot_generation` is **not** a gap to close — the
+collapsed model deliberately has no slot fence. `target_id` is the epoch.
+
 ## 5. Target Model
 
 ### 5.1 Naming conventions for the foundation PR
@@ -380,11 +419,11 @@ names** wherever possible:
 
 ```text
 sandbox_profile                            (broaden; do not rename)
-cloud_targets                              (extend; do not rename)
-cloud_sandbox                              (extend; slot semantics)
-cloud_workers, cloud_target_enrollments    (extend with slot/profile fences)
+cloud_targets                              (extend; profile link + ephemeral managed target)
+cloud_sandbox                              (extend; 1:1 with the managed target)
+cloud_workers, cloud_target_enrollments    (extend with profile link only)
 cloud_workspace                            (extend with profile/target/required-revision)
-cloud_commands                             (extend with cloud_workspace_id and slot fencing)
+cloud_commands                             (extend with cloud_workspace_id)
 ```
 
 New tables added by this PR:
@@ -397,8 +436,7 @@ sandbox_profile_target_state               (per-(profile,target) applied state; 
 `sandbox_profile_target_state` is a **rename and broaden** of the existing
 `sandbox_profile_agent_auth_target_state`. Migration drops the old name and
 creates the new one with the same primary identity columns plus new
-runtime-config and slot-fencing columns. See 5.6 for the exact shape and FK
-updates.
+runtime-config columns. See 5.6 for the exact shape and FK updates.
 
 `cloud_runtime_environment` is dropped in this PR. Every existing caller
 is classified during implementation; managed-cloud callers are rewritten
@@ -445,13 +483,6 @@ Status widening (see §2.1 for the full state machine):
 SUPPORTED_SANDBOX_PROFILE_STATUSES becomes:
   configuring | provisioning | active | disabled | blocked | error
 
-  configuring   row exists, no primary target yet (sync ensure succeeded)
-  provisioning  primary target exists, slot creation is in flight (background)
-  active        at least one slot reached 'running'; profile usable
-  disabled      explicit user/admin disable
-  blocked       billing/policy block; reactivatable when cleared
-  error         provisioning failed in a way the reconciler cannot self-heal
-
 Use the shipped enum name `active`; do not introduce a DB value named
 `enabled`. Product copy can still say a sandbox is "enabled".
 ```
@@ -465,7 +496,7 @@ personal: owner_user_id NOT NULL, organization_id NULL
 organization: organization_id NOT NULL, owner_user_id NULL
 ```
 
-### 5.3 `cloud_targets` (extend)
+### 5.3 `cloud_targets` (extend) — the managed target is the sandbox
 
 Add columns:
 
@@ -473,6 +504,12 @@ Add columns:
 sandbox_profile_id        uuid fk sandbox_profile.id  nullable
 profile_target_role       text not null default 'none'   ('primary' | 'none')
 ```
+
+A `managed_cloud` primary target is **ephemeral**: it co-terminates with its
+provider sandbox and is replaced (new `target_id`) rather than re-enrolled.
+Non-managed targets (`ssh`, `desktop_dispatch`, `self_hosted_cloud`) are
+long-lived and keep `profile_target_role = 'none'` — they never had a slot and
+are unchanged by the collapse.
 
 Existing `owner_user_id` is currently NOT NULL. The foundation **relaxes
 `cloud_targets.owner_user_id` to nullable** so that organization-owned managed
@@ -498,13 +535,17 @@ UNIQUE PARTIAL ux_cloud_target_primary_per_profile:
   (sandbox_profile_id) WHERE profile_target_role = 'primary' AND archived_at IS NULL
 ```
 
+The `ux_cloud_target_primary_per_profile` index is what makes target
+replacement safe: only one non-archived primary target may exist per profile,
+so replacing means archive-then-insert, and the active target is unambiguous.
+
 Service-level guards (not DB):
 
 - The owner fields of a `primary` target must match the referenced profile's
   owner fields.
 - Setting `profile_target_role = 'primary'` requires `kind = 'managed_cloud'`.
 
-### 5.4 `cloud_sandbox` (extend) — semantically the "slot"
+### 5.4 `cloud_sandbox` (extend) — the provider-lifecycle row, 1:1 with the target
 
 Add columns:
 
@@ -513,56 +554,53 @@ sandbox_profile_id           uuid fk sandbox_profile.id   nullable
 target_id                    uuid fk cloud_targets.id     nullable
 billing_subject_id           uuid fk billing_subject.id   nullable
 
-slot_generation              integer nullable
-superseded_by_sandbox_id     uuid fk cloud_sandbox.id     nullable
-superseded_at                timestamptz                  nullable
-
 lifecycle_on_timeout         text  default 'pause'
 lifecycle_auto_resume        boolean default true
 provider_timeout_seconds     integer nullable
 blocked_reason               text nullable
 ```
 
-New rows for managed cloud **MUST** set `sandbox_profile_id`, `target_id`,
-`billing_subject_id`, and `slot_generation`.
+There are deliberately **no** `slot_generation`, `superseded_by_sandbox_id`, or
+`superseded_at` columns. A managed sandbox is 1:1 with its target and is not
+superseded in place — replacement provisions a new `(target, sandbox)` pair.
 
-Active-slot uniqueness:
+New rows for managed cloud **MUST** set `sandbox_profile_id`, `target_id`, and
+`billing_subject_id`.
 
-```text
-UNIQUE PARTIAL ux_cloud_sandbox_active_slot_per_profile_target:
-  (sandbox_profile_id, target_id)
-  WHERE superseded_at IS NULL
-    AND status IN ('creating','provisioning','running','paused','blocked')
-```
-
-Slot replacement rule:
+Active uniqueness (one live sandbox per target):
 
 ```text
-1. Mark old slot superseded_at = now and (if not already terminal) status = 'killed' / 'error'.
-2. Insert new slot with bumped slot_generation (max(old)+1) and the same
-   sandbox_profile_id/target_id/billing_subject_id.
-3. Old slot rows remain for audit/billing.
+UNIQUE PARTIAL ux_cloud_sandbox_active_per_target:
+  (target_id)
+  WHERE status IN ('creating','provisioning','running','paused','blocked')
 ```
 
-`runtime_environment_id` on `cloud_sandbox` is removed in this PR.
-Managed-cloud slot lookup uses `(sandbox_profile_id, target_id) WHERE
-superseded_at IS NULL`.
+Replacement rule:
 
-`cloud_sandbox.cloud_workspace_id` is removed in this PR. Slots belong to
-a target, not to a workspace.
+```text
+1. Archive the target (cloud_targets.archived_at = now, status terminal).
+2. Mark the 1:1 sandbox terminal (status = 'killed' / 'error').
+3. Provision a NEW target (new target_id, fresh enrollment token) and a NEW
+   sandbox for the same profile. Old rows remain for audit/billing.
+```
+
+`runtime_environment_id` and `cloud_workspace_id` on `cloud_sandbox` are removed
+in this PR. Managed-cloud sandbox lookup uses `target_id` (and, through it, the
+profile's active primary target).
 
 ### 5.5 `cloud_target_runtime_access` (new)
 
 One row per managed cloud target. Owns the direct AnyHarness connection
 state that used to live on `CloudRuntimeEnvironment` and `CloudWorkspace`.
+Because the target is 1:1 with its sandbox, this is simply the current access
+for the current target — there is no active-slot compare-and-set.
 
 ```text
 cloud_target_runtime_access
   id                              uuid pk
   target_id                       uuid fk cloud_targets.id        unique not null
   sandbox_profile_id              uuid fk sandbox_profile.id      not null
-  active_sandbox_id               uuid fk cloud_sandbox.id        nullable
-  slot_generation                 integer                         nullable
+  cloud_sandbox_id                uuid fk cloud_sandbox.id        nullable
 
   anyharness_base_url             text
   runtime_token_ciphertext        bytea / text
@@ -572,20 +610,16 @@ cloud_target_runtime_access
   last_heartbeat_at               timestamptz
   created_at                      timestamptz
   updated_at                      timestamptz
-
-  CHECK active slot fields are either both null or both not null
-  CHECK if active_sandbox_id is set, slot_generation matches the slot row
-        (enforced by service before write)
 ```
 
 Update rule:
 
-- Worker enrollment / heartbeat reports `target_id`, `sandbox_profile_id`,
-  `cloud_sandbox_id`, `slot_generation`.
-- Server compare-and-set updates `cloud_target_runtime_access` only if the
-  reported `(active_sandbox_id, slot_generation)` matches the current active
-  slot.
-- Stale reports are rejected and the worker is marked stale.
+- Worker enrollment / heartbeat reports `target_id` (and the bearer
+  `worker_token`).
+- Server updates `cloud_target_runtime_access` for that `target_id`. A report
+  for an **archived** `target_id` is ignored (the target is retired); this is
+  the natural replacement for slot fencing — no generation comparison is
+  needed.
 
 Boundary:
 
@@ -609,7 +643,7 @@ payloads, worker result payloads, or status JSON.
 
 The existing `sandbox_profile_agent_auth_target_state` is renamed to
 `sandbox_profile_target_state` and broadened to carry both runtime-config
-and agent-auth apply state, plus active slot identity for fencing.
+and agent-auth apply state for the current `(profile, target)`.
 
 Schema:
 
@@ -617,9 +651,6 @@ Schema:
 sandbox_profile_target_state
   sandbox_profile_id    uuid fk sandbox_profile.id   not null
   target_id             uuid fk cloud_targets.id     not null
-
-  active_sandbox_id     uuid fk cloud_sandbox.id     nullable
-  slot_generation       integer                      nullable
 
   -- agent-auth axis (existing columns, kept verbatim under new table name)
   desired_agent_auth_revision     integer
@@ -650,6 +681,11 @@ sandbox_profile_target_state
   UNIQUE (sandbox_profile_id, target_id)
 ```
 
+There is no `active_sandbox_id`/`slot_generation` fence on this row. Because the
+target is ephemeral, applied state is naturally per-target: a **new** target
+starts with a fresh state row defaulting to `0 / pending`, so there is nothing
+to invalidate on replacement — the old row belongs to the archived target.
+
 Migration plan:
 
 ```text
@@ -675,15 +711,13 @@ Migration plan:
 Launch-preflight validity:
 
 ```text
-applied_runtime_config_sequence  is valid only if
-  sandbox_profile_target_state.active_sandbox_id matches the current
-  cloud_sandbox active slot AND
-  sandbox_profile_target_state.slot_generation matches the slot's generation
+applied_runtime_config_sequence  is valid for the profile's active primary
+  target (the state row's target_id == the active primary target_id).
 
-applied_agent_auth_revision      is valid under the same fence
+applied_agent_auth_revision      is valid under the same rule.
 
-slot replacement resets applied_* on the affected row until the new slot
-reports materialization
+target replacement starts a fresh state row for the new target_id; the old
+row is inert with the archived target.
 ```
 
 ### 5.7 `cloud_workspace` (extend)
@@ -695,7 +729,7 @@ sandbox_profile_id                  uuid fk sandbox_profile.id   nullable
 target_id                           uuid fk cloud_targets.id     nullable
 normalized_repo_key                 text  -- e.g. "github.com/proliferate-ai/proliferate"
 worktree_path                       text
-materialized_slot_generation        integer nullable
+materialized_target_id              uuid fk cloud_targets.id nullable
 
 required_runtime_config_sequence    integer nullable
 required_runtime_config_revision_id text    nullable
@@ -740,28 +774,28 @@ Uniqueness:
 
 ```text
 UNIQUE PARTIAL ux_cloud_workspace_active_per_branch:
-  (sandbox_profile_id, target_id, normalized_repo_key, git_branch)
+  (sandbox_profile_id, normalized_repo_key, git_branch)
   WHERE archived_at IS NULL
 
 UNIQUE PARTIAL ux_cloud_workspace_active_worktree_path:
-  (target_id, worktree_path)
+  (sandbox_profile_id, worktree_path)
   WHERE archived_at IS NULL
 ```
 
-The existing `cloud_runtime_environment` uniqueness key keys per-repo identity
-into the root. Replacing it requires the new key to include normalized repo
-identity; branch alone is not unique across repos.
+Workspace identity keys on the **profile** (the durable thing), not the
+ephemeral target — a workspace survives target replacement and rebinds.
 
-`materialized_slot_generation` rule:
+`materialized_target_id` rule (the replacement for `materialized_slot_generation`):
 
 ```text
 cloud_workspace.anyharness_workspace_id  is runnable only if
-  cloud_workspace.materialized_slot_generation == active slot's slot_generation
-  for that (sandbox_profile_id, target_id).
+  cloud_workspace.materialized_target_id == the profile's active primary target_id.
 
-slot replacement clears materialized_slot_generation on managed workspaces
-and marks them rematerialization-required (use existing status enum or add
-'needs_rematerialization'; do not overload 'failed').
+target replacement clears materialized_target_id on the profile's managed
+workspaces and marks them rematerialization-required (use existing status enum
+or add 'needs_rematerialization'; do not overload 'failed'). On the next
+materialize_workspace, target_id and materialized_target_id are set to the new
+active target.
 ```
 
 ### 5.8 `cloud_commands` (extend)
@@ -770,9 +804,10 @@ Add columns:
 
 ```text
 cloud_workspace_id        uuid fk cloud_workspace.id   nullable
-leased_cloud_sandbox_id   uuid fk cloud_sandbox.id     nullable
-leased_slot_generation    integer                      nullable
 ```
+
+No `leased_cloud_sandbox_id` / `leased_slot_generation` — leasing correlates by
+`target_id` alone.
 
 Field semantics:
 
@@ -787,48 +822,45 @@ cloud_commands.cloud_workspace_id     uuid
   the join key for results that need to update product state.
 
 cloud_commands.target_id              uuid
-  always set; the worker destination.
-
-cloud_commands.leased_cloud_sandbox_id + leased_slot_generation
-  filled by command leasing; identifies the slot the worker leased from.
+  always set; the worker destination and the epoch.
 ```
 
-Fencing rules:
+Correlation rules (no slot fence):
 
 ```text
 command leasing requires:
-  worker.target_id = command.target_id
-  worker.cloud_sandbox_id = active slot id for the target
-  worker.slot_generation  = active slot's slot_generation
+  worker.target_id = command.target_id      (the worker is the current target)
 
 result / delivery / event ingest requires:
-  command.leased_cloud_sandbox_id = active slot id at result time
-  command.leased_slot_generation  = active slot's slot_generation
-  worker.cloud_sandbox_id         = command.leased_cloud_sandbox_id
-  worker.slot_generation          = command.leased_slot_generation
+  worker.target_id = command.target_id
+  the command's target is not archived
 
-stale slot reports do NOT update workspace, session, runtime access,
-profile-target state, or billing readiness. They mark the worker stale and
-the affected command stale/superseded.
+a report from a worker whose target_id is archived (a replaced target) is
+inert: nothing routes to a retired target. Such reports do NOT update
+workspace, session, runtime access, profile-target state, or billing
+readiness. target_id is the epoch; there is no generation to compare.
 ```
+
+Note: this spec keeps command **leasing** as an at-least-once correlation only.
+The transport (the single control long-poll that delivers commands + reconcile,
+replacing per-endpoint polling) is owned by spec 04.
 
 ### 5.9 `cloud_workers` and `cloud_target_enrollments` (extend)
 
 Add columns:
 
 ```text
-cloud_workers.cloud_sandbox_id              uuid fk cloud_sandbox.id  nullable
-cloud_workers.slot_generation               integer                   nullable
-
 cloud_target_enrollments.sandbox_profile_id uuid fk sandbox_profile.id nullable
-cloud_target_enrollments.cloud_sandbox_id   uuid fk cloud_sandbox.id  nullable
-cloud_target_enrollments.slot_generation    integer                   nullable
 ```
 
+No `cloud_sandbox_id` / `slot_generation` on either table — a worker belongs to
+a target, and the target is the epoch.
+
 The enrollment row is the seed that ties a fresh worker process to the
-profile/slot it is supposed to serve. Cloud assigns the worker's
-`cloud_sandbox_id`/`slot_generation` from the consumed enrollment token and
-must not trust arbitrary fields in heartbeat payloads to choose a slot.
+profile/target it is supposed to serve. Cloud assigns the worker's `target_id`
+from the consumed enrollment token and must not trust arbitrary fields in
+heartbeat payloads to choose a target. A replaced sandbox gets a brand-new
+enrollment token for the new target — it never re-enrolls into the old one.
 
 ### 5.10 Worker wire contract additions
 
@@ -838,32 +870,28 @@ Update `anyharness/crates/anyharness-contract/src/v1/`:
 CloudCommandEnvelope
   + cloud_workspace_id    Option<Uuid>
   + sandbox_profile_id    Option<Uuid>
-  + slot_generation       Option<i64>
 
 CommandResultRequest
   + cloud_workspace_id    Option<Uuid>
-  + slot_generation       Option<i64>
   + anyharness_workspace_id  Option<String>     -- echoed for materialization results
 
 CommandDeliveryRequest
   + cloud_workspace_id    Option<Uuid>
-  + slot_generation       Option<i64>
 
 EnrollRequest
   + sandbox_profile_id    Option<Uuid>
-  + cloud_sandbox_id      Option<Uuid>
-  + slot_generation       Option<i64>
 
 EnrollResponse
   + sandbox_profile_id    Option<Uuid>
-  + cloud_sandbox_id      Option<Uuid>
-  + slot_generation       Option<i64>
 
 HeartbeatRequest
   + sandbox_profile_id    Option<Uuid>
-  + cloud_sandbox_id      Option<Uuid>
-  + slot_generation       Option<i64>
 ```
+
+No `cloud_sandbox_id` or `slot_generation` field on any envelope, result,
+delivery, enroll, or heartbeat. `target_id` (already present) is the identity.
+This aligns with the protocol contract owned by `cloud-worker-protocol-design`,
+which carries no `SlotFence`.
 
 `workspace_id` (the AnyHarness workspace id) keeps its current meaning: a
 runtime-side id that is unset until the worker has materialized it.
@@ -875,17 +903,17 @@ created. The server verifies:
 ```text
 result.cloud_workspace_id  = cloud_commands.cloud_workspace_id
 result.cloud_workspace_id  refers to an existing cloud_workspace row
-result target_id           = cloud_workspace.target_id
-result slot id / generation = active slot id / generation
+result target_id           = cloud_workspace.target_id (the active primary target)
+the command's target is not archived
 ```
 
 Only then may the server update `cloud_workspace.anyharness_workspace_id`,
-`cloud_workspace.materialized_slot_generation`, workspace status, session
-projection rows, or profile-target applied state.
+`cloud_workspace.materialized_target_id`, workspace status, session projection
+rows, or profile-target applied state.
 
 **Worker results never auto-create `cloud_workspace`.** A result whose
 `cloud_workspace_id` does not match an existing Cloud row is rejected with
-a structured `cloud_workspace_not_found` error and marked the command stale.
+a structured `cloud_workspace_not_found` error and the command marked stale.
 This preserves the invariant that **Cloud creates the workspace row before
 AnyHarness materialization begins** (acceptance #8) and prevents orphan
 AnyHarness workspaces from inserting themselves into the Cloud product
@@ -921,11 +949,12 @@ GET    /v1/cloud/sandbox-profiles/{sandbox_profile_id}/target-state
 
 POST   /v1/cloud/sandbox-profiles/{sandbox_profile_id}/enable-cloud
        -- explicit "Enable Personal/Shared Cloud" trigger
-       -- creates primary target and ensures slot when invoked
+       -- creates primary target and provisions it when invoked
 ```
 
 Worker (already exists for agent auth; ensure they accept the new envelope
-fields):
+fields). The transport shape of these endpoints — and the control long-poll
+that supersedes per-endpoint polling — is owned by spec 04:
 
 ```text
 POST /v1/cloud/worker/commands/lease
@@ -943,31 +972,31 @@ those.
 The foundation introduces two background jobs and one reconciler. They are
 the home for any work that touches E2B or waits on worker enrollment.
 
-**`provision_profile_slot` (background)**:
+**`provision_managed_target` (background)**:
 
 ```text
 trigger
-  ensure_profile_slot enqueues this when no active slot exists for
-  (sandbox_profile_id, target_id) and the profile is not blocked
+  ensure_primary_profile_target enqueues this when the primary target has no
+  live sandbox and the profile is not blocked
 
 steps
-  1. Lock (sandbox_profile_id, target_id). Reload active slot. Abort if one
-     already exists (idempotent).
+  1. Lock (sandbox_profile_id, target_id). Reload the target's sandbox. Abort
+     if a live one already exists (idempotent).
   2. Resolve template + compute shape from sandbox_profile + plan/entitlement
      (spec 09 owns entitlement check; foundation defaults to "personal free
      shape").
-  3. INSERT cloud_sandbox status='creating', slot_generation=max(prev)+1,
+  3. INSERT cloud_sandbox status='creating', target_id, sandbox_profile_id,
      billing_subject_id copied from profile, lifecycle_on_timeout='pause',
      lifecycle_auto_resume=true, provider_timeout_seconds=<short window>.
   4. Call E2B SDK to create provider sandbox with Proliferate metadata
-     (sandbox_profile_id, target_id, cloud_sandbox_id, slot_generation,
-     billing_subject_id). Record external_sandbox_id and started_at.
+     (sandbox_profile_id, target_id, cloud_sandbox_id, billing_subject_id).
+     Record external_sandbox_id and started_at.
   5. Wait for worker enrollment (bounded poll + heartbeat callback path)
      identified by the enrollment token minted at target ensure time.
-  6. UPSERT cloud_target_runtime_access with compare-and-set on
-     (active_sandbox_id, slot_generation).
+  6. UPSERT cloud_target_runtime_access for target_id from the enrollment
+     payload.
   7. cloud_sandbox.status -> 'running'; cloud_targets.status -> 'online';
-     sandbox_profile.status -> 'active' if this is the first slot.
+     sandbox_profile.status -> 'active'.
 
 failure
   on bounded retry exhaustion:
@@ -975,7 +1004,7 @@ failure
     sandbox_profile.status -> 'error' (admin/owner-actionable) or
                               'blocked' (billing-cleared)
   the reconciler picks up sandbox_profile.status='provisioning' rows whose
-  slot is older than the provisioning timeout and retries.
+  target has no live sandbox past the provisioning timeout and retries.
 ```
 
 **`reconcile_sandbox_profile_target` (reconciler tick)**:
@@ -989,7 +1018,7 @@ steps
   for each (sandbox_profile_id, target_id) row whose
     sandbox_profile_target_state.applied_* < desired_* OR
     cloud_target_runtime_access is missing/stale:
-      verify slot is still active
+      verify the target is the active primary (not archived)
       enqueue materialize_environment (runtime config) if applicable
       enqueue refresh_agent_auth_config if applicable
       bump last_attempted_at; record errors
@@ -999,21 +1028,21 @@ collapse server-side.
 ```
 
 **`reconcile_paused_sandbox_for_wake_required_command` (later — flagged for
-spec 09)**: when a wake-required command targets a paused slot, the spec-09
-billing gate decides whether to resume. The foundation only models the slot
+spec 09)**: when a wake-required command targets a paused sandbox, the spec-09
+billing gate decides whether to resume. The foundation only models the sandbox
 state and `lifecycle_auto_resume` flag.
 
 Both jobs live in the existing Cloud runtime scheduler area:
 
 ```text
 server/proliferate/server/cloud/runtime/provision.py
-  provision_profile_slot(...) handler
+  provision_managed_target(...) handler
 
 server/proliferate/server/cloud/runtime/reconciler.py        (new)
   reconcile_sandbox_profile_target(...) handler
 
 server/proliferate/server/cloud/runtime/scheduler.py
-  schedule_profile_slot_provision(...) uses the same in-process task pattern
+  schedule_managed_target_provision(...) uses the same in-process task pattern
   as the existing workspace provisioning scheduler.
 ```
 
@@ -1078,12 +1107,12 @@ sandbox_profile.billing_subject_id   sourced from
   ensure_organization_billing_subject(organization_id)
 
 These helpers exist today; the foundation just wires the FK on profile
-creation. Slot/workspace creation copies the profile's billing_subject_id
-to the slot/workspace row, never re-derives it.
+creation. Sandbox/workspace creation copies the profile's billing_subject_id
+to the sandbox/workspace row, never re-derives it.
 ```
 
-Billing/quota code (spec 09) must be able to count active slots without
-joining through `cloud_runtime_environment`. The slot's `billing_subject_id`
+Billing/quota code (spec 09) must be able to count active sandboxes without
+joining through `cloud_runtime_environment`. The sandbox's `billing_subject_id`
 is the direct path.
 
 ## 6. Files To Change
@@ -1096,33 +1125,31 @@ server/proliferate/db/models/cloud/agent_auth.py
     created_by_user_id, archived_at).
   Drop SandboxProfile.managed_target_id.
   Rename SandboxProfileAgentAuthTargetState -> SandboxProfileTargetState and
-    add runtime-config + slot-fencing columns.
+    add runtime-config columns (no slot-fence columns).
 
 server/proliferate/db/models/cloud/targets.py
   Add sandbox_profile_id, profile_target_role to CloudTarget.
   Relax owner_user_id nullable; add owner-fields check.
   Add ux_cloud_target_primary_per_profile partial unique index.
-  Add cloud_workers.cloud_sandbox_id, slot_generation.
-  Add cloud_target_enrollments.sandbox_profile_id, cloud_sandbox_id,
-    slot_generation.
+  Add cloud_target_enrollments.sandbox_profile_id.
 
 server/proliferate/db/models/cloud/sandboxes.py
-  Add sandbox_profile_id, target_id, billing_subject_id, slot_generation,
-    superseded_by_sandbox_id, superseded_at, lifecycle_*, blocked_reason.
-  Add ux_cloud_sandbox_active_slot_per_profile_target.
-  Drop cloud_workspace_id.
+  Add sandbox_profile_id, target_id, billing_subject_id, lifecycle_*,
+    blocked_reason. (No slot_generation/supersession.)
+  Add ux_cloud_sandbox_active_per_target.
+  Drop cloud_workspace_id and runtime_environment_id.
 
 server/proliferate/db/models/cloud/cloud_target_runtime_access.py   (new)
-  Define CloudTargetRuntimeAccess.
+  Define CloudTargetRuntimeAccess (per-target, no active-slot CAS).
 
 server/proliferate/db/models/cloud/workspaces.py
   Add sandbox_profile_id, target_id, normalized_repo_key, worktree_path,
-    materialized_slot_generation, required_runtime_config_*,
+    materialized_target_id, required_runtime_config_*,
     required_agent_auth_revision.
   Add ux_cloud_workspace_active_per_branch and active worktree-path index.
 
 server/proliferate/db/models/cloud/commands.py
-  Add cloud_workspace_id, leased_cloud_sandbox_id, leased_slot_generation.
+  Add cloud_workspace_id. (No leased_* slot columns.)
 
 server/proliferate/db/models/cloud/__init__.py
   Export new classes; remove SandboxProfileAgentAuthTargetState.
@@ -1132,13 +1159,14 @@ server/alembic/versions/<NEW>_sandbox_profile_foundation.py
     - extends sandbox_profile;
     - drops sandbox_profile.managed_target_id;
     - adds cloud_targets fields and indexes;
-    - adds cloud_sandbox fields and indexes;
+    - adds cloud_sandbox fields and the 1:1 active index; drops
+      cloud_workspace_id / runtime_environment_id;
     - creates cloud_target_runtime_access;
     - creates sandbox_profile_target_state with data copy from
       sandbox_profile_agent_auth_target_state, then drops the old table;
     - adds cloud_workspace fields and indexes;
-    - adds cloud_commands fields;
-    - extends cloud_workers and cloud_target_enrollments.
+    - adds cloud_commands.cloud_workspace_id;
+    - adds cloud_target_enrollments.sandbox_profile_id.
 ```
 
 Stores:
@@ -1152,12 +1180,13 @@ server/proliferate/db/store/cloud_sandbox_profiles.py      (new)
 
 server/proliferate/db/store/cloud_sync/targets.py
   Add ensure_primary_profile_target(sandbox_profile_id) helper.
-  Add update_target_runtime_access (compare-and-set on active slot id+generation).
+  Add replace_managed_target(sandbox_profile_id, old_target_id) helper.
+  Add upsert_target_runtime_access (per-target; ignore archived target).
   Add load_active_runtime_access_for_target.
 
 server/proliferate/db/store/cloud_sandboxes.py             (rename from inline use)
-  ensure_profile_slot(sandbox_profile_id, target_id) -> SlotSnapshot
-  supersede_slot, load_active_slot_for_profile_target.
+  ensure_managed_sandbox(sandbox_profile_id, target_id) -> SandboxSnapshot
+  load_active_sandbox_for_target.
 
 server/proliferate/db/store/cloud_workspaces.py
   Add create_managed_cloud_workspace_for_profile(...) that writes
@@ -1167,8 +1196,8 @@ server/proliferate/db/store/cloud_workspaces.py
 server/proliferate/db/store/cloud_sync/sandbox_profile_target_state.py  (new file)
   load_state_for_profile_target,
   record_runtime_config_apply_attempt/success/failure,
-  record_agent_auth_apply_attempt/success/failure (moved from cloud_agent_auth store),
-  invalidate_applied_on_slot_replacement(sandbox_profile_id, target_id).
+  record_agent_auth_apply_attempt/success/failure (moved from cloud_agent_auth store).
+  (No invalidate-on-slot-replacement; a new target gets a fresh state row.)
 
 server/proliferate/db/store/cloud_agent_auth/**
   Update FKs to sandbox_profile_target_state; remove the old narrow store.
@@ -1192,14 +1221,13 @@ server/proliferate/server/cloud/runtime/
                             no CloudRuntimeEnvironment reads/writes for managed.
                             sync portion only: row existence checks; defers
                             E2B work to provision.py background handler.
-  provision.py             owns the provision_profile_slot background job.
+  provision.py             owns the provision_managed_target background job +
                             ensure_primary_profile_target (sync) +
-                            provision_profile_slot (background) +
-                            record_target_runtime_access.
+                            replace_managed_target + record_target_runtime_access.
   reconciler.py            (new) reconcile_sandbox_profile_target tick.
   bootstrap.py / sandbox_exec.py / data_key.py
                             update to write cloud_target_runtime_access
-                            and feed slot identity into enrollment tokens.
+                            and feed target identity into enrollment tokens.
 
 server/proliferate/server/cloud/workspaces/service.py
   Rewrite managed workspace creation to use the profile launch service.
@@ -1209,12 +1237,11 @@ server/proliferate/server/cloud/workspaces/service.py
 
 server/proliferate/server/cloud/commands/service.py
   Carry cloud_workspace_id on every managed-cloud command.
-  Stamp leased_cloud_sandbox_id + leased_slot_generation on lease.
-  Verify result correlation by cloud_workspace_id + slot fence.
+  Verify result correlation by cloud_workspace_id + target_id (no slot fence).
 
 server/proliferate/server/cloud/runtime/target_registration.py
-  Issue enrollment tokens carrying sandbox_profile_id + cloud_sandbox_id +
-  slot_generation; assign these fields on the new worker row.
+  Issue enrollment tokens carrying sandbox_profile_id + target_id; assign
+  these on the new worker row. (No cloud_sandbox_id/slot_generation.)
 
 server/proliferate/server/cloud/agent_auth/service.py
   Replace SandboxProfileAgentAuthTargetState references with
@@ -1231,30 +1258,26 @@ Worker / contract (Rust):
 
 ```text
 server/proliferate/server/cloud/commands/models.py
-  Extend enqueue payload models with cloudWorkspaceId,
-  sandboxProfileId, slotGeneration, leasedCloudSandboxId.
+  Extend enqueue payload models with cloudWorkspaceId, sandboxProfileId.
 
 server/proliferate/server/cloud/worker/models.py
   Extend worker lease / result / delivery / enrollment / heartbeat models
-  with cloud_workspace_id, sandbox_profile_id, cloud_sandbox_id,
-  slot_generation.
+  with cloud_workspace_id, sandbox_profile_id. (No cloud_sandbox_id/
+  slot_generation.)
 
 anyharness/crates/proliferate-worker/src/cloud_client/commands.rs
   Send/echo new fields.
 
 anyharness/crates/proliferate-worker/src/cloud_client/mod.rs
-  Persist (sandbox_profile_id, cloud_sandbox_id, slot_generation) from
-  EnrollResponse and feed them into every subsequent request.
+  Persist (target_id, sandbox_profile_id) from EnrollResponse and feed them
+  into every subsequent request. (No slot identity.)
 
-anyharness/crates/proliferate-worker/src/enrollment.rs
-  Consume enrollment response fields and persist slot/profile identity.
+anyharness/crates/proliferate-worker/src/identity/enrollment.rs
+  Consume enrollment response fields and persist target/profile identity.
 
-anyharness/crates/proliferate-worker/src/commands/dispatcher.rs
+anyharness/crates/proliferate-worker/src/control/commands/  (dispatcher)
   Pass cloud_workspace_id into materialization results; surface
   AnyHarness workspace id back to Cloud through CommandResultRequest.
-
-anyharness/crates/proliferate-worker/src/materialization/mod.rs
-  No internal logic change beyond carrying the new fields through.
 
 anyharness/sdk regeneration
   cd anyharness/sdk && pnpm run generate
@@ -1289,48 +1312,136 @@ apps/desktop/src/lib/access/cloud/sandbox-profiles.ts                          (
 
 Tests follow files listed in §8.
 
+## 7. Implementation Phases / Chunks
+
+Because the foundation has no production users to migrate, it ships as one
+replacement PR with sequenced chunks. Do not split into a multi-PR additive
+migration with fallback reads.
+
+```text
+Chunk 1  DB models + Alembic migration
+  - sandbox_profile broaden + drop managed_target_id
+  - cloud_targets sandbox_profile_id / profile_target_role + primary index
+  - cloud_sandbox profile/target/billing + 1:1 active index;
+    drop cloud_workspace_id / runtime_environment_id
+  - cloud_target_runtime_access creation
+  - sandbox_profile_target_state rename + broaden with data copy
+  - cloud_workspace profile/target/normalized_repo_key/materialized_target_id/required_*
+  - cloud_commands cloud_workspace_id
+  - cloud_target_enrollments sandbox_profile_id
+  - update __init__.py exports
+  - migration tests verify shape and copy
+
+Chunk 2  Sandbox profile store + service
+  - ensure_personal_sandbox_profile, ensure_organization_sandbox_profile
+  - billing_subject_id wiring via existing ensure helpers
+  - status state machine: configuring -> active
+  - sandbox_profile_target_state store split from cloud_agent_auth store
+
+Chunk 3a  Sync target lifecycle around profiles
+  - ensure_primary_profile_target (idempotent with unique-index retry)
+  - mint enrollment token carrying (sandbox_profile_id, target_id)
+  - sync API returns immediately with status='configuring' or
+    status='provisioning'; no E2B call inside the request
+
+Chunk 3b  Background target provisioning + reconciler
+  - provision_managed_target background handler (E2B create, worker boot,
+    enrollment wait, cloud_target_runtime_access write, status transitions)
+  - replace_managed_target path (archive old target+sandbox, provision new,
+    mark workspaces rematerialization-required)
+  - reconcile_sandbox_profile_target tick (re-enqueue stale apply commands,
+    retry stuck provisioning, mark error after bounded retries)
+  - register handlers with whichever scheduler/queue primitive the repo
+    already uses; do not invent a parallel queue
+  - manual smoke that a profile transitions configuring -> provisioning ->
+    active without the originating API request blocking
+
+Chunk 4  Worker wire contract
+  - extend envelope, result, delivery, enroll, heartbeat with
+    cloud_workspace_id / sandbox_profile_id (no slot fields)
+  - regenerate anyharness/sdk
+  - new fields are Option<T> only because non-managed targets (SSH,
+    local) have no sandbox_profile_id to send; managed-cloud commands MUST
+    set them
+
+Chunk 5  Managed workspace creation rewrite
+  - cloud_workspace creation under (sandbox_profile_id, target_id) BEFORE
+    enqueueing materialize_workspace
+  - cloud_commands carry cloud_workspace_id
+  - worker echoes cloud_workspace_id + anyharness_workspace_id on result
+  - update cloud_workspace.anyharness_workspace_id + materialized_target_id
+    only on results from the active (non-archived) target
+
+Chunk 6  Agent auth rebind
+  - agent_auth service writes through SandboxProfileTargetState
+  - drop SandboxProfile.managed_target_id readers
+  - refresh_agent_auth_config preflight uses sandbox_profile_target_state
+
+Chunk 7  Delete dead managed-cloud runtime_environment code paths
+  - rg "CloudRuntimeEnvironment|runtime_environment_id" remaining hits
+  - classify each as non-managed / test fixture / diagnostic / dead;
+    delete dead, isolate the rest
+
+Chunk 8  Org shared path
+  - ensure_organization_sandbox_profile + primary target for
+    organization owner_scope
+  - either remove _raise_org_cloud_not_ready and pass acceptance tests, or
+    keep as explicit block that calls ensure_organization_sandbox_profile
+    BEFORE failing so we never half-provision
+
+Chunk 9  Fixtures / dev data updated
+  - dev seed scripts create profiles + primary targets through the new
+    ensure helpers; no CloudRuntimeEnvironment shortcut
+
+Chunk 10 Acceptance test sweep (see §8)
+```
+
+Inside the PR, chunks 1-3 are atomic. Chunks 4-10 may land as commits in the
+same branch but must all be present before the PR is mergeable.
+
 ## 8. Acceptance Criteria
 
 Single-PR acceptance:
 
 1. `sandbox_profile` is the managed-cloud product/config root.
 2. Personal cloud enablement creates or reuses exactly one personal
-   `sandbox_profile`, exactly one primary `cloud_target`, and at most one
-   active `cloud_sandbox` slot.
+   `sandbox_profile`, exactly one active primary `cloud_target`, and at most
+   one live `cloud_sandbox` (1:1 with that target).
 3. Organization cloud enablement creates or reuses exactly one organization
    `sandbox_profile`; the shared launch path either provisions an
    organization-owned `cloud_workspace` or fails explicitly before creating
-   profile/target/slot/workspace rows.
+   profile/target/sandbox/workspace rows.
 4. `cloud_targets.sandbox_profile_id + profile_target_role = 'primary'` is the
    sole authoritative relationship for the profile's primary managed target.
    `sandbox_profile.managed_target_id` does not exist.
-5. Exactly one active managed slot exists per `(sandbox_profile_id,
-   target_id)` (active = `superseded_at IS NULL` AND status IN
-   `('creating','provisioning','running','paused','blocked')`).
+5. Exactly one live managed sandbox exists per active primary target (1:1),
+   and at most one non-archived primary target exists per profile.
 6. Worker enrollment, heartbeat, command leasing, delivery, result ingest,
-   event ingest, runtime-access writes, and readiness updates are fenced by
-   active slot id and `slot_generation`. Stale slot reports do not mutate
+   event ingest, runtime-access writes, and readiness updates correlate by
+   `target_id` only. Reports from an **archived** target do not mutate
    workspace/session/runtime-access/profile-target/billing readiness state.
+   There is no `slot_generation` anywhere.
 7. `cloud_target_runtime_access` exists; runtime URL/token/data key are not
    read from `cloud_runtime_environment` or `cloud_workspace` in the managed
    path.
 8. Managed `cloud_workspace` rows are created before AnyHarness
    materialization and carry `sandbox_profile_id` and `target_id`.
-9. Managed workspace uniqueness includes profile, target, normalized repo,
-   and branch; active worktree paths are unique per target.
+9. Managed workspace uniqueness includes profile, normalized repo, and
+   branch; active worktree paths are unique per profile.
 10. `cloud_workspace.anyharness_workspace_id` is valid only when
-    `materialized_slot_generation` equals the active slot's `slot_generation`.
+    `materialized_target_id` equals the profile's active primary target;
+    target replacement marks the workspace rematerialization-required.
 11. `cloud_commands` carry `cloud_workspace_id` for managed-cloud commands;
     materialization results correlate by `cloud_workspace_id` before any
     AnyHarness workspace id exists.
-12. Managed `cloud_sandbox` slot rows carry `sandbox_profile_id`, `target_id`,
-    and `billing_subject_id`. Billing/quota code counts active slots without
-    joining through `cloud_runtime_environment`.
+12. Managed `cloud_sandbox` rows carry `sandbox_profile_id`, `target_id`,
+    and `billing_subject_id`. Billing/quota code counts active sandboxes
+    without joining through `cloud_runtime_environment`.
 13. `sandbox_profile_target_state` is the single per-`(profile, target)` apply
-    row carrying both runtime-config and agent-auth axes plus active-slot
-    fence. `sandbox_profile_agent_auth_target_state` does not exist after the
+    row carrying both runtime-config and agent-auth axes (no slot fence).
+    `sandbox_profile_agent_auth_target_state` does not exist after the
     migration.
-14. Managed-cloud workspace/slot/provisioning code does not require
+14. Managed-cloud workspace/sandbox/provisioning code does not require
     `CloudRuntimeEnvironment`. `rg
     "CloudRuntimeEnvironment|runtime_environment_id" server/proliferate` has
     every remaining hit classified as non-managed, test/fixture, diagnostic,
@@ -1339,9 +1450,10 @@ Single-PR acceptance:
     target.
 16. Automations call the same `managed_profile_launch` service (or whatever
     the foundation names it) or fail before partial provisioning.
-17. Worker contract carries `cloud_workspace_id`, `sandbox_profile_id`,
-    `slot_generation` on envelope, result, delivery, enrollment, and
-    heartbeat. `anyharness/sdk` and `cloud/sdk` are regenerated.
+17. Worker contract carries `cloud_workspace_id` and `sandbox_profile_id` on
+    envelope, result, delivery, enrollment, and heartbeat, and carries **no**
+    `cloud_sandbox_id` / `slot_generation`. `anyharness/sdk` and `cloud/sdk`
+    are regenerated.
 18. `materialize_environment_runtime_config` is **not** enqueued anywhere.
 19. Desired/current runtime/auth sequence placeholders exist and default to a
     passing `0 / 0` state.
@@ -1350,7 +1462,7 @@ Single-PR acceptance:
 21. **Sandbox profile creation does not block on E2B provisioning.** The
     sync API returns with `status='configuring'` (or `'provisioning'` if
     `ensure_primary_profile_target` was also called) before any E2B SDK
-    operation runs. Slot provisioning runs in `provision_profile_slot` in
+    operation runs. Provisioning runs in `provision_managed_target` in
     the background; status transitions `configuring -> provisioning ->
     active` are observable via `GET /v1/cloud/sandbox-profiles/{id}` and
     `…/target-state`.
@@ -1365,7 +1477,12 @@ Single-PR acceptance:
     state is `sync_existing_workspace` (admission owned by spec 08).
 24. The reconciler tick re-enqueues stale apply commands by `revision_id /
     content_hash` so duplicates collapse server-side. Retrying a failed
-    `provision_profile_slot` does not create duplicate slot rows.
+    `provision_managed_target` does not create duplicate sandbox rows.
+25. **Target replacement provisions a new target, not a re-enrollment.**
+    Replacing the provider sandbox archives the old `(target, sandbox)` pair,
+    creates a new `target_id` with a fresh enrollment token, and marks the
+    profile's managed workspaces rematerialization-required. A worker holding
+    the old `target_id` cannot affect product state.
 
 ## 9. Verification / Tests
 
@@ -1385,16 +1502,16 @@ server/tests/cloud/sandbox_profiles/test_profile_idempotency_concurrent.py
 server/tests/cloud/sandbox_profiles/test_billing_subject_wired.py
 server/tests/cloud/runtime/test_ensure_primary_profile_target.py
 server/tests/cloud/runtime/test_primary_target_uniqueness.py
-server/tests/cloud/runtime/test_slot_generation_supersession.py
-server/tests/cloud/runtime/test_target_runtime_access_cas.py
-server/tests/cloud/runtime/test_runtime_access_stale_reject.py
+server/tests/cloud/runtime/test_target_replacement_new_target.py
+server/tests/cloud/runtime/test_target_runtime_access_per_target.py
+server/tests/cloud/runtime/test_archived_target_report_ignored.py
 server/tests/cloud/workspaces/test_managed_workspace_profile_target_links.py
 server/tests/cloud/workspaces/test_workspace_uniqueness_repo_branch.py
 server/tests/cloud/workspaces/test_workspace_worktree_path_unique.py
-server/tests/cloud/workspaces/test_materialized_slot_generation_invalidation.py
+server/tests/cloud/workspaces/test_materialized_target_invalidation.py
 server/tests/cloud/commands/test_cloud_workspace_id_correlation.py
-server/tests/cloud/commands/test_slot_fence_on_lease.py
-server/tests/cloud/commands/test_slot_fence_on_result.py
+server/tests/cloud/commands/test_target_correlation_on_lease.py
+server/tests/cloud/commands/test_archived_target_result_rejected.py
 server/tests/cloud/agent_auth/test_target_state_rebind.py
 server/tests/cloud/agent_auth/test_refresh_agent_auth_config_against_new_table.py
 server/tests/cloud/runtime/test_no_runtime_environment_reads_in_managed_path.py
@@ -1417,8 +1534,8 @@ anyharness/crates/proliferate-worker/src/cloud_client/commands.rs#tests
   - command result echoes cloud_workspace_id and anyharness_workspace_id
 
 anyharness/crates/proliferate-worker/src/cloud_client/mod.rs#tests
-  - enrollment persists sandbox_profile_id + cloud_sandbox_id +
-    slot_generation; heartbeat carries them
+  - enrollment persists target_id + sandbox_profile_id; heartbeat carries
+    sandbox_profile_id; no slot fields are sent
 ```
 
 SDK regeneration:
@@ -1437,8 +1554,8 @@ Manual smoke:
      -> API returns inside the request; no E2B call yet
      -> primary cloud_target created on the first explicit cloud-intent
         action; profile status moves to 'provisioning'
-     -> provision_profile_slot background job runs:
-          E2B sandbox created
+     -> provision_managed_target background job runs:
+          E2B sandbox created (1:1 with the target)
           worker boots, enrolls, heartbeats
           cloud_target_runtime_access populated
           cloud_sandbox.status='running'
@@ -1458,22 +1575,24 @@ Manual smoke:
 
 3. Pause provider sandbox
      -> Cloud lists workspaces/sessions without waking
-     -> cloud_target_runtime_access remains current with the paused slot id
+     -> cloud_target_runtime_access remains current for the paused target
      -> next wake-required command resumes through Proliferate-owned path
 
-4. Replace provider sandbox
-     -> old cloud_sandbox.superseded_at set; status terminal
-     -> new cloud_sandbox row with slot_generation = old + 1
-     -> sandbox_profile_target_state applied_* cleared
-     -> cloud_workspace.materialized_slot_generation invalidated
+4. Replace the managed target (the collapsed-model replacement flow)
+     -> old cloud_target archived; its 1:1 cloud_sandbox set terminal
+     -> new cloud_target row (new target_id) with a fresh enrollment token,
+        and a new cloud_sandbox provisioned for it
+     -> sandbox_profile_target_state for the new target starts fresh (0/pending)
+     -> profile's managed cloud_workspace rows marked rematerialization-required
+        (materialized_target_id no longer matches the active primary target)
      -> next start_session fails preflight until rematerialization
-     -> stale worker (old slot_generation) is fenced out
+     -> a worker still holding the old target_id cannot mutate product state
 
 5. Enable shared cloud as admin (implicit trigger)
      -> admin publicizes first MCP to org
      -> ensure_organization_sandbox_profile runs in background;
         no org creation flow touched
-     -> primary target / slot provisioned through provision_profile_slot
+     -> primary target provisioned through provision_managed_target
      -> _raise_org_cloud_not_ready either gone or routes through
         ensure_organization_sandbox_profile before failing
      -> ensure_personal_sandbox_profile is NOT called for this admin's
@@ -1486,9 +1605,57 @@ Manual smoke:
      -> if launch is not ready, fails before creating partial rows
 
 7. Provision retry on transient failure
-     -> simulate E2B failure during provision_profile_slot
+     -> simulate E2B failure during provision_managed_target
      -> sandbox_profile.status='error' or 'blocked', not 'provisioning'
-     -> reconciler retries with bounded backoff; no duplicate slot rows
+     -> reconciler retries with bounded backoff; no duplicate sandbox rows
      -> on success, status moves to 'active'; existing sandbox_profile row
         is reused, not duplicated
 ```
+## 10. Final Decisions / Deferred Questions
+
+1. **Should we model "ssh / desktop_dispatch / self_hosted_cloud" targets as
+   also having a profile?**
+
+   Decision: no. The foundation keeps non-managed targets target-first with
+   `profile_target_role = 'none'`. They are long-lived and unaffected by the
+   collapse. A later spec can add an explicit `cloud_target.policy_profile_id`
+   if non-managed targets need shared policy defaults.
+
+2. **Which queue/scheduler does `provision_managed_target` run on?**
+
+   Decision: use `server/proliferate/server/cloud/runtime/scheduler.py` and
+   mirror the existing in-process workspace provisioning task pattern. Do not
+   route target provisioning through automation scheduling.
+
+3. **Does the foundation add a profile-events SSE stream, or just polling?**
+
+   Polling (`GET /sandbox-profiles/{id}` + `…/target-state`) is sufficient
+   for V1. SSE is a UX-latency improvement and may already be available
+   through the existing cloud events fanout (spec 04). The foundation does
+   not add a new SSE channel; spec 04 can fold profile/target events into
+   the existing channel if it exists.
+
+4. **Should `ensure_*_sandbox_profile` always also call
+   `ensure_primary_profile_target`?**
+
+   Decision: yes. The target row is free; the sandbox is the expensive part.
+   Ensuring the primary target makes the enrollment-token mint and
+   `cloud_target_runtime_access` placeholder available earlier so the
+   background provision job has less to do in its critical path.
+
+5. **Do `cloud_targets` and `cloud_sandbox` merge into one table now that the
+   managed target is 1:1 with its sandbox?**
+
+   Decision (this revision): no — keep them as separate 1:1 rows. `cloud_targets`
+   is the addressable Cloud identity (and also covers non-managed targets that
+   have no provider sandbox); `cloud_sandbox` is the provider-lifecycle row
+   (E2B id, status, pause/resume, billing). Merging is a viable future
+   simplification but would entangle non-managed targets with provider
+   lifecycle and is deferred.
+
+6. **What is the epoch now that `slot_generation` is gone?**
+
+   `target_id`. A managed target is ephemeral and never reused; replacement
+   mints a new `target_id`. Stale workers/commands/results reference a
+   retired (archived) `target_id`, which routes nowhere — so correlation by
+   `target_id` replaces every former slot fence with no generation counter.

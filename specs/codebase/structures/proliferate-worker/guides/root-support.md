@@ -15,6 +15,7 @@ src/
   error.rs
   logging.rs
   observability.rs
+  process_lock.rs
   versions.rs
 ```
 
@@ -22,11 +23,12 @@ src/
 
 | File | Owns | Must Not Own |
 | --- | --- | --- |
-| `config.rs` | Worker config load, parse, sanitize, and private config writes. | Command, event, target, or identity workflows. |
+| `config.rs` | Worker config load, parse, sanitize, and private config writes. | Command, reconcile, tail, or identity workflows. |
 | `error.rs` | Worker error enum and conversions. | Domain-specific control flow. |
 | `logging.rs` | Tracing/Sentry/log initialization. | Per-flow observability policy. |
 | `observability.rs` | Shared diagnostic helpers and correlation conventions. | Workflow implementation or hidden global state. |
-| `versions.rs` | Worker, AnyHarness, and supervisor version helpers. | Target inventory upload orchestration or update application. |
+| `process_lock.rs` | Single-instance guarantee for the worker process. | Subsystem lifecycle. |
+| `versions.rs` | Worker, AnyHarness, and supervisor version helpers. | Self-update decisions or the supervisor mailbox. |
 
 ## Observability
 
@@ -36,23 +38,25 @@ formatting utilities. Flow code still owns when and why it logs.
 Important correlation fields:
 
 - `command_id`
-- `lease_id`
 - `target_id`
 - `worker_id`
-- `sandbox_profile_id`
-- `slot_generation`
+- `domain` (for reconcile: the config/agent-auth/exposures/revoked-jti domain)
+- `applied_revision`, `desired_revision` (for reconcile)
 - `cloud_workspace_id`
 - `anyharness_workspace_id`
 - `session_id`
 - `session_projection_id`
 - `exposure_id`
+- `last_uploaded_seq` (for the tail)
+
+There are no `lease_id`, `sandbox_profile_id`, or `slot_generation` fields — the
+collapsed model has no slot or fence to correlate on.
 
 ## Hard Rules
 
 - Keep root support files small and boring.
 - Do not add `utils.rs`, `helpers.rs`, or `misc.rs`.
 - Do not create an `infra/` folder unless root support files become a real
-  source of clutter.
-- `infra/` must not become a softer name for `utils`.
+  source of clutter; `infra/` must not become a softer name for `utils`.
 - Move code into an owning subsystem when it starts making product, command,
-  event, target, store, client, or identity decisions.
+  reconcile, tail, materialization, store, client, or identity decisions.
