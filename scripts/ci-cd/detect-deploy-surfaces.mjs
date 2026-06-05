@@ -120,6 +120,7 @@ function classifyFile(path) {
 
   if (
     matches(path, [
+      "server/proliferate/background",
       "server/proliferate/server/automations/worker",
       "anyharness/crates/proliferate-worker",
     ])

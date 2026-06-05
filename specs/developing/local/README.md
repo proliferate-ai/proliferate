@@ -84,11 +84,13 @@ convenience, not a repo contract.
 - Proliferate server on the profile's `PROLIFERATE_API_PORT`
 - Desktop renderer on the profile's `PROLIFERATE_WEB_PORT`
 - Hosted web app on the profile's `PROLIFERATE_HOSTED_WEB_PORT`
-- automation worker against the same profile database
+- automation scheduler worker against the same profile database
 - Tauri desktop app with generated profile identity
 
 The Celery/RabbitMQ/redbeat worker-tier substrate is available for worker-tier
-migration testing, but the profile launcher does not start Celery workers yet.
+migration testing. The profile launcher starts the automation scheduler, but it
+does not start Celery workers yet; cloud automation execution runs through the
+`automations.execution` Celery queue.
 For Slice 1 substrate checks, start the local broker stores explicitly:
 
 ```bash
@@ -106,6 +108,7 @@ To run a local Celery worker for manual testing:
 
 ```bash
 uv run celery -A proliferate.background.celery_app:celery_app worker -Q periodic.default --loglevel INFO
+uv run celery -A proliferate.background.celery_app:celery_app worker -Q automations.execution --loglevel INFO
 ```
 
 Profile state lives under:

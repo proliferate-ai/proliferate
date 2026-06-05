@@ -39,11 +39,32 @@ def test_celery_app_import_registers_noop_task_without_broker_connection() -> No
     from proliferate.background.celery_app import celery_app
 
     assert isinstance(celery_app, Celery)
+    assert AUTOMATIONS_EXECUTE_RUN_TASK in celery_app.tasks
     assert HEALTH_NOOP_TASK in celery_app.tasks
     assert NOTIFICATIONS_SEND_SLACK_TASK in celery_app.tasks
     assert RUNTIME_WAKE_TARGET_TASK in celery_app.tasks
     assert SUPPORT_TRACKER_RECONCILE_PASS_TASK in celery_app.tasks
     assert celery_app.tasks[HEALTH_NOOP_TASK].run() == "ok"
+
+
+def test_automation_execute_task_dispatches_payload(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from proliferate.background.tasks import automations
+
+    calls: list[UUID] = []
+    run_id = uuid4()
+
+    async def fake_execute_cloud_automation_run(parsed_run_id: UUID) -> bool:
+        calls.append(parsed_run_id)
+        return True
+
+    monkeypatch.setattr(
+        automations,
+        "execute_cloud_automation_run",
+        fake_execute_cloud_automation_run,
+    )
+
+    assert automations.execute_run.run(run_id=str(run_id)) is True
+    assert calls == [run_id]
 
 
 def test_runtime_wake_task_dispatches_payload(monkeypatch) -> None:  # type: ignore[no-untyped-def]

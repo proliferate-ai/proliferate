@@ -8,6 +8,8 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from proliferate.background.config import (
+    AUTOMATIONS_EXECUTE_RUN_TASK,
+    AUTOMATIONS_EXECUTION_QUEUE,
     HEALTH_NOOP_TASK,
     PERIODIC_DEFAULT_QUEUE,
     RUNTIME_WAKE_QUEUE,
@@ -313,6 +315,35 @@ async def test_relay_publishes_runtime_wake_task(
         "target_id": "target-one",
         "command_id": "command-one",
     }
+    assert published is not None
+    assert published.status == OUTBOX_STATUS_PUBLISHED
+
+
+@pytest.mark.asyncio
+async def test_relay_publishes_automation_execute_task(
+    db_session: AsyncSession,
+    test_engine: AsyncEngine,
+) -> None:
+    task = await enqueue_outbox_task(
+        db_session,
+        task_name=AUTOMATIONS_EXECUTE_RUN_TASK,
+        queue=AUTOMATIONS_EXECUTION_QUEUE,
+        kwargs_json={"run_id": "run-one"},
+    )
+    await db_session.commit()
+    publisher = RecordingPublisher()
+
+    result = await relay_once(
+        session_factory=_session_factory(test_engine),
+        publisher=publisher,
+    )
+
+    published = await _load_fresh_outbox_task(db_session, task.id)
+    assert result.claimed == 1
+    assert result.published == 1
+    assert publisher.messages[0].task_name == AUTOMATIONS_EXECUTE_RUN_TASK
+    assert publisher.messages[0].queue == AUTOMATIONS_EXECUTION_QUEUE
+    assert publisher.messages[0].kwargs == {"run_id": "run-one"}
     assert published is not None
     assert published.status == OUTBOX_STATUS_PUBLISHED
 
