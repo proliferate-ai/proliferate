@@ -25,6 +25,43 @@ def coerce_utc(value: datetime | None) -> datetime | None:
     return value.astimezone(UTC)
 
 
+async def list_active_holds(db: AsyncSession, billing_subject_id: UUID) -> list[BillingHold]:
+    return list(
+        (
+            await db.execute(
+                select(BillingHold)
+                .where(
+                    BillingHold.billing_subject_id == billing_subject_id,
+                    BillingHold.status == BILLING_HOLD_STATUS_ACTIVE,
+                )
+                .order_by(BillingHold.created_at.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
+async def list_subscriptions(
+    db: AsyncSession,
+    billing_subject_id: UUID,
+) -> list[BillingSubscription]:
+    return list(
+        (
+            await db.execute(
+                select(BillingSubscription)
+                .where(BillingSubscription.billing_subject_id == billing_subject_id)
+                .order_by(
+                    BillingSubscription.current_period_end.desc().nullslast(),
+                    BillingSubscription.updated_at.desc(),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
 async def upsert_billing_subscription(
     db: AsyncSession,
     *,

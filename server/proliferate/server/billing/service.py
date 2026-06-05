@@ -67,18 +67,10 @@ from proliferate.db.models.billing import (
     BillingSubscription,
     UsageSegment,
 )
-from proliferate.db.store import billing_subscriptions
+from proliferate.db.store import billing_seats, billing_subscriptions
 from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store import users as user_store
 from proliferate.db.store.billing import (
-    BillingSnapshotState,
-    claim_pending_seat_adjustments,
-    count_active_seats_for_billing_subject_id,
-    mark_seat_adjustment_failed,
-    mark_seat_adjustment_grant_issued,
-    mark_seat_adjustment_stripe_confirmed,
-    maybe_create_org_seat_adjustment,
-    prepare_initial_org_seat_reconcile,
     sum_meter_quantity_cents_for_subject,
 )
 from proliferate.db.store.billing_accounting import (
@@ -208,6 +200,7 @@ from proliferate.server.billing.seats import (
     prorated_seat_grant_hours,
     seat_proration_grant_source_ref,
 )
+from proliferate.server.billing.snapshot_state import BillingSnapshotState
 from proliferate.server.cloud.sandbox_profiles.service import ensure_organization_for_activation
 from proliferate.server.organizations.domain.profile import (
     clean_organization_name,
@@ -291,7 +284,7 @@ async def maybe_create_organization_seat_adjustment(
     organization_id: UUID,
     membership_id: UUID | None,
 ) -> bool:
-    return await maybe_create_org_seat_adjustment(
+    return await billing_seats.maybe_create_org_seat_adjustment(
         db,
         organization_id=organization_id,
         membership_id=membership_id,
@@ -304,7 +297,7 @@ async def reconcile_initial_org_subscription_seats(
     record: BillingSubscription,
 ) -> BillingSubscription:
     async with db_session.open_async_transaction() as db:
-        adjustment = await prepare_initial_org_seat_reconcile(
+        adjustment = await billing_seats.prepare_initial_org_seat_reconcile(
             db,
             billing_subscription_id=record.id,
             pro_billing_enabled=settings.pro_billing_enabled,
@@ -321,18 +314,18 @@ async def reconcile_initial_org_subscription_seats(
             idempotency_key=f"initial-seat-reconcile:{adjustment.id}:seats:{adjustment.target_quantity}",
         )
         async with db_session.open_async_transaction() as db:
-            await mark_seat_adjustment_stripe_confirmed(
+            await billing_seats.mark_seat_adjustment_stripe_confirmed(
                 db,
                 adjustment_id=adjustment.id,
             )
         async with db_session.open_async_transaction() as db:
-            await mark_seat_adjustment_grant_issued(
+            await billing_seats.mark_seat_adjustment_grant_issued(
                 db,
                 adjustment_id=adjustment.id,
             )
     except stripe_billing.StripeBillingError as error:
         async with db_session.open_async_transaction() as db:
-            await mark_seat_adjustment_failed(
+            await billing_seats.mark_seat_adjustment_failed(
                 db,
                 adjustment_id=adjustment.id,
                 error=error.message,
@@ -341,7 +334,7 @@ async def reconcile_initial_org_subscription_seats(
         raise
     except Exception as error:
         async with db_session.open_async_transaction() as db:
-            await mark_seat_adjustment_failed(
+            await billing_seats.mark_seat_adjustment_failed(
                 db,
                 adjustment_id=adjustment.id,
                 error=f"{type(error).__name__}: {error}",
@@ -1740,7 +1733,7 @@ async def create_cloud_checkout_session(
     async with db.begin():
         snapshot = await _get_billing_snapshot_for_subject_request(db, subject_id)
         seat_quantity = (
-            await count_active_seats_for_billing_subject_id(db, subject_id)
+            await billing_seats.count_active_seats_for_billing_subject_id(db, subject_id)
             if org_context is not None and not snapshot.is_paid_cloud
             else 1
         )
@@ -2281,7 +2274,7 @@ async def process_pending_seat_adjustments(*, limit: int = 100) -> None:
         return
 
     async with db_session.open_async_transaction() as db:
-        adjustments = await claim_pending_seat_adjustments(db, limit=limit)
+        adjustments = await billing_seats.claim_pending_seat_adjustments(db, limit=limit)
     for adjustment in adjustments:
         try:
             await stripe_billing.update_subscription_item_quantity(
@@ -2290,7 +2283,7 @@ async def process_pending_seat_adjustments(*, limit: int = 100) -> None:
                 idempotency_key=f"seat-quantity:{adjustment.id}:seats:{adjustment.target_quantity}",
             )
             async with db_session.open_async_transaction() as db:
-                await mark_seat_adjustment_stripe_confirmed(
+                await billing_seats.mark_seat_adjustment_stripe_confirmed(
                     db,
                     adjustment_id=adjustment.id,
                 )
@@ -2325,13 +2318,13 @@ async def process_pending_seat_adjustments(*, limit: int = 100) -> None:
                         source_ref=grant_source_ref,
                     )
             async with db_session.open_async_transaction() as db:
-                await mark_seat_adjustment_grant_issued(
+                await billing_seats.mark_seat_adjustment_grant_issued(
                     db,
                     adjustment_id=adjustment.id,
                 )
         except stripe_billing.StripeBillingError as error:
             async with db_session.open_async_transaction() as db:
-                await mark_seat_adjustment_failed(
+                await billing_seats.mark_seat_adjustment_failed(
                     db,
                     adjustment_id=adjustment.id,
                     error=error.message,
@@ -2339,7 +2332,7 @@ async def process_pending_seat_adjustments(*, limit: int = 100) -> None:
                 )
         except Exception as error:
             async with db_session.open_async_transaction() as db:
-                await mark_seat_adjustment_failed(
+                await billing_seats.mark_seat_adjustment_failed(
                     db,
                     adjustment_id=adjustment.id,
                     error=f"{type(error).__name__}: {error}",
