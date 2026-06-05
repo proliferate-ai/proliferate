@@ -39,7 +39,6 @@ server/proliferate/server/cloud/mobility/service.py 1208 server structure migrat
 server/proliferate/server/cloud/runtime/bootstrap.py 922 server structure migration debt for oversized domain-adjacent file
 server/proliferate/server/cloud/runtime/provision.py 1688 server structure migration debt for oversized domain-adjacent file
 server/proliferate/server/cloud/runtime_config/domain/resolver.py 611 server structure migration debt for oversized pure-domain file
-server/proliferate/server/cloud/runtime_config/service.py 1095 server structure migration debt for oversized service file
 server/tests/integration/schema_migration_assertions.py 878 existing server oversized test helper
 server/tests/integration/test_auth_flow.py 2057 existing server oversized integration test
 server/tests/integration/test_billing_accounting.py 871 existing server oversized integration test

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from uuid import UUID
 
@@ -10,7 +9,6 @@ from proliferate.config import settings
 from proliferate.constants.cloud import CloudCommandActorKind, CloudCommandKind, CloudCommandSource
 from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
-from proliferate.db.store.cloud_mcp import auth as mcp_auth_store
 from proliferate.db.store.cloud_mcp.connections import (
     list_enabled_connections_for_organization_profile,
     list_enabled_connections_for_personal_profile,
@@ -31,18 +29,21 @@ from proliferate.db.store.cloud_skills import (
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
-from proliferate.db.store.cloud_sync import worker_control as worker_control_store
 from proliferate.server.cloud.claims.domain.pem import normalize_pem_setting
 from proliferate.server.cloud.commands.domain.rules import compact_command_json
 from proliferate.server.cloud.commands.wake import enqueue_managed_target_wake_outbox
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.live.service import (
-    publish_command_status_after_commit,
-    publish_worker_control_after_commit,
-)
+from proliferate.server.cloud.live.service import publish_command_status_after_commit
 from proliferate.server.cloud.mcp_catalog.availability import catalog_entry_is_configured
 from proliferate.server.cloud.mcp_catalog.catalog import build_connector_catalog
 from proliferate.server.cloud.plugins.catalog.service import plugin_packages_for_catalog_entries
+from proliferate.server.cloud.runtime_config.artifacts import (
+    raise_if_artifact_integrity_invalid,
+)
+from proliferate.server.cloud.runtime_config.credentials import (
+    credential_refs_from_manifest,
+    resolve_runtime_credential_ref,
+)
 from proliferate.server.cloud.runtime_config.domain.manifest import (
     CompiledRuntimeConfigManifest,
     compile_runtime_config_manifest,
@@ -58,24 +59,14 @@ from proliferate.server.cloud.runtime_config.domain.resolver import (
 from proliferate.server.cloud.runtime_config.models import (
     DesktopRuntimeConfigApplyResponse,
     RuntimeConfigArtifactRefModel,
-    RuntimeConfigArtifactResponse,
-    RuntimeConfigCredentialValueModel,
     RuntimeConfigMaterializationFragment,
     RuntimeConfigStatusResponse,
-    WorkerRuntimeConfigCredentialMaterializationRequest,
-    WorkerRuntimeConfigCredentialMaterializationResponse,
-    WorkerRuntimeConfigStatusRequest,
-    WorkerRuntimeConfigStatusResponse,
     parse_json_dict,
     runtime_config_revision_model,
 )
 from proliferate.server.cloud.target_config.models import (
     TargetConfigMaterializationPlan,
     TargetConfigSummaryModel,
-)
-from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
-from proliferate.server.cloud.worker.target_validation import (
-    require_active_worker_target as _require_active_worker_target,
 )
 from proliferate.utils.crypto import decrypt_json, encrypt_json
 
@@ -347,7 +338,7 @@ async def runtime_config_fragment_for_revision(
         for item in (artifacts if isinstance(artifacts, list) else [])
         if isinstance(item, dict)
     ]
-    credential_refs = _credential_refs_from_manifest(manifest)
+    credential_refs = credential_refs_from_manifest(manifest)
     return RuntimeConfigMaterializationFragment(
         revision_id=str(revision.id),
         sandbox_profile_id=str(revision.sandbox_profile_id),
@@ -358,17 +349,6 @@ async def runtime_config_fragment_for_revision(
         artifact_refs=artifact_refs,
         credential_refs=credential_refs,
     )
-
-
-async def worker_runtime_config_fragment(
-    db: AsyncSession,
-    *,
-    auth: WorkerAuthContext,
-    revision_id: UUID,
-) -> RuntimeConfigMaterializationFragment:
-    await _require_active_worker_target(db, auth=auth)
-    await _require_current_worker_revision(db, auth=auth, revision_id=revision_id)
-    return await runtime_config_fragment_for_revision(db, revision_id=revision_id)
 
 
 async def runtime_config_apply_request_for_revision(
@@ -390,7 +370,7 @@ async def runtime_config_apply_request_for_revision(
                 "Runtime config artifact payload is invalid.",
                 status_code=500,
             )
-        _raise_if_artifact_integrity_invalid(artifact, payload=payload, content=content)
+        raise_if_artifact_integrity_invalid(artifact, payload=payload, content=content)
         artifact_payloads.append(
             {
                 "hash": artifact.artifact_hash,
@@ -408,14 +388,13 @@ async def runtime_config_apply_request_for_revision(
                 "content": content,
             }
         )
-
     credential_values: list[dict[str, object]] = []
     missing_credentials: list[str] = []
     for ref in fragment.credential_refs:
         credential_ref = ref.get("credentialRef")
         if not isinstance(credential_ref, str) or not credential_ref:
             continue
-        value = await _resolve_runtime_credential_ref(db, credential_ref)
+        value = await resolve_runtime_credential_ref(db, credential_ref)
         if value is None:
             missing_credentials.append(credential_ref)
             continue
@@ -426,7 +405,6 @@ async def runtime_config_apply_request_for_revision(
             "Runtime config credentials are missing.",
             status_code=409,
         )
-
     return {
         "revision": {
             "id": fragment.revision_id,
@@ -464,141 +442,6 @@ def _revision_expectation_from_apply_revision(
         "contentHash": content_hash,
         "externalScope": external_scope if isinstance(external_scope, dict) else None,
     }
-
-
-async def worker_runtime_config_artifact(
-    db: AsyncSession,
-    *,
-    auth: WorkerAuthContext,
-    revision_id: UUID,
-    artifact_hash: str,
-) -> RuntimeConfigArtifactResponse:
-    await _require_active_worker_target(db, auth=auth)
-    revision = await _require_current_worker_revision(db, auth=auth, revision_id=revision_id)
-    artifact = await artifact_store.get_artifact(
-        db,
-        revision_id=revision.id,
-        artifact_hash=artifact_hash,
-    )
-    if artifact is None:
-        raise CloudApiError(
-            "runtime_config_artifact_not_found",
-            "Runtime config artifact not found.",
-            status_code=404,
-        )
-    payload = decrypt_json(artifact.payload_ciphertext)
-    content = payload.get("content")
-    if not isinstance(content, str):
-        raise CloudApiError(
-            "runtime_config_artifact_invalid",
-            "Runtime config artifact payload is invalid.",
-            status_code=500,
-        )
-    _raise_if_artifact_integrity_invalid(artifact, payload=payload, content=content)
-    return RuntimeConfigArtifactResponse(
-        hash=artifact.artifact_hash,
-        content_type=artifact.content_type,
-        byte_size=artifact.byte_size,
-        source_ref=str(payload["sourceRef"]) if payload.get("sourceRef") is not None else None,
-        resource_id=str(payload["resourceId"]) if payload.get("resourceId") is not None else None,
-        display_name=(
-            str(payload["displayName"]) if payload.get("displayName") is not None else None
-        ),
-        content=content,
-    )
-
-
-async def worker_runtime_config_credentials(
-    db: AsyncSession,
-    *,
-    auth: WorkerAuthContext,
-    revision_id: UUID,
-    body: WorkerRuntimeConfigCredentialMaterializationRequest,
-) -> WorkerRuntimeConfigCredentialMaterializationResponse:
-    await _require_active_worker_target(db, auth=auth)
-    revision = await _require_current_worker_revision(db, auth=auth, revision_id=revision_id)
-    manifest = parse_json_dict(revision.manifest_json) or {}
-    allowed_refs = {
-        str(ref["credentialRef"])
-        for ref in _credential_refs_from_manifest(manifest)
-        if isinstance(ref.get("credentialRef"), str)
-    }
-    credentials: list[RuntimeConfigCredentialValueModel] = []
-    missing: list[str] = []
-    seen: set[str] = set()
-    for credential_ref in body.credential_refs:
-        if credential_ref in seen:
-            continue
-        seen.add(credential_ref)
-        if credential_ref not in allowed_refs:
-            missing.append(credential_ref)
-            continue
-        value = await _resolve_runtime_credential_ref(db, credential_ref)
-        if value is None:
-            missing.append(credential_ref)
-            continue
-        credentials.append(
-            RuntimeConfigCredentialValueModel(
-                credential_ref=credential_ref,
-                value=value,
-            )
-        )
-    return WorkerRuntimeConfigCredentialMaterializationResponse(
-        credentials=credentials,
-        missing_credential_refs=missing,
-    )
-
-
-async def record_worker_runtime_config_status(
-    db: AsyncSession,
-    *,
-    auth: WorkerAuthContext,
-    revision_id: UUID,
-    body: WorkerRuntimeConfigStatusRequest,
-) -> WorkerRuntimeConfigStatusResponse:
-    await _require_active_worker_target(db, auth=auth)
-    revision = await _require_worker_revision(db, auth=auth, revision_id=revision_id)
-    if not await _worker_revision_is_current(db, revision=revision):
-        return WorkerRuntimeConfigStatusResponse(
-            revision_id=str(revision.id),
-            status="stale",
-            updated=False,
-        )
-    error_message = body.error_message
-    if body.status == "failed":
-        details = {
-            "missingArtifacts": body.missing_artifacts,
-            "missingCredentials": body.missing_credentials,
-            "errorMessage": body.error_message,
-        }
-        error_message = json.dumps(
-            details,
-            ensure_ascii=True,
-            separators=(",", ":"),
-            sort_keys=True,
-        )
-    state = await agent_auth_store.record_runtime_config_worker_status(
-        db,
-        sandbox_profile_id=revision.sandbox_profile_id,
-        target_id=auth.target_id,
-        sequence=revision.sequence,
-        revision_id=revision.id,
-        worker_id=auth.worker_id,
-        status=body.status,
-        error_code=body.error_code,
-        error_message=error_message,
-    )
-    await worker_control_store.bump_control_revision(db, target_id=auth.target_id)
-    await publish_worker_control_after_commit(
-        db,
-        target_id=auth.target_id,
-        reason="state_changed",
-    )
-    return WorkerRuntimeConfigStatusResponse(
-        revision_id=str(revision.id),
-        status=state.runtime_config_status,
-        updated=True,
-    )
 
 
 def _mcp_resolver_snapshot(record) -> McpConnectionSnapshot:  # noqa: ANN001
@@ -954,142 +797,3 @@ async def _record_runtime_config_command(
         command_id=command_id,
     )
     await enqueue_managed_target_wake_outbox(db, target_id=target_id, command_id=command_id)
-
-
-async def _require_worker_revision(
-    db: AsyncSession,
-    *,
-    auth: WorkerAuthContext,
-    revision_id: UUID,
-) -> SandboxProfileRuntimeConfigRevisionSnapshot:
-    target = await targets_store.get_target_by_id(db, auth.target_id)
-    if target is None or target.sandbox_profile_id is None:
-        raise CloudApiError(
-            "runtime_config_target_not_found",
-            "Worker target is not attached to a sandbox profile.",
-            status_code=404,
-        )
-    revision = await revision_store.get_revision_by_id(db, revision_id)
-    if revision is None or revision.sandbox_profile_id != target.sandbox_profile_id:
-        raise CloudApiError(
-            "runtime_config_revision_not_found",
-            "Runtime config revision not found.",
-            status_code=404,
-        )
-    return revision
-
-
-async def _require_current_worker_revision(
-    db: AsyncSession,
-    *,
-    auth: WorkerAuthContext,
-    revision_id: UUID,
-) -> SandboxProfileRuntimeConfigRevisionSnapshot:
-    revision = await _require_worker_revision(db, auth=auth, revision_id=revision_id)
-    if not await _worker_revision_is_current(db, revision=revision):
-        raise CloudApiError(
-            "runtime_config_revision_stale",
-            "Runtime config revision is no longer current for this target.",
-            status_code=409,
-        )
-    return revision
-
-
-async def _worker_revision_is_current(
-    db: AsyncSession,
-    *,
-    revision: SandboxProfileRuntimeConfigRevisionSnapshot,
-) -> bool:
-    _current, current_revision = await revision_store.get_current(
-        db,
-        sandbox_profile_id=revision.sandbox_profile_id,
-    )
-    return current_revision is not None and current_revision.id == revision.id
-
-
-def _raise_if_artifact_integrity_invalid(
-    artifact: artifact_store.SandboxProfileRuntimeConfigArtifactSnapshot,
-    *,
-    payload: dict[str, object],
-    content: str,
-) -> None:
-    expected_hash = artifact.artifact_hash
-    byte_size = len(content.encode("utf-8"))
-    payload_hash = payload.get("hash")
-    payload_content_type = payload.get("contentType")
-    if (
-        byte_size != artifact.byte_size
-        or _artifact_content_hash(content) != expected_hash
-        or (payload_hash is not None and payload_hash != expected_hash)
-        or (payload_content_type is not None and payload_content_type != artifact.content_type)
-    ):
-        raise CloudApiError(
-            "runtime_config_artifact_integrity_mismatch",
-            "Runtime config artifact payload does not match its recorded hash.",
-            status_code=500,
-        )
-
-
-def _artifact_content_hash(content: str) -> str:
-    return f"sha256:{hashlib.sha256(content.encode('utf-8')).hexdigest()}"
-
-
-def _credential_refs_from_manifest(manifest: dict[str, object]) -> list[dict[str, object]]:
-    refs: list[dict[str, object]] = []
-    servers = manifest.get("mcpServers")
-    if not isinstance(servers, list):
-        return refs
-    for server in servers:
-        if not isinstance(server, dict):
-            continue
-        server_refs = server.get("credentialRefs")
-        if isinstance(server_refs, list):
-            refs.extend(item for item in server_refs if isinstance(item, dict))
-    return refs
-
-
-async def _resolve_runtime_credential_ref(
-    db: AsyncSession,
-    credential_ref: str,
-) -> str | None:
-    parts = credential_ref.split(":", 2)
-    if len(parts) != 3 or parts[0] != "mcp":
-        return None
-    try:
-        connection_db_id = UUID(parts[1])
-    except ValueError:
-        return None
-    field_name = parts[2]
-    auth = await mcp_auth_store.load_connection_auth(
-        db,
-        connection_db_id=connection_db_id,
-    )
-    if auth is not None and auth.auth_status == "ready" and auth.payload_ciphertext:
-        payload = decrypt_json(auth.payload_ciphertext)
-    else:
-        return None
-    if not isinstance(payload, dict):
-        return None
-    return _credential_value_from_payload(payload, field_name)
-
-
-def _credential_value_from_payload(payload: dict[str, object], field_name: str) -> str | None:
-    secret_fields = payload.get("secretFields")
-    if isinstance(secret_fields, dict):
-        value = secret_fields.get(field_name)
-        if isinstance(value, str) and value:
-            return value
-    candidate_keys = [field_name]
-    if "_" in field_name:
-        head, *tail = field_name.split("_")
-        candidate_keys.append(head + "".join(part.title() for part in tail))
-    elif field_name and any(char.isupper() for char in field_name):
-        snake = "".join(
-            f"_{char.lower()}" if char.isupper() else char for char in field_name
-        ).lstrip("_")
-        candidate_keys.append(snake)
-    for key in candidate_keys:
-        value = payload.get(key)
-        if isinstance(value, str) and value:
-            return value
-    return None

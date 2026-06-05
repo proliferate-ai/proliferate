@@ -24,8 +24,10 @@ from proliferate.server.cloud.runtime_config.models import (
 from proliferate.server.cloud.runtime_config.service import (
     desktop_runtime_config_apply_request,
     get_profile_runtime_config_status,
-    record_worker_runtime_config_status,
     refresh_profile_runtime_config,
+)
+from proliferate.server.cloud.runtime_config.worker import (
+    record_worker_runtime_config_status,
     worker_runtime_config_artifact,
     worker_runtime_config_credentials,
     worker_runtime_config_fragment,
