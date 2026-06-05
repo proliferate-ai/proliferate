@@ -50,6 +50,18 @@ Collapsed identity is the only live model:
 - Runtime/config/auth applicability is checked by `(sandbox_profile_id, target_id)`.
 - Workspace materialization validity is `materialized_target_id == current active primary target_id`.
 
+## Broader Program Positioning
+
+This plan completed the foundational Track 1 from the PR 528 documentation set:
+Target = Sandbox / slot-collapse. It does not claim to implement the other
+draft alignment tracks that were merged alongside the specs, including
+worker-tier/Celery substrate, server structural hygiene beyond migration-needed
+splits, frontend structure alignment, AnyHarness structure alignment, or
+workspace migration/git durability.
+
+Those tracks remain future or independent work. This migration intentionally
+targets the shared identity/data-model foundation they depend on.
+
 ## Files / Modules Owned
 
 Phase 0:

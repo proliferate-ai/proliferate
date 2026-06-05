@@ -37,6 +37,33 @@ Therefore:
   paths. The merged specs deliberately choose a replacement migration because
   the managed-cloud model has no production users to preserve.
 
+## Relationship To The Broader Alignment Program
+
+PR 528, `docs(product): consolidate architecture and worker specs`, merged a
+broader documentation set than this migration implements. This document is the
+complete, executable plan for the foundational **Target = Sandbox** track only.
+It should not be read as the implementation plan for every draft alignment doc
+that landed with PR 528.
+
+Positioning:
+
+- "Align with the collapsed-identity spec updates" means this document and this
+  migration. The end-state specs for Target = Sandbox are authoritative and this
+  track is first because other managed-cloud work builds on the simplified
+  identity model.
+- "Align the whole codebase with every new or draft spec" is a larger program.
+  Several tracks remain independent or intentionally later.
+
+| Track | What It Is | Spec Maturity | Relationship | Order |
+| --- | --- | --- | --- | --- |
+| 1. Target = Sandbox | Core cloud/worker identity and data model. | End-state specs are merged; this document is the executable code plan. | Foundation for managed cloud, worker identity, commands, and runtime access. | First. |
+| 2. Worker-tier / Celery substrate | Move background jobs such as wake, provision, and reconcile to Celery/RabbitMQ/redbeat. | Drafts: `worker-tier-scalability-rfc.md`, `worker-tier-migration-catalog.md`. | Orthogonal substrate that should wrap the jobs after Target = Sandbox is stable. | After Track 1. |
+| 3. Server structural hygiene | Split large server files such as cloud worker services into ownership-correct modules. | Audit/draft level, not an end-state implementation spec. | Track 1 only does minimal splits needed to remove slot paths and unblock validation. | After Track 1. |
+| 4. Frontend structure alignment | Align frontend code to the folder/layer standards. | Draft: `frontend-structure-alignment-migration.md`. | Independent; frontend structure was a model for the worker docs but is not implemented here. | Parallel or independent. |
+| 5. AnyHarness structure alignment | Reshape AnyHarness runtime crates/modules toward their structure docs. | Draft: `anyharness-structure-alignment-swarms.md`. | Independent of this managed-cloud identity migration. | Parallel or independent. |
+| 6. Misc feature tracks | Examples include workspace migration/git durability. | Drafts such as `workspace-migration-git-durability-plan.md`. | Independent feature or hardening tracks. | As needed. |
+| Deferred cleanup | Merge or further collapse `cloud_target` / `cloud_sandbox` tables if desired. | Mentioned as future cleanup in the collapsed model discussion. | Cleanup after Track 1, not required for this migration to satisfy Target = Sandbox behavior. | Later. |
+
 ## The Invariant Card
 
 Every phase agent and every critique agent must receive this card verbatim.
