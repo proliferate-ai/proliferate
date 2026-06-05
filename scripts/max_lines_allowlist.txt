@@ -35,12 +35,12 @@ server/proliferate/db/store/cloud_sync/events.py 1109 server structure migration
 server/proliferate/db/store/cloud_workspaces.py 1621 server structure migration debt for oversized store file
 server/proliferate/server/billing/service.py 2459 server structure migration debt for oversized service file during billing orchestration consolidation
 server/proliferate/server/cloud/commands/domain/rules.py 607 server structure migration debt for oversized pure-domain file
-server/proliferate/server/cloud/commands/service.py 1648 server structure migration debt for oversized service file
+server/proliferate/server/cloud/commands/service.py 1647 server structure migration debt for oversized service file
 server/proliferate/server/cloud/mobility/service.py 1208 server structure migration debt for oversized service file
 server/proliferate/server/cloud/runtime/bootstrap.py 922 server structure migration debt for oversized domain-adjacent file
 server/proliferate/server/cloud/runtime/provision.py 1688 server structure migration debt for oversized domain-adjacent file
 server/proliferate/server/cloud/runtime_config/domain/resolver.py 611 server structure migration debt for oversized pure-domain file
-server/proliferate/server/cloud/runtime_config/service.py 1096 server structure migration debt for oversized service file
+server/proliferate/server/cloud/runtime_config/service.py 1095 server structure migration debt for oversized service file
 server/proliferate/server/cloud/worker/service.py 1290 server structure migration debt for oversized service file
 server/proliferate/server/cloud/workspaces/models.py 934 server structure migration debt for oversized API models file
 server/proliferate/server/cloud/workspaces/service.py 2643 server structure migration debt for oversized service file
@@ -50,7 +50,7 @@ server/tests/integration/test_billing_accounting.py 871 existing server oversize
 server/tests/integration/test_billing_api.py 2053 existing server oversized integration test
 server/tests/integration/test_cloud_agent_auth_api.py 1664 existing server oversized integration test
 server/tests/integration/test_cloud_api.py 2373 existing server oversized integration test
-server/tests/integration/test_cloud_commands_api.py 4930 existing server oversized integration test
+server/tests/integration/test_cloud_commands_api.py 4929 existing server oversized integration test
 server/tests/integration/test_sandbox_profile_foundation.py 1224 existing server oversized integration test
 server/tests/integration/test_schema_migrations.py 925 existing server oversized integration test
 server/tests/integration/test_stripe_webhooks.py 1456 existing server oversized integration test

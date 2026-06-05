@@ -57,19 +57,20 @@ _TERMINAL_AGENT_AUTH_REFRESH_COMMAND_STATUSES = frozenset(
 )
 
 
-async def _kick_agent_auth_refresh_wake_after_commit(
+async def _enqueue_agent_auth_refresh_wake(
     db: AsyncSession,
     command: commands_store.CloudCommandSnapshot,
 ) -> None:
     if command.status in _TERMINAL_AGENT_AUTH_REFRESH_COMMAND_STATUSES:
         return
 
-    async def _wake_after_commit() -> None:
-        from proliferate.server.cloud.runtime.wake import kick_off_managed_target_wake
+    from proliferate.server.cloud.commands.wake import enqueue_managed_target_wake_outbox
 
-        kick_off_managed_target_wake(command.target_id, command.id)
-
-    await db_session.run_after_commit(db, _wake_after_commit)
+    await enqueue_managed_target_wake_outbox(
+        db,
+        target_id=command.target_id,
+        command_id=command.id,
+    )
 
 
 async def _bump_profile_for_selection(
@@ -261,7 +262,7 @@ async def _queue_agent_auth_refresh_command(
             force_restart=force_restart,
         ):
             await publish_command_status_after_commit(db, existing)
-            await _kick_agent_auth_refresh_wake_after_commit(db, existing)
+            await _enqueue_agent_auth_refresh_wake(db, existing)
             return existing
         idempotency_key = (
             f"{base_idempotency_key}:retry:{_agent_auth_retry_marker(existing_state)}"
@@ -273,7 +274,7 @@ async def _queue_agent_auth_refresh_command(
         )
         if retry_existing is not None:
             await publish_command_status_after_commit(db, retry_existing)
-            await _kick_agent_auth_refresh_wake_after_commit(db, retry_existing)
+            await _enqueue_agent_auth_refresh_wake(db, retry_existing)
             return retry_existing
     payload = {
         "sandboxProfileId": str(profile.id),
@@ -327,7 +328,7 @@ async def _queue_agent_auth_refresh_command(
             raise
         command = duplicate
     await publish_command_status_after_commit(db, command)
-    await _kick_agent_auth_refresh_wake_after_commit(db, command)
+    await _enqueue_agent_auth_refresh_wake(db, command)
     return command
 
 

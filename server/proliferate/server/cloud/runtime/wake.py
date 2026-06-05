@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import timedelta
 from uuid import UUID
 
@@ -19,9 +21,13 @@ from proliferate.db.store.cloud_sandbox_profiles import load_sandbox_profile_by_
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import targets as targets_store
+from proliferate.db.store.cloud_sync import worker_control as worker_control_store
 from proliferate.integrations.sentry import capture_server_sentry_exception
 from proliferate.server.billing.service import authorize_sandbox_start_for_billing_subject
-from proliferate.server.cloud.live.service import publish_command_status_after_commit
+from proliferate.server.cloud.live.service import (
+    publish_command_status_after_commit,
+    publish_worker_control_after_commit,
+)
 from proliferate.server.cloud.runtime.domain.wake import WAKE_REQUIRED_CLOUD_COMMAND_KINDS
 from proliferate.server.cloud.runtime.liveness.ensure_running import (
     ensure_environment_runtime_ready,
@@ -99,14 +105,26 @@ async def run_managed_target_wake_job(target_id: UUID, command_id: UUID | None =
                 or authorization.start_block_reason
                 or _WAKE_BLOCKED_FALLBACK_MESSAGE
             )
+            marked_at = utcnow()
             commands = await commands_store.mark_queued_commands_failed_delivery_for_target(
                 db,
                 target_id=target_id,
                 command_kinds=WAKE_REQUIRED_CLOUD_COMMAND_KINDS,
                 error_code=_WAKE_BLOCKED_ERROR_CODE,
                 error_message=message,
-                now=utcnow(),
+                now=marked_at,
             )
+            if commands:
+                await worker_control_store.bump_control_revision(
+                    db,
+                    target_id=target_id,
+                    now=marked_at,
+                )
+                await publish_worker_control_after_commit(
+                    db,
+                    target_id=target_id,
+                    reason="command",
+                )
             for command in commands:
                 await _fail_pending_prompt_interaction_for_command(db, command)
                 await publish_command_status_after_commit(db, command)
@@ -122,10 +140,37 @@ async def run_managed_target_wake_job(target_id: UUID, command_id: UUID | None =
             )
             return
 
-    resumed = await _resume_target_runtime_environment(target_id, command_id=command_id)
-    if resumed:
-        return
-    await perform_proliferate_owned_e2b_resume({"target_id": str(target_id)})
+    async with _managed_target_wake_execution_lock(target_id) as acquired:
+        if not acquired:
+            logger.info(
+                "Managed target wake skipped because another worker owns the target wake lock",
+                extra={"target_id": str(target_id)},
+            )
+            return
+        resumed = await _resume_target_runtime_environment(target_id, command_id=command_id)
+        if resumed:
+            return
+        await perform_proliferate_owned_e2b_resume({"target_id": str(target_id)})
+
+
+@asynccontextmanager
+async def _managed_target_wake_execution_lock(target_id: UUID) -> AsyncIterator[bool]:
+    async with db_engine.async_session_factory() as db:
+        acquired = await targets_store.try_acquire_managed_target_wake_lock(
+            db,
+            target_id=target_id,
+        )
+        if not acquired:
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            await targets_store.release_managed_target_wake_lock(
+                db,
+                target_id=target_id,
+            )
+            await db.commit()
 
 
 async def _fail_pending_prompt_interaction_for_command(

@@ -38,7 +38,7 @@ from proliferate.server.cloud.commands.domain.rules import (
     validate_command_source,
 )
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
-from proliferate.server.cloud.commands.wake import schedule_managed_target_wake_after_commit
+from proliferate.server.cloud.commands.wake import enqueue_managed_target_wake_outbox
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.live.service import (
@@ -46,7 +46,7 @@ from proliferate.server.cloud.live.service import (
     publish_worker_control_after_commit,
 )
 from proliferate.server.cloud.runtime.domain.wake import command_kind_requires_wake
-from proliferate.server.cloud.runtime.wake import kick_off_managed_target_wake
+from proliferate.server.cloud.runtime.wake import kick_off_managed_target_wake  # noqa: F401
 from proliferate.server.cloud.workspaces.access import cloud_workspace_user_can_read_with_db
 from proliferate.utils.time import utcnow
 
@@ -1629,11 +1629,10 @@ async def kick_off_command_wake_after_commit_if_required(
     if not _command_requires_managed_target_wake(target, command):
         return
 
-    await schedule_managed_target_wake_after_commit(
+    await enqueue_managed_target_wake_outbox(
         db,
         target_id=target.id,
         command_id=command.id,
-        wake=kick_off_managed_target_wake,
     )
 
 

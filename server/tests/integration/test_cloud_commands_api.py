@@ -15,6 +15,7 @@ from proliferate.constants.cloud import (
     CloudCommandStatus,
     CloudWorkspaceStatus,
 )
+from proliferate.db.models.background import BackgroundOutboxTask
 from proliferate.db.models.cloud.agent_auth import SandboxProfileTargetState
 from proliferate.db.models.cloud.commands import CloudCommand
 from proliferate.db.models.cloud.exposures import CloudWorkspaceExposure
@@ -31,6 +32,7 @@ from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
+from proliferate.db.store.cloud_sync import worker_control as worker_control_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.server.cloud.agent_auth.service import (
     request_agent_auth_refresh_for_profile_target,
@@ -1669,13 +1671,6 @@ class TestCloudCommandsApi:
         )
         await db_session.commit()
 
-        wake_calls: list[tuple[UUID, UUID | None]] = []
-
-        def _record_wake(target_id: UUID, command_id: UUID | None = None) -> None:
-            wake_calls.append((target_id, command_id))
-
-        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", _record_wake)
-
         created = await client.post(
             "/v1/cloud/commands",
             headers=auth.headers,
@@ -1691,9 +1686,16 @@ class TestCloudCommandsApi:
 
         assert created.status_code == 200
         payload = created.json()
+        command_id = payload["commandId"]
         assert payload["cloudWorkspaceId"] == cloud_workspace_id
-        assert wake_calls == [(target_uuid, UUID(payload["commandId"]))]
-        command = await db_session.get(CloudCommand, UUID(payload["commandId"]))
+        outbox_task = await db_session.scalar(
+            select(BackgroundOutboxTask).where(
+                BackgroundOutboxTask.task_name == "runtime.wake_target"
+            )
+        )
+        assert outbox_task.kwargs_json["target_id"] == str(target_uuid)
+        assert outbox_task.kwargs_json["command_id"] == command_id
+        command = await db_session.get(CloudCommand, UUID(command_id))
         assert command is not None
         assert command.cloud_workspace_id == UUID(cloud_workspace_id)
         command_payload = json.loads(command.payload_json)
@@ -2712,11 +2714,6 @@ class TestCloudCommandsApi:
             session_id="session-wake-blocked",
         )
         await db_session.commit()
-        monkeypatch.setattr(
-            command_service,
-            "kick_off_managed_target_wake",
-            lambda _target_id, _command_id=None: None,
-        )
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -2736,6 +2733,9 @@ class TestCloudCommandsApi:
         )
         assert created.status_code == 200, created.text
         command_id = UUID(created.json()["commandId"])
+        before_control = await worker_control_store.get_or_create_control_state(
+            db_session, target_id=target_uuid
+        )
 
         class _Denied:
             allowed = False
@@ -2772,6 +2772,10 @@ class TestCloudCommandsApi:
         assert interaction_payload["commandId"] == str(command_id)
         assert interaction_payload["status"] == "failed_delivery"
         assert interaction_payload["errorCode"] == "sandbox_wake_blocked"
+        after_control = await worker_control_store.get_or_create_control_state(
+            db_session, target_id=target_uuid
+        )
+        assert after_control.control_revision == before_control.control_revision + 1
 
     @pytest.mark.asyncio
     async def test_managed_target_wake_hydrates_environment_from_runtime_access(
@@ -2844,11 +2848,6 @@ class TestCloudCommandsApi:
             heartbeat_at=utcnow(),
         )
         await db_session.commit()
-        monkeypatch.setattr(
-            command_service,
-            "kick_off_managed_target_wake",
-            lambda _target_id, _command_id=None: None,
-        )
 
         created = await client.post(
             "/v1/cloud/commands",

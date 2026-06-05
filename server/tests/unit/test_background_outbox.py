@@ -7,7 +7,12 @@ import pytest
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from proliferate.background.config import HEALTH_NOOP_TASK, PERIODIC_DEFAULT_QUEUE
+from proliferate.background.config import (
+    HEALTH_NOOP_TASK,
+    PERIODIC_DEFAULT_QUEUE,
+    RUNTIME_WAKE_QUEUE,
+    RUNTIME_WAKE_TARGET_TASK,
+)
 from proliferate.background.relay import RelayMessage, relay_once
 from proliferate.db.models.background import BackgroundOutboxTask
 from proliferate.db.store.background_outbox import (
@@ -281,14 +286,46 @@ async def test_relay_records_publish_failure_for_retry(
 
 
 @pytest.mark.asyncio
-async def test_relay_rejects_non_whitelisted_task_without_publishing(
+async def test_relay_publishes_runtime_wake_task(
     db_session: AsyncSession,
     test_engine: AsyncEngine,
 ) -> None:
     task = await enqueue_outbox_task(
         db_session,
-        task_name="runtime.wake_target",
-        queue="runtime.wake",
+        task_name=RUNTIME_WAKE_TARGET_TASK,
+        queue=RUNTIME_WAKE_QUEUE,
+        kwargs_json={"target_id": "target-one", "command_id": "command-one"},
+    )
+    await db_session.commit()
+    publisher = RecordingPublisher()
+
+    result = await relay_once(
+        session_factory=_session_factory(test_engine),
+        publisher=publisher,
+    )
+
+    published = await _load_fresh_outbox_task(db_session, task.id)
+    assert result.claimed == 1
+    assert result.published == 1
+    assert publisher.messages[0].task_name == RUNTIME_WAKE_TARGET_TASK
+    assert publisher.messages[0].queue == RUNTIME_WAKE_QUEUE
+    assert publisher.messages[0].kwargs == {
+        "target_id": "target-one",
+        "command_id": "command-one",
+    }
+    assert published is not None
+    assert published.status == OUTBOX_STATUS_PUBLISHED
+
+
+@pytest.mark.asyncio
+async def test_relay_rejects_unknown_task_without_publishing(
+    db_session: AsyncSession,
+    test_engine: AsyncEngine,
+) -> None:
+    task = await enqueue_outbox_task(
+        db_session,
+        task_name="runtime.unknown",
+        queue=RUNTIME_WAKE_QUEUE,
     )
     await db_session.commit()
     publisher = RecordingPublisher()

@@ -2,24 +2,27 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db import session_ops as db_session
+from proliferate.background.config import RUNTIME_WAKE_QUEUE, RUNTIME_WAKE_TARGET_TASK
+from proliferate.db.store.background_outbox import enqueue_outbox_task
 
-type ManagedTargetWake = Callable[[UUID, UUID | None], None]
 
-
-async def schedule_managed_target_wake_after_commit(
+async def enqueue_managed_target_wake_outbox(
     db: AsyncSession,
     *,
     target_id: UUID,
     command_id: UUID,
-    wake: ManagedTargetWake,
 ) -> None:
-    async def _wake_after_commit() -> None:
-        wake(target_id, command_id)
-
-    await db_session.run_after_commit(db, _wake_after_commit)
+    await enqueue_outbox_task(
+        db,
+        task_name=RUNTIME_WAKE_TARGET_TASK,
+        queue=RUNTIME_WAKE_QUEUE,
+        kwargs_json={
+            "target_id": str(target_id),
+            "command_id": str(command_id),
+        },
+        idempotency_key=f"{RUNTIME_WAKE_TARGET_TASK}:{target_id}:{command_id}",
+    )
