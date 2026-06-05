@@ -7,8 +7,8 @@ import pytest
 from proliferate.config import settings
 from proliferate.integrations import stripe
 from proliferate.integrations.stripe import client as stripe_client
-from proliferate.server.billing.models import BillingServiceError
 from proliferate.server.billing import pricing as billing_pricing
+from proliferate.server.billing.models import BillingServiceError
 
 
 def _price_details(payload: dict[str, Any]) -> stripe.StripePriceDetails:
