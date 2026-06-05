@@ -1111,7 +1111,7 @@ class TestBillingApi:
             updates.append(int(kwargs["quantity"]))
 
         monkeypatch.setattr(
-            "proliferate.server.billing.service.stripe_billing.update_subscription_item_quantity",
+            "proliferate.server.billing.accounting.stripe_billing.update_subscription_item_quantity",
             fake_update_subscription_item_quantity,
         )
 
@@ -1267,7 +1267,7 @@ class TestBillingApi:
             updates.append(int(kwargs["quantity"]))
 
         monkeypatch.setattr(
-            "proliferate.server.billing.service.stripe_billing.update_subscription_item_quantity",
+            "proliferate.server.billing.accounting.stripe_billing.update_subscription_item_quantity",
             fake_update_subscription_item_quantity,
         )
 
@@ -1384,7 +1384,7 @@ class TestBillingApi:
                 )
 
         monkeypatch.setattr(
-            "proliferate.server.billing.service.stripe_billing.update_subscription_item_quantity",
+            "proliferate.server.billing.accounting.stripe_billing.update_subscription_item_quantity",
             fake_update_subscription_item_quantity,
         )
 
@@ -1533,11 +1533,11 @@ class TestBillingApi:
             raise RuntimeError("grant write failed")
 
         monkeypatch.setattr(
-            "proliferate.server.billing.service.stripe_billing.update_subscription_item_quantity",
+            "proliferate.server.billing.accounting.stripe_billing.update_subscription_item_quantity",
             fake_update_subscription_item_quantity,
         )
         monkeypatch.setattr(
-            "proliferate.server.billing.service.ensure_billing_grant_record",
+            "proliferate.server.billing.accounting.ensure_billing_grant_record",
             fail_ensure_billing_grant_record,
         )
 
@@ -1651,7 +1651,7 @@ class TestBillingApi:
             updates.append(int(kwargs["quantity"]))
 
         monkeypatch.setattr(
-            "proliferate.server.billing.service.stripe_billing.update_subscription_item_quantity",
+            "proliferate.server.billing.accounting.stripe_billing.update_subscription_item_quantity",
             fake_update_subscription_item_quantity,
         )
 

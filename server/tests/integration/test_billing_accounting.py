@@ -39,7 +39,8 @@ from proliferate.db.store.billing_subjects import (
     ensure_personal_billing_subject,
 )
 from proliferate.integrations import stripe as stripe_billing
-from proliferate.server.billing import service as billing_service
+from proliferate.server.billing import accounting as billing_accounting_service
+from proliferate.server.billing.service import run_billing_accounting_pass
 from tests.integration.billing_accounting_helpers import (
     patch_global_session_factory,
     seed_usage_segment,
@@ -94,7 +95,7 @@ async def test_usage_export_claiming_skips_written_off_rows(
     written_off_export_id = written_off_export.id
     billable_export_id = billable_export.id
 
-    claimed = await billing_service.claim_usage_exports_for_sending()
+    claimed = await billing_accounting_service.claim_usage_exports_for_sending()
     db_session.expire_all()
 
     assert [export.id for export in claimed] == [billable_export_id]
@@ -135,7 +136,7 @@ async def test_usage_export_claiming_keeps_legacy_null_exports_in_pro_mode(
     await db_session.commit()
     legacy_export_id = legacy_export.id
 
-    claimed = await billing_service.claim_usage_exports_for_sending()
+    claimed = await billing_accounting_service.claim_usage_exports_for_sending()
     db_session.expire_all()
 
     assert [export.id for export in claimed] == [legacy_export_id]
@@ -201,7 +202,7 @@ async def test_accounting_consumes_monthly_then_refill_and_observes_uncovered_us
     db_session.add(subscription)
     await db_session.commit()
 
-    result = await billing_service.account_usage_for_billing_subject(
+    result = await billing_accounting_service.account_usage_for_billing_subject(
         billing_subject_id=subject_id,
         is_paid_cloud=True,
         billing_subscription_id=subscription.id,
@@ -326,7 +327,7 @@ async def test_paid_accounting_carries_free_grants_after_monthly_before_refill(
     db_session.add(subscription)
     await db_session.commit()
 
-    result = await billing_service.account_usage_for_billing_subject(
+    result = await billing_accounting_service.account_usage_for_billing_subject(
         billing_subject_id=subject_id,
         is_paid_cloud=True,
         billing_subscription_id=subscription.id,
@@ -400,7 +401,7 @@ async def test_unlimited_accounting_advances_cursor_without_consuming_or_exporti
     )
     await db_session.commit()
 
-    result = await billing_service.account_usage_for_billing_subject(
+    result = await billing_accounting_service.account_usage_for_billing_subject(
         billing_subject_id=subject_id,
         is_paid_cloud=False,
         billing_subscription_id=None,
@@ -511,7 +512,7 @@ async def test_manual_unlimited_with_pro_subscription_does_not_export_overage(
     )
     await db_session.commit()
 
-    await billing_service.run_billing_accounting_pass(subject_limit=10)
+    await run_billing_accounting_pass(subject_limit=10)
     db_session.expire_all()
 
     exports = list(
@@ -589,7 +590,7 @@ async def test_zero_pro_overage_cap_writes_off_uncovered_usage(
     )
     await db_session.commit()
 
-    await billing_service.run_billing_accounting_pass(subject_limit=10)
+    await run_billing_accounting_pass(subject_limit=10)
     db_session.expire_all()
 
     exports = list(
@@ -665,7 +666,7 @@ async def test_paid_accounting_does_not_export_pre_subscription_free_overage(
     db_session.add(subscription)
     await db_session.commit()
 
-    result = await billing_service.account_usage_for_billing_subject(
+    result = await billing_accounting_service.account_usage_for_billing_subject(
         billing_subject_id=subject_id,
         is_paid_cloud=True,
         billing_subscription_id=subscription.id,
@@ -744,7 +745,7 @@ async def test_observe_mode_does_not_send_pending_meter_exports(
 
     monkeypatch.setattr(stripe_billing, "create_meter_event", _create_meter_event)
 
-    await billing_service.send_pending_usage_exports()
+    await billing_accounting_service.send_pending_usage_exports()
     db_session.expire_all()
 
     export = await db_session.get(BillingUsageExport, export_id)
@@ -834,7 +835,7 @@ async def test_enforce_mode_export_success_retryable_and_terminal_paths(
 
     monkeypatch.setattr(stripe_billing, "create_meter_event", _create_meter_event)
 
-    await billing_service.send_pending_usage_exports(limit=10)
+    await billing_accounting_service.send_pending_usage_exports(limit=10)
     db_session.expire_all()
 
     success = await db_session.get(BillingUsageExport, success_id)
