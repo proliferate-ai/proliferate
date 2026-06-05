@@ -9,8 +9,8 @@ import type {
 import { applyStreamEnvelopeBatch } from "@/lib/domain/sessions/stream/stream-state";
 import {
   logDevSSEEvent,
-  logDevSessionRuntimeEvent,
-} from "@/lib/infra/debug/session-runtime-dev-sse";
+} from "@/lib/infra/debug/dev-sse-event-log";
+import { logDevSessionRuntimeEvent } from "@/lib/infra/debug/dev-session-runtime-log";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   finishOrCancelMeasurementOperation,

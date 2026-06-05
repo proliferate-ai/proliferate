@@ -245,3 +245,13 @@ There is no `E2B_RUNTIME_SENTRY_*` compatibility fallback on this branch.
 Operators should migrate any legacy runtime Sentry configuration to the
 `CLOUD_RUNTIME_*` variables above. The old `E2B_RUNTIME_SENTRY_*` names are not
 part of the supported env surface here.
+
+## Operator Recovery References
+
+Use [`../runbooks/operator-security-posture.md`](../runbooks/operator-security-posture.md)
+before rotating secrets, using break-glass access, or handling support bundles.
+Use [`../runbooks/cloud-provisioning-failure.md`](../runbooks/cloud-provisioning-failure.md)
+and [`../runbooks/worker-enrollment-failure.md`](../runbooks/worker-enrollment-failure.md)
+to triage cloud runtime failures before changing secret values. Use
+[`../runbooks/e2b-template-rollback.md`](../runbooks/e2b-template-rollback.md)
+when a bad E2B template promotion is the suspected cause.
