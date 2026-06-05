@@ -24,7 +24,7 @@ SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/workspaces/provisioning
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/workspaces/provisioning/service.py 1 provisioning extraction preserves existing explicit session boundary debt through session_ops
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/workspaces/remote_access/service.py 1 remote-access connection flow preserves existing explicit session boundary debt through session_ops
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/workspaces/target_launch/service.py 1 target-launch orchestration preserves existing explicit command/session boundary debt through session_ops
-SERVICE_DB_METHOD_CALL server/proliferate/server/billing/service.py 21 remaining billing service-owned transaction/session boundary debt through session_ops
+SERVICE_DB_METHOD_CALL server/proliferate/server/billing/service.py 17 remaining billing service-owned transaction/session boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/agent_auth/managed_credits.py 2 remaining agent-auth service concern managed-credit sync session boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/agent_auth/refresh.py 1 remaining agent-auth service concern error session boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/commands/agent_auth_refresh.py 1 Lane 7 explicit transaction-boundary debt for best-effort preflight refresh
