@@ -18,7 +18,6 @@ from proliferate.constants.cloud import (
 )
 from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZATION_ROLE_OWNER
 from proliferate.db import session_ops as db_session
-from proliferate.db.store import cloud_sandboxes
 from proliferate.db.store.cloud_agent_auth import store
 from proliferate.db.store.cloud_agent_auth.records import (
     SandboxAgentAuthSelectionRecord,
@@ -66,9 +65,9 @@ async def _kick_agent_auth_refresh_wake_after_commit(
         return
 
     async def _wake_after_commit() -> None:
-        from proliferate.server.cloud.runtime.wake import kick_off_managed_slot_wake
+        from proliferate.server.cloud.runtime.wake import kick_off_managed_target_wake
 
-        kick_off_managed_slot_wake(command.target_id, command.id)
+        kick_off_managed_target_wake(command.target_id, command.id)
 
     await db_session.run_after_commit(db, _wake_after_commit)
 
@@ -203,16 +202,10 @@ async def request_agent_auth_refresh_for_profile_target(
         sandbox_profile_id=profile.id,
         target_id=target_id,
     )
-    active_slot = await cloud_sandboxes.load_active_slot_for_profile_target(
-        db,
-        sandbox_profile_id=profile.id,
-        target_id=target_id,
-    )
     if _agent_auth_target_state_is_current(
         existing_state,
         profile=profile,
         force_restart=force_restart,
-        active_slot=active_slot,
     ):
         return
     command = await _queue_agent_auth_refresh_command(
@@ -223,7 +216,6 @@ async def request_agent_auth_refresh_for_profile_target(
         reason=reason,
         force_restart=force_restart,
         existing_state=existing_state,
-        active_slot=active_slot,
     )
     await store.upsert_target_state(
         db,
@@ -249,7 +241,6 @@ async def _queue_agent_auth_refresh_command(
     reason: str,
     force_restart: bool,
     existing_state: SandboxProfileAgentAuthTargetStateRecord | None = None,
-    active_slot: cloud_sandboxes.SlotSnapshot | None = None,
 ) -> commands_store.CloudCommandSnapshot:
     idempotency_scope = f"target:{target_id}:agent-auth-config:{profile.id}"
     base_idempotency_key = (
@@ -268,7 +259,6 @@ async def _queue_agent_auth_refresh_command(
             existing_state=existing_state,
             profile=profile,
             force_restart=force_restart,
-            active_slot=active_slot,
         ):
             await publish_command_status_after_commit(db, existing)
             await _kick_agent_auth_refresh_wake_after_commit(db, existing)
@@ -346,20 +336,13 @@ def _agent_auth_target_state_is_current(
     *,
     profile: SandboxProfileRecord,
     force_restart: bool,
-    active_slot: cloud_sandboxes.SlotSnapshot | None = None,
 ) -> bool:
-    slot_matches = active_slot is None or (
-        state is not None
-        and state.active_sandbox_id == active_slot.id
-        and state.slot_generation == active_slot.slot_generation
-    )
     return (
         not force_restart
         and state is not None
         and state.status == "applied"
         and state.applied_revision is not None
         and state.applied_revision >= profile.agent_auth_revision
-        and slot_matches
         and not state.force_restart_required
     )
 
@@ -370,7 +353,6 @@ def _agent_auth_refresh_command_requires_retry(
     existing_state: SandboxProfileAgentAuthTargetStateRecord | None,
     profile: SandboxProfileRecord,
     force_restart: bool,
-    active_slot: cloud_sandboxes.SlotSnapshot | None = None,
 ) -> bool:
     if command.status not in _TERMINAL_AGENT_AUTH_REFRESH_COMMAND_STATUSES:
         return False
@@ -378,7 +360,6 @@ def _agent_auth_refresh_command_requires_retry(
         existing_state,
         profile=profile,
         force_restart=force_restart,
-        active_slot=active_slot,
     )
 
 

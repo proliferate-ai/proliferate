@@ -15,8 +15,8 @@ from proliferate.server.cloud.sandbox_profiles.models import (
     SandboxProfileResponse,
     SandboxProfileTargetStateResponse,
     runtime_access_payload,
+    sandbox_payload,
     sandbox_profile_payload,
-    slot_payload,
     target_payload,
 )
 from proliferate.server.cloud.sandbox_profiles.service import (
@@ -87,8 +87,11 @@ async def get_sandbox_profile_target_state_endpoint(
     return SandboxProfileTargetStateResponse(
         profile=sandbox_profile_payload(state.profile),
         target=target_payload(state.target),
-        slot=slot_payload(state.slot),
+        sandbox=sandbox_payload(state.sandbox),
         runtime_access=runtime_access_payload(state.runtime_access),
+        target_ready=state.target_ready,
+        sandbox_ready=state.sandbox_ready,
+        runtime_access_ready=state.runtime_access_ready,
         ready=state.ready,
     )
 
@@ -109,7 +112,10 @@ async def enable_sandbox_profile_cloud_endpoint(
     return SandboxProfileTargetStateResponse(
         profile=sandbox_profile_payload(state.profile),
         target=target_payload(state.target),
-        slot=slot_payload(state.slot),
+        sandbox=sandbox_payload(state.sandbox),
         runtime_access=runtime_access_payload(state.runtime_access),
+        target_ready=state.target_ready,
+        sandbox_ready=state.sandbox_ready,
+        runtime_access_ready=state.runtime_access_ready,
         ready=state.ready,
     )

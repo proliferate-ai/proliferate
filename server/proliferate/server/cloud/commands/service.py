@@ -18,9 +18,8 @@ from proliferate.constants.cloud import (
     CloudWorkspaceStatus,
 )
 from proliferate.db.session_ops import is_integrity_error
-from proliferate.db.store import cloud_runtime_environments, cloud_sandboxes, cloud_workspaces
+from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
-from proliferate.db.store.cloud_profile_target_guard import managed_profile_target_requires_slot
 from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import events as events_store
@@ -39,7 +38,7 @@ from proliferate.server.cloud.commands.domain.rules import (
     validate_command_source,
 )
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
-from proliferate.server.cloud.commands.wake import schedule_managed_slot_wake_after_commit
+from proliferate.server.cloud.commands.wake import schedule_managed_target_wake_after_commit
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.live.service import (
@@ -47,7 +46,7 @@ from proliferate.server.cloud.live.service import (
     publish_worker_control_after_commit,
 )
 from proliferate.server.cloud.runtime.domain.wake import command_kind_requires_wake
-from proliferate.server.cloud.runtime.wake import kick_off_managed_slot_wake
+from proliferate.server.cloud.runtime.wake import kick_off_managed_target_wake
 from proliferate.server.cloud.workspaces.access import cloud_workspace_user_can_read_with_db
 from proliferate.utils.time import utcnow
 
@@ -401,22 +400,13 @@ async def _resolve_managed_start_session_workspace(
         )
     if workspace.sandbox_profile_id is None or workspace.target_id is None:
         raise CloudApiError(
-            "cloud_command_workspace_slot_missing",
+            "cloud_command_workspace_target_missing",
             "Workspace is missing its managed sandbox profile target.",
             status_code=409,
         )
-    active_slot = await cloud_sandboxes.load_active_slot_for_profile_target(
-        db,
-        sandbox_profile_id=workspace.sandbox_profile_id,
-        target_id=workspace.target_id,
-    )
-    if (
-        active_slot is None
-        or active_slot.slot_generation is None
-        or workspace.materialized_slot_generation != active_slot.slot_generation
-    ):
+    if workspace.materialized_target_id != target.id:
         raise CloudApiError(
-            "cloud_command_workspace_slot_stale",
+            "cloud_command_workspace_target_stale",
             "Workspace must be rematerialized on the active managed sandbox before commands run.",
             status_code=409,
         )
@@ -706,10 +696,13 @@ async def _resolve_cloud_workspace_id_for_target(
             "Workspace not found.",
             status_code=404,
         )
-    requires_managed_slot = _target_requires_cloud_workspace(target)
+    requires_managed_workspace = _target_requires_cloud_workspace(target)
     if (
         workspace.target_id != target.id
-        or (requires_managed_slot and workspace.sandbox_profile_id != target.sandbox_profile_id)
+        or (
+            requires_managed_workspace
+            and workspace.sandbox_profile_id != target.sandbox_profile_id
+        )
         or workspace.owner_scope != target.owner_scope
         or workspace.owner_user_id != target.owner_user_id
         or workspace.organization_id != target.organization_id
@@ -772,10 +765,11 @@ def _direct_start_session_workspace_id(payload: dict[str, object]) -> str | None
 
 
 def _target_requires_cloud_workspace(target: targets_store.CloudTargetSnapshot) -> bool:
-    return managed_profile_target_requires_slot(
-        kind=target.kind,
-        sandbox_profile_id=target.sandbox_profile_id,
-        profile_target_role=target.profile_target_role,
+    return (
+        target.kind == "managed_cloud"
+        and target.sandbox_profile_id is not None
+        and target.profile_target_role == "primary"
+        and target.archived_at is None
     )
 
 
@@ -1098,27 +1092,11 @@ async def _validate_agent_auth_preflight(
         sandbox_profile_id=profile.id,
         target_id=target.id,
     )
-    requires_slot = _target_requires_cloud_workspace(target)
-    active_slot = None
-    if requires_slot:
-        active_slot = await cloud_sandboxes.load_active_slot_for_profile_target(
-            db,
-            sandbox_profile_id=profile.id,
-            target_id=target.id,
-        )
     if (
         state is None
         or state.status != "applied"
         or state.applied_revision is None
         or state.applied_revision < required_revision
-        or (
-            active_slot is not None
-            and (
-                state.active_sandbox_id != active_slot.id
-                or state.slot_generation != active_slot.slot_generation
-            )
-        )
-        or (requires_slot and active_slot is None)
     ):
         await queue_agent_auth_refresh_for_not_ready_preflight(
             sandbox_profile_id=profile.id,
@@ -1220,26 +1198,11 @@ async def _validate_runtime_config_preflight(
         sandbox_profile_id=profile_id,
         target_id=target.id,
     )
-    active_slot = None
-    if _target_requires_cloud_workspace(target):
-        active_slot = await cloud_sandboxes.load_active_slot_for_profile_target(
-            db,
-            sandbox_profile_id=profile_id,
-            target_id=target.id,
-        )
     if (
         state is None
         or state.runtime_config_status != "applied"
         or state.applied_runtime_config_revision_id != required_revision_id
         or state.applied_runtime_config_sequence < required_sequence
-        or (
-            active_slot is not None
-            and (
-                state.active_sandbox_id != active_slot.id
-                or state.slot_generation != active_slot.slot_generation
-            )
-        )
-        or (active_slot is None and _target_requires_cloud_workspace(target))
     ):
         raise CloudApiError(
             "cloud_command_runtime_config_not_ready",
@@ -1439,26 +1402,11 @@ async def _validate_managed_runtime_config_current_for_command(
         sandbox_profile_id=target.sandbox_profile_id,
         target_id=target.id,
     )
-    active_slot = None
-    if _target_requires_cloud_workspace(target):
-        active_slot = await cloud_sandboxes.load_active_slot_for_profile_target(
-            db,
-            sandbox_profile_id=target.sandbox_profile_id,
-            target_id=target.id,
-        )
     if (
         state is None
         or state.runtime_config_status != "applied"
         or state.applied_runtime_config_revision_id != str(current_revision.id)
         or state.applied_runtime_config_sequence < current_revision.sequence
-        or (
-            active_slot is not None
-            and (
-                state.active_sandbox_id != active_slot.id
-                or state.slot_generation != active_slot.slot_generation
-            )
-        )
-        or (active_slot is None and _target_requires_cloud_workspace(target))
     ):
         raise CloudApiError(
             "cloud_command_runtime_config_not_ready",
@@ -1511,19 +1459,11 @@ async def _stamp_managed_runtime_config_preflight(
         sandbox_profile_id=target.sandbox_profile_id,
         target_id=target.id,
     )
-    active_slot = await cloud_sandboxes.load_active_slot_for_profile_target(
-        db,
-        sandbox_profile_id=target.sandbox_profile_id,
-        target_id=target.id,
-    )
     if (
         state is None
         or state.runtime_config_status != "applied"
         or state.applied_runtime_config_revision_id != str(current_revision.id)
         or state.applied_runtime_config_sequence < current_revision.sequence
-        or active_slot is None
-        or state.active_sandbox_id != active_slot.id
-        or state.slot_generation != active_slot.slot_generation
     ):
         raise CloudApiError(
             "cloud_command_runtime_config_not_ready",
@@ -1668,7 +1608,7 @@ def _runtime_config_blocking_errors(manifest_json: str) -> list[dict[str, object
     return [item for item in blocking_errors if isinstance(item, dict)]
 
 
-def _command_requires_managed_slot_wake(
+def _command_requires_managed_target_wake(
     target: targets_store.CloudTargetSnapshot,
     command: commands_store.CloudCommandSnapshot,
 ) -> bool:
@@ -1686,14 +1626,14 @@ async def kick_off_command_wake_after_commit_if_required(
     command: commands_store.CloudCommandSnapshot,
 ) -> None:
     await publish_worker_control_after_commit(db, target_id=target.id, reason="command")
-    if not _command_requires_managed_slot_wake(target, command):
+    if not _command_requires_managed_target_wake(target, command):
         return
 
-    await schedule_managed_slot_wake_after_commit(
+    await schedule_managed_target_wake_after_commit(
         db,
         target_id=target.id,
         command_id=command.id,
-        wake=kick_off_managed_slot_wake,
+        wake=kick_off_managed_target_wake,
     )
 
 

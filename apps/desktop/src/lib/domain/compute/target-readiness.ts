@@ -7,7 +7,7 @@ import type {
 } from "@/lib/domain/compute/target-types";
 
 export interface ComputeReadinessItem {
-  key: "target" | "worker" | "git" | "node" | "python" | "runtime-config" | "sandbox-slot";
+  key: "target" | "worker" | "git" | "node" | "python" | "runtime-config" | "sandbox";
   label: string;
   status: "ready" | "pending" | "missing" | "unavailable";
   detail: string;
@@ -87,14 +87,14 @@ export function computeTargetReadiness(
       detail: runtimeConfigDetail(target, runtimeConfig, options.loadingRuntimeConfig ?? false),
     },
     {
-      key: "sandbox-slot",
-      label: "Sandbox slot",
-      status: sandboxSlotReadiness(
+      key: "sandbox",
+      label: "Sandbox",
+      status: sandboxReadiness(
         target,
         sandboxState,
         options.loadingTargetState ?? false,
       ),
-      detail: sandboxSlotDetail(target, sandboxState, options.loadingTargetState ?? false),
+      detail: sandboxDetail(target, sandboxState, options.loadingTargetState ?? false),
     },
   ];
 }
@@ -166,7 +166,7 @@ function runtimeConfigDetail(
   return `Revision ${revision.sequence} generated ${revision.createdAt}.`;
 }
 
-function sandboxSlotReadiness(
+function sandboxReadiness(
   target: ComputeTargetSummary | null,
   sandboxState: ComputeSandboxProfileTargetState | null,
   loading: boolean,
@@ -177,37 +177,66 @@ function sandboxSlotReadiness(
   if (loading) {
     return "pending";
   }
-  if (!sandboxState?.slot) {
+  if (!sandboxState) {
     return "missing";
   }
-  if (sandboxState.ready) {
+  if (
+    sandboxState.ready
+    && sandboxState.targetReady === true
+    && sandboxState.sandboxReady === true
+    && sandboxState.runtimeAccessReady === true
+  ) {
     return "ready";
   }
-  if (sandboxState.slot.status === "creating" || sandboxState.slot.status === "provisioning") {
+  if (isPendingTargetStatus(sandboxState.target?.status)) {
+    return "pending";
+  }
+  if (!sandboxState.sandbox) {
+    return "missing";
+  }
+  if (isPendingSandboxStatus(sandboxState.sandbox.status)) {
     return "pending";
   }
   return "missing";
 }
 
-function sandboxSlotDetail(
+function sandboxDetail(
   target: ComputeTargetSummary | null,
   sandboxState: ComputeSandboxProfileTargetState | null,
   loading: boolean,
 ): string {
   if (target?.kind !== "managed_cloud") {
-    return "Direct SSH and local targets do not use a managed cloud slot.";
+    return "Direct SSH and local targets do not use a managed cloud sandbox.";
   }
   if (loading) {
-    return "Loading managed cloud sandbox slot state.";
+    return "Loading managed cloud sandbox state.";
   }
-  if (!sandboxState?.slot) {
-    return "No active managed sandbox slot is assigned to this target.";
+  if (!sandboxState) {
+    return "Managed cloud sandbox state has not been reported.";
   }
-  if (sandboxState.slot.blockedReason) {
-    return `Slot ${sandboxState.slot.slotGeneration ?? "-"} blocked: ${sandboxState.slot.blockedReason}.`;
+  if (sandboxState.targetReady !== true) {
+    const targetStatus = sandboxState.target?.status ?? target?.status ?? "unknown";
+    return `Primary managed target is ${targetStatus}; waiting for it to come online.`;
   }
-  if (!sandboxState.runtimeAccess?.anyharnessBaseUrl) {
-    return `Slot ${sandboxState.slot.slotGeneration ?? "-"} is ${sandboxState.slot.status}; runtime access is not ready.`;
+  if (!sandboxState.sandbox) {
+    return "No active managed sandbox exists for this target.";
   }
-  return `Slot ${sandboxState.slot.slotGeneration ?? "-"} is ${sandboxState.slot.status}; runtime access is ready.`;
+  if (sandboxState.sandbox.blockedReason) {
+    return `Sandbox blocked: ${sandboxState.sandbox.blockedReason}.`;
+  }
+  if (sandboxState.sandboxReady !== true) {
+    return `Sandbox is ${sandboxState.sandbox.status}; waiting for provider readiness.`;
+  }
+  if (sandboxState.runtimeAccessReady !== true) {
+    return `Sandbox is ${sandboxState.sandbox.status}; runtime access is not ready.`;
+  }
+  return `Sandbox is ${sandboxState.sandbox.status}; runtime access is ready.`;
+}
+
+function isPendingTargetStatus(status: string | null | undefined): boolean {
+  return status === "enrolling" || status === "provisioning" || status === "pending";
+}
+
+function isPendingSandboxStatus(status: string | null | undefined): boolean {
+  return status === "creating" || status === "provisioning" || status === "pending";
 }

@@ -100,8 +100,6 @@ async def test_killed_e2b_webhook_clears_runtime_metadata_and_increments_generat
     ).encode()
     sandbox = SimpleNamespace(
         id=sandbox_id,
-        runtime_environment_id=runtime_environment_id,
-        cloud_workspace_id=None,
         provider="e2b",
         external_sandbox_id="sandbox-123",
         last_provider_event_at=None,
@@ -117,10 +115,11 @@ async def test_killed_e2b_webhook_clears_runtime_metadata_and_increments_generat
     async def _load_cloud_sandbox_by_external_id(_db: object, _external_sandbox_id: str) -> object:
         return sandbox
 
-    async def _load_runtime_environment_by_id(
-        _db: object, _runtime_environment_id: object
-    ) -> object:
-        return runtime_environment
+    async def _load_sandbox_runtime_owner(
+        _db: object, _sandbox_id: object
+    ) -> tuple[object, object | None]:
+        assert _sandbox_id == sandbox_id
+        return runtime_environment, None
 
     async def _save_sandbox_provider_state(
         _db: object,
@@ -152,8 +151,8 @@ async def test_killed_e2b_webhook_clears_runtime_metadata_and_increments_generat
     )
     monkeypatch.setattr(
         webhook_service,
-        "load_runtime_environment_by_id",
-        _load_runtime_environment_by_id,
+        "_load_sandbox_runtime_owner",
+        _load_sandbox_runtime_owner,
     )
     monkeypatch.setattr(
         webhook_service,
@@ -210,8 +209,6 @@ async def test_timeout_e2b_webhook_closes_usage_as_paused(
     ).encode()
     sandbox = SimpleNamespace(
         id=sandbox_id,
-        runtime_environment_id=runtime_environment_id,
-        cloud_workspace_id=None,
         provider="e2b",
         external_sandbox_id="sandbox-123",
         last_provider_event_at=None,
@@ -228,10 +225,11 @@ async def test_timeout_e2b_webhook_closes_usage_as_paused(
     async def _load_cloud_sandbox_by_external_id(_db: object, _external_sandbox_id: str) -> object:
         return sandbox
 
-    async def _load_runtime_environment_by_id(
-        _db: object, _runtime_environment_id: object
-    ) -> object:
-        return runtime_environment
+    async def _load_sandbox_runtime_owner(
+        _db: object, _sandbox_id: object
+    ) -> tuple[object, object | None]:
+        assert _sandbox_id == sandbox_id
+        return runtime_environment, None
 
     async def _save_sandbox_provider_state(
         _db: object,
@@ -263,8 +261,8 @@ async def test_timeout_e2b_webhook_closes_usage_as_paused(
     )
     monkeypatch.setattr(
         webhook_service,
-        "load_runtime_environment_by_id",
-        _load_runtime_environment_by_id,
+        "_load_sandbox_runtime_owner",
+        _load_sandbox_runtime_owner,
     )
     monkeypatch.setattr(
         webhook_service,

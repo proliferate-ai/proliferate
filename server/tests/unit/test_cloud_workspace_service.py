@@ -534,17 +534,17 @@ async def test_target_launch_wait_marks_pending_prompt_failed(
     async def _commit(_db):
         calls.append(("commit", "db"))
 
+    class FakeFreshSession(SimpleNamespace):
+        async def close(self):
+            calls.append(("fresh_session", "close"))
+
+        async def rollback(self):
+            calls.append(("fresh_session", "rollback"))
+
     class FakeSessionFactory:
         def __call__(self):
-            return self
-
-        async def __aenter__(self):
             calls.append(("fresh_session", "open"))
-            return SimpleNamespace()
-
-        async def __aexit__(self, _exc_type, _exc, _traceback):
-            calls.append(("fresh_session", "close"))
-            return False
+            return FakeFreshSession()
 
     monkeypatch.setattr(
         workspace_service,

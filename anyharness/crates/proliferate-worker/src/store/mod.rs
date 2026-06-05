@@ -20,7 +20,6 @@ pub struct PendingCommandResult {
     pub command_id: String,
     pub lease_id: String,
     pub cloud_workspace_id: Option<String>,
-    pub slot_generation: Option<i64>,
     pub anyharness_workspace_id: Option<String>,
     pub status: String,
     pub error_code: Option<String>,
@@ -71,8 +70,6 @@ impl WorkerStore {
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 target_id TEXT NOT NULL,
                 sandbox_profile_id TEXT,
-                cloud_sandbox_id TEXT,
-                slot_generation INTEGER,
                 worker_id TEXT NOT NULL,
                 worker_token TEXT NOT NULL,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -107,7 +104,6 @@ impl WorkerStore {
                 command_id TEXT PRIMARY KEY,
                 lease_id TEXT NOT NULL,
                 cloud_workspace_id TEXT,
-                slot_generation INTEGER,
                 anyharness_workspace_id TEXT,
                 status TEXT NOT NULL,
                 error_code TEXT,
@@ -157,27 +153,9 @@ impl WorkerStore {
         )?;
         add_column_if_missing(
             &conn,
-            "identity",
-            "cloud_sandbox_id",
-            "cloud_sandbox_id TEXT",
-        )?;
-        add_column_if_missing(
-            &conn,
-            "identity",
-            "slot_generation",
-            "slot_generation INTEGER",
-        )?;
-        add_column_if_missing(
-            &conn,
             "pending_command_results",
             "cloud_workspace_id",
             "cloud_workspace_id TEXT",
-        )?;
-        add_column_if_missing(
-            &conn,
-            "pending_command_results",
-            "slot_generation",
-            "slot_generation INTEGER",
         )?;
         add_column_if_missing(
             &conn,
@@ -199,16 +177,14 @@ impl WorkerStore {
         let conn = self.connection()?;
         let value = conn
             .query_row(
-                "SELECT target_id, sandbox_profile_id, cloud_sandbox_id, slot_generation, worker_id, worker_token FROM identity WHERE id = 1",
+                "SELECT target_id, sandbox_profile_id, worker_id, worker_token FROM identity WHERE id = 1",
                 [],
                 |row| {
                     Ok(WorkerIdentity {
                         target_id: row.get(0)?,
                         sandbox_profile_id: row.get(1)?,
-                        cloud_sandbox_id: row.get(2)?,
-                        slot_generation: row.get(3)?,
-                        worker_id: row.get(4)?,
-                        worker_token: row.get(5)?,
+                        worker_id: row.get(2)?,
+                        worker_token: row.get(3)?,
                     })
                 },
             )
@@ -224,18 +200,14 @@ impl WorkerStore {
                 id,
                 target_id,
                 sandbox_profile_id,
-                cloud_sandbox_id,
-                slot_generation,
                 worker_id,
                 worker_token,
                 updated_at
             )
-            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, CURRENT_TIMESTAMP)
+            VALUES (1, ?1, ?2, ?3, ?4, CURRENT_TIMESTAMP)
             ON CONFLICT(id) DO UPDATE SET
                 target_id = excluded.target_id,
                 sandbox_profile_id = excluded.sandbox_profile_id,
-                cloud_sandbox_id = excluded.cloud_sandbox_id,
-                slot_generation = excluded.slot_generation,
                 worker_id = excluded.worker_id,
                 worker_token = excluded.worker_token,
                 updated_at = CURRENT_TIMESTAMP
@@ -243,8 +215,6 @@ impl WorkerStore {
             params![
                 identity.target_id,
                 identity.sandbox_profile_id,
-                identity.cloud_sandbox_id,
-                identity.slot_generation,
                 identity.worker_id,
                 identity.worker_token
             ],
@@ -321,7 +291,6 @@ impl WorkerStore {
                 command_id,
                 lease_id,
                 cloud_workspace_id,
-                slot_generation,
                 anyharness_workspace_id,
                 status,
                 error_code,
@@ -329,11 +298,10 @@ impl WorkerStore {
                 result_json,
                 updated_at
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, CURRENT_TIMESTAMP)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, CURRENT_TIMESTAMP)
             ON CONFLICT(command_id) DO UPDATE SET
                 lease_id = excluded.lease_id,
                 cloud_workspace_id = excluded.cloud_workspace_id,
-                slot_generation = excluded.slot_generation,
                 anyharness_workspace_id = excluded.anyharness_workspace_id,
                 status = excluded.status,
                 error_code = excluded.error_code,
@@ -345,7 +313,6 @@ impl WorkerStore {
                 result.command_id,
                 result.lease_id,
                 result.cloud_workspace_id,
-                result.slot_generation,
                 result.anyharness_workspace_id,
                 result.status,
                 result.error_code,
@@ -364,7 +331,6 @@ impl WorkerStore {
                 command_id,
                 lease_id,
                 cloud_workspace_id,
-                slot_generation,
                 anyharness_workspace_id,
                 status,
                 error_code,
@@ -375,11 +341,11 @@ impl WorkerStore {
             "#,
         )?;
         let rows = stmt.query_map([], |row| {
-            let result_json: Option<String> = row.get(8)?;
+            let result_json: Option<String> = row.get(7)?;
             let result = match result_json {
                 Some(value) => Some(serde_json::from_str(&value).map_err(|error| {
                     rusqlite::Error::FromSqlConversionFailure(
-                        8,
+                        7,
                         rusqlite::types::Type::Text,
                         Box::new(error),
                     )
@@ -390,11 +356,10 @@ impl WorkerStore {
                 command_id: row.get(0)?,
                 lease_id: row.get(1)?,
                 cloud_workspace_id: row.get(2)?,
-                slot_generation: row.get(3)?,
-                anyharness_workspace_id: row.get(4)?,
-                status: row.get(5)?,
-                error_code: row.get(6)?,
-                error_message: row.get(7)?,
+                anyharness_workspace_id: row.get(3)?,
+                status: row.get(4)?,
+                error_code: row.get(5)?,
+                error_message: row.get(6)?,
                 result,
             })
         })?;

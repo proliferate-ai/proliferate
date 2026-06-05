@@ -423,9 +423,12 @@ async def list_cloud_sandboxes_for_subject(
                 select(CloudSandbox)
                 .outerjoin(
                     CloudRuntimeEnvironment,
-                    CloudRuntimeEnvironment.id == CloudSandbox.runtime_environment_id,
+                    CloudRuntimeEnvironment.active_sandbox_id == CloudSandbox.id,
                 )
-                .outerjoin(CloudWorkspace, CloudWorkspace.id == CloudSandbox.cloud_workspace_id)
+                .outerjoin(
+                    CloudWorkspace,
+                    CloudWorkspace.active_sandbox_id == CloudSandbox.id,
+                )
                 .where(
                     or_(
                         CloudSandbox.billing_subject_id == billing_subject_id,

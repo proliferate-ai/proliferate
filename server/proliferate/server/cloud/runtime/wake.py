@@ -1,4 +1,4 @@
-"""Managed cloud slot wake hook skeleton."""
+"""Managed cloud target wake hook skeleton."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ _WAKE_BLOCKED_ERROR_CODE = "sandbox_wake_blocked"
 _WAKE_BLOCKED_FALLBACK_MESSAGE = "Sandbox wake is blocked by billing."
 
 
-async def cancel_managed_slot_wake_tasks() -> None:
+async def cancel_managed_target_wake_tasks() -> None:
     """Cancel outstanding in-process wake attempts during shutdown or test cleanup."""
 
     tasks = tuple(_wake_tasks.values())
@@ -49,8 +49,8 @@ async def cancel_managed_slot_wake_tasks() -> None:
             _wake_tasks.pop(key, None)
 
 
-def kick_off_managed_slot_wake(target_id: UUID, command_id: UUID | None = None) -> None:
-    """Schedule a managed slot wake attempt without waiting for provider work."""
+def kick_off_managed_target_wake(target_id: UUID, command_id: UUID | None = None) -> None:
+    """Schedule a managed target wake attempt without waiting for provider work."""
 
     key = str(target_id)
     existing = _wake_tasks.get(key)
@@ -70,13 +70,13 @@ def kick_off_managed_slot_wake(target_id: UUID, command_id: UUID | None = None) 
 async def _run_wake_task(target_id: UUID, command_id: UUID | None) -> None:
     key = str(target_id)
     try:
-        await run_managed_slot_wake_job(target_id, command_id=command_id)
+        await run_managed_target_wake_job(target_id, command_id=command_id)
     finally:
         _wake_tasks.pop(key, None)
 
 
-async def run_managed_slot_wake_job(target_id: UUID, command_id: UUID | None = None) -> None:
-    """Gate managed slot wake on billing before provider resume work."""
+async def run_managed_target_wake_job(target_id: UUID, command_id: UUID | None = None) -> None:
+    """Gate managed target wake on billing before provider resume work."""
 
     async with db_engine.async_session_factory() as db:
         target = await targets_store.get_target_by_id(db, target_id)
@@ -112,7 +112,7 @@ async def run_managed_slot_wake_job(target_id: UUID, command_id: UUID | None = N
                 await publish_command_status_after_commit(db, command)
             await db.commit()
             logger.info(
-                "Blocked managed slot wake because billing denied sandbox start",
+                "Blocked managed target wake because billing denied sandbox start",
                 extra={
                     "target_id": str(target_id),
                     "billing_subject_id": str(billing_subject_id),
@@ -202,14 +202,14 @@ async def _resume_target_runtime_environment(
                 db,
                 target_id=target_id,
             )
-            if runtime_access is None or runtime_access.active_sandbox_id is None:
+            if runtime_access is None or runtime_access.cloud_sandbox_id is None:
                 return False
             environment = (
                 await db.execute(
                     select(CloudRuntimeEnvironment)
                     .where(
                         CloudRuntimeEnvironment.active_sandbox_id
-                        == runtime_access.active_sandbox_id,
+                        == runtime_access.cloud_sandbox_id,
                     )
                     .where(CloudRuntimeEnvironment.target_id == target_id)
                     .order_by(CloudRuntimeEnvironment.updated_at.desc())
@@ -223,9 +223,9 @@ async def _resume_target_runtime_environment(
                 db,
                 target_id=target_id,
             )
-            if runtime_access is None or runtime_access.active_sandbox_id is None:
+            if runtime_access is None or runtime_access.cloud_sandbox_id is None:
                 return False
-            environment.active_sandbox_id = runtime_access.active_sandbox_id
+            environment.active_sandbox_id = runtime_access.cloud_sandbox_id
             environment.runtime_url = runtime_access.anyharness_base_url or environment.runtime_url
             environment.runtime_token_ciphertext = (
                 runtime_access.runtime_token_ciphertext or environment.runtime_token_ciphertext
@@ -252,7 +252,7 @@ async def _resume_target_runtime_environment(
         refresh_worker_enrollment_on_restart=force_launcher_restart,
     )
     logger.info(
-        "Managed slot wake resumed target runtime",
+        "Managed target wake resumed target runtime",
         extra={
             "target_id": str(target_id),
             "command_id": str(command_id) if command_id is not None else None,
@@ -276,10 +276,10 @@ async def _target_worker_heartbeat_is_stale(db: AsyncSession, target_id: UUID) -
     return heartbeat_at <= stale_before
 
 
-async def perform_proliferate_owned_e2b_resume(slot: object) -> None:
+async def perform_proliferate_owned_e2b_resume(target: object) -> None:
     """Placeholder for the Proliferate-owned provider resume operation."""
 
-    del slot
+    del target
 
 
 def _capture_wake_task_failure(
@@ -297,7 +297,7 @@ def _capture_wake_task_failure(
         exc,
         tags={
             "domain": "cloud_runtime",
-            "action": "managed_slot_wake_task",
+            "action": "managed_target_wake_task",
         },
         extras={
             "target_id": str(target_id),
@@ -305,6 +305,6 @@ def _capture_wake_task_failure(
         },
     )
     logger.error(
-        "Managed slot wake task failed",
+        "Managed target wake task failed",
         exc_info=(type(exc), exc, exc.__traceback__),
     )

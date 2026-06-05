@@ -45,8 +45,6 @@ class AgentGatewayRouterMaterialization(Base):
             "object_scope",
             "selection_id",
             "target_id",
-            "cloud_sandbox_id",
-            "slot_generation",
             unique=True,
             postgresql_where=text("object_scope = 'runtime_selection' AND status != 'revoked'"),
         ),
@@ -110,12 +108,6 @@ class AgentGatewayRouterMaterialization(Base):
         index=True,
         nullable=True,
     )
-    cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_sandbox.id", ondelete="CASCADE"),
-        index=True,
-        nullable=True,
-    )
-    slot_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
     agent_kind: Mapped[str | None] = mapped_column(String(32), index=True, nullable=True)
     protocol_facade: Mapped[str | None] = mapped_column(String(32), nullable=True)
     router_object_id: Mapped[str | None] = mapped_column(String(255), nullable=True)

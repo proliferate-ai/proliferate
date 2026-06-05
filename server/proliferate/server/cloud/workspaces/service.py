@@ -2514,8 +2514,8 @@ async def _load_workspace_owned_runtime_sandbox(
 ) -> CloudSandbox | None:
     """Load only the legacy workspace-owned runtime sandbox.
 
-    Managed cloud slots are shared by all workspaces on a sandbox profile and
-    target. Workspace stop/delete must not pause or destroy that shared slot.
+    Managed cloud target sandboxes are shared by all workspaces on a sandbox
+    profile and target. Workspace stop/delete must not pause or destroy them.
     """
     sandbox_id = getattr(workspace, "active_sandbox_id", None)
     if sandbox_id is None:
@@ -2524,7 +2524,7 @@ async def _load_workspace_owned_runtime_sandbox(
         sandbox = await load_cloud_sandbox_by_id(db, sandbox_id)
     if sandbox is None:
         return None
-    if sandbox.cloud_workspace_id != workspace.id:
+    if sandbox.sandbox_profile_id is not None or sandbox.target_id is not None:
         log_cloud_event(
             "cloud workspace runtime action skipped non-workspace sandbox",
             workspace_id=workspace.id,

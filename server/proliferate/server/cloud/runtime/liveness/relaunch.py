@@ -225,14 +225,13 @@ async def refresh_worker_enrollment_for_runtime(
 ) -> None:
     sandbox_profile_id = getattr(sandbox_record, "sandbox_profile_id", None)
     target_id = getattr(sandbox_record, "target_id", None)
-    slot_generation = getattr(sandbox_record, "slot_generation", None)
-    if sandbox_profile_id is None or target_id is None or slot_generation is None:
+    if sandbox_profile_id is None or target_id is None:
         raise CloudRuntimeReconnectError(
-            "Managed runtime relaunch cannot refresh worker enrollment without slot identity."
+            "Managed runtime relaunch cannot refresh worker enrollment without target identity."
         )
     if environment.target_id != target_id:
         raise CloudRuntimeReconnectError(
-            "Managed runtime relaunch target does not match the active sandbox slot."
+            "Managed runtime relaunch target does not match the active sandbox."
         )
 
     cloud_base_url = await cloud_base_url_for_worker_relaunch(
@@ -260,13 +259,9 @@ async def refresh_worker_enrollment_for_runtime(
         )
 
     enrollment = await ensure_runtime_target_enrollment(
-        runtime_environment_id=environment.id,
         user_id=environment.user_id,
-        display_name=f"Managed cloud: {environment.git_owner}/{environment.git_repo_name}",
         sandbox_profile_id=sandbox_profile_id,
         target_id=target_id,
-        cloud_sandbox_id=sandbox_record.id,
-        slot_generation=slot_generation,
     )
     if enrollment is None:
         raise CloudRuntimeReconnectError(

@@ -941,7 +941,6 @@ mod tests {
             workspace_id: None,
             cloud_workspace_id: None,
             sandbox_profile_id: None,
-            slot_generation: None,
             session_id: None,
             kind: "materialize_workspace".to_string(),
             payload,

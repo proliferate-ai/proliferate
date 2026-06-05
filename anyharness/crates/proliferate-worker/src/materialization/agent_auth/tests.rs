@@ -52,7 +52,7 @@ fn builds_secret_bearing_anyharness_request() {
     .expect("plan");
 
     let (request, outcome) =
-        build_anyharness_agent_auth_request(None, "profile-1", "target-1", None, 7, &plan)
+        build_anyharness_agent_auth_request(None, "profile-1", "target-1", 7, &plan)
             .expect("request");
 
     assert!(outcome.applied);
@@ -100,7 +100,7 @@ fn allows_codex_gateway_env_aliases() {
     .expect("plan");
 
     let (request, outcome) =
-        build_anyharness_agent_auth_request(None, "profile-1", "target-1", None, 7, &plan)
+        build_anyharness_agent_auth_request(None, "profile-1", "target-1", 7, &plan)
             .expect("request");
 
     assert!(outcome.applied);
@@ -122,38 +122,18 @@ fn rejects_plan_for_different_profile_or_target() {
     .expect("plan");
 
     let profile_error =
-        build_anyharness_agent_auth_request(None, "profile-2", "target-1", None, 7, &plan)
+        build_anyharness_agent_auth_request(None, "profile-2", "target-1", 7, &plan)
             .expect_err("profile mismatch");
     assert!(profile_error
         .to_string()
         .contains("agent auth sandbox profile mismatch"));
 
     let target_error =
-        build_anyharness_agent_auth_request(None, "profile-1", "target-2", None, 7, &plan)
+        build_anyharness_agent_auth_request(None, "profile-1", "target-2", 7, &plan)
             .expect_err("target mismatch");
     assert!(target_error
         .to_string()
         .contains("agent auth target mismatch"));
-}
-
-#[test]
-fn rejects_plan_for_different_slot_generation() {
-    let plan: AgentAuthMaterializationPlan = serde_json::from_value(json!({
-        "applied": true,
-        "targetId": "target-1",
-        "slotGeneration": 4,
-        "sandboxProfileId": "profile-1",
-        "revision": 7,
-        "selections": []
-    }))
-    .expect("plan");
-
-    let error =
-        build_anyharness_agent_auth_request(None, "profile-1", "target-1", Some(5), 7, &plan)
-            .expect_err("slot mismatch");
-    assert!(error
-        .to_string()
-        .contains("agent auth slot generation mismatch"));
 }
 
 #[test]
@@ -194,7 +174,7 @@ fn applies_synced_auth_cleanup_and_reports_paths() {
     .expect("plan");
 
     let (request, outcome) =
-        build_anyharness_agent_auth_request(Some(&root), "profile-1", "target-1", None, 7, &plan)
+        build_anyharness_agent_auth_request(Some(&root), "profile-1", "target-1", 7, &plan)
             .expect("request");
     assert_eq!(outcome.applied_cleanup_paths, vec![".codex/auth.json"]);
     assert_eq!(outcome.selection_count, 1);
@@ -225,7 +205,7 @@ fn rejects_claude_synced_protected_env() {
     }))
     .expect("plan");
 
-    let error = build_anyharness_agent_auth_request(None, "profile-1", "target-1", None, 7, &plan)
+    let error = build_anyharness_agent_auth_request(None, "profile-1", "target-1", 7, &plan)
         .expect_err("disallowed synced env");
     assert!(error.to_string().contains("ANTHROPIC_API_KEY"));
 }

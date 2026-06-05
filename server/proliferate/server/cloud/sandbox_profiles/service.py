@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import ActorIdentity
 from proliferate.db.store import cloud_sandbox_profiles as profile_store
-from proliferate.db.store import cloud_sandboxes as slot_store
+from proliferate.db.store import cloud_sandboxes as sandbox_store
 from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.errors import CloudApiError
@@ -20,24 +20,35 @@ from proliferate.server.cloud.targets.domain.policy import require_target_admin_
 class SandboxProfileTargetState:
     profile: profile_store.SandboxProfileSnapshot
     target: targets_store.CloudTargetSnapshot | None
-    slot: slot_store.SlotSnapshot | None
+    sandbox: sandbox_store.CloudSandboxSnapshot | None
     runtime_access: targets_store.CloudTargetRuntimeAccessSnapshot | None
 
     @property
-    def ready(self) -> bool:
+    def target_ready(self) -> bool:
         return (
             self.profile.status == "active"
             and self.target is not None
             and self.target.status == "online"
-            and self.slot is not None
-            and self.slot.status in {"running", "paused"}
+        )
+
+    @property
+    def sandbox_ready(self) -> bool:
+        return self.sandbox is not None and self.sandbox.status in {"running", "paused"}
+
+    @property
+    def runtime_access_ready(self) -> bool:
+        return (
+            self.sandbox is not None
             and self.runtime_access is not None
-            and self.runtime_access.active_sandbox_id == self.slot.id
-            and self.runtime_access.slot_generation == self.slot.slot_generation
             and bool(self.runtime_access.anyharness_base_url)
             and bool(self.runtime_access.runtime_token_ciphertext)
             and bool(self.runtime_access.anyharness_data_key_ciphertext)
+            and self.runtime_access.cloud_sandbox_id == self.sandbox.id
         )
+
+    @property
+    def ready(self) -> bool:
+        return self.target_ready and self.sandbox_ready and self.runtime_access_ready
 
 
 async def ensure_personal(
@@ -167,10 +178,11 @@ async def enable_cloud(
         sandbox_profile_id=profile.id,
         created_by_user_id=user.id,
     )
-    await slot_store.ensure_profile_slot(
+    await sandbox_store.ensure_managed_sandbox_for_target(
         db,
         sandbox_profile_id=profile.id,
         target_id=target.id,
+        billing_subject_id=profile.billing_subject_id,
     )
     refreshed = await profile_store.load_sandbox_profile_by_id(db, profile.id)
     if refreshed is None:
@@ -194,10 +206,10 @@ async def get_target_state(
         if profile.primary_target_id is not None
         else None
     )
-    slot = None
+    sandbox = None
     runtime_access = None
     if target is not None:
-        slot = await slot_store.load_active_slot_for_profile_target(
+        sandbox = await sandbox_store.load_active_sandbox_for_profile_target(
             db,
             sandbox_profile_id=profile.id,
             target_id=target.id,
@@ -209,7 +221,7 @@ async def get_target_state(
     return SandboxProfileTargetState(
         profile=profile,
         target=target,
-        slot=slot,
+        sandbox=sandbox,
         runtime_access=runtime_access,
     )
 

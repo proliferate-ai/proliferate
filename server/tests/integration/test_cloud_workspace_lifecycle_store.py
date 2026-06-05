@@ -24,7 +24,7 @@ from proliferate.db.store.cloud_workspaces import (
     mark_workspace_error,
     persist_workspace_destroy,
     persist_workspace_stop,
-    reserve_sandbox_slot_for_workspace,
+    reserve_sandbox_for_workspace,
 )
 from proliferate.server.cloud.workspaces import service as workspace_service
 from proliferate.server.cloud.workspaces.domain.setup_runs import (
@@ -229,7 +229,7 @@ async def test_sandbox_reservation_limit_and_provision_finalization_are_atomic(
     first_workspace = await _create_workspace(db_session, user_id=user_id, repo_name="first")
     second_workspace = await _create_workspace(db_session, user_id=user_id, repo_name="second")
 
-    sandbox = await reserve_sandbox_slot_for_workspace(
+    sandbox = await reserve_sandbox_for_workspace(
         db_session,
         workspace_id=first_workspace.id,
         external_sandbox_id="sandbox-first",
@@ -241,7 +241,7 @@ async def test_sandbox_reservation_limit_and_provision_finalization_are_atomic(
     )
     assert sandbox is not None
 
-    denied = await reserve_sandbox_slot_for_workspace(
+    denied = await reserve_sandbox_for_workspace(
         db_session,
         workspace_id=second_workspace.id,
         external_sandbox_id="sandbox-second",
@@ -295,7 +295,6 @@ async def test_provision_failure_cleanup_is_idempotent_and_preserves_failed_sand
     stored_workspace = await db_session.get(CloudWorkspace, workspace.id)
     assert stored_workspace is not None
     sandbox = CloudSandbox(
-        cloud_workspace_id=workspace.id,
         provider="e2b",
         external_sandbox_id="sandbox-error",
         status="provisioning",
@@ -356,7 +355,6 @@ async def test_stop_and_destroy_preserve_retry_state_after_provider_failure(
     )
     sandbox = CloudSandbox(
         id=sandbox_id,
-        cloud_workspace_id=workspace_id,
         provider="e2b",
         external_sandbox_id="sandbox-123",
         status="running",

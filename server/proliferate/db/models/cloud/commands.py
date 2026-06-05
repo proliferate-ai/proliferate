@@ -83,12 +83,6 @@ class CloudCommand(Base):
         index=True,
         nullable=True,
     )
-    leased_cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_sandbox.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
-    leased_slot_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
     attempt_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     lease_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

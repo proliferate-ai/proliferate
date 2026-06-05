@@ -22,7 +22,11 @@ from proliferate.db.models.cloud.sync import CloudPendingInteraction, CloudSessi
 from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
-from proliferate.db.store.cloud_sandboxes import ensure_profile_slot, supersede_slot
+from proliferate.db.store.cloud_sandboxes import (
+    ensure_managed_sandbox_for_target,
+    load_active_sandbox_for_profile_target,
+    mark_managed_sandbox_terminal,
+)
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
@@ -96,17 +100,18 @@ async def _create_managed_profile_target(
     profile_payload = profile_response.json()
     profile_id = UUID(profile_payload["id"])
     target_id = UUID(profile_payload["primaryTargetId"])
-    slot = await ensure_profile_slot(
+    rebound = await agent_auth_store.get_sandbox_profile(db_session, profile_id)
+    assert rebound is not None
+    sandbox = await ensure_managed_sandbox_for_target(
         db_session,
         sandbox_profile_id=profile_id,
         target_id=target_id,
+        billing_subject_id=rebound.billing_subject_id,
     )
     worker_token = f"managed-profile-{suffix}-{uuid4()}"
     await worker_auth_store.create_worker(
         db_session,
         target_id=target_id,
-        cloud_sandbox_id=slot.id,
-        slot_generation=slot.slot_generation,
         token_hash=worker_service._hash_token(
             domain=CLOUD_WORKER_TOKEN_DOMAIN,
             token=worker_token,
@@ -118,9 +123,54 @@ async def _create_managed_profile_target(
         supervisor_version=None,
         now=utcnow(),
     )
-    rebound = await agent_auth_store.get_sandbox_profile(db_session, profile_id)
-    assert rebound is not None
+    assert sandbox.target_id == target_id
     return str(target_id), {"Authorization": f"Bearer {worker_token}"}, rebound
+
+
+async def _replace_managed_profile_target(
+    db_session: AsyncSession,
+    *,
+    profile,
+    old_target_id: UUID,
+    user_id: UUID,
+    suffix: str,
+) -> tuple[UUID, dict[str, str], object]:
+    old_sandbox = await load_active_sandbox_for_profile_target(
+        db_session,
+        sandbox_profile_id=profile.id,
+        target_id=old_target_id,
+    )
+    assert old_sandbox is not None
+    await targets_store.archive_target(db_session, target_id=old_target_id)
+    await mark_managed_sandbox_terminal(db_session, sandbox_id=old_sandbox.id)
+    new_target = await targets_store.ensure_primary_profile_target(
+        db_session,
+        sandbox_profile_id=profile.id,
+        created_by_user_id=user_id,
+    )
+    sandbox = await ensure_managed_sandbox_for_target(
+        db_session,
+        sandbox_profile_id=profile.id,
+        target_id=new_target.id,
+        billing_subject_id=profile.billing_subject_id,
+    )
+    worker_token = f"managed-profile-{suffix}-{uuid4()}"
+    worker = await worker_auth_store.create_worker(
+        db_session,
+        target_id=new_target.id,
+        token_hash=worker_service._hash_token(
+            domain=CLOUD_WORKER_TOKEN_DOMAIN,
+            token=worker_token,
+        ),
+        machine_fingerprint=f"managed-profile-{suffix}",
+        hostname=f"managed-profile-{suffix}",
+        worker_version="0.1.0",
+        anyharness_version="0.1.0",
+        supervisor_version=None,
+        now=utcnow(),
+    )
+    assert sandbox.target_id == new_target.id
+    return new_target.id, {"Authorization": f"Bearer {worker_token}"}, worker
 
 
 async def _mark_minimal_runtime_config_applied(
@@ -264,6 +314,8 @@ async def _create_ready_cloud_workspace(
     )
     workspace.status = CloudWorkspaceStatus.ready.value
     workspace.anyharness_workspace_id = anyharness_workspace_id
+    workspace.target_id = UUID(target_id)
+    workspace.materialized_target_id = UUID(target_id)
     runtime_environment = await cloud_runtime_environments.get_runtime_environment_for_workspace(
         db_session,
         workspace,
@@ -303,12 +355,7 @@ async def _create_ready_managed_cloud_workspace(
     )
     workspace.status = CloudWorkspaceStatus.ready.value
     workspace.anyharness_workspace_id = f"anyharness-managed-{suffix}"
-    slot = await ensure_profile_slot(
-        db_session,
-        sandbox_profile_id=profile_id,
-        target_id=target_id,
-    )
-    workspace.materialized_slot_generation = slot.slot_generation
+    workspace.materialized_target_id = target_id
     await exposures_store.upsert_workspace_exposure(
         db_session,
         target_id=target_id,
@@ -647,7 +694,6 @@ class TestCloudCommandsApi:
             headers=worker_headers,
             json={
                 "leaseId": leased["leaseId"],
-                "slotGeneration": leased["slotGeneration"],
                 "status": "accepted",
                 "result": {
                     "cloudWorkspaceId": cloud_workspace_id,
@@ -747,7 +793,6 @@ class TestCloudCommandsApi:
             headers=worker_headers,
             json={
                 "leaseId": leased["leaseId"],
-                "slotGeneration": leased["slotGeneration"],
                 "status": "accepted",
                 "result": {
                     "cloudWorkspaceId": cloud_workspace_id,
@@ -941,7 +986,6 @@ class TestCloudCommandsApi:
             headers=worker_headers,
             json={
                 "leaseId": leased["leaseId"],
-                "slotGeneration": leased["slotGeneration"],
                 "cloudWorkspaceId": cloud_workspace_id,
                 "status": "accepted",
                 "result": {
@@ -1630,7 +1674,7 @@ class TestCloudCommandsApi:
         def _record_wake(target_id: UUID, command_id: UUID | None = None) -> None:
             wake_calls.append((target_id, command_id))
 
-        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", _record_wake)
+        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", _record_wake)
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -1698,7 +1742,7 @@ class TestCloudCommandsApi:
             session_id="session-decide-plan",
         )
         await db_session.commit()
-        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -1771,7 +1815,7 @@ class TestCloudCommandsApi:
             session_id="session-decide-plan-mismatch",
         )
         await db_session.commit()
-        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -1852,7 +1896,7 @@ class TestCloudCommandsApi:
         ).scalar_one()
         exposure.anyharness_workspace_id = None
         await db_session.commit()
-        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -1927,7 +1971,7 @@ class TestCloudCommandsApi:
         )
         await db_session.commit()
 
-        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -2006,7 +2050,7 @@ class TestCloudCommandsApi:
         )
         await db_session.commit()
 
-        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -2044,7 +2088,6 @@ class TestCloudCommandsApi:
             headers=worker_headers,
             json={
                 "leaseId": leased_command["leaseId"],
-                "slotGeneration": leased_command["slotGeneration"],
                 "status": "rejected",
                 "errorCode": "runtime_rejected_prompt",
                 "errorMessage": "Runtime rejected the prompt.",
@@ -2111,7 +2154,7 @@ class TestCloudCommandsApi:
         )
         await db_session.commit()
 
-        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -2149,7 +2192,6 @@ class TestCloudCommandsApi:
             headers=worker_headers,
             json={
                 "leaseId": leased_command["leaseId"],
-                "slotGeneration": leased_command["slotGeneration"],
                 "status": "failed_delivery",
                 "errorCode": "runtime_delivery_failed",
                 "errorMessage": "Runtime delivery failed.",
@@ -2216,7 +2258,7 @@ class TestCloudCommandsApi:
         )
         await db_session.commit()
 
-        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -2352,7 +2394,7 @@ class TestCloudCommandsApi:
         )
         await db_session.commit()
 
-        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -2495,7 +2537,7 @@ class TestCloudCommandsApi:
         assert delivered_pending.status == "failed"
 
     @pytest.mark.asyncio
-    async def test_managed_slot_wake_resumes_command_runtime_environment(
+    async def test_managed_target_wake_resumes_command_runtime_environment(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
@@ -2544,18 +2586,19 @@ class TestCloudCommandsApi:
                 workspace,
             )
         )
-        slot = await ensure_profile_slot(
+        sandbox = await ensure_managed_sandbox_for_target(
             db_session,
             sandbox_profile_id=profile.id,
             target_id=target_uuid,
+            billing_subject_id=profile.billing_subject_id,
         )
-        runtime_environment.active_sandbox_id = slot.id
+        runtime_environment.active_sandbox_id = sandbox.id
         runtime_environment.target_id = target_uuid
         runtime_environment.runtime_token_ciphertext = encrypt_text("runtime-token")
         await db_session.commit()
         monkeypatch.setattr(
             command_service,
-            "kick_off_managed_slot_wake",
+            "kick_off_managed_target_wake",
             lambda _target_id, _command_id=None: None,
         )
 
@@ -2616,7 +2659,7 @@ class TestCloudCommandsApi:
             _record_runtime_ready,
         )
 
-        await runtime_wake.run_managed_slot_wake_job(target_uuid, command_id=command_id)
+        await runtime_wake.run_managed_target_wake_job(target_uuid, command_id=command_id)
 
         assert wake_calls == [
             {
@@ -2630,7 +2673,7 @@ class TestCloudCommandsApi:
         ]
 
     @pytest.mark.asyncio
-    async def test_managed_slot_wake_billing_failure_fails_pending_prompt_interaction(
+    async def test_managed_target_wake_billing_failure_fails_pending_prompt_interaction(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
@@ -2671,7 +2714,7 @@ class TestCloudCommandsApi:
         await db_session.commit()
         monkeypatch.setattr(
             command_service,
-            "kick_off_managed_slot_wake",
+            "kick_off_managed_target_wake",
             lambda _target_id, _command_id=None: None,
         )
 
@@ -2708,7 +2751,7 @@ class TestCloudCommandsApi:
             _deny_sandbox_start,
         )
 
-        await runtime_wake.run_managed_slot_wake_job(target_uuid, command_id=command_id)
+        await runtime_wake.run_managed_target_wake_job(target_uuid, command_id=command_id)
 
         command = await db_session.get(CloudCommand, command_id)
         assert command is not None
@@ -2731,7 +2774,7 @@ class TestCloudCommandsApi:
         assert interaction_payload["errorCode"] == "sandbox_wake_blocked"
 
     @pytest.mark.asyncio
-    async def test_managed_slot_wake_hydrates_environment_from_runtime_access(
+    async def test_managed_target_wake_hydrates_environment_from_runtime_access(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
@@ -2780,10 +2823,11 @@ class TestCloudCommandsApi:
                 workspace,
             )
         )
-        slot = await ensure_profile_slot(
+        sandbox = await ensure_managed_sandbox_for_target(
             db_session,
             sandbox_profile_id=profile.id,
             target_id=target_uuid,
+            billing_subject_id=profile.billing_subject_id,
         )
         runtime_environment.active_sandbox_id = None
         runtime_environment.target_id = target_uuid
@@ -2792,8 +2836,7 @@ class TestCloudCommandsApi:
             db_session,
             target_id=target_uuid,
             sandbox_profile_id=profile.id,
-            active_sandbox_id=slot.id,
-            slot_generation=slot.slot_generation,
+            cloud_sandbox_id=sandbox.id,
             anyharness_base_url="https://runtime-access.example.test",
             runtime_token_ciphertext=encrypt_text("runtime-access-token"),
             anyharness_data_key_ciphertext=encrypt_text("runtime-access-data-key"),
@@ -2803,7 +2846,7 @@ class TestCloudCommandsApi:
         await db_session.commit()
         monkeypatch.setattr(
             command_service,
-            "kick_off_managed_slot_wake",
+            "kick_off_managed_target_wake",
             lambda _target_id, _command_id=None: None,
         )
 
@@ -2863,13 +2906,13 @@ class TestCloudCommandsApi:
             _record_runtime_ready,
         )
 
-        await runtime_wake.run_managed_slot_wake_job(target_uuid, command_id=command_id)
+        await runtime_wake.run_managed_target_wake_job(target_uuid, command_id=command_id)
 
         assert wake_calls == [
             {
                 "environment_id": runtime_environment.id,
                 "workspace_id": UUID(cloud_workspace_id),
-                "active_sandbox_id": slot.id,
+                "active_sandbox_id": sandbox.id,
                 "runtime_url": "https://runtime-access.example.test",
                 "access_token": "runtime-access-token",
             }
@@ -2924,7 +2967,7 @@ class TestCloudCommandsApi:
         await db_session.commit()
         monkeypatch.setattr(
             command_service,
-            "kick_off_managed_slot_wake",
+            "kick_off_managed_target_wake",
             lambda _target_id, _command_id=None: None,
         )
 
@@ -2985,7 +3028,6 @@ class TestCloudCommandsApi:
             headers=worker_headers,
             json={
                 "leaseId": leased_materialize["leaseId"],
-                "slotGeneration": leased_materialize["slotGeneration"],
                 "cloudWorkspaceId": cloud_workspace_id,
                 "anyharnessWorkspaceId": "workspace-exposure-cursor",
                 "status": "accepted",
@@ -3056,7 +3098,6 @@ class TestCloudCommandsApi:
             headers=worker_headers,
             json={
                 "leaseId": leased_start["leaseId"],
-                "slotGeneration": leased_start["slotGeneration"],
                 "cloudWorkspaceId": cloud_workspace_id,
                 "status": "accepted",
                 "result": {"body": {"sessionId": "session-exposure-cursor"}},
@@ -3110,7 +3151,6 @@ class TestCloudCommandsApi:
             headers=worker_headers,
             json={
                 "leaseId": leased_codex_start["leaseId"],
-                "slotGeneration": leased_codex_start["slotGeneration"],
                 "cloudWorkspaceId": cloud_workspace_id,
                 "status": "accepted",
                 "result": {"body": {"sessionId": "session-exposure-cursor-codex"}},
@@ -3164,7 +3204,6 @@ class TestCloudCommandsApi:
             headers=worker_headers,
             json={
                 "leaseId": leased_invalid_start["leaseId"],
-                "slotGeneration": leased_invalid_start["slotGeneration"],
                 "cloudWorkspaceId": cloud_workspace_id,
                 "status": "accepted",
                 "result": {"body": {"sessionId": "session-exposure-cursor-invalid-agent"}},
@@ -3228,7 +3267,6 @@ class TestCloudCommandsApi:
             headers=worker_headers,
             json={
                 "leaseId": leased_revoked["leaseId"],
-                "slotGeneration": leased_revoked["slotGeneration"],
                 "cloudWorkspaceId": revoked_cloud_workspace_id,
                 "status": "accepted",
                 "result": {"body": {"sessionId": "session-exposure-revoked"}},
@@ -3243,175 +3281,6 @@ class TestCloudCommandsApi:
             )
             is None
         )
-
-    @pytest.mark.asyncio
-    async def test_managed_slot_fence_rejects_delivery_generation_mismatch(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        auth = await create_user_and_login(
-            client,
-            db_session,
-            email_prefix="cloud-command-delivery-slot",
-        )
-        target_id, worker_headers, profile = await _create_managed_profile_target(
-            client,
-            db_session,
-            auth,
-            suffix="delivery-slot",
-        )
-        target_uuid = UUID(target_id)
-        await _mark_agent_and_runtime_config_applied(
-            db_session,
-            target_id=target_uuid,
-            profile=profile,
-            user_id=UUID(auth.user_id),
-        )
-        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
-            db_session,
-            profile_id=profile.id,
-            target_id=target_uuid,
-            user_id=UUID(auth.user_id),
-            suffix="delivery-slot",
-        )
-        await _seed_managed_session_projection(
-            db_session,
-            target_id=target_uuid,
-            cloud_workspace_id=cloud_workspace_id,
-            user_id=UUID(auth.user_id),
-            session_id="session-slot-delivery",
-        )
-        await db_session.commit()
-        monkeypatch.setattr(
-            command_service,
-            "kick_off_managed_slot_wake",
-            lambda _target_id, _command_id=None: None,
-        )
-
-        created = await client.post(
-            "/v1/cloud/commands",
-            headers=auth.headers,
-            json={
-                "idempotencyKey": "managed-delivery-slot-mismatch",
-                "targetId": target_id,
-                "sessionId": "session-slot-delivery",
-                "kind": "send_prompt",
-                "payload": {"text": "slot delivery"},
-            },
-        )
-        assert created.status_code == 200
-        command_id = created.json()["commandId"]
-
-        lease = await client.post(
-            "/v1/cloud/worker/commands/lease",
-            headers=worker_headers,
-            json={
-                "supportedKinds": ["send_prompt", "refresh_agent_auth_config"],
-                "leaseTimeoutSeconds": 30,
-            },
-        )
-        assert lease.status_code == 200
-        leased = lease.json()["command"]
-        assert leased["commandId"] == command_id
-        assert leased["slotGeneration"] is not None
-
-        delivery = await client.post(
-            f"/v1/cloud/worker/commands/{command_id}/delivery",
-            headers=worker_headers,
-            json={
-                "leaseId": leased["leaseId"],
-                "slotGeneration": leased["slotGeneration"] + 1,
-                "status": "delivered",
-            },
-        )
-        assert delivery.status_code == 200
-        assert delivery.json()["status"] == "superseded"
-
-    @pytest.mark.asyncio
-    async def test_managed_slot_fence_rejects_result_generation_mismatch(
-        self,
-        client: AsyncClient,
-        db_session: AsyncSession,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        auth = await create_user_and_login(
-            client,
-            db_session,
-            email_prefix="cloud-command-result-slot",
-        )
-        target_id, worker_headers, profile = await _create_managed_profile_target(
-            client,
-            db_session,
-            auth,
-            suffix="result-slot",
-        )
-        target_uuid = UUID(target_id)
-        await _mark_agent_and_runtime_config_applied(
-            db_session,
-            target_id=target_uuid,
-            profile=profile,
-            user_id=UUID(auth.user_id),
-        )
-        cloud_workspace_id = await _create_ready_managed_cloud_workspace(
-            db_session,
-            profile_id=profile.id,
-            target_id=target_uuid,
-            user_id=UUID(auth.user_id),
-            suffix="result-slot",
-        )
-        await _seed_managed_session_projection(
-            db_session,
-            target_id=target_uuid,
-            cloud_workspace_id=cloud_workspace_id,
-            user_id=UUID(auth.user_id),
-            session_id="session-slot-result",
-        )
-        await db_session.commit()
-        monkeypatch.setattr(
-            command_service,
-            "kick_off_managed_slot_wake",
-            lambda _target_id, _command_id=None: None,
-        )
-
-        created = await client.post(
-            "/v1/cloud/commands",
-            headers=auth.headers,
-            json={
-                "idempotencyKey": "managed-result-slot-mismatch",
-                "targetId": target_id,
-                "sessionId": "session-slot-result",
-                "kind": "send_prompt",
-                "payload": {"text": "slot result"},
-            },
-        )
-        assert created.status_code == 200
-        command_id = created.json()["commandId"]
-
-        lease = await client.post(
-            "/v1/cloud/worker/commands/lease",
-            headers=worker_headers,
-            json={
-                "supportedKinds": ["send_prompt", "refresh_agent_auth_config"],
-                "leaseTimeoutSeconds": 30,
-            },
-        )
-        assert lease.status_code == 200
-        leased = lease.json()["command"]
-        assert leased["commandId"] == command_id
-
-        result = await client.post(
-            f"/v1/cloud/worker/commands/{command_id}/result",
-            headers=worker_headers,
-            json={
-                "leaseId": leased["leaseId"],
-                "slotGeneration": leased["slotGeneration"] + 1,
-                "status": "accepted",
-            },
-        )
-        assert result.status_code == 200
-        assert result.json()["status"] == "superseded"
 
     @pytest.mark.asyncio
     async def test_runtime_config_preflight_fails_fast_when_not_applied(
@@ -3473,7 +3342,7 @@ class TestCloudCommandsApi:
         await db_session.commit()
         monkeypatch.setattr(
             command_service,
-            "kick_off_managed_slot_wake",
+            "kick_off_managed_target_wake",
             lambda _target_id, _command_id=None: None,
         )
 
@@ -3556,7 +3425,7 @@ class TestCloudCommandsApi:
         await db_session.commit()
         monkeypatch.setattr(
             command_service,
-            "kick_off_managed_slot_wake",
+            "kick_off_managed_target_wake",
             lambda _target_id, _command_id=None: None,
         )
 
@@ -3786,7 +3655,6 @@ class TestCloudCommandsApi:
             headers=worker_headers,
             json={
                 "leaseId": leased_command["leaseId"],
-                "slotGeneration": leased_command["slotGeneration"],
                 "status": "accepted",
                 "result": {
                     "applied": True,
@@ -3864,7 +3732,6 @@ class TestCloudCommandsApi:
             headers=worker_headers,
             json={
                 "leaseId": first_command["leaseId"],
-                "slotGeneration": first_command["slotGeneration"],
                 "status": "accepted",
                 "result": {
                     "applied": True,
@@ -3925,7 +3792,7 @@ class TestCloudCommandsApi:
         assert state.last_command_id == UUID(second_command["commandId"])
 
     @pytest.mark.asyncio
-    async def test_agent_auth_refresh_requeues_when_applied_state_belongs_to_stale_slot(
+    async def test_agent_auth_refresh_queues_for_replaced_target_without_reusing_old_state(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
@@ -3933,24 +3800,19 @@ class TestCloudCommandsApi:
         auth = await create_user_and_login(
             client,
             db_session,
-            email_prefix="cloud-command-agent-auth-stale-slot-requeue",
+            email_prefix="cloud-command-agent-auth-replaced-target-requeue",
         )
         target_id, first_worker_headers, profile = await _create_managed_profile_target(
             client,
             db_session,
             auth,
-            suffix="agent-auth-stale-slot-requeue",
+            suffix="agent-auth-replaced-target-requeue",
         )
-        target_uuid = UUID(target_id)
-        first_slot = await ensure_profile_slot(
-            db_session,
-            sandbox_profile_id=profile.id,
-            target_id=target_uuid,
-        )
+        first_target_uuid = UUID(target_id)
         profile = await agent_auth_store.bump_sandbox_profile_agent_auth_revision(
             db_session,
             sandbox_profile_id=profile.id,
-            reason="test_stale_slot_requeue",
+            reason="test_replaced_target_requeue",
             actor_user_id=UUID(auth.user_id),
             force_restart=False,
         )
@@ -3958,9 +3820,9 @@ class TestCloudCommandsApi:
         await request_agent_auth_refresh_for_profile_target(
             db_session,
             sandbox_profile_id=profile.id,
-            target_id=target_uuid,
+            target_id=first_target_uuid,
             actor_user_id=UUID(auth.user_id),
-            reason="test_stale_slot_requeue",
+            reason="test_replaced_target_requeue",
             force_restart=False,
         )
         await db_session.commit()
@@ -3981,7 +3843,6 @@ class TestCloudCommandsApi:
             headers=first_worker_headers,
             json={
                 "leaseId": first_command["leaseId"],
-                "slotGeneration": first_command["slotGeneration"],
                 "status": "accepted",
                 "result": {
                     "applied": True,
@@ -3992,79 +3853,52 @@ class TestCloudCommandsApi:
         assert first_result.status_code == 200
 
         await db_session.rollback()
-        applied_to_first_slot = await agent_auth_store.get_target_state(
+        applied_to_first_target = await agent_auth_store.get_target_state(
             db_session,
             sandbox_profile_id=profile.id,
-            target_id=target_uuid,
+            target_id=first_target_uuid,
         )
-        assert applied_to_first_slot is not None
-        assert applied_to_first_slot.status == "applied"
-        assert applied_to_first_slot.applied_revision == profile.agent_auth_revision
-        assert applied_to_first_slot.active_sandbox_id == first_slot.id
-        assert applied_to_first_slot.slot_generation == first_slot.slot_generation
+        assert applied_to_first_target is not None
+        assert applied_to_first_target.status == "applied"
+        assert applied_to_first_target.applied_revision == profile.agent_auth_revision
 
-        await supersede_slot(db_session, sandbox_id=first_slot.id)
-        second_slot = await ensure_profile_slot(
-            db_session,
-            sandbox_profile_id=profile.id,
-            target_id=target_uuid,
-        )
-        second_worker_token = f"managed-profile-stale-slot-requeue-{uuid4()}"
-        second_worker = await worker_auth_store.create_worker(
-            db_session,
-            target_id=target_uuid,
-            cloud_sandbox_id=second_slot.id,
-            slot_generation=second_slot.slot_generation,
-            token_hash=worker_service._hash_token(
-                domain=CLOUD_WORKER_TOKEN_DOMAIN,
-                token=second_worker_token,
-            ),
-            machine_fingerprint="managed-profile-stale-slot-requeue-second",
-            hostname="managed-profile-stale-slot-requeue-second",
-            worker_version="0.1.0",
-            anyharness_version="0.1.0",
-            supervisor_version=None,
-            now=utcnow(),
-        )
-        stale_state = (
-            await db_session.execute(
-                select(SandboxProfileTargetState).where(
-                    SandboxProfileTargetState.sandbox_profile_id == profile.id,
-                    SandboxProfileTargetState.target_id == target_uuid,
-                )
+        second_target_uuid, second_worker_headers, second_worker = (
+            await _replace_managed_profile_target(
+                db_session,
+                profile=profile,
+                old_target_id=first_target_uuid,
+                user_id=UUID(auth.user_id),
+                suffix="agent-auth-replaced-target-requeue",
             )
-        ).scalar_one()
-        stale_state.agent_auth_status = "applied"
-        stale_state.applied_agent_auth_revision = profile.agent_auth_revision
-        stale_state.active_sandbox_id = first_slot.id
-        stale_state.slot_generation = first_slot.slot_generation
-        stale_state.last_agent_auth_command_id = UUID(first_command["commandId"])
-        stale_state.last_agent_auth_worker_id = applied_to_first_slot.last_worker_id
-        stale_state.updated_at = utcnow()
-        await db_session.commit()
-
+        )
         await request_agent_auth_refresh_for_profile_target(
             db_session,
             sandbox_profile_id=profile.id,
-            target_id=target_uuid,
+            target_id=second_target_uuid,
             actor_user_id=UUID(auth.user_id),
-            reason="test_stale_slot_requeue",
+            reason="test_replaced_target_requeue",
             force_restart=False,
         )
         await db_session.commit()
 
         await db_session.rollback()
-        pending_second_slot = await agent_auth_store.get_target_state(
+        still_applied_to_first_target = await agent_auth_store.get_target_state(
             db_session,
             sandbox_profile_id=profile.id,
-            target_id=target_uuid,
+            target_id=first_target_uuid,
         )
-        assert pending_second_slot is not None
-        assert pending_second_slot.status == "pending"
-        assert pending_second_slot.applied_revision is None
-        assert pending_second_slot.last_command_id != UUID(first_command["commandId"])
+        assert still_applied_to_first_target is not None
+        assert still_applied_to_first_target.status == "applied"
+        pending_second_target = await agent_auth_store.get_target_state(
+            db_session,
+            sandbox_profile_id=profile.id,
+            target_id=second_target_uuid,
+        )
+        assert pending_second_target is not None
+        assert pending_second_target.status == "pending"
+        assert pending_second_target.applied_revision is None
+        assert pending_second_target.last_command_id != UUID(first_command["commandId"])
 
-        second_worker_headers = {"Authorization": f"Bearer {second_worker_token}"}
         second_lease = await client.post(
             "/v1/cloud/worker/commands/lease",
             headers=second_worker_headers,
@@ -4075,7 +3909,8 @@ class TestCloudCommandsApi:
         )
         assert second_lease.status_code == 200
         second_command = second_lease.json()["command"]
-        assert second_command["commandId"] == str(pending_second_slot.last_command_id)
+        assert second_command["commandId"] == str(pending_second_target.last_command_id)
+        assert second_command["targetId"] == str(second_target_uuid)
         materialization = await client.get(
             f"/v1/cloud/worker/agent-auth-configs/{profile.id}/materialization",
             headers=second_worker_headers,
@@ -4088,15 +3923,13 @@ class TestCloudCommandsApi:
         assert materialization.status_code == 200
         materialization_plan = materialization.json()
         assert materialization_plan["applied"] is True
-        assert materialization_plan["slotGeneration"] == second_slot.slot_generation
-        assert materialization_plan["slotGeneration"] == second_command["slotGeneration"]
+        assert materialization_plan["targetId"] == str(second_target_uuid)
 
         second_result = await client.post(
             f"/v1/cloud/worker/commands/{second_command['commandId']}/result",
             headers=second_worker_headers,
             json={
                 "leaseId": second_command["leaseId"],
-                "slotGeneration": second_command["slotGeneration"],
                 "status": "accepted",
                 "result": {
                     "applied": True,
@@ -4107,17 +3940,15 @@ class TestCloudCommandsApi:
         assert second_result.status_code == 200
 
         await db_session.rollback()
-        applied_to_second_slot = await agent_auth_store.get_target_state(
+        applied_to_second_target = await agent_auth_store.get_target_state(
             db_session,
             sandbox_profile_id=profile.id,
-            target_id=target_uuid,
+            target_id=second_target_uuid,
         )
-        assert applied_to_second_slot is not None
-        assert applied_to_second_slot.status == "applied"
-        assert applied_to_second_slot.applied_revision == profile.agent_auth_revision
-        assert applied_to_second_slot.active_sandbox_id == second_slot.id
-        assert applied_to_second_slot.slot_generation == second_slot.slot_generation
-        assert applied_to_second_slot.last_worker_id == second_worker.id
+        assert applied_to_second_target is not None
+        assert applied_to_second_target.status == "applied"
+        assert applied_to_second_target.applied_revision == profile.agent_auth_revision
+        assert applied_to_second_target.last_worker_id == second_worker.id
 
     @pytest.mark.asyncio
     async def test_stale_agent_auth_refresh_result_does_not_regress_target_state(
@@ -4198,7 +4029,6 @@ class TestCloudCommandsApi:
             headers=worker_headers,
             json={
                 "leaseId": first_command["leaseId"],
-                "slotGeneration": first_command["slotGeneration"],
                 "status": "accepted",
                 "result": {
                     "applied": True,
@@ -4225,7 +4055,7 @@ class TestCloudCommandsApi:
         assert state.last_command_id == second_command_id
 
     @pytest.mark.asyncio
-    async def test_stale_slot_agent_auth_refresh_result_does_not_apply_target_state(
+    async def test_replaced_target_agent_auth_refresh_result_does_not_apply_old_target_state(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
@@ -4233,19 +4063,19 @@ class TestCloudCommandsApi:
         auth = await create_user_and_login(
             client,
             db_session,
-            email_prefix="cloud-command-agent-auth-stale-slot-result",
+            email_prefix="cloud-command-agent-auth-replaced-target-result",
         )
         target_id, worker_headers, profile = await _create_managed_profile_target(
             client,
             db_session,
             auth,
-            suffix="agent-auth-stale-slot-result",
+            suffix="agent-auth-replaced-target-result",
         )
         target_uuid = UUID(target_id)
         profile = await agent_auth_store.bump_sandbox_profile_agent_auth_revision(
             db_session,
             sandbox_profile_id=profile.id,
-            reason="test_stale_slot_result",
+            reason="test_replaced_target_result",
             actor_user_id=UUID(auth.user_id),
             force_restart=False,
         )
@@ -4255,7 +4085,7 @@ class TestCloudCommandsApi:
             sandbox_profile_id=profile.id,
             target_id=target_uuid,
             actor_user_id=UUID(auth.user_id),
-            reason="test_stale_slot_result",
+            reason="test_replaced_target_result",
             force_restart=False,
         )
         await db_session.commit()
@@ -4272,17 +4102,12 @@ class TestCloudCommandsApi:
         leased_command = lease.json()["command"]
         assert leased_command["kind"] == "refresh_agent_auth_config"
 
-        old_slot = await ensure_profile_slot(
+        await _replace_managed_profile_target(
             db_session,
-            sandbox_profile_id=profile.id,
-            target_id=target_uuid,
-        )
-        old_slot_id = old_slot.id
-        await supersede_slot(db_session, sandbox_id=old_slot_id)
-        await ensure_profile_slot(
-            db_session,
-            sandbox_profile_id=profile.id,
-            target_id=target_uuid,
+            profile=profile,
+            old_target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="agent-auth-replaced-target-result",
         )
         await db_session.commit()
 
@@ -4291,7 +4116,6 @@ class TestCloudCommandsApi:
             headers=worker_headers,
             json={
                 "leaseId": leased_command["leaseId"],
-                "slotGeneration": leased_command["slotGeneration"],
                 "status": "accepted",
                 "result": {
                     "applied": True,
@@ -4303,8 +4127,8 @@ class TestCloudCommandsApi:
                 },
             },
         )
-        assert result.status_code == 200
-        assert result.json()["status"] == "superseded"
+        assert result.status_code == 409
+        assert result.json()["detail"]["code"] == "cloud_worker_target_archived"
 
         await db_session.rollback()
         state = await agent_auth_store.get_target_state(
@@ -4410,7 +4234,7 @@ class TestCloudCommandsApi:
         db_session: AsyncSession,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
         auth = await create_user_and_login(
             client,
             db_session,
@@ -4492,7 +4316,7 @@ class TestCloudCommandsApi:
         db_session: AsyncSession,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
         auth = await create_user_and_login(
             client,
             db_session,
@@ -4582,7 +4406,7 @@ class TestCloudCommandsApi:
         db_session: AsyncSession,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
         auth = await create_user_and_login(
             client,
             db_session,
@@ -4673,7 +4497,7 @@ class TestCloudCommandsApi:
         db_session: AsyncSession,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
         auth = await create_user_and_login(
             client,
             db_session,
@@ -4900,7 +4724,7 @@ class TestCloudCommandsApi:
         )
 
     @pytest.mark.asyncio
-    async def test_agent_auth_preflight_rejects_stale_slot_state(
+    async def test_agent_auth_preflight_rejects_replaced_target(
         self,
         client: AsyncClient,
         db_session: AsyncSession,
@@ -4908,19 +4732,19 @@ class TestCloudCommandsApi:
         auth = await create_user_and_login(
             client,
             db_session,
-            email_prefix="cloud-command-agent-auth-stale-slot",
+            email_prefix="cloud-command-agent-auth-replaced-target",
         )
         target_id, _worker_headers, profile = await _create_managed_profile_target(
             client,
             db_session,
             auth,
-            suffix="agent-auth-stale-slot",
+            suffix="agent-auth-replaced-target",
         )
         target_uuid = UUID(target_id)
         profile = await agent_auth_store.bump_sandbox_profile_agent_auth_revision(
             db_session,
             sandbox_profile_id=profile.id,
-            reason="test_stale_slot",
+            reason="test_replaced_target",
             actor_user_id=UUID(auth.user_id),
             force_restart=False,
         )
@@ -4931,22 +4755,19 @@ class TestCloudCommandsApi:
             profile=profile,
             user_id=UUID(auth.user_id),
         )
-        stale_state = (
-            await db_session.execute(
-                select(SandboxProfileTargetState).where(
-                    SandboxProfileTargetState.sandbox_profile_id == profile.id,
-                    SandboxProfileTargetState.target_id == target_uuid,
-                )
-            )
-        ).scalar_one()
-        stale_state.active_sandbox_id = None
-        stale_state.slot_generation = None
         cloud_workspace_id = await _create_ready_managed_cloud_workspace(
             db_session,
             profile_id=profile.id,
             target_id=target_uuid,
             user_id=UUID(auth.user_id),
-            suffix="agent-auth-stale-slot",
+            suffix="agent-auth-replaced-target",
+        )
+        await _replace_managed_profile_target(
+            db_session,
+            profile=profile,
+            old_target_id=target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="agent-auth-replaced-target",
         )
         await db_session.commit()
 
@@ -4954,7 +4775,7 @@ class TestCloudCommandsApi:
             "/v1/cloud/commands",
             headers=auth.headers,
             json={
-                "idempotencyKey": "agent-auth-preflight-stale-slot",
+                "idempotencyKey": "agent-auth-preflight-replaced-target",
                 "targetId": target_id,
                 "workspaceId": cloud_workspace_id,
                 "kind": "start_session",
@@ -4966,7 +4787,7 @@ class TestCloudCommandsApi:
             },
         )
         assert response.status_code == 409
-        assert response.json()["detail"]["code"] == "cloud_command_agent_auth_not_ready"
+        assert response.json()["detail"]["code"] == "cloud_command_target_archived"
         await db_session.rollback()
         refresh_commands = (
             (
@@ -4982,39 +4803,7 @@ class TestCloudCommandsApi:
             .scalars()
             .all()
         )
-        assert len(refresh_commands) == 1
-        assert refresh_commands[0].status == CloudCommandStatus.queued.value
-
-        repeated_response = await client.post(
-            "/v1/cloud/commands",
-            headers=auth.headers,
-            json={
-                "idempotencyKey": "agent-auth-preflight-stale-slot-repeat",
-                "targetId": target_id,
-                "workspaceId": cloud_workspace_id,
-                "kind": "start_session",
-                "payload": {
-                    "agentKind": "claude",
-                    "sandboxProfileId": str(profile.id),
-                    "requiredAgentAuthRevision": profile.agent_auth_revision,
-                },
-            },
-        )
-        assert repeated_response.status_code == 409
-        await db_session.rollback()
-        repeated_refresh_commands = (
-            (
-                await db_session.execute(
-                    select(CloudCommand).where(
-                        CloudCommand.target_id == target_uuid,
-                        CloudCommand.kind == CloudCommandKind.refresh_agent_auth_config.value,
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        assert len(repeated_refresh_commands) == 1
+        assert refresh_commands == []
 
     @pytest.mark.asyncio
     async def test_agent_auth_preflight_command_requires_refresh_capable_worker(
@@ -5023,7 +4812,7 @@ class TestCloudCommandsApi:
         db_session: AsyncSession,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(command_service, "kick_off_managed_slot_wake", lambda *_args: None)
+        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
         auth = await create_user_and_login(
             client,
             db_session,

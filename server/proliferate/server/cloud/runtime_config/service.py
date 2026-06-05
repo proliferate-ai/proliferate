@@ -73,7 +73,9 @@ from proliferate.server.cloud.target_config.models import (
     TargetConfigSummaryModel,
 )
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
-from proliferate.server.cloud.worker.slot_guard import require_current_managed_worker_slot
+from proliferate.server.cloud.worker.target_validation import (
+    require_active_worker_target as _require_active_worker_target,
+)
 from proliferate.utils.crypto import decrypt_json, encrypt_json
 
 
@@ -363,7 +365,7 @@ async def worker_runtime_config_fragment(
     auth: WorkerAuthContext,
     revision_id: UUID,
 ) -> RuntimeConfigMaterializationFragment:
-    await require_current_managed_worker_slot(db, auth=auth)
+    await _require_active_worker_target(db, auth=auth)
     await _require_current_worker_revision(db, auth=auth, revision_id=revision_id)
     return await runtime_config_fragment_for_revision(db, revision_id=revision_id)
 
@@ -470,7 +472,7 @@ async def worker_runtime_config_artifact(
     revision_id: UUID,
     artifact_hash: str,
 ) -> RuntimeConfigArtifactResponse:
-    await require_current_managed_worker_slot(db, auth=auth)
+    await _require_active_worker_target(db, auth=auth)
     revision = await _require_current_worker_revision(db, auth=auth, revision_id=revision_id)
     artifact = await artifact_store.get_artifact(
         db,
@@ -512,7 +514,7 @@ async def worker_runtime_config_credentials(
     revision_id: UUID,
     body: WorkerRuntimeConfigCredentialMaterializationRequest,
 ) -> WorkerRuntimeConfigCredentialMaterializationResponse:
-    await require_current_managed_worker_slot(db, auth=auth)
+    await _require_active_worker_target(db, auth=auth)
     revision = await _require_current_worker_revision(db, auth=auth, revision_id=revision_id)
     manifest = parse_json_dict(revision.manifest_json) or {}
     allowed_refs = {
@@ -553,7 +555,7 @@ async def record_worker_runtime_config_status(
     revision_id: UUID,
     body: WorkerRuntimeConfigStatusRequest,
 ) -> WorkerRuntimeConfigStatusResponse:
-    await require_current_managed_worker_slot(db, auth=auth)
+    await _require_active_worker_target(db, auth=auth)
     revision = await _require_worker_revision(db, auth=auth, revision_id=revision_id)
     if not await _worker_revision_is_current(db, revision=revision):
         return WorkerRuntimeConfigStatusResponse(

@@ -9,6 +9,7 @@ from contextlib import suppress
 from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
@@ -23,6 +24,8 @@ from proliferate.constants.billing import (
 from proliferate.constants.cloud import CloudRuntimeEnvironmentStatus
 from proliferate.db import engine as db_engine
 from proliferate.db.models.billing import UsageSegment
+from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing import (
     close_usage_segment_for_sandbox as close_usage_segment_for_sandbox_record,
 )
@@ -46,7 +49,6 @@ from proliferate.db.store.cloud_runtime_environments import (
 from proliferate.db.store.cloud_workspaces import (
     load_cloud_sandbox_by_id,
     load_cloud_sandbox_placeholders,
-    load_cloud_workspace_by_id,
     save_sandbox_provider_state,
 )
 from proliferate.integrations.sandbox import (
@@ -201,6 +203,38 @@ async def _mark_environment_unavailable(
             )
 
 
+async def _load_sandbox_runtime_owner(
+    db: AsyncSession,
+    sandbox_id: UUID,
+) -> tuple[CloudRuntimeEnvironment | None, CloudWorkspace | None]:
+    environment = (
+        await db.execute(
+            select(CloudRuntimeEnvironment)
+            .where(CloudRuntimeEnvironment.active_sandbox_id == sandbox_id)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    workspace = (
+        await db.execute(
+            select(CloudWorkspace).where(CloudWorkspace.active_sandbox_id == sandbox_id).limit(1)
+        )
+    ).scalar_one_or_none()
+    return environment, workspace
+
+
+async def _mark_sandbox_environment_unavailable(
+    sandbox_id: UUID,
+    *,
+    destroyed: bool,
+) -> None:
+    async with db_engine.async_session_factory() as db:
+        environment, _workspace = await _load_sandbox_runtime_owner(db, sandbox_id)
+    await _mark_environment_unavailable(
+        environment.id if environment is not None else None,
+        destroyed=destroyed,
+    )
+
+
 async def _repair_placeholders(
     *,
     states_by_placeholder_id: dict[str, ProviderSandboxState],
@@ -212,16 +246,7 @@ async def _repair_placeholders(
         if state is None:
             continue
         async with db_engine.async_session_factory() as db:
-            environment = (
-                await load_runtime_environment_by_id(db, placeholder.runtime_environment_id)
-                if placeholder.runtime_environment_id is not None
-                else None
-            )
-            workspace = (
-                await load_cloud_workspace_by_id(db, placeholder.cloud_workspace_id)
-                if placeholder.cloud_workspace_id is not None
-                else None
-            )
+            environment, workspace = await _load_sandbox_runtime_owner(db, placeholder.id)
         if environment is None and workspace is None:
             continue
         async with db_engine.async_session_factory() as db, db.begin():
@@ -293,7 +318,7 @@ async def _enforce_or_reconcile_segment(
                 status="paused",
                 stopped_at=state.end_at or state.observed_at,
             )
-        await _mark_environment_unavailable(sandbox.runtime_environment_id, destroyed=False)
+        await _mark_sandbox_environment_unavailable(sandbox.id, destroyed=False)
         return
 
     if state.state in {"killed", "destroyed", "terminated"}:
@@ -309,7 +334,7 @@ async def _enforce_or_reconcile_segment(
                 status="destroyed",
                 stopped_at=state.end_at or state.observed_at,
             )
-        await _mark_environment_unavailable(sandbox.runtime_environment_id, destroyed=True)
+        await _mark_sandbox_environment_unavailable(sandbox.id, destroyed=True)
         return
 
     if settings.cloud_billing_mode == BILLING_MODE_ENFORCE and billing_snapshot.active_spend_hold:
@@ -339,7 +364,7 @@ async def _enforce_or_reconcile_segment(
                 status="paused",
                 stopped_at=ended_at,
             )
-        await _mark_environment_unavailable(sandbox.runtime_environment_id, destroyed=False)
+        await _mark_sandbox_environment_unavailable(sandbox.id, destroyed=False)
 
 
 async def run_billing_reconcile_pass() -> None:

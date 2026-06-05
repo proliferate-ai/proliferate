@@ -25,8 +25,13 @@ from proliferate.server.cloud.worker.models import (
     WorkerControlWaitResponse,
     WorkerExposureSnapshotResponse,
 )
-from proliferate.server.cloud.worker.service import _command_envelope, authenticate_worker
-from proliferate.server.cloud.worker.slot_guard import require_current_managed_worker_slot
+from proliferate.server.cloud.worker.service import (
+    _command_envelope,
+    authenticate_worker,
+)
+from proliferate.server.cloud.worker.target_validation import (
+    require_current_worker_target as _require_current_worker_target,
+)
 from proliferate.utils.time import utcnow
 
 
@@ -54,7 +59,7 @@ async def check_worker_control(
                 "Worker target no longer exists.",
                 status_code=401,
             )
-        await require_current_managed_worker_slot(db, auth=auth, target=target)
+        _require_current_worker_target(target)
 
         now = utcnow()
         expired_commands = await command_service.expire_stale_client_commands_for_target(

@@ -130,7 +130,7 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
     run_sandbox_command_logged,
 )
 from proliferate.server.cloud.runtime.target_registration import ensure_runtime_target_enrollment
-from proliferate.server.cloud.runtime.wake import run_managed_slot_wake_job
+from proliferate.server.cloud.runtime.wake import run_managed_target_wake_job
 from proliferate.server.cloud.runtime_config.service import (
     refresh_profile_runtime_config,
     runtime_config_apply_request_for_revision,
@@ -457,7 +457,7 @@ async def _create_and_connect_sandbox(
     ctx: CloudProvisionInput,
     provider: SandboxProvider,
     *,
-    sandbox_record_id: UUID,
+    sandbox_record: cloud_sandboxes.CloudSandboxSnapshot,
 ) -> ConnectedSandbox:
     tracker.begin(
         ProvisionStep.create_sandbox,
@@ -470,7 +470,10 @@ async def _create_and_connect_sandbox(
             "user_id": str(ctx.user_id),
             "workspace_id": str(ctx.workspace_id),
             "runtime_environment_id": str(ctx.runtime_environment_id),
-            "cloud_sandbox_id": str(sandbox_record_id),
+            "sandbox_profile_id": str(ctx.sandbox_profile_id),
+            "target_id": str(ctx.target_id),
+            "cloud_sandbox_id": str(sandbox_record.id),
+            "billing_subject_id": str(sandbox_record.billing_subject_id),
         }
     )
     tracker.complete(sandbox_id=handle.sandbox_id)
@@ -478,7 +481,7 @@ async def _create_and_connect_sandbox(
     async with db_engine.async_session_factory() as db, db.begin():
         await bind_allocated_sandbox(
             db,
-            sandbox_record_id,
+            sandbox_record.id,
             external_sandbox_id=handle.sandbox_id,
             status="provisioning",
             started_at=started_at,
@@ -487,7 +490,7 @@ async def _create_and_connect_sandbox(
         user_id=ctx.user_id,
         runtime_environment_id=ctx.runtime_environment_id,
         workspace_id=ctx.workspace_id,
-        sandbox_id=sandbox_record_id,
+        sandbox_id=sandbox_record.id,
         external_sandbox_id=handle.sandbox_id,
         sandbox_execution_id=None,
         started_at=started_at,
@@ -517,7 +520,6 @@ async def _persist_target_runtime_access(
     ctx: CloudProvisionInput,
     *,
     sandbox_record_id: UUID,
-    slot_generation: int,
     runtime_url: str,
     runtime_token_ciphertext: str | None,
     anyharness_data_key_ciphertext: str | None,
@@ -527,8 +529,7 @@ async def _persist_target_runtime_access(
             db,
             target_id=ctx.target_id,
             sandbox_profile_id=ctx.sandbox_profile_id,
-            active_sandbox_id=sandbox_record_id,
-            slot_generation=slot_generation,
+            cloud_sandbox_id=sandbox_record_id,
             anyharness_base_url=runtime_url,
             runtime_token_ciphertext=runtime_token_ciphertext,
             anyharness_data_key_ciphertext=anyharness_data_key_ciphertext,
@@ -536,7 +537,7 @@ async def _persist_target_runtime_access(
             heartbeat_at=utcnow(),
         )
         if runtime_access is None:
-            raise RuntimeError("Managed target runtime access rejected stale sandbox slot state.")
+            raise RuntimeError("Managed target runtime access rejected inactive target state.")
 
 
 async def _mark_sandbox_running(sandbox_id: UUID, started_at: object) -> None:
@@ -553,13 +554,13 @@ async def _save_runtime_environment_updates(
         await save_runtime_environment_state(db, runtime_environment_id, **updates)
 
 
-async def _connect_existing_profile_slot(
+async def _connect_existing_profile_sandbox(
     tracker: _StepTracker,
     ctx: CloudProvisionInput,
     provider: SandboxProvider,
-) -> tuple[ConnectedSandbox, UUID, int, str] | None:
+) -> tuple[ConnectedSandbox, UUID, str] | None:
     async with db_engine.async_session_factory() as db:
-        slot = await cloud_sandboxes.load_active_slot_for_profile_target(
+        active_sandbox = await cloud_sandboxes.load_active_sandbox_for_profile_target(
             db,
             sandbox_profile_id=ctx.sandbox_profile_id,
             target_id=ctx.target_id,
@@ -568,14 +569,13 @@ async def _connect_existing_profile_slot(
             db,
             target_id=ctx.target_id,
         )
-    if slot is None or not slot.external_sandbox_id or slot.slot_generation is None:
+    if active_sandbox is None or not active_sandbox.external_sandbox_id:
         return None
-    if slot.provider != provider.kind.value:
+    if active_sandbox.provider != provider.kind.value:
         return None
     if (
         runtime_access is None
-        or runtime_access.active_sandbox_id != slot.id
-        or runtime_access.slot_generation != slot.slot_generation
+        or runtime_access.cloud_sandbox_id != active_sandbox.id
         or not runtime_access.runtime_token_ciphertext
         or not runtime_access.anyharness_data_key_ciphertext
     ):
@@ -583,12 +583,12 @@ async def _connect_existing_profile_slot(
 
     tracker.begin(
         ProvisionStep.connect_sandbox,
-        sandbox_id=slot.external_sandbox_id,
+        sandbox_id=active_sandbox.external_sandbox_id,
         reused_sandbox=True,
-        reused_profile_slot=True,
+        reused_profile_sandbox=True,
     )
     try:
-        provider_state = await provider.get_sandbox_state(slot.external_sandbox_id)
+        provider_state = await provider.get_sandbox_state(active_sandbox.external_sandbox_id)
         if provider_state is None:
             tracker.complete(reused_sandbox=False, reason="provider_state_missing")
             return None
@@ -596,9 +596,9 @@ async def _connect_existing_profile_slot(
         observed_state = provider_state.state.strip().lower()
         reconnect_action = reconnect_action_for_sandbox_state(observed_state)
         if reconnect_action == SandboxReconnectAction.connect:
-            sandbox = await provider.connect_running_sandbox(slot.external_sandbox_id)
+            sandbox = await provider.connect_running_sandbox(active_sandbox.external_sandbox_id)
         elif reconnect_action == SandboxReconnectAction.resume:
-            sandbox = await provider.resume_sandbox(slot.external_sandbox_id)
+            sandbox = await provider.resume_sandbox(active_sandbox.external_sandbox_id)
         else:
             tracker.complete(reused_sandbox=False, provider_state=observed_state)
             return None
@@ -607,27 +607,26 @@ async def _connect_existing_profile_slot(
         endpoint = await provider.resolve_runtime_endpoint(sandbox)
     except Exception:
         log_cloud_event(
-            "cloud profile slot sandbox reuse failed",
+            "cloud profile target sandbox reuse failed",
             level=logging.WARNING,
             workspace_id=ctx.workspace_id,
             target_id=ctx.target_id,
-            sandbox_id=slot.id,
-            external_sandbox_id=slot.external_sandbox_id,
+            sandbox_id=active_sandbox.id,
+            external_sandbox_id=active_sandbox.external_sandbox_id,
         )
         tracker.complete(reused_sandbox=False, reason="connect_failed")
         return None
 
-    await _mark_sandbox_running(slot.id, provider_state.started_at)
+    await _mark_sandbox_running(active_sandbox.id, provider_state.started_at)
     await _persist_target_runtime_access(
         ctx,
-        sandbox_record_id=slot.id,
-        slot_generation=slot.slot_generation,
+        sandbox_record_id=active_sandbox.id,
         runtime_url=endpoint.runtime_url,
         runtime_token_ciphertext=runtime_access.runtime_token_ciphertext,
         anyharness_data_key_ciphertext=runtime_access.anyharness_data_key_ciphertext,
     )
     update = runtime_connected_sandbox_update(
-        runtime_url=endpoint.runtime_url, active_sandbox_id=slot.id
+        runtime_url=endpoint.runtime_url, active_sandbox_id=active_sandbox.id
     )
     await _save_runtime_environment_updates(ctx.runtime_environment_id, update)
     tracker.complete(runtime_url=endpoint.runtime_url, reused_sandbox=True)
@@ -636,15 +635,14 @@ async def _connect_existing_profile_slot(
         ConnectedSandbox(
             handle=SandboxHandle(
                 provider=provider.kind,
-                sandbox_id=slot.external_sandbox_id,
-                template_version=slot.template_version or provider.template_version,
+                sandbox_id=active_sandbox.external_sandbox_id,
+                template_version=active_sandbox.template_version or provider.template_version,
             ),
             sandbox=sandbox,
             endpoint=endpoint,
             runtime_context=runtime_context,
         ),
-        slot.id,
-        slot.slot_generation,
+        active_sandbox.id,
         decrypt_text(runtime_access.runtime_token_ciphertext),
     )
 
@@ -653,7 +651,7 @@ async def _connect_existing_environment_sandbox(
     tracker: _StepTracker,
     ctx: CloudProvisionInput,
     provider: SandboxProvider,
-) -> tuple[ConnectedSandbox, UUID, int, str] | None:
+) -> tuple[ConnectedSandbox, UUID, str] | None:
     async with db_engine.async_session_factory() as db:
         runtime = await load_runtime_environment_with_sandbox(db, ctx.runtime_environment_id)
     sandbox_record = runtime.sandbox if runtime is not None else None
@@ -666,7 +664,6 @@ async def _connect_existing_environment_sandbox(
     if (
         sandbox_record.sandbox_profile_id != ctx.sandbox_profile_id
         or sandbox_record.target_id != ctx.target_id
-        or sandbox_record.slot_generation is None
     ):
         return None
 
@@ -709,7 +706,6 @@ async def _connect_existing_environment_sandbox(
     await _persist_target_runtime_access(
         ctx,
         sandbox_record_id=sandbox_record.id,
-        slot_generation=sandbox_record.slot_generation,
         runtime_url=endpoint.runtime_url,
         runtime_token_ciphertext=runtime.environment.runtime_token_ciphertext,
         anyharness_data_key_ciphertext=runtime.environment.anyharness_data_key_ciphertext,
@@ -732,7 +728,6 @@ async def _connect_existing_environment_sandbox(
             runtime_context=runtime_context,
         ),
         sandbox_record.id,
-        sandbox_record.slot_generation,
         decrypt_text(runtime.environment.runtime_token_ciphertext),
     )
 
@@ -826,17 +821,11 @@ async def _launch_supervised_runtime_bundle(
     runtime_env: dict[str, str],
     runtime_token: str,
     cloud_base_url: str,
-    cloud_sandbox_id: UUID,
-    slot_generation: int,
 ) -> UUID:
     enrollment = await ensure_runtime_target_enrollment(
-        runtime_environment_id=ctx.runtime_environment_id,
         user_id=ctx.user_id,
-        display_name=f"Managed cloud: {ctx.repo_label}",
         sandbox_profile_id=ctx.sandbox_profile_id,
         target_id=ctx.target_id,
-        cloud_sandbox_id=cloud_sandbox_id,
-        slot_generation=slot_generation,
     )
     if enrollment is None:
         raise RuntimeError("Cloud runtime environment disappeared before worker enrollment.")
@@ -932,7 +921,7 @@ async def _wake_reused_runtime_if_worker_stale(
         CloudWorkspaceStatus.materializing,
         detail="Restarting cloud runtime worker",
     )
-    await run_managed_slot_wake_job(ctx.target_id, command_id=None)
+    await run_managed_target_wake_job(ctx.target_id, command_id=None)
     return True
 
 
@@ -989,8 +978,6 @@ async def _wait_for_agent_auth_target_current(
 ) -> None:
     last_status = "missing"
     last_applied_revision: int | None = None
-    last_slot_generation: int | None = None
-    last_active_slot_generation: int | None = None
     last_error: str | None = None
     for _attempt in range(max(1, total_attempts)):
         async with db_engine.async_session_factory() as db:
@@ -999,17 +986,10 @@ async def _wait_for_agent_auth_target_current(
                 sandbox_profile_id=ctx.sandbox_profile_id,
                 target_id=ctx.target_id,
             )
-            active_slot = await cloud_sandboxes.load_active_slot_for_profile_target(
-                db,
-                sandbox_profile_id=ctx.sandbox_profile_id,
-                target_id=ctx.target_id,
-            )
         if state is not None:
             last_status = state.status
             last_applied_revision = state.applied_revision
-            last_slot_generation = state.slot_generation
             last_error = state.last_error_message
-            last_active_slot_generation = active_slot.slot_generation if active_slot else None
             if state.status == "failed":
                 raise CloudApiError(
                     "agent_auth_apply_failed",
@@ -1020,9 +1000,6 @@ async def _wait_for_agent_auth_target_current(
                 state.status == "applied"
                 and state.applied_revision is not None
                 and state.applied_revision >= ctx.required_agent_auth_revision
-                and active_slot is not None
-                and state.active_sandbox_id == active_slot.id
-                and state.slot_generation == active_slot.slot_generation
                 and not state.force_restart_required
             ):
                 return
@@ -1033,8 +1010,6 @@ async def _wait_for_agent_auth_target_current(
         f"for target {ctx.target_id}; last_status={last_status}; "
         f"last_applied_revision={last_applied_revision}; "
         f"required_revision={ctx.required_agent_auth_revision}; "
-        f"last_slot_generation={last_slot_generation}; "
-        f"active_slot_generation={last_active_slot_generation}; "
         f"last_error={last_error or '<none>'}."
     )
 
@@ -1146,8 +1121,6 @@ async def _launch_and_connect_runtime(
     connected: ConnectedSandbox,
     *,
     cloud_base_url: str,
-    cloud_sandbox_id: UUID,
-    slot_generation: int,
 ) -> tuple[ConnectedSandbox, RuntimeHandshake]:
     runtime_token = secrets.token_urlsafe(32)
     runtime_env = build_runtime_env(
@@ -1165,8 +1138,6 @@ async def _launch_and_connect_runtime(
         runtime_env=runtime_env,
         runtime_token=runtime_token,
         cloud_base_url=cloud_base_url,
-        cloud_sandbox_id=cloud_sandbox_id,
-        slot_generation=slot_generation,
     )
 
     connected = ConnectedSandbox(
@@ -1433,11 +1404,11 @@ async def provision_workspace(
             detail="Connecting to repo runtime",
         )
 
-        reused_runtime = await _connect_existing_profile_slot(tracker, ctx, provider)
+        reused_runtime = await _connect_existing_profile_sandbox(tracker, ctx, provider)
         if reused_runtime is None:
             reused_runtime = await _connect_existing_environment_sandbox(tracker, ctx, provider)
         if reused_runtime is not None:
-            connected, sandbox_record_id, slot_generation, runtime_token = reused_runtime
+            connected, sandbox_record_id, runtime_token = reused_runtime
         else:
             worker_cloud_base_url = _cloud_base_url()
             await _set_workspace_status(
@@ -1446,22 +1417,27 @@ async def provision_workspace(
                 detail="Allocating sandbox",
             )
             async with db_engine.async_session_factory() as db, db.begin():
-                sandbox_slot = await cloud_sandboxes.ensure_profile_slot(
+                profile = await agent_auth_store.get_sandbox_profile(db, ctx.sandbox_profile_id)
+                if profile is None:
+                    raise CloudApiError(
+                        "sandbox_profile_not_found",
+                        "Cloud sandbox profile could not be prepared.",
+                        status_code=500,
+                    )
+                sandbox_record = await cloud_sandboxes.ensure_managed_sandbox_for_target(
                     db,
                     sandbox_profile_id=ctx.sandbox_profile_id,
                     target_id=ctx.target_id,
+                    billing_subject_id=profile.billing_subject_id,
                     provider=provider.kind.value,
                     template_version=provider.template_version,
                     status="creating",
                 )
-            sandbox_record_id = sandbox_slot.id
-            if sandbox_slot.slot_generation is None:
-                raise RuntimeError("Managed cloud sandbox slot is missing slot generation.")
-            slot_generation = sandbox_slot.slot_generation
-            if getattr(sandbox_slot, "external_sandbox_id", None):
+            sandbox_record_id = sandbox_record.id
+            if getattr(sandbox_record, "external_sandbox_id", None):
                 raise CloudApiError(
-                    "cloud_slot_reuse_unavailable",
-                    "Existing managed cloud slot could not be reused safely.",
+                    "cloud_sandbox_reuse_unavailable",
+                    "Existing managed cloud sandbox could not be reused safely.",
                     status_code=409,
                 )
             allocated_sandbox_this_attempt = True
@@ -1469,7 +1445,7 @@ async def provision_workspace(
                 tracker,
                 ctx,
                 provider,
-                sandbox_record_id=sandbox_record_id,
+                sandbox_record=sandbox_record,
             )
 
             await _set_workspace_status(
@@ -1522,7 +1498,7 @@ async def provision_workspace(
             tracker.complete()
 
         if reused_runtime is not None:
-            connected, sandbox_record_id, slot_generation, runtime_token = reused_runtime
+            connected, sandbox_record_id, runtime_token = reused_runtime
             await _set_workspace_status(
                 workspace_id,
                 CloudWorkspaceStatus.materializing,
@@ -1585,8 +1561,6 @@ async def provision_workspace(
                 provider,
                 connected,
                 cloud_base_url=worker_cloud_base_url,
-                cloud_sandbox_id=sandbox_record_id,
-                slot_generation=slot_generation,
             )
             launched_runtime_this_attempt = True
 
@@ -1605,7 +1579,6 @@ async def provision_workspace(
         await _persist_target_runtime_access(
             ctx,
             sandbox_record_id=sandbox_record_id,
-            slot_generation=slot_generation,
             runtime_url=connected.endpoint.runtime_url,
             runtime_token_ciphertext=runtime_token_ciphertext,
             anyharness_data_key_ciphertext=anyharness_data_key_ciphertext,

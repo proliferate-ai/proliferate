@@ -1797,8 +1797,6 @@ class TestBillingApi:
         environment.status = CloudRuntimeEnvironmentStatus.running.value
 
         sandbox = CloudSandbox(
-            runtime_environment_id=environment.id,
-            cloud_workspace_id=workspace.id,
             provider="e2b",
             external_sandbox_id="sandbox-123",
             status="running",
@@ -1808,6 +1806,7 @@ class TestBillingApi:
         db_session.add(sandbox)
         await db_session.flush()
         environment.active_sandbox_id = sandbox.id
+        workspace.active_sandbox_id = sandbox.id
 
         now = datetime.now(UTC)
         db_session.add(
@@ -1889,7 +1888,6 @@ class TestBillingApi:
         await db_session.flush()
 
         sandbox = CloudSandbox(
-            cloud_workspace_id=workspace.id,
             provider="e2b",
             external_sandbox_id="sandbox-history",
             status="paused",
@@ -2012,7 +2010,6 @@ class TestBillingApi:
         await db_session.flush()
 
         sandbox = CloudSandbox(
-            cloud_workspace_id=workspace.id,
             provider="e2b",
             external_sandbox_id="sandbox-exhausted",
             status="paused",

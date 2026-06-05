@@ -148,7 +148,7 @@ async def get_active_sandbox_for_environment(
     return await db.get(CloudSandbox, environment.active_sandbox_id)
 
 
-async def reserve_sandbox_slot_for_environment(
+async def reserve_sandbox_for_environment(
     db: AsyncSession,
     *,
     runtime_environment_id: UUID,
@@ -175,7 +175,7 @@ async def reserve_sandbox_slot_for_environment(
                 select(func.count(CloudSandbox.id))
                 .join(
                     CloudRuntimeEnvironment,
-                    CloudSandbox.runtime_environment_id == CloudRuntimeEnvironment.id,
+                    CloudRuntimeEnvironment.active_sandbox_id == CloudSandbox.id,
                 )
                 .where(
                     CloudRuntimeEnvironment.billing_subject_id == environment.billing_subject_id,
@@ -187,37 +187,23 @@ async def reserve_sandbox_slot_for_environment(
         if active_sandbox_count >= concurrent_sandbox_limit:
             return None
 
-    slot_generation: int | None = None
     billing_subject_id: UUID | None = None
     if sandbox_profile_id is not None or target_id is not None:
         if sandbox_profile_id is None or target_id is None:
-            raise RuntimeError("Managed cloud sandbox slots require profile and target ids.")
+            raise RuntimeError("Managed cloud sandboxes require profile and target ids.")
         profile, _target = await require_primary_managed_profile_target(
             db,
             sandbox_profile_id=sandbox_profile_id,
             target_id=target_id,
             lock_rows=True,
         )
-        max_generation = (
-            await db.scalar(
-                select(func.max(CloudSandbox.slot_generation)).where(
-                    CloudSandbox.sandbox_profile_id == sandbox_profile_id,
-                    CloudSandbox.target_id == target_id,
-                )
-            )
-            or 0
-        )
-        slot_generation = int(max_generation) + 1
         billing_subject_id = profile.billing_subject_id
 
     now = utcnow()
     sandbox = CloudSandbox(
-        runtime_environment_id=environment.id,
-        cloud_workspace_id=None,
         sandbox_profile_id=sandbox_profile_id,
         target_id=target_id,
         billing_subject_id=billing_subject_id,
-        slot_generation=slot_generation,
         provider=provider,
         external_sandbox_id=external_sandbox_id,
         status=status,
@@ -331,7 +317,7 @@ async def reserve_and_attach_sandbox_for_environment(
     sandbox_profile_id: UUID | None = None,
     target_id: UUID | None = None,
 ) -> CloudSandbox | None:
-    sandbox = await reserve_sandbox_slot_for_environment(
+    sandbox = await reserve_sandbox_for_environment(
         db,
         runtime_environment_id=runtime_environment_id,
         external_sandbox_id=external_sandbox_id,

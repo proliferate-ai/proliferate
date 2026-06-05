@@ -155,18 +155,6 @@ async fn send_heartbeat(
         supervisor_version.clone(),
     );
     let response = cloud.heartbeat(&identity.worker_token, &request).await?;
-    if response.cloud_sandbox_id != identity.cloud_sandbox_id
-        || response.slot_generation != identity.slot_generation
-    {
-        warn!(
-            response_sandbox_profile_id = response.sandbox_profile_id.as_deref(),
-            response_cloud_sandbox_id = response.cloud_sandbox_id.as_deref(),
-            response_slot_generation = response.slot_generation,
-            identity_cloud_sandbox_id = identity.cloud_sandbox_id.as_deref(),
-            identity_slot_generation = identity.slot_generation,
-            "worker heartbeat returned a different sandbox slot identity"
-        );
-    }
     crate::observability::heartbeat_ack(&response);
     let installed = updates::desired::InstalledVersions {
         anyharness_version,

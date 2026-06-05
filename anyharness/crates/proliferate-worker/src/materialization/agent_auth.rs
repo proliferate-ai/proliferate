@@ -44,7 +44,6 @@ pub struct AgentAuthMaterializationPlan {
     pub reason: Option<String>,
     pub current_revision: Option<i64>,
     pub target_id: Option<String>,
-    pub slot_generation: Option<i64>,
     pub sandbox_profile_id: String,
     pub revision: i64,
     #[serde(default)]
@@ -148,7 +147,6 @@ pub fn build_anyharness_agent_auth_request(
     allowed_root: Option<&Path>,
     expected_sandbox_profile_id: &str,
     expected_target_id: &str,
-    expected_slot_generation: Option<i64>,
     expected_revision: i64,
     plan: &AgentAuthMaterializationPlan,
 ) -> Result<(Value, AgentAuthMaterializationOutcome), WorkerError> {
@@ -162,17 +160,6 @@ pub fn build_anyharness_agent_auth_request(
         return Err(materialization_error(format!(
             "agent auth target mismatch: expected {expected_target_id}, got {}",
             plan.target_id.as_deref().unwrap_or("<missing>")
-        )));
-    }
-    if expected_slot_generation.is_some() && plan.slot_generation != expected_slot_generation {
-        return Err(materialization_error(format!(
-            "agent auth slot generation mismatch: expected {}, got {}",
-            expected_slot_generation
-                .map(|value| value.to_string())
-                .unwrap_or_else(|| "<missing>".to_string()),
-            plan.slot_generation
-                .map(|value| value.to_string())
-                .unwrap_or_else(|| "<missing>".to_string())
         )));
     }
     if plan.revision != expected_revision {

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.billing import (
@@ -19,14 +20,12 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_OPENED_BY_PROVISION,
     USAGE_SEGMENT_OPENED_BY_WEBHOOK_RESUMED,
 )
-from proliferate.db.store.cloud_runtime_environments import (
-    load_runtime_environment_by_id,
-    save_runtime_environment_state,
-)
+from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
+from proliferate.db.store.cloud_runtime_environments import save_runtime_environment_state
 from proliferate.db.store.cloud_workspaces import (
     load_cloud_sandbox_by_external_id,
     load_cloud_sandbox_by_id,
-    load_cloud_workspace_by_id,
     save_sandbox_provider_state,
 )
 from proliferate.integrations.sandbox import (
@@ -81,6 +80,25 @@ def _metadata_sandbox_id(metadata: dict[str, str]) -> UUID | None:
         return UUID(value)
     except ValueError:
         return None
+
+
+async def _load_sandbox_runtime_owner(
+    db: AsyncSession,
+    sandbox_id: UUID,
+) -> tuple[CloudRuntimeEnvironment | None, CloudWorkspace | None]:
+    runtime_environment = (
+        await db.execute(
+            select(CloudRuntimeEnvironment)
+            .where(CloudRuntimeEnvironment.active_sandbox_id == sandbox_id)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    workspace = (
+        await db.execute(
+            select(CloudWorkspace).where(CloudWorkspace.active_sandbox_id == sandbox_id).limit(1)
+        )
+    ).scalar_one_or_none()
+    return runtime_environment, workspace
 
 
 async def remember_sandbox_event_receipt(
@@ -184,16 +202,7 @@ async def handle_e2b_webhook(
     ):
         return E2BWebhookReceipt()
 
-    runtime_environment = (
-        await load_runtime_environment_by_id(db, sandbox.runtime_environment_id)
-        if sandbox.runtime_environment_id is not None
-        else None
-    )
-    workspace = (
-        await load_cloud_workspace_by_id(db, sandbox.cloud_workspace_id)
-        if sandbox.cloud_workspace_id is not None
-        else None
-    )
+    runtime_environment, workspace = await _load_sandbox_runtime_owner(db, sandbox.id)
     if runtime_environment is None and workspace is None:
         return E2BWebhookReceipt()
 

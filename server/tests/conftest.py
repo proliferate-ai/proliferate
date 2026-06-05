@@ -19,9 +19,9 @@ from tests.postgres import (
 
 
 async def _cancel_test_background_tasks() -> None:
-    from proliferate.server.cloud.runtime.wake import cancel_managed_slot_wake_tasks
+    from proliferate.server.cloud.runtime.wake import cancel_managed_target_wake_tasks
 
-    await cancel_managed_slot_wake_tasks()
+    await cancel_managed_target_wake_tasks()
 
 
 @pytest.fixture(scope="session")

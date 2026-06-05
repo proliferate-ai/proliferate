@@ -17,10 +17,10 @@ from proliferate.constants.organizations import (
     ORGANIZATION_ROLE_OWNER,
 )
 from proliferate.db.models.organizations import Organization, OrganizationMembership
-from proliferate.db.store.cloud_sandboxes import ensure_profile_slot
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_claims import claims as claims_store
 from proliferate.db.store.cloud_runtime_config import revisions as runtime_config_store
+from proliferate.db.store.cloud_sandboxes import ensure_managed_sandbox_for_target
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
@@ -383,16 +383,16 @@ async def _seed_claimable_workspace(
         origin="automation",
     )
     if with_runtime_access:
-        slot = await ensure_profile_slot(
+        sandbox = await ensure_managed_sandbox_for_target(
             db_session,
             sandbox_profile_id=profile_id,
             target_id=target_id,
+            billing_subject_id=uuid.UUID(profile["billingSubjectId"]),
+            status="running",
         )
         worker = await worker_auth_store.create_worker(
             db_session,
             target_id=target_id,
-            cloud_sandbox_id=slot.id,
-            slot_generation=slot.slot_generation,
             token_hash=f"worker-token-{suffix}",
             machine_fingerprint=f"worker-{suffix}",
             hostname=f"worker-{suffix}",
@@ -405,8 +405,7 @@ async def _seed_claimable_workspace(
             db_session,
             target_id=target_id,
             sandbox_profile_id=profile_id,
-            active_sandbox_id=slot.id,
-            slot_generation=slot.slot_generation or 0,
+            cloud_sandbox_id=sandbox.id,
             anyharness_base_url="http://127.0.0.1:19000",
             runtime_token_ciphertext="runtime-token",
             anyharness_data_key_ciphertext="data-key",
