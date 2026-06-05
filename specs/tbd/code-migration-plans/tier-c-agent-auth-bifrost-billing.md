@@ -9,6 +9,11 @@ target identity and removes slot fences. It does not implement the non-identity
 feature work in the merged agent-auth, Bifrost BYOK, billing, and settings/admin
 IA specs.
 
+This track should not race server structural hygiene in the same file families.
+If command preflight, worker command surfaces, or agent-auth service files are
+still unsplit, run the relevant server-hygiene boundary extraction first, then
+land Tier C behavior inside those boundaries.
+
 ## Docs To Read
 
 - `AGENTS.md`
@@ -51,6 +56,9 @@ Non-identity feature work is implemented on top of target-scoped auth state:
 - Slot-collapse identity work already owned by PR 529.
 - Celery job substrate except if a reconciler task is explicitly part of a
   billing/gateway feature slice.
+- Server structural hygiene in shared command/auth files, except for a
+  prerequisite boundary-extraction slice that is explicitly owned and reviewed
+  as hygiene.
 - Broad settings redesign unrelated to the specs.
 
 ## Migration Slices
@@ -106,6 +114,8 @@ that violate gateway-mode invariants.
 - Billing behavior is high stakes; isolate accounting changes and test edge
   cases.
 - Provider-secret handling requires careful security review.
+- Command/auth behavior changes should not be implemented in parallel with
+  structural moves of the same server files.
 
 ## Critique Prompts
 

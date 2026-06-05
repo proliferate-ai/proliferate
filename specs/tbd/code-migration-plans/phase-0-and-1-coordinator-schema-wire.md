@@ -56,7 +56,9 @@ This plan completed the PR 529 scope: the foundational Target = Sandbox
 slot-collapse and data-model rebind. It does not claim that the full worker
 README/architecture from PR 528 is realized.
 
-Immediate Tier A follow-ons are still required for the full worker spec shape:
+Immediate Tier A follow-ons are required to realize the full worker spec shape.
+Until both land, the product is slot-free and target-scoped, but the worker does
+not yet match its own PR 528 README/architecture:
 
 - Worker structure alignment into the documented `control/`, `tail/`,
   `lifecycle/`, `inventory/`, `materialization/`, client, store, and identity

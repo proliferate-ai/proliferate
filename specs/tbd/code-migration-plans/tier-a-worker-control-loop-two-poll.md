@@ -1,7 +1,7 @@
 # Tier A: Worker Control-Loop / Two-Poll Transport
 
-Status: executable planning target after PR 529 merges, but requires a concrete
-implementation plan before coding.
+Status: executable planning target after PR 529 merges, but requires the shared
+Redis/wake mini-ratification and a concrete implementation plan before coding.
 
 ## Starting Baseline
 
@@ -9,6 +9,12 @@ Start from `main` after PR 529 merges. The code is target-scoped and slot-free,
 but the worker may still use separate DB-backed endpoints for idle command
 leasing and exposure refresh. This track implements the PR 528 worker transport
 shape: one Cloud control long-poll down and one AnyHarness event tail up.
+
+Before coding, record the shared Redis/wake ownership decision from
+`post-529-migration-roadmap.md`. If this track owns the pub/sub doorbell, the
+worker-tier durable-job plan must conform to that decision. If the worker-tier
+substrate owns shared Redis/wake infrastructure, this track must use that
+ratified namespace and boundary.
 
 ## Docs To Read
 
@@ -37,6 +43,8 @@ shape: one Cloud control long-poll down and one AnyHarness event tail up.
 - Cloud does not hold a DB connection while waiting.
 - Producers bump target-scoped control state after commits.
 - Redis/pubsub or an equivalent doorbell wakes long-poll waiters.
+- Doorbell implementation follows the pre-ratified shared Redis/wake ownership
+  decision rather than inventing a track-local Redis shape.
 - Worker event tail remains local and frequent, but uploads only real event
   batches.
 - Existing command lease and exposure endpoints remain only as fallback or
@@ -61,26 +69,31 @@ shape: one Cloud control long-poll down and one AnyHarness event tail up.
 
 ## Migration Slices
 
-1. **Contract slice**
+1. **Shared Redis/wake ownership slice**
+   - Decide and document the doorbell owner, Redis namespace, pub/sub vs redbeat
+     relationship, and command-wake/task boundary.
+   - Confirm whether control-loop owns pub/sub and worker-tier conforms, or
+     durable-job infrastructure owns shared Redis/wake and control-loop conforms.
+2. **Contract slice**
    - Finalize request/response models for `/v1/cloud/worker/control/wait`.
    - Define cursor format, timeout semantics, error behavior, and fallback rules.
-2. **Server state slice**
+3. **Server state slice**
    - Add target-scoped worker control state and store helpers.
    - Add after-commit bump helpers for command, exposure, projection, target, and
      auth/runtime-config changes.
-3. **Long-poll service slice**
+4. **Long-poll service slice**
    - Implement wait without holding a DB connection.
    - Subscribe to doorbells, re-open short DB transactions on wake/timeout.
-4. **Worker client/control slice**
+5. **Worker client/control slice**
    - Add client method and worker loop support.
    - Persist returned cursor locally.
    - Fall back only on explicit unsupported responses.
-5. **Exposure/event-tail slice**
+6. **Exposure/event-tail slice**
    - Make exposure reconciliation change-driven from control responses.
    - Keep local AnyHarness tailing independent.
-6. **Desktop duplicate-worker guard**
+7. **Desktop duplicate-worker guard**
    - Add or tighten cross-process guard if still needed.
-7. **Cutover and deletion**
+8. **Cutover and deletion**
    - Remove or demote legacy high-frequency polling paths after rollout safety is
      proven.
 
@@ -114,7 +127,8 @@ fallback on auth, stale-target, or malformed success responses.
 
 - Redis ownership overlaps with the worker-tier durable job track. Decide whether
   the same Redis deployment handles redbeat locks, rate limits, and control
-  doorbells.
+  doorbells before implementation, not after this track has baked in a doorbell
+  shape.
 - Wake jobs are both durable-job work and command-delivery work. Coordinate
   boundaries before implementation.
 - Long-poll timeout must stay below client HTTP timeout.

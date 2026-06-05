@@ -8,6 +8,11 @@ Start after PR 529 merges and preferably after the Tier A worker follow-ons are
 planned. PR 529 removes slot-specific seams and adds minimal target validation,
 but large server files still need ownership-correct decomposition.
 
+If Tier C agent-auth/Bifrost/billing feature work is queued, use this track to
+extract the shared command/auth boundaries first. Do not run behavior changes in
+`commands/service.py`, `worker/service.py`, or `agent_auth/**` in parallel with
+structural moves of those same files.
+
 ## Docs To Read
 
 - `AGENTS.md`
@@ -41,6 +46,8 @@ Likely hot spots:
 ## Out Of Scope
 
 - Behavior changes unless required to preserve semantics during extraction.
+- Tier C feature behavior in command preflight, gateway/BYOK, or billing
+  semantics. This track may create the boundaries those changes will use.
 - Celery/durable job conversion.
 - Worker control-loop transport changes.
 - Frontend or SDK changes except import fallout from API shape changes.
@@ -89,7 +96,8 @@ compatibility wrappers unless they are temporary and named with a deletion owner
 ## Risks And Open Questions
 
 - This track can conflict with active feature work in the same large files.
-  Prefer one file family per PR.
+  Prefer one file family per PR, and sequence command/auth extraction before
+  Tier C behavior changes in those files.
 - Moving too much at once makes review hard. Preserve behavior and keep imports
   direct.
 

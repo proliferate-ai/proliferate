@@ -7,6 +7,11 @@ Status: draft-to-executable migration plan. Start with design ratification.
 Start after PR 529 merges. This track is orthogonal to slot removal. It replaces
 hand-rolled server background execution with a designed durable job system.
 
+Before either this track or the control-loop track implements Redis-backed wake
+delivery, record the shared Redis/wake ownership decision from
+`post-529-migration-roadmap.md`. That mini-ratification is narrower than this
+track's full Celery/RabbitMQ/redbeat design ratification.
+
 Do not hand an implementation agent only the raw RFC and ask it to code the full
 system. First produce a ratified end-state plan for the minimal first slice.
 
@@ -58,26 +63,29 @@ system. First produce a ratified end-state plan for the minimal first slice.
 
 ## Migration Slices
 
-1. **Ratify the minimal architecture**
+1. **Shared Redis/wake ownership slice**
+   - Decide and document the doorbell owner, Redis namespace, pub/sub vs redbeat
+     relationship, and command-wake/task boundary with the control-loop plan.
+2. **Ratify the minimal architecture**
    - Decide package names, broker config, queue names, task naming, retry policy,
      redbeat/leader policy, and result backend stance.
-2. **Add infrastructure/config skeleton**
+3. **Add infrastructure/config skeleton**
    - Add Celery app, config, test settings, and a no-op task.
    - Add deployment/dev docs without moving business work yet.
-3. **Transactional outbox**
+4. **Transactional outbox**
    - Add outbox table/store helpers.
    - Add relay process/task with idempotent publication.
-4. **Tier 0: lift in-process loops**
+5. **Tier 0: lift in-process loops**
    - Move billing, setup monitor, agent gateway, mobility cleanup, support, and
      telemetry out of API lifespan or convert them to beat-fired tasks.
-5. **Tier 1: kill fire-and-forget**
+6. **Tier 1: kill fire-and-forget**
    - Runtime wake jobs, deferred worktree cleanup, Slack notifications.
-6. **Tier 2: automations execution**
+7. **Tier 2: automations execution**
    - Move cloud automation execution to broker-delivered idempotent task per run.
-7. **Tier 3: refine reconcilers**
+8. **Tier 3: refine reconcilers**
    - Make surviving reconcilers enqueue corrective tasks instead of doing heavy
      work inline.
-8. **Cutover**
+9. **Cutover**
    - Remove old process entrypoints and lifespan loops once new workers are
      deployed and monitored.
 
@@ -111,6 +119,8 @@ clear ownership of duplicate handling.
 - RabbitMQ/Celery deployment and local dev ergonomics need explicit ownership.
 - Redbeat vs leader-elected Beat must be chosen.
 - Wake delivery overlaps with the control-loop plan.
+- Do not let the control-loop track accidentally define durable-job Redis
+  ownership by shipping first without the shared mini-ratification.
 - Task boundaries for automations stage pipeline need a deliberate decision:
   one idempotent task per run first, or a chain.
 
