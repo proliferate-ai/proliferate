@@ -10,7 +10,6 @@ import { Select } from "@proliferate/ui/primitives/Select";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { SettingsCard } from "@/components/settings/shared/SettingsCard";
 import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
-import { isAgentAuthAdminRole } from "@/lib/domain/agent-auth/agent-auth-agent-presentation";
 import { agentAuthByokCapabilityLabel } from "@/lib/domain/agent-auth/agent-auth-gateway-capabilities";
 import {
   agentAuthGatewayCreatePayloadReady,
@@ -19,6 +18,7 @@ import {
   type AgentAuthGatewaySelectableAgentKind,
   type AgentAuthGatewayProviderChoice,
 } from "@/lib/domain/agent-auth/agent-auth-gateway-form";
+import { isSettingsAdminRole } from "@/lib/domain/settings/admin-roles";
 
 export interface OrganizationOption {
   id: string;
@@ -368,7 +368,7 @@ export function CloudAgentAuthCredentialForm({
 }
 
 function isAdminOrganization(organization: OrganizationOption): boolean {
-  return isAgentAuthAdminRole(organization.membership?.role);
+  return isSettingsAdminRole(organization.membership?.role);
 }
 
 function selectedOrganizationName(
