@@ -21,6 +21,10 @@ from proliferate.constants.cloud import (
 from proliferate.db import session_ops as db_session
 from proliferate.db.store.cloud_claims import claims as claims_store
 from proliferate.db.store.cloud_claims import tokens as claim_tokens_store
+from proliferate.db.store.cloud_sandboxes import (
+    load_cloud_sandbox_by_id,
+    update_sandbox_status,
+)
 from proliferate.db.store.cloud_sync import commands as command_store
 from proliferate.db.store.cloud_workspace_lifecycle import (
     archive_cloud_workspace_record,
@@ -33,9 +37,7 @@ from proliferate.db.store.cloud_workspace_lifecycle import (
 )
 from proliferate.db.store.cloud_workspaces import (
     get_cloud_workspace_by_id,
-    load_cloud_sandbox_by_id,
     load_cloud_workspace_by_id,
-    update_sandbox_status,
 )
 from proliferate.integrations.sandbox import get_sandbox_provider
 from proliferate.server.billing.service import record_cloud_sandbox_usage_stopped

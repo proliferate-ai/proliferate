@@ -8,10 +8,9 @@ from datetime import datetime
 from typing import Final, Literal
 from uuid import UUID
 
-from sqlalchemy import Select, func, select, text
+from sqlalchemy import Select, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.constants.billing import ACTIVE_SANDBOX_STATUSES
 from proliferate.constants.cloud import (
     WORKSPACE_REPO_APPLY_LOCK_SALT,
     CloudWorkspaceCleanupState,
@@ -640,141 +639,6 @@ async def create_direct_target_cloud_workspace(
     return workspace
 
 
-async def get_active_sandbox(
-    db: AsyncSession,
-    workspace: CloudWorkspace,
-) -> CloudSandbox | None:
-    """Load the active sandbox for *workspace*, if one exists."""
-    if workspace.active_sandbox_id:
-        sandbox = (
-            await db.execute(
-                select(CloudSandbox).where(CloudSandbox.id == workspace.active_sandbox_id)
-            )
-        ).scalar_one_or_none()
-        if sandbox is not None:
-            return sandbox
-    return await _get_active_profile_target_sandbox(db, workspace)
-
-
-async def _get_active_profile_target_sandbox(
-    db: AsyncSession,
-    workspace: CloudWorkspace,
-) -> CloudSandbox | None:
-    if workspace.sandbox_profile_id is None or workspace.target_id is None:
-        return None
-    return (
-        await db.execute(
-            select(CloudSandbox)
-            .where(
-                CloudSandbox.sandbox_profile_id == workspace.sandbox_profile_id,
-                CloudSandbox.target_id == workspace.target_id,
-                CloudSandbox.status.in_(ACTIVE_SANDBOX_STATUSES),
-            )
-            .order_by(CloudSandbox.updated_at.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-
-
-async def get_cloud_sandbox_by_id(
-    db: AsyncSession,
-    sandbox_id: UUID,
-) -> CloudSandbox | None:
-    return await db.get(CloudSandbox, sandbox_id)
-
-
-async def get_cloud_sandbox_by_external_id(
-    db: AsyncSession,
-    external_sandbox_id: str,
-) -> CloudSandbox | None:
-    return (
-        await db.execute(
-            select(CloudSandbox).where(CloudSandbox.external_sandbox_id == external_sandbox_id)
-        )
-    ).scalar_one_or_none()
-
-
-async def list_cloud_sandbox_placeholders(
-    db: AsyncSession,
-) -> list[CloudSandbox]:
-    return list(
-        (await db.execute(select(CloudSandbox).where(CloudSandbox.external_sandbox_id.is_(None))))
-        .scalars()
-        .all()
-    )
-
-
-async def reserve_sandbox_for_workspace(
-    db: AsyncSession,
-    *,
-    workspace_id: UUID,
-    external_sandbox_id: str | None,
-    provider: str,
-    template_version: str,
-    status: str,
-    started_at: datetime | None,
-    concurrent_sandbox_limit: int | None,
-) -> CloudSandbox | None:
-    workspace = await get_cloud_workspace_by_id(db, workspace_id)
-    if workspace is None:
-        raise RuntimeError("Workspace disappeared before sandbox attachment.")
-
-    if concurrent_sandbox_limit is not None:
-        await db.execute(
-            text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
-            {"lock_key": f"billing-subject:{workspace.billing_subject_id}"},
-        )
-        active_sandbox_count = int(
-            await db.scalar(
-                select(func.count(CloudSandbox.id))
-                .join(CloudWorkspace, CloudWorkspace.active_sandbox_id == CloudSandbox.id)
-                .where(
-                    CloudWorkspace.billing_subject_id == workspace.billing_subject_id,
-                    CloudSandbox.status.in_(ACTIVE_SANDBOX_STATUSES),
-                )
-            )
-            or 0
-        )
-        if active_sandbox_count >= concurrent_sandbox_limit:
-            return None
-
-    now = utcnow()
-    sandbox = CloudSandbox(
-        provider=provider,
-        external_sandbox_id=external_sandbox_id,
-        status=status,
-        template_version=template_version,
-        started_at=started_at,
-        created_at=now,
-        updated_at=now,
-    )
-    db.add(sandbox)
-    await db.flush()
-    workspace.active_sandbox_id = sandbox.id
-    workspace.updated_at = now
-    await db.flush()
-    await db.refresh(sandbox)
-    return sandbox
-
-
-async def persist_sandbox_status(
-    db: AsyncSession,
-    sandbox: CloudSandbox,
-    status: str,
-    *,
-    stopped_at_now: bool = False,
-    started_at: datetime | None = None,
-) -> None:
-    """Update sandbox status."""
-    sandbox.status = status
-    sandbox.updated_at = utcnow()
-    if started_at is not None:
-        sandbox.started_at = started_at
-    if stopped_at_now:
-        sandbox.stopped_at = utcnow()
-    await db.flush()
-
-
 async def persist_workspace_record(
     db: AsyncSession,
     workspace: CloudWorkspace,
@@ -803,53 +667,6 @@ async def persist_workspace_destroy(
     workspace.anyharness_workspace_id = None
     workspace.stopped_at = utcnow()
     await db.flush()
-
-
-async def persist_bound_sandbox(
-    db: AsyncSession,
-    sandbox: CloudSandbox,
-    *,
-    external_sandbox_id: str,
-    status: str,
-    started_at: datetime | None,
-) -> CloudSandbox:
-    sandbox.external_sandbox_id = external_sandbox_id
-    sandbox.status = status
-    sandbox.started_at = started_at
-    sandbox.stopped_at = None
-    sandbox.updated_at = utcnow()
-    await db.flush()
-    await db.refresh(sandbox)
-    return sandbox
-
-
-async def persist_sandbox_provider_state(
-    db: AsyncSession,
-    sandbox: CloudSandbox,
-    *,
-    external_sandbox_id: str | None | object = _UNSET,
-    status: str | None | object = _UNSET,
-    started_at: datetime | None | object = _UNSET,
-    stopped_at: datetime | None | object = _UNSET,
-    last_provider_event_at: datetime | None | object = _UNSET,
-    last_provider_event_kind: str | None | object = _UNSET,
-) -> CloudSandbox:
-    if external_sandbox_id is not _UNSET:
-        sandbox.external_sandbox_id = external_sandbox_id
-    if status is not _UNSET:
-        sandbox.status = status
-    if started_at is not _UNSET:
-        sandbox.started_at = started_at
-    if stopped_at is not _UNSET:
-        sandbox.stopped_at = stopped_at
-    if last_provider_event_at is not _UNSET:
-        sandbox.last_provider_event_at = last_provider_event_at
-    if last_provider_event_kind is not _UNSET:
-        sandbox.last_provider_event_kind = last_provider_event_kind
-    sandbox.updated_at = utcnow()
-    await db.flush()
-    await db.refresh(sandbox)
-    return sandbox
 
 
 async def finalize_workspace_provision(
@@ -1266,80 +1083,12 @@ async def create_cloud_workspace_for_user(
     )
 
 
-async def load_active_sandbox_for_workspace(
-    db: AsyncSession,
-    workspace: CloudWorkspace,
-) -> CloudSandbox | None:
-    return await get_active_sandbox(db, workspace)
-
-
-async def load_cloud_sandbox_by_id(
-    db: AsyncSession,
-    sandbox_id: UUID,
-) -> CloudSandbox | None:
-    return await get_cloud_sandbox_by_id(db, sandbox_id)
-
-
-async def load_cloud_sandbox_by_external_id(
-    db: AsyncSession,
-    external_sandbox_id: str,
-) -> CloudSandbox | None:
-    return await get_cloud_sandbox_by_external_id(db, external_sandbox_id)
-
-
-async def load_cloud_sandbox_placeholders(db: AsyncSession) -> list[CloudSandbox]:
-    return await list_cloud_sandbox_placeholders(db)
-
-
 async def save_workspace(
     db: AsyncSession,
     workspace: CloudWorkspace,
 ) -> CloudWorkspace:
     merged = await db.merge(workspace)
     return await persist_workspace_record(db, merged)
-
-
-async def reserve_and_attach_sandbox_for_workspace(
-    db: AsyncSession,
-    workspace_id: UUID,
-    *,
-    external_sandbox_id: str | None,
-    provider: str,
-    template_version: str,
-    status: str = "provisioning",
-    started_at: datetime | None = None,
-    concurrent_sandbox_limit: int | None,
-) -> CloudSandbox | None:
-    return await reserve_sandbox_for_workspace(
-        db,
-        workspace_id=workspace_id,
-        external_sandbox_id=external_sandbox_id,
-        provider=provider,
-        template_version=template_version,
-        status=status,
-        started_at=started_at,
-        concurrent_sandbox_limit=concurrent_sandbox_limit,
-    )
-
-
-async def bind_allocated_sandbox(
-    db: AsyncSession,
-    sandbox_id: UUID,
-    *,
-    external_sandbox_id: str,
-    status: str = "provisioning",
-    started_at: datetime | None,
-) -> CloudSandbox:
-    sandbox = await get_cloud_sandbox_by_id(db, sandbox_id)
-    if sandbox is None:
-        raise RuntimeError("Sandbox placeholder disappeared before provider allocation.")
-    return await persist_bound_sandbox(
-        db,
-        sandbox,
-        external_sandbox_id=external_sandbox_id,
-        status=status,
-        started_at=started_at,
-    )
 
 
 async def finalize_workspace_provision_for_ids(
@@ -1400,24 +1149,6 @@ async def update_workspace_repo_apply_status_by_id(
     )
 
 
-async def update_sandbox_status(
-    db: AsyncSession,
-    sandbox: CloudSandbox,
-    status: str,
-    *,
-    stopped_at_now: bool = False,
-    started_at: datetime | None = None,
-) -> None:
-    merged = await db.merge(sandbox)
-    await persist_sandbox_status(
-        db,
-        merged,
-        status,
-        stopped_at_now=stopped_at_now,
-        started_at=started_at,
-    )
-
-
 async def persist_runtime_reconnect_state_for_workspace(
     db: AsyncSession,
     workspace: CloudWorkspace,
@@ -1453,30 +1184,4 @@ async def mark_workspace_error_by_id(
         status_detail=status_detail,
         clear_runtime_metadata=clear_runtime_metadata,
         clear_active_sandbox=clear_active_sandbox,
-    )
-
-
-async def save_sandbox_provider_state(
-    db: AsyncSession,
-    sandbox_id: UUID,
-    *,
-    external_sandbox_id: str | None | object = _UNSET,
-    status: str | None | object = _UNSET,
-    started_at: datetime | None | object = _UNSET,
-    stopped_at: datetime | None | object = _UNSET,
-    last_provider_event_at: datetime | None | object = _UNSET,
-    last_provider_event_kind: str | None | object = _UNSET,
-) -> CloudSandbox:
-    sandbox = await get_cloud_sandbox_by_id(db, sandbox_id)
-    if sandbox is None:
-        raise RuntimeError("Sandbox record not found.")
-    return await persist_sandbox_provider_state(
-        db,
-        sandbox,
-        external_sandbox_id=external_sandbox_id,
-        status=status,
-        started_at=started_at,
-        stopped_at=stopped_at,
-        last_provider_event_at=last_provider_event_at,
-        last_provider_event_kind=last_provider_event_kind,
     )
