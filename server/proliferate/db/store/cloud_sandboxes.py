@@ -9,7 +9,9 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_profile_target_guard import require_primary_managed_profile_target
 from proliferate.utils.time import utcnow
 
@@ -43,6 +45,19 @@ class CloudSandboxSnapshot:
     updated_at: datetime
 
 
+@dataclass(frozen=True)
+class CloudSandboxOwnerSnapshot:
+    id: UUID
+    billing_subject_id: UUID
+    user_id: UUID
+
+
+@dataclass(frozen=True)
+class CloudSandboxRuntimeOwnerSnapshot:
+    runtime_environment: CloudSandboxOwnerSnapshot | None
+    workspace: CloudSandboxOwnerSnapshot | None
+
+
 def _sandbox_snapshot(row: CloudSandbox) -> CloudSandboxSnapshot:
     return CloudSandboxSnapshot(
         id=row.id,
@@ -62,6 +77,51 @@ def _sandbox_snapshot(row: CloudSandbox) -> CloudSandboxSnapshot:
         blocked_reason=row.blocked_reason,
         created_at=row.created_at,
         updated_at=row.updated_at,
+    )
+
+
+def _runtime_owner_snapshot(
+    row: tuple[UUID, UUID, UUID] | None,
+) -> CloudSandboxOwnerSnapshot | None:
+    if row is None:
+        return None
+    owner_id, billing_subject_id, user_id = row
+    return CloudSandboxOwnerSnapshot(
+        id=owner_id,
+        billing_subject_id=billing_subject_id,
+        user_id=user_id,
+    )
+
+
+async def load_sandbox_runtime_owner(
+    db: AsyncSession,
+    sandbox_id: UUID,
+) -> CloudSandboxRuntimeOwnerSnapshot:
+    runtime_environment = (
+        await db.execute(
+            select(
+                CloudRuntimeEnvironment.id,
+                CloudRuntimeEnvironment.billing_subject_id,
+                CloudRuntimeEnvironment.user_id,
+            )
+            .where(CloudRuntimeEnvironment.active_sandbox_id == sandbox_id)
+            .limit(1)
+        )
+    ).one_or_none()
+    workspace = (
+        await db.execute(
+            select(
+                CloudWorkspace.id,
+                CloudWorkspace.billing_subject_id,
+                CloudWorkspace.user_id,
+            )
+            .where(CloudWorkspace.active_sandbox_id == sandbox_id)
+            .limit(1)
+        )
+    ).one_or_none()
+    return CloudSandboxRuntimeOwnerSnapshot(
+        runtime_environment=_runtime_owner_snapshot(runtime_environment),
+        workspace=_runtime_owner_snapshot(workspace),
     )
 
 

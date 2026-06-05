@@ -3862,14 +3862,16 @@ class TestCloudCommandsApi:
         assert applied_to_first_target.status == "applied"
         assert applied_to_first_target.applied_revision == profile.agent_auth_revision
 
-        second_target_uuid, second_worker_headers, second_worker = (
-            await _replace_managed_profile_target(
-                db_session,
-                profile=profile,
-                old_target_id=first_target_uuid,
-                user_id=UUID(auth.user_id),
-                suffix="agent-auth-replaced-target-requeue",
-            )
+        (
+            second_target_uuid,
+            second_worker_headers,
+            second_worker,
+        ) = await _replace_managed_profile_target(
+            db_session,
+            profile=profile,
+            old_target_id=first_target_uuid,
+            user_id=UUID(auth.user_id),
+            suffix="agent-auth-replaced-target-requeue",
         )
         await request_agent_auth_refresh_for_profile_target(
             db_session,
