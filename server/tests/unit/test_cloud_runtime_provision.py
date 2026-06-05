@@ -19,6 +19,7 @@ from proliferate.integrations.sandbox import SandboxProviderKind
 from proliferate.server.cloud.agent_auth import session_loader as agent_auth_session_loader
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime import bootstrap as runtime_bootstrap
+from proliferate.server.cloud.runtime import bundle as runtime_bundle
 from proliferate.server.cloud.runtime import provision as runtime_provision
 from proliferate.server.cloud.runtime import sandbox_exec as runtime_sandbox_exec
 from proliferate.server.cloud.runtime.provisioning.data_key import generate_anyharness_data_key
@@ -477,7 +478,6 @@ class TestCheckBinaryPreinstalled:
     ) -> None:
         binary_path = tmp_path / "anyharness"
         binary_path.write_bytes(b"current-runtime")
-
         calls: list[str] = []
 
         async def _run_sandbox_command_logged(*args, **kwargs):
@@ -485,17 +485,17 @@ class TestCheckBinaryPreinstalled:
             return SimpleNamespace(exit_code=1, stdout="", stderr="")
 
         monkeypatch.setattr(
-            runtime_bootstrap,
+            runtime_bundle,
             "resolve_local_runtime_binary_path",
             lambda: binary_path,
         )
         monkeypatch.setattr(
-            runtime_bootstrap,
+            runtime_bundle,
             "run_sandbox_command_logged",
             _run_sandbox_command_logged,
         )
 
-        result = await runtime_bootstrap.check_binary_preinstalled(
+        result = await runtime_bundle.check_binary_preinstalled(
             SimpleNamespace(),
             object(),
             workspace_id=uuid.uuid4(),
@@ -526,17 +526,17 @@ class TestCheckBinaryPreinstalled:
             raise AssertionError(f"unexpected label: {kwargs['label']}")
 
         monkeypatch.setattr(
-            runtime_bootstrap,
+            runtime_bundle,
             "resolve_local_runtime_binary_path",
             lambda: binary_path,
         )
         monkeypatch.setattr(
-            runtime_bootstrap,
+            runtime_bundle,
             "run_sandbox_command_logged",
             _run_sandbox_command_logged,
         )
 
-        result = await runtime_bootstrap.check_binary_preinstalled(
+        result = await runtime_bundle.check_binary_preinstalled(
             SimpleNamespace(),
             object(),
             workspace_id=uuid.uuid4(),
@@ -563,17 +563,17 @@ class TestCheckBinaryPreinstalled:
             raise RuntimeError("missing local binary")
 
         monkeypatch.setattr(
-            runtime_bootstrap,
+            runtime_bundle,
             "resolve_local_runtime_binary_path",
             _resolve_local_runtime_binary_path,
         )
         monkeypatch.setattr(
-            runtime_bootstrap,
+            runtime_bundle,
             "run_sandbox_command_logged",
             _run_sandbox_command_logged,
         )
 
-        result = await runtime_bootstrap.check_binary_preinstalled(
+        result = await runtime_bundle.check_binary_preinstalled(
             SimpleNamespace(),
             object(),
             workspace_id=uuid.uuid4(),
@@ -603,17 +603,17 @@ class TestCheckBinaryPreinstalled:
             raise AssertionError(f"unexpected label: {kwargs['label']}")
 
         monkeypatch.setattr(
-            runtime_bootstrap,
+            runtime_bundle,
             "resolve_local_runtime_binary_path",
             lambda: binary_path,
         )
         monkeypatch.setattr(
-            runtime_bootstrap,
+            runtime_bundle,
             "run_sandbox_command_logged",
             _run_sandbox_command_logged,
         )
 
-        result = await runtime_bootstrap.check_binary_preinstalled(
+        result = await runtime_bundle.check_binary_preinstalled(
             SimpleNamespace(),
             object(),
             workspace_id=uuid.uuid4(),

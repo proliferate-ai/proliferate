@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from proliferate.config import settings
-from proliferate.server.cloud.runtime.bootstrap import (
+from proliferate.server.cloud.runtime.bundle import (
     resolve_local_runtime_binary_path,
     resolve_local_supervisor_binary_path,
     resolve_local_worker_binary_path,
