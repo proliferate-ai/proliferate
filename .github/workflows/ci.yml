@@ -36,6 +36,9 @@ jobs:
       - name: Check frontend layer boundaries
         run: python3 scripts/check_frontend_boundaries.py
 
+      - name: Check frontend structure drift
+        run: python3 scripts/report_frontend_structure.py --strict --summary-only
+
       - name: Check server layer boundaries
         run: python3 scripts/check_server_boundaries.py
 
