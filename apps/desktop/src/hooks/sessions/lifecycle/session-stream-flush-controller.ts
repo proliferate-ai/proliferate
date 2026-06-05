@@ -2,7 +2,7 @@ import type { SessionEventEnvelope } from "@anyharness/sdk";
 import {
   createFrameStreamBatchScheduler,
 } from "@proliferate/product-domain/chats/transcript/stream-batcher";
-import { logDevSessionRuntimeEvent } from "@/lib/infra/debug/session-runtime-dev-sse";
+import { logDevSessionRuntimeEvent } from "@/lib/infra/debug/dev-session-runtime-log";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 import { applySessionStreamFlushBatch } from "@/hooks/sessions/lifecycle/session-stream-flush-apply";
