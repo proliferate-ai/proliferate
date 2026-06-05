@@ -8,7 +8,7 @@ import {
   getSessionClientAndWorkspace,
   resumeSession,
 } from "@/lib/access/anyharness/session-runtime";
-import { logDevSessionRuntimeEvent } from "@/lib/infra/debug/session-runtime-dev-sse";
+import { logDevSessionRuntimeEvent } from "@/lib/infra/debug/dev-session-runtime-log";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import {
   resolveSessionStatus,
