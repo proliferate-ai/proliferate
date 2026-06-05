@@ -17,7 +17,7 @@ from proliferate.db.store.cloud_mobility import (
 )
 from proliferate.db.store.cloud_sync.exposures import archive_workspace_exposure
 from proliferate.db.store.cloud_sync.projections import end_session_projection_by_id
-from proliferate.db.store.cloud_workspaces import archive_cloud_workspace_record_by_id
+from proliferate.db.store.cloud_workspace_lifecycle import archive_cloud_workspace_record_by_id
 from proliferate.server.cloud.live.service import publish_worker_control_after_commit
 from proliferate.server.cloud.mobility.domain.lifecycle import (
     HANDOFF_PHASE_CLEANUP_FAILED,

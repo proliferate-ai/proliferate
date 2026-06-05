@@ -22,17 +22,19 @@ from proliferate.db import session_ops as db_session
 from proliferate.db.store.cloud_claims import claims as claims_store
 from proliferate.db.store.cloud_claims import tokens as claim_tokens_store
 from proliferate.db.store.cloud_sync import commands as command_store
-from proliferate.db.store.cloud_workspaces import (
+from proliferate.db.store.cloud_workspace_lifecycle import (
     archive_cloud_workspace_record,
     archive_cloud_workspace_record_by_id,
     delete_cloud_workspace_records_for_workspace,
-    get_cloud_workspace_by_id,
-    load_cloud_sandbox_by_id,
-    load_cloud_workspace_by_id,
     persist_workspace_destroy_state,
     persist_workspace_stop_state,
     purge_cloud_workspace_record,
     restore_cloud_workspace_record,
+)
+from proliferate.db.store.cloud_workspaces import (
+    get_cloud_workspace_by_id,
+    load_cloud_sandbox_by_id,
+    load_cloud_workspace_by_id,
     update_sandbox_status,
 )
 from proliferate.integrations.sandbox import get_sandbox_provider

@@ -15,7 +15,7 @@ from proliferate.config import settings
 from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
-from proliferate.db.store.cloud_workspaces import (
+from proliferate.db.store.cloud_workspace_lifecycle import (
     delete_cloud_workspace_records_for_workspace,
 )
 from proliferate.integrations.sandbox import get_sandbox_provider

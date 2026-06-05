@@ -14,10 +14,10 @@ from proliferate.db.store.billing import (
     count_active_cloud_repo_environments,
     ensure_personal_billing_subject,
 )
+from proliferate.db.store.cloud_workspace_lifecycle import delete_cloud_workspace_records
 from proliferate.db.store.cloud_workspaces import (
     CloudRepoLimitExceededError,
     create_cloud_workspace_for_user,
-    delete_cloud_workspace_records,
 )
 
 
