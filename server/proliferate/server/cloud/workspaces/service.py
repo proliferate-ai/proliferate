@@ -123,11 +123,11 @@ from proliferate.server.billing.service import (
 from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kinds
 from proliferate.server.cloud.claims.access import load_workspace_exposure_and_claim
 from proliferate.server.cloud.claims.domain.policy import is_org_admin_role
-from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
-from proliferate.server.cloud.commands.service import (
-    enqueue_command,
+from proliferate.server.cloud.commands.client_state import (
     mark_pending_prompt_interaction_failed_for_command,
 )
+from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
+from proliferate.server.cloud.commands.service import enqueue_command
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.live.service import (

@@ -35,7 +35,7 @@ server/proliferate/db/store/cloud_sync/events.py 1109 server structure migration
 server/proliferate/db/store/cloud_workspaces.py 1621 server structure migration debt for oversized store file
 server/proliferate/server/billing/service.py 2459 server structure migration debt for oversized service file during billing orchestration consolidation
 server/proliferate/server/cloud/commands/domain/rules.py 607 server structure migration debt for oversized pure-domain file
-server/proliferate/server/cloud/commands/service.py 1119 server structure migration debt for oversized service file
+server/proliferate/server/cloud/commands/service.py 949 server structure migration debt for oversized service file
 server/proliferate/server/cloud/mobility/service.py 1208 server structure migration debt for oversized service file
 server/proliferate/server/cloud/runtime/bootstrap.py 922 server structure migration debt for oversized domain-adjacent file
 server/proliferate/server/cloud/runtime/provision.py 1688 server structure migration debt for oversized domain-adjacent file
