@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.constants.billing import BILLING_MODE_ENFORCE
 from proliferate.db.models.billing import UsageSegment
-from proliferate.db.store.billing import open_usage_segment_for_sandbox
+from proliferate.db.store.billing_runtime_usage import open_usage_segment_for_sandbox
 from proliferate.server.cloud.webhooks import service as webhook_service
 from proliferate.server.billing.models import utcnow
 from tests.e2e.cloud.helpers import (
