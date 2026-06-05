@@ -1,11 +1,9 @@
 from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncConnection
+from tests.integration.background_schema_assertions import assert_background_outbox_schema
 
 
-async def assert_current_schema(
-    conn: AsyncConnection,
-    head_revision: str,
-) -> None:
+async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> None:
     tables = await conn.run_sync(lambda sync_conn: set(inspect(sync_conn).get_table_names()))
     assert tables >= {
         "alembic_version",
@@ -63,6 +61,7 @@ async def assert_current_schema(
         "user",
         "webhook_event_receipt",
     }
+    await assert_background_outbox_schema(conn)
 
     mobility_handoff_columns = await conn.run_sync(
         lambda sync_conn: {
