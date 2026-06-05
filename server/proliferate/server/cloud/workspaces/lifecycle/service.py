@@ -37,7 +37,7 @@ from proliferate.db.store.cloud_workspace_lifecycle import (
 )
 from proliferate.db.store.cloud_workspaces import get_cloud_workspace_by_id
 from proliferate.integrations.sandbox import get_sandbox_provider
-from proliferate.server.billing.service import record_cloud_sandbox_usage_stopped
+from proliferate.server.billing.runtime_usage import record_cloud_sandbox_usage_stopped
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
 from proliferate.server.cloud.commands.service import enqueue_command
 from proliferate.server.cloud.errors import CloudApiError
