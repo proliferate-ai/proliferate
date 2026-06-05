@@ -43,6 +43,25 @@ control plane env surface.
 | `CORS_ALLOW_ORIGINS` | No | Yes for browser/desktop API access | Allowed browser/webview origins |
 | `JWT_SECRET` | Yes | Yes | JWT signing and OAuth state signing |
 
+## Background Jobs
+
+| Variable | Secret | Required | Used for |
+| --- | --- | --- | --- |
+| `CELERY_BROKER_URL` | Yes | When Celery workers or Beat are deployed | RabbitMQ broker URL for Celery workers and Beat; must be `amqp://` or `amqps://` |
+| `CELERY_WORKER_QUEUES` | No | No | Comma-separated selector for the code-owned Celery queues a worker process consumes |
+| `CELERY_TASK_ALWAYS_EAGER` | No | Tests only | Executes Celery tasks inline for isolated tests; keep false in deployed environments |
+| `CELERY_TASK_TIME_LIMIT_SECONDS` | No | No | Hard Celery task execution limit in seconds |
+| `CELERY_TASK_SOFT_TIME_LIMIT_SECONDS` | No | No | Soft Celery task execution limit in seconds |
+| `REDBEAT_REDIS_URL` | Yes | When Beat/redbeat is deployed | Redis URL for redbeat scheduler metadata; not a Celery broker |
+| `REDBEAT_KEY_PREFIX` | No | No | Redis key prefix for redbeat scheduler metadata |
+
+The ratified queue names are code-owned in
+`server/proliferate/background/config.py`: `periodic.default`, `default`,
+`notifications`, `runtime.wake`, and `automations.execution`.
+`CELERY_WORKER_QUEUES` selects from that set; it does not create new queues.
+The hosted and self-hosted worker services remain disabled until the worker-tier
+deployment slice adds worker and Beat processes.
+
 ## Desktop Auth
 
 | Variable | Secret | Required | Used for |

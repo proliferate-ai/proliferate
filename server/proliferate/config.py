@@ -46,6 +46,17 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate"
     database_echo: bool = False
 
+    # Background jobs
+    celery_broker_url: str = "amqp://guest:guest@127.0.0.1:5672//"
+    celery_worker_queues: str = (
+        "periodic.default,default,notifications,runtime.wake,automations.execution"
+    )
+    celery_task_always_eager: bool = False
+    celery_task_time_limit_seconds: int = 3600
+    celery_task_soft_time_limit_seconds: int = 3300
+    redbeat_redis_url: str = "redis://127.0.0.1:6379/0"
+    redbeat_key_prefix: str = "redbeat:proliferate:"
+
     # Auth
     jwt_secret: str = "CHANGE-ME-IN-PRODUCTION"
     password_auth_enabled: bool = True
