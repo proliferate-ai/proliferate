@@ -7,7 +7,6 @@
 # count, update this file in the same PR.
 
 API_STORE_IMPORT server/proliferate/server/cloud/live/api.py 1 transitional live API reads store types during cloud worker migration
-SERVICE_ORM_IMPORT server/proliferate/server/billing/service.py 1 remaining service type boundary exposes billing ORM records until snapshot migration
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/mobility/service.py 1 remaining service type boundary exposes workspace ORM records until snapshot migration
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/runtime/service.py 1 remaining service type boundary exposes workspace ORM records until snapshot migration
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/agent_auth/managed_credits.py 1 remaining agent-auth service concern managed-credit sync session boundary debt through session_ops
