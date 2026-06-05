@@ -15,13 +15,11 @@ from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.workspaces.models import (
     BootstrapWorkspaceRemoteAccessRequest,
     CreateCloudWorkspaceRequest,
-    LaunchWorkspaceOnTargetRequest,
     UpdateCloudWorkspaceBranchRequest,
     UpdateCloudWorkspaceDisplayNameRequest,
     WorkspaceConnection,
     WorkspaceDetail,
     WorkspaceSummary,
-    WorkspaceTargetLaunchResponse,
 )
 from proliferate.server.cloud.workspaces.service import (
     archive_cloud_workspace,
@@ -32,7 +30,6 @@ from proliferate.server.cloud.workspaces.service import (
     enable_cloud_workspace_remote_access,
     get_cloud_connection,
     get_cloud_workspace_detail,
-    launch_workspace_on_target,
     list_cloud_workspaces_for_user,
     purge_cloud_workspace,
     restore_cloud_workspace,
@@ -41,6 +38,7 @@ from proliferate.server.cloud.workspaces.service import (
     sync_cloud_workspace_branch,
     sync_cloud_workspace_display_name,
 )
+from proliferate.server.cloud.workspaces.target_launch.api import router as target_launch_router
 
 router = APIRouter()
 
@@ -100,22 +98,7 @@ async def create_cloud_workspace_endpoint(
     return payload
 
 
-@router.post("/workspaces/target-launch", response_model=WorkspaceTargetLaunchResponse)
-async def launch_workspace_on_target_endpoint(
-    body: LaunchWorkspaceOnTargetRequest,
-    user: User = Depends(current_product_user),
-    db: AsyncSession = Depends(get_async_session),
-) -> WorkspaceTargetLaunchResponse:
-    try:
-        return await launch_workspace_on_target(db, user, body)
-    except CloudApiError as error:
-        log_cloud_event(
-            "cloud workspace target launch rejected",
-            error_code=error.code,
-            status_code=error.status_code,
-            target_id=body.target_id,
-        )
-        raise_cloud_error(error)
+router.include_router(target_launch_router)
 
 
 @router.post("/workspaces/remote-access", response_model=WorkspaceDetail)

@@ -16,6 +16,8 @@ from proliferate.server.billing.models import SandboxStartAuthorization
 from proliferate.server.automations.worker.cloud_executor_commands import AutomationCommandResult
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workspaces import service as workspace_service
+from proliferate.server.cloud.workspaces.target_launch import models as target_launch_models
+from proliferate.server.cloud.workspaces.target_launch import service as target_launch_service
 from tests.unit.db_session_helpers import NoopDb, patch_async_session_factory
 
 INTERACT_WITH_DB = "cloud_workspace_user_can_interact_with_db"
@@ -358,13 +360,13 @@ async def test_launch_workspace_on_target_keeps_workspace_id_after_expire_all(
             id=expected_target_id,
             owner_scope="personal",
             owner_user_id=user.id,
-            kind=workspace_service.CloudTargetKind.desktop_dispatch.value,
-            status=workspace_service.CloudTargetStatus.online.value,
+            kind=target_launch_service.CloudTargetKind.desktop_dispatch.value,
+            status=target_launch_service.CloudTargetStatus.online.value,
             default_workspace_root="/tmp/workspaces",
         )
 
     async def _resolve_new_direct_target_workspace_create(*_args, **_kwargs):
-        return workspace_service.ResolvedCloudWorkspaceCreate(
+        return target_launch_service.ResolvedDirectTargetWorkspaceCreate(
             git_provider="github",
             git_owner="acme",
             git_repo_name="rocket",
@@ -388,7 +390,7 @@ async def test_launch_workspace_on_target_keeps_workspace_id_after_expire_all(
     async def _enqueue_target_launch_command(_db, **kwargs):
         command = SimpleNamespace(id=uuid4(), kind=kwargs["kind"], payload=kwargs["payload"])
         command_calls.append({**kwargs, "command": command})
-        if command.kind == workspace_service.CloudCommandKind.materialize_workspace.value:
+        if command.kind == target_launch_service.CloudCommandKind.materialize_workspace.value:
             if command.payload["mode"] == "existing_path":
                 assert kwargs["cloud_workspace_id"] is None
             else:
@@ -399,7 +401,7 @@ async def test_launch_workspace_on_target_keeps_workspace_id_after_expire_all(
 
     async def _wait_for_target_launch_command(command, *, workspace_id: object):
         assert workspace_id == expected_workspace_id
-        if command.kind == workspace_service.CloudCommandKind.materialize_workspace.value:
+        if command.kind == target_launch_service.CloudCommandKind.materialize_workspace.value:
             if command.payload["mode"] == "existing_path":
                 return AutomationCommandResult(
                     command=command,
@@ -421,7 +423,7 @@ async def test_launch_workspace_on_target_keeps_workspace_id_after_expire_all(
                 },
                 body={},
             )
-        if command.kind == workspace_service.CloudCommandKind.start_session.value:
+        if command.kind == target_launch_service.CloudCommandKind.start_session.value:
             return AutomationCommandResult(command=command, result={}, body={"id": "session-1"})
         return AutomationCommandResult(command=command, result={}, body={})
 
@@ -434,51 +436,53 @@ async def test_launch_workspace_on_target_keeps_workspace_id_after_expire_all(
         return workspace_service.WorkspaceDetail.model_construct(id=str(expected_workspace_id))
 
     monkeypatch.setattr(
-        workspace_service.targets_store,
+        target_launch_service.targets_store,
         "get_visible_target_by_id",
         _get_visible_target_by_id,
     )
     monkeypatch.setattr(
-        workspace_service,
+        target_launch_service,
         "_resolve_new_direct_target_workspace_create",
         _resolve_new_direct_target_workspace_create,
     )
     monkeypatch.setattr(
-        workspace_service.billing_store,
+        target_launch_service.billing_store,
         "ensure_personal_billing_subject",
         _ensure_personal_billing_subject,
     )
     monkeypatch.setattr(
-        workspace_service,
+        target_launch_service,
         "create_direct_target_cloud_workspace",
         _create_direct_target_cloud_workspace,
     )
-    monkeypatch.setattr(workspace_service.db_session.db_engine, "commit_session", _commit_session)
     monkeypatch.setattr(
-        workspace_service,
+        target_launch_service.db_session.db_engine, "commit_session", _commit_session
+    )
+    monkeypatch.setattr(
+        target_launch_service,
         "_enqueue_target_launch_command",
         _enqueue_target_launch_command,
     )
     monkeypatch.setattr(
-        workspace_service,
+        target_launch_service,
         "_wait_for_target_launch_command",
         _wait_for_target_launch_command,
     )
     monkeypatch.setattr(
-        workspace_service,
+        target_launch_service,
         "get_cloud_workspace_by_id",
         _get_cloud_workspace_by_id,
     )
     monkeypatch.setattr(
-        workspace_service,
-        "_build_workspace_detail_for_request",
+        target_launch_service,
+        "build_workspace_detail_for_request",
         _build_workspace_detail_for_request,
     )
 
-    result = await workspace_service.launch_workspace_on_target(
+    result = await target_launch_service.launch_workspace_on_target(
         FakeDb(),
         user,
-        workspace_service.LaunchWorkspaceOnTargetRequest.model_validate(
+        target_launch_models.LaunchWorkspaceOnTargetRequest.model_validate(
             {
                 "targetId": str(expected_target_id),
                 "gitProvider": "github",
@@ -496,10 +500,10 @@ async def test_launch_workspace_on_target_keeps_workspace_id_after_expire_all(
     assert result.workspace.id == str(expected_workspace_id)
     assert len(command_calls) == 5
     assert {call["kind"] for call in command_calls} == {
-        workspace_service.CloudCommandKind.ensure_repo_checkout.value,
-        workspace_service.CloudCommandKind.materialize_workspace.value,
-        workspace_service.CloudCommandKind.start_session.value,
-        workspace_service.CloudCommandKind.send_prompt.value,
+        target_launch_service.CloudCommandKind.ensure_repo_checkout.value,
+        target_launch_service.CloudCommandKind.materialize_workspace.value,
+        target_launch_service.CloudCommandKind.start_session.value,
+        target_launch_service.CloudCommandKind.send_prompt.value,
     }
 
 
@@ -510,7 +514,7 @@ async def test_target_launch_wait_marks_pending_prompt_failed(
     command_id = uuid4()
     failed_command = SimpleNamespace(
         id=command_id,
-        status=workspace_service.CloudCommandStatus.expired.value,
+        status=target_launch_service.CloudCommandStatus.expired.value,
     )
     calls: list[tuple[str, object]] = []
 
@@ -547,40 +551,40 @@ async def test_target_launch_wait_marks_pending_prompt_failed(
             return FakeFreshSession()
 
     monkeypatch.setattr(
-        workspace_service,
+        target_launch_service,
         "wait_for_command_result",
         _wait_for_command_result,
     )
     monkeypatch.setattr(
-        workspace_service.command_store,
+        target_launch_service.command_store,
         "get_command_by_id",
         _get_command_by_id,
     )
     monkeypatch.setattr(
-        workspace_service,
+        target_launch_service,
         "mark_pending_prompt_interaction_failed_for_command",
         _mark_pending,
     )
     monkeypatch.setattr(
-        workspace_service,
+        target_launch_service,
         "publish_command_status_after_commit",
         _publish,
     )
     monkeypatch.setattr(
-        workspace_service.db_session.db_engine,
+        target_launch_service.db_session.db_engine,
         "async_session_factory",
         FakeSessionFactory(),
     )
-    monkeypatch.setattr(workspace_service.db_session.db_engine, "commit_session", _commit)
+    monkeypatch.setattr(target_launch_service.db_session.db_engine, "commit_session", _commit)
 
     with pytest.raises(TimeoutError):
-        await workspace_service._wait_for_target_launch_command(
+        await target_launch_service._wait_for_target_launch_command(
             SimpleNamespace(id=command_id),
             workspace_id=uuid4(),
         )
 
     assert calls == [
-        ("wait", workspace_service.TARGET_LAUNCH_COMMAND_WAIT_TIMEOUT),
+        ("wait", target_launch_service.TARGET_LAUNCH_COMMAND_WAIT_TIMEOUT),
         ("fresh_session", "open"),
         ("load", command_id),
         ("mark", command_id),
