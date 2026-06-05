@@ -13,7 +13,7 @@ from proliferate.constants.cloud import CloudCommandKind, CloudCommandStatus
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_sync import command_leases as command_leases_store
 from proliferate.db.store.cloud_sync import command_records
-from proliferate.db.store.cloud_sync import commands as commands_store
+from proliferate.db.store.cloud_sync import command_results as command_results_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.commands.client_state import (
     expire_stale_client_commands_for_target,
@@ -219,7 +219,7 @@ async def record_command_delivery(
     status = validate_delivery_status(body.status)
     now = utcnow()
     if status == CloudCommandStatus.failed_delivery.value:
-        command = await commands_store.mark_command_failed_delivery(
+        command = await command_results_store.mark_command_failed_delivery(
             db,
             command_id=command_id,
             worker_id=auth.worker_id,
@@ -229,7 +229,7 @@ async def record_command_delivery(
             now=now,
         )
     else:
-        command = await commands_store.mark_command_delivered(
+        command = await command_results_store.mark_command_delivered(
             db,
             command_id=command_id,
             worker_id=auth.worker_id,
@@ -357,7 +357,7 @@ async def record_command_result(
     body: WorkerCommandResultRequest,
 ) -> WorkerCommandStatusResponse:
     status = validate_result_status(body.status)
-    command = await commands_store.record_command_result(
+    command = await command_results_store.record_command_result(
         db,
         command_id=command_id,
         worker_id=auth.worker_id,
