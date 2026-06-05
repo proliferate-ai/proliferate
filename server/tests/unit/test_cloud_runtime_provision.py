@@ -24,6 +24,7 @@ from proliferate.server.cloud.runtime import provision as runtime_provision
 from proliferate.server.cloud.runtime import sandbox_exec as runtime_sandbox_exec
 from proliferate.server.cloud.runtime.provisioning.data_key import generate_anyharness_data_key
 from proliferate.server.cloud.runtime.provisioning import launch as runtime_launch
+from proliferate.server.cloud.runtime.provisioning import template as runtime_template
 from proliferate.server.cloud.runtime.provisioning import workspace as runtime_workspace
 from proliferate.server.cloud.runtime.models import CloudProvisionInput
 from proliferate.utils.crypto import encrypt_json
@@ -388,14 +389,10 @@ class TestPrepareRuntimeTemplate:
             calls.append("stage_binary")
             return {"anyharness": Path("/tmp/anyharness")}
 
-        monkeypatch.setattr(runtime_provision, "_set_workspace_status", _set_workspace_status)
-        monkeypatch.setattr(
-            runtime_provision,
-            "check_runtime_bundle_preinstalled",
-            _check_runtime_bundle_preinstalled,
-        )
-        monkeypatch.setattr(runtime_provision, "stage_runtime_bundle", _stage_runtime_bundle)
-        monkeypatch.setattr(runtime_provision, "check_node_runtime", _check_node_runtime)
+        check_bundle = "check_runtime_bundle_preinstalled"
+        monkeypatch.setattr(runtime_template, check_bundle, _check_runtime_bundle_preinstalled)
+        monkeypatch.setattr(runtime_template, "stage_runtime_bundle", _stage_runtime_bundle)
+        monkeypatch.setattr(runtime_template, "check_node_runtime", _check_node_runtime)
 
         tracker = runtime_provision._StepTracker(workspace_id=uuid.uuid4())
         ctx = _make_provision_input(codex_enabled=True)
@@ -410,7 +407,10 @@ class TestPrepareRuntimeTemplate:
             ),
         )
 
-        await runtime_provision._prepare_runtime_template(tracker, ctx, provider, connected)
+        prepare = runtime_provision._prepare_runtime_template
+        await prepare(
+            tracker, ctx, provider, connected, set_workspace_status=_set_workspace_status
+        )
 
         assert calls == ["check_bundle"]
         assert statuses == [
@@ -444,14 +444,10 @@ class TestPrepareRuntimeTemplate:
             calls.append("stage_binary")
             return {"anyharness": Path("/tmp/anyharness")}
 
-        monkeypatch.setattr(runtime_provision, "_set_workspace_status", _noop_status)
-        monkeypatch.setattr(
-            runtime_provision,
-            "check_runtime_bundle_preinstalled",
-            _check_runtime_bundle_preinstalled,
-        )
-        monkeypatch.setattr(runtime_provision, "stage_runtime_bundle", _stage_runtime_bundle)
-        monkeypatch.setattr(runtime_provision, "check_node_runtime", _check_node_runtime)
+        check_bundle = "check_runtime_bundle_preinstalled"
+        monkeypatch.setattr(runtime_template, check_bundle, _check_runtime_bundle_preinstalled)
+        monkeypatch.setattr(runtime_template, "stage_runtime_bundle", _stage_runtime_bundle)
+        monkeypatch.setattr(runtime_template, "check_node_runtime", _check_node_runtime)
 
         tracker = runtime_provision._StepTracker(workspace_id=uuid.uuid4())
         ctx = _make_provision_input(codex_enabled=True)
@@ -466,7 +462,8 @@ class TestPrepareRuntimeTemplate:
             ),
         )
 
-        await runtime_provision._prepare_runtime_template(tracker, ctx, provider, connected)
+        prepare = runtime_provision._prepare_runtime_template
+        await prepare(tracker, ctx, provider, connected, set_workspace_status=_noop_status)
 
         assert calls == ["check_bundle", "stage_binary", "check_node"]
 
