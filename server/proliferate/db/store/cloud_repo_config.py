@@ -179,18 +179,7 @@ async def get_cloud_repo_config(
     ).scalar_one_or_none()
     if record is None:
         return None
-    files = list(
-        (
-            await db.execute(
-                select(CloudRepoFile)
-                .where(CloudRepoFile.cloud_repo_config_id == record.id)
-                .order_by(CloudRepoFile.relative_path.asc())
-            )
-        )
-        .scalars()
-        .all()
-    )
-    return _repo_config_value(record, files)
+    return _repo_config_value(record, await _load_repo_file_rows(db, record.id))
 
 
 async def get_organization_cloud_repo_config(
@@ -645,12 +634,7 @@ async def save_cloud_repo_file(
 
     record.updated_at = now
     await db.flush()
-    return await get_cloud_repo_config(
-        db,
-        user_id=user_id,
-        git_owner=git_owner,
-        git_repo_name=git_repo_name,
-    )  # type: ignore[return-value]
+    return _repo_config_value(record, await _load_repo_file_rows(db, record.id))
 
 
 async def bootstrap_cloud_repo_config(
@@ -679,12 +663,7 @@ async def bootstrap_cloud_repo_config(
     record.configured_at = now
     record.updated_at = now
     await db.flush()
-    return await get_cloud_repo_config(
-        db,
-        user_id=user_id,
-        git_owner=git_owner,
-        git_repo_name=git_repo_name,
-    )  # type: ignore[return-value]
+    return _repo_config_value(record, await _load_repo_file_rows(db, record.id))
 
 
 async def load_cloud_repo_config_for_user(
