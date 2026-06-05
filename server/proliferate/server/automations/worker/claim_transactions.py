@@ -56,6 +56,31 @@ async def claim_cloud_automation_runs(
     return await _run_in_transaction(operation)
 
 
+async def claim_cloud_automation_run(
+    *,
+    run_id: UUID,
+    executor_id: str,
+    claim_ttl: timedelta,
+    now: datetime,
+    reclaimable_statuses: frozenset[str],
+    active_statuses: frozenset[str],
+    unconfigured_agent_failure: ClaimFailure,
+) -> claim_store.AutomationRunClaimAttempt:
+    async def operation(db: AsyncSession) -> claim_store.AutomationRunClaimAttempt:
+        return await claim_store.claim_cloud_automation_run(
+            db,
+            run_id=run_id,
+            executor_id=executor_id,
+            claim_ttl=claim_ttl,
+            now=now,
+            reclaimable_statuses=reclaimable_statuses,
+            active_statuses=active_statuses,
+            unconfigured_agent_failure=unconfigured_agent_failure,
+        )
+
+    return await _run_in_transaction(operation)
+
+
 async def load_current_run_claim(
     *,
     run_id: UUID,

@@ -204,7 +204,8 @@ async def test_due_scheduler_disables_bad_schedule_and_continues_batch(
                 .all()
             )
 
-        assert created == 1
+        assert created.created_runs == 1
+        assert created.cloud_run_ids == (runs[0].id,)
         assert good is not None
         assert good.last_scheduled_at == now
         assert good.next_run_at == now + timedelta(hours=1)
@@ -307,7 +308,8 @@ async def test_due_scheduler_skips_failed_snapshot_and_continues_batch(
                 .all()
             )
 
-        assert created == 1
+        assert created.created_runs == 1
+        assert created.cloud_run_ids == (runs[0].id,)
         assert good is not None
         assert good.last_scheduled_at == now
         assert good.next_run_at == now + timedelta(hours=1)
@@ -382,7 +384,8 @@ async def test_due_scheduler_uses_precomputed_agent_run_config_snapshot(
                 )
             ).scalar_one()
 
-        assert created == 1
+        assert created.created_runs == 1
+        assert created.cloud_run_ids == (run.id,)
         assert run.agent_run_config_snapshot_json is not None
         assert run.agent_run_config_snapshot_json["model_id"] == "gpt-5.3-codex"
     finally:
@@ -489,7 +492,8 @@ async def test_due_scheduler_advances_after_duplicate_scheduled_slot(
                 .all()
             )
 
-        assert created == 0
+        assert created.created_runs == 0
+        assert created.cloud_run_ids == ()
         assert automation is not None
         assert automation.next_run_at == now + timedelta(hours=1)
         assert automation.last_scheduled_at is None
@@ -556,7 +560,8 @@ async def test_due_scheduler_skips_personal_cloud_automation_without_repo_config
                 )
             ).scalar_one_or_none()
 
-        assert created == 0
+        assert created.created_runs == 0
+        assert created.cloud_run_ids == ()
         assert automation is not None
         assert automation.next_run_at == now
         assert run is None

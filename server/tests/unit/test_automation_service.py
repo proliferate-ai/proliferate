@@ -5,6 +5,10 @@ import pytest
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from proliferate.background.config import (
+    AUTOMATIONS_EXECUTE_RUN_TASK,
+    AUTOMATIONS_EXECUTION_QUEUE,
+)
 from proliferate.constants.cloud import CloudTargetKind, CloudTargetStatus
 from proliferate.constants.automations import (
     AUTOMATION_OWNER_SCOPE_PERSONAL,
@@ -13,6 +17,7 @@ from proliferate.constants.automations import (
 from proliferate.db import engine as engine_module
 from proliferate.db.models.automations import Automation
 from proliferate.db.models.auth import User
+from proliferate.db.models.background import BackgroundOutboxTask
 from proliferate.db.models.billing import BillingSubject
 from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
 from proliferate.db.models.cloud.targets import (
@@ -366,11 +371,25 @@ async def test_cloud_automation_snapshots_selected_run_config(
             )
             run = await automation_service.run_automation_now(session, user_id, automation.id)
 
+        async with engine_module.async_session_factory() as session:
+            outbox_task = (
+                await session.execute(
+                    select(BackgroundOutboxTask).where(
+                        BackgroundOutboxTask.idempotency_key
+                        == f"{AUTOMATIONS_EXECUTE_RUN_TASK}:{run.id}"
+                    )
+                )
+            ).scalar_one()
+
         assert automation.cloud_agent_run_config_id == run_config.id
         assert run.agent_run_config_snapshot_json is not None
         assert run.agent_run_config_snapshot_json["config_id"] == str(run_config.id)
         assert run.agent_kind == "codex"
         assert run.model_id == "gpt-5.4"
+        assert outbox_task.task_name == AUTOMATIONS_EXECUTE_RUN_TASK
+        assert outbox_task.queue == AUTOMATIONS_EXECUTION_QUEUE
+        assert outbox_task.status == "pending"
+        assert outbox_task.idempotency_key == f"{AUTOMATIONS_EXECUTE_RUN_TASK}:{run.id}"
     finally:
         engine_module.async_session_factory = original_factory
 

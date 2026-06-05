@@ -22,6 +22,8 @@ from proliferate.server.automations.domain.claim_lifecycle import (
 from proliferate.server.automations.local_executor import (
     _normalize_local_error_code,
 )
+from proliferate.server.automations.worker import cloud_executor
+from proliferate.server.automations.worker.cloud_executor_config import build_cloud_executor_config
 from proliferate.server.automations.worker.main import _parse_args
 from tests.unit.automation_claim_store_helpers import (
     attach_anyharness_workspace_to_run,
@@ -46,15 +48,98 @@ def test_local_executor_caps_claims_and_allowlists_error_codes() -> None:
     assert _normalize_local_error_code("raw/path/leak") == "local_unexpected_executor_error"
 
 
-def test_cloud_executor_cli_rejects_non_positive_values() -> None:
+def test_automation_worker_cli_rejects_non_positive_values() -> None:
     with pytest.raises(SystemExit):
-        _parse_args(["--role", "cloud-executor", "--cloud-concurrency", "0"])
+        _parse_args(["--role", "scheduler", "--batch-size", "0"])
 
 
-def test_cloud_executor_cli_accepts_stable_executor_id() -> None:
-    args = _parse_args(["--role", "cloud-executor", "--cloud-executor-id", "cloud:worker-a"])
+def test_automation_worker_cli_is_scheduler_only() -> None:
+    with pytest.raises(SystemExit):
+        _parse_args(["--role", "cloud-executor"])
+    args = _parse_args(["--role", "scheduler", "--interval-seconds", "2", "--batch-size", "5"])
 
-    assert args.cloud_executor_id == "cloud:worker-a"
+    assert args.role == "scheduler"
+    assert args.interval_seconds == 2
+    assert args.batch_size == 5
+
+
+@pytest.mark.asyncio
+async def test_cloud_execute_task_duplicate_delivery_noops_active_claim(
+    monkeypatch: pytest.MonkeyPatch,
+    test_engine,  # type: ignore[no-untyped-def]
+) -> None:
+    original_factory = engine_module.async_session_factory
+    engine_module.async_session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
+    now = datetime(2026, 4, 20, 12, 0, tzinfo=UTC)
+    user_id = uuid.uuid4()
+    processed_run_ids: list[uuid.UUID] = []
+
+    async def fake_process(claim, *, config):  # type: ignore[no-untyped-def]
+        processed_run_ids.append(claim.id)
+
+    monkeypatch.setattr(cloud_executor, "utcnow", lambda: now)
+    monkeypatch.setattr(cloud_executor, "process_cloud_automation_run", fake_process)
+
+    try:
+        automation_id = await create_cloud_automation(user_id, now)
+        run = await create_manual_run(user_id=user_id, automation_id=automation_id)
+        assert run is not None
+        config = build_cloud_executor_config(
+            executor_id="celery-task",
+            claim_ttl_seconds=300,
+        )
+
+        first = await cloud_executor.execute_cloud_automation_run(run.id, config=config)
+        with pytest.raises(cloud_executor.CloudAutomationRunBusy) as busy:
+            await cloud_executor.execute_cloud_automation_run(run.id, config=config)
+
+        async with engine_module.async_session_factory() as session:
+            record = await session.get(AutomationRun, run.id)
+            assert record is not None
+
+        assert first is True
+        assert busy.value.retry_after_seconds == 300
+        assert processed_run_ids == [run.id]
+        assert record.status == "claimed"
+        assert record.executor_id == "celery-task"
+    finally:
+        engine_module.async_session_factory = original_factory
+
+
+@pytest.mark.asyncio
+async def test_cloud_execute_task_noops_terminal_run(
+    monkeypatch: pytest.MonkeyPatch,
+    test_engine,  # type: ignore[no-untyped-def]
+) -> None:
+    original_factory = engine_module.async_session_factory
+    engine_module.async_session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
+    now = datetime(2026, 4, 20, 12, 0, tzinfo=UTC)
+    user_id = uuid.uuid4()
+
+    async def unexpected_process(*_args, **_kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("terminal run must not execute")
+
+    monkeypatch.setattr(cloud_executor, "utcnow", lambda: now)
+    monkeypatch.setattr(cloud_executor, "process_cloud_automation_run", unexpected_process)
+
+    try:
+        automation_id = await create_cloud_automation(user_id, now)
+        run = await create_manual_run(user_id=user_id, automation_id=automation_id)
+        assert run is not None
+        async with engine_module.async_session_factory() as session:
+            record = await session.get(AutomationRun, run.id)
+            assert record is not None
+            record.status = "dispatched"
+            await session.commit()
+
+        executed = await cloud_executor.execute_cloud_automation_run(
+            run.id,
+            config=build_cloud_executor_config(executor_id="celery-task"),
+        )
+
+        assert executed is False
+    finally:
+        engine_module.async_session_factory = original_factory
 
 
 @pytest.mark.asyncio

@@ -2,8 +2,13 @@ from datetime import UTC, datetime, timedelta
 import uuid
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from proliferate.background.config import (
+    AUTOMATIONS_EXECUTE_RUN_TASK,
+    AUTOMATIONS_EXECUTION_QUEUE,
+)
 from proliferate.constants.automations import (
     AUTOMATION_OWNER_SCOPE_PERSONAL,
     AUTOMATION_RUN_STATUS_DISPATCHING,
@@ -11,6 +16,7 @@ from proliferate.constants.automations import (
     AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
 )
 from proliferate.db import engine as engine_module
+from proliferate.db.models.background import BackgroundOutboxTask
 from proliferate.db.models.auth import User
 from proliferate.db.models.automations import Automation, AutomationRun
 from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
@@ -226,5 +232,106 @@ async def test_scheduler_tick_commits_sweep_before_due_batch_failure(
         assert record.last_error_code == AUTOMATION_ERROR_DISPATCH_UNCERTAIN
         assert record.claim_id is None
         assert record.executor_id is None
+    finally:
+        engine_module.async_session_factory = original_factory
+
+
+@pytest.mark.asyncio
+async def test_scheduler_tick_enqueues_created_cloud_run_outbox(
+    monkeypatch: pytest.MonkeyPatch,
+    test_engine,  # type: ignore[no-untyped-def]
+) -> None:
+    original_factory = engine_module.async_session_factory
+    engine_module.async_session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
+    now = datetime(2026, 4, 20, 12, 0, tzinfo=UTC)
+    user_id = uuid.uuid4()
+    monkeypatch.setattr(worker_service, "utcnow", lambda: now)
+
+    try:
+        async with engine_module.async_session_factory() as session:
+            session.add(
+                User(
+                    id=user_id,
+                    email=f"automation-worker-outbox-{user_id}@example.com",
+                    hashed_password="!",
+                    is_active=True,
+                    is_superuser=False,
+                    is_verified=True,
+                )
+            )
+            await session.flush()
+            repo = CloudRepoConfig(
+                owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+                user_id=user_id,
+                git_owner="proliferate-ai",
+                git_repo_name="proliferate",
+                configured=True,
+                configured_at=now,
+                default_branch="main",
+                env_vars_ciphertext="",
+                env_vars_version=0,
+                setup_script="",
+                setup_script_version=0,
+                files_version=0,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(repo)
+            await session.flush()
+            run_config = CloudAgentRunConfig(
+                owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+                owner_user_id=user_id,
+                organization_id=None,
+                created_by_user_id=user_id,
+                name="Automation worker outbox config",
+                agent_kind="codex",
+                model_id="gpt-5.4",
+                control_values_json={},
+                usable_in_personal_sandboxes=True,
+                usable_in_shared_sandboxes=False,
+                seed_key=None,
+                system_default_rank=None,
+                status="active",
+            )
+            session.add(run_config)
+            await session.flush()
+            session.add(
+                Automation(
+                    owner_scope=AUTOMATION_OWNER_SCOPE_PERSONAL,
+                    owner_user_id=user_id,
+                    organization_id=None,
+                    created_by_user_id=user_id,
+                    cloud_repo_config_id=repo.id,
+                    title="Daily check",
+                    prompt="Original prompt",
+                    schedule_rrule="RRULE:FREQ=DAILY;BYHOUR=12;BYMINUTE=0",
+                    schedule_timezone="UTC",
+                    schedule_summary="Daily at 12:00 in UTC",
+                    target_mode=AUTOMATION_TARGET_MODE_PERSONAL_CLOUD,
+                    cloud_agent_run_config_id=run_config.id,
+                    enabled=True,
+                    paused_at=None,
+                    next_run_at=now,
+                    last_scheduled_at=None,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            await session.commit()
+
+        result = await worker_service.run_scheduler_tick(
+            session_factory=engine_module.async_session_factory,
+            batch_size=1,
+        )
+
+        async with engine_module.async_session_factory() as session:
+            run = (await session.execute(select(AutomationRun))).scalar_one()
+            outbox = (await session.execute(select(BackgroundOutboxTask))).scalar_one()
+
+        assert result.created_runs == 1
+        assert outbox.task_name == AUTOMATIONS_EXECUTE_RUN_TASK
+        assert outbox.queue == AUTOMATIONS_EXECUTION_QUEUE
+        assert outbox.kwargs_json == {"run_id": str(run.id)}
+        assert outbox.idempotency_key == f"{AUTOMATIONS_EXECUTE_RUN_TASK}:{run.id}"
     finally:
         engine_module.async_session_factory = original_factory

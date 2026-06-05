@@ -198,6 +198,12 @@ class AutomationScheduleAdvance:
     next_run_at: datetime | None
 
 
+@dataclass(frozen=True)
+class ScheduledRunsBatchResult:
+    created_runs: int
+    cloud_run_ids: tuple[UUID, ...]
+
+
 ScheduleAdvanceResolver = Callable[
     [AutomationScheduleFields, datetime],
     AutomationScheduleAdvance,
@@ -672,7 +678,7 @@ async def create_due_scheduled_runs_batch(
     limit: int,
     schedule_advance_resolver: ScheduleAdvanceResolver,
     agent_run_config_snapshot_builder: AgentRunConfigSnapshotBuilder,
-) -> int:
+) -> ScheduledRunsBatchResult:
     rows = list(
         (
             await db.execute(
@@ -702,6 +708,7 @@ async def create_due_scheduled_runs_batch(
         ).all()
     )
     inserted_count = 0
+    cloud_run_ids: list[UUID] = []
     for record, repo_config, run_config in rows:
         try:
             advance = schedule_advance_resolver(
@@ -786,8 +793,13 @@ async def create_due_scheduled_runs_batch(
                     )
                     .returning(AutomationRun.id)
                 )
-                if result.scalar_one_or_none() is not None:
+                if (run_id := result.scalar_one_or_none()) is not None:
                     inserted_count += 1
+                    if (
+                        _execution_target_for_target_mode(record.target_mode)
+                        == AUTOMATION_EXECUTION_TARGET_CLOUD
+                    ):
+                        cloud_run_ids.append(run_id)
                     record.last_scheduled_at = advance.scheduled_for
                 else:
                     logger.debug(
@@ -798,4 +810,7 @@ async def create_due_scheduled_runs_batch(
                     )
         record.next_run_at = advance.next_run_at
         record.updated_at = now
-    return inserted_count
+    return ScheduledRunsBatchResult(
+        created_runs=inserted_count,
+        cloud_run_ids=tuple(cloud_run_ids),
+    )

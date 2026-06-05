@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -49,6 +50,12 @@ class LocalAutomationRepoIdentity(Protocol):
 
 class ClaimActivePredicate(Protocol):
     def __call__(self, claim_expires_at: datetime | None, now: datetime) -> bool: ...
+
+
+@dataclass(frozen=True)
+class AutomationRunClaimAttempt:
+    claim: AutomationRunClaimValue | None
+    retry_after_seconds: float | None = None
 
 
 async def load_claimed_run_for_update(
@@ -138,7 +145,74 @@ async def claim_cloud_automation_runs(
         unconfigured_agent_failure=unconfigured_agent_failure,
         user_id=None,
         repo_identities=None,
+        run_id=None,
     )
+
+
+async def claim_cloud_automation_run(
+    db: AsyncSession,
+    *,
+    run_id: UUID,
+    executor_id: str,
+    claim_ttl: timedelta,
+    now: datetime,
+    reclaimable_statuses: frozenset[str],
+    active_statuses: frozenset[str],
+    unconfigured_agent_failure: ClaimFailure,
+) -> AutomationRunClaimAttempt:
+    claims = await _claim_automation_runs(
+        db,
+        executor_id=executor_id,
+        executor_kind=AUTOMATION_EXECUTOR_KIND_CLOUD,
+        execution_target=AUTOMATION_EXECUTION_TARGET_CLOUD,
+        claim_ttl=claim_ttl,
+        limit=1,
+        now=now,
+        reclaimable_statuses=reclaimable_statuses,
+        unconfigured_agent_failure=unconfigured_agent_failure,
+        user_id=None,
+        repo_identities=None,
+        run_id=run_id,
+    )
+    if claims:
+        return AutomationRunClaimAttempt(claim=claims[0])
+    retry_after_seconds = await _cloud_run_retry_after_seconds(
+        db,
+        run_id=run_id,
+        now=now,
+        active_statuses=active_statuses,
+    )
+    return AutomationRunClaimAttempt(
+        claim=None,
+        retry_after_seconds=retry_after_seconds,
+    )
+
+
+async def _cloud_run_retry_after_seconds(
+    db: AsyncSession,
+    *,
+    run_id: UUID,
+    now: datetime,
+    active_statuses: frozenset[str],
+) -> float | None:
+    row = (
+        await db.execute(
+            select(AutomationRun.status, AutomationRun.claim_expires_at)
+            .where(
+                AutomationRun.id == run_id,
+                AutomationRun.target_mode.in_(
+                    [AUTOMATION_TARGET_MODE_PERSONAL_CLOUD, AUTOMATION_TARGET_MODE_SHARED_CLOUD]
+                ),
+            )
+            .with_for_update()
+        )
+    ).one_or_none()
+    if row is None:
+        return None
+    status, claim_expires_at = row
+    if status not in active_statuses or claim_expires_at is None or claim_expires_at <= now:
+        return None
+    return max(1.0, (claim_expires_at - now).total_seconds())
 
 
 async def claim_local_automation_runs(
@@ -174,6 +248,7 @@ async def claim_local_automation_runs(
         unconfigured_agent_failure=unconfigured_agent_failure,
         user_id=user_id,
         repo_identities=repo_identities,
+        run_id=None,
     )
 
 
@@ -190,6 +265,7 @@ async def _claim_automation_runs(
     unconfigured_agent_failure: ClaimFailure,
     user_id: UUID | None,
     repo_identities: list[tuple[str, str, str]] | None,
+    run_id: UUID | None,
 ) -> list[AutomationRunClaimValue]:
     predicates = [
         (
@@ -208,6 +284,8 @@ async def _claim_automation_runs(
             ),
         ),
     ]
+    if run_id is not None:
+        predicates.append(AutomationRun.id == run_id)
     if user_id is not None:
         predicates.append(AutomationRun.owner_user_id == user_id)
     if repo_identities is not None:

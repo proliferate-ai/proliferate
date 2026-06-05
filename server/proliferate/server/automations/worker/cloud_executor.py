@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from uuid import UUID
 
 from proliferate.constants.automations import (
     AUTOMATION_TARGET_MODE_SHARED_CLOUD,
@@ -13,11 +14,12 @@ from proliferate.db import engine as db_engine
 from proliferate.db.store import cloud_agent_run_config as run_config_store
 from proliferate.db.store.automation_run_claim_values import AutomationRunClaimValue
 from proliferate.server.automations.domain.claim_lifecycle import (
+    ACTIVE_CLAIM_STATUSES,
     RECLAIMABLE_STATUSES,
     unconfigured_agent_failure,
 )
 from proliferate.server.automations.worker.claim_transactions import (
-    claim_cloud_automation_runs,
+    claim_cloud_automation_run,
 )
 from proliferate.server.automations.worker.cloud_execution.context import (
     AutomationExecutionContext,
@@ -32,7 +34,6 @@ from proliferate.server.automations.worker.cloud_executor_claims import (
 from proliferate.server.automations.worker.cloud_executor_config import (
     CloudExecutorConfig,
     build_cloud_executor_config,
-    default_cloud_executor_config,
 )
 from proliferate.server.cloud.agent_run_config.domain.resolve import (
     validate_config_execution_scope,
@@ -41,12 +42,47 @@ from proliferate.utils.time import utcnow
 
 logger = logging.getLogger(__name__)
 
+
+class CloudAutomationRunBusy(Exception):
+    def __init__(self, *, retry_after_seconds: float) -> None:
+        super().__init__("Automation run is already claimed.")
+        self.retry_after_seconds = retry_after_seconds
+
+
 __all__ = [
     "CloudExecutorConfig",
+    "CloudAutomationRunBusy",
     "build_cloud_executor_config",
+    "execute_cloud_automation_run",
     "process_cloud_automation_run",
-    "run_cloud_executor_loop",
 ]
+
+
+async def execute_cloud_automation_run(
+    run_id: UUID,
+    *,
+    config: CloudExecutorConfig | None = None,
+) -> bool:
+    resolved = config or build_cloud_executor_config()
+    attempt = await claim_cloud_automation_run(
+        run_id=run_id,
+        executor_id=resolved.executor_id,
+        claim_ttl=resolved.claim_ttl,
+        now=utcnow(),
+        reclaimable_statuses=RECLAIMABLE_STATUSES,
+        active_statuses=ACTIVE_CLAIM_STATUSES,
+        unconfigured_agent_failure=unconfigured_agent_failure(),
+    )
+    claim = attempt.claim
+    if claim is None:
+        if attempt.retry_after_seconds is not None:
+            raise CloudAutomationRunBusy(
+                retry_after_seconds=attempt.retry_after_seconds,
+            )
+        logger.info("automation cloud executor run not claimable run_id=%s", run_id)
+        return False
+    await process_cloud_automation_run(claim, config=resolved)
+    return True
 
 
 async def process_cloud_automation_run(
@@ -120,56 +156,3 @@ async def _claim_run_config_is_current(claim: AutomationRunClaimValue) -> bool:
         await fail_claim(claim, code=issue.code)
         return False
     return True
-
-
-async def run_cloud_executor_loop(
-    *,
-    config: CloudExecutorConfig | None = None,
-    stop_event: asyncio.Event | None = None,
-) -> None:
-    resolved = config or default_cloud_executor_config()
-    stop_event = stop_event or asyncio.Event()
-    logger.info(
-        "Automation cloud executor started executor_id=%s concurrency=%s",
-        resolved.executor_id,
-        resolved.concurrency,
-    )
-    tasks: set[asyncio.Task[None]] = set()
-    while not stop_event.is_set():
-        done = {task for task in tasks if task.done()}
-        for task in done:
-            tasks.remove(task)
-            try:
-                task.result()
-            except Exception:
-                logger.exception("automation cloud executor task crashed")
-
-        try:
-            available = max(0, resolved.concurrency - len(tasks))
-            if available:
-                claims = await claim_cloud_automation_runs(
-                    executor_id=resolved.executor_id,
-                    claim_ttl=resolved.claim_ttl,
-                    limit=available,
-                    now=utcnow(),
-                    reclaimable_statuses=RECLAIMABLE_STATUSES,
-                    unconfigured_agent_failure=unconfigured_agent_failure(),
-                )
-                for claim in claims:
-                    tasks.add(
-                        asyncio.create_task(process_cloud_automation_run(claim, config=resolved))
-                    )
-        except Exception:
-            logger.exception("automation cloud executor claim loop failed")
-
-        timeout = resolved.poll_interval_seconds if not tasks else 1.0
-        try:
-            await asyncio.wait_for(stop_event.wait(), timeout=timeout)
-        except TimeoutError:
-            continue
-
-    for task in tasks:
-        task.cancel()
-    if tasks:
-        await asyncio.gather(*tasks, return_exceptions=True)
-    logger.info("Automation cloud executor stopped executor_id=%s", resolved.executor_id)

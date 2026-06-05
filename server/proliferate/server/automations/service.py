@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.automations import (
+    AUTOMATION_EXECUTION_TARGET_CLOUD,
     AUTOMATION_OWNER_SCOPE_ORGANIZATION,
     AUTOMATION_OWNER_SCOPE_PERSONAL,
     AUTOMATION_RUN_LIST_DEFAULT_LIMIT,
@@ -52,6 +53,7 @@ from proliferate.server.automations.errors import (
     AutomationRepoLimitExceeded,
     AutomationServiceError,
 )
+from proliferate.server.automations.execution import enqueue_cloud_run_execution_outbox
 from proliferate.server.automations.models import (
     CreateAutomationRequest,
     UpdateAutomationRequest,
@@ -537,6 +539,8 @@ async def run_automation_now(
     )
     if value is None:
         raise AutomationNotFound()
+    if value.execution_target == AUTOMATION_EXECUTION_TARGET_CLOUD:
+        await enqueue_cloud_run_execution_outbox(db, run_id=value.id)
     return value
 
 
