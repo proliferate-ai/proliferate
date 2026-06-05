@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import secrets
 import time
 from urllib.parse import urlparse
 from uuid import UUID
@@ -35,13 +34,9 @@ from proliferate.server.billing.service import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
-from proliferate.server.cloud.runtime.bootstrap import build_runtime_env
 from proliferate.server.cloud.runtime.config_sync.repo_config import (
     WorkspaceRuntimeAccess,
     apply_workspace_repo_config_after_provision,
-)
-from proliferate.server.cloud.runtime.config_sync.worktree_policy import (
-    sync_cloud_worktree_policy_to_runtime,
 )
 from proliferate.server.cloud.runtime.domain.runtime_state import runtime_ready_update
 from proliferate.server.cloud.runtime.git_operations import (
@@ -49,22 +44,17 @@ from proliferate.server.cloud.runtime.git_operations import (
     clone_repository,
     configure_git_identity,
 )
-from proliferate.server.cloud.runtime.liveness.health import (
-    verify_runtime_auth_enforced,
-    wait_for_runtime_health,
-)
 from proliferate.server.cloud.runtime.models import (
     CloudProvisionInput,
     ConnectedSandbox,
     ProvisionStep,
-    RuntimeHandshake,
 )
 from proliferate.server.cloud.runtime.provisioning.input import (
     load_provision_input,
     resolve_git_identity,
 )
 from proliferate.server.cloud.runtime.provisioning.launch import (
-    launch_supervised_runtime_bundle as _launch_supervised_runtime_bundle,
+    launch_and_connect_runtime as _launch_and_connect_runtime,
 )
 from proliferate.server.cloud.runtime.provisioning.launch import (
     refresh_runtime_config_and_apply as _refresh_runtime_config_and_apply,
@@ -101,9 +91,6 @@ from proliferate.server.cloud.runtime.provisioning.template import (
 )
 from proliferate.server.cloud.runtime.provisioning.workspace import (
     attach_workspace_to_running_runtime as _attach_workspace_to_running_runtime,
-)
-from proliferate.server.cloud.runtime.provisioning.workspace import (
-    prepare_workspace_in_runtime as _prepare_workspace_in_runtime,
 )
 from proliferate.server.cloud.runtime.sandbox_exec import (
     collect_runtime_debug_report,
@@ -231,123 +218,6 @@ def _log_provision_summary(
     }
     payload.update(fields)
     _emit_cloud_event("cloud workspace provisioning summary", payload)
-
-
-async def _launch_and_connect_runtime(
-    tracker: _StepTracker,
-    ctx: CloudProvisionInput,
-    provider: SandboxProvider,
-    connected: ConnectedSandbox,
-    *,
-    cloud_base_url: str,
-) -> tuple[ConnectedSandbox, RuntimeHandshake]:
-    runtime_token = secrets.token_urlsafe(32)
-    runtime_env = build_runtime_env(
-        runtime_token,
-        anyharness_data_key=ctx.anyharness_data_key,
-        target_id=ctx.target_id,
-        repo_env_vars=ctx.repo_env_vars,
-    )
-
-    target_id = await _launch_supervised_runtime_bundle(
-        tracker,
-        ctx,
-        provider,
-        connected,
-        runtime_env=runtime_env,
-        runtime_token=runtime_token,
-        cloud_base_url=cloud_base_url,
-    )
-
-    connected = ConnectedSandbox(
-        handle=connected.handle,
-        sandbox=connected.sandbox,
-        endpoint=await provider.resolve_runtime_endpoint(connected.sandbox),
-        runtime_context=connected.runtime_context,
-    )
-
-    await _set_workspace_status(
-        ctx.workspace_id,
-        CloudWorkspaceStatus.materializing,
-        detail="Waiting for AnyHarness health",
-    )
-    tracker.begin(
-        ProvisionStep.wait_for_runtime_health,
-        runtime_url=connected.endpoint.runtime_url,
-    )
-    try:
-        await wait_for_runtime_health(
-            connected.endpoint.runtime_url,
-            workspace_id=ctx.workspace_id,
-            required_successes=1,
-            total_attempts=30,
-            delay_seconds=0.5,
-        )
-    except Exception:
-        await _log_runtime_diagnostics(
-            "cloud runtime launch diagnostics",
-            provider=provider,
-            connected=connected,
-            workspace_id=ctx.workspace_id,
-        )
-        raise
-    tracker.complete(runtime_url=connected.endpoint.runtime_url)
-    await verify_runtime_auth_enforced(
-        connected.endpoint.runtime_url,
-        runtime_token,
-        workspace_id=ctx.workspace_id,
-    )
-    await _set_workspace_status(
-        ctx.workspace_id,
-        CloudWorkspaceStatus.materializing,
-        detail="Waiting for Proliferate Worker enrollment",
-    )
-    tracker.begin(ProvisionStep.start_worker_process, target_id=str(target_id))
-    try:
-        await _wait_for_worker_target_online(target_id, workspace_id=ctx.workspace_id)
-    except Exception:
-        await _log_runtime_diagnostics(
-            "cloud worker enrollment diagnostics",
-            provider=provider,
-            connected=connected,
-            workspace_id=ctx.workspace_id,
-        )
-        raise
-    tracker.complete(target_id=str(target_id))
-    await _request_agent_auth_refresh_and_wait(
-        tracker,
-        ctx,
-        reason="workspace_provision",
-        force_restart=False,
-        set_workspace_status=_set_workspace_status,
-    )
-    await _refresh_runtime_config_and_apply(
-        tracker,
-        ctx,
-        runtime_url=connected.endpoint.runtime_url,
-        access_token=runtime_token,
-        reason="workspace_provision",
-        set_workspace_status=_set_workspace_status,
-    )
-    await sync_cloud_worktree_policy_to_runtime(
-        user_id=ctx.user_id,
-        runtime_url=connected.endpoint.runtime_url,
-        access_token=runtime_token,
-        workspace_id=ctx.workspace_id,
-        run_deferred_startup_cleanup=True,
-        await_deferred_startup_cleanup=False,
-    )
-
-    handshake = await _prepare_workspace_in_runtime(
-        tracker,
-        ctx,
-        provider,
-        connected,
-        runtime_token=runtime_token,
-        set_workspace_status=_set_workspace_status,
-    )
-
-    return connected, handshake
 
 
 async def provision_workspace(
@@ -569,6 +439,8 @@ async def provision_workspace(
                 provider,
                 connected,
                 cloud_base_url=worker_cloud_base_url,
+                set_workspace_status=_set_workspace_status,
+                log_runtime_diagnostics=_log_runtime_diagnostics,
             )
             launched_runtime_this_attempt = True
 
