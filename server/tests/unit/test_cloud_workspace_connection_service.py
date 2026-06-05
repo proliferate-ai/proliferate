@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 
-from proliferate.server.cloud.workspaces import service as workspace_service
+from proliferate.server.cloud.workspaces.remote_access import service as remote_access_service
 from tests.unit.db_session_helpers import NoopDb, noop_async_context
 
 INTERACT_WITH_DB = "cloud_workspace_user_can_interact_with_db"
@@ -13,7 +13,7 @@ INTERACT_WITH_DB = "cloud_workspace_user_can_interact_with_db"
 
 def _patch_session_factory(monkeypatch: pytest.MonkeyPatch, db: NoopDb) -> NoopDb:
     monkeypatch.setattr(
-        workspace_service.db_session,
+        remote_access_service.db_session,
         "open_async_session",
         lambda: noop_async_context(db),
     )
@@ -68,19 +68,19 @@ async def test_get_cloud_connection_uses_request_session_for_runtime_probe(
         assert workspace_id == workspace.id
         return workspace
 
-    monkeypatch.setattr(workspace_service, INTERACT_WITH_DB, _interact)
+    monkeypatch.setattr(remote_access_service, INTERACT_WITH_DB, _interact)
     monkeypatch.setattr(
-        workspace_service, "_reject_shared_workspace_static_connection", _reject_shared
+        remote_access_service, "_reject_shared_workspace_static_connection", _reject_shared
     )
     monkeypatch.setattr(
-        workspace_service,
+        remote_access_service,
         "list_latest_runs_by_cloud_workspace_ids_for_user",
         _latest_runs,
     )
-    monkeypatch.setattr(workspace_service, "get_workspace_connection", _workspace_connection)
-    monkeypatch.setattr(workspace_service, "load_cloud_workspace_by_id", _reload_workspace)
+    monkeypatch.setattr(remote_access_service, "get_workspace_connection", _workspace_connection)
+    monkeypatch.setattr(remote_access_service, "load_cloud_workspace_by_id", _reload_workspace)
 
-    connection = await workspace_service.get_cloud_connection(
+    connection = await remote_access_service.get_cloud_connection(
         request_db,
         user_id,
         workspace.id,

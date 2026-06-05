@@ -58,6 +58,7 @@ from proliferate.integrations.anyharness import CloudRuntimeReconnectError
 from proliferate.server.cloud.runtime.credentials.auth_status import RuntimeAuthStateSnapshot
 from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
 from proliferate.server.cloud.workspaces import service as cloud_service
+from proliferate.server.cloud.workspaces.remote_access import service as remote_service
 from proliferate.utils.crypto import decrypt_json, encrypt_json, encrypt_text
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
@@ -1961,7 +1962,7 @@ class TestCloudWorkspaces:
                 runtime_auth=_current_runtime_auth(),
             )
 
-        monkeypatch.setattr(cloud_service, "get_workspace_connection", _workspace_connection)
+        monkeypatch.setattr(remote_service, "get_workspace_connection", _workspace_connection)
 
         session = await _register_and_login(client, "cloud-connection-ready@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
@@ -2019,7 +2020,7 @@ class TestCloudWorkspaces:
         async def _boom(*_args, **_kwargs) -> RuntimeConnectionTarget:
             raise CloudRuntimeReconnectError("runtime down")
 
-        monkeypatch.setattr(cloud_service, "get_workspace_connection", _boom)
+        monkeypatch.setattr(remote_service, "get_workspace_connection", _boom)
 
         session = await _register_and_login(client, "cloud-connection-not-ready@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
