@@ -18,7 +18,7 @@ from proliferate.constants.cloud import (
     CloudWorkspaceCleanupState,
     CloudWorkspaceStatus,
 )
-from proliferate.db.store import cloud_workspaces
+from proliferate.db.store import cloud_workspace_lifecycle, cloud_workspaces
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import inventory as inventory_store
 from proliferate.db.store.cloud_sync import projections as projections_store
@@ -545,7 +545,7 @@ async def record_materialization_report(
         updates["cleanup_last_error"] = cleanup_last_error
     if state == "hydrated":
         updates["materialized_target_id"] = auth.target_id
-    await cloud_workspaces.update_cloud_workspace_materialization_state(
+    await cloud_workspace_lifecycle.update_cloud_workspace_materialization_state(
         db,
         workspace=workspace,
         **updates,
