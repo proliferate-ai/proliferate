@@ -36,6 +36,7 @@ def test_celery_app_import_registers_noop_task_without_broker_connection() -> No
 
     assert isinstance(celery_app, Celery)
     assert HEALTH_NOOP_TASK in celery_app.tasks
+    assert NOTIFICATIONS_SEND_SLACK_TASK in celery_app.tasks
     assert celery_app.tasks[HEALTH_NOOP_TASK].run() == "ok"
 
 

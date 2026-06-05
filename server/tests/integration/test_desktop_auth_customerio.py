@@ -160,9 +160,9 @@ class TestDesktopGitHubCustomerIoSync:
         assert signup_notification.name == "GitHub Tester"
         assert signup_notification.email == "desktop-github@example.com"
         assert signup_notification.github == "github-desktop-github"
-        assert schedule_signup_mock.call_args.kwargs == {
-            "dedupe_key": "github:github-account-desktop-github@example.com",
-        }
+        signup_kwargs = schedule_signup_mock.call_args.kwargs
+        assert signup_kwargs["dedupe_key"] == ("github:github-account-desktop-github@example.com")
+        assert "db" in signup_kwargs
 
         exchange = await client.post(
             "/auth/desktop/poll",

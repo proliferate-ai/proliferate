@@ -18,8 +18,7 @@ from proliferate.auth.desktop.models import AuthorizeParams
 from proliferate.auth.desktop import service as desktop_service
 from proliferate.auth.identity import providers as identity_providers
 from proliferate.auth.identity.service import WEB_CSRF_COOKIE
-from proliferate.auth.oauth import github_oauth_client
-from proliferate.auth.oauth import google_oauth_client
+from proliferate.auth.oauth import github_oauth_client, google_oauth_client
 from proliferate.auth.passwords import hash_password
 from proliferate.config import settings
 from proliferate.constants.auth import DESKTOP_GITHUB_CSRF_COOKIE, REFRESH_TOKEN_LIFETIME_SECONDS
@@ -29,7 +28,6 @@ from proliferate.utils.crypto import encrypt_text
 
 
 def _make_pkce_pair() -> tuple[str, str]:
-    """Generate a PKCE verifier + challenge pair."""
     verifier = "test-code-verifier-that-is-long-enough-for-pkce"
     digest = hashlib.sha256(verifier.encode("ascii")).digest()
     challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
@@ -1037,9 +1035,11 @@ class TestWebMobileProductAuthFlow:
         assert signup_notification.name == "GitHub Tester"
         assert signup_notification.email == "desktop-shared-github@example.com"
         assert signup_notification.github == "github-desktop-shared-github"
-        assert schedule_signup_mock.call_args.kwargs == {
-            "dedupe_key": "github:github-account-desktop-shared-github@example.com",
-        }
+        signup_kwargs = schedule_signup_mock.call_args.kwargs
+        assert signup_kwargs["dedupe_key"] == (
+            "github:github-account-desktop-shared-github@example.com"
+        )
+        assert "db" in signup_kwargs
 
         token = await client.post(
             "/auth/desktop/token",

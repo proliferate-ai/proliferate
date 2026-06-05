@@ -166,9 +166,9 @@ async def test_finish_github_desktop_callback_syncs_customerio_for_new_user(
     assert signup_notification.name == "The Octocat"
     assert signup_notification.email == "desktop-github@example.com"
     assert signup_notification.github == "octocat"
-    assert schedule_signup_mock.call_args.kwargs == {
-        "dedupe_key": "github:github-account-desktop",
-    }
+    signup_kwargs = schedule_signup_mock.call_args.kwargs
+    assert signup_kwargs["dedupe_key"] == "github:github-account-desktop"
+    assert signup_kwargs["db"] is db
 
 
 @pytest.mark.asyncio
