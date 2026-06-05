@@ -38,10 +38,10 @@ from proliferate.server.cloud.worker.models import (
     WorkerUpdateStatusRequest,
     WorkerUpdateStatusResponse,
 )
+from proliferate.server.cloud.worker.revoked_jti import list_revoked_jtis
 from proliferate.server.cloud.worker.service import (
     authenticate_worker,
     enroll_worker,
-    list_revoked_jtis,
     list_worker_exposures,
     record_command_delivery,
     record_command_result,

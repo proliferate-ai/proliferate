@@ -21,6 +21,7 @@ pub struct WorkerExposureSnapshot {
 #[derive(Debug, Clone)]
 pub(crate) struct WorkerControlState {
     pub control_cursor: Option<String>,
+    pub revoked_jti_cursor: Option<String>,
     pub exposure_cache_initialized: bool,
     pub legacy_exposure_polling_enabled: bool,
 }
@@ -206,6 +207,7 @@ impl WorkerStore {
                 r#"
                 SELECT
                     control_cursor,
+                    revoked_jti_cursor,
                     exposure_cache_initialized,
                     legacy_exposure_polling_enabled
                 FROM worker_control_state
@@ -215,14 +217,16 @@ impl WorkerStore {
                 |row| {
                     Ok(WorkerControlState {
                         control_cursor: row.get(0)?,
-                        exposure_cache_initialized: row.get::<_, i64>(1)? != 0,
-                        legacy_exposure_polling_enabled: row.get::<_, i64>(2)? != 0,
+                        revoked_jti_cursor: row.get(1)?,
+                        exposure_cache_initialized: row.get::<_, i64>(2)? != 0,
+                        legacy_exposure_polling_enabled: row.get::<_, i64>(3)? != 0,
                     })
                 },
             )
             .optional()?;
         Ok(state.unwrap_or(WorkerControlState {
             control_cursor: None,
+            revoked_jti_cursor: None,
             exposure_cache_initialized: false,
             legacy_exposure_polling_enabled: false,
         }))
@@ -239,6 +243,21 @@ impl WorkerStore {
                 updated_at = CURRENT_TIMESTAMP
             "#,
             params![control_cursor],
+        )?;
+        Ok(())
+    }
+
+    pub fn save_revoked_jti_cursor(&self, revoked_jti_cursor: &str) -> Result<(), WorkerError> {
+        let conn = self.connection()?;
+        conn.execute(
+            r#"
+            INSERT INTO worker_control_state (id, revoked_jti_cursor, updated_at)
+            VALUES (1, ?1, CURRENT_TIMESTAMP)
+            ON CONFLICT(id) DO UPDATE SET
+                revoked_jti_cursor = excluded.revoked_jti_cursor,
+                updated_at = CURRENT_TIMESTAMP
+            "#,
+            params![revoked_jti_cursor],
         )?;
         Ok(())
     }

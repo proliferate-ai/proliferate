@@ -293,7 +293,7 @@ async def test_worker_control_wait_returns_cursor_and_leases_commands(
     assert initial_body["reason"] == "exposures"
     assert initial_body["command"] is None
     assert initial_body["exposures"] == []
-    assert initial_body["controlCursor"].startswith("v1:")
+    assert initial_body["controlCursor"].startswith("v2:")
 
     command = await commands_store.create_command(
         db_session,

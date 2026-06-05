@@ -25,6 +25,7 @@ from proliferate.server.cloud.worker.models import (
     WorkerControlWaitResponse,
     WorkerExposureSnapshotResponse,
 )
+from proliferate.server.cloud.worker.revoked_jti import list_revoked_jtis_for_target
 from proliferate.server.cloud.worker.service import (
     _command_envelope,
     authenticate_worker,
@@ -47,7 +48,9 @@ async def check_worker_control(
     authorization: str | None,
     timeout_response: bool,
 ) -> ControlCheck:
-    supported_kinds = normalize_supported_command_kinds(body.supported_kinds)
+    supported_kinds = (
+        normalize_supported_command_kinds(body.supported_kinds) if body.lease_commands else ()
+    )
     lease_seconds = clamp_command_lease_seconds(body.lease_timeout_seconds)
     cursor = worker_control_store.parse_control_cursor(body.control_cursor)
     async with db_engine.async_session_factory() as db:
@@ -67,15 +70,19 @@ async def check_worker_control(
             target_id=auth.target_id,
         )
         blocked_commands: list[commands_store.CloudCommandSnapshot] = []
-        command = await commands_store.lease_next_command(
-            db,
-            target_id=auth.target_id,
-            worker_id=auth.worker_id,
-            supported_kinds=supported_kinds,
-            lease_id=secrets.token_urlsafe(24),
-            lease_expires_at=now + timedelta(seconds=lease_seconds),
-            now=now,
-            blocked_commands=blocked_commands,
+        command = (
+            await commands_store.lease_next_command(
+                db,
+                target_id=auth.target_id,
+                worker_id=auth.worker_id,
+                supported_kinds=supported_kinds,
+                lease_id=secrets.token_urlsafe(24),
+                lease_expires_at=now + timedelta(seconds=lease_seconds),
+                now=now,
+                blocked_commands=blocked_commands,
+            )
+            if body.lease_commands
+            else None
         )
         command_scan_changed_state = bool(blocked_commands)
         if command is not None:
@@ -111,7 +118,13 @@ async def check_worker_control(
             if needs_full_snapshot
             else worker_control_store.cursor_exposures_are_current(cursor, state)
         )
+        revoked_jtis_current = (
+            state.revoked_jti_revision == 0
+            if needs_full_snapshot
+            else worker_control_store.cursor_revoked_jtis_are_current(cursor, state)
+        )
         include_exposures = not exposures_current
+        include_revoked_jtis = not revoked_jtis_current
         exposure_snapshots: tuple[worker_exposures_store.WorkerExposureSnapshot, ...] = ()
         if include_exposures:
             exposure_snapshots = (
@@ -131,7 +144,23 @@ async def check_worker_control(
                 if needs_full_snapshot
                 else worker_control_store.cursor_exposures_are_current(cursor, state)
             )
+            revoked_jtis_current = (
+                state.revoked_jti_revision == 0
+                if needs_full_snapshot
+                else worker_control_store.cursor_revoked_jtis_are_current(cursor, state)
+            )
             include_exposures = not exposures_current
+            include_revoked_jtis = not revoked_jtis_current
+        revoked_jtis = (
+            await list_revoked_jtis_for_target(
+                db,
+                target_id=auth.target_id,
+                cursor=body.revoked_jti_cursor,
+                until=now,
+            )
+            if include_revoked_jtis
+            else None
+        )
         control_cursor = worker_control_store.control_cursor_for_state(state)
         state_current = (
             False if needs_full_snapshot else worker_control_store.cursor_is_current(cursor, state)
@@ -139,10 +168,15 @@ async def check_worker_control(
 
         response: WorkerControlWaitResponse | None = None
         if command is not None:
-            reason = "command_and_exposures" if include_exposures else "command"
+            reason = _control_reason(
+                command=True,
+                exposures=include_exposures,
+                revoked_jtis=include_revoked_jtis,
+            )
             response = WorkerControlWaitResponse(
                 command=_command_envelope(command),
                 exposures=(_exposure_responses(exposure_snapshots) if include_exposures else None),
+                revoked_jtis=revoked_jtis,
                 control_cursor=control_cursor,
                 reason=reason,
                 server_time=now.isoformat(),
@@ -151,14 +185,29 @@ async def check_worker_control(
             response = WorkerControlWaitResponse(
                 command=None,
                 exposures=_exposure_responses(exposure_snapshots),
+                revoked_jtis=revoked_jtis,
                 control_cursor=control_cursor,
-                reason="exposures",
+                reason=_control_reason(
+                    command=False,
+                    exposures=True,
+                    revoked_jtis=include_revoked_jtis,
+                ),
+                server_time=now.isoformat(),
+            )
+        elif include_revoked_jtis:
+            response = WorkerControlWaitResponse(
+                command=None,
+                exposures=None,
+                revoked_jtis=revoked_jtis,
+                control_cursor=control_cursor,
+                reason="revoked_jtis",
                 server_time=now.isoformat(),
             )
         elif not state_current or expired_commands or command_scan_changed_state:
             response = WorkerControlWaitResponse(
                 command=None,
                 exposures=None,
+                revoked_jtis=None,
                 control_cursor=control_cursor,
                 reason="state_changed",
                 server_time=now.isoformat(),
@@ -167,6 +216,7 @@ async def check_worker_control(
             response = WorkerControlWaitResponse(
                 command=None,
                 exposures=None,
+                revoked_jtis=None,
                 control_cursor=control_cursor,
                 reason="timeout",
                 server_time=now.isoformat(),
@@ -176,7 +226,16 @@ async def check_worker_control(
             command is not None
             or expired_commands
             or command_scan_changed_state
-            or response.reason in {"exposures", "command_and_exposures", "state_changed"}
+            or response.reason
+            in {
+                "exposures",
+                "revoked_jtis",
+                "exposures_and_revoked_jtis",
+                "command_and_exposures",
+                "command_and_revoked_jtis",
+                "command_and_reconcile",
+                "state_changed",
+            }
         ):
             await db.commit()
         return ControlCheck(target_id=auth.target_id, response=response)
@@ -224,3 +283,26 @@ def _exposure_responses(
         )
         for snapshot in snapshots
     ]
+
+
+def _control_reason(
+    *,
+    command: bool,
+    exposures: bool,
+    revoked_jtis: bool,
+) -> str:
+    if command and exposures and revoked_jtis:
+        return "command_and_reconcile"
+    if command and exposures:
+        return "command_and_exposures"
+    if command and revoked_jtis:
+        return "command_and_revoked_jtis"
+    if command:
+        return "command"
+    if exposures and revoked_jtis:
+        return "exposures_and_revoked_jtis"
+    if exposures:
+        return "exposures"
+    if revoked_jtis:
+        return "revoked_jtis"
+    return "state_changed"

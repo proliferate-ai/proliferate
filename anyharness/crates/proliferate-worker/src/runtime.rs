@@ -65,20 +65,6 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
             warn!(?error, "worker event tail loop exited");
         }
     });
-    let revoked_jti_config = config.clone();
-    let revoked_jti_cloud = cloud.clone();
-    let revoked_jti_identity = identity.clone();
-    tokio::spawn(async move {
-        if let Err(error) = control::reconcile::handlers::revoked_jti::run_loop(
-            revoked_jti_config,
-            revoked_jti_cloud,
-            revoked_jti_identity,
-        )
-        .await
-        {
-            warn!(?error, "worker revoked-jti reconcile loop exited");
-        }
-    });
     loop {
         sleep(lifecycle::heartbeat::interval(&config)).await;
         if let Err(error) = lifecycle::heartbeat::send_once(&config, &cloud, &identity).await {

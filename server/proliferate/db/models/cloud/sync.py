@@ -105,6 +105,11 @@ class CloudWorkerTargetControlState(Base):
         default=0,
         server_default=text("0"),
     )
+    revoked_jti_revision: Mapped[int] = mapped_column(
+        BigInteger,
+        default=0,
+        server_default=text("0"),
+    )
     exposure_fingerprint_hash: Mapped[str] = mapped_column(
         String(64),
         default="",
@@ -112,6 +117,10 @@ class CloudWorkerTargetControlState(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     exposure_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    revoked_jti_updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )

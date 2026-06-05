@@ -77,7 +77,7 @@ should still treat Cloud as authoritative. The change is not to bypass Cloud;
 it is to replace high-frequency empty polling with a bounded wait that only
 touches the DB at the beginning and end of a request.
 
-## 3. Current Implementation
+## 3. Pre-Migration Implementation
 
 Worker composition is currently one process with separate loops:
 
@@ -122,7 +122,8 @@ Idle steady state should be roughly:
 
 - One control long poll every 20 seconds per worker.
 - One heartbeat on the configured low-frequency interval.
-- One revoked-JTI poll on its existing low-frequency interval.
+- No separate revoked-JTI poll in normal mode; revoked-JTI deltas ride the
+  control long poll.
 - Zero exposure refresh requests while exposure/projection state is unchanged.
 - Zero command lease requests while no command is available, except the
   bounded long-poll returns.
@@ -149,7 +150,9 @@ Request:
 ```json
 {
   "supportedKinds": ["start_session", "send_prompt"],
-  "controlCursor": "target-control:42:17",
+  "controlCursor": "v2:<target-id>:42:17:3",
+  "revokedJtiCursor": "2026-05-31T22:00:00Z|<token-id>",
+  "leaseCommands": true,
   "waitSeconds": 20,
   "leaseTimeoutSeconds": 300
 }
@@ -161,7 +164,7 @@ Response:
 {
   "serverTime": "2026-05-31T22:18:30Z",
   "reason": "command",
-  "controlCursor": "target-control:43:17",
+  "controlCursor": "v2:<target-id>:43:17:3",
   "command": {
     "commandId": "...",
     "idempotencyKey": "...",
@@ -177,7 +180,8 @@ Response:
     "leaseId": "...",
     "leaseExpiresAt": "..."
   },
-  "exposures": null
+  "exposures": null,
+  "revokedJtis": null
 }
 ```
 
@@ -186,6 +190,10 @@ Response:
 - `command`: a command was leased and returned.
 - `exposures`: the worker's exposure/projection snapshot changed.
 - `command_and_exposures`: both happened before the response was produced.
+- `revoked_jtis`: the worker should push a page of revoked direct-attach JWT
+  ids to local AnyHarness.
+- `command_and_revoked_jtis`, `exposures_and_revoked_jtis`, and
+  `command_and_reconcile`: combined responses.
 - `state_changed`: the cursor advanced, but no leaseable command or exposure
   payload is relevant to this worker's request.
 - `timeout`: no relevant change arrived before `waitSeconds`.
@@ -194,13 +202,21 @@ Semantics:
 
 - `controlCursor` is target-scoped and opaque to the worker. The worker stores
   and echoes it.
+- Cursor v2 currently encodes target id, command/control revision, exposure
+  revision, and revoked-JTI revision. V1 cursors are accepted as legacy input
+  and are upgraded in the response.
 - A missing `controlCursor` means first call or fallback recovery; Cloud should
   return the current exposure snapshot and cursor.
 - A malformed, unknown, ahead-of-current, or obsolete `controlCursor` is
   treated as missing/stale. Cloud returns the current full exposure snapshot
   and cursor instead of failing the request.
-- The worker stores the returned `controlCursor` from every successful
-  response, including `timeout` and `state_changed` responses.
+- The worker stores the returned `controlCursor` from successful responses
+  after applying all included reconcile payloads. If a revoked-JTI page returns
+  `hasMore: true`, the worker stores `revokedJtiCursor` but withholds the
+  control cursor until the remaining pages drain.
+- `leaseCommands: false` keeps the wait open for reconcile changes without
+  leasing another command. Workers use this while a single-flight command task
+  is still running.
 - `waitSeconds` is clamped server-side. V1 target: minimum 1 second, maximum
   20 seconds. This leaves margin under the worker's current 30 second reqwest
   timeout and reduces the chance of committing a lease whose response cannot
@@ -495,7 +511,7 @@ Persist the control cursor only alongside a compatible local exposure-cache
 generation. On process start, the first control request sends
 `controlCursor: null` unless the worker has both a persisted cursor and a
 current-version local exposure cache. Store the returned cursor after every
-successful response.
+successful response whose reconcile payloads have been applied.
 
 Loop shape:
 
@@ -503,10 +519,11 @@ Loop shape:
 flush pending command results
 compute supported command kinds from local capability/health
 POST /worker/control/wait
-  if command: process one command through existing command processor
   if exposures present: reconcile projection cursors
+  if revokedJtis present: push ids to local AnyHarness and save revokedJtiCursor
+  if command: process one command through existing command processor
   if timeout: loop
-on unsupported endpoint: run legacy command lease + exposure polling fallback
+on unsupported endpoint: run legacy command lease + exposure/revoked-JTI polling fallback
 on transient error: back off
 ```
 
@@ -533,13 +550,10 @@ Command processing must not accidentally starve exposure reconciliation. The
 safest V1 is still one command in flight per worker, but the coordinator should
 make that tradeoff explicit:
 
-- If command processing remains inline, run a fresh control pass immediately
-  after the command result/reporting path completes, and accept that exposure
-  changes during a long command wait until that point.
-- If long materialization/backfill commands make that delay unacceptable,
-  split command processing into a single-flight command task and let
-  `cloud_control` continue waiting for exposure changes while refusing to lease
-  another command until the current command reaches a terminal delivery result.
+The implementation uses a single-flight command task: while one command is in
+flight, `cloud_control` continues waiting for exposure and revoked-JTI changes
+with `leaseCommands: false`, and refuses to lease another command until the
+current command reaches a terminal delivery result.
 
 ### 7.2 Fallback State
 
@@ -555,6 +569,8 @@ Rules:
   identity and must not fall back.
 - In fallback, command lease polling is no faster than every 5-10 seconds.
 - In fallback, exposure refresh is no faster than every 15-30 seconds.
+- In fallback, revoked-JTI refresh uses the legacy `/worker/revoked-jtis`
+  endpoint on its low-frequency cadence.
 - Fallback periodically probes `control/wait` again so a newly deployed server
   can recover without a worker restart.
 
@@ -731,7 +747,8 @@ Order:
 4. Add server control cursor, wake publishing, and `control/wait` endpoint
    behind the existing worker routes.
 5. Add worker `control/wait` client and `cloud_control` coordinator with
-   throttled legacy fallback.
+   throttled legacy fallback, revoked-JTI control bundles, and single-flight
+   command execution.
 6. Ship a worker/desktop release and verify request volume drop in production.
 7. Gate production rollout on observed endpoint RPM, DB connection usage, pool
    timeout count, and worker version adoption.
@@ -765,6 +782,9 @@ Server tests:
   queued.
 - `control/wait` returns changed exposures when the request cursor is missing
   or stale.
+- `control/wait` returns revoked-JTI pages when the revoked-JTI revision is
+  newer than the request cursor, and direct-token revoke paths bump/publish
+  that revision.
 - `control/wait` with a current cursor does not execute the exposure snapshot
   query.
 - Command blocker transitions advance the control cursor before returning
@@ -787,9 +807,13 @@ Server tests:
 Worker tests:
 
 - Client serializes/deserializes `control/wait` request/response.
+- Client serializes/deserializes optional `revokedJtis` bundles and persists
+  `revokedJtiCursor`.
 - 404/405 from `control/wait` triggers legacy fallback.
 - Exposure reconciliation is driven by control responses, not the 500 ms event
   loop in the new mode.
+- Revoked-JTI reconciliation is driven by control responses in normal mode; the
+  standalone revoked-JTI loop is not spawned.
 - The event uplink waits for an initial full control snapshot before tailing
   local cursors in control mode.
 - Fallback command and exposure polling use the throttled cadences and do not

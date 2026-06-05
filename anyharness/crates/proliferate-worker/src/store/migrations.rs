@@ -78,6 +78,7 @@ impl WorkerStore {
             CREATE TABLE IF NOT EXISTS worker_control_state (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 control_cursor TEXT,
+                revoked_jti_cursor TEXT,
                 exposure_cache_initialized INTEGER NOT NULL DEFAULT 0
                     CHECK (exposure_cache_initialized IN (0, 1)),
                 legacy_exposure_polling_enabled INTEGER NOT NULL DEFAULT 0
@@ -114,6 +115,12 @@ impl WorkerStore {
             "worker_projection_cursor",
             "gap_state_json",
             "gap_state_json TEXT",
+        )?;
+        add_column_if_missing(
+            &conn,
+            "worker_control_state",
+            "revoked_jti_cursor",
+            "revoked_jti_cursor TEXT",
         )?;
         ensure_projection_cursor_keyed_by_projection(&conn)?;
         Ok(())
