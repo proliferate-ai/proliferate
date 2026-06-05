@@ -37,10 +37,12 @@ from proliferate.db.store.organization_records import (
     OrganizationWithMembershipRecord,
     normalize_invitation_email,
 )
+from proliferate.server.billing.seat_reconciliation import (
+    maybe_create_organization_seat_adjustment,
+)
 from proliferate.server.billing.service import (
     ensure_organization_billing_subject_state,
     ensure_personal_billing_subject_state,
-    maybe_create_organization_seat_adjustment,
 )
 from proliferate.server.organizations import invitation_delivery
 from proliferate.server.organizations.domain.policy import (
