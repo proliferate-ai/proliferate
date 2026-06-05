@@ -87,6 +87,7 @@ Task names use `domain.action`:
 - `runtime.wake_target`
 - `automations.execute_run`
 - `billing.reconcile_pass`
+- `support.reconcile_tracker`
 
 Queue additions require the owning PR to state the isolation reason and the
 expected workload.

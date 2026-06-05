@@ -617,7 +617,8 @@ Row exists, `request_object_written_at` is null:
 `tracker_status=pending` for too long:
 
 - Check `SUPPORT_TRACKER_ENABLED`.
-- Check the support tracker reconciler background task is running.
+- Check Celery Beat and a `periodic.default` worker are running the
+  `support.reconcile_tracker` task.
 - Check `tracker_next_attempt_at` and `tracker_locked_until`.
 - Call the tracker nudge endpoint from an authenticated context if appropriate:
 
