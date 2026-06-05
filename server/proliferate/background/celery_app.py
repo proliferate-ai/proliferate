@@ -13,3 +13,4 @@ celery_app.conf.beat_schedule = build_beat_schedule()
 
 # Import task modules after app construction so decorators register on celery_app.
 import proliferate.background.tasks.health  # noqa: E402,F401
+import proliferate.background.tasks.notifications  # noqa: E402,F401

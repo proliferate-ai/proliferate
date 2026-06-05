@@ -475,6 +475,7 @@ async def finish_github_desktop_callback(
                 user_created_at=user.created_at,
             ),
             dedupe_key=f"github:{account_id}",
+            db=db,
         )
     deep_link_url = build_redirect_url(
         state_data["redirect_uri"],

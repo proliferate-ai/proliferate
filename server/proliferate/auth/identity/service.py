@@ -112,13 +112,11 @@ def validate_redirect_uri(surface: str, redirect_uri: str) -> None:
     if surface == "desktop":
         parsed = urlparse(redirect_uri)
         if parsed.scheme not in DESKTOP_REDIRECT_SCHEMES:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Desktop redirect URI must use a configured desktop scheme: "
-                    f"{', '.join(sorted(DESKTOP_REDIRECT_SCHEMES))}."
-                ),
+            desktop_schemes = ", ".join(sorted(DESKTOP_REDIRECT_SCHEMES))
+            detail = (
+                f"Desktop redirect URI must use a configured desktop scheme: {desktop_schemes}."
             )
+            raise HTTPException(status_code=400, detail=detail)
         return
     if surface == "web":
         if not _is_allowed_web_redirect_uri(redirect_uri):
@@ -321,6 +319,9 @@ async def start_provider_auth(
     nonce = hash_secret(providers.new_secret()) if provider == "apple" else providers.new_secret()
     csrf = providers.new_secret() if surface in {"web", "mobile"} else None
     expires_at = datetime.now(UTC) + timedelta(seconds=AUTH_CHALLENGE_LIFETIME_SECONDS)
+    provider_callback_url = providers.provider_callback_url(
+        request, provider=provider, surface=surface
+    )
     await create_auth_challenge(
         db,
         provider=provider,
@@ -339,11 +340,7 @@ async def start_provider_auth(
     authorization_url = await providers.build_authorization_url(
         provider=provider,
         surface=surface,
-        provider_callback_url=providers.provider_callback_url(
-            request,
-            provider=provider,
-            surface=surface,
-        ),
+        provider_callback_url=provider_callback_url,
         state=state,
         nonce=nonce,
         prompt=prompt,
@@ -372,9 +369,7 @@ async def complete_oauth_provider_callback(
         surface=callback_surface,
         code=code,
         provider_callback_url=providers.provider_callback_url(
-            request,
-            provider=provider,
-            surface=callback_surface,
+            request, provider=provider, surface=callback_surface
         ),
     )
     desktop_github_account_or_email_exists = True
@@ -394,6 +389,7 @@ async def complete_oauth_provider_callback(
     )
     if callback_surface == "desktop" and provider == "github":
         _schedule_desktop_github_login_side_effects(
+            db,
             user,
             verified=verified,
             notify_signup=not desktop_github_account_or_email_exists,
@@ -424,6 +420,7 @@ async def _desktop_github_account_or_email_exists(
 
 
 def _schedule_desktop_github_login_side_effects(
+    db: AsyncSession,
     user: User,
     *,
     verified: VerifiedProviderIdentity,
@@ -445,6 +442,7 @@ def _schedule_desktop_github_login_side_effects(
                 user_created_at=user.created_at,
             ),
             dedupe_key=f"github:{verified.provider_subject}",
+            db=db,
         )
 
 
