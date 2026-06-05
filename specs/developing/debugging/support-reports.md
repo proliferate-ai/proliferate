@@ -644,6 +644,10 @@ curl -X POST \
   absent or invalid.
 - Fix config, deploy, then decide whether to reset/requeue the specific report
   through an admin/backfill path.
+- Use
+  [`../runbooks/operator-security-posture.md`](../runbooks/operator-security-posture.md)
+  for break-glass access and audit closeout if a manual reset/backfill is
+  approved before a first-class recovery endpoint exists.
 
 `tracker_status=partial`:
 
