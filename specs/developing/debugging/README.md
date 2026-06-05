@@ -80,6 +80,10 @@ Required permissions depend on the issue surface:
   Desktop retry behavior.
 - [performance-profiling.md](performance-profiling.md): privacy-safe renderer
   and AnyHarness timing baselines.
+- [../runbooks/stripe-webhook-failure.md](../runbooks/stripe-webhook-failure.md):
+  Stripe webhook delivery, replay, and billing mirror recovery.
+- [../runbooks/e2b-template-rollback.md](../runbooks/e2b-template-rollback.md):
+  E2B template rollback for managed cloud runtime release failures.
 - [../analytics/sentry.md](../analytics/sentry.md): Sentry projects, privacy,
   support correlation, alerts, and release/debug uploads.
 - [../local/README.md](../local/README.md): local reproduction with dev
