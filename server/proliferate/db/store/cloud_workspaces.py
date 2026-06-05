@@ -36,10 +36,6 @@ from proliferate.db.store.billing import (
 )
 from proliferate.db.store.cloud_profile_target_guard import require_primary_managed_profile_target
 from proliferate.db.store.cloud_runtime_environments import ensure_runtime_environment_for_repo
-from proliferate.db.store.cloud_sandboxes import ACTIVE_SLOT_STATUSES
-from proliferate.db.store.cloud_sync.sandbox_profile_target_state import (
-    invalidate_applied_on_slot_replacement,
-)
 from proliferate.utils.time import utcnow
 
 _UNSET: Final = object()
@@ -510,7 +506,7 @@ async def create_managed_cloud_workspace_for_profile(
         last_error=None,
         template_version=template_version,
         runtime_generation=0,
-        materialized_slot_generation=None,
+        materialized_target_id=None,
         required_runtime_config_sequence=0,
         required_runtime_config_revision_id=None,
         required_agent_auth_revision=profile.desired_agent_auth_revision,
@@ -602,7 +598,7 @@ async def create_direct_target_cloud_workspace(
         last_error=None,
         template_version=template_version,
         runtime_generation=0,
-        materialized_slot_generation=None,
+        materialized_target_id=None,
         required_runtime_config_sequence=0,
         required_runtime_config_revision_id=None,
         required_agent_auth_revision=None,
@@ -707,7 +703,7 @@ async def update_cloud_workspace_materialization_state(
     status_detail: str | None | object = _UNSET,
     cleanup_state: CloudWorkspaceCleanupState | str | object = _UNSET,
     cleanup_last_error: str | None | object = _UNSET,
-    materialized_slot_generation: int | None | object = _UNSET,
+    materialized_target_id: UUID | None | object = _UNSET,
 ) -> CloudWorkspace:
     now = utcnow()
     if anyharness_workspace_id is not _UNSET:
@@ -728,8 +724,8 @@ async def update_cloud_workspace_materialization_state(
         workspace.cleanup_last_error = (
             cleanup_last_error[:2000] if isinstance(cleanup_last_error, str) else None
         )
-    if materialized_slot_generation is not _UNSET:
-        workspace.materialized_slot_generation = materialized_slot_generation
+    if materialized_target_id is not _UNSET:
+        workspace.materialized_target_id = materialized_target_id
     workspace.updated_at = now
     await db.flush()
     return workspace
@@ -787,8 +783,7 @@ async def _get_active_profile_target_sandbox(
             .where(
                 CloudSandbox.sandbox_profile_id == workspace.sandbox_profile_id,
                 CloudSandbox.target_id == workspace.target_id,
-                CloudSandbox.superseded_at.is_(None),
-                CloudSandbox.status.in_(ACTIVE_SLOT_STATUSES),
+                CloudSandbox.status.in_(ACTIVE_SANDBOX_STATUSES),
             )
             .order_by(CloudSandbox.updated_at.desc())
             .limit(1)
@@ -824,7 +819,7 @@ async def list_cloud_sandbox_placeholders(
     )
 
 
-async def reserve_sandbox_slot_for_workspace(
+async def reserve_sandbox_for_workspace(
     db: AsyncSession,
     *,
     workspace_id: UUID,
@@ -847,7 +842,7 @@ async def reserve_sandbox_slot_for_workspace(
         active_sandbox_count = int(
             await db.scalar(
                 select(func.count(CloudSandbox.id))
-                .join(CloudWorkspace, CloudSandbox.cloud_workspace_id == CloudWorkspace.id)
+                .join(CloudWorkspace, CloudWorkspace.active_sandbox_id == CloudSandbox.id)
                 .where(
                     CloudWorkspace.billing_subject_id == workspace.billing_subject_id,
                     CloudSandbox.status.in_(ACTIVE_SANDBOX_STATUSES),
@@ -860,7 +855,6 @@ async def reserve_sandbox_slot_for_workspace(
 
     now = utcnow()
     sandbox = CloudSandbox(
-        cloud_workspace_id=workspace_id,
         provider=provider,
         external_sandbox_id=external_sandbox_id,
         status=status,
@@ -968,18 +962,6 @@ async def persist_sandbox_provider_state(
     if last_provider_event_kind is not _UNSET:
         sandbox.last_provider_event_kind = last_provider_event_kind
     sandbox.updated_at = utcnow()
-    if (
-        status in {"destroyed", "killed", "terminated"}
-        and sandbox.sandbox_profile_id is not None
-        and sandbox.target_id is not None
-    ):
-        await invalidate_applied_on_slot_replacement(
-            db,
-            sandbox_profile_id=sandbox.sandbox_profile_id,
-            target_id=sandbox.target_id,
-            replaced_sandbox_id=sandbox.id,
-            replaced_slot_generation=sandbox.slot_generation,
-        )
     await db.flush()
     await db.refresh(sandbox)
     return sandbox
@@ -1003,7 +985,7 @@ async def finalize_workspace_provision(
     workspace.runtime_token_ciphertext = runtime_token_ciphertext
     workspace.anyharness_workspace_id = anyharness_workspace_id
     workspace.template_version = template_version
-    workspace.materialized_slot_generation = sandbox.slot_generation
+    workspace.materialized_target_id = sandbox.target_id
     workspace.runtime_generation = workspace.runtime_generation + 1
     workspace.status = WorkspaceStatus.ready
     workspace.status_detail = "Ready"
@@ -1443,7 +1425,7 @@ async def reserve_and_attach_sandbox_for_workspace(
     started_at: datetime | None = None,
     concurrent_sandbox_limit: int | None,
 ) -> CloudSandbox | None:
-    return await reserve_sandbox_slot_for_workspace(
+    return await reserve_sandbox_for_workspace(
         db,
         workspace_id=workspace_id,
         external_sandbox_id=external_sandbox_id,

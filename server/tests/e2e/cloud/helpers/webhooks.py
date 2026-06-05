@@ -110,8 +110,6 @@ async def create_seeded_workspace_and_sandbox(
     await db_session.refresh(environment)
 
     sandbox = CloudSandbox(
-        runtime_environment_id=environment.id,
-        cloud_workspace_id=workspace.id,
         provider=provider,
         external_sandbox_id=f"{provider}-sandbox-{uuid.uuid4()}",
         status=sandbox_status,

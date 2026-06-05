@@ -26,8 +26,6 @@ class WorkerInventoryPayload(BaseModel):
 class WorkerEnrollRequest(BaseModel):
     enrollment_token: str = Field(alias="enrollmentToken")
     sandbox_profile_id: str | None = Field(default=None, alias="sandboxProfileId")
-    cloud_sandbox_id: str | None = Field(default=None, alias="cloudSandboxId")
-    slot_generation: int | None = Field(default=None, alias="slotGeneration")
     machine_fingerprint: str | None = Field(default=None, alias="machineFingerprint")
     hostname: str | None = None
     worker_version: str | None = Field(default=None, alias="workerVersion")
@@ -39,8 +37,6 @@ class WorkerEnrollRequest(BaseModel):
 class WorkerEnrollResponse(BaseModel):
     target_id: str = Field(serialization_alias="targetId")
     sandbox_profile_id: str | None = Field(default=None, serialization_alias="sandboxProfileId")
-    cloud_sandbox_id: str | None = Field(default=None, serialization_alias="cloudSandboxId")
-    slot_generation: int | None = Field(default=None, serialization_alias="slotGeneration")
     worker_id: str = Field(serialization_alias="workerId")
     worker_token: str = Field(serialization_alias="workerToken")
     heartbeat_interval_seconds: int = Field(serialization_alias="heartbeatIntervalSeconds")
@@ -48,8 +44,6 @@ class WorkerEnrollResponse(BaseModel):
 
 class WorkerHeartbeatRequest(BaseModel):
     sandbox_profile_id: str | None = Field(default=None, alias="sandboxProfileId")
-    cloud_sandbox_id: str | None = Field(default=None, alias="cloudSandboxId")
-    slot_generation: int | None = Field(default=None, alias="slotGeneration")
     status: str = "online"
     status_detail: str | None = Field(default=None, alias="statusDetail")
     worker_version: str | None = Field(default=None, alias="workerVersion")
@@ -75,8 +69,6 @@ class WorkerDesiredVersionsResponse(BaseModel):
 class WorkerHeartbeatResponse(BaseModel):
     target_id: str = Field(serialization_alias="targetId")
     sandbox_profile_id: str | None = Field(default=None, serialization_alias="sandboxProfileId")
-    cloud_sandbox_id: str | None = Field(default=None, serialization_alias="cloudSandboxId")
-    slot_generation: int | None = Field(default=None, serialization_alias="slotGeneration")
     worker_id: str = Field(serialization_alias="workerId")
     status: str
     server_time: str = Field(serialization_alias="serverTime")
@@ -147,7 +139,6 @@ class WorkerCommandEnvelope(BaseModel):
     workspace_id: str | None = Field(default=None, serialization_alias="workspaceId")
     cloud_workspace_id: str | None = Field(default=None, serialization_alias="cloudWorkspaceId")
     sandbox_profile_id: str | None = Field(default=None, serialization_alias="sandboxProfileId")
-    slot_generation: int | None = Field(default=None, serialization_alias="slotGeneration")
     session_id: str | None = Field(default=None, serialization_alias="sessionId")
     kind: str
     payload: dict[str, object]
@@ -165,7 +156,6 @@ class WorkerCommandLeaseResponse(BaseModel):
 class WorkerCommandDeliveryRequest(BaseModel):
     lease_id: str = Field(alias="leaseId")
     cloud_workspace_id: str | None = Field(default=None, alias="cloudWorkspaceId")
-    slot_generation: int | None = Field(default=None, alias="slotGeneration")
     status: str = "delivered"
     error_code: str | None = Field(default=None, alias="errorCode")
     error_message: str | None = Field(default=None, alias="errorMessage")
@@ -174,7 +164,6 @@ class WorkerCommandDeliveryRequest(BaseModel):
 class WorkerCommandResultRequest(BaseModel):
     lease_id: str = Field(alias="leaseId")
     cloud_workspace_id: str | None = Field(default=None, alias="cloudWorkspaceId")
-    slot_generation: int | None = Field(default=None, alias="slotGeneration")
     anyharness_workspace_id: str | None = Field(default=None, alias="anyharnessWorkspaceId")
     status: str
     error_code: str | None = Field(default=None, alias="errorCode")

@@ -1,4 +1,4 @@
-"""Persistence helpers for managed cloud sandbox slots."""
+"""Persistence helpers for managed cloud target sandboxes."""
 
 from __future__ import annotations
 
@@ -6,17 +6,16 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_profile_target_guard import require_primary_managed_profile_target
-from proliferate.db.store.cloud_sync.sandbox_profile_target_state import (
-    invalidate_applied_on_slot_replacement,
-)
 from proliferate.utils.time import utcnow
 
-ACTIVE_SLOT_STATUSES: tuple[str, ...] = (
+ACTIVE_MANAGED_SANDBOX_STATUSES: tuple[str, ...] = (
     "creating",
     "provisioning",
     "running",
@@ -26,18 +25,18 @@ ACTIVE_SLOT_STATUSES: tuple[str, ...] = (
 
 
 @dataclass(frozen=True)
-class SlotSnapshot:
+class CloudSandboxSnapshot:
     id: UUID
     sandbox_profile_id: UUID | None
     target_id: UUID | None
     billing_subject_id: UUID | None
-    slot_generation: int | None
     provider: str
     external_sandbox_id: str | None
     status: str
     template_version: str
-    superseded_by_sandbox_id: UUID | None
-    superseded_at: datetime | None
+    started_at: datetime | None
+    stopped_at: datetime | None
+    last_heartbeat_at: datetime | None
     lifecycle_on_timeout: str
     lifecycle_auto_resume: bool
     provider_timeout_seconds: int | None
@@ -46,19 +45,32 @@ class SlotSnapshot:
     updated_at: datetime
 
 
-def _slot_snapshot(row: CloudSandbox) -> SlotSnapshot:
-    return SlotSnapshot(
+@dataclass(frozen=True)
+class CloudSandboxOwnerSnapshot:
+    id: UUID
+    billing_subject_id: UUID
+    user_id: UUID
+
+
+@dataclass(frozen=True)
+class CloudSandboxRuntimeOwnerSnapshot:
+    runtime_environment: CloudSandboxOwnerSnapshot | None
+    workspace: CloudSandboxOwnerSnapshot | None
+
+
+def _sandbox_snapshot(row: CloudSandbox) -> CloudSandboxSnapshot:
+    return CloudSandboxSnapshot(
         id=row.id,
         sandbox_profile_id=row.sandbox_profile_id,
         target_id=row.target_id,
         billing_subject_id=row.billing_subject_id,
-        slot_generation=row.slot_generation,
         provider=row.provider,
         external_sandbox_id=row.external_sandbox_id,
         status=row.status,
         template_version=row.template_version,
-        superseded_by_sandbox_id=row.superseded_by_sandbox_id,
-        superseded_at=row.superseded_at,
+        started_at=row.started_at,
+        stopped_at=row.stopped_at,
+        last_heartbeat_at=row.last_heartbeat_at,
         lifecycle_on_timeout=row.lifecycle_on_timeout,
         lifecycle_auto_resume=row.lifecycle_auto_resume,
         provider_timeout_seconds=row.provider_timeout_seconds,
@@ -68,65 +80,116 @@ def _slot_snapshot(row: CloudSandbox) -> SlotSnapshot:
     )
 
 
-async def load_active_slot_for_profile_target(
+def _runtime_owner_snapshot(
+    row: tuple[UUID, UUID, UUID] | None,
+) -> CloudSandboxOwnerSnapshot | None:
+    if row is None:
+        return None
+    owner_id, billing_subject_id, user_id = row
+    return CloudSandboxOwnerSnapshot(
+        id=owner_id,
+        billing_subject_id=billing_subject_id,
+        user_id=user_id,
+    )
+
+
+async def load_sandbox_runtime_owner(
+    db: AsyncSession,
+    sandbox_id: UUID,
+) -> CloudSandboxRuntimeOwnerSnapshot:
+    runtime_environment = (
+        await db.execute(
+            select(
+                CloudRuntimeEnvironment.id,
+                CloudRuntimeEnvironment.billing_subject_id,
+                CloudRuntimeEnvironment.user_id,
+            )
+            .where(CloudRuntimeEnvironment.active_sandbox_id == sandbox_id)
+            .limit(1)
+        )
+    ).one_or_none()
+    workspace = (
+        await db.execute(
+            select(
+                CloudWorkspace.id,
+                CloudWorkspace.billing_subject_id,
+                CloudWorkspace.user_id,
+            )
+            .where(CloudWorkspace.active_sandbox_id == sandbox_id)
+            .limit(1)
+        )
+    ).one_or_none()
+    return CloudSandboxRuntimeOwnerSnapshot(
+        runtime_environment=_runtime_owner_snapshot(runtime_environment),
+        workspace=_runtime_owner_snapshot(workspace),
+    )
+
+
+async def load_active_sandbox_for_target(
+    db: AsyncSession,
+    *,
+    target_id: UUID,
+) -> CloudSandboxSnapshot | None:
+    row = (
+        await db.execute(
+            select(CloudSandbox).where(
+                CloudSandbox.target_id == target_id,
+                CloudSandbox.status.in_(ACTIVE_MANAGED_SANDBOX_STATUSES),
+            )
+        )
+    ).scalar_one_or_none()
+    return _sandbox_snapshot(row) if row is not None else None
+
+
+async def load_active_sandbox_for_profile_target(
     db: AsyncSession,
     *,
     sandbox_profile_id: UUID,
     target_id: UUID,
-) -> SlotSnapshot | None:
+) -> CloudSandboxSnapshot | None:
     row = (
         await db.execute(
             select(CloudSandbox).where(
                 CloudSandbox.sandbox_profile_id == sandbox_profile_id,
                 CloudSandbox.target_id == target_id,
-                CloudSandbox.superseded_at.is_(None),
-                CloudSandbox.status.in_(ACTIVE_SLOT_STATUSES),
+                CloudSandbox.status.in_(ACTIVE_MANAGED_SANDBOX_STATUSES),
             )
         )
     ).scalar_one_or_none()
-    return _slot_snapshot(row) if row is not None else None
+    return _sandbox_snapshot(row) if row is not None else None
 
 
-async def ensure_profile_slot(
+async def ensure_managed_sandbox_for_target(
     db: AsyncSession,
     *,
     sandbox_profile_id: UUID,
     target_id: UUID,
+    billing_subject_id: UUID,
     provider: str = "e2b",
     template_version: str = "managed-cloud-v1",
     status: str = "creating",
     provider_timeout_seconds: int | None = None,
-) -> SlotSnapshot:
+) -> CloudSandboxSnapshot:
     profile, _target = await require_primary_managed_profile_target(
         db,
         sandbox_profile_id=sandbox_profile_id,
         target_id=target_id,
         lock_rows=True,
     )
-    existing = await load_active_slot_for_profile_target(
+    if profile.billing_subject_id != billing_subject_id:
+        raise ValueError("Managed sandbox billing subject must match sandbox profile.")
+    existing = await load_active_sandbox_for_profile_target(
         db,
         sandbox_profile_id=sandbox_profile_id,
         target_id=target_id,
     )
     if existing is not None:
         return existing
-    max_generation = (
-        await db.scalar(
-            select(func.max(CloudSandbox.slot_generation)).where(
-                CloudSandbox.sandbox_profile_id == sandbox_profile_id,
-                CloudSandbox.target_id == target_id,
-            )
-        )
-        or 0
-    )
     now = utcnow()
     row = CloudSandbox(
-        runtime_environment_id=None,
-        cloud_workspace_id=None,
         sandbox_profile_id=sandbox_profile_id,
         target_id=target_id,
-        billing_subject_id=profile.billing_subject_id,
-        slot_generation=int(max_generation) + 1,
+        billing_subject_id=billing_subject_id,
         provider=provider,
         external_sandbox_id=None,
         status=status,
@@ -139,31 +202,22 @@ async def ensure_profile_slot(
     )
     db.add(row)
     await db.flush()
-    return _slot_snapshot(row)
+    return _sandbox_snapshot(row)
 
 
-async def supersede_slot(
+async def mark_managed_sandbox_terminal(
     db: AsyncSession,
     *,
     sandbox_id: UUID,
-    superseded_by_sandbox_id: UUID | None = None,
     status: str = "killed",
-) -> SlotSnapshot | None:
+) -> CloudSandboxSnapshot | None:
     row = await db.get(CloudSandbox, sandbox_id)
     if row is None:
         return None
-    row.superseded_at = row.superseded_at or utcnow()
-    row.superseded_by_sandbox_id = superseded_by_sandbox_id
-    if row.status in ACTIVE_SLOT_STATUSES:
+    now = utcnow()
+    if row.status in ACTIVE_MANAGED_SANDBOX_STATUSES:
         row.status = status
-    row.updated_at = utcnow()
+        row.stopped_at = row.stopped_at or now
+    row.updated_at = now
     await db.flush()
-    if row.sandbox_profile_id is not None and row.target_id is not None:
-        await invalidate_applied_on_slot_replacement(
-            db,
-            sandbox_profile_id=row.sandbox_profile_id,
-            target_id=row.target_id,
-            replaced_sandbox_id=row.id,
-            replaced_slot_generation=row.slot_generation,
-        )
-    return _slot_snapshot(row)
+    return _sandbox_snapshot(row)

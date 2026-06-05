@@ -20,7 +20,7 @@ from proliferate.constants.organizations import (
 from proliferate.db.models.auth import AuthIdentity, OAuthAccount, ProviderGrant, User
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.cloud_agent_auth import store
-from proliferate.db.store.cloud_sandboxes import ensure_profile_slot
+from proliferate.db.store.cloud_sandboxes import ensure_managed_sandbox_for_target
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.integrations.bifrost import (
     BifrostIntegrationError,
@@ -508,17 +508,18 @@ async def test_revoked_synced_selection_materializes_invalid_cleanup_plan(
     profile = profile_response.json()
     profile_id = UUID(profile["id"])
     target_id = UUID(profile["primaryTargetId"])
-    slot = await ensure_profile_slot(
+    profile_record = await store.get_sandbox_profile(db_session, profile_id)
+    assert profile_record is not None
+    await ensure_managed_sandbox_for_target(
         db_session,
         sandbox_profile_id=profile_id,
         target_id=target_id,
+        billing_subject_id=profile_record.billing_subject_id,
     )
     worker_token = f"agent-auth-cleanup-{uuid.uuid4()}"
     await worker_auth_store.create_worker(
         db_session,
         target_id=target_id,
-        cloud_sandbox_id=slot.id,
-        slot_generation=slot.slot_generation,
         token_hash=worker_service._hash_token(
             domain=CLOUD_WORKER_TOKEN_DOMAIN,
             token=worker_token,
@@ -546,7 +547,6 @@ async def test_revoked_synced_selection_materializes_invalid_cleanup_plan(
             json={
                 "status": "accepted",
                 "leaseId": initial_command["leaseId"],
-                "slotGeneration": initial_command["slotGeneration"],
             },
         )
         assert initial_result.status_code == 200
@@ -1143,10 +1143,11 @@ async def test_bifrost_worker_materialization_uses_direct_virtual_key_env(
     assert profile is not None
     assert profile.primary_target_id is not None
     actor_user_id = UUID(tokens["user_id"])
-    slot = await ensure_profile_slot(
+    await ensure_managed_sandbox_for_target(
         db_session,
         sandbox_profile_id=profile.id,
         target_id=profile.primary_target_id,
+        billing_subject_id=profile.billing_subject_id,
     )
     await agent_auth_service.request_agent_auth_refresh_for_profile_target(
         db_session,
@@ -1160,8 +1161,6 @@ async def test_bifrost_worker_materialization_uses_direct_virtual_key_env(
     await worker_auth_store.create_worker(
         db_session,
         target_id=profile.primary_target_id,
-        cloud_sandbox_id=slot.id,
-        slot_generation=slot.slot_generation,
         token_hash=worker_service._hash_token(
             domain=CLOUD_WORKER_TOKEN_DOMAIN,
             token=worker_token,
@@ -1296,10 +1295,11 @@ async def test_bifrost_usage_import_debits_and_disables_exhausted_managed_credit
     assert profile_response.status_code == 200
     profile = await store.get_active_personal_sandbox_profile_for_user(db_session, actor_user_id)
     assert profile is not None and profile.primary_target_id is not None
-    slot = await ensure_profile_slot(
+    await ensure_managed_sandbox_for_target(
         db_session,
         sandbox_profile_id=profile.id,
         target_id=profile.primary_target_id,
+        billing_subject_id=profile.billing_subject_id,
     )
     selection = (await store.list_selections_for_profile(db_session, profile.id))[0]
     await agent_auth_service._issue_bifrost_runtime_virtual_key_for_selection(
@@ -1307,8 +1307,6 @@ async def test_bifrost_usage_import_debits_and_disables_exhausted_managed_credit
         auth=WorkerAuthContext(
             target_id=profile.primary_target_id,
             worker_id=uuid.uuid4(),
-            cloud_sandbox_id=slot.id,
-            slot_generation=slot.slot_generation,
         ),
         profile=profile,
         selection=selection,
@@ -1396,10 +1394,11 @@ async def test_bifrost_usage_import_paginates_and_flags_missing_managed_cost(
     assert profile_response.status_code == 200
     profile = await store.get_active_personal_sandbox_profile_for_user(db_session, actor_user_id)
     assert profile is not None and profile.primary_target_id is not None
-    slot = await ensure_profile_slot(
+    await ensure_managed_sandbox_for_target(
         db_session,
         sandbox_profile_id=profile.id,
         target_id=profile.primary_target_id,
+        billing_subject_id=profile.billing_subject_id,
     )
     selection = (await store.list_selections_for_profile(db_session, profile.id))[0]
     await agent_auth_service._issue_bifrost_runtime_virtual_key_for_selection(
@@ -1407,8 +1406,6 @@ async def test_bifrost_usage_import_paginates_and_flags_missing_managed_cost(
         auth=WorkerAuthContext(
             target_id=profile.primary_target_id,
             worker_id=uuid.uuid4(),
-            cloud_sandbox_id=slot.id,
-            slot_generation=slot.slot_generation,
         ),
         profile=profile,
         selection=selection,
@@ -1511,18 +1508,17 @@ async def test_bifrost_revoke_byok_disables_provider_key_and_runtime_virtual_key
     )
     assert select_response.status_code == 200
     selection = (await store.list_selections_for_profile(db_session, profile.id))[0]
-    slot = await ensure_profile_slot(
+    await ensure_managed_sandbox_for_target(
         db_session,
         sandbox_profile_id=profile.id,
         target_id=profile.primary_target_id,
+        billing_subject_id=profile.billing_subject_id,
     )
     await agent_auth_service._issue_bifrost_runtime_virtual_key_for_selection(
         db_session,
         auth=WorkerAuthContext(
             target_id=profile.primary_target_id,
             worker_id=uuid.uuid4(),
-            cloud_sandbox_id=slot.id,
-            slot_generation=slot.slot_generation,
         ),
         profile=profile,
         selection=selection,
@@ -1617,18 +1613,17 @@ async def test_bifrost_selection_change_disables_old_runtime_virtual_key(
     )
     assert select_first.status_code == 200
     selection = (await store.list_selections_for_profile(db_session, profile.id))[0]
-    slot = await ensure_profile_slot(
+    await ensure_managed_sandbox_for_target(
         db_session,
         sandbox_profile_id=profile.id,
         target_id=profile.primary_target_id,
+        billing_subject_id=profile.billing_subject_id,
     )
     await agent_auth_service._issue_bifrost_runtime_virtual_key_for_selection(
         db_session,
         auth=WorkerAuthContext(
             target_id=profile.primary_target_id,
             worker_id=uuid.uuid4(),
-            cloud_sandbox_id=slot.id,
-            slot_generation=slot.slot_generation,
         ),
         profile=profile,
         selection=selection,
@@ -1649,8 +1644,6 @@ async def test_bifrost_selection_change_disables_old_runtime_virtual_key(
         auth=WorkerAuthContext(
             target_id=profile.primary_target_id,
             worker_id=uuid.uuid4(),
-            cloud_sandbox_id=slot.id,
-            slot_generation=slot.slot_generation,
         ),
         profile=profile,
         selection=selection,
@@ -1658,7 +1651,8 @@ async def test_bifrost_selection_change_disables_old_runtime_virtual_key(
     await db_session.commit()
 
     name_prefix = (
-        f"proliferate-claude-{selection.id.hex[:12]}-{slot.id.hex[:12]}-{slot.slot_generation}-"
+        f"proliferate-claude-{selection.id.hex[:12]}-{profile.id.hex[:12]}-"
+        f"{profile.primary_target_id.hex[:12]}-r"
     )
     assert all(item["name"].startswith(name_prefix) for item in fake_bifrost.virtual_keys)
     assert fake_bifrost.virtual_keys[0]["name"] != fake_bifrost.virtual_keys[1]["name"]

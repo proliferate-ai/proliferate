@@ -44,7 +44,6 @@ async def test_app_startup_does_not_reconnect_cloud_sandboxes(
         await session.refresh(workspace)
 
         sandbox = CloudSandbox(
-            cloud_workspace_id=workspace.id,
             provider="e2b",
             external_sandbox_id=f"sandbox-{uuid.uuid4()}",
             status="paused",

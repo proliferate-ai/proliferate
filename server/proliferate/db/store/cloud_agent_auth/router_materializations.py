@@ -33,8 +33,6 @@ async def upsert_router_materialization(
     selection_id: UUID | None,
     sandbox_profile_id: UUID | None,
     target_id: UUID | None,
-    cloud_sandbox_id: UUID | None,
-    slot_generation: int | None,
     agent_kind: str | None,
     protocol_facade: str | None,
     router_object_id: str | None,
@@ -57,8 +55,6 @@ async def upsert_router_materialization(
             [
                 AgentGatewayRouterMaterialization.selection_id == selection_id,
                 AgentGatewayRouterMaterialization.target_id == target_id,
-                AgentGatewayRouterMaterialization.cloud_sandbox_id == cloud_sandbox_id,
-                AgentGatewayRouterMaterialization.slot_generation == slot_generation,
             ]
         )
     elif object_scope == "policy":
@@ -85,8 +81,6 @@ async def upsert_router_materialization(
             selection_id=selection_id,
             sandbox_profile_id=sandbox_profile_id,
             target_id=target_id,
-            cloud_sandbox_id=cloud_sandbox_id,
-            slot_generation=slot_generation,
             agent_kind=agent_kind,
             protocol_facade=protocol_facade,
             router_object_id=router_object_id,
@@ -109,8 +103,6 @@ async def upsert_router_materialization(
         row.selection_id = selection_id
         row.sandbox_profile_id = sandbox_profile_id
         row.target_id = target_id
-        row.cloud_sandbox_id = cloud_sandbox_id
-        row.slot_generation = slot_generation
         row.agent_kind = agent_kind
         row.protocol_facade = protocol_facade
         row.router_object_id = router_object_id
@@ -134,8 +126,6 @@ async def get_runtime_router_materialization(
     router_kind: str,
     selection_id: UUID,
     target_id: UUID,
-    cloud_sandbox_id: UUID,
-    slot_generation: int,
     router_object_kind: str = "virtual_key",
 ) -> AgentGatewayRouterMaterializationRecord | None:
     row = (
@@ -146,8 +136,6 @@ async def get_runtime_router_materialization(
                 AgentGatewayRouterMaterialization.object_scope == "runtime_selection",
                 AgentGatewayRouterMaterialization.selection_id == selection_id,
                 AgentGatewayRouterMaterialization.target_id == target_id,
-                AgentGatewayRouterMaterialization.cloud_sandbox_id == cloud_sandbox_id,
-                AgentGatewayRouterMaterialization.slot_generation == slot_generation,
                 AgentGatewayRouterMaterialization.status != "revoked",
             )
         )

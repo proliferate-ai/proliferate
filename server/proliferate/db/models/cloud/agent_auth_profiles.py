@@ -123,11 +123,6 @@ class SandboxProfileTargetState(Base):
             "OR applied_agent_auth_revision <= desired_agent_auth_revision",
             name="ck_sandbox_profile_target_state_agent_auth_applied_lte_desired",
         ),
-        CheckConstraint(
-            "(active_sandbox_id IS NULL AND slot_generation IS NULL) OR "
-            "(active_sandbox_id IS NOT NULL AND slot_generation IS NOT NULL)",
-            name="ck_sandbox_profile_target_state_slot_identity",
-        ),
         Index(
             "uq_sandbox_profile_target_state_target_profile",
             "target_id",
@@ -158,12 +153,6 @@ class SandboxProfileTargetState(Base):
         ForeignKey("cloud_targets.id", ondelete="CASCADE"),
         index=True,
     )
-    active_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_sandbox.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
-    slot_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
     desired_agent_auth_revision: Mapped[int] = mapped_column(Integer, default=0)
     applied_agent_auth_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
     agent_auth_status: Mapped[str] = mapped_column(String(32), default="pending", index=True)

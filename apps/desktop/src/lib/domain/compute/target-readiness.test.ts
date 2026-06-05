@@ -40,7 +40,7 @@ describe("compute target readiness", () => {
       ["node", "ready"],
       ["python", "missing"],
       ["runtime-config", "unavailable"],
-      ["sandbox-slot", "ready"],
+      ["sandbox", "ready"],
     ]);
   });
 
@@ -52,14 +52,23 @@ describe("compute target readiness", () => {
     }, {
       sandboxProfileTargetState: {
         ready: true,
-        slot: {
-          id: "slot-1",
+        targetReady: true,
+        sandboxReady: true,
+        runtimeAccessReady: true,
+        target: {
+          id: "target-1",
+          kind: "managed_cloud",
+          status: "online",
+          profileTargetRole: "primary",
+        },
+        sandbox: {
+          id: "sandbox-1",
           status: "running",
-          slotGeneration: 3,
+          provider: "e2b",
         },
         runtimeAccess: {
-          activeSandboxId: "slot-1",
-          slotGeneration: 3,
+          targetId: "target-1",
+          cloudSandboxId: "sandbox-1",
           anyharnessBaseUrl: "https://runtime.invalid",
         },
       },
@@ -74,10 +83,10 @@ describe("compute target readiness", () => {
     });
 
     expect(items.find((item) => item.key === "runtime-config")?.status).toBe("ready");
-    expect(items.find((item) => item.key === "sandbox-slot")?.status).toBe("ready");
+    expect(items.find((item) => item.key === "sandbox")?.status).toBe("ready");
   });
 
-  it("marks managed cloud slot state missing when target-state has no slot", () => {
+  it("marks managed cloud sandbox state missing when target-state has no sandbox", () => {
     const items = computeTargetReadiness({
       ...BASE_TARGET,
       kind: "managed_cloud",
@@ -85,11 +94,51 @@ describe("compute target readiness", () => {
     }, {
       sandboxProfileTargetState: {
         ready: false,
-        slot: null,
+        targetReady: true,
+        sandboxReady: false,
+        runtimeAccessReady: false,
+        target: {
+          id: "target-1",
+          kind: "managed_cloud",
+          status: "online",
+          profileTargetRole: "primary",
+        },
+        sandbox: null,
         runtimeAccess: null,
       },
     });
 
-    expect(items.find((item) => item.key === "sandbox-slot")?.status).toBe("missing");
+    expect(items.find((item) => item.key === "sandbox")?.status).toBe("missing");
+  });
+
+  it("describes sandbox blocks with sandbox copy", () => {
+    const items = computeTargetReadiness({
+      ...BASE_TARGET,
+      kind: "managed_cloud",
+      sandboxProfileId: "profile-1",
+    }, {
+      sandboxProfileTargetState: {
+        ready: false,
+        targetReady: true,
+        sandboxReady: false,
+        runtimeAccessReady: false,
+        target: {
+          id: "target-1",
+          kind: "managed_cloud",
+          status: "online",
+          profileTargetRole: "primary",
+        },
+        sandbox: {
+          id: "sandbox-1",
+          status: "error",
+          provider: "e2b",
+          blockedReason: "provider capacity",
+        },
+        runtimeAccess: null,
+      },
+    });
+
+    const detail = items.find((item) => item.key === "sandbox")?.detail ?? "";
+    expect(detail).toBe("Sandbox blocked: provider capacity.");
   });
 });

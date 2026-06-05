@@ -7005,8 +7005,14 @@ export interface components {
         SandboxProfileTargetStateResponse: {
             profile: components["schemas"]["SandboxProfileResponse"];
             target?: components["schemas"]["SandboxTargetSummary"] | null;
-            slot?: components["schemas"]["SandboxSlotSummary"] | null;
+            sandbox?: components["schemas"]["SandboxSummary"] | null;
             runtimeAccess?: components["schemas"]["SandboxRuntimeAccessSummary"] | null;
+            /** Targetready */
+            targetReady: boolean;
+            /** Sandboxready */
+            sandboxReady: boolean;
+            /** Runtimeaccessready */
+            runtimeAccessReady: boolean;
             /** Ready */
             ready: boolean;
         };
@@ -7014,10 +7020,8 @@ export interface components {
         SandboxRuntimeAccessSummary: {
             /** Targetid */
             targetId: string;
-            /** Activesandboxid */
-            activeSandboxId?: string | null;
-            /** Slotgeneration */
-            slotGeneration?: number | null;
+            /** Cloudsandboxid */
+            cloudSandboxId?: string | null;
             /** Anyharnessbaseurl */
             anyharnessBaseUrl?: string | null;
             /** Lastworkerid */
@@ -7025,14 +7029,12 @@ export interface components {
             /** Lastheartbeatat */
             lastHeartbeatAt?: string | null;
         };
-        /** SandboxSlotSummary */
-        SandboxSlotSummary: {
+        /** SandboxSummary */
+        SandboxSummary: {
             /** Id */
             id: string;
             /** Status */
             status: string;
-            /** Slotgeneration */
-            slotGeneration?: number | null;
             /** Provider */
             provider: string;
             /** Externalsandboxid */
@@ -7942,8 +7944,6 @@ export interface components {
             currentRevision?: number | null;
             /** Targetid */
             targetId?: string | null;
-            /** Slotgeneration */
-            slotGeneration?: number | null;
             /**
              * Sandboxprofileid
              * Format: uuid
@@ -8144,8 +8144,6 @@ export interface components {
             leaseId: string;
             /** Cloudworkspaceid */
             cloudWorkspaceId?: string | null;
-            /** Slotgeneration */
-            slotGeneration?: number | null;
             /**
              * Status
              * @default delivered
@@ -8170,8 +8168,6 @@ export interface components {
             cloudWorkspaceId?: string | null;
             /** Sandboxprofileid */
             sandboxProfileId?: string | null;
-            /** Slotgeneration */
-            slotGeneration?: number | null;
             /** Sessionid */
             sessionId?: string | null;
             /** Kind */
@@ -8210,8 +8206,6 @@ export interface components {
             leaseId: string;
             /** Cloudworkspaceid */
             cloudWorkspaceId?: string | null;
-            /** Slotgeneration */
-            slotGeneration?: number | null;
             /** Anyharnessworkspaceid */
             anyharnessWorkspaceId?: string | null;
             /** Status */
@@ -8277,10 +8271,6 @@ export interface components {
             enrollmentToken: string;
             /** Sandboxprofileid */
             sandboxProfileId?: string | null;
-            /** Cloudsandboxid */
-            cloudSandboxId?: string | null;
-            /** Slotgeneration */
-            slotGeneration?: number | null;
             /** Machinefingerprint */
             machineFingerprint?: string | null;
             /** Hostname */
@@ -8299,10 +8289,6 @@ export interface components {
             targetId: string;
             /** Sandboxprofileid */
             sandboxProfileId?: string | null;
-            /** Cloudsandboxid */
-            cloudSandboxId?: string | null;
-            /** Slotgeneration */
-            slotGeneration?: number | null;
             /** Workerid */
             workerId: string;
             /** Workertoken */
@@ -8380,10 +8366,6 @@ export interface components {
         WorkerHeartbeatRequest: {
             /** Sandboxprofileid */
             sandboxProfileId?: string | null;
-            /** Cloudsandboxid */
-            cloudSandboxId?: string | null;
-            /** Slotgeneration */
-            slotGeneration?: number | null;
             /**
              * Status
              * @default online
@@ -8404,10 +8386,6 @@ export interface components {
             targetId: string;
             /** Sandboxprofileid */
             sandboxProfileId?: string | null;
-            /** Cloudsandboxid */
-            cloudSandboxId?: string | null;
-            /** Slotgeneration */
-            slotGeneration?: number | null;
             /** Workerid */
             workerId: string;
             /** Status */

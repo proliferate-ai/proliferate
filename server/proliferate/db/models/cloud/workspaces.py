@@ -135,7 +135,11 @@ class CloudWorkspace(Base):
     runtime_token_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     anyharness_data_key_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     anyharness_workspace_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    materialized_slot_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    materialized_target_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_targets.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
     required_runtime_config_sequence: Mapped[int | None] = mapped_column(Integer, nullable=True)
     required_runtime_config_revision_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     required_agent_auth_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)

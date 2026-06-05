@@ -11,8 +11,6 @@ pub fn report(
 ) -> HeartbeatRequest {
     HeartbeatRequest {
         sandbox_profile_id: identity.sandbox_profile_id.clone(),
-        cloud_sandbox_id: identity.cloud_sandbox_id.clone(),
-        slot_generation: identity.slot_generation,
         status: status.into(),
         status_detail,
         worker_version,

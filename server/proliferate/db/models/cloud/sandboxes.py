@@ -17,31 +17,23 @@ class CloudSandbox(Base):
             name="ck_cloud_sandbox_lifecycle_on_timeout",
         ),
         CheckConstraint(
-            "(sandbox_profile_id IS NULL AND target_id IS NULL AND slot_generation IS NULL) OR "
+            "(sandbox_profile_id IS NULL AND target_id IS NULL AND billing_subject_id IS NULL) OR "
             "(sandbox_profile_id IS NOT NULL AND target_id IS NOT NULL "
-            "AND billing_subject_id IS NOT NULL AND slot_generation IS NOT NULL)",
-            name="ck_cloud_sandbox_managed_slot_identity",
+            "AND billing_subject_id IS NOT NULL)",
+            name="ck_cloud_sandbox_managed_target_identity",
         ),
         Index(
-            "ux_cloud_sandbox_active_slot_per_profile_target",
-            "sandbox_profile_id",
+            "ux_cloud_sandbox_active_per_target",
             "target_id",
             unique=True,
             postgresql_where=text(
-                "superseded_at IS NULL AND "
-                "status IN ('creating','provisioning','running','paused','blocked')"
+                "status IN ('creating','provisioning','running','paused','blocked') "
+                "AND target_id IS NOT NULL"
             ),
         ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    runtime_environment_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_runtime_environment.id", ondelete="CASCADE"),
-        index=True,
-        nullable=True,
-    )
-    # Compatibility-only during migration away from workspace-owned sandboxes.
-    cloud_workspace_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
     sandbox_profile_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("sandbox_profile.id", ondelete="CASCADE"),
         index=True,
@@ -57,13 +49,6 @@ class CloudSandbox(Base):
         index=True,
         nullable=True,
     )
-    slot_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    superseded_by_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_sandbox.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
-    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     provider: Mapped[str] = mapped_column(String(32))
     external_sandbox_id: Mapped[str | None] = mapped_column(

@@ -238,7 +238,6 @@ async def test_ensure_environment_runtime_ready_refreshes_worker_before_forced_r
         external_sandbox_id="sandbox-123",
         sandbox_profile_id=uuid4(),
         target_id=target_id,
-        slot_generation=4,
     )
     runtime_context = SimpleNamespace(
         home_dir="/root",
@@ -427,7 +426,6 @@ async def test_refresh_worker_enrollment_stops_and_resets_sidecars_before_write(
         id=uuid4(),
         sandbox_profile_id=uuid4(),
         target_id=target_id,
-        slot_generation=7,
     )
     runtime_context = SimpleNamespace(
         home_dir="/root",
@@ -519,7 +517,6 @@ async def test_refresh_worker_enrollment_reset_failure_stops_before_write(
         id=uuid4(),
         sandbox_profile_id=uuid4(),
         target_id=target_id,
-        slot_generation=7,
     )
     runtime_context = SimpleNamespace(
         home_dir="/root",
@@ -585,7 +582,6 @@ async def test_refresh_worker_enrollment_url_failure_does_not_touch_sandbox(
         id=uuid4(),
         sandbox_profile_id=uuid4(),
         target_id=target_id,
-        slot_generation=7,
     )
     runtime_context = SimpleNamespace(
         home_dir="/root",

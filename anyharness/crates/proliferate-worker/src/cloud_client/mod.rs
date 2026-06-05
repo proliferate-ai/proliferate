@@ -32,10 +32,6 @@ pub struct EnrollRequest {
     pub enrollment_token: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sandbox_profile_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cloud_sandbox_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub slot_generation: Option<i64>,
     pub machine_fingerprint: String,
     pub hostname: Option<String>,
     pub worker_version: Option<String>,
@@ -49,8 +45,6 @@ pub struct EnrollRequest {
 pub struct EnrollResponse {
     pub target_id: String,
     pub sandbox_profile_id: Option<String>,
-    pub cloud_sandbox_id: Option<String>,
-    pub slot_generation: Option<i64>,
     pub worker_id: String,
     pub worker_token: String,
     pub heartbeat_interval_seconds: u64,
@@ -61,10 +55,6 @@ pub struct EnrollResponse {
 pub struct HeartbeatRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sandbox_profile_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cloud_sandbox_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub slot_generation: Option<i64>,
     pub status: String,
     pub status_detail: Option<String>,
     pub worker_version: Option<String>,
@@ -88,8 +78,6 @@ pub struct DesiredVersions {
 pub struct HeartbeatResponse {
     pub target_id: String,
     pub sandbox_profile_id: Option<String>,
-    pub cloud_sandbox_id: Option<String>,
-    pub slot_generation: Option<i64>,
     pub worker_id: String,
     pub status: String,
     pub server_time: String,

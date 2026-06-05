@@ -134,7 +134,7 @@ async def build_cloud_diagnostics_payload(
     sandbox_ids = tuple(
         item
         for item in {
-            access.active_sandbox_id for access in runtime_access if access.active_sandbox_id
+            access.cloud_sandbox_id for access in runtime_access if access.cloud_sandbox_id
         }
     )
     sandboxes = await diagnostics_store.list_sandboxes_for_ids(db, sandbox_ids)

@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.constants.cloud import (
@@ -131,12 +131,6 @@ class CloudWorker(Base):
         ForeignKey("cloud_targets.id", ondelete="CASCADE"),
         index=True,
     )
-    cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_sandbox.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
-    slot_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     machine_fingerprint: Mapped[str | None] = mapped_column(String(255), nullable=True)
     hostname: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -178,12 +172,6 @@ class CloudTargetEnrollment(Base):
         index=True,
         nullable=True,
     )
-    cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("cloud_sandbox.id", ondelete="SET NULL"),
-        index=True,
-        nullable=True,
-    )
-    slot_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(

@@ -19,14 +19,11 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_OPENED_BY_PROVISION,
     USAGE_SEGMENT_OPENED_BY_WEBHOOK_RESUMED,
 )
-from proliferate.db.store.cloud_runtime_environments import (
-    load_runtime_environment_by_id,
-    save_runtime_environment_state,
-)
+from proliferate.db.store.cloud_runtime_environments import save_runtime_environment_state
+from proliferate.db.store.cloud_sandboxes import load_sandbox_runtime_owner
 from proliferate.db.store.cloud_workspaces import (
     load_cloud_sandbox_by_external_id,
     load_cloud_sandbox_by_id,
-    load_cloud_workspace_by_id,
     save_sandbox_provider_state,
 )
 from proliferate.integrations.sandbox import (
@@ -184,16 +181,9 @@ async def handle_e2b_webhook(
     ):
         return E2BWebhookReceipt()
 
-    runtime_environment = (
-        await load_runtime_environment_by_id(db, sandbox.runtime_environment_id)
-        if sandbox.runtime_environment_id is not None
-        else None
-    )
-    workspace = (
-        await load_cloud_workspace_by_id(db, sandbox.cloud_workspace_id)
-        if sandbox.cloud_workspace_id is not None
-        else None
-    )
+    sandbox_owner = await load_sandbox_runtime_owner(db, sandbox.id)
+    runtime_environment = sandbox_owner.runtime_environment
+    workspace = sandbox_owner.workspace
     if runtime_environment is None and workspace is None:
         return E2BWebhookReceipt()
 

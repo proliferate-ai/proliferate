@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from proliferate.db.store.cloud_sandbox_profiles import SandboxProfileSnapshot
-from proliferate.db.store.cloud_sandboxes import SlotSnapshot
+from proliferate.db.store.cloud_sandboxes import CloudSandboxSnapshot
 from proliferate.db.store.cloud_sync.targets import (
     CloudTargetRuntimeAccessSnapshot,
     CloudTargetSnapshot,
@@ -37,10 +37,9 @@ class SandboxTargetSummary(BaseModel):
     profile_target_role: str = Field(serialization_alias="profileTargetRole")
 
 
-class SandboxSlotSummary(BaseModel):
+class SandboxSummary(BaseModel):
     id: str
     status: str
-    slot_generation: int | None = Field(default=None, serialization_alias="slotGeneration")
     provider: str
     external_sandbox_id: str | None = Field(default=None, serialization_alias="externalSandboxId")
     blocked_reason: str | None = Field(default=None, serialization_alias="blockedReason")
@@ -48,8 +47,7 @@ class SandboxSlotSummary(BaseModel):
 
 class SandboxRuntimeAccessSummary(BaseModel):
     target_id: str = Field(serialization_alias="targetId")
-    active_sandbox_id: str | None = Field(default=None, serialization_alias="activeSandboxId")
-    slot_generation: int | None = Field(default=None, serialization_alias="slotGeneration")
+    cloud_sandbox_id: str | None = Field(default=None, serialization_alias="cloudSandboxId")
     anyharness_base_url: str | None = Field(default=None, serialization_alias="anyharnessBaseUrl")
     last_worker_id: str | None = Field(default=None, serialization_alias="lastWorkerId")
     last_heartbeat_at: str | None = Field(default=None, serialization_alias="lastHeartbeatAt")
@@ -58,11 +56,14 @@ class SandboxRuntimeAccessSummary(BaseModel):
 class SandboxProfileTargetStateResponse(BaseModel):
     profile: SandboxProfileResponse
     target: SandboxTargetSummary | None = None
-    slot: SandboxSlotSummary | None = None
+    sandbox: SandboxSummary | None = None
     runtime_access: SandboxRuntimeAccessSummary | None = Field(
         default=None,
         serialization_alias="runtimeAccess",
     )
+    target_ready: bool = Field(serialization_alias="targetReady")
+    sandbox_ready: bool = Field(serialization_alias="sandboxReady")
+    runtime_access_ready: bool = Field(serialization_alias="runtimeAccessReady")
     ready: bool
 
 
@@ -95,13 +96,12 @@ def target_payload(snapshot: CloudTargetSnapshot | None) -> SandboxTargetSummary
     )
 
 
-def slot_payload(snapshot: SlotSnapshot | None) -> SandboxSlotSummary | None:
+def sandbox_payload(snapshot: CloudSandboxSnapshot | None) -> SandboxSummary | None:
     if snapshot is None:
         return None
-    return SandboxSlotSummary(
+    return SandboxSummary(
         id=str(snapshot.id),
         status=snapshot.status,
-        slot_generation=snapshot.slot_generation,
         provider=snapshot.provider,
         external_sandbox_id=snapshot.external_sandbox_id,
         blocked_reason=snapshot.blocked_reason,
@@ -115,10 +115,7 @@ def runtime_access_payload(
         return None
     return SandboxRuntimeAccessSummary(
         target_id=str(snapshot.target_id),
-        active_sandbox_id=(
-            str(snapshot.active_sandbox_id) if snapshot.active_sandbox_id else None
-        ),
-        slot_generation=snapshot.slot_generation,
+        cloud_sandbox_id=str(snapshot.cloud_sandbox_id) if snapshot.cloud_sandbox_id else None,
         anyharness_base_url=snapshot.anyharness_base_url,
         last_worker_id=str(snapshot.last_worker_id) if snapshot.last_worker_id else None,
         last_heartbeat_at=_iso(snapshot.last_heartbeat_at),

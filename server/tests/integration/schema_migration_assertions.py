@@ -148,7 +148,7 @@ async def assert_current_schema(
         "target_id",
         "normalized_repo_key",
         "worktree_path",
-        "materialized_slot_generation",
+        "materialized_target_id",
         "required_runtime_config_sequence",
         "required_runtime_config_revision_id",
         "required_agent_auth_revision",
@@ -619,21 +619,24 @@ async def assert_current_schema(
         "sandbox_profile_id",
         "target_id",
         "billing_subject_id",
-        "slot_generation",
-        "superseded_by_sandbox_id",
-        "superseded_at",
         "lifecycle_on_timeout",
         "lifecycle_auto_resume",
         "provider_timeout_seconds",
         "blocked_reason",
     } <= set(sandbox_columns)
+    assert "cloud_workspace_id" not in sandbox_columns
+    assert "runtime_environment_id" not in sandbox_columns
+    assert "slot_generation" not in sandbox_columns
+    assert "superseded_by_sandbox_id" not in sandbox_columns
+    assert "superseded_at" not in sandbox_columns
     assert sandbox_columns["external_sandbox_id"]["nullable"] is True
     sandbox_indexes = await conn.run_sync(
         lambda sync_conn: {
             index["name"] for index in inspect(sync_conn).get_indexes("cloud_sandbox")
         }
     )
-    assert "ux_cloud_sandbox_active_slot_per_profile_target" in sandbox_indexes
+    assert "ux_cloud_sandbox_active_per_target" in sandbox_indexes
+    assert "ux_cloud_sandbox_active_slot_per_profile_target" not in sandbox_indexes
 
     runtime_access_columns = await conn.run_sync(
         lambda sync_conn: {
@@ -644,12 +647,13 @@ async def assert_current_schema(
     assert {
         "target_id",
         "sandbox_profile_id",
-        "active_sandbox_id",
-        "slot_generation",
+        "cloud_sandbox_id",
         "anyharness_base_url",
         "runtime_token_ciphertext",
         "anyharness_data_key_ciphertext",
     } <= runtime_access_columns
+    assert "active_sandbox_id" not in runtime_access_columns
+    assert "slot_generation" not in runtime_access_columns
     runtime_access_uniques = await conn.run_sync(
         lambda sync_conn: {
             constraint["name"]
@@ -691,9 +695,15 @@ async def assert_current_schema(
     assert {
         "uq_agent_gateway_runtime_grant_token_hash",
         "ix_agent_gateway_runtime_grant_target_profile_agent",
-        "ix_agent_gateway_runtime_grant_cloud_sandbox_id",
-        "ix_agent_gateway_runtime_grant_slot",
     } <= runtime_grant_indexes
+    runtime_grant_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"]
+            for column in inspect(sync_conn).get_columns("agent_gateway_runtime_grant")
+        }
+    )
+    assert "cloud_sandbox_id" not in runtime_grant_columns
+    assert "slot_generation" not in runtime_grant_columns
 
     budget_subject_columns = await conn.run_sync(
         lambda sync_conn: {

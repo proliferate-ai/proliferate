@@ -27,7 +27,6 @@ _session_id_var: ContextVar[str | None] = ContextVar("session_id", default=None)
 _interaction_id_var: ContextVar[str | None] = ContextVar("interaction_id", default=None)
 _command_id_var: ContextVar[str | None] = ContextVar("command_id", default=None)
 _worker_id_var: ContextVar[str | None] = ContextVar("worker_id", default=None)
-_slot_generation_var: ContextVar[str | None] = ContextVar("slot_generation", default=None)
 
 _CORRELATION_VARS: dict[str, ContextVar[str | None]] = {
     "request_id": _request_id_var,
@@ -45,7 +44,6 @@ _CORRELATION_VARS: dict[str, ContextVar[str | None]] = {
     "interaction_id": _interaction_id_var,
     "command_id": _command_id_var,
     "worker_id": _worker_id_var,
-    "slot_generation": _slot_generation_var,
 }
 
 

@@ -53,7 +53,6 @@ async def seed_usage_segment(
     await db_session.flush()
 
     sandbox = CloudSandbox(
-        cloud_workspace_id=workspace.id,
         provider="e2b",
         external_sandbox_id=f"sandbox-{uuid.uuid4().hex[:8]}",
         status="running" if not ended else "paused",
@@ -63,6 +62,7 @@ async def seed_usage_segment(
     )
     db_session.add(sandbox)
     await db_session.flush()
+    workspace.active_sandbox_id = sandbox.id
 
     segment = UsageSegment(
         user_id=user_id,

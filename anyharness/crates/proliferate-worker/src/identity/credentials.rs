@@ -4,8 +4,6 @@ use crate::{error::WorkerError, store::WorkerStore};
 pub struct WorkerIdentity {
     pub target_id: String,
     pub sandbox_profile_id: Option<String>,
-    pub cloud_sandbox_id: Option<String>,
-    pub slot_generation: Option<i64>,
     pub worker_id: String,
     pub worker_token: String,
 }

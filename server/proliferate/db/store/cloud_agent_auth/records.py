@@ -169,8 +169,6 @@ class SandboxProfileTargetStateRecord:
     id: UUID
     sandbox_profile_id: UUID
     target_id: UUID
-    active_sandbox_id: UUID | None
-    slot_generation: int | None
     desired_agent_auth_revision: int
     applied_agent_auth_revision: int | None
     agent_auth_status: str
@@ -245,8 +243,6 @@ class AgentGatewayRuntimeGrantRecord:
     issued_profile_revision: int
     target_id: UUID
     sandbox_profile_id: UUID
-    cloud_sandbox_id: UUID | None
-    slot_generation: int | None
     organization_id: UUID | None
     user_id: UUID | None
     agent_kind: str
@@ -269,8 +265,6 @@ class AgentGatewayRouterMaterializationRecord:
     selection_id: UUID | None
     sandbox_profile_id: UUID | None
     target_id: UUID | None
-    cloud_sandbox_id: UUID | None
-    slot_generation: int | None
     agent_kind: str | None
     protocol_facade: str | None
     router_object_id: str | None

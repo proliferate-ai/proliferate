@@ -250,7 +250,6 @@ class WorkerAgentAuthMaterializationPlan(BaseModel):
     reason: str | None = None
     current_revision: int | None = Field(default=None, alias="currentRevision")
     target_id: UUID | None = Field(default=None, alias="targetId")
-    slot_generation: int | None = Field(default=None, alias="slotGeneration")
     sandbox_profile_id: UUID = Field(alias="sandboxProfileId")
     revision: int
     selections: list[WorkerAgentAuthSelectionPlan] = Field(default_factory=list)

@@ -229,7 +229,6 @@ async fn process_command(
         target_id = %command.target_id,
         sandbox_profile_id = command.sandbox_profile_id.as_deref(),
         cloud_workspace_id = command.cloud_workspace_id.as_deref(),
-        slot_generation = command.slot_generation,
         workspace_id = command.workspace_id.as_deref(),
         observed_event_seq = command.observed_event_seq,
         has_preconditions = command.preconditions.is_some(),
@@ -396,7 +395,6 @@ async fn process_refresh_agent_auth_config_command(
             materialization_root,
             &payload.sandbox_profile_id,
             &command.target_id,
-            command.slot_generation,
             payload.revision,
             &plan,
         )?;
@@ -1286,7 +1284,6 @@ async fn flush_pending_command_results(
         let request = CommandResultRequest {
             lease_id: pending.lease_id,
             cloud_workspace_id: pending.cloud_workspace_id,
-            slot_generation: pending.slot_generation,
             anyharness_workspace_id: pending.anyharness_workspace_id,
             status: pending.status,
             error_code: pending.error_code,
@@ -1312,7 +1309,6 @@ async fn report_command_result(
         command_id: command_id.to_string(),
         lease_id: result.lease_id.clone(),
         cloud_workspace_id: result.cloud_workspace_id.clone(),
-        slot_generation: result.slot_generation,
         anyharness_workspace_id: result.anyharness_workspace_id.clone(),
         status: result.status.clone(),
         error_code: result.error_code.clone(),
@@ -1386,7 +1382,6 @@ fn command_delivery_request(
     CommandDeliveryRequest {
         lease_id: command.lease_id.clone(),
         cloud_workspace_id: command.cloud_workspace_id.clone(),
-        slot_generation: command.slot_generation,
         status: status.to_string(),
         error_code,
         error_message,
@@ -1406,7 +1401,6 @@ fn command_result_request(
     CommandResultRequest {
         lease_id: command.lease_id.clone(),
         cloud_workspace_id: command.cloud_workspace_id.clone(),
-        slot_generation: command.slot_generation,
         anyharness_workspace_id,
         status: status.to_string(),
         error_code,
@@ -1682,7 +1676,6 @@ mod tests {
             result.cloud_workspace_id.as_deref(),
             Some("cloud-workspace-1")
         );
-        assert_eq!(result.slot_generation, Some(7));
         assert_eq!(
             result.anyharness_workspace_id.as_deref(),
             Some("workspace-1")
@@ -1705,7 +1698,6 @@ mod tests {
             workspace_id: None,
             cloud_workspace_id: Some("cloud-workspace-1".to_string()),
             sandbox_profile_id: Some("sandbox-profile-1".to_string()),
-            slot_generation: Some(7),
             session_id: None,
             kind: "materialize_workspace".to_string(),
             payload: json!({}),

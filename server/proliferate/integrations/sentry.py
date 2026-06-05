@@ -153,7 +153,6 @@ def set_server_sentry_correlation_context(context: dict[str, str]) -> None:
         "interaction_id",
         "command_id",
         "worker_id",
-        "slot_generation",
     }
     for key, value in context.items():
         if key in allowed_keys:

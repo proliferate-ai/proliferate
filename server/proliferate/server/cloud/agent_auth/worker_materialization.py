@@ -12,6 +12,7 @@ from proliferate.constants.cloud import (
     CloudAgentKind,
     CloudCommandKind,
     CloudCommandStatus,
+    CloudTargetStatus,
 )
 from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZATION_ROLE_OWNER
 from proliferate.db.store.cloud_agent_auth import store
@@ -20,6 +21,7 @@ from proliferate.db.store.cloud_agent_auth.records import (
     SandboxProfileRecord,
 )
 from proliferate.db.store.cloud_sync import commands as commands_store
+from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_control as worker_control_store
 from proliferate.server.cloud.agent_auth.errors import AgentAuthError
 from proliferate.server.cloud.agent_auth.models import (
@@ -37,7 +39,6 @@ from proliferate.server.cloud.live.service import (
     publish_worker_control_after_commit,
 )
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
-from proliferate.server.cloud.worker.slot_guard import require_current_managed_worker_slot
 
 _ORG_ADMIN_ROLES = {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN}
 _GATEWAY_GRANT_TTL = timedelta(days=7)
@@ -70,7 +71,6 @@ async def worker_agent_auth_materialization_plan(
     revision: int,
     lease_id: str,
 ) -> WorkerAgentAuthMaterializationPlan:
-    await require_current_managed_worker_slot(db, auth=auth)
     command = await _require_agent_auth_refresh_command(
         db,
         auth=auth,
@@ -86,13 +86,13 @@ async def worker_agent_auth_materialization_plan(
             code="sandbox_profile_not_found",
             status_code=404,
         )
+    await _require_active_profile_target(db, auth=auth, profile=profile)
     if revision < profile.agent_auth_revision:
         return WorkerAgentAuthMaterializationPlan(
             applied=False,
             reason="superseded",
             currentRevision=profile.agent_auth_revision,
             targetId=auth.target_id,
-            slotGeneration=auth.slot_generation,
             sandboxProfileId=profile.id,
             revision=revision,
             selections=[],
@@ -131,10 +131,6 @@ async def worker_agent_auth_materialization_plan(
         reason=None,
         currentRevision=profile.agent_auth_revision,
         targetId=auth.target_id,
-        # The command was leased by the current managed worker slot. A stale
-        # target state may still reference an older slot while this refresh is
-        # repairing it, so the worker plan must echo the leased worker slot.
-        slotGeneration=auth.slot_generation,
         sandboxProfileId=profile.id,
         revision=revision,
         selections=selections,
@@ -148,7 +144,6 @@ async def record_worker_agent_auth_status(
     sandbox_profile_id: UUID,
     body: WorkerAgentAuthStatusRequest,
 ) -> WorkerAgentAuthStatusResponse:
-    await require_current_managed_worker_slot(db, auth=auth)
     command = await _require_agent_auth_refresh_command(
         db,
         auth=auth,
@@ -170,6 +165,7 @@ async def record_worker_agent_auth_status(
             code="sandbox_profile_not_found",
             status_code=404,
         )
+    await _require_active_profile_target(db, auth=auth, profile=profile)
     _validate_worker_status_revisions(body, profile)
     await _require_agent_auth_target_state(
         db,
@@ -245,6 +241,39 @@ async def record_worker_agent_auth_status(
         appliedRevision=state.applied_revision,
         status=state.status,
     )
+
+
+async def _require_active_profile_target(
+    db: AsyncSession,
+    *,
+    auth: WorkerAuthContext,
+    profile: SandboxProfileRecord,
+) -> targets_store.CloudTargetSnapshot:
+    target = await targets_store.get_target_by_id(db, auth.target_id)
+    if target is None:
+        raise AgentAuthError(
+            "Worker target no longer exists.",
+            code="cloud_worker_target_missing",
+            status_code=401,
+        )
+    if target.archived_at is not None or target.status == CloudTargetStatus.archived.value:
+        raise AgentAuthError(
+            "Worker target is no longer active.",
+            code="cloud_worker_target_archived",
+            status_code=409,
+        )
+    if (
+        target.kind != "managed_cloud"
+        or target.profile_target_role != "primary"
+        or target.sandbox_profile_id != profile.id
+        or profile.primary_target_id != target.id
+    ):
+        raise AgentAuthError(
+            "Worker target is not the active primary target for this sandbox profile.",
+            code="sandbox_profile_target_mismatch",
+            status_code=409,
+        )
+    return target
 
 
 def _validate_worker_status_revisions(

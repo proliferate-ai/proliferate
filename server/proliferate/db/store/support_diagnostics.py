@@ -38,7 +38,7 @@ class AuthorizedCloudWorkspaceSnapshot:
     git_base_branch: str | None
     origin: str
     template_version: str
-    materialized_slot_generation: int | None
+    materialized_target_id: UUID | None
     required_runtime_config_sequence: int | None
     required_runtime_config_revision_id: str | None
     required_agent_auth_revision: int | None
@@ -89,8 +89,7 @@ class CloudTargetDiagnosticsSnapshot:
 class CloudTargetRuntimeAccessDiagnosticsSnapshot:
     target_id: UUID
     sandbox_profile_id: UUID
-    active_sandbox_id: UUID | None
-    slot_generation: int | None
+    cloud_sandbox_id: UUID | None
     anyharness_base_url: str | None
     last_worker_id: UUID | None
     last_heartbeat_at: datetime | None
@@ -102,7 +101,6 @@ class CloudSandboxDiagnosticsSnapshot:
     id: UUID
     sandbox_profile_id: UUID | None
     target_id: UUID | None
-    slot_generation: int | None
     provider: str
     external_sandbox_id: str | None
     status: str
@@ -132,8 +130,6 @@ class CloudCommandDiagnosticsSnapshot:
     status: str
     lease_id: str | None
     leased_by_worker_id: UUID | None
-    leased_cloud_sandbox_id: UUID | None
-    leased_slot_generation: int | None
     attempt_count: int
     error_code: str | None
     error_message: str | None
@@ -335,7 +331,7 @@ def _workspace_snapshot(row: CloudWorkspace) -> AuthorizedCloudWorkspaceSnapshot
         git_base_branch=row.git_base_branch,
         origin=row.origin,
         template_version=row.template_version,
-        materialized_slot_generation=row.materialized_slot_generation,
+        materialized_target_id=row.materialized_target_id,
         required_runtime_config_sequence=row.required_runtime_config_sequence,
         required_runtime_config_revision_id=row.required_runtime_config_revision_id,
         required_agent_auth_revision=row.required_agent_auth_revision,
@@ -391,8 +387,7 @@ def _runtime_access_snapshot(
     return CloudTargetRuntimeAccessDiagnosticsSnapshot(
         target_id=row.target_id,
         sandbox_profile_id=row.sandbox_profile_id,
-        active_sandbox_id=row.active_sandbox_id,
-        slot_generation=row.slot_generation,
+        cloud_sandbox_id=row.cloud_sandbox_id,
         anyharness_base_url=row.anyharness_base_url,
         last_worker_id=row.last_worker_id,
         last_heartbeat_at=row.last_heartbeat_at,
@@ -405,7 +400,6 @@ def _sandbox_snapshot(row: CloudSandbox) -> CloudSandboxDiagnosticsSnapshot:
         id=row.id,
         sandbox_profile_id=row.sandbox_profile_id,
         target_id=row.target_id,
-        slot_generation=row.slot_generation,
         provider=row.provider,
         external_sandbox_id=row.external_sandbox_id,
         status=row.status,
@@ -436,8 +430,6 @@ def _command_snapshot(row: CloudCommand) -> CloudCommandDiagnosticsSnapshot:
         status=row.status,
         lease_id=row.lease_id,
         leased_by_worker_id=row.leased_by_worker_id,
-        leased_cloud_sandbox_id=row.leased_cloud_sandbox_id,
-        leased_slot_generation=row.leased_slot_generation,
         attempt_count=row.attempt_count,
         error_code=row.error_code,
         error_message=row.error_message,

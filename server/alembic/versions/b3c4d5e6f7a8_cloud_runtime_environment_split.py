@@ -142,7 +142,8 @@ def upgrade() -> None:
             ["runtime_environment_id"],
             unique=False,
         )
-    op.alter_column("cloud_sandbox", "cloud_workspace_id", nullable=True)
+    if _has_column("cloud_sandbox", "cloud_workspace_id"):
+        op.alter_column("cloud_sandbox", "cloud_workspace_id", nullable=True)
 
     if not _has_column("usage_segment", "runtime_environment_id"):
         op.add_column(
@@ -187,7 +188,8 @@ def downgrade() -> None:
         op.drop_index("ix_cloud_sandbox_runtime_environment_id", table_name="cloud_sandbox")
     if _has_column("cloud_sandbox", "runtime_environment_id"):
         op.drop_column("cloud_sandbox", "runtime_environment_id")
-    op.alter_column("cloud_sandbox", "cloud_workspace_id", nullable=False)
+    if _has_column("cloud_sandbox", "cloud_workspace_id"):
+        op.alter_column("cloud_sandbox", "cloud_workspace_id", nullable=False)
 
     if _has_index("cloud_workspace", "uq_cloud_workspace_active_branch"):
         op.drop_index("uq_cloud_workspace_active_branch", table_name="cloud_workspace")

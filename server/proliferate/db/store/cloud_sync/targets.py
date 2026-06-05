@@ -31,6 +31,8 @@ from proliferate.db.store.cloud_profile_target_guard import (
 from proliferate.db.store.cloud_sync import worker_control
 from proliferate.utils.time import utcnow
 
+_UNSET = object()
+
 
 @dataclass(frozen=True)
 class CloudTargetInventorySnapshot:
@@ -113,8 +115,7 @@ class CloudTargetRuntimeAccessSnapshot:
     id: UUID
     target_id: UUID
     sandbox_profile_id: UUID
-    active_sandbox_id: UUID | None
-    slot_generation: int | None
+    cloud_sandbox_id: UUID | None
     anyharness_base_url: str | None
     runtime_token_ciphertext: str | None
     anyharness_data_key_ciphertext: str | None
@@ -218,8 +219,7 @@ def _runtime_access_snapshot(
         id=row.id,
         target_id=row.target_id,
         sandbox_profile_id=row.sandbox_profile_id,
-        active_sandbox_id=row.active_sandbox_id,
-        slot_generation=row.slot_generation,
+        cloud_sandbox_id=row.cloud_sandbox_id,
         anyharness_base_url=row.anyharness_base_url,
         runtime_token_ciphertext=row.runtime_token_ciphertext,
         anyharness_data_key_ciphertext=row.anyharness_data_key_ciphertext,
@@ -589,8 +589,7 @@ async def update_target_runtime_access(
     *,
     target_id: UUID,
     sandbox_profile_id: UUID,
-    active_sandbox_id: UUID,
-    slot_generation: int,
+    cloud_sandbox_id: UUID | None | object = _UNSET,
     anyharness_base_url: str | None,
     runtime_token_ciphertext: str | None,
     anyharness_data_key_ciphertext: str | None,
@@ -605,25 +604,24 @@ async def update_target_runtime_access(
         )
     except ProfileTargetInvariantError:
         return None
-    active_slot = (
-        await db.execute(
-            select(CloudSandbox.id)
-            .where(
-                CloudSandbox.id == active_sandbox_id,
-                CloudSandbox.sandbox_profile_id == sandbox_profile_id,
-                CloudSandbox.target_id == target_id,
-                CloudSandbox.slot_generation == slot_generation,
-                CloudSandbox.superseded_at.is_(None),
-            )
-            .where(
-                CloudSandbox.status.in_(
-                    ("creating", "provisioning", "running", "paused", "blocked")
+    if cloud_sandbox_id is not _UNSET and cloud_sandbox_id is not None:
+        active_sandbox = (
+            await db.execute(
+                select(CloudSandbox.id)
+                .where(
+                    CloudSandbox.id == cloud_sandbox_id,
+                    CloudSandbox.sandbox_profile_id == sandbox_profile_id,
+                    CloudSandbox.target_id == target_id,
+                )
+                .where(
+                    CloudSandbox.status.in_(
+                        ("creating", "provisioning", "running", "paused", "blocked")
+                    )
                 )
             )
-        )
-    ).scalar_one_or_none()
-    if active_slot is None:
-        return None
+        ).scalar_one_or_none()
+        if active_sandbox is None:
+            return None
 
     row = (
         await db.execute(
@@ -638,8 +636,7 @@ async def update_target_runtime_access(
         row = CloudTargetRuntimeAccess(
             target_id=target_id,
             sandbox_profile_id=sandbox_profile_id,
-            active_sandbox_id=active_sandbox_id,
-            slot_generation=slot_generation,
+            cloud_sandbox_id=None if cloud_sandbox_id is _UNSET else cloud_sandbox_id,
             anyharness_base_url=anyharness_base_url,
             runtime_token_ciphertext=runtime_token_ciphertext,
             anyharness_data_key_ciphertext=anyharness_data_key_ciphertext,
@@ -650,26 +647,14 @@ async def update_target_runtime_access(
         )
         db.add(row)
     else:
-        slot_changed = (
-            row.active_sandbox_id != active_sandbox_id or row.slot_generation != slot_generation
+        sandbox_changed = (
+            cloud_sandbox_id is not _UNSET and row.cloud_sandbox_id != cloud_sandbox_id
         )
-        should_bump_control = slot_changed
-        if row.active_sandbox_id not in {None, active_sandbox_id}:
-            previous_slot = await db.get(CloudSandbox, row.active_sandbox_id)
-            previous_slot_is_current = (
-                previous_slot is not None
-                and previous_slot.superseded_at is None
-                and previous_slot.status
-                in ("creating", "provisioning", "running", "paused", "blocked")
-            )
-            if previous_slot_is_current:
-                return None
-        elif row.slot_generation not in {None, slot_generation}:
-            return None
+        should_bump_control = sandbox_changed
         row.sandbox_profile_id = sandbox_profile_id
-        row.active_sandbox_id = active_sandbox_id
-        row.slot_generation = slot_generation
-        if slot_changed:
+        if cloud_sandbox_id is not _UNSET:
+            row.cloud_sandbox_id = cloud_sandbox_id
+        if sandbox_changed:
             row.anyharness_base_url = anyharness_base_url
             row.runtime_token_ciphertext = runtime_token_ciphertext
             row.anyharness_data_key_ciphertext = anyharness_data_key_ciphertext

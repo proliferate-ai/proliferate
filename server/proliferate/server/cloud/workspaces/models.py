@@ -44,7 +44,7 @@ class WorkspaceRecord(Protocol):
     ready_at: datetime | None
     cleanup_state: str
     cleanup_last_error: str | None
-    materialized_slot_generation: int | None
+    materialized_target_id: UUID | None
     repo_post_ready_phase: str
     repo_post_ready_files_total: int
     repo_post_ready_files_applied: int
@@ -707,7 +707,7 @@ def materialization_payload(
         cleanup_status=cleanup_status_payload(workspace),
         cleanup_last_error=workspace.cleanup_last_error,
         blockers=materialization_blockers_payload(workspace),
-        generation=workspace.materialized_slot_generation or workspace.runtime_generation,
+        generation=workspace.runtime_generation,
         storage_bytes=None,
     )
 

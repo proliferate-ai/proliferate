@@ -17,8 +17,6 @@ pub fn build_enroll_request(
     Ok(EnrollRequest {
         enrollment_token,
         sandbox_profile_id: None,
-        cloud_sandbox_id: None,
-        slot_generation: None,
         machine_fingerprint: fingerprint::machine_fingerprint(),
         hostname: fingerprint::hostname(),
         worker_version: versions::worker_version(),
@@ -33,8 +31,6 @@ pub fn identity_from_response(response: crate::cloud_client::EnrollResponse) -> 
     WorkerIdentity {
         target_id: response.target_id,
         sandbox_profile_id: response.sandbox_profile_id,
-        cloud_sandbox_id: response.cloud_sandbox_id,
-        slot_generation: response.slot_generation,
         worker_id: response.worker_id,
         worker_token: response.worker_token,
     }

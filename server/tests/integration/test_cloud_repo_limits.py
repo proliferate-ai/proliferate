@@ -200,15 +200,15 @@ async def test_legacy_null_runtime_workspace_consumes_cloud_repo_slot(
     )
     db_session.add(legacy_workspace)
     await db_session.flush()
-    db_session.add(
-        CloudSandbox(
-            cloud_workspace_id=legacy_workspace.id,
-            provider="e2b",
-            external_sandbox_id="sandbox-legacy",
-            status="paused",
-            template_version="v1",
-        )
+    sandbox = CloudSandbox(
+        provider="e2b",
+        external_sandbox_id="sandbox-legacy",
+        status="paused",
+        template_version="v1",
     )
+    db_session.add(sandbox)
+    await db_session.flush()
+    legacy_workspace.active_sandbox_id = sandbox.id
     await db_session.commit()
 
     assert await count_active_cloud_repo_environments(db_session, subject.id) == 1

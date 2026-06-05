@@ -1991,7 +1991,6 @@ class TestCloudWorkspaces:
         await db_session.refresh(workspace)
 
         sandbox = CloudSandbox(
-            cloud_workspace_id=workspace.id,
             provider="e2b",
             external_sandbox_id=f"sandbox-{uuid.uuid4()}",
             status="paused",
@@ -2050,7 +2049,6 @@ class TestCloudWorkspaces:
         await db_session.refresh(workspace)
 
         sandbox = CloudSandbox(
-            cloud_workspace_id=workspace.id,
             provider="e2b",
             external_sandbox_id=f"sandbox-{uuid.uuid4()}",
             status="paused",
@@ -2142,7 +2140,6 @@ class TestCloudWorkspaces:
         await db_session.refresh(workspace)
 
         sandbox = CloudSandbox(
-            cloud_workspace_id=workspace.id,
             provider="e2b",
             external_sandbox_id=f"sandbox-{uuid.uuid4()}",
             status="paused",
@@ -2234,7 +2231,6 @@ class TestCloudWorkspaces:
         await db_session.refresh(workspace)
 
         sandbox = CloudSandbox(
-            cloud_workspace_id=workspace.id,
             provider="e2b",
             external_sandbox_id=f"sandbox-{uuid.uuid4()}",
             status="error",

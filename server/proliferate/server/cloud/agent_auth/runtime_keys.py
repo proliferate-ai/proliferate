@@ -93,12 +93,6 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
     profile: SandboxProfileRecord,
     selection: SandboxAgentAuthSelectionRecord,
 ) -> BifrostRuntimeVirtualKeyResult:
-    if auth.cloud_sandbox_id is None or auth.slot_generation is None:
-        raise AgentAuthError(
-            "Bifrost runtime virtual keys require an active sandbox slot.",
-            code="agent_gateway_slot_required",
-            status_code=409,
-        )
     if selection.status != "active":
         raise AgentAuthError(
             "Selection is not active.", code="selection_not_active", status_code=409
@@ -164,8 +158,6 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
         router_kind="bifrost",
         selection_id=selection.id,
         target_id=auth.target_id,
-        cloud_sandbox_id=auth.cloud_sandbox_id,
-        slot_generation=auth.slot_generation,
     )
     if (
         existing is not None
@@ -212,7 +204,8 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
         ]
     name = (
         f"proliferate-{selection.agent_kind}-{selection.id.hex[:12]}-"
-        f"{auth.cloud_sandbox_id.hex[:12]}-{auth.slot_generation}-{secrets.token_hex(4)}"
+        f"{profile.id.hex[:12]}-{auth.target_id.hex[:12]}-"
+        f"r{profile.agent_auth_revision}-{secrets.token_hex(4)}"
     )
     description = json.dumps(
         {
@@ -220,8 +213,7 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
             "policyId": str(policy.id),
             "sandboxProfileId": str(profile.id),
             "targetId": str(auth.target_id),
-            "cloudSandboxId": str(auth.cloud_sandbox_id),
-            "slotGeneration": auth.slot_generation,
+            "issuedProfileRevision": profile.agent_auth_revision,
         },
         sort_keys=True,
     )
@@ -249,8 +241,6 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
         selection_id=selection.id,
         sandbox_profile_id=profile.id,
         target_id=auth.target_id,
-        cloud_sandbox_id=auth.cloud_sandbox_id,
-        slot_generation=auth.slot_generation,
         agent_kind=selection.agent_kind,
         protocol_facade=plan.protocol_facade,
         router_object_id=virtual_key_id,

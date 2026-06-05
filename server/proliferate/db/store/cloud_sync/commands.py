@@ -24,22 +24,11 @@ from proliferate.db.models.cloud.runtime_config import (
     SandboxProfileRuntimeConfigCurrent,
     SandboxProfileRuntimeConfigRevision,
 )
-from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
-from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.sync import CloudSessionProjection
 from proliferate.db.models.cloud.targets import CloudTarget, CloudWorker
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
-from proliferate.db.store.cloud_profile_target_guard import managed_profile_target_requires_slot
 from proliferate.db.store.cloud_sync import worker_control
 from proliferate.utils.time import utcnow
-
-ACTIVE_SLOT_STATUSES: tuple[str, ...] = (
-    "creating",
-    "provisioning",
-    "running",
-    "paused",
-    "blocked",
-)
 
 WORKSPACE_LIFECYCLE_GUARDED_COMMAND_KINDS: frozenset[str] = frozenset(
     (
@@ -90,8 +79,6 @@ class CloudCommandSnapshot:
     status: str
     lease_id: str | None
     leased_by_worker_id: UUID | None
-    leased_cloud_sandbox_id: UUID | None
-    leased_slot_generation: int | None
     attempt_count: int
     lease_expires_at: datetime | None
     delivered_at: datetime | None
@@ -126,8 +113,6 @@ def _snapshot(row: CloudCommand) -> CloudCommandSnapshot:
         status=row.status,
         lease_id=row.lease_id,
         leased_by_worker_id=row.leased_by_worker_id,
-        leased_cloud_sandbox_id=row.leased_cloud_sandbox_id,
-        leased_slot_generation=row.leased_slot_generation,
         attempt_count=row.attempt_count,
         lease_expires_at=row.lease_expires_at,
         delivered_at=row.delivered_at,
@@ -169,7 +154,7 @@ async def create_command(
             CloudCommandKind.materialize_workspace.value,
             CloudCommandKind.backfill_exposed_workspace.value,
         }
-        and _target_requires_slot(target)
+        and _target_is_managed_cloud(target)
         and cloud_workspace_id is None
     ):
         raise RuntimeError(f"Managed {kind} commands require cloud_workspace_id.")
@@ -397,30 +382,12 @@ async def lease_next_command(
     blocked_commands: list[CloudCommandSnapshot] | None = None,
 ) -> CloudCommandSnapshot | None:
     worker = await db.get(CloudWorker, worker_id)
-    if worker is None:
+    if worker is None or worker.target_id != target_id:
         return None
     target = await db.get(CloudTarget, target_id)
-    target_requires_slot = _target_requires_slot(target)
-    if target_requires_slot and (
-        worker.cloud_sandbox_id is None or worker.slot_generation is None
-    ):
+    if target is None or target.archived_at is not None:
         return None
-    if worker.cloud_sandbox_id is not None or target_requires_slot:
-        if worker.cloud_sandbox_id is None or worker.slot_generation is None:
-            return None
-        active_slot = (
-            await db.execute(
-                select(CloudSandbox.id).where(
-                    CloudSandbox.id == worker.cloud_sandbox_id,
-                    CloudSandbox.target_id == target_id,
-                    CloudSandbox.slot_generation == worker.slot_generation,
-                    CloudSandbox.superseded_at.is_(None),
-                    CloudSandbox.status.in_(ACTIVE_SLOT_STATUSES),
-                )
-            )
-        ).scalar_one_or_none()
-        if active_slot is None:
-            return None
+    target_is_managed_cloud = _target_is_managed_cloud(target)
     for _ in range(20):
         query = (
             select(CloudCommand)
@@ -463,7 +430,7 @@ async def lease_next_command(
             return None
         if (
             row.kind == CloudCommandKind.materialize_workspace.value
-            and target_requires_slot
+            and target_is_managed_cloud
             and row.cloud_workspace_id is None
         ):
             row.status = CloudCommandStatus.rejected.value
@@ -530,8 +497,6 @@ async def lease_next_command(
         row.status = CloudCommandStatus.leased.value
         row.lease_id = lease_id
         row.leased_by_worker_id = worker_id
-        row.leased_cloud_sandbox_id = worker.cloud_sandbox_id
-        row.leased_slot_generation = worker.slot_generation
         row.lease_expires_at = lease_expires_at
         row.attempt_count += 1
         row.delivered_at = None
@@ -682,7 +647,6 @@ async def _runtime_config_lease_blocker(
         or state.runtime_config_status != "applied"
         or state.applied_runtime_config_revision_id != str(revision_id)
         or state.applied_runtime_config_sequence < required_sequence
-        or await _target_state_slot_is_stale(db, state=state, target=target)
     ):
         return (
             CloudCommandStatus.superseded.value,
@@ -703,7 +667,7 @@ async def _exposure_lease_blocker(
         return None
     if (
         row.kind == CloudCommandKind.materialize_workspace.value
-        and not await _command_requires_slot(
+        and not await _command_requires_managed_workspace(
             db,
             row,
         )
@@ -840,7 +804,6 @@ async def _agent_auth_lease_blocker(
         or state.agent_auth_status != "applied"
         or state.applied_agent_auth_revision is None
         or state.applied_agent_auth_revision < required_revision
-        or await _target_state_slot_is_stale(db, state=state, target=target)
     ):
         return (
             CloudCommandStatus.superseded.value,
@@ -862,7 +825,6 @@ async def mark_command_delivered(
     command_id: UUID,
     worker_id: UUID,
     lease_id: str,
-    slot_generation: int | None,
     now: datetime,
 ) -> CloudCommandSnapshot | None:
     row = await _get_worker_leased_command(
@@ -877,17 +839,10 @@ async def mark_command_delivered(
         return _snapshot(row)
     if _is_terminal_status(row.status) or row.status != CloudCommandStatus.leased.value:
         return None
-    if await _leased_slot_is_stale(db, row, worker_id=worker_id):
+    if await _leased_target_is_stale(db, row, worker_id=worker_id):
         row.status = CloudCommandStatus.superseded.value
-        row.error_code = "stale_slot"
-        row.error_message = "Command delivery came from a stale sandbox slot."
-        row.updated_at = now
-        await db.flush()
-        return _snapshot(row)
-    if await _leased_slot_echo_is_stale(db, row, slot_generation=slot_generation):
-        row.status = CloudCommandStatus.superseded.value
-        row.error_code = "stale_slot"
-        row.error_message = "Command delivery did not echo the leased sandbox slot generation."
+        row.error_code = "stale_target"
+        row.error_message = "Command delivery came from an archived or mismatched target."
         row.updated_at = now
         await db.flush()
         return _snapshot(row)
@@ -904,7 +859,6 @@ async def mark_command_failed_delivery(
     command_id: UUID,
     worker_id: UUID,
     lease_id: str,
-    slot_generation: int | None,
     error_code: str | None,
     error_message: str | None,
     now: datetime,
@@ -924,17 +878,10 @@ async def mark_command_failed_delivery(
         CloudCommandStatus.delivered.value,
     }:
         return None
-    if await _leased_slot_is_stale(db, row, worker_id=worker_id):
+    if await _leased_target_is_stale(db, row, worker_id=worker_id):
         row.status = CloudCommandStatus.superseded.value
-        row.error_code = "stale_slot"
-        row.error_message = "Command delivery came from a stale sandbox slot."
-        row.updated_at = now
-        await db.flush()
-        return _snapshot(row)
-    if await _leased_slot_echo_is_stale(db, row, slot_generation=slot_generation):
-        row.status = CloudCommandStatus.superseded.value
-        row.error_code = "stale_slot"
-        row.error_message = "Command delivery did not echo the leased sandbox slot generation."
+        row.error_code = "stale_target"
+        row.error_message = "Command delivery came from an archived or mismatched target."
         row.updated_at = now
         await db.flush()
         return _snapshot(row)
@@ -991,7 +938,6 @@ async def record_command_result(
     error_message: str | None,
     result_json: str | None,
     cloud_workspace_id: UUID | None,
-    slot_generation: int | None,
     anyharness_workspace_id: str | None,
     now: datetime,
 ) -> CloudCommandSnapshot | None:
@@ -1010,22 +956,15 @@ async def record_command_result(
         CloudCommandStatus.delivered.value,
     }:
         return None
-    stale_slot = await _leased_slot_is_stale(db, row, worker_id=worker_id)
-    if stale_slot:
+    stale_target = await _leased_target_is_stale(db, row, worker_id=worker_id)
+    if stale_target:
         row.status = CloudCommandStatus.superseded.value
-        row.error_code = "stale_slot"
-        row.error_message = "Command result came from a stale sandbox slot."
+        row.error_code = "stale_target"
+        row.error_message = "Command result came from an archived or mismatched target."
         row.updated_at = now
         await db.flush()
         return _snapshot(row)
-    command_requires_slot = await _command_requires_slot(db, row)
-    if command_requires_slot and slot_generation != row.leased_slot_generation:
-        row.status = CloudCommandStatus.superseded.value
-        row.error_code = "stale_slot"
-        row.error_message = "Command result did not echo the leased sandbox slot generation."
-        row.updated_at = now
-        await db.flush()
-        return _snapshot(row)
+    command_requires_managed_workspace = await _command_requires_managed_workspace(db, row)
     effective_status = status
     effective_error_code = error_code
     effective_error_message = error_message
@@ -1037,7 +976,7 @@ async def record_command_result(
     result_cloud_workspace_id = cloud_workspace_id or _result_cloud_workspace_id(result_json)
     if (
         row.kind == CloudCommandKind.materialize_workspace.value
-        and command_requires_slot
+        and command_requires_managed_workspace
         and row.cloud_workspace_id is None
     ):
         effective_status = CloudCommandStatus.rejected.value
@@ -1104,7 +1043,7 @@ async def record_command_result(
             db,
             cloud_workspace_id=row.cloud_workspace_id,
             anyharness_workspace_id=anyharness_workspace_id or materialized_workspace_id or "",
-            slot_generation=row.leased_slot_generation,
+            target_id=row.target_id,
             now=now,
         )
     if row.kind == CloudCommandKind.prune_workspace_worktree.value and effective_status in {
@@ -1130,90 +1069,32 @@ async def record_command_result(
     return _snapshot(row)
 
 
-async def _leased_slot_is_stale(
+async def _leased_target_is_stale(
     db: AsyncSession,
     row: CloudCommand,
     *,
     worker_id: UUID,
 ) -> bool:
-    command_requires_slot = await _command_requires_slot(db, row)
-    if row.leased_cloud_sandbox_id is None or row.leased_slot_generation is None:
-        return not (
-            not command_requires_slot
-            and row.leased_cloud_sandbox_id is None
-            and row.leased_slot_generation is None
-        )
     worker = await db.get(CloudWorker, worker_id)
     if worker is None:
         return True
-    if (
-        worker.cloud_sandbox_id != row.leased_cloud_sandbox_id
-        or worker.slot_generation != row.leased_slot_generation
-    ):
+    if worker.target_id != row.target_id:
         return True
-    active_slot = (
-        await db.execute(
-            select(CloudSandbox.id).where(
-                CloudSandbox.id == row.leased_cloud_sandbox_id,
-                CloudSandbox.target_id == row.target_id,
-                CloudSandbox.slot_generation == row.leased_slot_generation,
-                CloudSandbox.superseded_at.is_(None),
-                CloudSandbox.status.in_(ACTIVE_SLOT_STATUSES),
-            )
-        )
-    ).scalar_one_or_none()
-    return active_slot is None
+    target = await db.get(CloudTarget, row.target_id)
+    return target is None or target.archived_at is not None
 
 
-async def _leased_slot_echo_is_stale(
-    db: AsyncSession,
-    row: CloudCommand,
-    *,
-    slot_generation: int | None,
-) -> bool:
-    command_requires_slot = await _command_requires_slot(db, row)
-    return command_requires_slot and slot_generation != row.leased_slot_generation
+async def _command_requires_managed_workspace(db: AsyncSession, row: CloudCommand) -> bool:
+    return _target_is_managed_cloud(await db.get(CloudTarget, row.target_id))
 
 
-async def _target_state_slot_is_stale(
-    db: AsyncSession,
-    *,
-    state: SandboxProfileTargetState,
-    target: CloudTarget | None,
-) -> bool:
-    if not _target_requires_slot(target):
-        return False
-    if target is None or target.sandbox_profile_id is None:
-        return True
-    active_slot = (
-        await db.execute(
-            select(CloudSandbox).where(
-                CloudSandbox.sandbox_profile_id == target.sandbox_profile_id,
-                CloudSandbox.target_id == target.id,
-                CloudSandbox.superseded_at.is_(None),
-                CloudSandbox.status.in_(ACTIVE_SLOT_STATUSES),
-            )
-        )
-    ).scalar_one_or_none()
-    if active_slot is None:
-        return True
+def _target_is_managed_cloud(target: CloudTarget | None) -> bool:
     return (
-        state.active_sandbox_id != active_slot.id
-        or state.slot_generation != active_slot.slot_generation
-    )
-
-
-async def _command_requires_slot(db: AsyncSession, row: CloudCommand) -> bool:
-    return _target_requires_slot(await db.get(CloudTarget, row.target_id))
-
-
-def _target_requires_slot(target: CloudTarget | None) -> bool:
-    if target is None:
-        return False
-    return managed_profile_target_requires_slot(
-        kind=target.kind,
-        sandbox_profile_id=target.sandbox_profile_id,
-        profile_target_role=target.profile_target_role,
+        target is not None
+        and target.kind == "managed_cloud"
+        and target.sandbox_profile_id is not None
+        and target.profile_target_role == "primary"
+        and target.archived_at is None
     )
 
 
@@ -1228,7 +1109,7 @@ async def _cloud_workspace_matches_command(db: AsyncSession, row: CloudCommand) 
     ):
         return False
     target = await db.get(CloudTarget, row.target_id)
-    if _target_requires_slot(target):
+    if _target_is_managed_cloud(target):
         if workspace.sandbox_profile_id != target.sandbox_profile_id:
             return False
         exposure = await _load_active_workspace_exposure(
@@ -1255,14 +1136,15 @@ async def _record_materialized_cloud_workspace(
     *,
     cloud_workspace_id: UUID,
     anyharness_workspace_id: str,
-    slot_generation: int | None,
+    target_id: UUID,
     now: datetime,
 ) -> None:
     workspace = await db.get(CloudWorkspace, cloud_workspace_id)
     if workspace is None:
         return
     workspace.anyharness_workspace_id = anyharness_workspace_id
-    workspace.materialized_slot_generation = slot_generation
+    workspace.target_id = target_id
+    workspace.materialized_target_id = target_id
     workspace.status = "ready"
     workspace.status_detail = "Ready"
     workspace.ready_at = now
@@ -1298,13 +1180,7 @@ async def _workspace_matches_command_target(
 ) -> bool:
     if workspace.target_id is not None:
         return workspace.target_id == row.target_id
-    if workspace.runtime_environment_id is None:
-        return False
-    runtime_environment = await db.get(
-        CloudRuntimeEnvironment,
-        workspace.runtime_environment_id,
-    )
-    return runtime_environment is not None and runtime_environment.target_id == row.target_id
+    return False
 
 
 async def _record_pruned_cloud_workspace(

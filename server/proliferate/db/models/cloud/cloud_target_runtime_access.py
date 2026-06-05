@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.db.models.base import Base, utcnow
@@ -12,11 +12,6 @@ from proliferate.db.models.base import Base, utcnow
 class CloudTargetRuntimeAccess(Base):
     __tablename__ = "cloud_target_runtime_access"
     __table_args__ = (
-        CheckConstraint(
-            "(active_sandbox_id IS NULL AND slot_generation IS NULL) OR "
-            "(active_sandbox_id IS NOT NULL AND slot_generation IS NOT NULL)",
-            name="ck_cloud_target_runtime_access_active_slot_fields",
-        ),
         UniqueConstraint("target_id", name="uq_cloud_target_runtime_access_target_id"),
     )
 
@@ -28,12 +23,11 @@ class CloudTargetRuntimeAccess(Base):
         ForeignKey("sandbox_profile.id", ondelete="CASCADE"),
         index=True,
     )
-    active_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
+    cloud_sandbox_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("cloud_sandbox.id", ondelete="SET NULL"),
         index=True,
         nullable=True,
     )
-    slot_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
     anyharness_base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     runtime_token_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     anyharness_data_key_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)

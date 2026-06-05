@@ -109,7 +109,7 @@ def _schema_already_upgraded() -> bool:
         and _has_table("cloud_target_runtime_access")
         and _has_table("sandbox_profile_target_state")
         and _has_column("cloud_commands", "cloud_workspace_id")
-        and _has_column("cloud_sandbox", "slot_generation")
+        and _has_column("cloud_sandbox", "target_id")
     )
 
 
