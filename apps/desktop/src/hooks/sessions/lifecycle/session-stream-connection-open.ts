@@ -10,7 +10,7 @@ import {
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
-import { logDevSessionRuntimeEvent } from "@/lib/infra/debug/session-runtime-dev-sse";
+import { logDevSessionRuntimeEvent } from "@/lib/infra/debug/dev-session-runtime-log";
 import { markLatencyFlowLiveAttached } from "@/lib/infra/measurement/latency-flow";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
