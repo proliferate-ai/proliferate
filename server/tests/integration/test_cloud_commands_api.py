@@ -37,7 +37,6 @@ from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.server.cloud.agent_auth.service import (
     request_agent_auth_refresh_for_profile_target,
 )
-from proliferate.server.cloud.commands import service as command_service
 from proliferate.server.cloud.runtime import wake as runtime_wake
 from proliferate.server.cloud.worker import auth as worker_auth
 from proliferate.utils.crypto import encrypt_json, encrypt_text
@@ -1744,7 +1743,6 @@ class TestCloudCommandsApi:
             session_id="session-decide-plan",
         )
         await db_session.commit()
-        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -1817,7 +1815,6 @@ class TestCloudCommandsApi:
             session_id="session-decide-plan-mismatch",
         )
         await db_session.commit()
-        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -1898,7 +1895,6 @@ class TestCloudCommandsApi:
         ).scalar_one()
         exposure.anyharness_workspace_id = None
         await db_session.commit()
-        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -1972,8 +1968,6 @@ class TestCloudCommandsApi:
             session_id="session-pending-prompt",
         )
         await db_session.commit()
-
-        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -2051,8 +2045,6 @@ class TestCloudCommandsApi:
             session_id="session-pending-prompt-result",
         )
         await db_session.commit()
-
-        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -2156,8 +2148,6 @@ class TestCloudCommandsApi:
         )
         await db_session.commit()
 
-        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
-
         created = await client.post(
             "/v1/cloud/commands",
             headers=auth.headers,
@@ -2259,8 +2249,6 @@ class TestCloudCommandsApi:
             session_id=f"session-{source}-expire",
         )
         await db_session.commit()
-
-        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -2395,8 +2383,6 @@ class TestCloudCommandsApi:
             session_id=f"session-{source}-expire-lease",
         )
         await db_session.commit()
-
-        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -2598,11 +2584,6 @@ class TestCloudCommandsApi:
         runtime_environment.target_id = target_uuid
         runtime_environment.runtime_token_ciphertext = encrypt_text("runtime-token")
         await db_session.commit()
-        monkeypatch.setattr(
-            command_service,
-            "kick_off_managed_target_wake",
-            lambda _target_id, _command_id=None: None,
-        )
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -2964,11 +2945,6 @@ class TestCloudCommandsApi:
         assert unexposed is not None
         await exposures_store.archive_workspace_exposure(db_session, exposure_id=unexposed.id)
         await db_session.commit()
-        monkeypatch.setattr(
-            command_service,
-            "kick_off_managed_target_wake",
-            lambda _target_id, _command_id=None: None,
-        )
 
         unexposed_materialize = await client.post(
             "/v1/cloud/commands",
@@ -3339,11 +3315,6 @@ class TestCloudCommandsApi:
             generated_by_user_id=UUID(auth.user_id),
         )
         await db_session.commit()
-        monkeypatch.setattr(
-            command_service,
-            "kick_off_managed_target_wake",
-            lambda _target_id, _command_id=None: None,
-        )
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -3422,11 +3393,6 @@ class TestCloudCommandsApi:
             generated_by_user_id=UUID(auth.user_id),
         )
         await db_session.commit()
-        monkeypatch.setattr(
-            command_service,
-            "kick_off_managed_target_wake",
-            lambda _target_id, _command_id=None: None,
-        )
 
         created = await client.post(
             "/v1/cloud/commands",
@@ -4235,7 +4201,6 @@ class TestCloudCommandsApi:
         db_session: AsyncSession,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
         auth = await create_user_and_login(
             client,
             db_session,
@@ -4317,7 +4282,6 @@ class TestCloudCommandsApi:
         db_session: AsyncSession,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
         auth = await create_user_and_login(
             client,
             db_session,
@@ -4407,7 +4371,6 @@ class TestCloudCommandsApi:
         db_session: AsyncSession,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
         auth = await create_user_and_login(
             client,
             db_session,
@@ -4498,7 +4461,6 @@ class TestCloudCommandsApi:
         db_session: AsyncSession,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
         auth = await create_user_and_login(
             client,
             db_session,
@@ -4813,7 +4775,6 @@ class TestCloudCommandsApi:
         db_session: AsyncSession,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
         auth = await create_user_and_login(
             client,
             db_session,

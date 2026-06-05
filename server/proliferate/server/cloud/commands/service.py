@@ -31,6 +31,7 @@ from proliferate.server.cloud.commands.domain.rules import (
     validate_command_shape,
     validate_command_source,
 )
+from proliferate.server.cloud.commands.domain.target import target_requires_cloud_workspace
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
 from proliferate.server.cloud.commands.preflight import (
     populate_agent_auth_preflight_payload,
@@ -39,15 +40,10 @@ from proliferate.server.cloud.commands.preflight import (
     validate_managed_runtime_config_current_for_command,
     validate_runtime_config_preflight,
 )
-from proliferate.server.cloud.commands.wake import enqueue_managed_target_wake_outbox
+from proliferate.server.cloud.commands.wake import kick_off_command_wake_after_commit_if_required
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import log_cloud_event
-from proliferate.server.cloud.live.service import (
-    publish_command_status_after_commit,
-    publish_worker_control_after_commit,
-)
-from proliferate.server.cloud.runtime.domain.wake import command_kind_requires_wake
-from proliferate.server.cloud.runtime.wake import kick_off_managed_target_wake  # noqa: F401
+from proliferate.server.cloud.live.service import publish_command_status_after_commit
 from proliferate.server.cloud.workspaces.access import cloud_workspace_user_can_read_with_db
 from proliferate.utils.time import utcnow
 
@@ -111,7 +107,7 @@ async def _resolve_command_workspace(
     kind: str,
     body: CreateCloudCommandRequest,
 ) -> tuple[str | None, dict[str, object], str | None]:
-    if kind == CloudCommandKind.materialize_workspace.value and _target_requires_cloud_workspace(
+    if kind == CloudCommandKind.materialize_workspace.value and target_requires_cloud_workspace(
         target
     ):
         if body.cloud_workspace_id is None:
@@ -183,7 +179,7 @@ async def _resolve_command_workspace(
             target=target,
             body=body,
         )
-    if kind == CloudCommandKind.start_session.value and _target_requires_cloud_workspace(target):
+    if kind == CloudCommandKind.start_session.value and target_requires_cloud_workspace(target):
         if body.cloud_workspace_id is None and not body.workspace_id:
             raise CloudApiError(
                 "cloud_command_cloud_workspace_required",
@@ -697,7 +693,7 @@ async def _resolve_cloud_workspace_id_for_target(
             "Workspace not found.",
             status_code=404,
         )
-    requires_managed_workspace = _target_requires_cloud_workspace(target)
+    requires_managed_workspace = target_requires_cloud_workspace(target)
     if (
         workspace.target_id != target.id
         or (
@@ -723,22 +719,13 @@ def _direct_start_session_workspace_id(payload: dict[str, object]) -> str | None
     return value.strip()
 
 
-def _target_requires_cloud_workspace(target: targets_store.CloudTargetSnapshot) -> bool:
-    return (
-        target.kind == "managed_cloud"
-        and target.sandbox_profile_id is not None
-        and target.profile_target_role == "primary"
-        and target.archived_at is None
-    )
-
-
 def _command_has_managed_cloud_workspace(
     *,
     target: targets_store.CloudTargetSnapshot,
     kind: str,
     body: CreateCloudCommandRequest,
 ) -> bool:
-    if not _target_requires_cloud_workspace(target):
+    if not target_requires_cloud_workspace(target):
         return False
     if kind == CloudCommandKind.start_session.value:
         return body.cloud_workspace_id is not None or body.workspace_id is not None
@@ -1130,42 +1117,3 @@ async def mark_pending_prompt_interaction_failed_for_command(
     command: commands_store.CloudCommandSnapshot,
 ) -> None:
     await _mark_pending_prompt_interaction_failed_for_command(db, command)
-
-
-def _command_requires_managed_target_wake(
-    target: targets_store.CloudTargetSnapshot,
-    command: commands_store.CloudCommandSnapshot,
-) -> bool:
-    if is_terminal_command_status(command.status):
-        return False
-    if not _target_requires_cloud_workspace(target):
-        return False
-    return command_kind_requires_wake(command.kind)
-
-
-async def kick_off_command_wake_after_commit_if_required(
-    db: AsyncSession,
-    *,
-    target: targets_store.CloudTargetSnapshot,
-    command: commands_store.CloudCommandSnapshot,
-) -> None:
-    await publish_worker_control_after_commit(db, target_id=target.id, reason="command")
-    if not _command_requires_managed_target_wake(target, command):
-        return
-
-    await enqueue_managed_target_wake_outbox(
-        db,
-        target_id=target.id,
-        command_id=command.id,
-    )
-
-
-def is_terminal_command_status(status: str) -> bool:
-    return status in {
-        CloudCommandStatus.accepted.value,
-        CloudCommandStatus.accepted_but_queued.value,
-        CloudCommandStatus.rejected.value,
-        CloudCommandStatus.expired.value,
-        CloudCommandStatus.superseded.value,
-        CloudCommandStatus.failed_delivery.value,
-    }
