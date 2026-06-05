@@ -16,7 +16,6 @@ pub fn build_enroll_request(
         .ok_or(WorkerError::MissingEnrollmentToken)?;
     Ok(EnrollRequest {
         enrollment_token,
-        sandbox_profile_id: None,
         machine_fingerprint: fingerprint::machine_fingerprint(),
         hostname: fingerprint::hostname(),
         worker_version: versions::worker_version(),
@@ -30,7 +29,6 @@ pub fn identity_from_response(response: crate::cloud_client::EnrollResponse) -> 
     let _cloud_heartbeat_interval_seconds = response.heartbeat_interval_seconds;
     WorkerIdentity {
         target_id: response.target_id,
-        sandbox_profile_id: response.sandbox_profile_id,
         worker_id: response.worker_id,
         worker_token: response.worker_token,
     }

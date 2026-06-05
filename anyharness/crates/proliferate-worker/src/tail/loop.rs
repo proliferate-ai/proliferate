@@ -4,22 +4,15 @@ use reqwest::StatusCode;
 use tokio::time::{sleep, Duration, Instant};
 use tracing::{debug, info, warn};
 
+use super::{cursors, mapping};
 use crate::{
-    anyharness_client::{
-        events::SessionEventEnvelope, health as anyharness_health, AnyHarnessClient,
-    },
-    cloud_client::{
-        events::{EventBatchRequest, ProjectionGapRequest, WorkerSessionEventEnvelope},
-        exposures::WorkerExposureSnapshot as CloudWorkerExposureSnapshot,
-        CloudClient,
-    },
+    anyharness_client::{health as anyharness_health, AnyHarnessClient},
+    cloud_client::CloudClient,
     config::WorkerConfig,
+    control::reconcile::handlers::exposures,
     error::WorkerError,
     identity::credentials::WorkerIdentity,
-    store::{
-        ProjectionCursor, ProjectionCursorUpsert,
-        WorkerExposureSnapshot as CachedWorkerExposureSnapshot, WorkerStore,
-    },
+    store::{TailCursor, WorkerExposureSnapshot as CachedWorkerExposureSnapshot, WorkerStore},
 };
 
 const EVENT_POLL_INTERVAL: Duration = Duration::from_millis(500);
@@ -35,21 +28,21 @@ pub async fn run_loop(
     store: WorkerStore,
 ) -> Result<(), WorkerError> {
     let Some(base_url) = config.anyharness_base_url.clone() else {
-        warn!("worker event sync disabled because anyharness_base_url is not configured");
+        warn!("worker event tail disabled because anyharness_base_url is not configured");
         return Ok(());
     };
     let anyharness = AnyHarnessClient::new(base_url, config.anyharness_bearer_token.clone())?;
     let mut exposure_cache = ExposureRefreshState::default();
     loop {
         if !anyharness_health::probe(&anyharness).await {
-            warn!("worker event sync paused because anyharness health check failed");
+            warn!("worker event tail paused because anyharness health check failed");
             sleep(ERROR_SLEEP).await;
             continue;
         }
         if let Err(error) =
-            sync_once(&store, &anyharness, &cloud, &identity, &mut exposure_cache).await
+            tail_once(&store, &anyharness, &cloud, &identity, &mut exposure_cache).await
         {
-            warn!(?error, "worker event sync pass failed");
+            warn!(?error, "worker event tail pass failed");
             sleep(ERROR_SLEEP).await;
             continue;
         }
@@ -57,7 +50,7 @@ pub async fn run_loop(
     }
 }
 
-async fn sync_once(
+async fn tail_once(
     store: &WorkerStore,
     anyharness: &AnyHarnessClient,
     cloud: &CloudClient,
@@ -67,17 +60,15 @@ async fn sync_once(
     let exposures =
         refresh_exposure_cache_if_needed(store, cloud, identity, exposure_cache).await?;
     discover_workspace_sessions(store, anyharness, cloud, identity, &exposures).await;
-    let cursors = store.list_active_projection_cursors()?;
+    let cursors = store.list_active_tail_cursors()?;
     for cursor in cursors {
-        if let Err(error) =
-            sync_projection_cursor(store, anyharness, cloud, identity, &cursor).await
-        {
+        if let Err(error) = tail_cursor_once(store, anyharness, cloud, identity, &cursor).await {
             warn!(
                 ?error,
                 exposure_id = %cursor.exposure_id,
                 session_projection_id = %cursor.session_projection_id,
                 session_id = %cursor.anyharness_session_id,
-                "worker event sync failed for projection cursor"
+                "worker event tail failed for tail cursor"
             );
         }
     }
@@ -110,51 +101,9 @@ async fn refresh_exposure_cache_if_needed(
         }
         Err(error) => return Err(error),
     };
-    reconcile_exposure_snapshots(store, &response.exposures)?;
+    exposures::reconcile_exposure_snapshots(store, &response.exposures)?;
     exposure_cache.last_refresh = Some(Instant::now());
     store.list_cached_exposure_snapshots()
-}
-
-pub(crate) fn reconcile_exposure_snapshots(
-    store: &WorkerStore,
-    exposures: &[CloudWorkerExposureSnapshot],
-) -> Result<(), WorkerError> {
-    let cached_exposures = exposures
-        .iter()
-        .map(cached_exposure_snapshot)
-        .collect::<Vec<_>>();
-    let max_revision = exposures
-        .iter()
-        .filter_map(|snapshot| snapshot.revision)
-        .max();
-    let first_target_id = exposures
-        .first()
-        .map(|snapshot| snapshot.target_id.as_str());
-    let first_cloud_workspace_id = exposures
-        .first()
-        .map(|snapshot| snapshot.cloud_workspace_id.as_str());
-    let exposure_count = exposures.len();
-    let workspace_exposure_count = exposures
-        .iter()
-        .filter(|snapshot| snapshot.anyharness_session_id.is_none())
-        .count();
-    let cursors = exposures
-        .iter()
-        .map(cached_exposure_snapshot)
-        .filter_map(|snapshot| projection_cursor_upsert(&snapshot))
-        .collect::<Vec<_>>();
-    let session_cursor_count = cursors.len();
-    store.reconcile_exposure_snapshots(&cached_exposures, &cursors)?;
-    debug!(
-        exposure_count,
-        workspace_exposure_count,
-        session_cursor_count,
-        max_revision,
-        first_target_id,
-        first_cloud_workspace_id,
-        "reconciled worker projection cursors"
-    );
-    Ok(())
 }
 
 fn is_retryable_exposure_refresh_error(error: &WorkerError) -> bool {
@@ -273,12 +222,12 @@ async fn discover_workspace_sessions_for_exposure(
     Ok(())
 }
 
-async fn sync_projection_cursor(
+async fn tail_cursor_once(
     store: &WorkerStore,
     anyharness: &AnyHarnessClient,
     cloud: &CloudClient,
     identity: &WorkerIdentity,
-    cursor: &ProjectionCursor,
+    cursor: &TailCursor,
 ) -> Result<(), WorkerError> {
     debug!(
         exposure_id = %cursor.exposure_id,
@@ -288,7 +237,7 @@ async fn sync_projection_cursor(
         commandable = cursor.commandable,
         last_uploaded_seq = cursor.last_uploaded_seq,
         last_ack_seq = cursor.last_ack_seq,
-        "tailing active worker projection cursor"
+        "tailing active worker tail cursor"
     );
     let events = anyharness
         .list_session_events(
@@ -311,43 +260,27 @@ async fn sync_projection_cursor(
         event_count,
         first_seq = ?first_seq,
         last_seq = ?last_seq,
-        "worker fetched anyharness events for projection cursor"
+        "worker fetched anyharness events for tail cursor"
     );
-    if let Some(gap) = first_sequence_gap(cursor.last_uploaded_seq, &events) {
+    if let Some(gap) = cursors::first_sequence_gap(cursor.last_uploaded_seq, &events) {
         let response = cloud
             .report_projection_gap(
                 &identity.worker_token,
-                &ProjectionGapRequest {
-                    exposure_id: cursor.exposure_id.clone(),
-                    session_projection_id: cursor.session_projection_id.clone(),
-                    session_id: cursor.anyharness_session_id.clone(),
-                    expected_seq: gap.expected_seq,
-                    first_observed_seq: gap.first_observed_seq,
-                    last_uploaded_seq: cursor.last_uploaded_seq,
-                },
+                &cursors::projection_gap_request(cursor, gap),
             )
             .await?;
-        store.record_projection_cursor_gap(
-            &cursor.session_projection_id,
-            gap.expected_seq,
-            gap.first_observed_seq,
-        )?;
+        cursors::record_sequence_gap(store, cursor, gap)?;
         warn!(
             exposure_id = %cursor.exposure_id,
             session_id = %cursor.anyharness_session_id,
             expected_seq = gap.expected_seq,
             first_observed_seq = gap.first_observed_seq,
             cloud_updated = response.updated,
-            "worker event sync paused for projection cursor after sequence gap"
+            "worker event tail paused for tail cursor after sequence gap"
         );
         return Ok(());
     }
-    let request = EventBatchRequest {
-        events: events
-            .into_iter()
-            .map(|event| worker_event(cursor, event))
-            .collect(),
-    };
+    let request = mapping::event_batch_request(cursor, events);
     let upload_event_count = request.events.len();
     let response = cloud
         .upload_event_batch(&identity.worker_token, &request)
@@ -364,43 +297,8 @@ async fn sync_projection_cursor(
         session_ack_count,
         "uploaded worker event batch"
     );
-    for ack in response.session_acks {
-        store.update_projection_cursor_ack(&ack.session_id, ack.last_contiguous_seq)?;
-    }
+    cursors::apply_session_acks(store, response.session_acks)?;
     Ok(())
-}
-
-fn cached_exposure_snapshot(
-    snapshot: &CloudWorkerExposureSnapshot,
-) -> CachedWorkerExposureSnapshot {
-    CachedWorkerExposureSnapshot {
-        exposure_id: snapshot.exposure_id.clone(),
-        target_id: snapshot.target_id.clone(),
-        cloud_workspace_id: snapshot.cloud_workspace_id.clone(),
-        session_projection_id: snapshot.session_projection_id.clone(),
-        anyharness_workspace_id: snapshot.anyharness_workspace_id.clone(),
-        anyharness_session_id: snapshot.anyharness_session_id.clone(),
-        projection_level: snapshot.projection_level.clone(),
-        commandable: snapshot.commandable,
-        status: snapshot.status.clone(),
-        revision: snapshot.revision,
-        last_uploaded_seq: snapshot.last_uploaded_seq,
-    }
-}
-
-fn projection_cursor_upsert(
-    snapshot: &CachedWorkerExposureSnapshot,
-) -> Option<ProjectionCursorUpsert> {
-    Some(ProjectionCursorUpsert {
-        exposure_id: snapshot.exposure_id.clone(),
-        session_projection_id: snapshot.session_projection_id.clone()?,
-        anyharness_workspace_id: snapshot.anyharness_workspace_id.clone(),
-        anyharness_session_id: snapshot.anyharness_session_id.clone()?,
-        projection_level: snapshot.projection_level.clone(),
-        commandable: snapshot.commandable,
-        last_uploaded_seq: snapshot.last_uploaded_seq,
-        status: snapshot.status.clone(),
-    })
 }
 
 fn duration_ms(duration: Duration) -> i64 {
@@ -414,53 +312,6 @@ fn now_unix_ms() -> i64 {
         .unwrap_or(0)
 }
 
-fn worker_event(
-    cursor: &ProjectionCursor,
-    event: SessionEventEnvelope,
-) -> WorkerSessionEventEnvelope {
-    WorkerSessionEventEnvelope {
-        workspace_id: Some(cursor.anyharness_workspace_id.clone()),
-        session_id: event.session_id,
-        seq: event.seq,
-        timestamp: event.timestamp,
-        turn_id: event.turn_id,
-        item_id: event.item_id,
-        event: event.event,
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct EventSequenceGap {
-    expected_seq: i64,
-    first_observed_seq: i64,
-}
-
-fn first_sequence_gap(
-    last_uploaded_seq: i64,
-    events: &[SessionEventEnvelope],
-) -> Option<EventSequenceGap> {
-    let mut seqs = events
-        .iter()
-        .map(|event| event.seq)
-        .filter(|seq| *seq > last_uploaded_seq)
-        .collect::<Vec<_>>();
-    seqs.sort_unstable();
-    seqs.dedup();
-    let mut expected_seq = last_uploaded_seq + 1;
-    for seq in seqs {
-        if seq > expected_seq {
-            return Some(EventSequenceGap {
-                expected_seq,
-                first_observed_seq: seq,
-            });
-        }
-        if seq == expected_seq {
-            expected_seq += 1;
-        }
-    }
-    None
-}
-
 #[cfg(test)]
-#[path = "tailer_tests.rs"]
-mod tailer_tests;
+#[path = "loop_tests.rs"]
+mod loop_tests;

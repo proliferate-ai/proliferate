@@ -338,25 +338,6 @@ def _desired_versions_response(
     )
 
 
-def _require_worker_profile_identity(
-    *,
-    target: targets_store.CloudTargetSnapshot,
-    sandbox_profile_id: str | None,
-) -> None:
-    if target.sandbox_profile_id is None:
-        return
-    reported_profile_id = _optional_uuid(
-        sandbox_profile_id,
-        field_name="sandboxProfileId",
-    )
-    if reported_profile_id is None or reported_profile_id != target.sandbox_profile_id:
-        raise CloudApiError(
-            "cloud_worker_profile_identity_required",
-            "Managed cloud worker request must include the target sandboxProfileId.",
-            status_code=409,
-        )
-
-
 def _require_enrollment_profile_for_target(
     *,
     enrollment: worker_auth_store.CloudTargetEnrollmentSnapshot,
@@ -602,7 +583,7 @@ async def record_heartbeat(
             status_code=401,
         )
     _require_current_worker_target(target)
-    _require_worker_profile_identity(
+    sandbox_profile_id = _worker_request_profile_id(
         target=target,
         sandbox_profile_id=body.sandbox_profile_id,
     )
@@ -629,17 +610,7 @@ async def record_heartbeat(
         status_detail=body.status_detail,
     )
     await targets_store.set_target_status(db, target_id=auth.target_id, status_value=status_value)
-    if target.sandbox_profile_id is not None:
-        sandbox_profile_id = _optional_uuid(
-            body.sandbox_profile_id,
-            field_name="sandboxProfileId",
-        )
-        if sandbox_profile_id is None or target.sandbox_profile_id != sandbox_profile_id:
-            raise CloudApiError(
-                "cloud_worker_slot_identity_required",
-                "Managed cloud worker heartbeat must include sandboxProfileId.",
-                status_code=409,
-            )
+    if sandbox_profile_id is not None:
         await _update_runtime_access_for_managed_worker(
             db,
             target_id=auth.target_id,
@@ -666,12 +637,34 @@ async def record_heartbeat(
     await publish_target_patch_after_commit(db, target)
     return WorkerHeartbeatResponse(
         target_id=str(auth.target_id),
-        sandbox_profile_id=body.sandbox_profile_id,
+        sandbox_profile_id=str(sandbox_profile_id) if sandbox_profile_id else None,
         worker_id=str(auth.worker_id),
         status=status_value,
         server_time=now.isoformat(),
         desired_versions=desired_versions,
     )
+
+
+def _worker_request_profile_id(
+    *,
+    target: targets_store.CloudTargetSnapshot,
+    sandbox_profile_id: str | None,
+) -> UUID | None:
+    if target.sandbox_profile_id is None:
+        return None
+    if sandbox_profile_id is None:
+        return target.sandbox_profile_id
+    reported_profile_id = _optional_uuid(
+        sandbox_profile_id,
+        field_name="sandboxProfileId",
+    )
+    if reported_profile_id != target.sandbox_profile_id:
+        raise CloudApiError(
+            "cloud_worker_profile_identity_required",
+            "Managed cloud worker request must match the target sandboxProfileId.",
+            status_code=409,
+        )
+    return reported_profile_id
 
 
 async def _update_runtime_access_for_managed_worker(
@@ -1094,7 +1087,7 @@ async def _record_agent_auth_state_from_command_result(
 
     New workers report the detailed status endpoint during materialization.
     Older deployed worker bundles may only return an accepted command result;
-    the command result is still slot-fenced and worker-authenticated, so it is
+    the command result is still target-scoped and worker-authenticated, so it is
     sufficient to mark the target current for the reported revision.
     """
 

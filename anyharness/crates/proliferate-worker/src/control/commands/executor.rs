@@ -5,24 +5,19 @@ use anyharness_contract::v1::{
 use reqwest::StatusCode;
 use serde_json::{json, Value};
 use std::path::Path;
-use tokio::time::{sleep, Duration};
 use tracing::{debug, info, warn};
 
 use crate::{
-    anyharness_client::{
-        health as anyharness_health, sessions::AnyHarnessCommandResponse, AnyHarnessClient,
-    },
+    anyharness_client::{sessions::AnyHarnessCommandResponse, AnyHarnessClient},
     cloud_client::{
         agent_auth::AgentAuthStatusRequest,
         commands::{
             CloudCommandEnvelope, CommandDeliveryRequest, CommandResultRequest,
-            LeaseCommandRequest, MaterializationReportRequest, SUPPORTED_COMMAND_KINDS,
+            MaterializationReportRequest,
         },
-        control::WorkerControlWaitRequest,
         CloudClient,
     },
-    commands::mapping::{map_cloud_command, AnyHarnessCommand},
-    config::WorkerConfig,
+    control::commands::mapping::{map_cloud_command, AnyHarnessCommand},
     error::WorkerError,
     identity::credentials::WorkerIdentity,
     materialization::{
@@ -38,12 +33,9 @@ use crate::{
         },
     },
     store::{PendingCommandResult, WorkerStore},
-    sync,
+    tail,
 };
 
-const EMPTY_LEASE_SLEEP: Duration = Duration::from_secs(10);
-const ERROR_LEASE_SLEEP: Duration = Duration::from_secs(5);
-const CONTROL_WAIT_SECONDS: u64 = 20;
 const CONFIGURE_GIT_IDENTITY_KIND: &str = "configure_git_identity";
 const ENSURE_REPO_CHECKOUT_KIND: &str = "ensure_repo_checkout";
 const PRUNE_WORKSPACE_WORKTREE_KIND: &str = "prune_workspace_worktree";
@@ -51,169 +43,15 @@ const MATERIALIZE_ENVIRONMENT_KIND: &str = "materialize_environment";
 const REFRESH_AGENT_AUTH_CONFIG_KIND: &str = "refresh_agent_auth_config";
 const SAFE_AGENT_AUTH_REFRESH_ERROR: &str = "Agent auth config refresh failed.";
 
-pub async fn run_loop(
-    config: WorkerConfig,
-    cloud: CloudClient,
-    identity: WorkerIdentity,
-    store: WorkerStore,
-) -> Result<(), WorkerError> {
-    let anyharness = match config.anyharness_base_url.clone() {
-        Some(base_url) => Some(AnyHarnessClient::new(
-            base_url,
-            config.anyharness_bearer_token.clone(),
-        )?),
-        None => {
-            warn!("worker command loop running in materialization-only mode because anyharness_base_url is not configured");
-            None
-        }
-    };
-    let full_supported_kinds = SUPPORTED_COMMAND_KINDS
-        .iter()
-        .map(|kind| (*kind).to_string())
-        .collect::<Vec<_>>();
-    let materialization_only_kinds = vec![
+pub(crate) fn materialization_only_kinds() -> Vec<String> {
+    vec![
         CONFIGURE_GIT_IDENTITY_KIND.to_string(),
         ENSURE_REPO_CHECKOUT_KIND.to_string(),
         MATERIALIZE_ENVIRONMENT_KIND.to_string(),
-    ];
-    let mut control_cursor = store.load_worker_control_state()?.control_cursor;
-    loop {
-        if let Err(error) = flush_pending_command_results(&cloud, &identity, &store).await {
-            warn!(?error, "failed to flush pending command results");
-            sleep(ERROR_LEASE_SLEEP).await;
-            continue;
-        }
-        let anyharness_healthy = match &anyharness {
-            Some(client) => anyharness_health::probe(client).await,
-            None => false,
-        };
-        let supported_kinds = if anyharness_healthy {
-            full_supported_kinds.clone()
-        } else {
-            materialization_only_kinds.clone()
-        };
-        let control_wait = WorkerControlWaitRequest {
-            supported_kinds: supported_kinds.clone(),
-            lease_timeout_seconds: Some(300),
-            control_cursor: control_cursor.clone(),
-            wait_seconds: Some(CONTROL_WAIT_SECONDS),
-        };
-        match cloud
-            .wait_worker_control(&identity.worker_token, &control_wait)
-            .await
-        {
-            Ok(response) => {
-                let response_cursor = response.control_cursor.clone();
-                let mut cursor_saved = false;
-                if let Some(exposures) = response.exposures.as_ref() {
-                    match sync::tailer::reconcile_exposure_snapshots(&store, exposures.as_slice()) {
-                        Ok(()) => {
-                            store.save_control_cursor(&response_cursor)?;
-                            control_cursor = Some(response_cursor.clone());
-                            cursor_saved = true;
-                            debug!(
-                                reason = %response.reason,
-                                server_time = %response.server_time,
-                                exposure_count = exposures.len(),
-                                "worker control wait returned exposures"
-                            );
-                        }
-                        Err(error) => {
-                            warn!(?error, "worker failed to reconcile control wait exposures");
-                        }
-                    }
-                }
-                if response.exposures.is_none() {
-                    store.save_control_cursor(&response_cursor)?;
-                    control_cursor = Some(response_cursor.clone());
-                    cursor_saved = true;
-                }
-                if cursor_saved {
-                    store.set_legacy_exposure_polling_enabled(false)?;
-                }
-                if let Some(command) = response.command {
-                    if let Err(error) = process_command(
-                        &cloud,
-                        &identity,
-                        anyharness.as_ref(),
-                        &store,
-                        config.materialization_root.as_deref(),
-                        command,
-                    )
-                    .await
-                    {
-                        warn!(?error, "worker command processing failed");
-                        sleep(ERROR_LEASE_SLEEP).await;
-                    }
-                } else {
-                    debug!(
-                        reason = %response.reason,
-                        server_time = %response.server_time,
-                        "no worker command available"
-                    );
-                }
-            }
-            Err(WorkerError::Cloud { status, body })
-                if status == StatusCode::NOT_FOUND || status == StatusCode::METHOD_NOT_ALLOWED =>
-            {
-                warn!(
-                    %status,
-                    body = %body,
-                    "worker control wait unavailable; falling back to legacy command lease"
-                );
-                store.set_legacy_exposure_polling_enabled(true)?;
-                let lease = LeaseCommandRequest {
-                    supported_kinds,
-                    lease_timeout_seconds: Some(300),
-                };
-                match cloud.lease_command(&identity.worker_token, &lease).await {
-                    Ok(response) => {
-                        if let Some(command) = response.command {
-                            if let Err(error) = process_command(
-                                &cloud,
-                                &identity,
-                                anyharness.as_ref(),
-                                &store,
-                                config.materialization_root.as_deref(),
-                                command,
-                            )
-                            .await
-                            {
-                                warn!(?error, "worker command processing failed");
-                                sleep(ERROR_LEASE_SLEEP).await;
-                            }
-                        } else {
-                            debug!(
-                                server_time = %response.server_time,
-                                "no worker command available"
-                            );
-                            sleep(EMPTY_LEASE_SLEEP).await;
-                        }
-                    }
-                    Err(error) => {
-                        warn!(?error, "worker command lease failed");
-                        sleep(ERROR_LEASE_SLEEP).await;
-                    }
-                }
-            }
-            Err(error @ WorkerError::Cloud { status, .. }) if is_terminal_cloud_error(status) => {
-                return Err(error);
-            }
-            Err(error) => {
-                warn!(?error, "worker control wait failed");
-                sleep(ERROR_LEASE_SLEEP).await;
-            }
-        }
-    }
+    ]
 }
 
-fn is_terminal_cloud_error(status: StatusCode) -> bool {
-    status == StatusCode::UNAUTHORIZED
-        || status == StatusCode::FORBIDDEN
-        || status == StatusCode::CONFLICT
-}
-
-async fn process_command(
+pub(crate) async fn process_command(
     cloud: &CloudClient,
     identity: &WorkerIdentity,
     anyharness: Option<&AnyHarnessClient>,
@@ -327,7 +165,7 @@ async fn process_command(
     if let Ok(response) = &response {
         if response.is_success() {
             if let Err(error) = register_session_for_sync(store, &command, &mapped, response) {
-                warn!(?error, "failed to register session for cloud event sync");
+                warn!(?error, "failed to register session for cloud event tail");
             }
         }
     }
@@ -955,7 +793,7 @@ async fn process_backfill_exposed_workspace_command(
             &command_delivery_request(&command, "delivered", None, None),
         )
         .await?;
-    let response = sync::backfill::backfill_exposed_workspace(
+    let response = tail::backfill::backfill_exposed_workspace(
         store,
         anyharness,
         cloud,
@@ -1275,7 +1113,7 @@ fn worktree_path_from_retire_response(body: &Value) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
-async fn flush_pending_command_results(
+pub(crate) async fn flush_pending_command_results(
     cloud: &CloudClient,
     identity: &WorkerIdentity,
     store: &WorkerStore,
@@ -1588,7 +1426,7 @@ fn register_session_for_sync(
         .workspace_id
         .as_deref()
         .or_else(|| response.body.get("workspaceId").and_then(Value::as_str));
-    store.upsert_sync_session(&session_id, workspace_id)
+    store.upsert_tail_session_mapping(&session_id, workspace_id)
 }
 
 #[cfg(test)]
@@ -1601,7 +1439,7 @@ mod tests {
             sessions::AnyHarnessCommandResponse, workspaces::MaterializeWorkspaceRequest,
         },
         cloud_client::commands::CloudCommandEnvelope,
-        commands::mapping::AnyHarnessCommand,
+        control::commands::mapping::AnyHarnessCommand,
     };
 
     use super::command_result;
@@ -1646,7 +1484,7 @@ mod tests {
     }
 
     #[test]
-    fn materialize_workspace_result_echoes_cloud_workspace_and_slot() {
+    fn materialize_workspace_result_echoes_cloud_workspace() {
         let command = test_command();
         let mapped = AnyHarnessCommand::MaterializeWorkspace {
             request: MaterializeWorkspaceRequest::ExistingPath {

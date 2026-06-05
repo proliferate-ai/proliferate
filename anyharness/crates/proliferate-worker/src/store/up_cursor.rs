@@ -5,7 +5,7 @@ use super::WorkerStore;
 use crate::error::WorkerError;
 
 #[derive(Debug, Clone)]
-pub struct ProjectionCursorUpsert {
+pub struct TailCursorUpsert {
     pub exposure_id: String,
     pub session_projection_id: String,
     pub anyharness_workspace_id: String,
@@ -17,7 +17,7 @@ pub struct ProjectionCursorUpsert {
 }
 
 #[derive(Debug, Clone)]
-pub struct ProjectionCursor {
+pub struct TailCursor {
     pub exposure_id: String,
     pub session_projection_id: String,
     pub anyharness_workspace_id: String,
@@ -30,7 +30,7 @@ pub struct ProjectionCursor {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct ProjectionCursorGap {
+struct TailCursorGap {
     expected_seq: i64,
     first_observed_seq: i64,
     reason: String,
@@ -38,10 +38,7 @@ struct ProjectionCursorGap {
 
 impl WorkerStore {
     #[cfg_attr(not(test), allow(dead_code))]
-    pub fn reconcile_projection_cursors(
-        &self,
-        cursors: &[ProjectionCursorUpsert],
-    ) -> Result<(), WorkerError> {
+    pub fn reconcile_tail_cursors(&self, cursors: &[TailCursorUpsert]) -> Result<(), WorkerError> {
         let mut conn = self.connection()?;
         let tx = conn.transaction()?;
         tx.execute(
@@ -113,7 +110,7 @@ impl WorkerStore {
         Ok(())
     }
 
-    pub fn list_active_projection_cursors(&self) -> Result<Vec<ProjectionCursor>, WorkerError> {
+    pub fn list_active_tail_cursors(&self) -> Result<Vec<TailCursor>, WorkerError> {
         let conn = self.connection()?;
         let mut stmt = conn.prepare(
             r#"
@@ -133,7 +130,7 @@ impl WorkerStore {
             "#,
         )?;
         let rows = stmt.query_map([], |row| {
-            Ok(ProjectionCursor {
+            Ok(TailCursor {
                 session_projection_id: row.get(0)?,
                 exposure_id: row.get(1)?,
                 anyharness_workspace_id: row.get(2)?,
@@ -151,7 +148,7 @@ impl WorkerStore {
         Ok(cursors)
     }
 
-    pub fn update_projection_cursor_ack(
+    pub fn advance_tail_cursor_ack(
         &self,
         session_id: &str,
         last_contiguous_seq: i64,
@@ -171,14 +168,14 @@ impl WorkerStore {
         Ok(())
     }
 
-    pub fn record_projection_cursor_gap(
+    pub fn record_tail_cursor_gap(
         &self,
         session_projection_id: &str,
         expected_seq: i64,
         first_observed_seq: i64,
     ) -> Result<(), WorkerError> {
         let conn = self.connection()?;
-        let gap = ProjectionCursorGap {
+        let gap = TailCursorGap {
             expected_seq,
             first_observed_seq,
             reason: "anyharness_event_sequence_gap".to_string(),
@@ -204,95 +201,83 @@ mod tests {
         sync::atomic::{AtomicU64, Ordering},
     };
 
-    use super::{ProjectionCursorUpsert, WorkerStore};
+    use super::{TailCursorUpsert, WorkerStore};
 
     static NEXT_DB_ID: AtomicU64 = AtomicU64::new(1);
 
     #[test]
-    fn projection_cursor_reconcile_lists_only_active_sessions() {
+    fn tail_cursor_reconcile_lists_only_active_sessions() {
         let store = test_store();
         store
-            .reconcile_projection_cursors(&[
+            .reconcile_tail_cursors(&[
                 cursor("exposure-active", "session-1", "active", 4),
                 cursor("exposure-paused", "session-2", "paused", 0),
             ])
             .expect("reconcile");
 
-        let cursors = store
-            .list_active_projection_cursors()
-            .expect("active cursors");
+        let cursors = store.list_active_tail_cursors().expect("active cursors");
         assert_eq!(cursors.len(), 1);
         assert_eq!(cursors[0].exposure_id, "exposure-active");
         assert_eq!(cursors[0].anyharness_session_id, "session-1");
         assert_eq!(cursors[0].last_uploaded_seq, 4);
 
-        store
-            .reconcile_projection_cursors(&[])
-            .expect("empty reconcile");
+        store.reconcile_tail_cursors(&[]).expect("empty reconcile");
         assert!(store
-            .list_active_projection_cursors()
+            .list_active_tail_cursors()
             .expect("active cursors")
             .is_empty());
     }
 
     #[test]
-    fn projection_cursor_ack_is_monotonic() {
+    fn tail_cursor_ack_is_monotonic() {
         let store = test_store();
         store
-            .reconcile_projection_cursors(&[cursor("exposure-1", "session-1", "active", 4)])
+            .reconcile_tail_cursors(&[cursor("exposure-1", "session-1", "active", 4)])
             .expect("reconcile");
 
+        store.advance_tail_cursor_ack("session-1", 6).expect("ack");
         store
-            .update_projection_cursor_ack("session-1", 6)
-            .expect("ack");
-        store
-            .update_projection_cursor_ack("session-1", 5)
+            .advance_tail_cursor_ack("session-1", 5)
             .expect("stale ack");
 
-        let cursors = store
-            .list_active_projection_cursors()
-            .expect("active cursors");
+        let cursors = store.list_active_tail_cursors().expect("active cursors");
         assert_eq!(cursors[0].last_uploaded_seq, 6);
         assert_eq!(cursors[0].last_ack_seq, 6);
     }
 
     #[test]
-    fn projection_cursor_gap_removes_cursor_from_active_tail_set_until_repaired() {
+    fn tail_cursor_gap_removes_cursor_from_active_tail_set_until_repaired() {
         let store = test_store();
         store
-            .reconcile_projection_cursors(&[cursor("exposure-1", "session-1", "active", 4)])
+            .reconcile_tail_cursors(&[cursor("exposure-1", "session-1", "active", 4)])
             .expect("reconcile");
         store
-            .record_projection_cursor_gap("projection-session-1", 5, 8)
+            .record_tail_cursor_gap("projection-session-1", 5, 8)
             .expect("gap");
         assert!(store
-            .list_active_projection_cursors()
+            .list_active_tail_cursors()
             .expect("active cursors")
             .is_empty());
 
         store
-            .reconcile_projection_cursors(&[cursor("exposure-1", "session-1", "active", 8)])
+            .reconcile_tail_cursors(&[cursor("exposure-1", "session-1", "active", 8)])
             .expect("repair reconcile");
-        let cursors = store
-            .list_active_projection_cursors()
-            .expect("active cursors");
+        let cursors = store.list_active_tail_cursors().expect("active cursors");
         assert_eq!(cursors.len(), 1);
         assert_eq!(cursors[0].last_uploaded_seq, 8);
     }
 
     #[test]
-    fn projection_cursors_are_keyed_by_session_projection() {
+    fn tail_cursors_are_keyed_by_session_projection() {
         let store = test_store();
         store
-            .reconcile_projection_cursors(&[
+            .reconcile_tail_cursors(&[
                 cursor("exposure-1", "session-1", "active", 2),
                 cursor("exposure-1", "session-2", "active", 5),
             ])
             .expect("reconcile");
 
-        let mut cursors = store
-            .list_active_projection_cursors()
-            .expect("active cursors");
+        let mut cursors = store.list_active_tail_cursors().expect("active cursors");
         cursors.sort_by(|left, right| left.anyharness_session_id.cmp(&right.anyharness_session_id));
         assert_eq!(cursors.len(), 2);
         assert_eq!(cursors[0].session_projection_id, "projection-session-1");
@@ -306,8 +291,8 @@ mod tests {
         session_id: &str,
         status: &str,
         last_uploaded_seq: i64,
-    ) -> ProjectionCursorUpsert {
-        ProjectionCursorUpsert {
+    ) -> TailCursorUpsert {
+        TailCursorUpsert {
             exposure_id: exposure_id.to_string(),
             session_projection_id: format!("projection-{session_id}"),
             anyharness_workspace_id: "workspace-1".to_string(),

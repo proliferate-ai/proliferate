@@ -707,6 +707,9 @@ check-max-lines:
 check-server-boundaries:
 	cd server && uv run python ../scripts/check_server_boundaries.py
 
+check-worker-structure:
+	python3 scripts/check_proliferate_worker_structure.py
+
 test:
 	$(CARGO) test --workspace
 

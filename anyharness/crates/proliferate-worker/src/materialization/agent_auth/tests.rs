@@ -128,9 +128,8 @@ fn rejects_plan_for_different_profile_or_target() {
         .to_string()
         .contains("agent auth sandbox profile mismatch"));
 
-    let target_error =
-        build_anyharness_agent_auth_request(None, "profile-1", "target-2", 7, &plan)
-            .expect_err("target mismatch");
+    let target_error = build_anyharness_agent_auth_request(None, "profile-1", "target-2", 7, &plan)
+        .expect_err("target mismatch");
     assert!(target_error
         .to_string()
         .contains("agent auth target mismatch"));

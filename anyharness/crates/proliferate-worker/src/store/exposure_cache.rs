@@ -1,6 +1,6 @@
 use rusqlite::{params, OptionalExtension};
 
-use super::{ProjectionCursorUpsert, WorkerStore};
+use super::{TailCursorUpsert, WorkerStore};
 use crate::error::WorkerError;
 
 #[derive(Debug, Clone)]
@@ -19,7 +19,7 @@ pub struct WorkerExposureSnapshot {
 }
 
 #[derive(Debug, Clone)]
-pub struct WorkerControlState {
+pub(crate) struct WorkerControlState {
     pub control_cursor: Option<String>,
     pub exposure_cache_initialized: bool,
     pub legacy_exposure_polling_enabled: bool,
@@ -29,7 +29,7 @@ impl WorkerStore {
     pub fn reconcile_exposure_snapshots(
         &self,
         exposures: &[WorkerExposureSnapshot],
-        cursors: &[ProjectionCursorUpsert],
+        cursors: &[TailCursorUpsert],
     ) -> Result<(), WorkerError> {
         let mut conn = self.connection()?;
         let tx = conn.transaction()?;
@@ -199,7 +199,7 @@ impl WorkerStore {
         Ok(exposures)
     }
 
-    pub fn load_worker_control_state(&self) -> Result<WorkerControlState, WorkerError> {
+    pub(crate) fn load_worker_control_state(&self) -> Result<WorkerControlState, WorkerError> {
         let conn = self.connection()?;
         let state = conn
             .query_row(
