@@ -34,15 +34,15 @@ merge-readiness.
 
 ## Alignment Decisions Before Swarms
 
-- `domains/artifacts/**` is deferred. Current artifact behavior remains
-  cowork-owned until a separate artifacts product-domain migration is started.
-  Swarms may clean cowork artifact internals, but must not create a new
-  artifact domain as incidental structure cleanup.
+- `domains/artifacts/**` is outside these swarms. Current artifact behavior
+  remains cowork-owned until artifacts has its own product-domain owner. Swarms
+  may clean cowork artifact internals, but must not create a new artifact domain
+  as incidental structure cleanup.
 - `sessions/** -> domains/sessions/**`, `workspaces/** ->
   domains/workspaces/**`, `repo_roots/** -> domains/repo_roots/**`, and
   `live/sessions/connection/** -> live/sessions/driver/**` are final topology
   moves. They should happen after decomposition and coupling cleanup.
-- Contract event and transcript payloads may remain below `api/` when they are
+- Contract event and transcript payloads stay below `api/` only when they are
   deliberately the durable event-log or broadcast truth. Contract request and
   response DTOs should be mapped at the API boundary unless a focused doc
   explains why a specific type is runtime truth.
@@ -87,7 +87,7 @@ Focus:
   `live/sessions/**` paths.
 - Fix terminal current-state notes to reflect `domains/terminals/**` plus
   `live/terminals/**`.
-- Clarify which transitional notes are still true and which are complete.
+- Clarify which path notes are still true and which are complete.
 - Tighten old-path ratchets only for migrations already complete on the branch.
 
 Done when:
@@ -372,7 +372,7 @@ Focus:
 Done when:
 
 - Target top-level AnyHarness shape matches the README.
-- Old transitional roots cannot be resurrected.
+- Old roots cannot be resurrected.
 - The move PRs contain no unrelated behavior cleanup.
 
 ## Suggested Sequencing

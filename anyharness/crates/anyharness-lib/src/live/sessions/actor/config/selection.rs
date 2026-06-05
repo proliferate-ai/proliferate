@@ -39,9 +39,7 @@ pub(in crate::live::sessions::actor) fn pending_config_rank(
             }
         })
         .unwrap_or_else(|| {
-            if config_id == ACP_MODEL_COMPAT_CONFIG_ID
-                && startup_state.has_direct_model_control()
-            {
+            if config_id == ACP_MODEL_COMPAT_CONFIG_ID && startup_state.has_direct_model_control() {
                 NormalizedControlKind::Model
             } else if config_id == LEGACY_MODE_COMPAT_CONFIG_ID
                 && startup_state.has_raw_or_legacy_mode_control()
@@ -214,5 +212,25 @@ pub(in crate::live::sessions::actor) fn select_option_contains_value(
             _ => false,
         },
         _ => false,
+    }
+}
+
+pub(in crate::live::sessions::actor) fn select_option_values(
+    option: &acp::SessionConfigOption,
+) -> Vec<String> {
+    match &option.kind {
+        acp::SessionConfigKind::Select(select) => match &select.options {
+            acp::SessionConfigSelectOptions::Ungrouped(options) => options
+                .iter()
+                .map(|candidate| candidate.value.to_string())
+                .collect(),
+            acp::SessionConfigSelectOptions::Grouped(groups) => groups
+                .iter()
+                .flat_map(|group| group.options.iter())
+                .map(|candidate| candidate.value.to_string())
+                .collect(),
+            _ => Vec::new(),
+        },
+        _ => Vec::new(),
     }
 }

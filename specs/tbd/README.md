@@ -2,7 +2,7 @@
 
 Status: non-authoritative planning index.
 
-Files in this folder are useful notes, migration plans, and draft spec packs.
+Files in this folder are useful notes, plans, and draft spec packs.
 They are not operating law until they are promoted into `specs/codebase/**` or
 `specs/developing/**` with a clear owner and contract.
 
@@ -12,10 +12,10 @@ They are not operating law until they are promoted into `specs/codebase/**` or
 | --- | --- |
 | [anyharness-structure-alignment-swarms.md](anyharness-structure-alignment-swarms.md) | Planning notes for AnyHarness structure-alignment agent work. |
 | [cloud-worker-control-loop.md](cloud-worker-control-loop.md) | Cloud worker control-loop load-reduction planning. |
-| [frontend-structure-alignment-migration.md](frontend-structure-alignment-migration.md) | Frontend structure-alignment migration notes. |
+| [frontend-structure-alignment-migration.md](frontend-structure-alignment-migration.md) | Frontend structure-alignment notes. |
 | [security.md](security.md) | Draft security notes. |
 | [structure-alignment-coordinator-model.md](structure-alignment-coordinator-model.md) | Coordinator model for structure-alignment planning. |
-| [support-debug-correlation.md](support-debug-correlation.md) | Support/debug correlation follow-up notes. |
+| [support-debug-correlation.md](support-debug-correlation.md) | Support/debug correlation notes. |
 | [workspace-migration-git-durability-plan.md](workspace-migration-git-durability-plan.md) | Workspace migration git durability planning. |
 
 ## Promotion Rules

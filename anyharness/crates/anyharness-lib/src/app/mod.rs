@@ -353,6 +353,7 @@ impl AppState {
             workspace_operation_gate.clone(),
             checkout_deletion_gate.clone(),
             retire_preflight_checker.clone(),
+            runtime_home.clone(),
         ));
         let workspace_retention_service = Arc::new(WorkspaceRetentionService::new(
             workspace_runtime.clone(),

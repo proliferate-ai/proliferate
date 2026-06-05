@@ -60,16 +60,6 @@ Recommended first Metabase cards:
 - MCP connected/auth-ready/failed/deleted events
 - workspace migration starts/completions/failures
 
-## Deferred Metrics
-Billing is intentionally deferred until billing owns a durable subscription/MRR
-ledger. Do not derive MRR or net-new subscribers from transient entitlement
-state in this dashboard.
-
-Richer sandbox and target analytics are deferred until the current cloud sandbox
-architecture stack lands. That includes target/profile/slot dimensions, runtime
-config application facts, session origin attribution, and more precise
-provisioning lifecycle states.
-
 ## Metabase Access
 Use a read-only database role scoped to the `analytics` schema:
 

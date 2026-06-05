@@ -692,15 +692,14 @@ impl MobilityService {
                 .map_err(MobilityError::Internal)?;
             closed_terminal_ids.push(terminal.id);
         }
-
         let sessions = self
             .session_service
             .store()
             .list_by_workspace(workspace_id)?;
-
         let mut deleted_session_ids = Vec::new();
+        let runtime_home = Some(self.session_runtime.runtime_home());
         for session in sessions {
-            delete_session_agent_artifacts(&session, &workspace_path)?;
+            delete_session_agent_artifacts(&session, &workspace_path, runtime_home)?;
             self.session_service.delete_session(&session.id)?;
             deleted_session_ids.push(session.id);
         }
@@ -727,6 +726,7 @@ impl MobilityService {
             .store()
             .list_by_workspace(&workspace.id)?;
         let mut bundles = Vec::new();
+        let runtime_home = Some(self.session_runtime.runtime_home());
         for mut session in sessions {
             if !is_supported_agent_kind(&session.agent_kind) {
                 continue;
@@ -770,7 +770,7 @@ impl MobilityService {
             } else {
                 Vec::new()
             };
-            let agent_artifacts = collect_agent_artifacts(&session, &workspace_path)?;
+            let agent_artifacts = collect_agent_artifacts(&session, &workspace_path, runtime_home)?;
 
             bundles.push(WorkspaceMobilitySessionBundleData {
                 session,

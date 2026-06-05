@@ -3,6 +3,7 @@ import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from typing import Annotated, cast
 
+from anyio import CancelScope
 from fastapi import Depends
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -24,13 +25,16 @@ type AfterCommitCallback = Callable[[], Awaitable[None]]
 
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
-    async with async_session_factory() as session:
+    session = async_session_factory()
+    try:
         try:
             yield session
             await session.commit()
-        except Exception:
-            await session.rollback()
+        except BaseException:
+            await rollback_session(session)
             raise
+    finally:
+        await close_session(session)
 
 
 AsyncSessionDep = Annotated[AsyncSession, Depends(get_async_session)]
@@ -38,6 +42,16 @@ AsyncSessionDep = Annotated[AsyncSession, Depends(get_async_session)]
 
 async def commit_session(db: AsyncSession) -> None:
     await db.commit()
+
+
+async def rollback_session(db: AsyncSession) -> None:
+    with CancelScope(shield=True):
+        await db.rollback()
+
+
+async def close_session(db: AsyncSession) -> None:
+    with CancelScope(shield=True):
+        await db.close()
 
 
 async def run_after_commit(db: AsyncSession, callback: AfterCommitCallback) -> None:

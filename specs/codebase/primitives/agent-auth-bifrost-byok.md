@@ -1,7 +1,7 @@
 # Bifrost BYOK And Managed Credit Onboarding Spec
 
-Status: implemented on `codex/bifrost-byok-onboarding-spec`; remaining live
-E2B/Bedrock checks are opt-in environment-gated follow-ups.
+Status: implemented on `codex/bifrost-byok-onboarding-spec`; live E2B/Bedrock
+checks are opt-in and environment-gated.
 
 Date: 2026-05-25
 
@@ -842,7 +842,7 @@ Codex in E2B
   -> OpenAI, Anthropic via OpenAI facade, or compatible provider
 
 Gemini CLI in E2B
-  follow-up, not V1 E2B acceptance:
+  optional Gemini routing:
     GOOGLE_GEMINI_BASE_URL=https://llm.proliferate.ai/genai
     GEMINI_API_KEY=sk-bf-...
   -> Bifrost
@@ -1373,12 +1373,10 @@ codex
   protectedConfig.codex.model_providers.proliferate.requires_openai_auth = false
 
 gemini
-  follow-up only:
   GOOGLE_GEMINI_BASE_URL = <public>/genai
   GEMINI_API_KEY or GOOGLE_API_KEY = <virtual-key>
 
 opencode
-  follow-up only:
   OPENAI_BASE_URL = <public>/openai/v1
   OPENAI_API_KEY = <virtual-key>
 ```
@@ -1717,120 +1715,9 @@ OPENAI_API_KEY="$OPENAI_API_KEY" \
 python3 scripts/agent-gateway-phase0-probe.py bifrost --require-live --json
 ```
 
-That probe creates a temporary Bifrost provider key, creates a restricted
+That probe creates a short-lived Bifrost provider key, creates a restricted
 virtual key with a tiny budget, performs an OpenAI-compatible request through
-Bifrost, waits for a log row with cost, then disables both temporary keys.
-
-## Implementation Phases
-
-### Phase 0: Proof Harness
-
-- Add local Bifrost smoke script.
-  Implemented in `scripts/agent-gateway-phase0-probe.py bifrost`.
-- Verify Claude/OpenAI-compatible request paths.
-  Bifrost source exposes `/anthropic/v1/...`, `/openai/v1/...`,
-  `/genai/v1beta/...`, and `/v1/chat/completions`; Proliferate materializes
-  harness base URLs so each CLI appends the expected suffix.
-- Verify Bifrost logs contain usable cost metadata.
-  Implemented in the phase-0 probe and
-  `server/tests/e2e/agent_gateway/test_bifrost_live.py`.
-- Verify Bedrock local auth path with AWS CLI.
-- Verify E2B can reach tunneled Bifrost.
-- Prove Bifrost isolation before exposing hosted BYOK:
-  - `provider_configs[].key_ids` cannot be bypassed across aliases or
-    provider/model prefixes.
-  - duplicate public model names route only to selected provider keys.
-  - fallback never escapes to Proliferate managed provider keys.
-  - requests without virtual keys fail.
-  - logs attribute to the expected virtual key and selected key.
-
-Exit criteria:
-
-- Host curl through Bifrost succeeds.
-- E2B curl through Bifrost succeeds.
-- Bifrost log import fixture is representative.
-- Hosted BYOK UI remains hidden until the isolation proof passes.
-
-### Phase 1: Config And Integration Client
-
-- Add Bifrost env settings.
-- Add `integrations/bifrost`.
-- Add typed errors and response models.
-- Add health/provider/virtual-key/log operations.
-- Add mocked integration tests.
-
-Exit criteria:
-
-- No product service imports raw Bifrost endpoint paths.
-- Tests cover success, auth failure, validation failure, and network failure.
-
-### Phase 2: Router Materialization Persistence
-
-- Add materialization table.
-- Add usage ledger and import cursor tables.
-- Add stores returning frozen dataclasses.
-- Add desired-state fingerprint helpers.
-
-Exit criteria:
-
-- Re-running a materialization plan is idempotent.
-- Drifted materializations can be found by indexed query.
-
-### Phase 3: Managed Free Credits
-
-- Ensure onboarding entitlement.
-- Materialize managed provider keys and virtual keys.
-- Store encrypted Bifrost VK materialization.
-- Expose readiness/status to app surfaces.
-- Use the free-allocation guard before creating account managed-credit
-  entitlement.
-
-Exit criteria:
-
-- New user can launch a managed-credit cloud test request.
-- UI can show free credit active vs exhausted.
-
-### Phase 4: Sandbox Auth Apply
-
-- Convert sandbox selection to harness env/config plan.
-- Apply Bifrost virtual keys into E2B sandbox.
-- Ensure raw provider secrets are never written to the sandbox.
-- Support Claude and Codex first.
-- Keep Gemini and OpenCode gated until template installation, protected-env
-  allowlists, AnyHarness launch configuration, and live CLI smoke pass.
-
-Exit criteria:
-
-- E2B sandbox can call Bifrost with applied env.
-- Bifrost logs identify the sandbox's virtual key.
-- Worker accepts `gateway_env`; no `bifrost_env` mode is introduced.
-
-### Phase 5: Usage Import And Exhaustion
-
-- Poll Bifrost logs.
-- Insert usage ledger rows.
-- Debit managed-credit entitlements.
-- Disable exhausted virtual keys.
-- Block future managed-credit launches.
-
-Exit criteria:
-
-- Tiny grant exhaustion works end to end.
-- Duplicate Bifrost logs do not double-charge.
-
-### Phase 6: BYOK
-
-- Add personal/admin credential APIs if not already present.
-- Add provider validation.
-- Materialize BYOK provider keys and sandbox virtual keys.
-- Add Shared Sandbox/admin UI consumption.
-
-Exit criteria:
-
-- Anthropic/OpenAI BYOK works.
-- Bedrock BYOK works in live gated test.
-- OpenAI-compatible endpoint validation enforces hosted SSRF protections.
-- Non-admin cannot inspect or change org BYOK secrets.
+Bifrost, waits for a log row with cost, then disables both short-lived keys.
 
 ## Acceptance Criteria
 
@@ -1882,16 +1769,3 @@ Remaining budget caveat:
   high-scale managed credits, either map budget subjects to a shared Bifrost
   customer/team budget or keep Proliferate-owned preflight/usage reconciliation
   tight enough for the intended trial exposure.
-
-## Open Questions
-
-- Gemini and OpenCode gateway support are follow-ups after protected-env,
-  template, AnyHarness launch, and live CLI proof work.
-- Whether Proliferate should map personal subjects to Bifrost customers and org
-  subjects to Bifrost teams, or use one Bifrost concept for both, should be
-  finalized during Phase 0 after API ergonomics are tested.
-- Whether the hosted public URL should expose raw Bifrost branding paths or use
-  `https://llm.proliferate.ai` with route aliases is an operator/deployment
-  decision. Product code should treat it as config.
-- Exact Bifrost admin API auth mode for hosted production is a deployment
-  blocker, not a post-launch cleanup item.

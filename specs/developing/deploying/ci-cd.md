@@ -115,7 +115,7 @@ Before deploying:
 5. For user-facing releases, confirm whether the landing page, public docs,
    changelog/release notes, in-app copy, install docs, or support docs need to
    change with the release. Update them before deployment when they are part of
-   the shipped behavior, or record an explicit follow-up when they are not.
+   the shipped behavior, or record the owner when they are not.
 6. Do not print or document secret values. If a secret is invalid, update the
    GitHub environment secret and mention only that it was refreshed.
 
@@ -179,6 +179,11 @@ Bypass `require_staging_success` only when explicitly directed. If bypassing
 staging, the agent must state that staging was bypassed and should watch the
 E2B lane closely because production will build and smoke the immutable template
 before moving the rolling production tag.
+If a human operator explicitly asks to go to production while a staging run is
+still in progress, dispatch production from the exact `main` SHA with
+`require_staging_success=false`. Leave the staging run alone, but do not treat
+it as the production gate; production is successful only after the production
+run itself completes and the live production URLs/artifacts verify.
 
 If forcing `e2b` in production while `require_staging_success=true`, first
 force `e2b` in staging for the same SHA. Production uses `promote_only` in
@@ -223,6 +228,12 @@ Web staging: curl -I https://staging.proliferate.com/
 Desktop stable updater:
 curl -fsS https://downloads.proliferate.com/desktop/stable/latest.json
 curl -fsS https://downloads.proliferate.com/desktop/stable/installers.json
+curl -fsSI <each DMG URL from installers.json>
+
+Treat desktop as live only after the production `deploy-desktop / release`
+`publish-updater` job succeeds and the stable updater manifests advertise the
+new version. The macOS build jobs and draft GitHub Release are necessary
+intermediate steps, but they do not update installed apps by themselves.
 
 Desktop staging:
 Confirm the staging `deploy-desktop` lane completed its build/dry-run jobs and
@@ -240,7 +251,7 @@ Confirm the deploy job promoted the expected rolling tag (`staging` or
 ```
 
 When reporting back, include the workflow run URL, commit SHA, surfaces that
-ran, skipped lanes, verification results, release/docs/landing-page follow-up,
+ran, skipped lanes, verification results, release/docs/landing-page ownership,
 and any remaining owner.
 
 ### Failure Rules
@@ -264,6 +275,16 @@ and any remaining owner.
   once before changing code; repeated failures need the notary log.
 - E2B cache save/restore warnings are not failures when the E2B job completes
   and smoke passes.
+- E2B `cargo install cargo-zigbuild --locked` can fail on transient crates.io
+  or GitHub runner network errors such as `curl failed` with `[16] Error in the
+  HTTP2 framing layer`. Rerun the failed E2B job once before changing code.
+- Desktop production can be the long pole. The
+  `deploy-desktop / release / build-desktop` matrix builds the AnyHarness
+  runtime, bundled agent seed, debug helper, worker, SDK, frontend, and Tauri
+  app before uploading artifacts. Intel macOS often lags Apple Silicon by many
+  minutes. If the job is still `in_progress`, inspect active step names with
+  `gh run view <run> --json jobs`; GitHub may not expose live logs until the job
+  completes.
 
 ## 1. File Tree
 

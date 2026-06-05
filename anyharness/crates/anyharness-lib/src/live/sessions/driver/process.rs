@@ -63,9 +63,11 @@ pub(in crate::live::sessions) fn spawn_agent_process(
     let spawn_args = spawn_spec
         .map(|spec| spec.args.as_slice())
         .unwrap_or(agent.descriptor.launch.default_args.as_slice());
-    let spawn_cwd = spawn_spec
+    let (spawn_cwd, spawn_cwd_source) = spawn_spec
         .and_then(|spec| spec.cwd.as_ref())
-        .map_or(workspace_path, |path| path.as_path());
+        .map_or((workspace_path, "workspace"), |path| {
+            (path.as_path(), "agent_override")
+        });
     let spawn_env = merge_spawn_env(
         workspace_env,
         session_launch_env,
@@ -74,6 +76,26 @@ pub(in crate::live::sessions) fn spawn_agent_process(
         protected_agent_auth_env,
     );
     let latency_fields = latency_trace_fields(latency);
+
+    if let Err(error) = validate_spawn_cwd(spawn_cwd, spawn_cwd_source) {
+        tracing::warn!(
+            session_id = %session_id,
+            workspace_id = %workspace_id,
+            agent_kind = %source_agent_kind,
+            spawn_program = %spawn_program.display(),
+            agent_process_path = %resolved_path.display(),
+            spawn_cwd = %spawn_cwd.display(),
+            spawn_cwd_source,
+            error = %error,
+            flow_id = latency_fields.flow_id,
+            flow_kind = latency_fields.flow_kind,
+            flow_source = latency_fields.flow_source,
+            prompt_id = latency_fields.prompt_id,
+            "[workspace-latency] session.actor.process_spawn_cwd_invalid"
+        );
+        let _ = ready_tx.send(Err(anyhow::anyhow!(error.clone())));
+        anyhow::bail!("spawn agent subprocess: {error}");
+    }
 
     let process_spawn_started = std::time::Instant::now();
     let mut command = tokio::process::Command::new(spawn_program);
@@ -91,6 +113,10 @@ pub(in crate::live::sessions) fn spawn_agent_process(
             session_id = %session_id,
             workspace_id = %workspace_id,
             agent_kind = %source_agent_kind,
+            spawn_program = %spawn_program.display(),
+            agent_process_path = %resolved_path.display(),
+            spawn_cwd = %spawn_cwd.display(),
+            spawn_cwd_source,
             elapsed_ms = process_spawn_started.elapsed().as_millis(),
             error = %e,
             flow_id = latency_fields.flow_id,
@@ -133,9 +159,104 @@ pub(in crate::live::sessions) fn spawn_agent_process(
     })
 }
 
+fn validate_spawn_cwd(spawn_cwd: &Path, spawn_cwd_source: &str) -> Result<(), String> {
+    match std::fs::metadata(spawn_cwd) {
+        Ok(metadata) if metadata.is_dir() => Ok(()),
+        Ok(_) => Err(format!(
+            "{} is not a directory: {}",
+            spawn_cwd_label(spawn_cwd_source),
+            spawn_cwd.display()
+        )),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Err(format!(
+            "{} is missing: {}",
+            spawn_cwd_label(spawn_cwd_source),
+            spawn_cwd.display()
+        )),
+        Err(error) => Err(format!(
+            "{} cannot be accessed: {} ({error})",
+            spawn_cwd_label(spawn_cwd_source),
+            spawn_cwd.display()
+        )),
+    }
+}
+
+fn spawn_cwd_label(spawn_cwd_source: &str) -> &'static str {
+    match spawn_cwd_source {
+        "agent_override" => "agent launch directory",
+        _ => "workspace directory",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domains::agents::model::{
+        ArtifactRole, CredentialState, ResolvedAgentStatus, ResolvedArtifact,
+    };
+    use crate::domains::agents::registry::built_in_registry;
+
+    fn resolved_test_agent() -> ResolvedAgent {
+        let descriptor = built_in_registry()
+            .into_iter()
+            .find(|descriptor| descriptor.kind == AgentKind::Codex)
+            .expect("missing codex descriptor");
+
+        ResolvedAgent {
+            descriptor,
+            status: ResolvedAgentStatus::Ready,
+            credential_state: CredentialState::Ready,
+            native: None,
+            agent_process: ResolvedArtifact {
+                role: ArtifactRole::AgentProcess,
+                installed: true,
+                source: Some("managed".into()),
+                version: None,
+                path: Some(std::env::current_exe().expect("current exe")),
+                message: None,
+            },
+            spawn: None,
+        }
+    }
+
+    #[test]
+    fn missing_workspace_directory_returns_clear_startup_error() {
+        let missing_workspace = std::env::temp_dir().join(format!(
+            "anyharness-missing-workspace-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let agent = resolved_test_agent();
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+
+        let result = spawn_agent_process(
+            &agent,
+            &missing_workspace,
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+            "session-1",
+            "workspace-1",
+            AgentKind::Codex.as_str(),
+            None,
+            &ready_tx,
+        );
+        let error = match result {
+            Ok(_) => panic!("missing cwd should fail before spawn"),
+            Err(error) => error,
+        };
+
+        let message = error.to_string();
+        assert!(message.contains("workspace directory is missing"));
+        assert!(message.contains(&missing_workspace.display().to_string()));
+
+        let ready_error = ready_rx
+            .try_recv()
+            .expect("ready failure")
+            .expect_err("startup should report cwd failure");
+        let ready_message = ready_error.to_string();
+        assert!(ready_message.contains("workspace directory is missing"));
+        assert!(ready_message.contains(&missing_workspace.display().to_string()));
+    }
 
     #[test]
     fn merge_spawn_env_prefers_session_launch_over_workspace_env() {

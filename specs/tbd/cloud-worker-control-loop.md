@@ -563,8 +563,8 @@ upload batches only when events exist
 sleep 500 ms
 ```
 
-If the control endpoint is unavailable and the worker is using legacy fallback,
-the existing exposure refresh path can remain in that fallback mode.
+If the control endpoint is unavailable and the worker is using fallback, the
+exposure refresh path uses that fallback mode.
 
 The current local store only persists session projection cursors. To remove
 Cloud exposure fetches from the 500 ms loop, add a worker-local exposure cache:
@@ -812,23 +812,5 @@ After worker load drops, Web can still be slow because:
 - The current process-local pub/sub limitation also affects Web live streams
   under multiple API tasks or app worker processes.
 
-Keep Web workspace/chat endpoint latency on the dashboard and treat remaining
-p95 issues as a separate follow-up once worker endpoint RPM and DB pool
-timeouts are controlled.
-
-## 12. Implementation Decisions
-
-- V1 uses a new `cloud_worker_target_control_state` table with separate
-  control and exposure revisions.
-- `control/wait` can return both a command and exposure changes in one
-  response.
-- Desktop should surface duplicate worker ownership distinctly, such as
-  `already_running_elsewhere`.
-- V1 can keep the global 30 second reqwest timeout and clamp server waits to
-  20 seconds unless verification shows false client timeouts.
-
-Remaining operational choice:
-
-- Either deploy a shared pub/sub backend before horizontal API scaling, or keep
-  process-local pub/sub behind the single-task/single-process/no-overlap deploy
-  gate and accept timeout fallback during that interim.
+Keep Web workspace/chat endpoint latency on the dashboard after worker endpoint
+RPM and DB pool timeouts are controlled.

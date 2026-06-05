@@ -62,14 +62,10 @@ Identity fields:
 | `childSessionId` | Runtime session id for the delegated agent. | Internal/debug/details only |
 | `sessionLinkId` | Durable parent-child relationship row id. | Internal/debug/details only |
 
-The old `codingSessionId` concept should collapse into `coworkAgentId` for the
-normal agent-facing API. Compatibility aliases may exist during migration, but
-new tool contracts should use cowork workspace/agent language.
-
-During the migration window, MCP responses may still include legacy
-`codingSessionId` and `sessionLinkId` fields so older transcript parsers, SDKs,
-and in-flight agent sessions keep working. New callers should treat those
-fields as compatibility aliases only. All examples and new code should prefer
+The normal agent-facing API uses `coworkAgentId`. `codingSessionId` and
+`sessionLinkId` are compatibility aliases for older transcript parsers, SDKs,
+and in-flight agent sessions. New callers should treat those fields as
+compatibility aliases only. All examples and new code should prefer
 `coworkWorkspaceId`/`coworkAgentId` plus `label`.
 
 ## MCP Identity
@@ -112,14 +108,14 @@ lifecycle. Agent tools mirror the subagent lifecycle with a workspace scope.
 
 Compatibility rule:
 
-- accept `codingSessionId` during migration when a caller does not yet know
-  `coworkAgentId`
+- accept `codingSessionId` as a compatibility alias when a caller does not yet
+  know `coworkAgentId`
 - if both `coworkAgentId` and `codingSessionId` are supplied, they must resolve
   to the same linked cowork agent or the call returns a validation error
-- return legacy ids only as compatibility fields; do not require new callers
-  to store or echo them
+- return compatibility ids only as compatibility fields; do not require new
+  callers to store or echo them
 
-Current migration response shape:
+Compatibility response shape:
 
 - create/send/status/wake/close responses include `coworkAgentId` and `label`,
   and may also include `codingSessionId` and `sessionLinkId`
@@ -130,7 +126,7 @@ Current migration response shape:
 - `search_cowork_agent_transcript` returns `query`, `seq`, `timestamp`,
   `turnId`, `itemId`, and `snippet`
 - `read_cowork_agent_events` is a debug escape hatch and may return only raw
-  event cursors plus legacy child routing fields
+  event cursors plus compatibility child routing fields
 
 These compatibility fields are not the agent-facing handle. The agent-facing
 handle remains `coworkAgentId`.
@@ -605,8 +601,8 @@ Returns:
 }
 ```
 
-During migration, this response may also include `codingSessionId` and
-`sessionLinkId` as legacy routing aliases. The stable fields remain
+This response may also include `codingSessionId` and `sessionLinkId` as
+compatibility routing aliases. The stable fields remain
 `coworkAgentId` and `label`.
 
 #### `search_cowork_agent_transcript`
@@ -825,9 +821,9 @@ apps/desktop/src/lib/domain/delegated-work/**
 apps/desktop/src/lib/access/anyharness/cowork.ts
 ```
 
-## Migration Notes
+## Compatibility Notes
 
-Current coding-session names should migrate to cowork workspace/agent names:
+Coding-session names map to cowork workspace/agent names:
 
 | Old concept | Target concept |
 | --- | --- |
@@ -839,8 +835,7 @@ Current coding-session names should migrate to cowork workspace/agent names:
 | `get_coding_status` | `get_cowork_agent_status` |
 | `read_coding_events` | `read_cowork_agent_events` |
 
-Compatibility aliases may exist during migration, but the model-facing and
-doc-facing target should use cowork agent names.
+The model-facing and doc-facing contract uses cowork agent names.
 
 ## Acceptance
 

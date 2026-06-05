@@ -290,8 +290,7 @@ SETTINGS_CONTENT_SECTIONS = [
 Renamed ids:
 
 ```text
-"repo" -> "environments"      (matches group rename, keeps the pane file
-                                rename to follow in spec 03 chunk B)
+"repo" -> "environments"      (matches group rename)
 ```
 
 Removed id:
@@ -831,54 +830,6 @@ apps/desktop/src/lib/domain/telemetry/events.ts
   events. Payload uses 5.3 vocabulary verbatim.
 ```
 
-## 7. Implementation Chunks
-
-Preferred implementation is one PR for the settings IA cleanup. Shared primitives may land ahead of feature specs that consume them, but visible settings rows and panes ship only when their owning feature spec provides a functioning body. No empty pane shells,
-stub cards, or "coming soon" panels.
-
-```text
-Chunk A  Sidebar + nav + redirects
-  - navigation-presentation.ts rewrite
-  - SETTINGS_CONTENT_SECTIONS update
-  - redirect map for renamed ids
-  - SettingsSidebar admin-tag rendering
-  - sidebar pixel tests
-
-Chunk B  Page rename + folder reorganize
-  - rename "repo" id -> "environments"
-  - fold WorktreesPane into EnvironmentsPane per-repo detail
-  - relocate /panes/cloud/* -> /panes/agent-authentication/*
-  - delete CloudPane.tsx after splitting its content (sections that
-    were inside CloudPane move to AgentAuthenticationPane, BillingPane,
-    or EnvironmentsPane depending on subject)
-  - update imports
-
-Chunk C  New shared primitives
-  - StatusBadge, AdminOnlyPlaceholder
-  - CredentialPicker, AgentRunConfigSelector,
-    RuntimeReadinessPanel, PublicCapabilityList, WhereUsedDrawer
-  - storybook / vitest snapshots for each
-
-Chunk D  Admin gating hook + replacements
-  - useIsAdmin(orgId)
-  - replace inline role checks in OrganizationPane,
-    CloudAgentAuthCredentialForm
-  - admin-only pane wrappers for shared-environments, slack-bot
-
-Chunk E  Vocabulary + copy modules
-  - vocabulary.ts TS enums + helpers
-  - vocabulary-copy.ts labels
-  - new section copy files
-
-Chunk F  Feature page handoff
-  - AgentAuthenticationPane.tsx composes spec-02 components if spec 02 lands
-    in the same stack; otherwise the nav row stays hidden
-  - SharedEnvironmentsPane.tsx appears only with the shared-environment body
-    owned by the relevant follow-on spec
-  - SlackBotPane.tsx appears only with the Slack configuration body owned by
-    spec 07
-```
-
 ## 8. Acceptance Criteria
 
 1. Registered `SETTINGS_NAV_GROUPS` matches §5.1 exactly, but visible nav rows
@@ -999,51 +950,3 @@ Manual smoke:
 6. Resize sidebar focus.
      -> 300px fixed; no horizontal scroll inside nav.
 ```
-
-## 10. Final Decisions / Deferred Questions
-
-1. **Should `agents` and `agent-defaults` be one pane (tabs) or two
-   sidebar items?**
-
-   Decision: two sidebar items, matching the mockup. They have different
-   conceptual scopes (installed-on-this-Mac vs reusable run config).
-   Tabs would compress the IA and lose the mockup's intent.
-
-2. **Should the Workspace > Environments pane keep one row per repo,
-   or split local-vs-cloud?**
-
-   Decision: keep one row per repo with both local and cloud config
-   inline (current `EnvironmentsPane` shape). The list grows linearly
-   in repo count; splitting doubles the IA without product benefit.
-
-3. **Should `useIsAdmin` accept `null` (e.g. user has no org) and
-   return `isAdmin = false` quietly, or throw?**
-
-   Decision: return false quietly. Throwing makes UI-flow code uglier;
-   the empty-org case is real.
-
-4. **Empty shells now or feature specs ship together?**
-
-   Decision: no empty shells. Shared primitives can land independently, but a
-   sidebar row or pane exists only with a functioning owner-provided body.
-
-5. **Should the per-pane `?target=…` / `?credential=…` focus params
-   live in `useSettingsNavigation` or a sibling hook?**
-
-   Decision: extend `useSettingsNavigation()` with a generic
-   `focus: Record<string, string>` so panes don't each invent their
-   own param parser.
-
-6. **Personal cloud landing surface — where is it?**
-
-   The current `CloudPane.tsx` is the closest thing to a "personal
-   cloud" landing today. After the split, no single pane is "personal
-   cloud." Compute owns target readiness; Agent Authentication owns
-   credentials; Environments owns repos. A user looking for "set up
-   my personal cloud" is routed through Compute (where Enable Cloud
-   lives) and then naturally crosses into Environments/Agent Auth/
-   Plugins as needed.
-
-   Decision: do not invent a "Personal Cloud" pane. The cross-cutting
-   readiness summary lives in the Compute pane via
-   `RuntimeReadinessPanel`. Spec 00 owns that landing.

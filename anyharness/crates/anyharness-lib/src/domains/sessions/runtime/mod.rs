@@ -1,5 +1,5 @@
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyharness_contract::v1::{
@@ -26,6 +26,7 @@ pub(crate) mod contract;
 mod creation;
 mod fork;
 mod interactions;
+mod launch_env;
 mod lifecycle;
 mod pending_prompts;
 mod prompt;
@@ -48,6 +49,12 @@ pub struct SessionRuntime {
     plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
     plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
     agent_auth_config_service: Arc<AgentAuthConfigService>,
+}
+
+impl SessionRuntime {
+    pub(crate) fn runtime_home(&self) -> &Path {
+        &self.runtime_home
+    }
 }
 
 #[derive(Debug)]

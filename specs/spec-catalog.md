@@ -72,7 +72,7 @@ Folders: `process/`, `install/`, `update/` (manifest, staging, rollback).
 
 Domain shape: `api.py` (transport) → `service.py` (orchestration) → `domain/policy.py` (pure rules) + `db/store/` (queries). Type pipeline: ORM → frozen `@dataclass` → Pydantic; ORM never leaves the store.
 
-Guides: `domains`, `database`, `auth`, `errors`, `integrations`, `config`, `workers`. Audits: `phase6-billing-reconciler`, `phase6-cloud-runtime-background-loops`, `server-structure-hygiene`.
+Guides: `domains`, `database`, `auth`, `errors`, `integrations`, `config`, `workers`.
 
 ### SDK
 **`specs/codebase/structures/sdk/README.md`** — `anyharness/sdk/**` and `anyharness/sdk-react/**`.
@@ -125,7 +125,7 @@ Core split: `Workspace` = durable product record; `Worktree` = filesystem materi
 
 State model: product lifecycle (`active / archived / deleted`) × materialization state (`hydrated / dehydrated / hydrating / unknown / inconsistent`) × cleanup status (`idle / pruning / blocked / failed / skipped / completed`).
 
-7 documented flows. 7 implementation phases. Safety rule: never auto-prune uncommitted/conflicted work, live sessions, or paths outside Proliferate-managed roots.
+7 documented flows. Safety rule: never auto-prune uncommitted/conflicted work, live sessions, or paths outside Proliferate-managed roots.
 
 ### MCP + Skills Flow
 **`specs/codebase/primitives/mcp-runtime.md`** — MCP inside AnyHarness.
@@ -232,10 +232,10 @@ MCPs + permissions: GitHub MCP / `gh`, AWS (ECS, ECR, RDS, S3, SSM,
 CloudFront), GitHub Actions environment admin, Apple developer account, Vercel,
 Expo/EAS, App Store Connect, and browser/Chrome access for provider dashboards.
 
-Release docs/public-surface follow-up is now explicit in
-`deploying/README.md` and `deploying/ci-cd.md`: user-facing releases must
-confirm whether landing page, public docs, changelog/release notes, in-app
-copy, install docs, or support docs need to change.
+Release docs/public-surface ownership is explicit in `deploying/README.md` and
+`deploying/ci-cd.md`: user-facing releases must confirm whether landing page,
+public docs, changelog/release notes, in-app copy, install docs, or support
+docs need to change.
 
 ---
 

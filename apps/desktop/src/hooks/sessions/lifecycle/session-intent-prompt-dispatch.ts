@@ -15,8 +15,9 @@ import {
 import {
   transcriptHasRenderablePromptEcho,
 } from "@proliferate/product-domain/sessions/intents/prompt-echo";
-import type {
-  PromptOutboxEntry,
+import {
+  isOutboxEntryTerminal,
+  type PromptOutboxEntry,
 } from "@proliferate/product-domain/sessions/intents/session-intent-model";
 import {
   getSessionClientAndWorkspace,
@@ -197,6 +198,13 @@ export async function dispatchPromptIntent(
     }
   } catch (error) {
     const failure = classifyPromptDispatchFailure(error, requestStarted);
+    const latestAfterFailure = useSessionIntentStore.getState().entriesById[entry.intentId];
+    if (!latestAfterFailure || latestAfterFailure.kind !== "send_prompt") {
+      return;
+    }
+    if (isOutboxEntryTerminal(latestAfterFailure)) {
+      return;
+    }
     useSessionIntentStore.getState().patchIntent(entry.intentId, {
       status: failure.deliveryState === "failed_before_dispatch" ? "failed" : "dispatching",
       deliveryState: failure.deliveryState,

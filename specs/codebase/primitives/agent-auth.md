@@ -44,7 +44,7 @@ In scope:
 Out of scope:
 
 - BYOK provider validation (Anthropic API key, OpenAI API key, Bedrock
-  STS assume-role, OpenAI-compatible live probing). Deferred to a V2
+  STS assume-role, OpenAI-compatible live probing). This belongs to the V2
   product-scope decision.
 - Self-hosted Bifrost lifecycle.
 - Additional per-request usage ledger surfaces beyond the Bifrost usage importer.
@@ -345,7 +345,7 @@ env var name today (the gap in §4.2).
 apps/desktop/src/components/settings/panes/agent-authentication/CloudAgentAuthLibrary.tsx
 apps/desktop/src/components/settings/panes/compute/ComputeTargetAgentAuthCard.tsx
 apps/desktop/src/hooks/access/cloud/agent-auth/use-agent-auth.ts
-  (transitional shim re-exporting from @proliferate/cloud-sdk-react)
+  (re-exporting from @proliferate/cloud-sdk-react)
 apps/desktop/src/lib/domain/agent-auth/agent-auth-presentation.ts
 apps/desktop/src/config/agent-auth.ts
   -- AGENT_GATEWAY_BYOK_ENABLED = false   (hardcoded today; gap in §4.2)
@@ -766,17 +766,16 @@ apps/desktop/src/lib/access/cloud/agent-auth-sync.ts
   surface needs_resync in CloudAgentAuthLibrary
 ```
 
-Spec 02 ships the framework + the desktop_sync signals. Provider 401
-detection and harness-native checks ship as later phases (cheap once the
-framework exists).
+Spec 02 owns the framework and the desktop-sync signals. Provider 401 detection
+and harness-native checks belong to the validation policy layer.
 
-### 5.9 BYOK gating (deferred to V2 product decision)
+### 5.9 BYOK gating
 
 The schema and dormant service code exist; UI hides BYOK behind the
 capability flag. This spec does NOT make BYOK launchable. The capability
 API lets self-hosted operators enable BYOK explicitly.
 
-When BYOK is enabled (future PR):
+When BYOK is enabled by product capability:
 
 ```text
 - live validation per provider (Anthropic /models, OpenAI /models,
@@ -1018,68 +1017,6 @@ apps/desktop/src/hooks/access/cloud/agent-auth/
 
 Tests in §9.
 
-## 7. Implementation Phases
-
-Preferred implementation is one PR per spec. Chunks are review
-checkpoints inside that PR and may be split only when the split does
-not leave duplicate models, dead paths, partially wired security
-checks, or visible inert UI. Phases here describe build-order inside
-that PR, not staged rollout.
-
-```text
-Chunk A  Rebind to spec 00
-  - drop SandboxProfile.managed_target_id readers
-  - load_primary_target_for_profile helper using
-    cloud_targets.profile_target_role = 'primary'
-  - update all agent-auth store/service references to the renamed
-    sandbox_profile_target_state columns
-
-Chunk B  Worker scope synthesis + AnyHarness no-selection fail-closed
-  - Cloud command builder populates sandboxProfileId +
-    requiredAgentAuthRevision on start_session / send_prompt
-  - worker dispatcher synthesizes AgentAuthExternalScope on start_session
-  - AnyHarness AGENT_AUTH_SELECTION_REQUIRED typed error
-  - end-to-end test: scoped launch fails closed when no selection
-
-Chunk C  Cleanup-on-revoke (conservative)
-  - server emits cleanup_paths in plan ONLY on revoke / share-revoke /
-    profile-disabled
-  - worker executes cleanup under allowlist; aborts apply on
-    out-of-allowlist paths
-  - status report includes applied_cleanup_paths
-  - tests for revoke -> file removed; share revoke -> file removed;
-    selection replacement -> no cleanup emitted
-
-Chunk D  Protected env allowlist
-  - per (agent_kind, materialization_mode) allowlist module
-  - server validates before persisting plan
-  - worker validates defense-in-depth
-  - AnyHarness validates on apply
-  - tests for valid combos pass; invalid combos rejected
-
-Chunk E  Proactive grant rotation
-  - reconciler tick reconcile_runtime_grant_freshness
-  - refresh_window = 2 days; refresh when expires_at <= now + refresh_window
-  - reuses existing reconciler-enabled gate
-
-Chunk F  Capability API + Desktop selector cleanup
-  - GET /v1/cloud/capabilities
-  - Desktop hooks + selectors over capabilities snapshot
-  - remove hardcoded AGENT_GATEWAY_BYOK_ENABLED
-  - operator runbook update (specs/developing/deploying/self-hosted-deploy.md)
-
-Chunk G  Freshness framework + Desktop sync signals
-  - freshness.py module
-  - apply_signal hooks at Desktop sync sites
-  - CloudAgentAuthLibrary surfaces needs_resync
-
-Follow-ups (separate PRs, scope additions, not migration ceremony)
-  - provider 401 detection at the gateway (feeds freshness signals)
-  - OpenCode native sync via Desktop agent-auth export
-  - BYOK enablement (V2 product decision; live validation and Bifrost key
-    isolation)
-```
-
 ## 8. Acceptance Criteria
 
 1. `SandboxProfile.managed_target_id` is no longer read by agent-auth
@@ -1299,7 +1236,6 @@ Manual smoke cases:
      -> profile target state apply still 'applied' for that revision but
         the next scoped launch fails closed; UI prompts reconnect
 ```
-
 ## 10. Final Decisions / Deferred Questions
 
 1. **Should `auth_status != 'ready'` on a publicized MCP be blocker or

@@ -244,8 +244,7 @@ That means:
 - if a store needs an internal record, define it in `anyharness-lib`
 - if a handler needs to return a public shape, convert to a contract type there
 
-Using contract types as internal service results should be treated as a
-transitional compromise, not the default pattern for new code.
+Contract types are not internal service result types.
 
 ## Serialization Rules
 

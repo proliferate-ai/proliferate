@@ -131,7 +131,7 @@ Light apply → worker pushes config straight to local AnyHarness. Heavy apply
 
 Shared currency:
 
-```ts
+```text
 type RevisionMap = Map<string, u64>   // key: "auth" | "plugins" | "mcp:<id>" | "exposures" | "revoked-jti" | ...
 ```
 
@@ -142,14 +142,14 @@ RevisionMap is what keeps everything on the **one** control poll.
 
 **(1) Control exchange** (long-poll, both directions):
 
-```ts
+```text
 ControlRequest  = { control_cursor; supported_command_kinds[]; wait_seconds; lease_timeout_seconds }
 ControlResponse = { reason; commands: CommandEnvelope[]; revision_signals: RevisionMap; control_cursor; server_time }
 ```
 
 **(2) Command envelope** (down):
 
-```ts
+```text
 CommandEnvelope = {
   command_id: uuid            // idempotency key + correlation id + status handle
   kind; payload               // discriminated union per kind

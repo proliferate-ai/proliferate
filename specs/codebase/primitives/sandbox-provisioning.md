@@ -1611,7 +1611,6 @@ Manual smoke:
      -> on success, status moves to 'active'; existing sandbox_profile row
         is reused, not duplicated
 ```
-
 ## 10. Final Decisions / Deferred Questions
 
 1. **Should we model "ssh / desktop_dispatch / self_hosted_cloud" targets as

@@ -21,7 +21,7 @@ and session docs do not answer:
 - how artifacts are created and updated
 - what the built-in cowork MCP server exposes
 - what the desktop reads over HTTP
-- what is in scope for v1 and what is intentionally deferred
+- what is in scope for v1 and what belongs outside v1
 
 ## 1. Core Model
 
