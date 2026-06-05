@@ -47,7 +47,7 @@ from proliferate.db.models.organizations import (
     OrganizationInvitation,
     OrganizationMembership,
 )
-from proliferate.db.store.billing import (
+from proliferate.db.store.billing_subjects import (
     ensure_billing_grant,
     ensure_free_included_grant,
     ensure_organization_billing_subject,

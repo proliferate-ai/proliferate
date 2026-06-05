@@ -23,7 +23,7 @@ from proliferate.db.models.billing import (
     BillingUsageCursor,
     BillingUsageExport,
 )
-from proliferate.db.store.billing import (
+from proliferate.db.store.billing_subjects import (
     ensure_billing_grant,
     ensure_personal_billing_subject,
 )

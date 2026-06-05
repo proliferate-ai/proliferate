@@ -221,13 +221,6 @@ async def create_usage_export(
     return export
 
 
-async def get_billing_subject_by_id(
-    db: AsyncSession,
-    billing_subject_id: UUID,
-) -> BillingSubject | None:
-    return await db.get(BillingSubject, billing_subject_id)
-
-
 async def list_billing_subject_ids_for_usage_accounting(
     db: AsyncSession,
     limit: int = 100,

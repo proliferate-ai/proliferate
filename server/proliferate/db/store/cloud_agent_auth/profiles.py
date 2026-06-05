@@ -12,7 +12,7 @@ from proliferate.db.models.cloud.agent_auth_profiles import (
     SandboxProfileAgentAuthRevision,
 )
 from proliferate.db.models.cloud.targets import CloudTarget
-from proliferate.db.store.billing import (
+from proliferate.db.store.billing_subjects import (
     ensure_organization_billing_subject,
     ensure_personal_billing_subject,
 )

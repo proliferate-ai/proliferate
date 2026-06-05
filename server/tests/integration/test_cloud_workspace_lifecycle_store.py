@@ -11,7 +11,7 @@ from proliferate.constants.cloud import WorkspacePostReadyPhase
 from proliferate.db import engine as engine_module
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
-from proliferate.db.store.billing import ensure_personal_billing_subject
+from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.db.store.cloud_workspace_setup_runs import (
     claim_due_setup_runs,
     create_cloud_workspace_setup_run,

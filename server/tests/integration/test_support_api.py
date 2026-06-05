@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
-from proliferate.db.store.billing import ensure_personal_billing_subject
+from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 

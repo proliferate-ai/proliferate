@@ -17,8 +17,8 @@ from proliferate.db.store.billing import (
     acquire_billing_subject_repo_limit_lock,
     cloud_repo_slot_exists,
     count_active_cloud_repo_environments,
-    ensure_personal_billing_subject,
 )
+from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.db.store.cloud_profile_target_guard import require_primary_managed_profile_target
 from proliferate.db.store.cloud_runtime_environments import ensure_runtime_environment_for_repo
 from proliferate.utils.time import utcnow

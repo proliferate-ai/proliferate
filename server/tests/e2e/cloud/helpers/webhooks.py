@@ -14,7 +14,7 @@ from proliferate.constants.cloud import CloudRuntimeEnvironmentStatus
 from proliferate.db.models.billing import SandboxEventReceipt, UsageSegment
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
-from proliferate.db.store.billing import ensure_personal_billing_subject
+from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.db.store.cloud_runtime_environments import (
     ensure_runtime_environment_for_workspace,
 )

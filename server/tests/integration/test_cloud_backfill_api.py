@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db.models.cloud.targets import CloudTarget
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
-from proliferate.db.store.billing import ensure_personal_billing_subject
+from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account

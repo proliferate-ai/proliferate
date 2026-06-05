@@ -36,7 +36,7 @@ from proliferate.db.models.organizations import (
     OrganizationCheckoutIntent,
     OrganizationMembership,
 )
-from proliferate.db.store.billing import ensure_organization_billing_subject
+from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
 from proliferate.db.store.organization_records import (
     CheckoutIntentRecord,
     CheckoutIntentWithOrganizationRecord,
