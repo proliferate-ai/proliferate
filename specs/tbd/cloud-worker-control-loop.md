@@ -94,7 +94,7 @@ Server endpoints are DB-backed:
   `get_async_session` dependency.
 - `server/proliferate/server/cloud/worker/service.py` authenticates every
   worker request by token hash and target lookup.
-- `lease_worker_command` normalizes supported kinds, checks target/slot state,
+- `lease_worker_command` normalizes supported kinds, checks target state,
   expires stale commands, calls `commands_store.lease_next_command`, commits
   if it leased or expired anything, and returns immediately when there is no
   command.
@@ -163,7 +163,6 @@ Response:
     "workspaceId": "...",
     "cloudWorkspaceId": "...",
     "sandboxProfileId": "...",
-    "slotGeneration": 12,
     "sessionId": "...",
     "kind": "send_prompt",
     "payload": {},
@@ -218,7 +217,7 @@ Keep existing endpoints for compatibility:
 
 New workers try `control/wait` first. On 404/405 or an explicit unsupported
 response, they fall back to throttled legacy paths. They must not fall back on
-401, 403, 409, stale-slot responses, or malformed successful responses.
+401, 403, 409, stale-target responses, or malformed successful responses.
 
 ## 6. Server Design
 
@@ -232,13 +231,13 @@ state change could make an idle worker's next Cloud decision different:
   target-config flows.
 - A queued command becomes leaseable because a blocker clears, such as
   agent-auth applied state, runtime-config applied state, workspace lifecycle
-  state, active slot state, or target status.
+  state, or target status.
 - A workspace exposure is created, archived, claimed, materialized, or has its
   revision/commandability/workspace mapping changed.
 - A session projection is created or updated in a way that changes the worker
   exposure snapshot.
-- The target's active slot identity changes in a way that affects whether this
-  worker may lease or upload.
+- The target is archived or replaced (a worker bound to a retired target may no
+  longer lease or upload).
 
 Do not advance this cursor for ordinary event progress. In particular,
 `last_uploaded_seq`, `last_event_seq`, transcript row changes, and live UI
@@ -258,7 +257,7 @@ which local work the worker should tail or which commands it can lease:
 - AnyHarness session id
 - projection level
 - commandable flag
-- slot/target availability for the authenticated worker
+- target availability for the authenticated worker
 
 The fingerprint excludes upload-ack-only and UI projection progress fields:
 
@@ -335,7 +334,7 @@ Control cursor invalidation must be owned at concrete mutation surfaces:
 | Exposure workspace mapping or commandable revision changed by command result | command result service/store result surfaced to service | target-wide | yes |
 | Session projection membership/config created, ended, or reattached | event ingest or command result service, only when control fingerprint changes | target-wide | yes |
 | Upload ack or transcript/projection progress only | event ingest | none | no |
-| Target archive/status or active slot replacement | target/runtime/provisioning service | target-wide | yes |
+| Target archive/status or target replacement | target/runtime/provisioning service | target-wide | yes |
 | Worker archive/token replacement | worker/admin service | target-wide | yes |
 | Agent-auth/runtime-config applied state clears a lease blocker | worker report/status service | target-wide | yes |
 
@@ -378,7 +377,7 @@ Flow:
 
 ```text
 1. Authenticate worker in a short DB session.
-2. Validate the worker's current managed slot before waiting.
+2. Validate the worker's target is current (not archived) before waiting.
 3. Read current control cursor.
 4. Expire stale commands and apply any blocker-status transitions that the
    existing lease path would apply.
@@ -394,7 +393,7 @@ Flow:
     or timeout without a DB session.
 11. Open a fresh short DB session.
 12. Re-authenticate and validate the captured worker identity is still current.
-13. Validate the current managed slot again.
+13. Validate the target is still current (not archived) again.
 14. Expire stale commands and apply any blocker-status transitions again.
 15. Bump the control revision if expiry or blocker transitions mutated state.
 16. Lease one command if available.
@@ -419,7 +418,7 @@ target. This keeps expiry/status cleanup from depending on a brand-new worker
 request arriving at exactly the right moment.
 
 For cursor-only changes caused by expiry, supersede, blocker transition,
-target/slot change, or worker archive, return:
+target change (archive/replacement), or worker archive, return:
 
 ```json
 {
@@ -431,10 +430,10 @@ target/slot change, or worker archive, return:
 
 with the updated `controlCursor`.
 
-If the worker is no longer current for its managed slot, `control/wait` should
-fail closed with the same stale-slot/auth error family used by lease and event
-upload paths. Slot replacement must bump the control cursor and publish so old
-waiters wake and stop tailing.
+If the worker's target is no longer current (archived/replaced), `control/wait`
+should fail closed with the same stale-target/auth error family used by lease
+and event upload paths. Target replacement must bump the control cursor and
+publish so old waiters wake and stop tailing.
 
 ### 6.4 Session Lifetime Exception
 
@@ -539,8 +538,8 @@ Rules:
 - 404/405 or an explicit unsupported-control response enters fallback.
 - 5xx, network errors, and client timeouts are transient control errors; back
   off and retry `control/wait`.
-- 401/403/409/stale-slot responses are terminal for the worker's current
-  identity/slot and must not fall back.
+- 401/403/409/stale-target responses are terminal for the worker's current
+  identity and must not fall back.
 - In fallback, command lease polling is no faster than every 5-10 seconds.
 - In fallback, exposure refresh is no faster than every 15-30 seconds.
 - Fallback periodically probes `control/wait` again so a newly deployed server
@@ -781,7 +780,7 @@ Worker tests:
 - The event uplink waits for an initial full control snapshot before tailing
   local cursors in control mode.
 - Fallback command and exposure polling use the throttled cadences and do not
-  activate on auth/stale-slot errors.
+  activate on auth/stale-target errors.
 - Event batches still upload promptly for existing local cursors.
 - The process lock prevents a second worker for the same config/DB.
 

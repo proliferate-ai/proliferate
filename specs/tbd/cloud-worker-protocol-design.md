@@ -132,14 +132,18 @@ Light apply → worker pushes config straight to local AnyHarness. Heavy apply
 Shared currency:
 
 ```ts
-type RevisionMap = Map<string, u64>   // key: "auth" | "plugins" | "mcp:<id>" | "exposures" | ...
-type SlotFence   = { cloud_sandbox_id: uuid; slot_generation: i64 }
+type RevisionMap = Map<string, u64>   // key: "auth" | "plugins" | "mcp:<id>" | "exposures" | "revoked-jti" | ...
 ```
+
+There is no `SlotFence`. Identity is the bearer `worker_token` (which resolves
+to a single `target_id`); the target is ephemeral and 1:1 with its sandbox, so
+there is no slot id or generation to carry. Folding `revoked-jti` into the
+RevisionMap is what keeps everything on the **one** control poll.
 
 **(1) Control exchange** (long-poll, both directions):
 
 ```ts
-ControlRequest  = { control_cursor; supported_command_kinds[]; wait_seconds; lease_timeout_seconds; slot_fence }
+ControlRequest  = { control_cursor; supported_command_kinds[]; wait_seconds; lease_timeout_seconds }
 ControlResponse = { reason; commands: CommandEnvelope[]; revision_signals: RevisionMap; control_cursor; server_time }
 ```
 
@@ -150,12 +154,12 @@ CommandEnvelope = {
   command_id: uuid            // idempotency key + correlation id + status handle
   kind; payload               // discriminated union per kind
   required_revisions: RevisionMap   // preflight: applied >= these before executing
-  slot_fence; lease_id; lease_expires_at; attempt
+  lease_id; lease_expires_at; attempt
 }
 ```
 
-**(3) Worker report** (up): `AppliedRevisionsReport = { applied_revisions: RevisionMap; slot_fence }`
-and per command `CommandResult = { command_id; lease_id; status; error_code?; error_detail?; result_payload?; slot_fence }`.
+**(3) Worker report** (up): `AppliedRevisionsReport = { applied_revisions: RevisionMap }`
+and per command `CommandResult = { command_id; lease_id; status; error_code?; error_detail?; result_payload? }`.
 
 **(4) Bundle** (down, per domain, on fetch): `BundleResponse = { key; revision; content_hash; payload<domain> }`.
 `content_hash` lets the worker set `applied = revision` only after verifying the
@@ -177,7 +181,8 @@ network).
   without deprecation; unknown fields ignored; unknown command kind → typed
   `unsupported_kind` rejection, never a crash.
 - Command payloads that mirror AnyHarness ops **reuse `anyharness-contract`**;
-  this contract owns only the envelopes + revisions + fencing.
+  this contract owns only the envelopes + revisions (no fencing — identity is
+  the `worker_token`/`target_id`).
 
 ## 8. The Up-Direction (events)
 
