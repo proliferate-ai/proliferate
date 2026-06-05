@@ -477,7 +477,6 @@ class TestCheckBinaryPreinstalled:
     ) -> None:
         binary_path = tmp_path / "anyharness"
         binary_path.write_bytes(b"current-runtime")
-
         calls: list[str] = []
 
         async def _run_sandbox_command_logged(*args, **kwargs):
