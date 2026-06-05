@@ -8,6 +8,9 @@ from uuid import UUID
 from pydantic import BaseModel, Field, ValidationError
 
 from proliferate.db.store.cloud_sync import events as events_store
+from proliferate.db.store.cloud_sync import pending_interactions as pending_interactions_store
+from proliferate.db.store.cloud_sync import projections as projections_store
+from proliferate.db.store.cloud_sync import transcript_items as transcript_items_store
 
 
 class WorkerSessionEventEnvelope(BaseModel):
@@ -138,7 +141,7 @@ class CloudSessionPatchResponse(BaseModel):
 
 
 def session_projection_response(
-    value: events_store.CloudSessionProjectionSnapshot,
+    value: projections_store.CloudSessionProjectionSnapshot,
 ) -> CloudSessionProjectionResponse:
     return CloudSessionProjectionResponse(
         target_id=str(value.target_id),
@@ -160,7 +163,7 @@ def session_projection_response(
 
 
 def transcript_item_response(
-    value: events_store.CloudTranscriptItemSnapshot,
+    value: transcript_items_store.CloudTranscriptItemSnapshot,
 ) -> CloudTranscriptItemResponse:
     return CloudTranscriptItemResponse(
         item_id=value.item_id,
@@ -180,7 +183,7 @@ def transcript_item_response(
 
 
 def pending_interaction_response(
-    value: events_store.CloudPendingInteractionSnapshot,
+    value: pending_interactions_store.CloudPendingInteractionSnapshot,
 ) -> CloudPendingInteractionResponse:
     return CloudPendingInteractionResponse(
         request_id=value.request_id,
@@ -219,9 +222,9 @@ def session_patch_response(
     session_id: str,
     seq: int,
     event_type: str,
-    session: events_store.CloudSessionProjectionSnapshot,
-    transcript_item: events_store.CloudTranscriptItemSnapshot | None = None,
-    pending_interaction: events_store.CloudPendingInteractionSnapshot | None = None,
+    session: projections_store.CloudSessionProjectionSnapshot,
+    transcript_item: transcript_items_store.CloudTranscriptItemSnapshot | None = None,
+    pending_interaction: pending_interactions_store.CloudPendingInteractionSnapshot | None = None,
     envelope: WorkerSessionEventEnvelope | None = None,
 ) -> CloudSessionPatchResponse:
     return CloudSessionPatchResponse(

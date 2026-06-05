@@ -10,8 +10,8 @@ from proliferate.auth.authorization import ActorIdentity
 from proliferate.constants.cloud import CloudTargetStatus
 from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.cloud_sync import commands as commands_store
-from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import inventory as inventory_store
+from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.server.cloud.compute.domain.policy import (
@@ -144,7 +144,7 @@ async def check_safe_stop(
     user: ActorIdentity,
 ) -> SafeStopCheckResponse:
     target = await _require_admin_target(db, target_id=target_id, user=user)
-    active_session_count = await events_store.count_active_sessions_for_target(
+    active_session_count = await projections_store.count_active_sessions_for_target(
         db,
         target_id=target.id,
     )
@@ -181,7 +181,7 @@ async def revoke_workers_for_target(
             "Target is archived.",
             status_code=409,
         )
-    active_session_count = await events_store.count_active_sessions_for_target(
+    active_session_count = await projections_store.count_active_sessions_for_target(
         db,
         target_id=target.id,
     )

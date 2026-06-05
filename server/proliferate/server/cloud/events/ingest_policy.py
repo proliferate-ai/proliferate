@@ -7,8 +7,8 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
+from proliferate.db.store.cloud_sync import projections as projections_store
 
 
 @dataclass(frozen=True)
@@ -33,7 +33,7 @@ async def projection_ingest_policy(
     session_id: str,
     workspace_id: str | None,
 ) -> ProjectionIngestAdmission:
-    projection = await events_store.get_session_projection(
+    projection = await projections_store.get_session_projection(
         db,
         target_id=target_id,
         session_id=session_id,

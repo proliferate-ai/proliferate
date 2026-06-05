@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing import ensure_personal_billing_subject
-from proliferate.db.store.cloud_sync import events as events_store
+from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from tests.e2e.cloud.helpers.auth import create_user_and_login
 from tests.e2e.cloud.helpers.github import seed_linked_github_account
@@ -407,7 +407,7 @@ class TestCloudWorkerUpdatesApi:
             commandable=True,
             origin="manual_web",
         )
-        await events_store.upsert_session_projection(
+        await projections_store.upsert_session_projection(
             db_session,
             target_id=UUID(target_id),
             cloud_workspace_id=workspace.id,

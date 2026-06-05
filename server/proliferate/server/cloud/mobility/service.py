@@ -33,8 +33,8 @@ from proliferate.db.store.cloud_mobility.workspaces import (
 from proliferate.db.store.cloud_mobility.workspaces import (
     list_cloud_workspace_mobility_for_user as list_cloud_workspace_mobility_store,
 )
-from proliferate.db.store.cloud_sync.events import list_session_projections_for_workspace
 from proliferate.db.store.cloud_sync.exposures import get_active_workspace_exposure
+from proliferate.db.store.cloud_sync.projections import list_session_projections_for_workspace
 from proliferate.db.store.cloud_workspaces import (
     get_cloud_workspace_for_user,
     load_cloud_workspace_by_id,

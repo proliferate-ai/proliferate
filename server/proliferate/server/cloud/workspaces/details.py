@@ -26,7 +26,7 @@ from proliferate.db.store.cloud_runtime_environments import (
     get_runtime_environment_for_workspace,
     load_runtime_environment_for_workspace,
 )
-from proliferate.db.store.cloud_sync import events as events_store
+from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.billing.models import BillingSnapshot
 from proliferate.server.billing.service import (
@@ -192,7 +192,7 @@ async def workspace_summaries_for_request(
             workspace=workspace,
             runtime_environment=runtime_environment,
         )
-        latest_sessions = await events_store.list_session_projections_for_workspace(
+        latest_sessions = await projections_store.list_session_projections_for_workspace(
             db,
             cloud_workspace_id=workspace.id,
             target_id=workspace.target_id,
@@ -260,7 +260,7 @@ async def build_workspace_detail_for_request(
         runtime_environment=runtime_environment,
     )
     ready_agent_kind_values = await _agent_auth_agent_kinds_for_workspace_request(db, workspace)
-    latest_sessions = await events_store.list_session_projections_for_workspace(
+    latest_sessions = await projections_store.list_session_projections_for_workspace(
         db,
         cloud_workspace_id=workspace.id,
         target_id=workspace.target_id,
@@ -326,7 +326,7 @@ async def build_workspace_detail(
     )
     ready_agent_kind_values = await _load_agent_auth_agent_kinds_for_workspace(workspace)
     async with db_session.open_async_session() as db:
-        latest_sessions = await events_store.list_session_projections_for_workspace(
+        latest_sessions = await projections_store.list_session_projections_for_workspace(
             db,
             cloud_workspace_id=workspace.id,
             target_id=workspace.target_id,

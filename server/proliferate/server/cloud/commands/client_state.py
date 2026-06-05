@@ -14,7 +14,7 @@ from proliferate.constants.cloud import (
     CloudCommandStatus,
 )
 from proliferate.db.store.cloud_sync import commands as commands_store
-from proliferate.db.store.cloud_sync import events as events_store
+from proliferate.db.store.cloud_sync import pending_interactions as pending_interactions_store
 from proliferate.server.cloud.commands.domain.serialization import compact_command_json
 from proliferate.server.cloud.live.service import publish_command_status_after_commit
 from proliferate.utils.time import utcnow
@@ -61,7 +61,7 @@ async def record_pending_prompt_interaction_for_command(
     text = _str_or_none(payload.get("text"))
     if not prompt_id or not text or not text.strip():
         return
-    await events_store.upsert_pending_interaction(
+    await pending_interactions_store.upsert_pending_interaction(
         db,
         target_id=command.target_id,
         cloud_workspace_id=command.cloud_workspace_id,
@@ -167,7 +167,7 @@ async def mark_pending_prompt_interaction_failed_for_command(
     prompt_id = _str_or_none(payload.get("promptId"))
     if not prompt_id:
         return
-    await events_store.fail_existing_pending_interaction(
+    await pending_interactions_store.fail_existing_pending_interaction(
         db,
         target_id=command.target_id,
         session_id=command.session_id,

@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import ActorIdentity
 from proliferate.constants.cloud import CloudCommandKind
-from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
+from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.claims.access import require_workspace_interact
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
@@ -40,7 +40,7 @@ async def resolve_projected_session_command_workspace(
             "Projected session commands require sessionId.",
             status_code=400,
         )
-    projection = await events_store.get_session_projection(
+    projection = await projections_store.get_session_projection(
         db,
         target_id=target.id,
         session_id=body.session_id,

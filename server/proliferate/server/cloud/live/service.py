@@ -14,7 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db import session_ops as db_session
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import events as events_store
+from proliferate.db.store.cloud_sync import pending_interactions as pending_interactions_store
+from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import targets as targets_store
+from proliferate.db.store.cloud_sync import transcript_items as transcript_items_store
 from proliferate.integrations.pubsub.models import PubSubMessage
 from proliferate.integrations.pubsub.redis import get_pubsub_bus
 from proliferate.server.cloud.commands.models import command_response_payload
@@ -347,19 +350,19 @@ async def _get_session_snapshot(
     target_id: UUID,
     session_id: str,
 ) -> CloudSessionSnapshotResponse:
-    projection = await events_store.get_session_projection(
+    projection = await projections_store.get_session_projection(
         db,
         target_id=target_id,
         session_id=session_id,
     )
     if projection is None:
         raise LookupError("Synced session not found.")
-    transcript_items = await events_store.list_transcript_items(
+    transcript_items = await transcript_items_store.list_transcript_items(
         db,
         target_id=target_id,
         session_id=session_id,
     )
-    pending_interactions = await events_store.list_pending_interactions(
+    pending_interactions = await pending_interactions_store.list_pending_interactions(
         db,
         target_id=target_id,
         session_id=session_id,
@@ -422,7 +425,7 @@ async def _get_workspace_snapshot(
     *,
     workspace: WorkspaceDetail,
 ) -> CloudWorkspaceSnapshotResponse:
-    sessions = await events_store.list_session_projections_for_workspace(
+    sessions = await projections_store.list_session_projections_for_workspace(
         db,
         cloud_workspace_id=UUID(workspace.id),
         target_id=UUID(workspace.target_id) if workspace.target_id is not None else None,
@@ -450,9 +453,9 @@ def projection_patch_from_event(
     session_id: str,
     seq: int,
     event_type: str,
-    session: events_store.CloudSessionProjectionSnapshot,
-    transcript_item: events_store.CloudTranscriptItemSnapshot | None = None,
-    pending_interaction: events_store.CloudPendingInteractionSnapshot | None = None,
+    session: projections_store.CloudSessionProjectionSnapshot,
+    transcript_item: transcript_items_store.CloudTranscriptItemSnapshot | None = None,
+    pending_interaction: pending_interactions_store.CloudPendingInteractionSnapshot | None = None,
     envelope: WorkerSessionEventEnvelope | None = None,
 ) -> CloudSessionPatchResponse:
     return session_patch_response(

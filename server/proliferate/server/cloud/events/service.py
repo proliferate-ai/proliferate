@@ -11,7 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store import cloud_workspaces
 from proliferate.db.store.cloud_sync import events as events_store
+from proliferate.db.store.cloud_sync import pending_interactions as pending_interactions_store
+from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import targets as targets_store
+from proliferate.db.store.cloud_sync import transcript_items as transcript_items_store
 from proliferate.server.cloud.claims.access import (
     load_workspace_exposure_and_claim,
     require_workspace_view,
@@ -392,7 +395,7 @@ async def get_session_snapshot(
     target_id: UUID,
     session_id: str,
 ) -> CloudSessionSnapshotResponse:
-    projection = await events_store.get_session_projection(
+    projection = await projections_store.get_session_projection(
         db,
         target_id=target_id,
         session_id=session_id,
@@ -403,12 +406,12 @@ async def get_session_snapshot(
             "Synced session not found.",
             status_code=404,
         )
-    transcript_items = await events_store.list_transcript_items(
+    transcript_items = await transcript_items_store.list_transcript_items(
         db,
         target_id=target_id,
         session_id=session_id,
     )
-    pending_interactions = await events_store.list_pending_interactions(
+    pending_interactions = await pending_interactions_store.list_pending_interactions(
         db,
         target_id=target_id,
         session_id=session_id,
@@ -438,7 +441,7 @@ async def list_session_summaries(
             user_id=user_id,
             cloud_workspace_id=cloud_workspace_id,
         )
-    sessions = await events_store.list_session_projections(
+    sessions = await projections_store.list_session_projections(
         db,
         target_id=target_id,
         cloud_workspace_id=cloud_workspace_id,
@@ -478,7 +481,7 @@ async def ensure_visible_session_target(
             "Synced session not found.",
             status_code=404,
         )
-    projection = await events_store.get_session_projection(
+    projection = await projections_store.get_session_projection(
         db,
         target_id=target_id,
         session_id=session_id,
@@ -564,7 +567,7 @@ async def _apply_projection(
     event_payload = event if isinstance(event, dict) else {}
     current_event_type = event_type(envelope)
     patch = _session_projection_patch(current_event_type, event_payload, timestamp)
-    session_projection = await events_store.upsert_session_projection(
+    session_projection = await projections_store.upsert_session_projection(
         db,
         target_id=auth.target_id,
         cloud_workspace_id=cloud_workspace_id,
@@ -588,7 +591,7 @@ async def _apply_projection(
         item_id = transcript_item_id(envelope)
         if item_id is not None:
             item = transcript_item_payload(event_payload)
-            transcript_item = await events_store.upsert_transcript_item(
+            transcript_item = await transcript_items_store.upsert_transcript_item(
                 db,
                 target_id=auth.target_id,
                 cloud_workspace_id=cloud_workspace_id,
@@ -608,20 +611,22 @@ async def _apply_projection(
             )
             prompt_id = _str_or_none(item.get("promptId"))
             if item.get("kind") == "user_message" and prompt_id:
-                pending_interaction = await events_store.resolve_existing_pending_interaction(
-                    db,
-                    target_id=auth.target_id,
-                    session_id=session_id,
-                    request_id=prompt_id,
-                    seq=seq,
-                    occurred_at=timestamp,
-                    payload_json=payload_json,
+                pending_interaction = (
+                    await pending_interactions_store.resolve_existing_pending_interaction(
+                        db,
+                        target_id=auth.target_id,
+                        session_id=session_id,
+                        request_id=prompt_id,
+                        seq=seq,
+                        occurred_at=timestamp,
+                        payload_json=payload_json,
+                    )
                 )
     elif include_transcript and current_event_type == "interaction_requested":
         request_id = _str_or_none(event_payload.get("requestId"))
         if request_id:
             interaction_title = _str_or_none(event_payload.get("title"))
-            pending_interaction = await events_store.upsert_pending_interaction(
+            pending_interaction = await pending_interactions_store.upsert_pending_interaction(
                 db,
                 target_id=auth.target_id,
                 cloud_workspace_id=cloud_workspace_id,
@@ -635,7 +640,7 @@ async def _apply_projection(
                 description=_str_or_none(event_payload.get("description")),
                 payload_json=payload_json,
             )
-            transcript_item = await events_store.annotate_transcript_item_title(
+            transcript_item = await transcript_items_store.annotate_transcript_item_title(
                 db,
                 target_id=auth.target_id,
                 session_id=session_id,
@@ -645,7 +650,7 @@ async def _apply_projection(
     elif include_transcript and current_event_type == "interaction_resolved":
         request_id = _str_or_none(event_payload.get("requestId"))
         if request_id:
-            pending_interaction = await events_store.resolve_pending_interaction(
+            pending_interaction = await pending_interactions_store.resolve_pending_interaction(
                 db,
                 target_id=auth.target_id,
                 session_id=session_id,
@@ -655,7 +660,7 @@ async def _apply_projection(
                 payload_json=payload_json,
             )
     if pending_interaction is not None:
-        refreshed_projection = await events_store.get_session_projection(
+        refreshed_projection = await projections_store.get_session_projection(
             db,
             target_id=auth.target_id,
             session_id=session_id,
