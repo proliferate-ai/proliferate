@@ -2,7 +2,8 @@
 
 Status: implementation-ready spec.
 
-Date: 2026-05-20.
+Date: 2026-06-05 (collapsed-identity revision; applied-revision validity is
+per active target, no slot fence).
 
 Depends on: [`sandbox-provisioning.md`](sandbox-provisioning.md),
 [`mcp-skills.md`](mcp-skills.md).
@@ -22,8 +23,9 @@ In scope:
   - `synced_files` — Worker writes native auth files into the sandbox.
   - `gateway_env` — Worker gives AnyHarness protected env + Bifrost virtual-key
     auth; sandbox calls the configured Bifrost inference endpoint.
-- Rebind to spec 00's renamed `sandbox_profile_target_state` (gain the
-  active-slot fence; agent-auth columns become the auth axis of that row).
+- Rebind to spec 00's renamed `sandbox_profile_target_state` (agent-auth
+  columns become the auth axis of that per-(profile, target) row; no slot
+  fence — validity is per active target).
 - Drop `SandboxProfile.managed_target_id` readers — derive primary target
   from `cloud_targets.sandbox_profile_id + profile_target_role='primary'`.
 - Close the four shipped-stack gaps:
@@ -108,11 +110,10 @@ Hard:
     `cloud_targets.sandbox_profile_id + profile_target_role='primary'`.
   - `sandbox_profile_target_state` (renamed from the agent-auth-only
     `sandbox_profile_agent_auth_target_state`) carries both runtime-config
-    and agent-auth applied state plus the active-slot fence
-    (`active_sandbox_id` + `slot_generation`). Spec 02 owns the agent-auth
-    columns of that row.
-  - Worker envelope/result fields carry `sandbox_profile_id` and
-    `slot_generation`.
+    and agent-auth applied state, keyed by `(sandbox_profile_id, target_id)`
+    with no slot fence. Spec 02 owns the agent-auth columns of that row.
+  - Worker envelope/result fields carry `sandbox_profile_id` (and the
+    already-present `target_id`); there is no `slot_generation`.
 
 - [`mcp-skills.md`](mcp-skills.md):
   - `expected_runtime_config_revision` plus
@@ -439,8 +440,6 @@ After the rename:
 sandbox_profile_target_state                       UNIQUE (sandbox_profile_id, target_id)
   sandbox_profile_id                fk sandbox_profile.id
   target_id                         fk cloud_targets.id
-  active_sandbox_id                 fk cloud_sandbox.id
-  slot_generation                   integer
 
   desired_agent_auth_revision       integer       -- was: desired_revision
   applied_agent_auth_revision       integer NULL  -- was: applied_revision
@@ -462,13 +461,11 @@ sandbox_profile_target_state                       UNIQUE (sandbox_profile_id, t
 Validity rule (shared with spec 00 / 01):
 
 ```text
-applied_agent_auth_revision is valid only when
-  sandbox_profile_target_state.active_sandbox_id matches the active slot
-  AND
-  sandbox_profile_target_state.slot_generation matches the slot's generation
+applied_agent_auth_revision is valid for the profile's active primary
+target (the state row's target_id == the active primary target_id).
 
-slot replacement clears applied_agent_auth_revision; the next
-refresh_agent_auth_config rematerializes on the new slot.
+target replacement starts a fresh state row for the new target_id; the
+next refresh_agent_auth_config rematerializes on the new target.
 ```
 
 Cloud agent-auth service stops reading
@@ -614,7 +611,7 @@ the apply, mark it failed, and emit a security audit event. Never
 half-clean.
 ```
 
-Slot replacement is a separate path (the new sandbox starts empty —
+Target replacement is a separate path (the new sandbox starts empty —
 cleanup is unnecessary). Cleanup applies inside an existing sandbox.
 
 ### 5.5 Stricter `protected_env` allowlist (gap #5)
@@ -876,8 +873,7 @@ The materialization plan response gains:
 
 ```text
 plan.selections[].synced.cleanup: SyncedFilesCleanupActions     (5.4)
-plan.target_id                                                    (already present)
-plan.slot_generation                                              (new — from spec 00)
+plan.target_id                                                    (already present; the epoch)
 ```
 
 Worker, server, contract, and SDK ship in one PR; there is no capability
@@ -902,7 +898,7 @@ server/proliferate/server/cloud/agent_auth/service.py
   - derive primary target via cloud_targets.profile_target_role='primary'
   - rebind to sandbox_profile_target_state column names
   - update worker_agent_auth_materialization_plan to populate
-    plan.required_runtime_capabilities and plan.slot_generation
+    plan.required_runtime_capabilities (plan already carries target_id)
   - update record_worker_agent_auth_status to validate
     applied_cleanup_paths report (5.4)
   - update issue_runtime_grant_for_selection to record the rotation
@@ -1147,14 +1143,13 @@ Follow-ups (separate PRs, scope additions, not migration ceremony)
 18. OpenCode gateway is reachable only when
     `agent_gateway_opencode_enabled=true`. Default is false; capability
     API exposes the current value.
-19. Slot replacement clears
-    `sandbox_profile_target_state.applied_agent_auth_revision`. Next
-    `refresh_agent_auth_config` re-applies on the new slot before the
+19. Target replacement starts a fresh `sandbox_profile_target_state` row
+    (applied_agent_auth_revision defaults unset). The next
+    `refresh_agent_auth_config` re-applies on the new target before the
     next scoped launch.
-20. Worker materialization plan carries `target_id` and `slot_generation`
-    so the worker fences applies against the active slot. No capability
-    flag negotiation; worker/server/contract are version-locked by the
-    PR that ships them.
+20. Worker materialization plan carries `target_id` (the epoch); applies
+    correlate by target, not a slot fence. No capability flag negotiation;
+    worker/server/contract are version-locked by the PR that ships them.
 
 ## 9. Verification / Tests
 
@@ -1328,11 +1323,11 @@ Manual smoke cases:
    framework + Desktop sync signals only; the 401 path is a clean
    addition with no rework needed.
 
-4. **Cleanup of revoked synced files in a new sandbox slot?**
+4. **Cleanup of revoked synced files in a new sandbox (after replacement)?**
 
-   The new slot starts empty, so no cleanup is required there. But the
+   The new sandbox starts empty, so no cleanup is required there. But the
    `last_applied_at` audit trail should still record that no cleanup ran
-   because the slot is fresh.
+   because the sandbox is fresh.
 
 5. **Should the capability API also expose runtime config flags
    (per-spec-01)?**

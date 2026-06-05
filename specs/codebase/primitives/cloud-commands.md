@@ -2,7 +2,8 @@
 
 Status: implementation-ready spec.
 
-Date: 2026-05-20.
+Date: 2026-06-05 (collapsed-identity revision; command leasing/results
+correlate by `target_id`, no slot fence).
 
 Depends on: [`sandbox-provisioning.md`](sandbox-provisioning.md),
 [`mcp-skills.md`](mcp-skills.md),
@@ -19,10 +20,11 @@ strip the direct-access reads from `cloud_workspace`.
 
 In scope:
 
-- Thread `cloud_workspace_id`, `sandbox_profile_id`, `slot_generation`
+- Thread `cloud_workspace_id` and `sandbox_profile_id`
   through cloud_commands, the worker wire contract, command leasing,
   delivery, result ingest, and event ingest.
-- Slot-fence command leasing and result ingest per spec 00 §5.8.
+- Correlate command leasing and result ingest by `target_id` per spec 00 §5.8
+  (no slot id, no `slot_generation`, no fence — `target_id` is the epoch).
 - `_validate_runtime_config_preflight()` peer of the existing
   `_validate_agent_auth_preflight()` (per spec 01).
 - Worker dispatcher synthesizes `AgentAuthExternalScope` from
@@ -73,12 +75,12 @@ client (Desktop / Web / Mobile / Slack / Automation / API)
        enqueue_command (preflight + idempotency + auth gate)
        persist cloud_workspace + cloud_workspace_exposure +
        cloud_session_projection rows BEFORE worker dispatch
-       wake the slot if the command requires it
+       wake the target's sandbox if the command requires it
   -> Proliferate Worker
-       leases command (slot-fenced)
+       leases command (correlated by target_id)
        preflights local runtime state
        calls local AnyHarness
-       reports result + echoes cloud_workspace_id / slot identity
+       reports result + echoes cloud_workspace_id
   -> AnyHarness
        runs session
   -> Worker tailer (exposure-gated)
@@ -94,10 +96,10 @@ The invariant set:
 ```text
 1. Cloud creates cloud_workspace + (where relevant) exposure +
    projection rows BEFORE worker dispatch.
-2. Wake-required commands wake the slot through Proliferate, not
-   through raw E2B URLs.
-3. Command leasing, delivery, and result ingest are fenced by active
-   slot id + slot_generation.
+2. Wake-required commands wake the target's sandbox through Proliferate,
+   not through raw E2B URLs.
+3. Command leasing, delivery, and result ingest correlate by `target_id`;
+   reports from an archived (replaced) target are inert.
 4. Worker results never auto-create cloud_workspace rows (spec 00
    acceptance #23 echoed here).
 5. Workspace materialization results must echo cloud_workspace_id.
@@ -112,7 +114,7 @@ The invariant set:
 Hard:
 
 - Spec 00: `sandbox_profile`, `cloud_targets.profile_target_role`,
-  `cloud_sandbox.slot_generation`, `sandbox_profile_target_state`,
+  the ephemeral managed target (= sandbox), `sandbox_profile_target_state`,
   `cloud_target_runtime_access`, plus the new envelope/result wire
   fields.
 - Spec 01: `sandbox_profile_runtime_config_current.current_sequence`
@@ -299,8 +301,9 @@ Slack                   no caller in repo yet (spec 07 adds)
 - `cloud_commands.cloud_workspace_id` is in
   `authorization_context_json` but not a column. Spec 00 promotes it.
   Spec 04 makes every caller stamp it and every reader use it.
-- `leased_cloud_sandbox_id` and `leased_slot_generation` do not exist;
-  spec 00 adds them; spec 04 implements the leasing fence.
+- Command leasing correlates only by `target_id`; spec 00 removed the slot
+  fence, so there are no `leased_cloud_sandbox_id`/`leased_slot_generation`
+  columns to implement.
 - `_validate_runtime_config_preflight()` does not exist; spec 04 adds
   it as the peer of `_validate_agent_auth_preflight()`.
 - Worker dispatcher does not synthesize `AgentAuthExternalScope` from
@@ -325,9 +328,10 @@ Server (`cloud_commands` table) — already extended by spec 00:
 
 ```text
 cloud_workspace_id        uuid fk cloud_workspace.id   nullable
-leased_cloud_sandbox_id   uuid fk cloud_sandbox.id     nullable
-leased_slot_generation    integer                      nullable
 ```
+
+There are no `leased_cloud_sandbox_id` / `leased_slot_generation` columns —
+leasing correlates by `target_id` alone (spec 00 §5.8).
 
 Spec 04 enforces:
 
@@ -336,18 +340,15 @@ enqueue_command writes:
   cloud_workspace_id  (always set for managed-cloud commands; null
                        for non-managed targets like SSH/local)
 
-lease writes:
-  leased_cloud_sandbox_id  = active slot id at lease time
-  leased_slot_generation   = active slot's slot_generation
-
-result/delivery/event ingest reads:
-  leased_cloud_sandbox_id + leased_slot_generation MUST match the
-  current active slot for the target. If they don't:
-    - command is marked superseded (status = 'superseded')
-    - worker is marked stale (a worker that already shows
-      slot_generation < active is unenrolled and forced to re-enroll)
-    - the result is discarded; no projection / workspace / billing
-      state is updated from a stale slot
+lease / result / delivery / event ingest correlate by target_id:
+  worker.target_id MUST equal command.target_id, and the command's target
+  MUST NOT be archived. If the target was replaced (archived):
+    - the report is inert; no projection / workspace / billing state is
+      updated from a retired target
+    - the command is marked superseded (status = 'superseded')
+  target_id is the epoch — there is no slot id or slot_generation to compare,
+  and no "mark worker stale" step: a replaced sandbox is a brand-new target
+  with a brand-new worker that never shared identity with the old one.
 ```
 
 Worker wire (already added by spec 00 contract change):
@@ -356,17 +357,17 @@ Worker wire (already added by spec 00 contract change):
 CloudCommandEnvelope:
   cloud_workspace_id    Option<Uuid>
   sandbox_profile_id    Option<Uuid>
-  slot_generation       Option<i64>
 
 CommandResultRequest:
   cloud_workspace_id        Option<Uuid>
-  slot_generation           Option<i64>
   anyharness_workspace_id   Option<String>    -- echoed on materialize
 
 CommandDeliveryRequest:
   cloud_workspace_id    Option<Uuid>
-  slot_generation       Option<i64>
 ```
+
+No `slot_generation` on any of these — `target_id` (already present) is the
+identity.
 
 Where the worker fills in these fields:
 
@@ -376,13 +377,12 @@ On materialize_workspace result:
   - on success: set anyharness_workspace_id = the created/resolved
     AnyHarness workspace id
   - server verifies cloud_workspace_id resolves to a row + matches
-    the command's cloud_workspace_id; then updates
-    cloud_workspace.anyharness_workspace_id +
-    materialized_slot_generation only if slot fence is correct
+    the command's cloud_workspace_id, and the command's target is the
+    active (non-archived) primary; then updates
+    cloud_workspace.anyharness_workspace_id + materialized_target_id
 
 On every other command result:
   - echo cloud_workspace_id when known
-  - echo slot_generation always (so the server can fence)
 ```
 
 ### 5.2 Runtime config preflight
@@ -404,8 +404,9 @@ _validate_runtime_config_preflight(db, payload, target, profile):
     reject 'runtime_config_stale'
   if required_rev_id and state.applied_runtime_config_revision_id != required_rev_id:
     reject 'runtime_config_revision_mismatch'
-  if state.slot_generation != active_slot.slot_generation:
-    reject 'slot_replaced_runtime_config_invalid'
+  # validity is per active target: the state row is loaded for the profile's
+  # active primary target. A replaced target gets a fresh state row, so there
+  # is no slot generation to compare.
 ```
 
 Called from `enqueue_command` for kinds that require it:
@@ -611,15 +612,15 @@ ensure_repo_checkout       (same)
 ```
 
 **Wake is async.** `enqueue_command` does not block on E2B. The
-command row is persisted immediately; if the slot needs to be woken,
-a background wake job is kicked off and the command stays in
-`queued` status until the worker (after the slot resumes) leases it.
+command row is persisted immediately; if the target's sandbox needs to be
+woken, a background wake job is kicked off and the command stays in
+`queued` status until the worker (after the sandbox resumes) leases it.
 
 Web and mobile callers already poll for command status; the wake
 latency becomes visible as time-in-`queued` without any new polling
 surface. UI can surface "Your cloud is starting up" by reading
 `GET /v1/cloud/sandbox-profiles/{id}/target-state` (existing) which
-includes `slot.status`.
+includes the sandbox status.
 
 Wake control flow:
 
@@ -629,11 +630,11 @@ server/proliferate/server/cloud/commands/service.py
     ... existing preflight (agent_auth + runtime_config) ...
     persist cloud_commands row (status='queued')
     if kind in WAKE_REQUIRED_KINDS and target.kind == 'managed_cloud':
-        kick_off_managed_slot_wake(target_id, command_id)
+        kick_off_managed_sandbox_wake(target_id, command_id)
     return command_id   # NEVER blocks on E2B
 
 server/proliferate/server/cloud/runtime/wake.py        (new)
-  kick_off_managed_slot_wake(target_id, command_id):
+  kick_off_managed_sandbox_wake(target_id, command_id):
     # synchronous portion: just enqueue the background job.
     # idempotent under concurrent callers via advisory lock per
     # target id; only one wake job is in-flight per target.
@@ -642,25 +643,25 @@ server/proliferate/server/cloud/runtime/wake.py        (new)
         return                           # piggy-back on the in-flight job
     enqueue_wake_job(target_id)
 
-  run_managed_slot_wake_job(target_id):
+  run_managed_sandbox_wake_job(target_id):
     # background worker function
     lock (target_id) advisory
-    load active slot for the profile/target
-    if slot.status == 'running':
+    load the target's sandbox (1:1 with the active primary target)
+    if sandbox.status == 'running':
         return  # nothing to do (a sibling command already woke it)
     consult spec-09 billing hook (deny if blocked):
         if denied:
             mark all queued wake-required commands for this target as
               failed_delivery with error_code='sandbox_wake_blocked'
             return
-    if slot.status in ('paused', 'blocked'):
-        perform_proliferate_owned_e2b_resume(slot)
-        slot.status = 'resuming'
+    if sandbox.status in ('paused', 'blocked'):
+        perform_proliferate_owned_e2b_resume(sandbox)
+        sandbox.status = 'resuming'
         record wake event for audit
-    if slot.status == 'creating':
+    if sandbox.status == 'creating':
         await bounded for the in-flight create
     wait_for_worker_heartbeat(target_id, timeout)
-    if slot.status != 'running' after timeout:
+    if sandbox.status != 'running' after timeout:
         mark all queued wake-required commands as failed_delivery
           with error_code='sandbox_wake_failed'
         return
@@ -668,10 +669,10 @@ server/proliferate/server/cloud/runtime/wake.py        (new)
     # naturally on its next lease tick.
 ```
 
-The worker side does not change: it polls
-`/v1/cloud/worker/commands/lease`; when the slot is paused, the worker
+The worker side does not change: when the sandbox is paused, the worker
 process is suspended (no polling); after wake the worker resumes and
-finds the queued commands.
+leases the queued commands. (The poll transport itself — the control
+long-poll — is owned by the worker contract, not this section.)
 
 **Fail-fast for terminal wake failures.** If the wake job runs out of
 bounded retries or billing denies, queued wake-required commands for
@@ -685,7 +686,7 @@ sandbox_wake_failed     E2B SDK returned a terminal error,
 sandbox_wake_blocked    spec-09 billing/policy denied the wake
                         (e.g. compute exhausted, billing block).
 
-sandbox_wake_timeout    wake_timeout exceeded without slot reaching
+sandbox_wake_timeout    wake_timeout exceeded without the sandbox reaching
                         'running'. Same UX as failed; separate code
                         for diagnostics.
 ```
@@ -699,9 +700,9 @@ Callers polling `GET /v1/cloud/commands/{id}` see the transition from
 ```text
 POST /v1/cloud/sandbox-profiles/{profile_id}/wake
   body: { target_id? }   (defaults to the primary target)
-  behavior: idempotent kick_off_managed_slot_wake;
-            returns immediately with current slot state
-  response: { sandbox_profile_id, target_id, slot_status,
+  behavior: idempotent kick_off_managed_sandbox_wake;
+            returns immediately with current sandbox state
+  response: { sandbox_profile_id, target_id, sandbox_status,
               wake_in_flight, last_wake_started_at }
   errors:
     sandbox_wake_blocked  if billing denies (no row created)
@@ -714,8 +715,8 @@ would, but without persisting a command. Mobile/web's "Resume
 session" or "Wake cloud" button calls it before the user starts
 typing so the latency happens behind a progress affordance.
 
-Idempotency: `kick_off_managed_slot_wake` is safe to call
-concurrently. The advisory lock + slot status re-read makes parallel
+Idempotency: `kick_off_managed_sandbox_wake` is safe to call
+concurrently. The advisory lock + sandbox status re-read makes parallel
 callers converge on one in-flight wake job.
 
 Spec 09 owns the billing gate inside the wake job; spec 04 wires the
@@ -791,8 +792,6 @@ process_command(envelope):
 
   - on materialize_workspace result success:
       include anyharness_workspace_id and echo cloud_workspace_id
-
-  - on every result: echo slot_generation
 ```
 
 Worker reads new envelope fields from the contract; no version
@@ -819,7 +818,7 @@ GET /v1/cloud/sandbox-profiles/{id}/exposures      (new; admin & owner)
 
 These endpoints:
   - read from Cloud DB only
-  - never call kick_off_managed_slot_wake
+  - never call kick_off_managed_sandbox_wake
   - never read cloud_target_runtime_access
   - return cached transcript / pending-interaction rows even if the
     sandbox is paused
@@ -907,7 +906,7 @@ Existing endpoints:
 POST /v1/cloud/commands                      (existing; payloads gain
                                               requiredRuntimeConfig*)
 GET  /v1/cloud/commands/{id}                 (existing)
-POST /v1/cloud/worker/commands/lease         (existing; slot-fenced)
+POST /v1/cloud/worker/commands/lease         (existing; target-correlated)
 POST /v1/cloud/worker/commands/{id}/result   (existing; echo fields)
 POST /v1/cloud/worker/commands/{id}/delivery (existing)
 POST /v1/cloud/worker/events/batches         (existing; exposure-gated
@@ -964,14 +963,14 @@ server/proliferate/server/cloud/commands/service.py
   - thread cloud_workspace_id into every enqueue (already in
     authorization_context_json; promote to column)
   - _validate_runtime_config_preflight()
-  - call kick_off_managed_slot_wake for wake-required kinds (async,
+  - call kick_off_managed_sandbox_wake for wake-required kinds (async,
     fire-and-forget; command is persisted in 'queued' immediately)
-  - on lease: stamp leased_cloud_sandbox_id + leased_slot_generation
-  - on result/delivery: reject when slot fence mismatches; mark
-    superseded; emit observability event
+  - on lease/result/delivery: correlate by target_id; reject (mark
+    superseded) when the command's target is archived; emit observability
+    event
 
 server/proliferate/server/cloud/commands/api.py
-  - response shape: include exposure_id, projection_id, slot identity
+  - response shape: include exposure_id, projection_id, target identity
     where helpful
 
 server/proliferate/server/cloud/workspaces/service.py
@@ -1009,8 +1008,7 @@ managed_profile_launch signature (canonical; every caller imports here):
   class ManagedProfileLaunchResult:
       sandbox_profile_id:        UUID
       target_id:                 UUID
-      active_sandbox_id:         UUID    # spec 00 slot id
-      slot_generation:           int
+      active_sandbox_id:         UUID    # the cloud_sandbox row, 1:1 with target
       cloud_workspace_id:        UUID
       cloud_workspace_exposure_id: UUID
       cloud_session_projection_id: UUID | None   # set later on start_session
@@ -1018,16 +1016,16 @@ managed_profile_launch signature (canonical; every caller imports here):
                                          # resolved to existing rows
 
 The helper is transactional: ensure_*_sandbox_profile,
-ensure_primary_profile_target, ensure_profile_slot (background-
+ensure_primary_profile_target, provision_managed_target (background-
 provisioned), cloud_workspace INSERT, cloud_workspace_exposure
 INSERT or revision bump, all in one server-side flow. On
 failure before exposure insert, the cloud_workspace row is rolled
 back.
 
-Slot provisioning runs in the background (spec 00 §2.1); the
+Sandbox provisioning runs in the background (spec 00 §2.1); the
 helper returns once the cloud_workspace + exposure rows exist
-even if the slot is still `creating`. Wake-required commands
-that arrive against a creating slot use the spec 04 §5.6 async
+even if the sandbox is still `creating`. Wake-required commands
+that arrive against a creating sandbox use the spec 04 §5.6 async
 wake path.
 
 Sensible exposure defaults per caller (callers pass these
@@ -1040,10 +1038,10 @@ explicitly; the helper does not infer):
   - create or upsert cloud_session_projection on session start
 
 server/proliferate/server/cloud/runtime/wake.py     (new)
-  kick_off_managed_slot_wake(target_id, command_id?)   (sync; enqueues
-                                                         background job)
-  run_managed_slot_wake_job(target_id)                 (background)
-  perform_proliferate_owned_e2b_resume(slot)
+  kick_off_managed_sandbox_wake(target_id, command_id?)   (sync; enqueues
+                                                           background job)
+  run_managed_sandbox_wake_job(target_id)                 (background)
+  perform_proliferate_owned_e2b_resume(sandbox)
 
 server/proliferate/server/cloud/runtime/config_sync/repo_config.py
 server/proliferate/server/cloud/runtime/service.py
@@ -1076,7 +1074,7 @@ Worker (Rust):
 anyharness/crates/proliferate-worker/src/commands/dispatcher.rs
   - synthesize AgentAuthExternalScope on agent-auth-scoped kinds
   - attach expected_runtime_config_revision on runtime-config-scoped kinds
-  - echo cloud_workspace_id + slot_generation on results
+  - echo cloud_workspace_id on results
 
 anyharness/crates/proliferate-worker/src/commands/mapping.rs
   - propagate envelope fields through to AnyHarness contract types
@@ -1127,12 +1125,11 @@ apps/desktop/src/components/cloud/                                 add passive
 ## 7. Implementation Chunks
 
 ```text
-Chunk A  cloud_workspace_id + slot fence on commands
+Chunk A  cloud_workspace_id + target correlation on commands
   - command service stamps cloud_workspace_id at enqueue
-  - lease stamps leased_cloud_sandbox_id + leased_slot_generation
-  - result/delivery/event ingest reject stale slots
-  - tests for fence: stale slot result discarded; superseded marker;
-    worker re-enrollment behaviour
+  - lease/result/delivery/event ingest correlate by target_id
+  - reports from an archived (replaced) target are inert; command superseded
+  - tests: archived-target result discarded; superseded marker
 
 Chunk B  Runtime config preflight
   - _validate_runtime_config_preflight()
@@ -1149,8 +1146,8 @@ Chunk C  Exposure + projection model
   - event ingest gated by projection.status='active'
 
 Chunk D  Async wake job
-  - kick_off_managed_slot_wake (sync; advisory lock; enqueues job)
-  - run_managed_slot_wake_job (background; consults billing hook;
+  - kick_off_managed_sandbox_wake (sync; advisory lock; enqueues job)
+  - run_managed_sandbox_wake_job (background; consults billing hook;
     E2B resume; waits for heartbeat)
   - WAKE_REQUIRED_KINDS constant
   - POST /v1/cloud/sandbox-profiles/{id}/wake endpoint
@@ -1186,12 +1183,12 @@ Preferred implementation is one PR per spec. Chunks are review checkpoints insid
 
 1. Every managed-cloud `cloud_commands` row carries
    `cloud_workspace_id`. Non-managed (SSH, local) rows leave it NULL.
-2. Command leasing stamps `leased_cloud_sandbox_id` and
-   `leased_slot_generation` from the active slot at lease time.
-3. Result, delivery, and event ingest reject reports whose
-   `slot_generation` does not match the active slot. Affected
-   commands are marked `superseded`; the reporting worker is marked
-   stale and forced to re-enroll.
+2. Command leasing correlates by `target_id` only; there is no
+   `leased_cloud_sandbox_id` / `leased_slot_generation`.
+3. Result, delivery, and event ingest reject reports from an archived
+   (replaced) target. Affected commands are marked `superseded`. There is
+   no slot generation and no "mark worker stale" step — a replaced sandbox
+   is a brand-new target with a brand-new worker.
 4. `_validate_runtime_config_preflight()` exists in
    `commands/service.py` and is called from `enqueue_command` for
    `start_session`, `send_prompt`, `resolve_interaction`,
@@ -1208,10 +1205,10 @@ Preferred implementation is one PR per spec. Chunks are review checkpoints insid
    exposure is active. Sessions outside the active set are not
    uploaded.
 9. `enqueue_command` never blocks on E2B. Wake-required commands
-   are persisted in `queued` status; if the slot is not running,
-   `kick_off_managed_slot_wake` is called and the wake job runs in
+   are persisted in `queued` status; if the sandbox is not running,
+   `kick_off_managed_sandbox_wake` is called and the wake job runs in
    the background. The command transitions to `leased` after the
-   slot reaches `running` and the worker picks it up.
+   sandbox reaches `running` and the worker picks it up.
 10. The async wake job consults the spec-09 billing hook (a stub
     returning "allow" is fine in this spec; spec 09 fills it in).
     Wake denials transition queued commands to `failed_delivery`
@@ -1242,7 +1239,7 @@ Preferred implementation is one PR per spec. Chunks are review checkpoints insid
     `db/store/cloud_workspaces.py`. Runtime access reads route through
     `cloud_target_runtime_access`.
 15. Passive UI endpoints (§5.9 list) never call
-    `kick_off_managed_slot_wake` and never trigger a wake event.
+    `kick_off_managed_sandbox_wake` and never trigger a wake event.
     Integration test asserts this for a paused sandbox.
 16. Cloud event ingest discards (with a per-event ack) events for
     projections whose status is not `active`. The discard is
@@ -1273,9 +1270,9 @@ Targeted tests:
 
 ```text
 server/tests/cloud/commands/test_cloud_workspace_id_promoted_to_column.py
-server/tests/cloud/commands/test_slot_fence_lease.py
-server/tests/cloud/commands/test_slot_fence_result_rejection.py
-server/tests/cloud/commands/test_stale_worker_marked_after_mismatch.py
+server/tests/cloud/commands/test_target_correlation_lease.py
+server/tests/cloud/commands/test_archived_target_result_rejection.py
+server/tests/cloud/commands/test_superseded_on_archived_target.py
 server/tests/cloud/commands/test_runtime_config_preflight_stale.py
 server/tests/cloud/commands/test_runtime_config_preflight_revision_mismatch.py
 server/tests/cloud/commands/test_runtime_config_preflight_ok.py
@@ -1333,7 +1330,7 @@ Manual smoke:
      + projection
    - enqueue_command stamps cloud_workspace_id and required_*_revision;
      returns command_id immediately (no E2B block)
-   - if slot is paused: kick_off_managed_slot_wake fires in background;
+   - if sandbox is paused: kick_off_managed_sandbox_wake fires in background;
      UI polls /sandbox-profiles/{id}/target-state for "Cloud starting up"
    - slot transitions paused -> resuming -> running; worker heartbeats
    - worker leases the queued command, materializes, echoes ids
@@ -1344,7 +1341,7 @@ Manual smoke:
    - mobile calls POST /v1/cloud/sandbox-profiles/{id}/wake
    - server returns immediately with current slot state
    - background wake job runs; mobile polls target-state
-   - by the time user finishes typing, slot is running; first
+   - by the time user finishes typing, the sandbox is running; first
      send_prompt has no wake latency
 
 1b. Wake failure (billing block)
@@ -1360,13 +1357,13 @@ Manual smoke:
    - projection active; commandable=true
    - workspace listing for org members shows it without waking
 
-3. Slot replacement mid-flight
+3. Target replacement mid-flight
    - active session running
-   - replace cloud_sandbox; slot_generation bumps
-   - worker on old slot reports a result -> rejected, superseded;
-     old worker re-enrolls
-   - sandbox_profile_target_state applied_* invalidated
-   - cloud_workspace.materialized_slot_generation invalidated
+   - replace the managed target (archive old target + sandbox, provision new)
+   - worker on the old target reports a result -> inert/superseded
+     (the old target is archived; nothing routes to it)
+   - the new target gets a fresh sandbox_profile_target_state row
+   - cloud_workspace.materialized_target_id invalidated -> rematerialize-required
    - new launches re-materialize before send_prompt
 
 4. Stale runtime config
@@ -1377,7 +1374,7 @@ Manual smoke:
      materialize_environment applies; succeeds
 
 5. Passive UI on paused sandbox
-   - pause the slot
+   - pause the sandbox
    - GET /workspaces, /sessions, /transcript all succeed without
      waking; cloud_sandbox.status stays paused
 
