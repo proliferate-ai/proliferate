@@ -328,9 +328,18 @@ the root matrix.
 
 **`specs/developing/runbooks/`**
 
-Currently one runbook: `billing-pro-promo-codes.md`.
+Current runbooks:
 
-**⚠️ Gap:** Missing runbooks for cloud provisioning failure, worker enrollment failure, Stripe webhook failure, managed target replacement, E2B template release rollback.
+- `billing-pro-promo-codes.md`
+- `stripe-webhook-failure.md`
+- `e2b-template-rollback.md`
+- `cloud-provisioning-failure.md`
+- `worker-enrollment-failure.md`
+- `managed-target-replacement.md`
+- `operator-security-posture.md`
+
+**⚠️ Gap:** `managed-target-replacement.md` is an operational placeholder
+until the operator-safe replacement flow and audit trail are implemented.
 
 ---
 
