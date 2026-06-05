@@ -57,10 +57,6 @@ from proliferate.server.cloud.runtime.setup_monitor import (
 from proliferate.server.health import router as health_router
 from proliferate.server.organizations.api import router as organizations_router
 from proliferate.server.support.api import router as support_router
-from proliferate.server.support.reconciler import (
-    start_support_tracker_reconciler,
-    stop_support_tracker_reconciler,
-)
 from proliferate.utils.logging import configure_server_logging
 
 
@@ -169,13 +165,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     start_cloud_setup_monitor()
     start_agent_gateway_reconciler()
     start_mobility_cleanup_reconciler()
-    start_support_tracker_reconciler()
     anonymous_telemetry_task = await start_server_anonymous_telemetry_sender()
     try:
         yield
     finally:
         await stop_server_anonymous_telemetry_sender(anonymous_telemetry_task)
-        await stop_support_tracker_reconciler()
         await stop_mobility_cleanup_reconciler()
         await stop_agent_gateway_reconciler()
         await stop_cloud_setup_monitor()

@@ -26,6 +26,7 @@ NOTIFICATIONS_SEND_SLACK_TASK = "notifications.send_slack"
 RUNTIME_WAKE_TARGET_TASK = "runtime.wake_target"
 AUTOMATIONS_EXECUTE_RUN_TASK = "automations.execute_run"
 BILLING_RECONCILE_PASS_TASK = "billing.reconcile_pass"
+SUPPORT_TRACKER_RECONCILE_PASS_TASK = "support.reconcile_tracker"
 
 TASK_ROUTES: dict[str, dict[str, str]] = {
     HEALTH_NOOP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
@@ -33,6 +34,7 @@ TASK_ROUTES: dict[str, dict[str, str]] = {
     RUNTIME_WAKE_TARGET_TASK: {"queue": RUNTIME_WAKE_QUEUE},
     AUTOMATIONS_EXECUTE_RUN_TASK: {"queue": AUTOMATIONS_EXECUTION_QUEUE},
     BILLING_RECONCILE_PASS_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
+    SUPPORT_TRACKER_RECONCILE_PASS_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
 }
 
 
