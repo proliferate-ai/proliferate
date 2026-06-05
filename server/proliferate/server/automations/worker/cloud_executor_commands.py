@@ -20,8 +20,8 @@ from proliferate.db import engine as db_engine
 from proliferate.db.store.automation_run_claim_values import AutomationRunClaimValue
 from proliferate.db.store.cloud_profile_target_guard import managed_profile_target_requires_slot
 from proliferate.db.store.cloud_sync import commands as commands_store
-from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
+from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.commands.domain.serialization import compact_command_json
 from proliferate.server.cloud.commands.preflight import stamp_and_validate_command_preflight
@@ -197,7 +197,7 @@ async def _resolve_scope(
             f"Cloud command kind requires sessionId: {kind}",
             status_code=400,
         )
-    projection = await events_store.get_session_projection(
+    projection = await projections_store.get_session_projection(
         db,
         target_id=target.id,
         session_id=session_id,

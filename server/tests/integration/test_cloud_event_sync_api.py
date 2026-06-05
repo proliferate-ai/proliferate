@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing import ensure_personal_billing_subject
 from proliferate.db.store.cloud_sync import events as events_store
+from proliferate.db.store.cloud_sync import pending_interactions as pending_interactions_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import projections as projections_store
 from tests.e2e.cloud.helpers.auth import create_user_and_login
@@ -457,7 +458,7 @@ class TestCloudEventSyncApi:
             workspace_id="workspace-pending-prompt",
             session_id="session-pending-prompt",
         )
-        await events_store.upsert_pending_interaction(
+        await pending_interactions_store.upsert_pending_interaction(
             db_session,
             target_id=UUID(target_id),
             cloud_workspace_id=None,

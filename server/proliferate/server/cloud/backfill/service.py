@@ -14,6 +14,7 @@ from proliferate.db.store.billing import (
 from proliferate.db.store.cloud_sync import backfill as backfill_store
 from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
+from proliferate.db.store.cloud_sync import pending_interactions as pending_interactions_store
 from proliferate.db.store.cloud_sync import projections as projections_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.backfill.models import (
@@ -149,7 +150,7 @@ async def record_worker_backfill(
         ):
             skipped_session_inactive_exposure += 1
             continue
-        projection = await events_store.upsert_session_projection(
+        projection = await projections_store.upsert_session_projection(
             db,
             target_id=auth.target_id,
             cloud_workspace_id=cloud_workspace_id,
@@ -179,7 +180,7 @@ async def record_worker_backfill(
                 status=session.status or "running",
             )
         for interaction in session.pending_interactions:
-            await events_store.upsert_pending_interaction(
+            await pending_interactions_store.upsert_pending_interaction(
                 db,
                 target_id=auth.target_id,
                 cloud_workspace_id=cloud_workspace_id,
@@ -193,7 +194,7 @@ async def record_worker_backfill(
                 description=interaction.description,
                 payload_json=compact_json(interaction.payload),
             )
-        await events_store.resolve_missing_pending_interactions(
+        await pending_interactions_store.resolve_missing_pending_interactions(
             db,
             target_id=auth.target_id,
             session_id=session.session_id,

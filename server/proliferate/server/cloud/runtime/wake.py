@@ -19,7 +19,7 @@ from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnviron
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_sandbox_profiles import load_sandbox_profile_by_id
 from proliferate.db.store.cloud_sync import commands as commands_store
-from proliferate.db.store.cloud_sync import events as events_store
+from proliferate.db.store.cloud_sync import pending_interactions as pending_interactions_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_control as worker_control_store
 from proliferate.integrations.sentry import capture_server_sentry_exception
@@ -188,7 +188,7 @@ async def _fail_pending_prompt_interaction_for_command(
     prompt_id = _str_or_none(payload.get("promptId"))
     if not prompt_id:
         return
-    await events_store.fail_existing_pending_interaction(
+    await pending_interactions_store.fail_existing_pending_interaction(
         db,
         target_id=command.target_id,
         session_id=command.session_id,
