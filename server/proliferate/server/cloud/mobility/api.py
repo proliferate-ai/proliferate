@@ -32,12 +32,15 @@ from proliferate.server.cloud.mobility.models import (
     MobilityWorkspaceSummary,
     StartWorkspaceMobilityHandoffRequest,
     UpdateWorkspaceMobilityHandoffPhaseRequest,
-    WorkspaceMobilityPreflightRequest,
-    WorkspaceMobilityPreflightResponse,
     handoff_summary_payload,
     mobility_workspace_detail_payload,
     mobility_workspace_summary_payload,
 )
+from proliferate.server.cloud.mobility.preflight.models import (
+    WorkspaceMobilityPreflightRequest,
+    WorkspaceMobilityPreflightResponse,
+)
+from proliferate.server.cloud.mobility.preflight.service import preflight_cloud_workspace_handoff
 from proliferate.server.cloud.mobility.service import (
     ensure_cloud_workspace_mobility,
     fail_cloud_workspace_handoff,
@@ -45,7 +48,6 @@ from proliferate.server.cloud.mobility.service import (
     get_cloud_workspace_mobility_detail,
     heartbeat_cloud_workspace_handoff,
     list_cloud_workspace_mobility_for_user,
-    preflight_cloud_workspace_handoff,
     start_cloud_workspace_handoff,
     update_cloud_workspace_handoff_phase,
 )

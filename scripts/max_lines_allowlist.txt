@@ -34,7 +34,6 @@ server/proliferate/db/store/cloud_sync/commands.py 1565 server structure migrati
 server/proliferate/db/store/cloud_sync/events.py 1109 server structure migration debt for oversized store file
 server/proliferate/db/store/cloud_workspaces.py 1187 server structure migration debt for oversized store file
 server/proliferate/server/billing/service.py 2459 server structure migration debt for oversized service file during billing orchestration consolidation
-server/proliferate/server/cloud/mobility/service.py 904 server structure migration debt for oversized service file
 server/tests/integration/schema_migration_assertions.py 878 existing server oversized test helper
 server/tests/integration/test_auth_flow.py 2057 existing server oversized integration test
 server/tests/integration/test_billing_accounting.py 871 existing server oversized integration test
@@ -45,6 +44,6 @@ server/tests/integration/test_cloud_commands_api.py 4890 existing server oversiz
 server/tests/integration/test_sandbox_profile_foundation.py 1222 existing server oversized integration test
 server/tests/integration/test_schema_migrations.py 925 existing server oversized integration test
 server/tests/integration/test_stripe_webhooks.py 1456 existing server oversized integration test
-server/tests/unit/test_cloud_mobility_service.py 806 existing server oversized unit test
+server/tests/unit/test_cloud_mobility_service.py 800 existing server oversized unit test
 server/tests/unit/test_cloud_runtime_ensure_running.py 872 existing server oversized unit test
 server/tests/unit/test_cloud_runtime_provision.py 1822 existing server oversized unit test
