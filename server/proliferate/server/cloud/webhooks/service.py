@@ -31,11 +31,13 @@ from proliferate.integrations.sandbox import (
     get_sandbox_provider,
     verify_e2b_webhook_signature,
 )
-from proliferate.server.billing.service import (
-    get_billing_snapshot_for_subject,
+from proliferate.server.billing.runtime_usage import (
     record_cloud_sandbox_usage_started,
     record_cloud_sandbox_usage_stopped,
     remember_cloud_sandbox_event_receipt,
+)
+from proliferate.server.billing.service import (
+    get_billing_snapshot_for_subject,
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.domain.provider_events import (

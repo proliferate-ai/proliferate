@@ -20,7 +20,7 @@ from proliferate.db.store.cloud_sandboxes import (
 )
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.integrations.sandbox import SandboxHandle, SandboxProvider
-from proliferate.server.billing.service import record_cloud_sandbox_usage_started
+from proliferate.server.billing.runtime_usage import record_cloud_sandbox_usage_started
 from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.runtime.domain.reconnect_policy import (
     SandboxReconnectAction,
