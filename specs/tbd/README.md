@@ -11,7 +11,6 @@ They are not operating law until they are promoted into `specs/codebase/**` or
 | Draft | Use |
 | --- | --- |
 | [anyharness-structure-alignment-swarms.md](anyharness-structure-alignment-swarms.md) | Planning notes for AnyHarness structure-alignment agent work. |
-| [cloud-shared-sandbox-spec-pack.md](cloud-shared-sandbox-spec-pack.md) | Cloud/shared sandbox planning pack. |
 | [cloud-worker-control-loop.md](cloud-worker-control-loop.md) | Cloud worker control-loop load-reduction planning. |
 | [frontend-structure-alignment-migration.md](frontend-structure-alignment-migration.md) | Frontend structure-alignment migration notes. |
 | [security.md](security.md) | Draft security notes. |

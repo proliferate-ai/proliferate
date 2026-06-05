@@ -204,7 +204,7 @@ Compared to the current product shape:
 - **New page: Slack bot** as its own loose nav item between Agents
   and Help. No current pane.
 - **Compute page** exists but needs to expose sandbox profile state
-  (spec 00) and per-target sandbox slot status more clearly.
+  (spec 00) and per-target sandbox status more clearly.
 - **Cloud pane (`CloudPane.tsx`) is doing too much**: it currently
   contains both the credential library (agent auth) and cloud repo
   config. Spec 02 lifts agent auth out into its own page. The
@@ -344,7 +344,7 @@ Workspace
                                        and Slack. Admin-tagged.
   compute                   spec 00 (sandbox foundation):
                                        target list, sandbox profile state,
-                                       slot status, "Enable Cloud" verb,
+                                       sandbox status, "Enable Cloud" verb,
                                        per-target ComputeTargetReadiness,
                                        per-target ComputeTargetAgentAuthCard.
 
@@ -554,7 +554,7 @@ RuntimeReadinessPanel
     target online state, worker version,
     runtime_config_status (applied / pending / failed),
     agent_auth_status,
-    sandbox slot state (creating / running / paused / blocked / error)
+    sandbox state (creating / running / paused / blocked / error)
     each with a "fix" CTA that deep-links to the owning pane.
   Used by:
     ComputePane per-target detail

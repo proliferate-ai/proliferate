@@ -209,7 +209,7 @@ IDs so an investigator can jump from the support report to replay and exception
 contexts without relying on user-entered text.
 
 Cloud logging records request, user, tenant, support report, cloud workspace,
-target, sandbox, session, interaction, command, worker, and slot-generation
+target, sandbox, session, interaction, command, and worker
 fields when available. Log payloads must scrub auth headers, bearer tokens,
 secret/key/token environment values, ciphertext-looking values, signed URLs,
 and long opaque token strings.

@@ -32,8 +32,8 @@ In scope:
   with values from spec 03 vocabulary:
   `local | personal_cloud | shared_cloud`.
 - Route automation workspace/session creation through the new
-  `managed_profile_launch` helper from spec 04. Profile, target,
-  and slot are resolved through `ensure_*_sandbox_profile` and
+  `managed_profile_launch` helper from spec 04. Profile and target
+  are resolved through `ensure_*_sandbox_profile` and
   `ensure_primary_profile_target`.
 - Per-run preflight: runtime config (spec 01) and agent auth
   (spec 02). Stale state triggers **auto-cascade** — enqueue

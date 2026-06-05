@@ -375,8 +375,8 @@ Fields: `id`, `sandbox_profile_id`, `owner_scope`, `agent_kind`,
 
 Row: target-specific application state for auth and runtime config.
 
-Fields: `id`, `sandbox_profile_id`, `target_id`, `active_sandbox_id`,
-`slot_generation`, `desired_agent_auth_revision`,
+Fields: `id`, `sandbox_profile_id`, `target_id`,
+`desired_agent_auth_revision`,
 `applied_agent_auth_revision`, `agent_auth_status`,
 `agent_auth_force_restart_required`, `last_agent_auth_command_id`,
 `last_agent_auth_worker_id`, `last_agent_auth_attempted_at`,
@@ -394,7 +394,7 @@ Row: historical runtime-scoped token grant retained for compatibility paths.
 
 Fields: `id`, `token_hash`, `hash_key_id`, `policy_id`, `credential_id`,
 `selection_id`, `issued_profile_revision`, `target_id`,
-`sandbox_profile_id`, `cloud_sandbox_id`, `slot_generation`,
+`sandbox_profile_id`, `cloud_sandbox_id`,
 `organization_id`, `user_id`, `agent_kind`, `protocol_facade`,
 `expires_at`, `revoked_at`, `last_used_at`, `created_at`.
 
@@ -404,7 +404,7 @@ Row: durable Bifrost provider-key or virtual-key materialization mapping.
 
 Fields: `id`, `router_kind`, `router_object_kind`, `object_scope`,
 `policy_id`, `provider_credential_id`, `budget_subject_id`, `selection_id`,
-`sandbox_profile_id`, `target_id`, `cloud_sandbox_id`, `slot_generation`,
+`sandbox_profile_id`, `target_id`, `cloud_sandbox_id`,
 `agent_kind`, `protocol_facade`, `router_object_id`,
 `router_object_secret_ciphertext`, `router_object_secret_ciphertext_key_id`,
 `sync_status`, `sync_fingerprint`, `status`, `last_reconciled_at`,
@@ -1004,7 +1004,6 @@ selection_id uuid null
 sandbox_profile_id uuid null
 target_id uuid null
 cloud_sandbox_id text null
-slot_generation integer null
 agent_kind text null
 router_secret_ciphertext bytea null
 router_secret_ciphertext_key_id text null
@@ -1059,7 +1058,7 @@ virtual_key
   selection_id required
   sandbox_profile_id required
   target_id required
-  cloud_sandbox_id and slot_generation required for active managed cloud slots
+  cloud_sandbox_id required for active managed cloud targets
   agent_kind required
 ```
 
@@ -1212,7 +1211,6 @@ must be scoped at least to:
 sandbox_profile_id
 target_id
 cloud_sandbox_id
-slot_generation
 agent_kind
 sandbox_agent_auth_selection_id
 policy_id
@@ -1220,7 +1218,7 @@ policy_id
 
 Virtual keys must be disabled when any of these change:
 
-- sandbox slot is replaced
+- the managed target (sandbox) is replaced
 - sandbox target is paused, stopped, archived, or billing-blocked
 - sandbox auth selection changes
 - credential or provider key is revoked/rotated
@@ -1841,8 +1839,9 @@ The implementation is complete when these are true:
 - A brand new web-only user can start a cloud agent run using managed free
   credit.
 - The sandbox contains a Bifrost virtual key, not raw provider credentials.
-- The sandbox virtual key is scoped to the active target/sandbox slot/agent
-  selection and is revoked on slot, selection, credential, or billing changes.
+- The sandbox virtual key is scoped to the active target/sandbox/agent
+  selection and is revoked on target-replacement, selection, credential, or
+  billing changes.
 - Bifrost logs the request with virtual-key and cost metadata.
 - Proliferate imports the usage and debits the user's grant.
 - Exhaustion disables managed-credit use.
@@ -1860,7 +1859,7 @@ The implementation should preserve these security and operability constraints:
 
 - Sandbox materialization must require an explicit public Bifrost URL. It must
   never fall back to the private/admin Bifrost URL.
-- Runtime virtual keys are scoped to a sandbox slot and selection. A selection,
+- Runtime virtual keys are scoped to a target (sandbox) and selection. A selection,
   credential, provider-key fingerprint, or budget change disables the old
   runtime key and mints a new one instead of mutating the old key in place.
 - Bifrost provider-key fingerprints include non-reversible digests of secret

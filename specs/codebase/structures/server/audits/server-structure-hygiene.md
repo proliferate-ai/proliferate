@@ -73,7 +73,8 @@ status, not product behavior status.
 - **Swarm 7: Workspaces, Commands, And Worker Control**
   - Status: ready after relevant store threading.
   - Goal: separate workspace lifecycle, command lifecycle, and worker-control
-    responsibilities while preserving command fencing and visibility contracts.
+    responsibilities while preserving command correlation and visibility
+    contracts.
   - Boundary: `cloud/workspaces/**`, `cloud/commands/**`,
     `cloud/worker/**`, `cloud_workspaces.py`, and `cloud_sync/**`.
 
@@ -590,9 +591,9 @@ Target result:
 
 Do not change:
 
-- Command leasing/fencing semantics.
+- Command leasing/correlation semantics.
 - Workspace visibility, exposure, or claim behavior.
-- Worker heartbeat, slot guard, or command status stream contracts.
+- Worker heartbeat or command status stream contracts.
 
 Verification:
 

@@ -414,7 +414,7 @@ Called from `enqueue_command` for kinds that require it:
 ```text
 start_session, send_prompt, resolve_interaction, update_session_config,
 materialize_workspace (target-applied check before re-materializing
-                       on a slot whose runtime config is behind)
+                       on a target whose runtime config is behind)
 ```
 
 `materialize_environment` is the apply command itself, not gated by
@@ -887,7 +887,7 @@ POST /v1/cloud/sessions/{session_id}/projection
 POST /v1/cloud/sandbox-profiles/{id}/wake
        body: { target_id? }
        idempotent; kicks off the async wake job; returns immediately
-       with current slot state. Used by mobile/web "warm up cloud"
+       with current sandbox state. Used by mobile/web "warm up cloud"
        affordances and any UX that wants to surface "starting up"
        before the first command is sent.
 ```
@@ -1174,7 +1174,7 @@ Chunk F  Direct-access cleanup
 
 Chunk G  Passive UI invariant tests
   - integration test that calls every passive GET endpoint with a
-    paused sandbox and asserts no slot mutation, no E2B SDK call
+    paused sandbox and asserts no sandbox mutation, no E2B SDK call
 ```
 
 Preferred implementation is one PR per spec. Chunks are review checkpoints inside that PR and may be split only when the split does not leave duplicate models, dead paths, partially wired security checks, or visible inert UI.
@@ -1332,14 +1332,14 @@ Manual smoke:
      returns command_id immediately (no E2B block)
    - if sandbox is paused: kick_off_managed_sandbox_wake fires in background;
      UI polls /sandbox-profiles/{id}/target-state for "Cloud starting up"
-   - slot transitions paused -> resuming -> running; worker heartbeats
+   - sandbox transitions paused -> resuming -> running; worker heartbeats
    - worker leases the queued command, materializes, echoes ids
    - tailer picks up the new session via /worker/exposures
    - cloud_session_projection becomes active
 
 1a. Mobile "warm up cloud" before typing
    - mobile calls POST /v1/cloud/sandbox-profiles/{id}/wake
-   - server returns immediately with current slot state
+   - server returns immediately with current sandbox state
    - background wake job runs; mobile polls target-state
    - by the time user finishes typing, the sandbox is running; first
      send_prompt has no wake latency

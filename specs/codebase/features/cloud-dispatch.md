@@ -1227,7 +1227,7 @@ Manual smoke:
    replaced)?**
 
    The JWT carries `target_id`; AnyHarness checks
-   `target_id == AppState.target_id`. If the slot was replaced
+   `target_id == AppState.target_id`. If the target was replaced
    and AnyHarness booted with a new target_id, old JWTs fail
    target check and Desktop refreshes via
    `use-direct-attach-token`. Spec 05 §10 decision #4 already
