@@ -13,7 +13,7 @@ from proliferate.db.models.cloud.mobility import (
     CloudWorkspaceMobility,
 )
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
-from proliferate.db.store.cloud_mobility import (
+from proliferate.db.store.cloud_mobility.handoffs import (
     complete_cloud_workspace_handoff_cleanup,
     create_cloud_workspace_handoff_op,
     create_cloud_workspace_handoff_op_for_user,
@@ -23,6 +23,8 @@ from proliferate.db.store.cloud_mobility import (
     get_active_handoff_for_mobility,
     get_active_user_handoff_op,
     heartbeat_cloud_workspace_handoff_op,
+)
+from proliferate.db.store.cloud_mobility.workspaces import (
     load_cloud_workspace_mobility_for_user,
 )
 from proliferate.server.cloud.mobility.domain.lifecycle import (

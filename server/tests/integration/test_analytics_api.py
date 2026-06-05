@@ -13,7 +13,7 @@ from proliferate.db.models.analytics import (
     CloudWorkspaceMobilityEvent,
 )
 from proliferate.db.models.cloud.mobility import CloudWorkspaceMobility
-from proliferate.db.store.cloud_mobility import create_cloud_workspace_handoff_op
+from proliferate.db.store.cloud_mobility.handoffs import create_cloud_workspace_handoff_op
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.mobility import CloudWorkspaceMobility
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
-from proliferate.db.store.cloud_mobility import (
+from proliferate.db.store.cloud_mobility.workspaces import (
     backfill_cloud_workspace_mobility_from_workspace,
     ensure_cloud_workspace_mobility,
 )

@@ -7,13 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.db.models.cloud.mobility import CloudWorkspaceHandoffOp, CloudWorkspaceMobility
-from proliferate.db.store.cloud_mobility import (
+from proliferate.db.store.cloud_mobility.cleanup_items import (
     all_cleanup_items_completed,
-    complete_cloud_workspace_handoff_cleanup,
-    fail_cloud_workspace_handoff_op,
     get_cleanup_item_for_handoff,
     list_cleanup_items_for_handoff,
     update_cleanup_item_status,
+)
+from proliferate.db.store.cloud_mobility.handoffs import (
+    complete_cloud_workspace_handoff_cleanup,
+    fail_cloud_workspace_handoff_op,
 )
 from proliferate.db.store.cloud_sync.exposures import archive_workspace_exposure
 from proliferate.db.store.cloud_sync.projections import end_session_projection_by_id

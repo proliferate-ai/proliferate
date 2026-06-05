@@ -6,17 +6,21 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
-from proliferate.db.store.cloud_mobility import (
-    CloudWorkspaceHandoffOpValue,
-    CloudWorkspaceMoveCleanupItemValue,
+from proliferate.db.store.cloud_mobility.cleanup_items import (
     all_cleanup_items_completed,
-    complete_cloud_workspace_handoff_cleanup_for_user,
-    fail_cloud_workspace_handoff_op_for_user,
     get_cleanup_item_for_handoff,
-    get_cloud_workspace_handoff_op,
     list_cleanup_items_for_handoff,
     update_cleanup_item_status,
+)
+from proliferate.db.store.cloud_mobility.handoffs import (
+    complete_cloud_workspace_handoff_cleanup_for_user,
+    fail_cloud_workspace_handoff_op_for_user,
+    get_cloud_workspace_handoff_op,
     update_cloud_workspace_handoff_phase_for_user,
+)
+from proliferate.db.store.cloud_mobility.records import (
+    CloudWorkspaceHandoffOpValue,
+    CloudWorkspaceMoveCleanupItemValue,
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mobility.cleanup.domain.ownership import (

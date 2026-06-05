@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 
 from proliferate.constants.cloud import CloudWorkspaceStatus
-from proliferate.db.store.cloud_mobility import (
+from proliferate.db.store.cloud_mobility.records import (
     CloudWorkspaceHandoffOpValue,
     CloudWorkspaceMobilityValue,
     CloudWorkspaceMoveCleanupItemValue,

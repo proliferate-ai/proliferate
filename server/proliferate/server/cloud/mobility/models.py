@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from proliferate.db.store.cloud_mobility import (
+from proliferate.db.store.cloud_mobility.records import (
     CloudWorkspaceHandoffOpValue,
     CloudWorkspaceMobilityValue,
 )
