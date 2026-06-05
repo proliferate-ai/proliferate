@@ -21,14 +21,16 @@ from proliferate.db import engine as db_engine
 from proliferate.db.models.billing import BillingSubject, BillingSubscription
 from proliferate.db.store.billing import (
     apply_payment_failed_hold,
-    claim_webhook_event,
     clear_payment_failed_holds,
     ensure_billing_grant_record,
     get_billing_subject_for_stripe_reference,
     get_billing_subscription_by_stripe_subscription_id,
+    upsert_stripe_subscription_record,
+)
+from proliferate.db.store.billing_runtime_usage import (
+    claim_webhook_event,
     mark_webhook_event_failed_by_id,
     mark_webhook_event_processed_by_id,
-    upsert_stripe_subscription_record,
 )
 from proliferate.integrations import stripe as stripe_billing
 from proliferate.server.billing.domain.pricing import (

@@ -16,7 +16,7 @@ from proliferate.background.config import NOTIFICATIONS_QUEUE, NOTIFICATIONS_SEN
 from proliferate.config import settings
 from proliferate.db import engine as db_engine
 from proliferate.db import session_ops as db_session
-from proliferate.db.store.billing import (
+from proliferate.db.store.billing_runtime_usage import (
     claim_webhook_event,
     mark_webhook_event_failed_by_id,
     mark_webhook_event_processed_by_id,
