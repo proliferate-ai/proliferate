@@ -7,6 +7,12 @@ Owner: TBD. Drafted from the worker guide
 (`specs/codebase/structures/server/guides/workers.md`), the two worker audits,
 and the server structure hygiene handoff.
 
+Shared Redis/wake ownership is ratified in
+`specs/tbd/shared-redis-wake-ownership.md`. This RFC conforms to that decision:
+the worker control-loop owns the worker-control doorbell, and worker-tier
+durable jobs use RabbitMQ as the broker with Redis only for ancillary redbeat,
+locks, and rate limits.
+
 ## 1. Context And Drivers
 
 We are explicitly building for enterprise scale with a large influx of new
@@ -49,6 +55,10 @@ Hard constraints:
 
 - **RabbitMQ is the broker, not Redis.** Redis-as-broker can drop tasks under
   failure; that reintroduces the "jobs lost" pain.
+- **Worker-control doorbells are not broker tasks.** The control-loop owns the
+  lossy worker-control wake channel; Celery tasks that mutate worker-visible
+  state bump Postgres control state and publish through the existing
+  after-commit doorbell path.
 - **Question the Redis result backend.** Jobs write outcomes to Postgres;
   Redis earns its place for `redbeat` + rate limiting, not results-by-default.
 
