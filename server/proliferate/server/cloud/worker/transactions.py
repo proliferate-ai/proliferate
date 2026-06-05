@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db import session_ops as db_session
-from proliferate.server.cloud.worker import service
+from proliferate.server.cloud.worker import commands, service
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
 from proliferate.server.cloud.worker.models import (
     WorkerCommandLeaseRequest,
@@ -32,7 +32,7 @@ async def lease_worker_command_and_commit_if_needed(
     auth: WorkerAuthContext,
     body: WorkerCommandLeaseRequest,
 ) -> WorkerCommandLeaseResponse:
-    response, should_commit = await service.prepare_worker_command_lease(
+    response, should_commit = await commands.prepare_worker_command_lease(
         db,
         auth=auth,
         body=body,
