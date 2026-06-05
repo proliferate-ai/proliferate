@@ -1,71 +1,46 @@
 from __future__ import annotations
 
-import logging
-import time
 from dataclasses import dataclass, replace
-from types import SimpleNamespace
 from typing import NoReturn
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import ActorIdentity, OwnerSelection
-from proliferate.constants.billing import (
-    USAGE_SEGMENT_CLOSED_BY_DESTROY,
-    USAGE_SEGMENT_CLOSED_BY_MANUAL_STOP,
-)
 from proliferate.constants.cloud import (
     SUPPORTED_GIT_PROVIDER,
-    CloudCommandKind,
-    CloudCommandSource,
-    CloudWorkspaceCleanupState,
     CloudWorkspaceStatus,
 )
 from proliferate.db import session_ops as db_session
-from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store import cloud_sandbox_profiles as sandbox_profile_store
 from proliferate.db.store.automation_cloud_workspace_claims import (
     create_managed_cloud_workspace_for_claimed_run,
 )
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
-from proliferate.db.store.cloud_claims import claims as claims_store
-from proliferate.db.store.cloud_claims import tokens as claim_tokens_store
 from proliferate.db.store.cloud_repo_config import (
     get_cloud_repo_config,
     get_organization_cloud_repo_config,
 )
-from proliferate.db.store.cloud_sync import commands as command_store
 from proliferate.db.store.cloud_workspaces import (
     CloudRepoLimitExceededError,
-    archive_cloud_workspace_record,
-    archive_cloud_workspace_record_by_id,
     create_cloud_workspace_for_user,
-    delete_cloud_workspace_records_for_workspace,
-    get_cloud_workspace_by_id,
     get_existing_managed_cloud_workspace_for_profile,
     list_claimed_organization_workspaces_for_user,
     list_exposed_cloud_workspaces_for_user,
     list_organization_workspaces_for_admin_audit,
     list_unclaimed_organization_workspaces,
     load_any_cloud_workspace_for_repo,
-    load_cloud_sandbox_by_id,
-    load_cloud_workspace_by_id,
     load_existing_cloud_workspace,
     mark_workspace_error_by_id,
-    persist_workspace_destroy_state,
-    persist_workspace_stop_state,
-    purge_cloud_workspace_record,
-    restore_cloud_workspace_record,
     save_workspace,
-    update_sandbox_status,
     update_workspace_branch,
     update_workspace_display_name,
 )
 from proliferate.db.store.cloud_workspaces import (
     list_cloud_workspaces as list_cloud_workspaces_store,
 )
-from proliferate.integrations.sandbox import get_configured_sandbox_provider, get_sandbox_provider
+from proliferate.integrations.sandbox import get_configured_sandbox_provider
 from proliferate.server.automations.domain.claim_lifecycle import (
     CLOUD_WORKSPACE_CREATION_TRANSITION,
     claim_is_active,
@@ -75,13 +50,10 @@ from proliferate.server.billing.service import (
     authorize_sandbox_start,
     authorize_sandbox_start_for_billing_subject,
     get_billing_snapshot_for_subject,
-    record_cloud_sandbox_usage_stopped,
     repo_limit_for_billing_snapshot,
 )
 from proliferate.server.cloud.agent_auth.domain.status import allowed_agent_kinds
 from proliferate.server.cloud.claims.domain.policy import is_org_admin_role
-from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
-from proliferate.server.cloud.commands.service import enqueue_command
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.repo_config.service import (
@@ -98,11 +70,8 @@ from proliferate.server.cloud.runtime.credentials.auth_status import (
     selected_agent_auth_agent_kinds,
 )
 from proliferate.server.cloud.runtime.scheduler import schedule_workspace_provision
-from proliferate.server.cloud.worker.revoked_jti import mark_revoked_jtis_changed
 from proliferate.server.cloud.workspaces.access import (
-    cloud_workspace_user_can_archive_with_db,
     cloud_workspace_user_can_interact_with_db,
-    cloud_workspace_user_can_read,
     cloud_workspace_user_can_read_with_db,
 )
 from proliferate.server.cloud.workspaces.details import (
@@ -120,9 +89,9 @@ from proliferate.server.cloud.workspaces.details import (
 from proliferate.server.cloud.workspaces.domain.lifecycle import (
     decide_workspace_start_after_validation,
     decide_workspace_status_transition,
-    provider_failure_debug_state,
     start_request_should_return_existing,
 )
+from proliferate.server.cloud.workspaces.lifecycle import service as lifecycle_service
 from proliferate.server.cloud.workspaces.models import (
     WorkspaceDetail,
     WorkspaceSummary,
@@ -131,7 +100,7 @@ from proliferate.server.organizations.service import (
     OrganizationServiceError,
     resolve_owner_context,
 )
-from proliferate.utils.time import duration_ms, utcnow
+from proliferate.utils.time import utcnow
 
 MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS = 160
 CLOUD_HUMAN_ORIGIN_JSON = '{"kind":"human","entrypoint":"cloud"}'
@@ -350,11 +319,6 @@ async def _bootstrap_repo_config_tx(user_id: UUID, git_owner: str, git_repo_name
 async def _mark_workspace_error_tx(workspace_id: UUID, message: str, **kwargs: object) -> None:
     async with db_session.open_async_transaction() as db:
         await mark_workspace_error_by_id(db, workspace_id, message, **kwargs)
-
-
-async def _update_sandbox_status_tx(sandbox: CloudSandbox, status: str, **kwargs: object) -> None:
-    async with db_session.open_async_transaction() as db:
-        await update_sandbox_status(db, sandbox, status, **kwargs)
 
 
 async def _resolve_new_cloud_workspace_create(
@@ -894,7 +858,9 @@ async def ensure_cloud_workspace_for_existing_branch(
         )
     if existing_cloud_workspace is not None:
         if _cloud_workspace_should_be_replaced_for_mobility_retry(existing_cloud_workspace):
-            await _archive_failed_cloud_workspace_for_mobility_retry(existing_cloud_workspace.id)
+            await lifecycle_service.archive_failed_cloud_workspace_for_mobility_retry(
+                existing_cloud_workspace.id
+            )
             log_cloud_event(
                 "failed cloud workspace archived before mobility retry",
                 workspace_id=existing_cloud_workspace.id,
@@ -954,11 +920,6 @@ def _cloud_workspace_should_be_replaced_for_mobility_retry(
         workspace.status == CloudWorkspaceStatus.error.value
         and workspace.anyharness_workspace_id is None
     )
-
-
-async def _archive_failed_cloud_workspace_for_mobility_retry(workspace_id: UUID) -> None:
-    async with db_session.open_async_transaction() as db:
-        await archive_cloud_workspace_record_by_id(db, workspace_id=workspace_id)
 
 
 async def _refresh_repo_env_snapshot_for_workspace(workspace: CloudWorkspace) -> CloudWorkspace:
@@ -1167,305 +1128,3 @@ async def sync_cloud_workspace_display_name(
     workspace = await cloud_workspace_user_can_interact_with_db(db, user_id, workspace_id)
     workspace = await update_workspace_display_name(db, workspace, cleaned)
     return await _build_workspace_detail_for_request(db, workspace)
-
-
-async def stop_cloud_workspace(
-    db: AsyncSession,
-    user_id: UUID,
-    workspace_id: UUID,
-) -> WorkspaceDetail:
-    workspace = await cloud_workspace_user_can_archive_with_db(db, user_id, workspace_id)
-    await _stop_workspace_runtime(workspace)
-    await _revoke_claim_tokens_for_workspace(workspace, reason="workspace_archived")
-    workspace = await cloud_workspace_user_can_read(user_id, workspace_id)
-    return await _build_workspace_detail(workspace)
-
-
-async def archive_cloud_workspace(
-    db: AsyncSession,
-    user_id: UUID,
-    workspace_id: UUID,
-) -> WorkspaceDetail:
-    workspace = await cloud_workspace_user_can_archive_with_db(db, user_id, workspace_id)
-    prune_error = None
-    if workspace.archived_at is None:
-        await command_store.supersede_workspace_commands(
-            db,
-            cloud_workspace_id=workspace.id,
-            reason_code="cloud_workspace_archived",
-            reason_message=(
-                "Workspace command was superseded because the Cloud workspace was archived."
-            ),
-        )
-        await _revoke_claim_tokens_for_workspace(workspace, reason="workspace_archived")
-        prune_error = await _enqueue_archive_prune_command(
-            db, user_id=user_id, workspace=workspace
-        )
-    await archive_cloud_workspace_record(db, workspace=workspace)
-    if prune_error is not None:
-        workspace.cleanup_state = CloudWorkspaceCleanupState.failed.value
-        workspace.cleanup_last_error = prune_error
-    detail = await _build_workspace_detail_for_request(db, workspace)
-    await db_session.commit_session(db)
-    return detail
-
-
-async def _enqueue_archive_prune_command(
-    db: AsyncSession,
-    *,
-    user_id: UUID,
-    workspace: CloudWorkspace,
-) -> str | None:
-    if workspace.target_id is None or not workspace.anyharness_workspace_id:
-        return None
-    try:
-        await enqueue_command(
-            db,
-            user=SimpleNamespace(id=user_id),
-            body=CreateCloudCommandRequest.model_validate(
-                {
-                    "idempotencyKey": (
-                        f"archive-prune:{workspace.id}:{workspace.anyharness_workspace_id}"
-                    ),
-                    "targetId": workspace.target_id,
-                    "workspaceId": workspace.anyharness_workspace_id,
-                    "cloudWorkspaceId": workspace.id,
-                    "kind": CloudCommandKind.prune_workspace_worktree.value,
-                    "payload": {
-                        "workspaceId": workspace.anyharness_workspace_id,
-                        "cloudWorkspaceId": str(workspace.id),
-                        "reason": "archive",
-                    },
-                    "source": CloudCommandSource.api.value,
-                }
-            ),
-        )
-    except CloudApiError as exc:
-        log_cloud_event(
-            "cloud workspace archive prune enqueue failed",
-            workspace_id=workspace.id,
-            target_id=workspace.target_id,
-            anyharness_workspace_id=workspace.anyharness_workspace_id,
-            error_code=exc.code,
-        )
-        return exc.message
-    return None
-
-
-async def restore_cloud_workspace(
-    db: AsyncSession,
-    user_id: UUID,
-    workspace_id: UUID,
-) -> WorkspaceDetail:
-    workspace = await cloud_workspace_user_can_archive_with_db(db, user_id, workspace_id)
-    if workspace.archived_at is None:
-        return await _build_workspace_detail_for_request(db, workspace)
-    try:
-        await restore_cloud_workspace_record(db, workspace=workspace)
-        detail = await _build_workspace_detail_for_request(db, workspace)
-        await db_session.commit_session(db)
-    except Exception as exc:
-        if not db_session.is_integrity_error(exc):
-            raise
-        await db_session.rollback_session(db)
-        raise CloudApiError(
-            "workspace_restore_conflict",
-            "Another active workspace already exists for this repo and branch.",
-            status_code=409,
-        ) from exc
-    return detail
-
-
-async def purge_cloud_workspace(
-    db: AsyncSession,
-    user_id: UUID,
-    workspace_id: UUID,
-) -> None:
-    if await get_cloud_workspace_by_id(db, workspace_id) is None:
-        return
-    workspace = await cloud_workspace_user_can_archive_with_db(db, user_id, workspace_id)
-    if workspace.owner_scope != "personal":
-        raise CloudApiError(
-            "workspace_purge_unsupported",
-            "Only personal cloud workspaces can be purged from this surface.",
-            status_code=409,
-        )
-    if workspace.archived_at is None:
-        raise CloudApiError(
-            "workspace_purge_requires_archive",
-            "Archive this Cloud workspace before purging it.",
-            status_code=409,
-        )
-    await _revoke_claim_tokens_for_workspace(workspace, reason="workspace_purged")
-    await command_store.supersede_workspace_commands(
-        db,
-        cloud_workspace_id=workspace.id,
-        reason_code="cloud_workspace_purged",
-        reason_message="Workspace command was superseded because the Cloud workspace was purged.",
-        command_kinds=None,
-    )
-    await purge_cloud_workspace_record(db, workspace=workspace)
-    await db_session.commit_session(db)
-
-
-async def delete_cloud_workspace(
-    db: AsyncSession,
-    user_id: UUID,
-    workspace_id: UUID,
-) -> None:
-    workspace = await cloud_workspace_user_can_archive_with_db(db, user_id, workspace_id)
-    await _revoke_claim_tokens_for_workspace(workspace, reason="workspace_deleted")
-    workspace_record_id = workspace.id
-    db.expunge(workspace)
-    await _destroy_workspace_runtime(workspace)
-    async with db_session.open_async_transaction() as delete_db:
-        if refreshed := await load_cloud_workspace_by_id(delete_db, workspace_record_id):
-            await delete_cloud_workspace_records_for_workspace(delete_db, refreshed)
-
-
-async def _revoke_claim_tokens_for_workspace(
-    workspace: CloudWorkspace,
-    *,
-    reason: str,
-) -> None:
-    async with db_session.open_async_transaction() as db:
-        claim = await claims_store.get_claim_for_workspace(db, workspace.id)
-        if claim is None:
-            return
-        if await claim_tokens_store.revoke_active_tokens_for_claim(
-            db, claim_id=claim.id, reason=reason
-        ):
-            await mark_revoked_jtis_changed(db, target_id=claim.target_id)
-
-
-# These helpers own the interaction with the persisted sandbox provider
-# (pause / destroy) and delegate the persistence update to store.py primitives.
-
-
-async def _stop_workspace_runtime(workspace: CloudWorkspace) -> None:
-    """Pause the active sandbox and mark the workspace as stopped."""
-    stop_started = time.perf_counter()
-    log_cloud_event(
-        "cloud workspace stop requested",
-        workspace_id=workspace.id,
-        sandbox_id=workspace.active_sandbox_id,
-        status=workspace.status,
-    )
-    sandbox = await _load_workspace_owned_runtime_sandbox(workspace)
-    if sandbox is not None:
-        if sandbox.external_sandbox_id:
-            provider = get_sandbox_provider(sandbox.provider)
-            try:
-                await provider.pause_sandbox(sandbox.external_sandbox_id)
-            except Exception:
-                failure_state = provider_failure_debug_state("stop")
-                await _update_sandbox_status_tx(sandbox, failure_state.sandbox_status)
-                log_cloud_event(
-                    "cloud sandbox pause failed",
-                    level=logging.WARNING,
-                    workspace_id=workspace.id,
-                    sandbox_id=sandbox.id,
-                    external_sandbox_id=sandbox.external_sandbox_id,
-                )
-            else:
-                await record_cloud_sandbox_usage_stopped(
-                    sandbox_id=sandbox.id,
-                    ended_at=utcnow(),
-                    closed_by=USAGE_SEGMENT_CLOSED_BY_MANUAL_STOP,
-                )
-                await _update_sandbox_status_tx(sandbox, "paused", stopped_at_now=True)
-                log_cloud_event(
-                    "cloud sandbox paused",
-                    workspace_id=workspace.id,
-                    sandbox_id=sandbox.id,
-                    external_sandbox_id=sandbox.external_sandbox_id,
-                )
-        else:
-            await _update_sandbox_status_tx(sandbox, "paused", stopped_at_now=True)
-
-    if workspace.status != CloudWorkspaceStatus.archived.value:
-        transition_workspace_status(
-            workspace,
-            CloudWorkspaceStatus.archived,
-            status_detail="Archived",
-        )
-    else:
-        workspace.updated_at = utcnow()
-    async with db_session.open_async_transaction() as db:
-        await persist_workspace_stop_state(db, workspace)
-    log_cloud_event(
-        "cloud workspace stopped",
-        workspace_id=workspace.id,
-        elapsed_ms=duration_ms(stop_started),
-    )
-
-
-async def _destroy_workspace_runtime(workspace: CloudWorkspace) -> None:
-    """Destroy the active sandbox and mark the workspace as stopped."""
-    destroy_started = time.perf_counter()
-    sandbox = await _load_workspace_owned_runtime_sandbox(workspace)
-    if sandbox is not None:
-        if sandbox.external_sandbox_id:
-            provider = get_sandbox_provider(sandbox.provider)
-            try:
-                await provider.destroy_sandbox(sandbox.external_sandbox_id)
-            except Exception:
-                failure_state = provider_failure_debug_state("destroy")
-                await _update_sandbox_status_tx(sandbox, failure_state.sandbox_status)
-                log_cloud_event(
-                    "cloud sandbox destroy failed",
-                    level=logging.WARNING,
-                    workspace_id=workspace.id,
-                    sandbox_id=sandbox.id,
-                    external_sandbox_id=sandbox.external_sandbox_id,
-                )
-            else:
-                await record_cloud_sandbox_usage_stopped(
-                    sandbox_id=sandbox.id,
-                    ended_at=utcnow(),
-                    closed_by=USAGE_SEGMENT_CLOSED_BY_DESTROY,
-                )
-                await _update_sandbox_status_tx(sandbox, "destroyed", stopped_at_now=True)
-                log_cloud_event(
-                    "cloud sandbox destroyed",
-                    workspace_id=workspace.id,
-                    sandbox_id=sandbox.id,
-                    external_sandbox_id=sandbox.external_sandbox_id,
-                )
-        else:
-            await _update_sandbox_status_tx(sandbox, "destroyed", stopped_at_now=True)
-    transition_workspace_status(workspace, CloudWorkspaceStatus.archived, status_detail="Archived")
-    async with db_session.open_async_transaction() as db:
-        await persist_workspace_destroy_state(db, workspace)
-    log_cloud_event(
-        "cloud workspace destroyed",
-        workspace_id=workspace.id,
-        elapsed_ms=duration_ms(destroy_started),
-    )
-
-
-async def _load_workspace_owned_runtime_sandbox(
-    workspace: CloudWorkspace,
-) -> CloudSandbox | None:
-    """Load only the legacy workspace-owned runtime sandbox.
-
-    Managed cloud target sandboxes are shared by all workspaces on a sandbox
-    profile and target. Workspace stop/delete must not pause or destroy them.
-    """
-    sandbox_id = getattr(workspace, "active_sandbox_id", None)
-    if sandbox_id is None:
-        return None
-    async with db_session.open_async_session() as db:
-        sandbox = await load_cloud_sandbox_by_id(db, sandbox_id)
-    if sandbox is None:
-        return None
-    if sandbox.sandbox_profile_id is not None or sandbox.target_id is not None:
-        log_cloud_event(
-            "cloud workspace runtime action skipped non-workspace sandbox",
-            workspace_id=workspace.id,
-            sandbox_id=sandbox.id,
-            sandbox_profile_id=sandbox.sandbox_profile_id,
-            target_id=sandbox.target_id,
-        )
-        return None
-    return sandbox

@@ -41,13 +41,13 @@ server/proliferate/server/cloud/runtime/provision.py 1688 server structure migra
 server/proliferate/server/cloud/runtime_config/domain/resolver.py 611 server structure migration debt for oversized pure-domain file
 server/proliferate/server/cloud/runtime_config/service.py 1095 server structure migration debt for oversized service file
 server/proliferate/server/cloud/workspaces/models.py 861 server structure migration debt for oversized API models file
-server/proliferate/server/cloud/workspaces/service.py 1471 server structure migration debt for oversized service file
+server/proliferate/server/cloud/workspaces/service.py 1130 server structure migration debt for oversized service file
 server/tests/integration/schema_migration_assertions.py 878 existing server oversized test helper
 server/tests/integration/test_auth_flow.py 2057 existing server oversized integration test
 server/tests/integration/test_billing_accounting.py 871 existing server oversized integration test
 server/tests/integration/test_billing_api.py 2053 existing server oversized integration test
 server/tests/integration/test_cloud_agent_auth_api.py 1664 existing server oversized integration test
-server/tests/integration/test_cloud_api.py 2374 existing server oversized integration test
+server/tests/integration/test_cloud_api.py 2346 existing server oversized integration test
 server/tests/integration/test_cloud_commands_api.py 4890 existing server oversized integration test
 server/tests/integration/test_sandbox_profile_foundation.py 1224 existing server oversized integration test
 server/tests/integration/test_schema_migrations.py 925 existing server oversized integration test
@@ -55,4 +55,4 @@ server/tests/integration/test_stripe_webhooks.py 1456 existing server oversized 
 server/tests/unit/test_cloud_mobility_service.py 806 existing server oversized unit test
 server/tests/unit/test_cloud_runtime_ensure_running.py 872 existing server oversized unit test
 server/tests/unit/test_cloud_runtime_provision.py 1826 existing server oversized unit test
-server/tests/unit/test_cloud_workspace_service.py 1323 existing server oversized unit test
+server/tests/unit/test_cloud_workspace_service.py 1059 existing server oversized unit test

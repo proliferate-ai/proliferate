@@ -11,6 +11,7 @@ from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
+from proliferate.server.cloud.workspaces.lifecycle.api import router as lifecycle_router
 from proliferate.server.cloud.workspaces.models import (
     CreateCloudWorkspaceRequest,
     UpdateCloudWorkspaceBranchRequest,
@@ -20,15 +21,10 @@ from proliferate.server.cloud.workspaces.models import (
 )
 from proliferate.server.cloud.workspaces.remote_access.api import router as remote_access_router
 from proliferate.server.cloud.workspaces.service import (
-    archive_cloud_workspace,
     create_cloud_workspace,
-    delete_cloud_workspace,
     get_cloud_workspace_detail,
     list_cloud_workspaces_for_user,
-    purge_cloud_workspace,
-    restore_cloud_workspace,
     start_cloud_workspace,
-    stop_cloud_workspace,
     sync_cloud_workspace_branch,
     sync_cloud_workspace_display_name,
 )
@@ -94,6 +90,7 @@ async def create_cloud_workspace_endpoint(
 
 router.include_router(target_launch_router)
 router.include_router(remote_access_router)
+router.include_router(lifecycle_router)
 
 
 @router.get("/workspaces/{workspace_id}", response_model=WorkspaceDetail)
@@ -119,57 +116,6 @@ async def start_cloud_workspace_endpoint(
     except CloudApiError as error:
         raise_cloud_error(error)
     return payload
-
-
-@router.post("/workspaces/{workspace_id}/stop", response_model=WorkspaceDetail)
-async def stop_cloud_workspace_endpoint(
-    workspace_id: UUID,
-    user: User = Depends(current_product_user),
-    db: AsyncSession = Depends(get_async_session),
-) -> WorkspaceDetail:
-    try:
-        payload = await stop_cloud_workspace(db, user.id, workspace_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
-    return payload
-
-
-@router.post("/workspaces/{workspace_id}/archive", response_model=WorkspaceDetail)
-async def archive_cloud_workspace_endpoint(
-    workspace_id: UUID,
-    user: User = Depends(current_product_user),
-    db: AsyncSession = Depends(get_async_session),
-) -> WorkspaceDetail:
-    try:
-        return await archive_cloud_workspace(db, user.id, workspace_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
-
-
-@router.post("/workspaces/{workspace_id}/restore", response_model=WorkspaceDetail)
-async def restore_cloud_workspace_endpoint(
-    workspace_id: UUID,
-    user: User = Depends(current_product_user),
-    db: AsyncSession = Depends(get_async_session),
-) -> WorkspaceDetail:
-    try:
-        return await restore_cloud_workspace(db, user.id, workspace_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
-
-
-@router.post("/workspaces/{workspace_id}/purge")
-@router.delete("/workspaces/{workspace_id}/purge")
-async def purge_cloud_workspace_endpoint(
-    workspace_id: UUID,
-    user: User = Depends(current_product_user),
-    db: AsyncSession = Depends(get_async_session),
-) -> dict[str, bool]:
-    try:
-        await purge_cloud_workspace(db, user.id, workspace_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
-    return {"ok": True}
 
 
 @router.patch("/workspaces/{workspace_id}/branch", response_model=WorkspaceDetail)
@@ -208,16 +154,3 @@ async def update_cloud_workspace_display_name_endpoint(
     except CloudApiError as error:
         raise_cloud_error(error)
     return payload
-
-
-@router.delete("/workspaces/{workspace_id}")
-async def delete_cloud_workspace_endpoint(
-    workspace_id: UUID,
-    user: User = Depends(current_product_user),
-    db: AsyncSession = Depends(get_async_session),
-) -> dict[str, bool]:
-    try:
-        await delete_cloud_workspace(db, user.id, workspace_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
-    return {"ok": True}

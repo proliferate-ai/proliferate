@@ -50,7 +50,6 @@ from proliferate.integrations.mcp_oauth import (
     RegisteredOAuthClient,
     TokenResponse,
 )
-from proliferate.integrations.sandbox.base import ProviderSandboxState
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.repo_config import service as repo_config_service
 from proliferate.server.cloud.repos import service as repos_service
@@ -2077,20 +2076,6 @@ class TestCloudWorkspaces:
     ) -> None:
         scheduled: list[uuid.UUID] = []
 
-        class _FakeProvider:
-            async def get_sandbox_state(self, sandbox_id: str) -> ProviderSandboxState:
-                return ProviderSandboxState(
-                    external_sandbox_id=sandbox_id,
-                    state="paused",
-                    started_at=None,
-                    end_at=None,
-                    observed_at=datetime.now(UTC),
-                    metadata={},
-                )
-
-            async def resume_sandbox(self, _sandbox_id: str) -> None:
-                return None
-
         async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
             return GitHubRepoBranches(
                 default_branch="main",
@@ -2103,7 +2088,6 @@ class TestCloudWorkspaces:
             "schedule_workspace_provision",
             lambda workspace_id, **_kwargs: scheduled.append(workspace_id),
         )
-        monkeypatch.setattr(cloud_service, "get_sandbox_provider", lambda _kind: _FakeProvider())
 
         session = await _register_and_login(client, "cloud-start-reuse@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
@@ -2171,17 +2155,6 @@ class TestCloudWorkspaces:
     ) -> None:
         scheduled: list[uuid.UUID] = []
 
-        class _FakeProvider:
-            async def get_sandbox_state(self, sandbox_id: str) -> ProviderSandboxState:
-                return ProviderSandboxState(
-                    external_sandbox_id=sandbox_id,
-                    state="running",
-                    started_at=None,
-                    end_at=None,
-                    observed_at=datetime.now(UTC),
-                    metadata={},
-                )
-
         async def _repo_branches(*_args, **_kwargs) -> GitHubRepoBranches:
             return GitHubRepoBranches(
                 default_branch="main",
@@ -2194,7 +2167,6 @@ class TestCloudWorkspaces:
             "schedule_workspace_provision",
             lambda workspace_id, **_kwargs: scheduled.append(workspace_id),
         )
-        monkeypatch.setattr(cloud_service, "get_sandbox_provider", lambda _kind: _FakeProvider())
 
         session = await _register_and_login(client, "cloud-start-reprovision@example.com")
         headers = {"Authorization": f"Bearer {session['access_token']}"}
