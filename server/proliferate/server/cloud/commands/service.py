@@ -13,6 +13,7 @@ from proliferate.constants.cloud import (
     CloudTargetStatus,
 )
 from proliferate.db.session_ops import is_integrity_error
+from proliferate.db.store.cloud_sync import command_records
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.commands.client_state import (
@@ -71,7 +72,7 @@ async def enqueue_command(
     *,
     user: ActorIdentity,
     body: CreateCloudCommandRequest,
-) -> commands_store.CloudCommandSnapshot:
+) -> command_records.CloudCommandSnapshot:
     target = await targets_store.get_visible_target_by_id(
         db,
         target_id=body.target_id,
@@ -265,7 +266,7 @@ async def get_command_status(
     *,
     command_id: UUID,
     user_id: UUID,
-) -> commands_store.CloudCommandSnapshot:
+) -> command_records.CloudCommandSnapshot:
     command = await commands_store.get_command_by_id(db, command_id)
     if command is None:
         raise CloudApiError(

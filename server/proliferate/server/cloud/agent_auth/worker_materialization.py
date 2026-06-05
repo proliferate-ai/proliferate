@@ -20,6 +20,7 @@ from proliferate.db.store.cloud_agent_auth.records import (
     SandboxProfileAgentAuthTargetStateRecord,
     SandboxProfileRecord,
 )
+from proliferate.db.store.cloud_sync import command_records
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_control as worker_control_store
@@ -308,7 +309,7 @@ async def _require_agent_auth_refresh_command(
     command_id: UUID,
     revision: int,
     lease_id: str,
-) -> commands_store.CloudCommandSnapshot:
+) -> command_records.CloudCommandSnapshot:
     command = await commands_store.get_command_by_id(db, command_id)
     if (
         command is None
@@ -351,7 +352,7 @@ async def _require_agent_auth_target_state(
     *,
     profile: SandboxProfileRecord,
     auth: WorkerAuthContext,
-    command: commands_store.CloudCommandSnapshot,
+    command: command_records.CloudCommandSnapshot,
 ) -> SandboxProfileAgentAuthTargetStateRecord:
     state = await store.get_target_state(
         db,

@@ -16,7 +16,7 @@ from proliferate.constants.automations import (
 from proliferate.constants.cloud import CloudTargetKind, CloudTargetStatus
 from proliferate.db.store.automation_run_claim_values import AutomationRunClaimValue
 from proliferate.db.store.cloud_sync.targets import CloudTargetSnapshot
-from proliferate.db.store.cloud_sync.commands import CloudCommandSnapshot
+from proliferate.db.store.cloud_sync.command_records import CloudCommandSnapshot
 from proliferate.server.automations.worker.cloud_execution import pipeline
 from proliferate.server.automations.worker.cloud_execution.command_models import SendPromptPayload
 from proliferate.server.automations.worker.cloud_execution.commands import (

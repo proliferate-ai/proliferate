@@ -8,7 +8,8 @@ from datetime import timedelta
 from uuid import UUID
 
 from proliferate.db import engine as db_engine
-from proliferate.db.store.cloud_sync import commands as commands_store
+from proliferate.db.store.cloud_sync import command_leases as command_leases_store
+from proliferate.db.store.cloud_sync import command_records
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_control as worker_control_store
 from proliferate.db.store.cloud_sync import worker_exposures as worker_exposures_store
@@ -67,9 +68,9 @@ async def check_worker_control(
             db,
             target_id=auth.target_id,
         )
-        blocked_commands: list[commands_store.CloudCommandSnapshot] = []
+        blocked_commands: list[command_records.CloudCommandSnapshot] = []
         command = (
-            await commands_store.lease_next_command(
+            await command_leases_store.lease_next_command(
                 db,
                 target_id=auth.target_id,
                 worker_id=auth.worker_id,

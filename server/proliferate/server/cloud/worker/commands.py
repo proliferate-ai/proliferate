@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CloudCommandKind, CloudCommandStatus
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
+from proliferate.db.store.cloud_sync import command_leases as command_leases_store
+from proliferate.db.store.cloud_sync import command_records
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.commands.client_state import (
@@ -52,7 +54,7 @@ def _parse_json_dict(value: str | None) -> dict[str, object] | None:
 
 
 def command_envelope(
-    command: commands_store.CloudCommandSnapshot,
+    command: command_records.CloudCommandSnapshot,
 ) -> WorkerCommandEnvelope:
     payload = _parse_json_dict(command.payload_json) or {}
     return WorkerCommandEnvelope(
@@ -81,7 +83,7 @@ def _sandbox_profile_id_from_payload(payload_json: str) -> str | None:
 
 
 def _worker_delivery_payload(
-    command: commands_store.CloudCommandSnapshot,
+    command: command_records.CloudCommandSnapshot,
     payload: dict[str, object],
 ) -> dict[str, object]:
     if command.kind == CloudCommandKind.start_session.value:
@@ -173,7 +175,7 @@ async def prepare_worker_command_lease(
         db,
         target_id=auth.target_id,
     )
-    command = await commands_store.lease_next_command(
+    command = await command_leases_store.lease_next_command(
         db,
         target_id=auth.target_id,
         worker_id=auth.worker_id,
@@ -266,7 +268,7 @@ async def _record_agent_auth_state_from_command_result(
     db: AsyncSession,
     *,
     auth: WorkerAuthContext,
-    command: commands_store.CloudCommandSnapshot,
+    command: command_records.CloudCommandSnapshot,
     body: WorkerCommandResultRequest,
     status: str,
 ) -> None:
@@ -407,7 +409,7 @@ async def record_command_result(
 
 
 def _command_result_should_fail_pending_prompt(
-    command: commands_store.CloudCommandSnapshot,
+    command: command_records.CloudCommandSnapshot,
 ) -> bool:
     return command.kind == CloudCommandKind.send_prompt.value and command.status in {
         CloudCommandStatus.rejected.value,

@@ -18,6 +18,7 @@ from proliferate.db import session_ops as db_session
 from proliferate.db.store import cloud_repo_config as repo_store
 from proliferate.db.store import cloud_sandbox_profiles as profile_store
 from proliferate.db.store import cloud_workspaces
+from proliferate.db.store.cloud_sync import command_records
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as target_store
@@ -257,7 +258,7 @@ async def enqueue_send_prompt(
     prompt_id: str,
     slack_user_id: str | None,
     idempotency_key: str,
-) -> commands_store.CloudCommandSnapshot:
+) -> command_records.CloudCommandSnapshot:
     return await enqueue_command(
         db,
         organization_id=organization_id,
@@ -322,7 +323,7 @@ async def enqueue_command(
     idempotency_key: str,
     slack_user_id: str | None,
     workspace_id: str | None = None,
-) -> commands_store.CloudCommandSnapshot:
+) -> command_records.CloudCommandSnapshot:
     target = await target_store.get_target_by_id(db, target_id)
     if target is None:
         raise CloudApiError("cloud_target_not_found", "Cloud target not found.", status_code=404)

@@ -24,6 +24,7 @@ from proliferate.db.store.cloud_agent_auth.records import (
     SandboxProfileAgentAuthTargetStateRecord,
     SandboxProfileRecord,
 )
+from proliferate.db.store.cloud_sync import command_records
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.server.cloud.agent_auth.errors import AgentAuthError
 from proliferate.server.cloud.agent_auth.worker_cleanup import (
@@ -59,7 +60,7 @@ _TERMINAL_AGENT_AUTH_REFRESH_COMMAND_STATUSES = frozenset(
 
 async def _enqueue_agent_auth_refresh_wake(
     db: AsyncSession,
-    command: commands_store.CloudCommandSnapshot,
+    command: command_records.CloudCommandSnapshot,
 ) -> None:
     if command.status in _TERMINAL_AGENT_AUTH_REFRESH_COMMAND_STATUSES:
         return
@@ -242,7 +243,7 @@ async def _queue_agent_auth_refresh_command(
     reason: str,
     force_restart: bool,
     existing_state: SandboxProfileAgentAuthTargetStateRecord | None = None,
-) -> commands_store.CloudCommandSnapshot:
+) -> command_records.CloudCommandSnapshot:
     idempotency_scope = f"target:{target_id}:agent-auth-config:{profile.id}"
     base_idempotency_key = (
         f"agent-auth-config:{target_id}:{profile.id}:{profile.agent_auth_revision}:"
@@ -349,7 +350,7 @@ def _agent_auth_target_state_is_current(
 
 
 def _agent_auth_refresh_command_requires_retry(
-    command: commands_store.CloudCommandSnapshot,
+    command: command_records.CloudCommandSnapshot,
     *,
     existing_state: SandboxProfileAgentAuthTargetStateRecord | None,
     profile: SandboxProfileRecord,

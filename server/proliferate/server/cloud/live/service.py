@@ -12,7 +12,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db import session_ops as db_session
-from proliferate.db.store.cloud_sync import commands as commands_store
+from proliferate.db.store.cloud_sync import command_records
 from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import pending_interactions as pending_interactions_store
 from proliferate.db.store.cloud_sync import projections as projections_store
@@ -117,7 +117,7 @@ async def publish_target_patch_after_commit(
 
 async def publish_command_status_after_commit(
     db: AsyncSession,
-    command: commands_store.CloudCommandSnapshot,
+    command: command_records.CloudCommandSnapshot,
 ) -> None:
     await _publish_live_after_commit(db, lambda: publish_command_status(command))
 
@@ -146,7 +146,7 @@ async def publish_target_patch(target: targets_store.CloudTargetSnapshot) -> Non
     )
 
 
-async def publish_command_status(command: commands_store.CloudCommandSnapshot) -> None:
+async def publish_command_status(command: command_records.CloudCommandSnapshot) -> None:
     data = CloudCommandStatusEnvelope(
         command=command_response_payload(command),
     ).model_dump(by_alias=True)
