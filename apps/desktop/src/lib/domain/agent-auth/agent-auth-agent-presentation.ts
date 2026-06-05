@@ -1,4 +1,5 @@
 import type { AgentAuthAgentKind } from "@proliferate/cloud-sdk";
+import { isSettingsAdminRole } from "@/lib/domain/settings/admin-roles";
 
 export const AGENT_AUTH_AGENT_ORDER: AgentAuthAgentKind[] = [
   "claude",
@@ -8,7 +9,7 @@ export const AGENT_AUTH_AGENT_ORDER: AgentAuthAgentKind[] = [
 ];
 
 export function isAgentAuthAdminRole(role: string | null | undefined): boolean {
-  return role === "owner" || role === "admin";
+  return isSettingsAdminRole(role);
 }
 
 export function agentAuthAgentLabel(agentKind: string): string {
