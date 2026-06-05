@@ -13,6 +13,10 @@ permissions, happy path, verification, and failure modes for one operation.
 | [billing-pro-promo-codes.md](billing-pro-promo-codes.md) | Grant a user free or discounted Pro access via a Stripe promotional code. |
 | [stripe-webhook-failure.md](stripe-webhook-failure.md) | Triage and recover Stripe webhook delivery or billing mirror failures. |
 | [e2b-template-rollback.md](e2b-template-rollback.md) | Roll an E2B cloud runtime template rolling tag back to a known-good immutable build. |
+| [cloud-provisioning-failure.md](cloud-provisioning-failure.md) | Triage managed cloud sandbox provisioning failures before worker enrollment. |
+| [worker-enrollment-failure.md](worker-enrollment-failure.md) | Triage worker enrollment, heartbeat, and control-loop delivery failures. |
+| [managed-target-replacement.md](managed-target-replacement.md) | Contain unrecoverable managed targets until the operator-safe replacement flow ships. |
+| [operator-security-posture.md](operator-security-posture.md) | Baseline for break-glass access, secret rotation, support bundle handling, and audit closeout. |
 
 ## Adding A Runbook
 

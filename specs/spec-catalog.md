@@ -333,8 +333,13 @@ Current runbooks:
 - `billing-pro-promo-codes.md`
 - `stripe-webhook-failure.md`
 - `e2b-template-rollback.md`
+- `cloud-provisioning-failure.md`
+- `worker-enrollment-failure.md`
+- `managed-target-replacement.md`
+- `operator-security-posture.md`
 
-**⚠️ Gap:** Missing runbooks for cloud provisioning failure, worker enrollment failure, and managed target replacement.
+**⚠️ Gap:** `managed-target-replacement.md` is an operational placeholder
+until the operator-safe replacement flow and audit trail are implemented.
 
 ---
 
