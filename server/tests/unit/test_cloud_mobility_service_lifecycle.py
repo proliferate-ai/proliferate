@@ -12,6 +12,7 @@ from proliferate.db.store.cloud_mobility import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.mobility import service as mobility_service
+from proliferate.server.cloud.mobility.preflight import service as preflight_service
 
 REQUESTED_SHA = "a" * 40
 
@@ -100,23 +101,23 @@ def _stub_common_preflight_dependencies(
         return None
 
     monkeypatch.setattr(
-        mobility_service,
+        preflight_service,
         "expire_stale_cloud_workspace_handoffs_for_user",
         _noop_expire,
     )
-    monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
+    monkeypatch.setattr(preflight_service, "get_cloud_workspace_mobility_detail", _get_detail)
     monkeypatch.setattr(
-        mobility_service,
+        preflight_service,
         "load_active_user_handoff_op_for_user",
         _load_active_user_handoff,
     )
     monkeypatch.setattr(
-        mobility_service,
+        preflight_service,
         "load_user_with_oauth_accounts_by_id",
         _load_user,
     )
-    monkeypatch.setattr(mobility_service, "get_repo_branches_for_user", _repo_branches)
-    monkeypatch.setattr(mobility_service, "load_cloud_repo_config_for_user", _load_repo_config)
+    monkeypatch.setattr(preflight_service, "get_repo_branches_for_user", _repo_branches)
+    monkeypatch.setattr(preflight_service, "load_cloud_repo_config_for_user", _load_repo_config)
 
 
 @pytest.mark.asyncio
@@ -132,7 +133,7 @@ async def test_preflight_blocks_another_active_handoff_for_same_user(
         active_handoff=other_handoff,
     )
 
-    response = await mobility_service.preflight_cloud_workspace_handoff(
+    response = await preflight_service.preflight_cloud_workspace_handoff(
         object(),
         user_id=user_id,
         mobility_workspace_id=workspace.id,
@@ -163,7 +164,7 @@ async def test_preflight_blocks_owner_direction_mismatch(
     workspace = _workspace(owner=owner)
     _stub_common_preflight_dependencies(monkeypatch, workspace=workspace)
 
-    response = await mobility_service.preflight_cloud_workspace_handoff(
+    response = await preflight_service.preflight_cloud_workspace_handoff(
         object(),
         user_id=uuid4(),
         mobility_workspace_id=workspace.id,
@@ -184,7 +185,7 @@ async def test_preflight_blocks_cloud_lost_workspace(
     workspace = _workspace(cloud_lost_at=datetime.now(UTC))
     _stub_common_preflight_dependencies(monkeypatch, workspace=workspace)
 
-    response = await mobility_service.preflight_cloud_workspace_handoff(
+    response = await preflight_service.preflight_cloud_workspace_handoff(
         object(),
         user_id=uuid4(),
         mobility_workspace_id=workspace.id,
@@ -246,7 +247,7 @@ async def test_start_local_to_cloud_creates_handoff_before_provisioning(
         _checkpoint_expire,
     )
     monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
-    monkeypatch.setattr(mobility_service, "preflight_cloud_workspace_handoff", _preflight)
+    monkeypatch.setattr(preflight_service, "preflight_cloud_workspace_handoff", _preflight)
     monkeypatch.setattr(
         mobility_service.mobility_tx,
         "create_cloud_workspace_handoff_op_checkpoint_tx",
@@ -316,7 +317,7 @@ async def test_start_cloud_to_local_creates_handoff_without_cloud_provisioning(
         _noop_expire,
     )
     monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
-    monkeypatch.setattr(mobility_service, "preflight_cloud_workspace_handoff", _preflight)
+    monkeypatch.setattr(preflight_service, "preflight_cloud_workspace_handoff", _preflight)
     monkeypatch.setattr(
         mobility_service.mobility_tx,
         "create_cloud_workspace_handoff_op_checkpoint_tx",
