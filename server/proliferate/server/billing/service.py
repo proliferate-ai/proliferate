@@ -67,20 +67,19 @@ from proliferate.db.models.billing import (
     BillingSubscription,
     UsageSegment,
 )
+from proliferate.db.store import billing_subscriptions
 from proliferate.db.store import organization_invitations as invitation_store
 from proliferate.db.store import users as user_store
 from proliferate.db.store.billing import (
     BillingSnapshotState,
     claim_pending_seat_adjustments,
     count_active_seats_for_billing_subject_id,
-    load_billing_subscription_by_id,
     mark_seat_adjustment_failed,
     mark_seat_adjustment_grant_issued,
     mark_seat_adjustment_stripe_confirmed,
     maybe_create_org_seat_adjustment,
     prepare_initial_org_seat_reconcile,
     sum_meter_quantity_cents_for_subject,
-    upsert_billing_subscription,
 )
 from proliferate.db.store.billing_accounting import (
     BillingAccountingResult,
@@ -313,7 +312,7 @@ async def reconcile_initial_org_subscription_seats(
         )
     if adjustment is None:
         async with db_session.open_async_session() as db:
-            reloaded = await load_billing_subscription_by_id(db, record.id)
+            reloaded = await billing_subscriptions.load_billing_subscription_by_id(db, record.id)
         return reloaded or record
     try:
         await stripe_billing.update_subscription_item_quantity(
@@ -349,7 +348,7 @@ async def reconcile_initial_org_subscription_seats(
             )
         raise
     async with db_session.open_async_session() as db:
-        reloaded = await load_billing_subscription_by_id(db, record.id)
+        reloaded = await billing_subscriptions.load_billing_subscription_by_id(db, record.id)
     return reloaded or record
 
 
@@ -1505,7 +1504,7 @@ async def _upsert_team_subscription_from_stripe(
         monthly_item_id=details.monthly_item_id,
         metered_item_id=details.metered_item_id,
     )
-    return await upsert_billing_subscription(
+    return await billing_subscriptions.upsert_billing_subscription(
         db,
         billing_subject_id=billing_subject_id,
         stripe_subscription_id=subscription_id,
