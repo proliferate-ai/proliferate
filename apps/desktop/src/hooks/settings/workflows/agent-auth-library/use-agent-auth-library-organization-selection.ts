@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useOrganizations } from "@/hooks/access/cloud/organizations/use-organizations";
-import { isAgentAuthAdminRole } from "@/lib/domain/agent-auth/agent-auth-agent-presentation";
+import { isSettingsAdminRole } from "@/lib/domain/settings/admin-roles";
 
 export type AgentAuthLibraryOrganizationOption =
   NonNullable<ReturnType<typeof useOrganizations>["data"]>["organizations"][number];
@@ -56,5 +56,5 @@ export function useAgentAuthLibraryOrganizationSelection(initialOrganizationId: 
 }
 
 function isAdminOrganization(organization: AgentAuthLibraryOrganizationOption): boolean {
-  return isAgentAuthAdminRole(organization.membership?.role);
+  return isSettingsAdminRole(organization.membership?.role);
 }
