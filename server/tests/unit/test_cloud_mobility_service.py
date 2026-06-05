@@ -21,6 +21,7 @@ from proliferate.server.cloud.mobility.domain.lifecycle import (
     HANDOFF_PHASE_HANDOFF_FAILED,
     LIFECYCLE_HANDOFF_FAILED,
 )
+from proliferate.server.cloud.mobility.preflight import service as preflight_service
 
 REQUESTED_SHA = "a" * 40
 GITHUB_SHA = "b" * 40
@@ -108,6 +109,39 @@ def _cleanup_item(
 
 async def _noop_expire(*_args, **_kwargs):
     return None
+
+
+def _patch_preflight_dependencies(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    get_detail,
+    load_active_user_handoff,
+    load_user,
+    repo_branches,
+    load_repo_config,
+) -> None:
+    monkeypatch.setattr(
+        preflight_service,
+        "expire_stale_cloud_workspace_handoffs_for_user",
+        _noop_expire,
+    )
+    monkeypatch.setattr(
+        preflight_service,
+        "get_cloud_workspace_mobility_detail",
+        get_detail,
+    )
+    monkeypatch.setattr(
+        preflight_service,
+        "load_active_user_handoff_op_for_user",
+        load_active_user_handoff,
+    )
+    monkeypatch.setattr(
+        preflight_service,
+        "load_user_with_oauth_accounts_by_id",
+        load_user,
+    )
+    monkeypatch.setattr(preflight_service, "get_repo_branches_for_user", repo_branches)
+    monkeypatch.setattr(preflight_service, "load_cloud_repo_config_for_user", load_repo_config)
 
 
 @pytest.mark.asyncio
@@ -221,26 +255,16 @@ async def test_preflight_blocks_when_workspace_handoff_is_already_active(
     async def _load_repo_config(*_args, **_kwargs):
         return None
 
-    monkeypatch.setattr(
-        mobility_service,
-        "expire_stale_cloud_workspace_handoffs_for_user",
-        _noop_expire,
+    _patch_preflight_dependencies(
+        monkeypatch,
+        get_detail=_get_detail,
+        load_active_user_handoff=_load_active_user_handoff,
+        load_user=_load_user,
+        repo_branches=_repo_branches,
+        load_repo_config=_load_repo_config,
     )
-    monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
-    monkeypatch.setattr(
-        mobility_service,
-        "load_active_user_handoff_op_for_user",
-        _load_active_user_handoff,
-    )
-    monkeypatch.setattr(
-        mobility_service,
-        "load_user_with_oauth_accounts_by_id",
-        _load_user,
-    )
-    monkeypatch.setattr(mobility_service, "get_repo_branches_for_user", _repo_branches)
-    monkeypatch.setattr(mobility_service, "load_cloud_repo_config_for_user", _load_repo_config)
 
-    response = await mobility_service.preflight_cloud_workspace_handoff(
+    response = await preflight_service.preflight_cloud_workspace_handoff(
         object(),
         user_id=uuid4(),
         mobility_workspace_id=workspace.id,
@@ -279,26 +303,16 @@ async def test_preflight_blocks_when_github_repo_access_is_missing(
     async def _load_repo_config(*_args, **_kwargs):
         return None
 
-    monkeypatch.setattr(
-        mobility_service,
-        "expire_stale_cloud_workspace_handoffs_for_user",
-        _noop_expire,
+    _patch_preflight_dependencies(
+        monkeypatch,
+        get_detail=_get_detail,
+        load_active_user_handoff=_load_active_user_handoff,
+        load_user=_load_user,
+        repo_branches=_repo_branches,
+        load_repo_config=_load_repo_config,
     )
-    monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
-    monkeypatch.setattr(
-        mobility_service,
-        "load_active_user_handoff_op_for_user",
-        _load_active_user_handoff,
-    )
-    monkeypatch.setattr(
-        mobility_service,
-        "load_user_with_oauth_accounts_by_id",
-        _load_user,
-    )
-    monkeypatch.setattr(mobility_service, "get_repo_branches_for_user", _repo_branches)
-    monkeypatch.setattr(mobility_service, "load_cloud_repo_config_for_user", _load_repo_config)
 
-    response = await mobility_service.preflight_cloud_workspace_handoff(
+    response = await preflight_service.preflight_cloud_workspace_handoff(
         object(),
         user_id=uuid4(),
         mobility_workspace_id=workspace.id,
@@ -339,26 +353,16 @@ async def test_preflight_blocks_when_branch_is_not_published(
     async def _load_repo_config(*_args, **_kwargs):
         return None
 
-    monkeypatch.setattr(
-        mobility_service,
-        "expire_stale_cloud_workspace_handoffs_for_user",
-        _noop_expire,
+    _patch_preflight_dependencies(
+        monkeypatch,
+        get_detail=_get_detail,
+        load_active_user_handoff=_load_active_user_handoff,
+        load_user=_load_user,
+        repo_branches=_repo_branches,
+        load_repo_config=_load_repo_config,
     )
-    monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
-    monkeypatch.setattr(
-        mobility_service,
-        "load_active_user_handoff_op_for_user",
-        _load_active_user_handoff,
-    )
-    monkeypatch.setattr(
-        mobility_service,
-        "load_user_with_oauth_accounts_by_id",
-        _load_user,
-    )
-    monkeypatch.setattr(mobility_service, "get_repo_branches_for_user", _repo_branches)
-    monkeypatch.setattr(mobility_service, "load_cloud_repo_config_for_user", _load_repo_config)
 
-    response = await mobility_service.preflight_cloud_workspace_handoff(
+    response = await preflight_service.preflight_cloud_workspace_handoff(
         object(),
         user_id=uuid4(),
         mobility_workspace_id=workspace.id,
@@ -397,26 +401,16 @@ async def test_preflight_blocks_when_github_branch_head_is_behind_requested_comm
     async def _load_repo_config(*_args, **_kwargs):
         return None
 
-    monkeypatch.setattr(
-        mobility_service,
-        "expire_stale_cloud_workspace_handoffs_for_user",
-        _noop_expire,
+    _patch_preflight_dependencies(
+        monkeypatch,
+        get_detail=_get_detail,
+        load_active_user_handoff=_load_active_user_handoff,
+        load_user=_load_user,
+        repo_branches=_repo_branches,
+        load_repo_config=_load_repo_config,
     )
-    monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
-    monkeypatch.setattr(
-        mobility_service,
-        "load_active_user_handoff_op_for_user",
-        _load_active_user_handoff,
-    )
-    monkeypatch.setattr(
-        mobility_service,
-        "load_user_with_oauth_accounts_by_id",
-        _load_user,
-    )
-    monkeypatch.setattr(mobility_service, "get_repo_branches_for_user", _repo_branches)
-    monkeypatch.setattr(mobility_service, "load_cloud_repo_config_for_user", _load_repo_config)
 
-    response = await mobility_service.preflight_cloud_workspace_handoff(
+    response = await preflight_service.preflight_cloud_workspace_handoff(
         object(),
         user_id=uuid4(),
         mobility_workspace_id=workspace.id,
@@ -456,7 +450,7 @@ async def test_start_handoff_maps_existing_workspace_conflict_to_409(
 
     monkeypatch.setattr(mobility_service.mobility_tx, "expire_stale_handoffs_tx", _noop_expire)
     monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
-    monkeypatch.setattr(mobility_service, "preflight_cloud_workspace_handoff", _preflight)
+    monkeypatch.setattr(preflight_service, "preflight_cloud_workspace_handoff", _preflight)
     monkeypatch.setattr(
         mobility_service.mobility_tx,
         "create_cloud_workspace_handoff_op_checkpoint_tx",
@@ -515,7 +509,7 @@ async def test_start_local_to_cloud_marks_handoff_failed_when_cloud_setup_fails(
 
     monkeypatch.setattr(mobility_service.mobility_tx, "expire_stale_handoffs_tx", _noop_expire)
     monkeypatch.setattr(mobility_service, "get_cloud_workspace_mobility_detail", _get_detail)
-    monkeypatch.setattr(mobility_service, "preflight_cloud_workspace_handoff", _preflight)
+    monkeypatch.setattr(preflight_service, "preflight_cloud_workspace_handoff", _preflight)
     monkeypatch.setattr(
         mobility_service.mobility_tx,
         "create_cloud_workspace_handoff_op_checkpoint_tx",
