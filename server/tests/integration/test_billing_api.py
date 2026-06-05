@@ -371,7 +371,7 @@ class TestBillingApi:
             return stripe_billing.StripeUrlResponse(url="https://portal.test/active")
 
         monkeypatch.setattr(
-            "proliferate.server.billing.service.validate_cloud_subscription_price_configuration",
+            "proliferate.server.billing.checkout.validate_cloud_subscription_price_configuration",
             fake_validate_cloud_subscription_price_configuration,
         )
         monkeypatch.setattr(
@@ -839,7 +839,7 @@ class TestBillingApi:
             return stripe_billing.StripeUrlResponse(url="https://checkout.test/org")
 
         monkeypatch.setattr(
-            "proliferate.server.billing.service.validate_pro_subscription_price_configuration",
+            "proliferate.server.billing.checkout.validate_pro_subscription_price_configuration",
             fake_validate_pro_subscription_price_configuration,
         )
         monkeypatch.setattr(stripe_billing, "create_customer", fake_create_customer)
