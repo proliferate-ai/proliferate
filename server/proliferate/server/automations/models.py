@@ -9,7 +9,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from proliferate.db.store.automation_run_claim_values import AutomationRunClaimValue
-from proliferate.db.store.automations import AutomationRunValue, AutomationValue
+from proliferate.db.store.automation_runs import AutomationRunValue
+from proliferate.db.store.automations import AutomationValue
 
 OwnerScope = Literal["personal", "organization"]
 TargetMode = Literal["local", "personal_cloud", "shared_cloud"]

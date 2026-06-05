@@ -11,7 +11,7 @@ from proliferate.db.models.auth import User
 from proliferate.db.models.automations import Automation
 from proliferate.db.models.cloud.agent_run_config import CloudAgentRunConfig
 from proliferate.db.models.cloud.repo_config import CloudRepoConfig
-from proliferate.db.store.automations import create_manual_run_for_user
+from proliferate.db.store.automation_runs import create_manual_run_for_user
 
 
 def _agent_snapshot(config: CloudAgentRunConfig) -> dict[str, object]:

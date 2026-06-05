@@ -17,7 +17,7 @@ from proliferate.constants.billing import (
 )
 from proliferate.constants.cloud import CloudTargetKind, CloudTargetStatus, CloudWorkspaceStatus
 from proliferate.db import session_ops as db_session
-from proliferate.db.store.automations import (
+from proliferate.db.store.automation_runs import (
     AutomationRunValue,
     list_latest_runs_by_cloud_workspace_ids_for_user,
 )

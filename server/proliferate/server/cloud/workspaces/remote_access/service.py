@@ -15,7 +15,7 @@ from proliferate.constants.cloud import (
 )
 from proliferate.db import session_ops as db_session
 from proliferate.db.store import billing as billing_store
-from proliferate.db.store.automations import list_latest_runs_by_cloud_workspace_ids_for_user
+from proliferate.db.store.automation_runs import list_latest_runs_by_cloud_workspace_ids_for_user
 from proliferate.db.store.cloud_sync import backfill as backfill_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as targets_store

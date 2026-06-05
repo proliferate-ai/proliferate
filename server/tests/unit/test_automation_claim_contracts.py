@@ -28,7 +28,7 @@ from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.server.automations.domain.claim_lifecycle import (
     LocalAutomationRepoIdentity,
 )
-from proliferate.db.store.automations import create_manual_run_for_user
+from proliferate.db.store.automation_runs import create_manual_run_for_user
 from tests.unit.automation_claim_store_helpers import (
     claim_cloud_automation_runs,
     claim_local_automation_runs,
