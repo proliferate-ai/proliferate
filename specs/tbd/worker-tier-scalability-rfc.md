@@ -1,7 +1,7 @@
 # RFC: Worker Tier Scalability — Broker-Backed Job System
 
-Status: draft for team debate. Not a behavior change. Forward-looking plan;
-lives in `specs/tbd/` until ratified, then becomes a guide/board.
+Status: draft background and rationale. The executable first-slice decisions
+are ratified in `worker-tier-durable-jobs-ratification.md`.
 
 Owner: TBD. Drafted from the worker guide
 (`specs/codebase/structures/server/guides/workers.md`), the two worker audits,
@@ -123,7 +123,7 @@ In Celery there is one unit — the task. Only the **trigger** differs:
   telemetry sends. A scheduler and a reconciler are *both just Beat-fired
   periodic tasks* — not bespoke `while True` loops.
 - **On-demand tasks** are fired by the **outbox relay** when work is created:
-  execute a run, wake a slot, send a notification.
+  execute a run, wake a target runtime, send a notification.
 
 So the four archetypes collapse in implementation terms: *scheduler* and
 *reconciler* are periodic tasks; *executor* is an on-demand task; the
@@ -132,7 +132,7 @@ So the four archetypes collapse in implementation terms: *scheduler* and
 ### Code Structure
 
 ```text
-proliferate/background/
+server/proliferate/background/
   celery_app.py        # the single Celery() app
   config.py            # broker, durability chain, task_routes, queues
   beat_schedule.py     # periodic triggers (scheduler tick, reconciler passes, telemetry)
@@ -140,7 +140,7 @@ proliferate/background/
   tasks/
     automations/tasks.py   # schedule_due_runs (Beat) + execute_run (enqueued)
     billing/tasks.py       # reconcile_pass (Beat)
-    cloud_runtime/tasks.py # wake_slot (enqueued) + setup_reconcile_pass (Beat)
+    cloud_runtime/tasks.py # wake_target (enqueued) + setup_reconcile_pass (Beat)
 
 proliferate/server/<domain>/    # UNCHANGED: service.py + domain/ own all logic
 ```
@@ -245,27 +245,40 @@ front rather than discovering it:
 
 ## 6. Phased Plan
 
-Each phase is behavior-preserving and independently shippable. Phases 2+ depend
-on the DB-threading prerequisite.
+The ratified first implementation order is in
+`worker-tier-durable-jobs-ratification.md`. Each phase below is
+behavior-preserving and independently shippable. Broker-delivered domain work
+that needs state/enqueue atomicity depends on explicit transaction ownership for
+that path.
 
-- **Phase 0 — Decisions + harness.** Ratify this RFC. Capture current job
-  volumes and latency requirements. Stand up the failure-injection verification
-  harness (Section 7) *before* code.
-- **Phase 1 — Dedicated worker processes (no broker; do now).** Extract every
-  in-process loop out of the API server into dedicated processes with a
-  `--role` split (mirror `automations/worker/main.py`). Pure win: removes
-  API-latency coupling and enables independent scaling. No dependency on DB
-  threading.
-- **Phase 2 — Outbox + broker for ONE path (after Swarm 2/3 for that path).**
-  Introduce RabbitMQ, Celery, the outbox table + relay, and idempotent
-  consumers for a single high-volume workload (automation execution is the
-  candidate — it already has claims). Keep its reconciler as the backstop.
-  Prove consistency + throughput end to end.
-- **Phase 3 — Migrate remaining queue-shaped workloads.** Move enqueue→execute
-  flows onto the broker. Leave reconcile-shaped flows as reconcilers.
-- **Phase 4 — Enterprise hardening.** Per-workload queues (isolation),
-  priorities, rate limits (protect downstream vendors and Postgres),
-  `redbeat`/leader-elected scheduling, Flower + Sentry observability.
+- **Phase 0 — Decisions + harness.** Ratify this RFC through the companion
+  ratification doc. Capture current job volumes and latency requirements. Stand
+  up the failure-injection verification harness (Section 7) before real work
+  moves.
+- **Phase 1 — Celery/RabbitMQ/redbeat skeleton.** Add the
+  `server/proliferate/background/**` package, configuration, queue routing,
+  local/dev documentation, and a no-op task. This phase must not move business
+  work.
+- **Phase 2 — Transactional outbox foundation.** Add the outbox table, store
+  helpers, relay shell, idempotent publication semantics, and crash/duplicate
+  tests. The relay may publish only no-op or test tasks until a real domain
+  path is ready.
+- **Phase 3 — One low-risk direct enqueue.** Move a loose-consistency
+  notification or Customer.io lifecycle side effect to prove worker deployment
+  without pretending it provides state/enqueue atomicity.
+- **Phase 4 — One correctness-sensitive outbox path.** Move one fire-and-forget
+  path, such as runtime wake or workspace provisioning, behind the outbox after
+  that path has explicit transaction ownership. If the task mutates
+  worker-visible state, land distributed worker-control pub/sub first or accept
+  timeout-only wakes explicitly.
+- **Phase 5 — Periodic work to Beat.** Move FastAPI-lifespan reconcilers and
+  telemetry to Beat-fired periodic tasks. Do not lift them to bespoke loop
+  processes by default.
+- **Phase 6 — Automations execution.** Move cloud automation execution to one
+  idempotent task per run. Keep the scheduler poll and local executor API
+  separate.
+- **Phase 7 — Enterprise hardening.** Per-workload queues, priorities, rate
+  limits, Flower/Sentry observability, and measured queue/fleet split changes.
 
 ## 7. Verification (the part agents do NOT make cheap)
 
@@ -295,14 +308,27 @@ Plus the standing server checks: `scripts/check_server_boundaries.py`,
 - **Non-goal:** changing accounting/billing, command fencing, or runtime
   lifecycle semantics during the move.
 
-## 9. Open Decisions For The Team
+## 9. Decisions Ratified For The First Slice
 
-1. Confirm RabbitMQ (broker) + Redis (`redbeat`/locks) + Celery, or weigh
-   `arq` (async-native, Redis) for lower integration friction at the cost of a
-   smaller ecosystem.
-2. First workload for Phase 2 (proposed: automation execution).
-3. Scheduling: `redbeat` vs a leader-elected custom scheduler.
-4. Result backend: needed at all, or is Postgres-as-outcome sufficient?
-5. Sequencing with the active hygiene swarms — does the worker migration get
+See `worker-tier-durable-jobs-ratification.md` for the binding first-slice
+plan. In short:
+
+- RabbitMQ is the Celery broker.
+- Redis is ancillary for redbeat, locks, rate limits, and metrics.
+- Redbeat is the initial scheduler-HA choice.
+- No Redis result backend by default.
+- Celery tasks are prefork sync shells that call the existing async service
+  layer with `asyncio.run(...)`.
+- Outbox-backed domain work waits for caller-owned transaction boundaries.
+- Do not add temporary dedicated-loop processes unless there is an emergency
+  production brake with a rollback plan.
+
+## 10. Open Decisions For Later Slices
+
+1. First correctness-sensitive workload after the skeleton/outbox slices
+   (proposed: runtime wake).
+2. When, if ever, automations should graduate from one task per run to a Celery
+   chain.
+3. Sequencing with the active hygiene swarms — does the worker migration get
    its own swarm after Swarm 2/3, or fold into Swarm 7 (workspaces/commands/
    worker control)?
