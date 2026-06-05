@@ -24,8 +24,9 @@ the area docs under `specs/codebase/structures/**`.
 - [qa/README.md](qa/README.md)
   - release QA process and per-surface verification checklist
 - [runbooks/README.md](runbooks/README.md)
-  - specific, repeatable operational runbooks (billing promo codes, and future
-    cloud/worker/sandbox operational procedures)
+  - specific, repeatable operational runbooks (billing promo codes, Stripe
+    webhook failures, E2B template rollback, and future cloud/worker/sandbox
+    operational procedures)
 - [reference/README.md](reference/README.md)
   - canonical environment variable inventory, secrets matrix, and workspace
     command environment reference
