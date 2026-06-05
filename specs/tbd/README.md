@@ -12,7 +12,6 @@ They are not operating law until they are promoted into `specs/codebase/**` or
 | --- | --- |
 | [anyharness-structure-alignment-swarms.md](anyharness-structure-alignment-swarms.md) | Planning notes for AnyHarness structure-alignment agent work. |
 | [cloud-worker-control-loop.md](cloud-worker-control-loop.md) | Cloud worker control-loop load-reduction planning. |
-| [code-migration-plans/post-529-migration-roadmap.md](code-migration-plans/post-529-migration-roadmap.md) | Implementation roadmap for the distinct migration tracks after PR 529 merges. |
 | [frontend-structure-alignment-migration.md](frontend-structure-alignment-migration.md) | Frontend structure-alignment notes. |
 | [security.md](security.md) | Draft security notes. |
 | [structure-alignment-coordinator-model.md](structure-alignment-coordinator-model.md) | Coordinator model for structure-alignment planning. |
