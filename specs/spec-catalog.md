@@ -54,11 +54,11 @@ Guides: `system-architecture`, `crates`, `api`, `app`, `domains`, `live-runtime`
 ### Proliferate Worker
 **`specs/codebase/structures/proliferate-worker/README.md`** — `anyharness/crates/proliferate-worker/**`.
 
-Target-side bridge: `Cloud → Worker → AnyHarness` (command downlink) and `AnyHarness → Worker → Cloud` (event uplink).
+Target-side bridge, collapsed/ephemeral identity (one worker = one sandbox = one Target, no slots/fencing): two long-polls — `control` down (`Cloud → Worker → AnyHarness`: commands + per-domain reconcile incl. revoked-jti) and `tail` up (`AnyHarness → Worker → Cloud`: events) — plus a heartbeat carrying the self-update check.
 
-Folders: `command_downlink/`, `event_uplink/`, `target_status/`, `target/` (materialization/inventory/updates), `clients/` (raw HTTP only), `store/` (SQLite cursors/mappings), `identity/` (enrollment/credentials).
+Folders: `control/` (`commands/` + `reconcile/`), `tail/`, `lifecycle/` (heartbeat + self-update mailbox), `inventory/` (startup capabilities), `materialization/` (target-local effects), `cloud_client/` + `anyharness_client/` (raw HTTP only), `store/` (SQLite: applied-revisions/up-cursor), `identity/` (enrollment/credentials). Consolidated narrative in `architecture.md`.
 
-Guides: `runtime`, `command-downlink`, `event-uplink`, `target-status`, `target`, `clients`, `store`, `identity`, `root-support`.
+Guides: `runtime`, `identity`, `control`, `tail`, `lifecycle`, `inventory`, `materialization`, `clients`, `store`, `root-support`.
 
 ### Proliferate Supervisor
 **`specs/codebase/structures/proliferate-supervisor/README.md`** — `anyharness/crates/proliferate-supervisor/**`.
