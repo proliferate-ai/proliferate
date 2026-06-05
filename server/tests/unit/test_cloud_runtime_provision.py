@@ -23,6 +23,7 @@ from proliferate.server.cloud.runtime import bundle as runtime_bundle
 from proliferate.server.cloud.runtime import provision as runtime_provision
 from proliferate.server.cloud.runtime import sandbox_exec as runtime_sandbox_exec
 from proliferate.server.cloud.runtime.provisioning.data_key import generate_anyharness_data_key
+from proliferate.server.cloud.runtime.provisioning import launch as runtime_launch
 from proliferate.server.cloud.runtime.models import CloudProvisionInput
 from proliferate.utils.crypto import encrypt_json
 
@@ -909,10 +910,10 @@ class TestLaunchAndConnectRuntime:
 
         monkeypatch.setattr(runtime_provision, "_set_workspace_status", _set_workspace_status)
         monkeypatch.setattr(
-            runtime_provision, "run_sandbox_command_logged", _run_sandbox_command_logged
+            runtime_launch, "run_sandbox_command_logged", _run_sandbox_command_logged
         )
         monkeypatch.setattr(
-            runtime_provision, "assert_command_succeeded", lambda *_args, **_kwargs: None
+            runtime_launch, "assert_command_succeeded", lambda *_args, **_kwargs: None
         )
         monkeypatch.setattr(runtime_provision, "wait_for_runtime_health", _wait_for_runtime_health)
         monkeypatch.setattr(
@@ -955,7 +956,7 @@ class TestLaunchAndConnectRuntime:
             _refresh_runtime_config_and_apply,
         )
         monkeypatch.setattr(
-            runtime_provision,
+            runtime_launch,
             "ensure_runtime_target_enrollment",
             _ensure_runtime_target_enrollment,
         )
@@ -1812,7 +1813,6 @@ class TestProvisionWorkspaceGitSetup:
 
         with pytest.raises(CloudApiError) as exc_info:
             await runtime_provision.provision_workspace(ctx.workspace_id)
-
         assert exc_info.value.code == "cloud_sandbox_reuse_unavailable"
         assert destroyed == []
         assert sandbox_statuses == []

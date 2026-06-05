@@ -2,24 +2,16 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import secrets
-import shlex
 import time
-from datetime import timedelta
-from pathlib import PurePosixPath
 from urllib.parse import urlparse
 from uuid import UUID
 
 from proliferate.auth.identity.store import get_ready_github_grant_for_user
 from proliferate.config import settings
 from proliferate.constants.billing import USAGE_SEGMENT_CLOSED_BY_PROVISION_FAILURE
-from proliferate.constants.cloud import (
-    CLOUD_TARGET_HEARTBEAT_STALE_SECONDS,
-    CloudTargetStatus,
-    CloudWorkspaceStatus,
-)
+from proliferate.constants.cloud import CloudWorkspaceStatus
 from proliferate.constants.cloud import WorkspaceStatus as LegacyWorkspaceStatus
 from proliferate.db import engine as db_engine
 from proliferate.db.store import cloud_sandboxes
@@ -53,20 +45,9 @@ from proliferate.server.billing.service import (
     authorize_sandbox_start,
     record_cloud_sandbox_usage_stopped,
 )
-from proliferate.server.cloud.agent_auth.service import (
-    request_agent_auth_refresh_for_profile_target,
-)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
-from proliferate.server.cloud.runtime.bootstrap import (
-    build_detached_supervisor_launch_command,
-    build_runtime_env,
-    build_supervisor_config,
-    build_worker_config,
-    local_anyharness_base_url,
-    supervisor_config_path,
-    worker_config_path,
-)
+from proliferate.server.cloud.runtime.bootstrap import build_runtime_env
 from proliferate.server.cloud.runtime.bundle import (
     check_runtime_bundle_preinstalled,
     stage_runtime_bundle,
@@ -75,7 +56,6 @@ from proliferate.server.cloud.runtime.config_sync.repo_config import (
     WorkspaceRuntimeAccess,
     apply_workspace_repo_config_after_provision,
 )
-from proliferate.server.cloud.runtime.config_sync.runtime_config import apply_remote_runtime_config
 from proliferate.server.cloud.runtime.config_sync.worktree_policy import (
     sync_cloud_worktree_policy_to_runtime,
 )
@@ -102,6 +82,21 @@ from proliferate.server.cloud.runtime.models import (
     RuntimeHandshake,
 )
 from proliferate.server.cloud.runtime.provisioning.data_key import generate_anyharness_data_key
+from proliferate.server.cloud.runtime.provisioning.launch import (
+    launch_supervised_runtime_bundle as _launch_supervised_runtime_bundle,
+)
+from proliferate.server.cloud.runtime.provisioning.launch import (
+    refresh_runtime_config_and_apply as _refresh_runtime_config_and_apply,
+)
+from proliferate.server.cloud.runtime.provisioning.launch import (
+    request_agent_auth_refresh_and_wait as _request_agent_auth_refresh_and_wait,
+)
+from proliferate.server.cloud.runtime.provisioning.launch import (
+    wait_for_worker_target_online as _wait_for_worker_target_online,
+)
+from proliferate.server.cloud.runtime.provisioning.launch import (
+    wake_reused_runtime_if_worker_stale as _wake_reused_runtime_if_worker_stale,
+)
 from proliferate.server.cloud.runtime.provisioning.remote_workspace import (
     prepare_remote_mobility_destination,
     resolve_remote_workspace,
@@ -125,17 +120,9 @@ from proliferate.server.cloud.runtime.provisioning.step_tracker import (
     ProvisionStepTracker as _StepTracker,
 )
 from proliferate.server.cloud.runtime.sandbox_exec import (
-    assert_command_succeeded,
     collect_runtime_debug_report,
-    run_sandbox_command_logged,
 )
-from proliferate.server.cloud.runtime.target_registration import ensure_runtime_target_enrollment
 from proliferate.server.cloud.runtime.toolchains import check_node_runtime, install_node_runtime
-from proliferate.server.cloud.runtime.wake import run_managed_target_wake_job
-from proliferate.server.cloud.runtime_config.service import (
-    refresh_profile_runtime_config,
-    runtime_config_apply_request_for_revision,
-)
 from proliferate.utils.crypto import decrypt_text, encrypt_text
 from proliferate.utils.time import duration_ms, utcnow
 
@@ -532,308 +519,6 @@ async def _prepare_runtime_template(
         tracker.complete(node_version=installed_version)
 
 
-async def _launch_supervised_runtime_bundle(
-    tracker: _StepTracker,
-    ctx: CloudProvisionInput,
-    provider: SandboxProvider,
-    connected: ConnectedSandbox,
-    *,
-    runtime_env: dict[str, str],
-    runtime_token: str,
-    cloud_base_url: str,
-) -> UUID:
-    enrollment = await ensure_runtime_target_enrollment(
-        user_id=ctx.user_id,
-        sandbox_profile_id=ctx.sandbox_profile_id,
-        target_id=ctx.target_id,
-    )
-    if enrollment is None:
-        raise RuntimeError("Cloud runtime environment disappeared before worker enrollment.")
-
-    tracker.begin(ProvisionStep.start_runtime_process, target_id=str(enrollment.target_id))
-    config_path = worker_config_path(connected.runtime_context)
-    supervisor_path = supervisor_config_path(connected.runtime_context)
-    await run_sandbox_command_logged(
-        provider,
-        connected.sandbox,
-        workspace_id=ctx.workspace_id,
-        label="mkdir_runtime_bundle_config_dirs",
-        command=(
-            f"mkdir -p {shlex.quote(str(PurePosixPath(config_path).parent))} "
-            f"{shlex.quote(str(PurePosixPath(supervisor_path).parent))} "
-            f"&& chmod 700 {shlex.quote(str(PurePosixPath(config_path).parent))} "
-            f"{shlex.quote(str(PurePosixPath(supervisor_path).parent))}"
-        ),
-        runtime_context=connected.runtime_context,
-        timeout_seconds=30,
-    )
-    await provider.write_file(
-        connected.sandbox,
-        config_path,
-        build_worker_config(
-            cloud_base_url=cloud_base_url,
-            enrollment_token=enrollment.enrollment_token,
-            anyharness_base_url=local_anyharness_base_url(provider),
-            anyharness_bearer_token=runtime_token,
-            runtime_context=connected.runtime_context,
-        ),
-    )
-    await provider.write_file(
-        connected.sandbox,
-        supervisor_path,
-        build_supervisor_config(provider, connected.runtime_context, runtime_env),
-    )
-    await run_sandbox_command_logged(
-        provider,
-        connected.sandbox,
-        workspace_id=ctx.workspace_id,
-        label="chmod_runtime_bundle_configs",
-        command=f"chmod 600 {shlex.quote(config_path)} {shlex.quote(supervisor_path)}",
-        runtime_context=connected.runtime_context,
-        timeout_seconds=30,
-    )
-    assert_command_succeeded(
-        await run_sandbox_command_logged(
-            provider,
-            connected.sandbox,
-            workspace_id=ctx.workspace_id,
-            label="launch_runtime_supervisor",
-            command=build_detached_supervisor_launch_command(connected.runtime_context),
-            runtime_context=connected.runtime_context,
-            cwd=connected.runtime_context.runtime_workdir,
-            timeout_seconds=30,
-            log_output_on_success=True,
-        ),
-        "Cloud supervised runtime launch failed",
-    )
-    tracker.complete(target_id=str(enrollment.target_id))
-    return enrollment.target_id
-
-
-def _target_has_current_worker(target: targets_store.CloudTargetSnapshot | None) -> bool:
-    if (
-        target is None
-        or target.status != CloudTargetStatus.online.value
-        or target.status_record is None
-        or target.status_record.worker_id is None
-        or target.status_record.last_heartbeat_at is None
-        or target.current_versions is None
-        or not target.current_versions.anyharness_version
-        or not target.current_versions.worker_version
-        or not target.current_versions.supervisor_version
-    ):
-        return False
-
-    stale_before = utcnow() - timedelta(seconds=CLOUD_TARGET_HEARTBEAT_STALE_SECONDS)
-    return target.status_record.last_heartbeat_at > stale_before
-
-
-async def _wake_reused_runtime_if_worker_stale(
-    ctx: CloudProvisionInput,
-) -> bool:
-    async with db_engine.async_session_factory() as db:
-        target = await targets_store.get_target_by_id(db, ctx.target_id)
-    if _target_has_current_worker(target):
-        return False
-
-    await _set_workspace_status(
-        ctx.workspace_id,
-        CloudWorkspaceStatus.materializing,
-        detail="Restarting cloud runtime worker",
-    )
-    await run_managed_target_wake_job(ctx.target_id, command_id=None)
-    return True
-
-
-async def _wait_for_worker_target_online(
-    target_id: UUID,
-    *,
-    workspace_id: UUID,
-    total_attempts: int = 90,
-    delay_seconds: float = 0.5,
-) -> None:
-    last_status = "missing"
-    last_detail: str | None = None
-    last_heartbeat_at = None
-    last_anyharness_version: str | None = None
-    last_worker_version: str | None = None
-    last_supervisor_version: str | None = None
-    for _attempt in range(max(1, total_attempts)):
-        async with db_engine.async_session_factory() as db:
-            target = await targets_store.get_target_by_id(db, target_id)
-        if target is not None:
-            last_status = target.status
-            last_detail = target.status_record.status_detail if target.status_record else None
-            last_heartbeat_at = (
-                target.status_record.last_heartbeat_at if target.status_record else None
-            )
-            if target.current_versions is not None:
-                last_anyharness_version = target.current_versions.anyharness_version
-                last_worker_version = target.current_versions.worker_version
-                last_supervisor_version = target.current_versions.supervisor_version
-            else:
-                last_anyharness_version = None
-                last_worker_version = None
-                last_supervisor_version = None
-            if _target_has_current_worker(target):
-                return
-        await asyncio.sleep(delay_seconds)
-
-    raise RuntimeError(
-        "Proliferate Worker did not report an online AnyHarness runtime "
-        f"for target {target_id}; last_status={last_status}; "
-        f"last_detail={last_detail or '<none>'}; "
-        f"last_heartbeat_at={last_heartbeat_at.isoformat() if last_heartbeat_at else '<none>'}; "
-        f"last_anyharness_version={last_anyharness_version or '<none>'}; "
-        f"last_worker_version={last_worker_version or '<none>'}; "
-        f"last_supervisor_version={last_supervisor_version or '<none>'}."
-    )
-
-
-async def _wait_for_agent_auth_target_current(
-    ctx: CloudProvisionInput,
-    *,
-    total_attempts: int = 120,
-    delay_seconds: float = 0.5,
-) -> None:
-    last_status = "missing"
-    last_applied_revision: int | None = None
-    last_error: str | None = None
-    for _attempt in range(max(1, total_attempts)):
-        async with db_engine.async_session_factory() as db:
-            state = await agent_auth_store.get_target_state(
-                db,
-                sandbox_profile_id=ctx.sandbox_profile_id,
-                target_id=ctx.target_id,
-            )
-        if state is not None:
-            last_status = state.status
-            last_applied_revision = state.applied_revision
-            last_error = state.last_error_message
-            if state.status == "failed":
-                raise CloudApiError(
-                    "agent_auth_apply_failed",
-                    state.last_error_message or "Agent authentication failed to apply.",
-                    status_code=409,
-                )
-            if (
-                state.status == "applied"
-                and state.applied_revision is not None
-                and state.applied_revision >= ctx.required_agent_auth_revision
-                and not state.force_restart_required
-            ):
-                return
-        await asyncio.sleep(delay_seconds)
-
-    raise RuntimeError(
-        "Agent auth target state did not become current "
-        f"for target {ctx.target_id}; last_status={last_status}; "
-        f"last_applied_revision={last_applied_revision}; "
-        f"required_revision={ctx.required_agent_auth_revision}; "
-        f"last_error={last_error or '<none>'}."
-    )
-
-
-async def _request_agent_auth_refresh_and_wait(
-    tracker: _StepTracker,
-    ctx: CloudProvisionInput,
-    *,
-    reason: str,
-    force_restart: bool,
-) -> None:
-    await _set_workspace_status(
-        ctx.workspace_id,
-        CloudWorkspaceStatus.materializing,
-        detail="Applying agent authentication",
-    )
-    tracker.begin(
-        ProvisionStep.apply_agent_auth,
-        target_id=str(ctx.target_id),
-        revision=ctx.required_agent_auth_revision,
-    )
-    async with db_engine.async_session_factory() as db, db.begin():
-        await request_agent_auth_refresh_for_profile_target(
-            db,
-            sandbox_profile_id=ctx.sandbox_profile_id,
-            target_id=ctx.target_id,
-            actor_user_id=ctx.user_id,
-            reason=reason,
-            force_restart=force_restart,
-        )
-    await _wait_for_agent_auth_target_current(ctx)
-    tracker.complete(target_id=str(ctx.target_id), revision=ctx.required_agent_auth_revision)
-
-
-async def _refresh_runtime_config_and_apply(
-    tracker: _StepTracker,
-    ctx: CloudProvisionInput,
-    *,
-    runtime_url: str,
-    access_token: str,
-    reason: str,
-) -> None:
-    await _set_workspace_status(
-        ctx.workspace_id,
-        CloudWorkspaceStatus.materializing,
-        detail="Applying MCPs and skills",
-    )
-    tracker.begin(
-        ProvisionStep.apply_runtime_config,
-        target_id=str(ctx.target_id),
-        sandbox_profile_id=str(ctx.sandbox_profile_id),
-    )
-    async with db_engine.async_session_factory() as db, db.begin():
-        status = await refresh_profile_runtime_config(
-            db,
-            sandbox_profile_id=ctx.sandbox_profile_id,
-            actor_user_id=ctx.user_id,
-            reason=reason,
-        )
-        if status.current_revision is None:
-            raise CloudApiError(
-                "runtime_config_missing",
-                "Runtime config could not be compiled for the cloud sandbox.",
-                status_code=409,
-            )
-        revision_id = UUID(status.current_revision.revision_id)
-        body = await runtime_config_apply_request_for_revision(
-            db,
-            revision_id=revision_id,
-            target_id=ctx.target_id,
-        )
-    await apply_remote_runtime_config(
-        runtime_url,
-        access_token,
-        body,
-        workspace_id=ctx.workspace_id,
-    )
-    async with db_engine.async_session_factory() as db, db.begin():
-        target = await targets_store.get_target_by_id(db, ctx.target_id)
-        worker_id = target.status_record.worker_id if target and target.status_record else None
-        if worker_id is None:
-            raise CloudApiError(
-                "runtime_config_worker_missing",
-                "Runtime config was applied but the cloud worker is not registered.",
-                status_code=409,
-            )
-        await agent_auth_store.record_runtime_config_worker_status(
-            db,
-            sandbox_profile_id=ctx.sandbox_profile_id,
-            target_id=ctx.target_id,
-            sequence=status.current_revision.sequence,
-            revision_id=revision_id,
-            worker_id=worker_id,
-            status="applied",
-            error_code=None,
-            error_message=None,
-        )
-    tracker.complete(
-        target_id=str(ctx.target_id),
-        revision=str(revision_id),
-        sequence=status.current_revision.sequence,
-    )
-
-
 async def _launch_and_connect_runtime(
     tracker: _StepTracker,
     ctx: CloudProvisionInput,
@@ -920,6 +605,7 @@ async def _launch_and_connect_runtime(
         ctx,
         reason="workspace_provision",
         force_restart=False,
+        set_workspace_status=_set_workspace_status,
     )
     await _refresh_runtime_config_and_apply(
         tracker,
@@ -927,6 +613,7 @@ async def _launch_and_connect_runtime(
         runtime_url=connected.endpoint.runtime_url,
         access_token=runtime_token,
         reason="workspace_provision",
+        set_workspace_status=_set_workspace_status,
     )
     await sync_cloud_worktree_policy_to_runtime(
         user_id=ctx.user_id,
@@ -1228,7 +915,10 @@ async def provision_workspace(
             tracker.begin(ProvisionStep.start_worker_process, target_id=str(ctx.target_id))
             worker_wake_ran = False
             try:
-                worker_wake_ran = await _wake_reused_runtime_if_worker_stale(ctx)
+                worker_wake_ran = await _wake_reused_runtime_if_worker_stale(
+                    ctx,
+                    set_workspace_status=_set_workspace_status,
+                )
                 await _wait_for_worker_target_online(ctx.target_id, workspace_id=ctx.workspace_id)
             except Exception:
                 await _log_runtime_diagnostics(
@@ -1248,6 +938,7 @@ async def provision_workspace(
                 ctx,
                 reason="workspace_reuse",
                 force_restart=False,
+                set_workspace_status=_set_workspace_status,
             )
             await _refresh_runtime_config_and_apply(
                 tracker,
@@ -1255,6 +946,7 @@ async def provision_workspace(
                 runtime_url=connected.endpoint.runtime_url,
                 access_token=runtime_token,
                 reason="workspace_reuse",
+                set_workspace_status=_set_workspace_status,
             )
             await _set_workspace_status(
                 workspace_id,
