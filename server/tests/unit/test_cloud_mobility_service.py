@@ -13,8 +13,8 @@ from proliferate.db.store.cloud_mobility import (
     CloudWorkspaceMoveCleanupItemValue,
 )
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.mobility import cleanup_executor
-from proliferate.server.cloud.mobility import service as mobility_service
+from proliferate.server.cloud.mobility import cleanup_executor, service as mobility_service
+from proliferate.server.cloud.mobility.cleanup import service as cleanup_service
 from proliferate.server.cloud.mobility.domain.lifecycle import (
     CANONICAL_SIDE_DESTINATION,
     HANDOFF_PHASE_COMPLETED,
@@ -731,29 +731,29 @@ async def test_cleanup_completion_executes_anyharness_item_before_projection_cle
         )
 
     monkeypatch.setattr(
-        mobility_service,
+        cleanup_service,
         "expire_stale_cloud_workspace_handoffs_for_user",
         _noop_expire,
     )
-    monkeypatch.setattr(mobility_service, "list_cleanup_items_for_handoff", _list_cleanup_items)
-    monkeypatch.setattr(mobility_service, "get_cleanup_item_for_handoff", _get_cleanup_item)
+    monkeypatch.setattr(cleanup_service, "list_cleanup_items_for_handoff", _list_cleanup_items)
+    monkeypatch.setattr(cleanup_service, "get_cleanup_item_for_handoff", _get_cleanup_item)
     monkeypatch.setattr(
-        mobility_service,
+        cleanup_service,
         "update_cleanup_item_status",
         _update_cleanup_item_status,
     )
     monkeypatch.setattr(
-        mobility_service,
+        cleanup_service,
         "execute_server_cleanup_item",
         _execute_server_cleanup_item,
     )
     monkeypatch.setattr(
-        mobility_service,
+        cleanup_service,
         "complete_cloud_workspace_handoff_cleanup_for_user",
         _complete_for_user,
     )
 
-    completed = await mobility_service.complete_cloud_workspace_handoff_cleanup(
+    completed = await cleanup_service.complete_cloud_workspace_handoff_cleanup(
         db=SimpleNamespace(),
         user_id=user_id,
         mobility_workspace_id=mobility_workspace_id,
