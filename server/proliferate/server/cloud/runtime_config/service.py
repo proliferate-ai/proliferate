@@ -30,7 +30,7 @@ from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import target_config as target_config_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.claims.domain.pem import normalize_pem_setting
-from proliferate.server.cloud.commands.domain.rules import compact_command_json
+from proliferate.server.cloud.commands.domain.serialization import compact_command_json
 from proliferate.server.cloud.commands.wake import enqueue_managed_target_wake_outbox
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.live.service import publish_command_status_after_commit

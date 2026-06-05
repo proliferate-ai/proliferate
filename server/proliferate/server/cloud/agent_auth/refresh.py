@@ -30,7 +30,7 @@ from proliferate.server.cloud.agent_auth.worker_cleanup import (
     _pending_cleanup_entries_for_selection,
     _pending_cleanup_json,
 )
-from proliferate.server.cloud.commands.domain.rules import compact_command_json
+from proliferate.server.cloud.commands.domain.serialization import compact_command_json
 from proliferate.server.cloud.live.service import (
     publish_command_status_after_commit,
 )

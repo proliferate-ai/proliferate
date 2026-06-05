@@ -19,13 +19,13 @@ from proliferate.server.cloud.commands.client_state import (
     expire_stale_client_command_if_needed,
     record_pending_prompt_interaction_for_command,
 )
+from proliferate.server.cloud.commands.domain.payload import validate_command_payload
 from proliferate.server.cloud.commands.domain.rules import (
-    compact_command_json,
     validate_active_command_kind,
-    validate_command_payload,
     validate_command_shape,
     validate_command_source,
 )
+from proliferate.server.cloud.commands.domain.serialization import compact_command_json
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
 from proliferate.server.cloud.commands.preflight import (
     populate_agent_auth_preflight_payload,
