@@ -52,15 +52,23 @@ Collapsed identity is the only live model:
 
 ## Broader Program Positioning
 
-This plan completed the foundational Track 1 from the PR 528 documentation set:
-Target = Sandbox / slot-collapse. It does not claim to implement the other
-draft alignment tracks that were merged alongside the specs, including
-worker-tier/Celery substrate, server structural hygiene beyond migration-needed
-splits, frontend structure alignment, AnyHarness structure alignment, or
-workspace migration/git durability.
+This plan completed the PR 529 scope: the foundational Target = Sandbox
+slot-collapse and data-model rebind. It does not claim that the full worker
+README/architecture from PR 528 is realized.
 
-Those tracks remain future or independent work. This migration intentionally
-targets the shared identity/data-model foundation they depend on.
+Immediate Tier A follow-ons are still required for the full worker spec shape:
+
+- Worker structure alignment into the documented `control/`, `tail/`,
+  `lifecycle/`, `inventory/`, `materialization/`, client, store, and identity
+  areas.
+- Control-loop / two-poll transport: control long-poll, target-scoped cursors,
+  doorbells, and change-driven exposure refresh.
+
+Broader Tier B/C tracks remain future or independent work: worker-tier/Celery
+substrate, broader server structural hygiene, frontend structure alignment,
+AnyHarness structure alignment, workspace migration/git durability,
+agent-auth/Bifrost/billing feature follow-through, and support/security/ops
+runbooks.
 
 ## Files / Modules Owned
 

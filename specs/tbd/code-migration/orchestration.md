@@ -41,28 +41,37 @@ Therefore:
 
 PR 528, `docs(product): consolidate architecture and worker specs`, merged a
 broader documentation set than this migration implements. This document is the
-complete, executable plan for the foundational **Target = Sandbox** track only.
-It should not be read as the implementation plan for every draft alignment doc
-that landed with PR 528.
+complete, executable plan for the foundational **slot-collapse / data-model**
+part of Target = Sandbox. It should not be read as the implementation plan for
+every draft alignment doc that landed with PR 528.
 
 Positioning:
 
-- "Align with the collapsed-identity spec updates" means this document and this
-  migration. The end-state specs for Target = Sandbox are authoritative and this
-  track is first because other managed-cloud work builds on the simplified
-  identity model.
+- "Remove the slot layer and rebind live code to target identity" means this
+  document and this migration.
+- "Fully realize the worker Target = Sandbox architecture from PR 528" also
+  requires the immediate Tier A follow-ons below: the worker structure reshape and
+  the control-loop / two-poll transport. PR 529 deliberately keeps those out of
+  the slot-removal PR for reviewability.
 - "Align the whole codebase with every new or draft spec" is a larger program.
   Several tracks remain independent or intentionally later.
 
-| Track | What It Is | Spec Maturity | Relationship | Order |
+| Tier | Track | What It Is | Relationship | Order |
 | --- | --- | --- | --- | --- |
-| 1. Target = Sandbox | Core cloud/worker identity and data model. | End-state specs are merged; this document is the executable code plan. | Foundation for managed cloud, worker identity, commands, and runtime access. | First. |
-| 2. Worker-tier / Celery substrate | Move background jobs such as wake, provision, and reconcile to Celery/RabbitMQ/redbeat. | Drafts: `worker-tier-scalability-rfc.md`, `worker-tier-migration-catalog.md`. | Orthogonal substrate that should wrap the jobs after Target = Sandbox is stable. | After Track 1. |
-| 3. Server structural hygiene | Split large server files such as cloud worker services into ownership-correct modules. | Audit/draft level, not an end-state implementation spec. | Track 1 only does minimal splits needed to remove slot paths and unblock validation. | After Track 1. |
-| 4. Frontend structure alignment | Align frontend code to the folder/layer standards. | Draft: `frontend-structure-alignment-migration.md`. | Independent; frontend structure was a model for the worker docs but is not implemented here. | Parallel or independent. |
-| 5. AnyHarness structure alignment | Reshape AnyHarness runtime crates/modules toward their structure docs. | Draft: `anyharness-structure-alignment-swarms.md`. | Independent of this managed-cloud identity migration. | Parallel or independent. |
-| 6. Misc feature tracks | Examples include workspace migration/git durability. | Drafts such as `workspace-migration-git-durability-plan.md`. | Independent feature or hardening tracks. | As needed. |
-| Deferred cleanup | Merge or further collapse `cloud_target` / `cloud_sandbox` tables if desired. | Mentioned as future cleanup in the collapsed model discussion. | Cleanup after Track 1, not required for this migration to satisfy Target = Sandbox behavior. | Later. |
+| PR 529 | Slot-collapse foundation | Remove slot generation/fences from schema, worker wire, server services, SDK, readiness, and tests. | Tight reviewable PR for the Target = Sandbox identity/data-model foundation. | First. |
+| A | Worker structure alignment | Reshape the worker toward `control/`, `tail/`, `lifecycle/`, `inventory/`, `materialization/`, clients, store, and identity. | Required for the worker code to match the worker README/architecture; not generic cleanup. | Immediately after PR 529. |
+| A | Control-loop / two-poll transport | Add control long-poll, target-scoped cursors, doorbells, and change-driven exposure refresh. | Required to realize the worker architecture and reduce DB-backed idle polling; independent from slot removal. | Immediately after PR 529; coordinate with worker-tier Redis choices. |
+| B | Worker-tier / Celery substrate | Move background jobs such as wake, provision, and reconcile to Celery/RabbitMQ/redbeat with outbox/idempotency. | Orthogonal durable-job track. It overlaps with control-loop work around Redis and wake delivery, so coordinate the designs. | After PR 529; needs clarify-to-plan pass. |
+| B | Frontend structure alignment | Align frontend code to folder/layer standards. | Independent structure track. | Parallel/independent; draft needs executable plan per lane. |
+| B | AnyHarness structure alignment | Reshape AnyHarness runtime crates/modules toward their structure docs. | Independent structure track. | Parallel/independent; draft needs executable plan per swarm. |
+| B | Workspace migration / git durability | Harden dirty/unpushed branch migration flows. | Independent feature/durability track. | As needed; draft needs executable plan. |
+| C | Agent-auth / Bifrost / billing follow-through | Implement non-identity feature work from agent-auth, Bifrost BYOK, billing, and settings/admin specs. | PR 529 only rebinds identity to target scope; gateway/BYOK/budget/managed-credit/UI work remains. | After foundation; needs feature specs/plans per surface. |
+| C | Support / security / ops runbooks | Support-debug correlation, security hardening, and runbooks for provisioning, enrollment, Stripe, target replacement, and E2B rollback. | Operational follow-through from merged docs and catalog gaps. | As needed; promote drafts/runbooks before treating as review law. |
+| Deferred | `cloud_target` / `cloud_sandbox` table merge | Further table consolidation if desired. | Cleanup after the target identity model settles. | Later. |
+
+The scope boundary is intentional: PR 529 is the tight slot-removal foundation.
+Do not let "PR 529 merged" mean "the worker fully matches its PR 528
+architecture." That requires the Tier A follow-ons.
 
 ## The Invariant Card
 
