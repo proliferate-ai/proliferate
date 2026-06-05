@@ -1085,6 +1085,60 @@ async def test_managed_profile_target_enrollment_requires_profile_identity(
 
 
 @pytest.mark.asyncio
+async def test_managed_profile_target_heartbeat_derives_profile_identity(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    auth, profile_id, target_id = await _create_personal_profile(
+        client,
+        db_session,
+        email_prefix="sandbox-profile-heartbeat-derived-profile",
+    )
+    token = "profile-target-derived-profile-heartbeat"
+    await worker_auth_store.create_enrollment(
+        db_session,
+        target_id=target_id,
+        token_hash=worker_service._hash_token(
+            domain=CLOUD_TARGET_ENROLLMENT_TOKEN_DOMAIN,
+            token=token,
+        ),
+        created_by_user_id=uuid.UUID(auth.user_id),
+        sandbox_profile_id=profile_id,
+        expires_at=utcnow() + timedelta(minutes=5),
+    )
+    await db_session.commit()
+
+    enrolled = await client.post(
+        "/v1/cloud/worker/enroll",
+        json={
+            "enrollmentToken": token,
+            "machineFingerprint": "derived-profile-heartbeat",
+            "hostname": "derived-profile-heartbeat",
+            "workerVersion": "0.1.0",
+        },
+    )
+    assert enrolled.status_code == 200
+    worker = enrolled.json()
+
+    heartbeat = await client.post(
+        "/v1/cloud/worker/heartbeat",
+        headers={"Authorization": f"Bearer {worker['workerToken']}"},
+        json={"status": "online", "workerVersion": "0.1.1"},
+    )
+
+    assert heartbeat.status_code == 200
+    assert heartbeat.json()["sandboxProfileId"] == str(profile_id)
+    runtime_access = await targets_store.load_active_runtime_access_for_target(
+        db_session,
+        target_id=target_id,
+    )
+    assert runtime_access is not None
+    assert runtime_access.sandbox_profile_id == profile_id
+    assert runtime_access.last_worker_id == uuid.UUID(worker["workerId"])
+    assert runtime_access.last_heartbeat_at is not None
+
+
+@pytest.mark.asyncio
 async def test_profile_target_writes_reject_cross_owner_and_mismatched_targets(
     client: AsyncClient,
     db_session: AsyncSession,

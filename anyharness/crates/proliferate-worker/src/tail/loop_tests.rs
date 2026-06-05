@@ -3,65 +3,15 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use serde_json::json;
-
 use crate::{
-    anyharness_client::events::SessionEventEnvelope,
     cloud_client::exposures::WorkerExposureSnapshot,
-    store::{ProjectionCursor, WorkerStore},
+    control::reconcile::handlers::exposures::reconcile_exposure_snapshots, store::WorkerStore,
 };
-
-use super::{first_sequence_gap, reconcile_exposure_snapshots, worker_event, EventSequenceGap};
 
 static NEXT_DB_ID: AtomicU64 = AtomicU64::new(1);
 
 #[test]
-fn worker_event_uses_projection_cursor_workspace() {
-    let cursor = projection_cursor("session-1", "workspace-1", 4);
-    let event = SessionEventEnvelope {
-        session_id: "session-1".to_string(),
-        seq: 5,
-        timestamp: None,
-        turn_id: None,
-        item_id: None,
-        event: json!({ "type": "session_updated" }),
-    };
-
-    let event = worker_event(&cursor, event);
-    assert_eq!(event.workspace_id.as_deref(), Some("workspace-1"));
-    assert_eq!(event.session_id, "session-1");
-    assert_eq!(event.seq, 5);
-}
-
-#[test]
-fn detects_first_sequence_gap() {
-    let events = vec![
-        event("session-1", 5),
-        event("session-1", 7),
-        event("session-1", 8),
-    ];
-    assert_eq!(
-        first_sequence_gap(4, &events),
-        Some(EventSequenceGap {
-            expected_seq: 6,
-            first_observed_seq: 7,
-        })
-    );
-}
-
-#[test]
-fn contiguous_sequences_have_no_gap() {
-    let events = vec![
-        event("session-1", 5),
-        event("session-1", 6),
-        event("session-1", 6),
-        event("session-1", 7),
-    ];
-    assert_eq!(first_sequence_gap(4, &events), None);
-}
-
-#[test]
-fn reconciles_exposure_snapshots_into_projection_cursors() {
+fn reconciles_exposure_snapshots_into_tail_cursors() {
     let store = test_store();
     reconcile_exposure_snapshots(
         &store,
@@ -78,9 +28,7 @@ fn reconciles_exposure_snapshots_into_projection_cursors() {
     )
     .expect("reconcile exposures");
 
-    let cursors = store
-        .list_active_projection_cursors()
-        .expect("active cursors");
+    let cursors = store.list_active_tail_cursors().expect("active cursors");
     assert_eq!(cursors.len(), 1);
     assert_eq!(cursors[0].session_projection_id, "projection-1");
     assert_eq!(cursors[0].anyharness_session_id, "session-1");
@@ -105,41 +53,13 @@ fn reconciles_exposure_snapshots_into_projection_cursors() {
 
     reconcile_exposure_snapshots(&store, &[]).expect("reconcile empty exposures");
     let cursors = store
-        .list_active_projection_cursors()
+        .list_active_tail_cursors()
         .expect("active cursors after revoke");
     assert!(cursors.is_empty());
     assert!(store
         .list_cached_exposure_snapshots()
         .expect("cached exposures after revoke")
         .is_empty());
-}
-
-fn event(session_id: &str, seq: i64) -> SessionEventEnvelope {
-    SessionEventEnvelope {
-        session_id: session_id.to_string(),
-        seq,
-        timestamp: None,
-        turn_id: None,
-        item_id: None,
-        event: json!({ "type": "session_updated" }),
-    }
-}
-
-fn projection_cursor(
-    session_id: &str,
-    workspace_id: &str,
-    last_uploaded_seq: i64,
-) -> ProjectionCursor {
-    ProjectionCursor {
-        exposure_id: "exposure-1".to_string(),
-        session_projection_id: "projection-1".to_string(),
-        anyharness_workspace_id: workspace_id.to_string(),
-        anyharness_session_id: session_id.to_string(),
-        projection_level: "live".to_string(),
-        commandable: true,
-        last_uploaded_seq,
-        last_ack_seq: last_uploaded_seq,
-    }
 }
 
 fn exposure_snapshot(

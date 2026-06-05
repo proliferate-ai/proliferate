@@ -8,7 +8,7 @@ use crate::{
     observability,
 };
 
-use super::{status, supervisor};
+use super::{status, supervisor_mailbox};
 
 #[derive(Debug, Clone)]
 pub struct InstalledVersions {
@@ -34,7 +34,7 @@ pub async fn reconcile(
         return Ok(());
     }
     observability::update_requested(&stale);
-    match supervisor::stage_update_request(config, &stale) {
+    match supervisor_mailbox::stage_update_request(config, &stale) {
         Ok(staged) => {
             let detail = if staged.wrote_request {
                 format!(
@@ -84,7 +84,7 @@ pub async fn reconcile(
 }
 
 fn clear_stale_request(config: &WorkerConfig) -> Result<(), WorkerError> {
-    if supervisor::clear_update_request(config)? {
+    if supervisor_mailbox::clear_update_request(config)? {
         info!("cleared stale supervisor update request");
     }
     Ok(())

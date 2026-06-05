@@ -1,18 +1,18 @@
 mod anyharness_client;
 mod cloud_client;
-mod commands;
 mod config;
+mod control;
 mod error;
 mod identity;
 mod inventory;
+mod lifecycle;
 mod logging;
 mod materialization;
 mod observability;
 mod process_lock;
 mod runtime;
 mod store;
-mod sync;
-mod updates;
+mod tail;
 mod versions;
 
 use std::path::PathBuf;

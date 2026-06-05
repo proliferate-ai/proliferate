@@ -95,7 +95,7 @@ pub async fn backfill_exposed_workspace(
             .iter()
             .map(|mapping| (mapping.session_id.clone(), mapping.workspace_id.clone()))
             .collect::<Vec<_>>();
-        store.upsert_sync_mappings(&workspace_mappings, &session_mappings)?;
+        store.upsert_tail_mappings(&workspace_mappings, &session_mappings)?;
         mapped_workspace_count += response.mapped_workspaces.len();
         mapped_session_count += response.mapped_sessions.len();
     }

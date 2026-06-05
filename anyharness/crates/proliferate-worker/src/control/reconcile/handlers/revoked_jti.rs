@@ -21,18 +21,20 @@ pub async fn run_loop(
     identity: WorkerIdentity,
 ) -> Result<(), WorkerError> {
     let Some(base_url) = config.anyharness_base_url.clone() else {
-        warn!("worker revoked-jti sync disabled because anyharness_base_url is not configured");
+        warn!(
+            "worker revoked-jti reconcile disabled because anyharness_base_url is not configured"
+        );
         return Ok(());
     };
     let anyharness = AnyHarnessClient::new(base_url, config.anyharness_bearer_token.clone())?;
     let mut cursor: Option<String> = None;
     loop {
         if !anyharness_health::probe(&anyharness).await {
-            warn!("worker revoked-jti sync paused because anyharness health check failed");
+            warn!("worker revoked-jti reconcile paused because anyharness health check failed");
             sleep(ERROR_SLEEP).await;
             continue;
         }
-        match sync_once(&anyharness, &cloud, &identity, cursor.as_deref()).await {
+        match reconcile_once(&anyharness, &cloud, &identity, cursor.as_deref()).await {
             Ok(outcome) => {
                 cursor = Some(outcome.next_cursor);
                 sleep(if outcome.has_more {
@@ -43,14 +45,14 @@ pub async fn run_loop(
                 .await;
             }
             Err(error) => {
-                warn!(?error, "worker revoked-jti sync pass failed");
+                warn!(?error, "worker revoked-jti reconcile pass failed");
                 sleep(ERROR_SLEEP).await;
             }
         }
     }
 }
 
-async fn sync_once(
+async fn reconcile_once(
     anyharness: &AnyHarnessClient,
     cloud: &CloudClient,
     identity: &WorkerIdentity,
@@ -77,7 +79,7 @@ async fn sync_once(
         server_time = %response.server_time,
         next_cursor = %response.next_cursor,
         has_more = response.has_more,
-        "synced revoked direct-attach token ids"
+        "reconciled revoked direct-attach token ids"
     );
     Ok(RevokedJtiSyncOutcome {
         next_cursor: response.next_cursor,
