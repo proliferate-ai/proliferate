@@ -36,10 +36,6 @@ from proliferate.server.billing.service import (
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.runtime.bootstrap import build_runtime_env
-from proliferate.server.cloud.runtime.bundle import (
-    check_runtime_bundle_preinstalled,
-    stage_runtime_bundle,
-)
 from proliferate.server.cloud.runtime.config_sync.repo_config import (
     WorkspaceRuntimeAccess,
     apply_workspace_repo_config_after_provision,
@@ -100,6 +96,9 @@ from proliferate.server.cloud.runtime.provisioning.sandbox_lifecycle import (
 from proliferate.server.cloud.runtime.provisioning.step_tracker import (
     ProvisionStepTracker as _StepTracker,
 )
+from proliferate.server.cloud.runtime.provisioning.template import (
+    prepare_runtime_template as _prepare_runtime_template,
+)
 from proliferate.server.cloud.runtime.provisioning.workspace import (
     attach_workspace_to_running_runtime as _attach_workspace_to_running_runtime,
 )
@@ -109,7 +108,6 @@ from proliferate.server.cloud.runtime.provisioning.workspace import (
 from proliferate.server.cloud.runtime.sandbox_exec import (
     collect_runtime_debug_report,
 )
-from proliferate.server.cloud.runtime.toolchains import check_node_runtime, install_node_runtime
 from proliferate.utils.crypto import encrypt_text
 from proliferate.utils.time import duration_ms, utcnow
 
@@ -233,85 +231,6 @@ def _log_provision_summary(
     }
     payload.update(fields)
     _emit_cloud_event("cloud workspace provisioning summary", payload)
-
-
-async def _prepare_runtime_template(
-    tracker: _StepTracker,
-    ctx: CloudProvisionInput,
-    provider: SandboxProvider,
-    connected: ConnectedSandbox,
-) -> None:
-    tracker.begin(ProvisionStep.check_preinstalled_runtime)
-    bundle_preinstalled = await check_runtime_bundle_preinstalled(
-        provider,
-        connected.sandbox,
-        workspace_id=ctx.workspace_id,
-        runtime_context=connected.runtime_context,
-    )
-    tracker.complete(preinstalled=bundle_preinstalled)
-    if bundle_preinstalled:
-        await _set_workspace_status(
-            ctx.workspace_id,
-            CloudWorkspaceStatus.materializing,
-            detail="Using prebuilt runtime bundle",
-        )
-        tracker.begin(ProvisionStep.stage_runtime_binary)
-        tracker.complete(skipped=True, reason="template_runtime_bundle_present")
-
-        await _set_workspace_status(
-            ctx.workspace_id,
-            CloudWorkspaceStatus.materializing,
-            detail="Using prebuilt Node.js runtime",
-        )
-        tracker.begin(ProvisionStep.check_node_runtime)
-        tracker.complete(skipped=True, reason="template_runtime_present")
-        return
-
-    await _set_workspace_status(
-        ctx.workspace_id,
-        CloudWorkspaceStatus.materializing,
-        detail="Uploading runtime bundle",
-    )
-    tracker.begin(ProvisionStep.stage_runtime_binary)
-    binary_paths = await stage_runtime_bundle(
-        provider,
-        connected.sandbox,
-        workspace_id=ctx.workspace_id,
-        runtime_context=connected.runtime_context,
-    )
-    tracker.complete(
-        binary_paths={key: str(value) for key, value in binary_paths.items()},
-        preinstalled=bundle_preinstalled,
-    )
-
-    await _set_workspace_status(
-        ctx.workspace_id,
-        CloudWorkspaceStatus.materializing,
-        detail="Checking Node.js runtime",
-    )
-    tracker.begin(ProvisionStep.check_node_runtime)
-    node_version = await check_node_runtime(
-        provider,
-        connected.sandbox,
-        workspace_id=ctx.workspace_id,
-        runtime_context=connected.runtime_context,
-    )
-    tracker.complete(node_version=node_version or "missing")
-
-    if node_version is None:
-        await _set_workspace_status(
-            ctx.workspace_id,
-            CloudWorkspaceStatus.materializing,
-            detail="Installing Node.js",
-        )
-        tracker.begin(ProvisionStep.install_node_runtime)
-        installed_version = await install_node_runtime(
-            provider,
-            connected.sandbox,
-            workspace_id=ctx.workspace_id,
-            runtime_context=connected.runtime_context,
-        )
-        tracker.complete(node_version=installed_version)
 
 
 async def _launch_and_connect_runtime(
@@ -530,7 +449,13 @@ async def provision_workspace(
                 CloudWorkspaceStatus.materializing,
                 detail="Checking prebuilt runtime template",
             )
-            await _prepare_runtime_template(tracker, ctx, provider, connected)
+            await _prepare_runtime_template(
+                tracker,
+                ctx,
+                provider,
+                connected,
+                set_workspace_status=_set_workspace_status,
+            )
 
             await _set_workspace_status(
                 workspace_id,
