@@ -13,18 +13,16 @@ from proliferate.db.models.auth import User
 from proliferate.server.cloud.errors import CloudApiError, raise_cloud_error
 from proliferate.server.cloud.workspaces.lifecycle.api import router as lifecycle_router
 from proliferate.server.cloud.workspaces.models import (
-    CreateCloudWorkspaceRequest,
     UpdateCloudWorkspaceBranchRequest,
     UpdateCloudWorkspaceDisplayNameRequest,
     WorkspaceDetail,
     WorkspaceSummary,
 )
+from proliferate.server.cloud.workspaces.provisioning.api import router as provisioning_router
 from proliferate.server.cloud.workspaces.remote_access.api import router as remote_access_router
 from proliferate.server.cloud.workspaces.service import (
-    create_cloud_workspace,
     get_cloud_workspace_detail,
     list_cloud_workspaces_for_user,
-    start_cloud_workspace,
     sync_cloud_workspace_branch,
     sync_cloud_workspace_display_name,
 )
@@ -60,34 +58,7 @@ async def list_cloud_workspaces_endpoint(
         raise_cloud_error(error)
 
 
-@router.post("/workspaces", response_model=WorkspaceDetail)
-async def create_cloud_workspace_endpoint(
-    body: CreateCloudWorkspaceRequest,
-    user: User = Depends(current_product_user),
-    db: AsyncSession = Depends(get_async_session),
-) -> WorkspaceDetail:
-    try:
-        payload = await create_cloud_workspace(
-            user,
-            db=db,
-            git_provider=body.git_provider,
-            git_owner=body.git_owner,
-            git_repo_name=body.git_repo_name,
-            base_branch=body.base_branch,
-            branch_name=body.branch_name,
-            display_name=body.display_name,
-            required_agent_kind=body.required_agent_kind,
-            source=body.source or "desktop",
-            owner_selection=OwnerSelection(
-                owner_scope=body.owner_scope,
-                organization_id=body.organization_id,
-            ),
-        )
-    except CloudApiError as error:
-        raise_cloud_error(error)
-    return payload
-
-
+router.include_router(provisioning_router)
 router.include_router(target_launch_router)
 router.include_router(remote_access_router)
 router.include_router(lifecycle_router)
@@ -103,19 +74,6 @@ async def get_cloud_workspace_endpoint(
         return await get_cloud_workspace_detail(db, user.id, workspace_id)
     except CloudApiError as error:
         raise_cloud_error(error)
-
-
-@router.post("/workspaces/{workspace_id}/start", response_model=WorkspaceDetail)
-async def start_cloud_workspace_endpoint(
-    workspace_id: UUID,
-    user: User = Depends(current_product_user),
-    db: AsyncSession = Depends(get_async_session),
-) -> WorkspaceDetail:
-    try:
-        payload = await start_cloud_workspace(db, user, workspace_id)
-    except CloudApiError as error:
-        raise_cloud_error(error)
-    return payload
 
 
 @router.patch("/workspaces/{workspace_id}/branch", response_model=WorkspaceDetail)

@@ -21,6 +21,7 @@ from proliferate.db.store import cloud_workspaces
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as target_store
+from proliferate.integrations.sandbox import get_configured_sandbox_provider
 from proliferate.server.automations.worker.cloud_execution.command_models import (
     EnsureRepoCheckoutPayload,
     MaterializeWorkspacePayload,
@@ -44,7 +45,6 @@ from proliferate.server.cloud.commands.wake import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.live.service import publish_worker_control_after_commit
-from proliferate.server.cloud.workspaces.service import get_configured_sandbox_provider
 from proliferate.utils.crypto import encrypt_json
 from proliferate.utils.time import utcnow
 

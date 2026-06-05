@@ -10,7 +10,6 @@ API_STORE_IMPORT server/proliferate/server/cloud/live/api.py 1 transitional live
 SERVICE_ORM_IMPORT server/proliferate/server/billing/service.py 1 remaining service type boundary exposes billing ORM records until snapshot migration
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/mobility/service.py 1 remaining service type boundary exposes workspace ORM records until snapshot migration
 SERVICE_ORM_IMPORT server/proliferate/server/cloud/runtime/service.py 1 remaining service type boundary exposes workspace ORM records until snapshot migration
-SERVICE_ORM_IMPORT server/proliferate/server/cloud/workspaces/service.py 1 remaining service type boundary exposes workspace ORM records until snapshot migration
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/billing/service.py 1 remaining service-owned non-HTTP session boundary debt through session_ops
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/agent_auth/managed_credits.py 1 remaining agent-auth service concern managed-credit sync session boundary debt through session_ops
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/agent_auth/refresh.py 1 remaining agent-auth service concern refresh wake/error session boundary debt through session_ops
@@ -21,8 +20,9 @@ SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/commands/transactions.p
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/live/service.py 1 remaining service-owned live event session boundary debt through session_ops
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/worker/transactions.py 1 Lane 7 explicit worker API pre-response commit boundary debt
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/workspaces/lifecycle/service.py 1 lifecycle extraction preserves existing explicit session boundary debt through session_ops
+SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/workspaces/provisioning/preflight.py 1 provisioning preflight extraction preserves existing repo/config validation session boundary debt through session_ops
+SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/workspaces/provisioning/service.py 1 provisioning extraction preserves existing explicit session boundary debt through session_ops
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/workspaces/remote_access/service.py 1 remote-access connection flow preserves existing explicit session boundary debt through session_ops
-SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/workspaces/service.py 1 remaining service-owned workspace lifecycle session boundary debt through session_ops
 SERVICE_DB_ENGINE_IMPORT server/proliferate/server/cloud/workspaces/target_launch/service.py 1 target-launch orchestration preserves existing explicit command/session boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/billing/service.py 34 remaining billing service-owned transaction/session boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/agent_auth/managed_credits.py 2 remaining agent-auth service concern managed-credit sync session boundary debt through session_ops
@@ -32,8 +32,9 @@ SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/commands/transactions.py 
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/live/service.py 4 remaining live service-owned session/deferred boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/worker/transactions.py 2 Lane 7 explicit worker API pre-response commit boundary debt
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/workspaces/lifecycle/service.py 12 lifecycle extraction preserves existing workspace lifecycle transaction/session boundary debt through session_ops
+SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/workspaces/provisioning/preflight.py 6 provisioning preflight extraction preserves existing repo/config validation transaction/session boundary debt through session_ops
+SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/workspaces/provisioning/service.py 7 provisioning extraction preserves existing workspace provisioning transaction/session boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/workspaces/remote_access/service.py 4 remote-access connection flow preserves existing explicit session boundary debt through session_ops
-SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/workspaces/service.py 14 remaining workspace service-owned lifecycle transaction/session boundary debt through session_ops
 SERVICE_DB_METHOD_CALL server/proliferate/server/cloud/workspaces/target_launch/service.py 5 target-launch orchestration preserves existing explicit command/session boundary debt through session_ops
 DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/agent_run_config/domain/resolve.py 1 transitional agent run config resolver imports product constants
 DOMAIN_FORBIDDEN_IMPORT server/proliferate/server/cloud/target_config/domain/policy.py 1 transitional target config policy imports product config during worker migration

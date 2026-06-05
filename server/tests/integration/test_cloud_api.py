@@ -56,7 +56,8 @@ from proliferate.server.cloud.repos import service as repos_service
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError
 from proliferate.server.cloud.runtime.credentials.auth_status import RuntimeAuthStateSnapshot
 from proliferate.server.cloud.runtime.models import RuntimeConnectionTarget
-from proliferate.server.cloud.workspaces import service as cloud_service
+from proliferate.server.cloud.workspaces.provisioning import preflight as provisioning_preflight
+from proliferate.server.cloud.workspaces.provisioning import service as provisioning_service
 from proliferate.server.cloud.workspaces.remote_access import service as remote_service
 from proliferate.utils.crypto import decrypt_json, encrypt_json, encrypt_text
 from tests.helpers.desktop_auth import mint_desktop_token_payload
@@ -229,9 +230,7 @@ async def _list_mcp_connection_auths(
 
 def _disable_workspace_provision(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        cloud_service,
-        "schedule_workspace_provision",
-        lambda _workspace_id, **_kwargs: None,
+        provisioning_service, "schedule_workspace_provision", lambda *_args, **_kwargs: None
     )
 
 
@@ -305,7 +304,8 @@ def _patch_repo_branches_lookup(
     resolver,
 ) -> None:
     monkeypatch.setattr(repos_service, "get_github_repo_branches", resolver)
-    monkeypatch.setattr(cloud_service, "get_github_repo_branches", resolver)
+    monkeypatch.setattr(provisioning_preflight, "get_github_repo_branches", resolver)
+    monkeypatch.setattr(provisioning_service, "get_github_repo_branches", resolver)
     monkeypatch.setattr(repo_config_service, "get_repo_branches_for_credentials", resolver)
 
 
@@ -1518,7 +1518,7 @@ class TestCloudWorkspaces:
 
         _patch_repo_branches_lookup(monkeypatch, _repo_branches)
         monkeypatch.setattr(
-            cloud_service,
+            provisioning_preflight,
             "log_cloud_event",
             lambda message, **kwargs: logged_events.append((message, kwargs)),
         )
@@ -1577,7 +1577,7 @@ class TestCloudWorkspaces:
 
         _patch_repo_branches_lookup(monkeypatch, _initial_repo_branches)
         monkeypatch.setattr(
-            cloud_service,
+            provisioning_preflight,
             "log_cloud_event",
             lambda message, **kwargs: logged_events.append((message, kwargs)),
         )
@@ -2084,7 +2084,7 @@ class TestCloudWorkspaces:
 
         _patch_repo_branches_lookup(monkeypatch, _repo_branches)
         monkeypatch.setattr(
-            cloud_service,
+            provisioning_service,
             "schedule_workspace_provision",
             lambda workspace_id, **_kwargs: scheduled.append(workspace_id),
         )
@@ -2163,7 +2163,7 @@ class TestCloudWorkspaces:
 
         _patch_repo_branches_lookup(monkeypatch, _repo_branches)
         monkeypatch.setattr(
-            cloud_service,
+            provisioning_service,
             "schedule_workspace_provision",
             lambda workspace_id, **_kwargs: scheduled.append(workspace_id),
         )

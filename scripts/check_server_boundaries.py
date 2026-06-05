@@ -63,6 +63,7 @@ SERVICE_BOUNDARY_DEBT_MODULES = {
     "server/proliferate/server/cloud/commands/transactions.py",
     "server/proliferate/server/cloud/commands/wake.py",
     "server/proliferate/server/cloud/worker/transactions.py",
+    "server/proliferate/server/cloud/workspaces/provisioning/preflight.py",
 }
 
 
