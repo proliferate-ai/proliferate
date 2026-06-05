@@ -8,8 +8,8 @@ import pytest
 from proliferate.db.store.cloud_runtime_config.revisions import (
     SandboxProfileRuntimeConfigRevisionSnapshot,
 )
-from proliferate.server.cloud.commands.service import (
-    _raise_runtime_config_blocked_if_needed,
+from proliferate.server.cloud.commands.preflight import (
+    raise_runtime_config_blocked_if_needed,
 )
 from proliferate.server.cloud.errors import CloudApiError
 
@@ -34,11 +34,11 @@ def test_runtime_config_preflight_rejects_blocking_errors() -> None:
     )
 
     with pytest.raises(CloudApiError) as exc:
-        _raise_runtime_config_blocked_if_needed(revision)
+        raise_runtime_config_blocked_if_needed(revision)
 
     assert exc.value.code == "cloud_command_runtime_config_blocked"
     assert exc.value.status_code == 409
 
 
 def test_runtime_config_preflight_allows_manifest_without_blocking_errors() -> None:
-    _raise_runtime_config_blocked_if_needed(_revision('{"blockingErrors":[]}'))
+    raise_runtime_config_blocked_if_needed(_revision('{"blockingErrors":[]}'))

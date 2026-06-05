@@ -24,9 +24,9 @@ from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.server.cloud.commands.domain.rules import compact_command_json
+from proliferate.server.cloud.commands.preflight import stamp_and_validate_command_preflight
 from proliferate.server.cloud.commands.service import (
     kick_off_command_wake_after_commit_if_required,
-    stamp_and_validate_command_preflight,
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.utils.time import utcnow
