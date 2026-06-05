@@ -22,7 +22,6 @@ from proliferate.db.models.billing import (
     BillingEntitlement,
     BillingSubscription,
 )
-from proliferate.db.store import billing_seats, billing_subscriptions
 from proliferate.db.store.billing_accounting import (
     BillingAccountingResult,
     ClaimedUsageExport,
@@ -37,15 +36,11 @@ from proliferate.db.store.billing_subjects import (
     get_or_create_organization_stripe_customer_state,
     get_or_create_user_stripe_customer_state,
 )
-from proliferate.integrations import stripe as stripe_billing
 from proliferate.server.billing import accounting as billing_accounting_service
 from proliferate.server.billing import accounting_pass as billing_accounting_pass_service
 from proliferate.server.billing import authorization as billing_authorization
 from proliferate.server.billing import snapshots as billing_snapshots
 from proliferate.server.billing.checkout import resolve_billing_owner_context
-from proliferate.server.billing.domain.accounting import (
-    stripe_status_is_terminal,
-)
 from proliferate.server.billing.domain.plans import UnlimitedCloudHoursState
 from proliferate.server.billing.models import (
     BillingOverview,
@@ -55,9 +50,6 @@ from proliferate.server.billing.models import (
     GrantAllocationInfo,
     PlanInfo,
     SandboxStartAuthorization,
-)
-from proliferate.server.billing.pricing import (
-    configured_pro_monthly_price_id,
 )
 from proliferate.server.billing.snapshot_state import BillingSnapshotState
 
@@ -97,73 +89,6 @@ async def ensure_organization_billing_subject_state(
     organization_id: UUID,
 ) -> BillingSubjectStripeState:
     return await get_or_create_organization_stripe_customer_state(db, organization_id)
-
-
-async def maybe_create_organization_seat_adjustment(
-    db: AsyncSession,
-    *,
-    organization_id: UUID,
-    membership_id: UUID | None,
-) -> bool:
-    return await billing_seats.maybe_create_org_seat_adjustment(
-        db,
-        organization_id=organization_id,
-        membership_id=membership_id,
-        pro_billing_enabled=settings.pro_billing_enabled,
-        pro_monthly_price_id=configured_pro_monthly_price_id(),
-    )
-
-
-async def reconcile_initial_org_subscription_seats(
-    record: BillingSubscription,
-) -> BillingSubscription:
-    async with db_session.open_async_transaction() as db:
-        adjustment = await billing_seats.prepare_initial_org_seat_reconcile(
-            db,
-            billing_subscription_id=record.id,
-            pro_billing_enabled=settings.pro_billing_enabled,
-            pro_monthly_price_id=configured_pro_monthly_price_id(),
-        )
-    if adjustment is None:
-        async with db_session.open_async_session() as db:
-            reloaded = await billing_subscriptions.load_billing_subscription_by_id(db, record.id)
-        return reloaded or record
-    try:
-        await stripe_billing.update_subscription_item_quantity(
-            subscription_item_id=adjustment.monthly_subscription_item_id,
-            quantity=adjustment.target_quantity,
-            idempotency_key=f"initial-seat-reconcile:{adjustment.id}:seats:{adjustment.target_quantity}",
-        )
-        async with db_session.open_async_transaction() as db:
-            await billing_seats.mark_seat_adjustment_stripe_confirmed(
-                db,
-                adjustment_id=adjustment.id,
-            )
-        async with db_session.open_async_transaction() as db:
-            await billing_seats.mark_seat_adjustment_grant_issued(
-                db,
-                adjustment_id=adjustment.id,
-            )
-    except stripe_billing.StripeBillingError as error:
-        async with db_session.open_async_transaction() as db:
-            await billing_seats.mark_seat_adjustment_failed(
-                db,
-                adjustment_id=adjustment.id,
-                error=error.message,
-                terminal=stripe_status_is_terminal(error.status_code),
-            )
-        raise
-    except Exception as error:
-        async with db_session.open_async_transaction() as db:
-            await billing_seats.mark_seat_adjustment_failed(
-                db,
-                adjustment_id=adjustment.id,
-                error=f"{type(error).__name__}: {error}",
-            )
-        raise
-    async with db_session.open_async_session() as db:
-        reloaded = await billing_subscriptions.load_billing_subscription_by_id(db, record.id)
-    return reloaded or record
 
 
 async def remember_cloud_sandbox_event_receipt(

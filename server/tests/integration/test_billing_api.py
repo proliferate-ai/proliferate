@@ -59,9 +59,9 @@ from proliferate.db.store.cloud_runtime_environments import (
 from proliferate.integrations import resend
 from proliferate.integrations import stripe as stripe_billing
 from proliferate.integrations.github import GitHubRepoBranches
-from proliferate.server.billing.service import (
+from proliferate.server.billing.accounting import process_pending_seat_adjustments
+from proliferate.server.billing.seat_reconciliation import (
     maybe_create_organization_seat_adjustment as maybe_create_org_seat_adjustment,
-    process_pending_seat_adjustments,
 )
 from proliferate.server.billing.team_checkout.activation import (
     activate_team_checkout_from_stripe_session,

@@ -75,10 +75,10 @@ from proliferate.server.billing.pricing import (
     billing_price_ids_from_settings,
     classify_monthly_price_id,
 )
-from proliferate.server.billing.seats import pro_period_grant_source_ref
-from proliferate.server.billing.service import (
+from proliferate.server.billing.seat_reconciliation import (
     reconcile_initial_org_subscription_seats,
 )
+from proliferate.server.billing.seats import pro_period_grant_source_ref
 from proliferate.server.billing.team_checkout.activation import (
     activate_team_checkout_from_stripe_session,
 )
