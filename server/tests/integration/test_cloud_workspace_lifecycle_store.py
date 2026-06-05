@@ -18,13 +18,13 @@ from proliferate.db.store.cloud_workspace_setup_runs import (
     finalize_setup_run,
     release_setup_run_claim,
 )
+from proliferate.db.store.cloud_sandboxes import reserve_sandbox_for_workspace
 from proliferate.db.store.cloud_workspaces import (
     create_cloud_workspace_for_user,
     finalize_workspace_provision,
     mark_workspace_error,
     persist_workspace_destroy,
     persist_workspace_stop,
-    reserve_sandbox_for_workspace,
 )
 from proliferate.server.cloud.workspaces.domain.setup_runs import (
     bounded_setup_monitor_error,

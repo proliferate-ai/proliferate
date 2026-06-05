@@ -46,7 +46,7 @@ from proliferate.db.store.cloud_runtime_environments import (
     load_runtime_environment_by_id,
     save_runtime_environment_state,
 )
-from proliferate.db.store.cloud_workspaces import (
+from proliferate.db.store.cloud_sandboxes import (
     load_cloud_sandbox_by_id,
     load_cloud_sandbox_placeholders,
     save_sandbox_provider_state,

@@ -8,10 +8,12 @@ from proliferate.db import engine as db_engine
 from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.cloud_runtime_environments import save_runtime_environment_state
-from proliferate.db.store.cloud_sync import targets as targets_store
-from proliferate.db.store.cloud_workspaces import (
+from proliferate.db.store.cloud_sandboxes import (
     load_active_sandbox_for_workspace,
     load_cloud_sandbox_by_id,
+)
+from proliferate.db.store.cloud_sync import targets as targets_store
+from proliferate.db.store.cloud_workspaces import (
     persist_runtime_reconnect_state_for_workspace,
 )
 from proliferate.integrations.anyharness import CloudRuntimeReconnectError

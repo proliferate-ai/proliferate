@@ -20,10 +20,10 @@ from proliferate.constants.billing import (
     USAGE_SEGMENT_OPENED_BY_WEBHOOK_RESUMED,
 )
 from proliferate.db.store.cloud_runtime_environments import save_runtime_environment_state
-from proliferate.db.store.cloud_sandboxes import load_sandbox_runtime_owner
-from proliferate.db.store.cloud_workspaces import (
+from proliferate.db.store.cloud_sandboxes import (
     load_cloud_sandbox_by_external_id,
     load_cloud_sandbox_by_id,
+    load_sandbox_runtime_owner,
     save_sandbox_provider_state,
 )
 from proliferate.integrations.sandbox import (

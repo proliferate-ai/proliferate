@@ -29,6 +29,7 @@ from proliferate.db.models.organizations import Organization, OrganizationMember
 from proliferate.db.store.cloud_agent_auth import store as agent_auth_store
 from proliferate.db.store.cloud_sandboxes import (
     ensure_managed_sandbox_for_target,
+    get_active_sandbox,
     load_active_sandbox_for_profile_target,
     mark_managed_sandbox_terminal,
 )
@@ -38,7 +39,6 @@ from proliferate.db.store.cloud_sync import targets as targets_store
 from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.db.store.cloud_workspaces import (
     create_managed_cloud_workspace_for_profile,
-    get_active_sandbox,
 )
 from proliferate.server.cloud.runtime import wake as runtime_wake
 from proliferate.server.cloud.worker import auth as worker_auth
@@ -605,7 +605,6 @@ async def test_managed_materialize_workspace_keeps_cloud_metadata_out_of_payload
         template_version="managed-cloud-v1",
     )
     await db_session.commit()
-
     response = await client.post(
         "/v1/cloud/commands",
         headers=auth.headers,
@@ -624,7 +623,6 @@ async def test_managed_materialize_workspace_keeps_cloud_metadata_out_of_payload
             "source": "automation",
         },
     )
-
     assert response.status_code == 200
     command = await db_session.get(CloudCommand, uuid.UUID(response.json()["commandId"]))
     assert command is not None
