@@ -60,9 +60,11 @@ from proliferate.integrations import resend
 from proliferate.integrations import stripe as stripe_billing
 from proliferate.integrations.github import GitHubRepoBranches
 from proliferate.server.billing.service import (
-    activate_team_checkout_from_stripe_session,
     maybe_create_organization_seat_adjustment as maybe_create_org_seat_adjustment,
     process_pending_seat_adjustments,
+)
+from proliferate.server.billing.team_checkout.activation import (
+    activate_team_checkout_from_stripe_session,
 )
 from proliferate.server.cloud.workspaces.provisioning import preflight as provisioning_preflight
 from proliferate.server.cloud.workspaces.provisioning import service as provisioning_service
@@ -464,7 +466,7 @@ class TestBillingApi:
             )
 
         monkeypatch.setattr(
-            "proliferate.server.billing.service.validate_pro_subscription_price_configuration",
+            "proliferate.server.billing.team_checkout.service.validate_pro_subscription_price_configuration",
             fake_validate_pro_subscription_price_configuration,
         )
         monkeypatch.setattr(stripe_billing, "create_customer", fake_create_customer)
@@ -572,7 +574,7 @@ class TestBillingApi:
             )
 
         monkeypatch.setattr(
-            "proliferate.server.billing.service.validate_pro_subscription_price_configuration",
+            "proliferate.server.billing.team_checkout.service.validate_pro_subscription_price_configuration",
             fake_validate_pro_subscription_price_configuration,
         )
         monkeypatch.setattr(stripe_billing, "create_customer", fake_create_customer)
