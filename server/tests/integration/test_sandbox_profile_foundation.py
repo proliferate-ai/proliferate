@@ -40,7 +40,7 @@ from proliferate.db.store.cloud_workspaces import (
     create_managed_cloud_workspace_for_profile,
     get_active_sandbox,
 )
-from proliferate.server.cloud.commands import service as command_service
+from proliferate.server.cloud.runtime import wake as runtime_wake
 from proliferate.server.cloud.worker import auth as worker_auth
 from proliferate.utils.time import utcnow
 from tests.e2e.cloud.helpers.auth import create_user_and_login
@@ -583,7 +583,7 @@ async def test_managed_materialize_workspace_keeps_cloud_metadata_out_of_payload
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(command_service, "kick_off_managed_target_wake", lambda *_args: None)
+    monkeypatch.setattr(runtime_wake, "kick_off_managed_target_wake", lambda *_args: None)
     auth, profile_id, target_id = await _create_personal_profile(
         client,
         db_session,
