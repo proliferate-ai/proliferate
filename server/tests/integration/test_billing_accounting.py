@@ -40,7 +40,7 @@ from proliferate.db.store.billing_subjects import (
 )
 from proliferate.integrations import stripe as stripe_billing
 from proliferate.server.billing import accounting as billing_accounting_service
-from proliferate.server.billing.service import run_billing_accounting_pass
+from proliferate.server.billing.accounting_pass import run_billing_accounting_pass
 from tests.integration.billing_accounting_helpers import (
     patch_global_session_factory,
     seed_usage_segment,

@@ -14,10 +14,6 @@ from proliferate.auth.authorization import (
 )
 from proliferate.config import settings
 from proliferate.constants.billing import (
-    BILLING_DECISION_OVERAGE_EXPORT,
-    BILLING_MODE_ENFORCE,
-    BILLING_MODE_OBSERVE,
-    BILLING_USAGE_EXPORT_STATUS_OBSERVED,
     FREE_INCLUDED_GRANT_TYPE,
     FREE_TRIAL_V2_GRANT_TYPE,
 )
@@ -30,12 +26,10 @@ from proliferate.db.store import billing_seats, billing_subscriptions
 from proliferate.db.store.billing_accounting import (
     BillingAccountingResult,
     ClaimedUsageExport,
-    list_billing_subject_ids_for_usage_accounting,
 )
 from proliferate.db.store.billing_runtime_usage import (
     close_usage_segment_for_sandbox,
     open_usage_segment_for_sandbox,
-    record_billing_decision_event,
     remember_sandbox_event_receipt,
 )
 from proliferate.db.store.billing_subjects import (
@@ -45,8 +39,8 @@ from proliferate.db.store.billing_subjects import (
 )
 from proliferate.integrations import stripe as stripe_billing
 from proliferate.server.billing import accounting as billing_accounting_service
+from proliferate.server.billing import accounting_pass as billing_accounting_pass_service
 from proliferate.server.billing import authorization as billing_authorization
-from proliferate.server.billing import snapshot_state
 from proliferate.server.billing import snapshots as billing_snapshots
 from proliferate.server.billing.checkout import resolve_billing_owner_context
 from proliferate.server.billing.domain.accounting import (
@@ -61,7 +55,6 @@ from proliferate.server.billing.models import (
     GrantAllocationInfo,
     PlanInfo,
     SandboxStartAuthorization,
-    utcnow,
 )
 from proliferate.server.billing.pricing import (
     configured_pro_monthly_price_id,
@@ -505,96 +498,9 @@ async def claim_usage_exports_for_sending(*, limit: int = 100) -> list[ClaimedUs
 
 
 async def run_billing_accounting_pass(*, subject_limit: int = 100) -> None:
-    if settings.cloud_billing_mode not in {BILLING_MODE_OBSERVE, BILLING_MODE_ENFORCE}:
-        return
-
-    await process_pending_seat_adjustments()
-
-    async with db_session.open_async_transaction() as db:
-        subject_ids = await list_billing_subject_ids_for_usage_accounting(
-            db,
-            limit=subject_limit,
-        )
-    for billing_subject_id in subject_ids:
-        async with db_session.open_async_transaction() as db:
-            state = await snapshot_state.load_snapshot_state_for_subject(db, billing_subject_id)
-            state = await state_with_overage_usage(db, state)
-        now = utcnow()
-        unlimited_state = _compute_unlimited_cloud_hours_state(
-            subscriptions=state.subscriptions,
-            entitlements=state.entitlements,
-            now=now,
-        )
-        results = []
-        pro_subscription = (
-            unlimited_state.subscription
-            if (
-                settings.pro_billing_enabled
-                and unlimited_state.subscription is not None
-                and _subscription_is_pro(unlimited_state.subscription)
-            )
-            else None
-        )
-        if unlimited_state.has_unlimited_cloud_hours:
-            if unlimited_state.unlimited_window_start is not None:
-                results.append(
-                    await billing_accounting_service.account_usage_for_snapshot_state(
-                        state,
-                        scan_until=unlimited_state.unlimited_window_start,
-                        consume_grants=True,
-                        subscription=None,
-                    )
-                )
-            results.append(
-                await billing_accounting_service.account_usage_for_snapshot_state(
-                    state,
-                    scan_until=now,
-                    consume_grants=False,
-                    subscription=None,
-                )
-            )
-        elif pro_subscription is not None:
-            results.append(
-                await billing_accounting_service.account_usage_for_snapshot_state(
-                    state,
-                    scan_until=now,
-                    consume_grants=True,
-                    subscription=pro_subscription,
-                )
-            )
-        else:
-            results.append(
-                await billing_accounting_service.account_usage_for_snapshot_state(
-                    state,
-                    scan_until=now,
-                    consume_grants=True,
-                    subscription=None,
-                )
-            )
-
-        if any(result.export_count > 0 for result in results):
-            snapshot = _build_billing_snapshot(state)
-            async with db_session.open_async_transaction() as db:
-                await record_billing_decision_event(
-                    db,
-                    billing_subject_id=billing_subject_id,
-                    actor_user_id=None,
-                    workspace_id=None,
-                    decision_type=BILLING_DECISION_OVERAGE_EXPORT,
-                    mode=settings.cloud_billing_mode,
-                    would_block_start=False,
-                    would_pause_active=False,
-                    reason=(
-                        BILLING_USAGE_EXPORT_STATUS_OBSERVED
-                        if settings.cloud_billing_mode == BILLING_MODE_OBSERVE
-                        else "pending"
-                    ),
-                    active_sandbox_count=snapshot.active_sandbox_count,
-                    remaining_seconds=snapshot.remaining_seconds,
-                )
-
-    if settings.cloud_billing_mode == BILLING_MODE_ENFORCE:
-        await send_pending_usage_exports()
+    await billing_accounting_pass_service.run_billing_accounting_pass(
+        subject_limit=subject_limit,
+    )
 
 
 async def process_pending_seat_adjustments(*, limit: int = 100) -> None:
