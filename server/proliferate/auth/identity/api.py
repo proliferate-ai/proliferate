@@ -32,22 +32,26 @@ from proliferate.auth.identity.models import (
     StartAuthRequest,
     StartAuthResponse,
 )
+from proliferate.auth.identity.password import (
+    authenticate_password_login,
+    set_password_credential,
+)
 from proliferate.auth.identity.routing import auth_route_path
 from proliferate.auth.identity.service import (
-    WEB_CSRF_COOKIE,
-    WEB_CSRF_HEADER,
-    WEB_REFRESH_COOKIE,
-    auth_session_response,
-    authenticate_password_login,
     complete_apple_mobile_login,
     complete_apple_web_callback,
     complete_oauth_provider_callback,
     complete_oauth_provider_error_callback,
-    exchange_auth_code,
     hash_secret,
-    refresh_auth_session,
-    set_password_credential,
     start_provider_auth,
+)
+from proliferate.auth.identity.sessions import (
+    WEB_CSRF_COOKIE,
+    WEB_CSRF_HEADER,
+    WEB_REFRESH_COOKIE,
+    auth_session_response,
+    exchange_auth_code,
+    refresh_auth_session,
 )
 from proliferate.auth.identity.types import AuthProviderName
 from proliferate.config import settings

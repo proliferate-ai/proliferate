@@ -17,7 +17,7 @@ from sqlalchemy import select
 from proliferate.auth.desktop.models import AuthorizeParams
 from proliferate.auth.desktop import service as desktop_service
 from proliferate.auth.identity import providers as identity_providers
-from proliferate.auth.identity.service import WEB_CSRF_COOKIE
+from proliferate.auth.identity.sessions import WEB_CSRF_COOKIE
 from proliferate.auth.oauth import github_oauth_client, google_oauth_client
 from proliferate.auth.passwords import hash_password
 from proliferate.config import settings
