@@ -11,6 +11,8 @@ permissions, happy path, verification, and failure modes for one operation.
 | Runbook | Operation |
 | --- | --- |
 | [billing-pro-promo-codes.md](billing-pro-promo-codes.md) | Grant a user free or discounted Pro access via a Stripe promotional code. |
+| [stripe-webhook-failure.md](stripe-webhook-failure.md) | Triage and recover Stripe webhook delivery or billing mirror failures. |
+| [e2b-template-rollback.md](e2b-template-rollback.md) | Roll an E2B cloud runtime template rolling tag back to a known-good immutable build. |
 
 ## Adding A Runbook
 
