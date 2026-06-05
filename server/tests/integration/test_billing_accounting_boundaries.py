@@ -27,8 +27,9 @@ from proliferate.db.store.billing_subjects import (
     ensure_billing_grant,
     ensure_personal_billing_subject,
 )
-from proliferate.server.billing import service as billing_service
-from proliferate.server.billing.service import account_usage_for_billing_subject
+from proliferate.server.billing import accounting as billing_accounting_service
+from proliferate.server.billing.accounting import account_usage_for_billing_subject
+from proliferate.server.billing.service import run_billing_accounting_pass
 from tests.integration.billing_accounting_helpers import (
     patch_global_session_factory,
     seed_usage_segment,
@@ -91,7 +92,7 @@ async def test_accounting_splits_pre_subscription_usage_before_unlimited_hours(
     )
     await db_session.commit()
 
-    await billing_service.run_billing_accounting_pass(subject_limit=10)
+    await run_billing_accounting_pass(subject_limit=10)
     db_session.expire_all()
 
     grant = (
@@ -190,7 +191,7 @@ async def test_accounting_uses_stable_subscription_start_after_renewal(
     )
     await db_session.commit()
 
-    await billing_service.run_billing_accounting_pass(subject_limit=10)
+    await run_billing_accounting_pass(subject_limit=10)
     db_session.expire_all()
 
     grant = (
@@ -320,12 +321,12 @@ async def test_pending_usage_export_is_sent_as_raw_seconds(
         return {"identifier": kwargs["identifier"]}
 
     monkeypatch.setattr(
-        billing_service.stripe_billing,
+        billing_accounting_service.stripe_billing,
         "create_meter_event",
         _fake_create_meter_event,
     )
 
-    await billing_service.send_pending_usage_exports()
+    await billing_accounting_service.send_pending_usage_exports()
 
     assert calls == [
         {
