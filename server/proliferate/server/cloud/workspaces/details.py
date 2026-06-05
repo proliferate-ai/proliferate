@@ -44,6 +44,8 @@ from proliferate.server.cloud.workspaces.models import (
     WorkspaceDetail,
     WorkspaceDirectTargetContext,
     WorkspaceSummary,
+)
+from proliferate.server.cloud.workspaces.payloads import (
     workspace_detail_payload,
     workspace_summary_payload,
 )

@@ -38,7 +38,8 @@ from proliferate.server.cloud.workspaces.access import (
     cloud_workspace_user_can_interact_with_db,
 )
 from proliferate.server.cloud.workspaces.details import build_workspace_detail_for_request
-from proliferate.server.cloud.workspaces.models import WorkspaceDetail, runtime_auth_payload
+from proliferate.server.cloud.workspaces.models import WorkspaceDetail
+from proliferate.server.cloud.workspaces.payloads import runtime_auth_payload
 from proliferate.server.cloud.workspaces.remote_access.models import (
     BootstrapWorkspaceRemoteAccessRequest,
     WorkspaceConnection,
