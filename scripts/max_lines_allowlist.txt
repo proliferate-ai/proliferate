@@ -39,9 +39,9 @@ server/tests/integration/test_billing_api.py 2052 existing server oversized inte
 server/tests/integration/test_cloud_agent_auth_api.py 1664 existing server oversized integration test
 server/tests/integration/test_cloud_api.py 2346 existing server oversized integration test
 server/tests/integration/test_cloud_commands_api.py 4890 existing server oversized integration test
-server/tests/integration/test_sandbox_profile_foundation.py 1223 existing server oversized integration test
+server/tests/integration/test_sandbox_profile_foundation.py 1222 existing server oversized integration test
 server/tests/integration/test_schema_migrations.py 925 existing server oversized integration test
 server/tests/integration/test_stripe_webhooks.py 1456 existing server oversized integration test
 server/tests/unit/test_cloud_mobility_service.py 800 existing server oversized unit test
 server/tests/unit/test_cloud_runtime_ensure_running.py 872 existing server oversized unit test
-server/tests/unit/test_cloud_runtime_provision.py 1823 existing server oversized unit test
+server/tests/unit/test_cloud_runtime_provision.py 1822 existing server oversized unit test
