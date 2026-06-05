@@ -71,13 +71,13 @@ from proliferate.server.cloud.runtime.bootstrap import (
     build_runtime_env,
     build_supervisor_config,
     build_worker_config,
-    check_node_runtime,
-    check_runtime_bundle_preinstalled,
-    install_node_runtime,
     local_anyharness_base_url,
-    stage_runtime_bundle,
     supervisor_config_path,
     worker_config_path,
+)
+from proliferate.server.cloud.runtime.bundle import (
+    check_runtime_bundle_preinstalled,
+    stage_runtime_bundle,
 )
 from proliferate.server.cloud.runtime.config_sync.repo_config import (
     WorkspaceRuntimeAccess,
@@ -130,6 +130,7 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
     run_sandbox_command_logged,
 )
 from proliferate.server.cloud.runtime.target_registration import ensure_runtime_target_enrollment
+from proliferate.server.cloud.runtime.toolchains import check_node_runtime, install_node_runtime
 from proliferate.server.cloud.runtime.wake import run_managed_target_wake_job
 from proliferate.server.cloud.runtime_config.service import (
     refresh_profile_runtime_config,
@@ -746,7 +747,6 @@ async def _prepare_runtime_template(
         runtime_context=connected.runtime_context,
     )
     tracker.complete(preinstalled=bundle_preinstalled)
-
     if bundle_preinstalled:
         await _set_workspace_status(
             ctx.workspace_id,
