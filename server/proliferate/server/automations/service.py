@@ -60,7 +60,7 @@ from proliferate.server.automations.models import (
     CreateAutomationRequest,
     UpdateAutomationRequest,
 )
-from proliferate.server.billing.service import (
+from proliferate.server.billing.snapshots import (
     get_billing_snapshot_for_request,
     repo_limit_for_billing_snapshot,
 )

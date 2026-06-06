@@ -17,7 +17,7 @@ from proliferate.constants.cloud import (
 )
 from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZATION_ROLE_OWNER
 from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
-from proliferate.server.billing.service import get_billing_snapshot_for_subject_in_session
+from proliferate.server.billing.snapshots import get_billing_snapshot_for_subject_in_session
 from proliferate.server.cloud.agent_auth.deployment_plans import (
     _gateway_deployments_for_credential,
 )

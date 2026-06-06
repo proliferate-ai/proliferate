@@ -36,9 +36,7 @@ from proliferate.server.billing.runtime_usage import (
     record_cloud_sandbox_usage_stopped,
     remember_cloud_sandbox_event_receipt,
 )
-from proliferate.server.billing.service import (
-    get_billing_snapshot_for_subject,
-)
+from proliferate.server.billing.snapshots import get_billing_snapshot_for_subject
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime.domain.provider_events import (
     is_stale_provider_event as _is_stale_provider_event,

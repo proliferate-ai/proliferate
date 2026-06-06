@@ -28,8 +28,8 @@ from proliferate.integrations.sandbox import (
     SandboxProvider,
     get_configured_sandbox_provider,
 )
+from proliferate.server.billing.authorization import authorize_sandbox_start
 from proliferate.server.billing.runtime_usage import record_cloud_sandbox_usage_stopped
-from proliferate.server.billing.service import authorize_sandbox_start
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.runtime.config_sync.repo_config import (

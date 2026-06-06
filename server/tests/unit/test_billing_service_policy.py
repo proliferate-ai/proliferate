@@ -15,7 +15,7 @@ from proliferate.constants.billing import (
 )
 from proliferate.server.billing.models import BillingSnapshot
 from proliferate.server.billing.pricing import classify_monthly_price_id
-from proliferate.server.billing.service import repo_limit_for_billing_snapshot
+from proliferate.server.billing.snapshots import repo_limit_for_billing_snapshot
 
 
 def _billing_snapshot(*, billing_mode: str, is_paid_cloud: bool) -> BillingSnapshot:

@@ -25,8 +25,8 @@ from proliferate.server.automations.domain.claim_lifecycle import (
     CLOUD_WORKSPACE_CREATION_TRANSITION,
     claim_is_active,
 )
-from proliferate.server.billing.service import (
-    authorize_sandbox_start,
+from proliferate.server.billing.authorization import authorize_sandbox_start
+from proliferate.server.billing.snapshots import (
     get_billing_snapshot_for_subject,
     repo_limit_for_billing_snapshot,
 )

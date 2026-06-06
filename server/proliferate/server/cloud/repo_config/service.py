@@ -26,7 +26,7 @@ from proliferate.db.store.cloud_slack import repo_routing_profiles as slack_rout
 from proliferate.db.store.cloud_workspaces import get_cloud_workspace_by_id
 from proliferate.db.store.organizations import get_active_membership
 from proliferate.integrations.anyharness import CloudRuntimeOperationError
-from proliferate.server.billing.service import (
+from proliferate.server.billing.snapshots import (
     get_billing_snapshot,
     get_billing_snapshot_for_request,
     repo_limit_for_billing_snapshot,
