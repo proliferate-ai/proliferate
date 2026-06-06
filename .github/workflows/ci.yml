@@ -59,8 +59,13 @@ jobs:
 
       - name: Check CI/CD scripts parse
         run: |
+          node --check scripts/ci-cd/create-release-tags.mjs
           node --check scripts/ci-cd/detect-deploy-surfaces.mjs
+          node --check scripts/ci-cd/prepare-artifact-release.mjs
           node --check scripts/ci-cd/resolve-deploy-base.mjs
+
+      - name: Test CI/CD scripts
+        run: node --test scripts/ci-cd/*.test.mjs
 
       - name: Check workflow YAML parses
         run: ruby -e 'require "yaml"; ARGV.each { |file| YAML.load_file(file); puts file }' .github/workflows/*.yml

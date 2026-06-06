@@ -14,6 +14,10 @@ on:
         description: Comma-separated surfaces to force, or all.
         required: false
         type: string
+      only_surfaces:
+        description: Exact comma-separated surfaces to deploy, or all. Overrides detection and force_surfaces.
+        required: false
+        type: string
       dry_run:
         description: Plan only; do not deploy.
         default: false
@@ -48,6 +52,8 @@ jobs:
       desktop: ${{ steps.detect.outputs.desktop }}
       runtime: ${{ steps.detect.outputs.runtime }}
       changed_files_count: ${{ steps.detect.outputs.changed_files_count }}
+      selection_mode: ${{ steps.detect.outputs.selection_mode }}
+      selected_surfaces: ${{ steps.detect.outputs.selected_surfaces }}
       summary_json: ${{ steps.detect.outputs.summary_json }}
     steps:
       - uses: actions/checkout@v4
@@ -136,8 +142,10 @@ jobs:
           --base "${{ steps.base.outputs.base_sha }}"
           --head "${{ steps.meta.outputs.head_sha }}"
           --force "$FORCE_SURFACES"
+          --only "$ONLY_SURFACES"
         env:
           FORCE_SURFACES: ${{ github.event.inputs.force_surfaces || '' }}
+          ONLY_SURFACES: ${{ github.event.inputs.only_surfaces || '' }}
 
       - name: Summarize plan
         run: |
@@ -147,6 +155,10 @@ jobs:
             echo "- Head: \`${{ steps.detect.outputs.head_sha }}\`"
             echo "- Changed files: \`${{ steps.detect.outputs.changed_files_count }}\`"
             echo "- Dry run: \`${{ steps.meta.outputs.dry_run }}\`"
+            echo "- Selection: \`${{ steps.detect.outputs.selection_mode }}\`"
+            echo "- Forced surfaces: \`${{ steps.detect.outputs.forced_surfaces }}\`"
+            echo "- Only surfaces: \`${{ steps.detect.outputs.only_surfaces }}\`"
+            echo "- Selected surfaces: \`${{ steps.detect.outputs.selected_surfaces }}\`"
             echo ""
             echo "| Surface | Deploy |"
             echo "| --- | --- |"

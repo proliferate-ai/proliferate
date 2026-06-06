@@ -2,8 +2,9 @@
 
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 
-const SURFACES = [
+export const SURFACES = [
   "server",
   "workers",
   "e2b",
@@ -17,18 +18,19 @@ function printUsage() {
   console.log(`Detect deployable surfaces touched by a git diff.
 
 Usage:
-  node scripts/ci-cd/detect-deploy-surfaces.mjs --base <sha> --head <sha> [--force <surface[,surface]|all>]
+  node scripts/ci-cd/detect-deploy-surfaces.mjs --base <sha> --head <sha> [--force <surface[,surface]|all>] [--only <surface[,surface]|all>]
 
 Outputs JSON to stdout. When GITHUB_OUTPUT is set, also writes boolean outputs
 for each deploy surface plus base_sha, head_sha, and changed_files_count.
 `);
 }
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const parsed = {
     base: "",
     head: "HEAD",
     force: "",
+    only: "",
     help: false,
   };
 
@@ -45,6 +47,10 @@ function parseArgs(argv) {
         break;
       case "--force":
         parsed.force = argv[index + 1] || "";
+        index += 1;
+        break;
+      case "--only":
+        parsed.only = argv[index + 1] || "";
         index += 1;
         break;
       case "--help":
@@ -93,7 +99,7 @@ function matches(path, prefixes) {
   return prefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
-function classifyFile(path) {
+export function classifyFile(path) {
   const touched = new Set();
 
   const workflowDeployPath =
@@ -197,22 +203,59 @@ function classifyFile(path) {
   return touched;
 }
 
-function forcedSurfaces(force) {
-  const normalized = force
+export function parseSurfaceList(value, optionName) {
+  const normalized = value
     .split(",")
-    .map((value) => value.trim())
+    .map((item) => item.trim())
     .filter(Boolean);
   if (normalized.length === 0) {
     return new Set();
   }
   if (normalized.includes("all")) {
+    if (normalized.length > 1) {
+      throw new Error(`${optionName}=all cannot be combined with other surfaces.`);
+    }
     return new Set(SURFACES);
   }
   const unknown = normalized.filter((surface) => !SURFACES.includes(surface));
   if (unknown.length > 0) {
-    throw new Error(`Unknown forced deploy surface(s): ${unknown.join(", ")}`);
+    throw new Error(`Unknown ${optionName} deploy surface(s): ${unknown.join(", ")}`);
   }
   return new Set(normalized);
+}
+
+function surfacesFromFiles(files) {
+  const touched = new Set();
+  for (const file of files) {
+    for (const surface of classifyFile(file)) {
+      touched.add(surface);
+    }
+  }
+  return touched;
+}
+
+export function selectSurfaces({ files, force = "", only = "" }) {
+  const detected = surfacesFromFiles(files);
+  const forced = parseSurfaceList(force, "forced");
+  const onlySurfaces = parseSurfaceList(only, "only");
+  const selectionMode = onlySurfaces.size > 0 ? "only" : "detected";
+
+  const selected =
+    selectionMode === "only"
+      ? new Set(onlySurfaces)
+      : new Set([...detected, ...forced]);
+
+  return {
+    selected,
+    detected,
+    forced,
+    only: onlySurfaces,
+    selectionMode,
+  };
+}
+
+function surfaceList(set) {
+  return [...set].sort((left, right) => SURFACES.indexOf(left) - SURFACES.indexOf(right));
 }
 
 function writeGithubOutput(result) {
@@ -225,12 +268,33 @@ function writeGithubOutput(result) {
     `base_sha=${result.baseSha}`,
     `head_sha=${result.headSha}`,
     `changed_files_count=${result.changedFiles.length}`,
+    `selection_mode=${result.selectionMode}`,
+    `detected_surfaces=${result.detectedSurfaces.join(",")}`,
+    `forced_surfaces=${result.forcedSurfaces.join(",")}`,
+    `only_surfaces=${result.onlySurfaces.join(",")}`,
+    `selected_surfaces=${result.selectedSurfaces.join(",")}`,
   ];
   for (const surface of SURFACES) {
     lines.push(`${surface}=${result.surfaces[surface] ? "true" : "false"}`);
   }
   lines.push(`summary_json=${JSON.stringify(result)}`);
   fs.appendFileSync(outputPath, `${lines.join("\n")}\n`);
+}
+
+export function buildResult({ baseSha, headSha, files, force, only }) {
+  const selection = selectSurfaces({ files, force, only });
+  const selectedSurfaces = surfaceList(selection.selected);
+  return {
+    baseSha,
+    headSha,
+    changedFiles: files,
+    selectionMode: selection.selectionMode,
+    detectedSurfaces: surfaceList(selection.detected),
+    forcedSurfaces: surfaceList(selection.forced),
+    onlySurfaces: surfaceList(selection.only),
+    selectedSurfaces,
+    surfaces: Object.fromEntries(SURFACES.map((surface) => [surface, selection.selected.has(surface)])),
+  };
 }
 
 function main() {
@@ -254,26 +318,18 @@ function main() {
   }
   const baseSha = resolveCommit(parsed.base) || firstCommit();
   const files = changedFiles(baseSha, headSha);
-  const forced = forcedSurfaces(parsed.force);
-  const touched = new Set(forced);
-
-  for (const file of files) {
-    for (const surface of classifyFile(file)) {
-      touched.add(surface);
-    }
-  }
-
-  const surfaces = Object.fromEntries(SURFACES.map((surface) => [surface, touched.has(surface)]));
-  const result = {
+  const result = buildResult({
     baseSha,
     headSha,
-    changedFiles: files,
-    forcedSurfaces: [...forced],
-    surfaces,
-  };
+    files,
+    force: parsed.force,
+    only: parsed.only,
+  });
 
   writeGithubOutput(result);
   console.log(JSON.stringify(result, null, 2));
 }
 
-main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}

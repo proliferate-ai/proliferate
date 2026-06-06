@@ -1,0 +1,279 @@
+name: Hotfix Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Main commit SHA or ref to hotfix from.
+        required: true
+        type: string
+      only_surfaces:
+        description: Exact comma-separated surfaces to hotfix, or all.
+        required: true
+        type: string
+      reason:
+        description: Short operator-facing reason for the hotfix.
+        required: true
+        type: string
+      bump_patch:
+        description: Bump patch versions for artifact lanes before publishing.
+        default: true
+        required: false
+        type: boolean
+      dry_run:
+        description: Plan only; do not push commits, tags, releases, or deploys.
+        default: false
+        required: false
+        type: boolean
+
+permissions:
+  actions: read
+  contents: write
+  id-token: write
+  packages: write
+
+concurrency:
+  group: hotfix-production
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.meta.outputs.release_id }}
+      head_sha: ${{ steps.commit.outputs.head_sha }}
+      dry_run: ${{ steps.meta.outputs.dry_run }}
+      selected_surfaces: ${{ steps.detect.outputs.selected_surfaces }}
+      server: ${{ steps.detect.outputs.server }}
+      workers: ${{ steps.detect.outputs.workers }}
+      e2b: ${{ steps.detect.outputs.e2b }}
+      web: ${{ steps.detect.outputs.web }}
+      mobile: ${{ steps.detect.outputs.mobile }}
+      desktop: ${{ steps.detect.outputs.desktop }}
+      runtime: ${{ steps.detect.outputs.runtime }}
+      desktop_version: ${{ steps.artifacts.outputs.desktop_version }}
+      runtime_version: ${{ steps.artifacts.outputs.runtime_version }}
+      server_version: ${{ steps.artifacts.outputs.server_version }}
+      desktop_tag: ${{ steps.artifacts.outputs.desktop_tag }}
+      runtime_tag: ${{ steps.artifacts.outputs.runtime_tag }}
+      server_tag: ${{ steps.artifacts.outputs.server_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Resolve hotfix metadata
+        id: meta
+        env:
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          set -euo pipefail
+          git fetch origin main --tags --prune
+          head_sha="$(git rev-parse HEAD)"
+          git merge-base --is-ancestor "$head_sha" refs/remotes/origin/main
+          release_id="hotfix-$(date -u +%F)-${GITHUB_RUN_NUMBER}"
+          {
+            echo "release_id=$release_id"
+            echo "head_sha=$head_sha"
+            echo "dry_run=$DRY_RUN"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Select exact hotfix surfaces
+        id: detect
+        run: |
+          set -euo pipefail
+          if [[ -z "${ONLY_SURFACES// }" ]]; then
+            echo "::error::only_surfaces is required for production hotfixes."
+            exit 1
+          fi
+          node scripts/ci-cd/detect-deploy-surfaces.mjs \
+            --base "${{ steps.meta.outputs.head_sha }}" \
+            --head "${{ steps.meta.outputs.head_sha }}" \
+            --only "$ONLY_SURFACES"
+        env:
+          ONLY_SURFACES: ${{ github.event.inputs.only_surfaces }}
+
+      - name: Prepare artifact versions
+        id: artifacts
+        run: >
+          node scripts/ci-cd/prepare-artifact-release.mjs
+          --surfaces "${{ steps.detect.outputs.selected_surfaces }}"
+          --release-id "${{ steps.meta.outputs.release_id }}"
+          --bump-patch "${{ github.event.inputs.bump_patch || 'true' }}"
+          --dry-run "${{ steps.meta.outputs.dry_run }}"
+
+      - name: Commit version bumps
+        id: commit
+        env:
+          RELEASE_ID: ${{ steps.meta.outputs.release_id }}
+          DRY_RUN: ${{ steps.meta.outputs.dry_run }}
+          REASON: ${{ github.event.inputs.reason }}
+        run: |
+          set -euo pipefail
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --quiet; then
+            echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json apps/desktop/src-tauri/Cargo.toml anyharness/sdk/package.json
+          git commit -m "release: prepare $RELEASE_ID" -m "$REASON"
+          git push origin HEAD:main
+          echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Create hotfix tag
+        if: steps.meta.outputs.dry_run != 'true'
+        run: >
+          node scripts/ci-cd/create-release-tags.mjs
+          --target "${{ steps.commit.outputs.head_sha }}"
+          --tags "${{ steps.meta.outputs.release_id }}"
+          --dry-run false
+
+      - name: Summarize hotfix
+        run: |
+          {
+            echo "### Production hotfix"
+            echo "- Hotfix: \`${{ steps.meta.outputs.release_id }}\`"
+            echo "- Reason: ${{ github.event.inputs.reason }}"
+            echo "- Head: \`${{ steps.commit.outputs.head_sha }}\`"
+            echo "- Dry run: \`${{ steps.meta.outputs.dry_run }}\`"
+            echo "- Selected surfaces: \`${{ steps.detect.outputs.selected_surfaces }}\`"
+            echo "- Desktop: \`${{ steps.artifacts.outputs.desktop_tag }}\`"
+            echo "- Runtime: \`${{ steps.artifacts.outputs.runtime_tag }}\`"
+            echo "- Server: \`${{ steps.artifacts.outputs.server_tag }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  release-runtime:
+    needs: [prepare]
+    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.runtime == 'true' }}
+    uses: ./.github/workflows/release-runtime.yml
+    with:
+      git_sha: ${{ needs.prepare.outputs.head_sha }}
+      version: ${{ needs.prepare.outputs.runtime_version }}
+      dry_run: false
+      publish: true
+    secrets: inherit
+
+  release-server:
+    needs: [prepare]
+    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.server == 'true' }}
+    permissions:
+      contents: write
+      packages: write
+    uses: ./.github/workflows/server-ci.yml
+    with:
+      git_sha: ${{ needs.prepare.outputs.head_sha }}
+      version: ${{ needs.prepare.outputs.server_version }}
+      dry_run: false
+      publish: true
+    secrets: inherit
+
+  promote-e2b:
+    needs: [prepare]
+    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' }}
+    uses: ./.github/workflows/_deploy-e2b.yml
+    with:
+      environment: production
+      git_sha: ${{ needs.prepare.outputs.head_sha }}
+      enabled: ${{ needs.prepare.outputs.e2b == 'true' }}
+      rolling_tag: production
+      mode: build_and_promote
+    secrets: inherit
+
+  deploy-server:
+    needs: [prepare, promote-e2b]
+    if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' }}
+    uses: ./.github/workflows/_deploy-server.yml
+    with:
+      environment: production
+      git_sha: ${{ needs.prepare.outputs.head_sha }}
+      enabled: ${{ needs.prepare.outputs.server == 'true' }}
+    secrets: inherit
+
+  deploy-workers:
+    needs: [prepare, deploy-server]
+    if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' }}
+    uses: ./.github/workflows/_deploy-workers.yml
+    with:
+      environment: production
+      git_sha: ${{ needs.prepare.outputs.head_sha }}
+      enabled: ${{ needs.prepare.outputs.workers == 'true' }}
+    secrets: inherit
+
+  deploy-web:
+    needs: [prepare, deploy-server]
+    if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' }}
+    uses: ./.github/workflows/_deploy-web.yml
+    with:
+      environment: production
+      git_sha: ${{ needs.prepare.outputs.head_sha }}
+      enabled: ${{ needs.prepare.outputs.web == 'true' }}
+    secrets: inherit
+
+  deploy-mobile:
+    needs: [prepare]
+    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' }}
+    uses: ./.github/workflows/_deploy-mobile.yml
+    with:
+      environment: production
+      git_sha: ${{ needs.prepare.outputs.head_sha }}
+      enabled: ${{ needs.prepare.outputs.mobile == 'true' }}
+    secrets: inherit
+
+  deploy-desktop:
+    needs: [prepare]
+    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' }}
+    permissions:
+      contents: write
+      id-token: write
+    uses: ./.github/workflows/_deploy-desktop.yml
+    with:
+      environment: production
+      git_sha: ${{ needs.prepare.outputs.head_sha }}
+      enabled: ${{ needs.prepare.outputs.desktop == 'true' }}
+      dry_run: false
+      publish_updater: true
+    secrets: inherit
+
+  summary:
+    needs:
+      - prepare
+      - release-runtime
+      - release-server
+      - promote-e2b
+      - deploy-server
+      - deploy-workers
+      - deploy-web
+      - deploy-mobile
+      - deploy-desktop
+    if: ${{ always() && needs.prepare.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Summarize results
+        run: |
+          {
+            echo "### Production hotfix result"
+            echo "- Hotfix: \`${{ needs.prepare.outputs.release_id }}\`"
+            echo "- Head: \`${{ needs.prepare.outputs.head_sha }}\`"
+            echo "- Surfaces: \`${{ needs.prepare.outputs.selected_surfaces }}\`"
+            echo "- Runtime release: \`${{ needs.release-runtime.result }}\`"
+            echo "- Server release: \`${{ needs.release-server.result }}\`"
+            echo "- E2B production: \`${{ needs.promote-e2b.result }}\`"
+            echo "- Server production: \`${{ needs.deploy-server.result }}\`"
+            echo "- Workers production: \`${{ needs.deploy-workers.result }}\`"
+            echo "- Web production: \`${{ needs.deploy-web.result }}\`"
+            echo "- Mobile production: \`${{ needs.deploy-mobile.result }}\`"
+            echo "- Desktop production: \`${{ needs.deploy-desktop.result }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

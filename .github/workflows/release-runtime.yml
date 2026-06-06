@@ -10,6 +10,24 @@ on:
         description: "Run the full pipeline without publishing or creating a release"
         type: boolean
         default: false
+  workflow_call:
+    inputs:
+      git_sha:
+        description: "Commit SHA to package. Defaults to the caller ref."
+        required: false
+        type: string
+      version:
+        description: "Runtime version to release. Required for reusable releases."
+        required: false
+        type: string
+      dry_run:
+        description: "Run the full pipeline without publishing or creating a release"
+        type: boolean
+        default: false
+      publish:
+        description: "Publish npm package and GitHub Release"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -46,6 +64,8 @@ jobs:
             archive: zip
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_sha || github.ref }}
 
       - name: Setup Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -100,6 +120,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_sha || github.ref }}
 
       - uses: actions/setup-node@v4
         with:
@@ -124,7 +146,7 @@ jobs:
           pnpm run build
 
       - name: Publish to npm
-        if: github.event_name == 'push' && !inputs.dry_run
+        if: (github.event_name == 'push' || inputs.publish) && !inputs.dry_run
         working-directory: anyharness/sdk
         run: |
           if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
@@ -136,7 +158,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Dry-run publish
-        if: github.event_name != 'push' || inputs.dry_run
+        if: (github.event_name != 'push' && !inputs.publish) || inputs.dry_run
         working-directory: anyharness/sdk
         run: npm publish --access public --dry-run
 
@@ -145,6 +167,10 @@ jobs:
     needs: [build-binaries, publish-sdk]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_sha || github.ref }}
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -156,11 +182,32 @@ jobs:
           sha256sum anyharness-* > SHA256SUMS
           cat SHA256SUMS
 
+      - name: Ensure runtime release tag exists
+        if: github.event_name == 'workflow_call' && inputs.publish && !inputs.dry_run
+        env:
+          RELEASE_TAG: ${{ format('runtime-v{0}', inputs.version) }}
+          RELEASE_TARGET: ${{ inputs.git_sha }}
+        run: |
+          set -euo pipefail
+          : "${RELEASE_TAG:?Missing runtime release tag.}"
+          : "${RELEASE_TARGET:?Missing runtime release target.}"
+          existing_target="$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG" | awk '{ print $1 }' | head -n 1)"
+          if [[ -n "$existing_target" && "$existing_target" != "$RELEASE_TARGET" ]]; then
+            echo "::error::Runtime tag $RELEASE_TAG already exists at $existing_target, not $RELEASE_TARGET."
+            exit 1
+          fi
+          if [[ -z "$existing_target" ]]; then
+            git tag "$RELEASE_TAG" "$RELEASE_TARGET"
+            git push origin "refs/tags/$RELEASE_TAG"
+          fi
+
       - name: Create GitHub Release
-        if: github.event_name == 'push' && !inputs.dry_run
+        if: (github.event_name == 'push' || inputs.publish) && !inputs.dry_run
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          target_commitish: ${{ inputs.git_sha || github.sha }}
+          tag_name: ${{ github.event_name == 'push' && github.ref_name || format('runtime-v{0}', inputs.version) }}
           files: |
             artifacts/anyharness-*
             artifacts/SHA256SUMS

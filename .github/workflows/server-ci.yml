@@ -22,6 +22,24 @@ on:
       - "scripts/validate-agent-catalog.mjs"
       - "server/**"
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      git_sha:
+        description: "Commit SHA to validate and package. Defaults to the caller ref."
+        required: false
+        type: string
+      version:
+        description: "Server/self-hosted version to release. Required for reusable release calls."
+        required: false
+        type: string
+      dry_run:
+        description: "Run validation and packaging without publishing release artifacts."
+        type: boolean
+        default: false
+      publish:
+        description: "Publish GHCR image and GitHub Release assets."
+        type: boolean
+        default: true
 
 defaults:
   run:
@@ -35,6 +53,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_sha || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -91,6 +111,8 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_sha || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -119,12 +141,14 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     needs: [lint, test]
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/server-v')
+    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/server-v')) || (github.event_name == 'workflow_call' && inputs.publish && !inputs.dry_run)
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_sha || github.ref }}
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -135,12 +159,18 @@ jobs:
 
       - name: Compute image tags
         id: tags
+        env:
+          INPUT_VERSION: ${{ inputs.version || '' }}
         run: |
           set -euo pipefail
           GHCR_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/proliferate-server"
           TAGS=()
 
-          VERSION="${GITHUB_REF#refs/tags/server-v}"
+          if [[ "${GITHUB_REF:-}" == refs/tags/server-v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/server-v}"
+          else
+            VERSION="${INPUT_VERSION:?A server version input is required for reusable releases.}"
+          fi
           TAGS+=("${GHCR_IMAGE}:${VERSION}")
 
           {
@@ -160,11 +190,13 @@ jobs:
   self-hosted-release-assets:
     runs-on: ubuntu-latest
     needs: [lint, test, docker]
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/server-v')
+    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/server-v')) || (github.event_name == 'workflow_call' && inputs.publish && !inputs.dry_run)
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_sha || github.ref }}
 
       - name: Setup Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -211,9 +243,31 @@ jobs:
             > artifacts/self-hosted-assets.SHA256SUMS
         working-directory: .
 
+      - name: Ensure server release tag exists
+        if: github.event_name == 'workflow_call' && inputs.publish && !inputs.dry_run
+        env:
+          RELEASE_TAG: ${{ format('server-v{0}', inputs.version) }}
+          RELEASE_TARGET: ${{ inputs.git_sha }}
+        run: |
+          set -euo pipefail
+          : "${RELEASE_TAG:?Missing server release tag.}"
+          : "${RELEASE_TARGET:?Missing server release target.}"
+          existing_target="$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG" | awk '{ print $1 }' | head -n 1)"
+          if [[ -n "$existing_target" && "$existing_target" != "$RELEASE_TARGET" ]]; then
+            echo "::error::Server tag $RELEASE_TAG already exists at $existing_target, not $RELEASE_TARGET."
+            exit 1
+          fi
+          if [[ -z "$existing_target" ]]; then
+            git tag "$RELEASE_TAG" "$RELEASE_TARGET"
+            git push origin "refs/tags/$RELEASE_TAG"
+          fi
+        working-directory: .
+
       - name: Publish self-hosted release assets
         uses: softprops/action-gh-release@v2
         with:
+          target_commitish: ${{ inputs.git_sha || github.sha }}
+          tag_name: ${{ github.event_name == 'push' && github.ref_name || format('server-v{0}', inputs.version) }}
           files: |
             artifacts/anyharness-x86_64-unknown-linux-musl.tar.gz
             artifacts/anyharness-aarch64-unknown-linux-musl.tar.gz

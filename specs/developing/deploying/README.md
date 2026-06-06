@@ -44,6 +44,8 @@ Use this folder to answer four deployment questions:
 4. New release process:
    - desktop, runtime/SDK, cloud template, server image, mobile/TestFlight, and
      hosted web/API release paths live in [ci-cd.md](ci-cd.md)
+   - nightly trains and production hotfixes are coordinated by the release
+     train workflows in [ci-cd.md](ci-cd.md)
    - user-facing releases must also update the landing page, public docs,
      changelog/release notes, or in-app copy when the shipped behavior changes
      those surfaces
