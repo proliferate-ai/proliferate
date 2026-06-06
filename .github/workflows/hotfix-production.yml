@@ -15,11 +15,14 @@ on:
         description: Short operator-facing reason for the hotfix.
         required: true
         type: string
-      bump_patch:
-        description: Bump patch versions for artifact lanes before publishing.
-        default: true
+      version_bump:
+        description: Public Proliferate version bump for this hotfix. Use none only for SHA-based surfaces.
+        default: patch
         required: false
-        type: boolean
+        type: choice
+        options:
+          - patch
+          - none
       dry_run:
         description: Plan only; do not push commits, tags, releases, or deploys.
         default: false
@@ -46,6 +49,8 @@ jobs:
       release_id: ${{ steps.meta.outputs.release_id }}
       head_sha: ${{ steps.commit.outputs.head_sha }}
       dry_run: ${{ steps.meta.outputs.dry_run }}
+      product_version: ${{ steps.artifacts.outputs.product_version }}
+      product_tag: ${{ steps.artifacts.outputs.product_tag }}
       selected_surfaces: ${{ steps.detect.outputs.selected_surfaces }}
       server: ${{ steps.detect.outputs.server }}
       workers: ${{ steps.detect.outputs.workers }}
@@ -101,13 +106,13 @@ jobs:
         env:
           ONLY_SURFACES: ${{ github.event.inputs.only_surfaces }}
 
-      - name: Prepare artifact versions
+      - name: Prepare product and artifact versions
         id: artifacts
         run: >
           node scripts/ci-cd/prepare-artifact-release.mjs
           --surfaces "${{ steps.detect.outputs.selected_surfaces }}"
           --release-id "${{ steps.meta.outputs.release_id }}"
-          --bump-patch "${{ github.event.inputs.bump_patch || 'true' }}"
+          --version-bump "${{ github.event.inputs.version_bump || 'patch' }}"
           --dry-run "${{ steps.meta.outputs.dry_run }}"
 
       - name: Commit version bumps
@@ -128,23 +133,36 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json apps/desktop/src-tauri/Cargo.toml anyharness/sdk/package.json
+          git add VERSION apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json apps/desktop/src-tauri/Cargo.toml anyharness/sdk/package.json
           git commit -m "release: prepare $RELEASE_ID" -m "$REASON"
           git push origin HEAD:main
           echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Create hotfix tag
+      - name: Create hotfix tags
         if: steps.meta.outputs.dry_run != 'true'
-        run: >
-          node scripts/ci-cd/create-release-tags.mjs
-          --target "${{ steps.commit.outputs.head_sha }}"
-          --tags "${{ steps.meta.outputs.release_id }}"
-          --dry-run false
+        env:
+          ARTIFACT_TAGS: ${{ steps.artifacts.outputs.artifact_tags }}
+          PRODUCT_TAG: ${{ steps.artifacts.outputs.product_tag }}
+          RELEASE_ID: ${{ steps.meta.outputs.release_id }}
+        run: |
+          set -euo pipefail
+          tags="$RELEASE_ID"
+          if [[ -n "$PRODUCT_TAG" ]]; then
+            tags="$PRODUCT_TAG,$tags"
+          fi
+          if [[ -n "$ARTIFACT_TAGS" ]]; then
+            tags="$tags,$ARTIFACT_TAGS"
+          fi
+          node scripts/ci-cd/create-release-tags.mjs \
+            --target "${{ steps.commit.outputs.head_sha }}" \
+            --tags "$tags" \
+            --dry-run false
 
       - name: Summarize hotfix
         run: |
           {
             echo "### Production hotfix"
+            echo "- Product: \`${{ steps.artifacts.outputs.product_tag || 'unchanged' }}\`"
             echo "- Hotfix: \`${{ steps.meta.outputs.release_id }}\`"
             echo "- Reason: ${{ github.event.inputs.reason }}"
             echo "- Head: \`${{ steps.commit.outputs.head_sha }}\`"
@@ -265,6 +283,7 @@ jobs:
         run: |
           {
             echo "### Production hotfix result"
+            echo "- Product: \`${{ needs.prepare.outputs.product_tag || 'unchanged' }}\`"
             echo "- Hotfix: \`${{ needs.prepare.outputs.release_id }}\`"
             echo "- Head: \`${{ needs.prepare.outputs.head_sha }}\`"
             echo "- Surfaces: \`${{ needs.prepare.outputs.selected_surfaces }}\`"

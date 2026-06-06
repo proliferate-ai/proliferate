@@ -198,34 +198,43 @@ deploy-base resolution.
 
 ### Nightly Release Train
 
-The nightly train coordinates artifact versions, artifact releases, and staging
-deploys from `main`.
+The nightly train coordinates the public Proliferate product version, artifact
+versions, artifact releases, and staging deploys from `main`.
 
 ```text
 Workflow: Nightly Release Train
 ref: <blank or main SHA/ref>
 only_surfaces: <blank, comma-separated surfaces, or all>
+version_bump: patch
 dry_run: false
 ```
 
 Train behavior:
 
-1. Resolve a shared release id, `release-YYYY-MM-DD`.
+1. Resolve a shared train id, `release-YYYY-MM-DD`.
 2. Diff the selected SHA against the previous `release-*` train tag.
 3. If `only_surfaces` is blank, release the detected surfaces. If
    `only_surfaces` is set, release exactly those surfaces.
-4. Bump patch versions for selected artifact lanes:
-   - desktop updates `apps/desktop/package.json`,
+4. If no surfaces are selected, do not mint a new product version or train tag.
+5. Otherwise, bump the public product version from `VERSION` and the latest
+   `proliferate-v*` tag. The normal train bump is `patch`; manual train runs
+   may choose `minor` or `major`.
+6. For selected artifact lanes, use the same semver as the product version:
+   - desktop creates `desktop-vX.Y.Z` and updates `apps/desktop/package.json`,
      `apps/desktop/src-tauri/tauri.conf.json`, and
      `apps/desktop/src-tauri/Cargo.toml`
-   - runtime updates `anyharness/sdk/package.json`
-   - server derives the next `server-v*` tag without a tracked version file
-5. Commit version bumps back to `main` when needed.
-6. Create the `release-YYYY-MM-DD` train tag.
-7. Run selected artifact release lanes and selected staging deploy lanes.
+   - runtime creates `runtime-vX.Y.Z` and updates `anyharness/sdk/package.json`
+   - server creates `server-vX.Y.Z` without a tracked server version file
+7. Commit `VERSION` and any artifact version files back to `main`.
+8. Create `proliferate-vX.Y.Z`, `release-YYYY-MM-DD`, and selected artifact
+   tags at the final release commit.
+9. Run selected artifact release lanes and selected staging deploy lanes.
 
-The train does not publish public changelog pages or raw release-note pages.
-Those surfaces are owned by separate product/website automation.
+Feature changelog pages and social launch copy should cite
+`Proliferate vX.Y.Z` first. The `release-*` train id is the date/ops alias, and
+artifact tags are install/update plumbing. The train does not publish public
+changelog pages or raw release-note pages; those surfaces are owned by separate
+product/website automation.
 
 ### Production Hotfix
 
@@ -237,7 +246,7 @@ Workflow: Hotfix Production
 ref: <main SHA or ref>
 only_surfaces: <comma-separated surfaces or all>
 reason: <short reason>
-bump_patch: true
+version_bump: patch
 dry_run: false
 ```
 
@@ -245,10 +254,14 @@ Hotfix behavior:
 
 1. Require `only_surfaces`; no detected-surface spillover is allowed.
 2. Verify the input ref is reachable from `main`.
-3. Bump selected artifact-lane patch versions when `bump_patch=true`.
-4. Commit version bumps back to `main` when needed.
-5. Create a `hotfix-YYYY-MM-DD-<run-number>` tag.
-6. Publish selected runtime/server artifacts and deploy selected production
+3. By default, bump the public product version with `version_bump=patch`.
+4. Use `version_bump=none` only for SHA-based surfaces (`web`, `workers`,
+   `e2b`). Artifact lanes (`desktop`, `runtime`, `server`) and mobile require
+   a product version bump.
+5. Commit `VERSION` and any artifact version files back to `main`.
+6. Create a `hotfix-YYYY-MM-DD-<run-number>` tag. When the product version is
+   bumped, also create `proliferate-vX.Y.Z` and selected artifact tags.
+7. Publish selected runtime/server artifacts and deploy selected production
    lanes. Desktop hotfixes publish the stable updater feed.
 
 For production hotfixes, prefer `dry_run=true` first. Then dispatch the real
@@ -405,10 +418,11 @@ vercel.json                  # web app deploy config (Vercel project proliferate
 
 - Treat workflows, release scripts, infra, and updater config as one delivery
   surface. Do not update one without checking the others.
-- Desktop releases create/use the `desktop-v*` tag line. Runtime releases ship
-  off the `runtime-v*` tag line.
-- Release trains use shared `release-YYYY-MM-DD` tags. Artifact versions remain
-  lane-specific: `desktop-v*`, `runtime-v*`, and `server-v*`.
+- `VERSION` and `proliferate-vX.Y.Z` are the public product version. Changelog
+  pages, launch copy, and support notes cite this version first.
+- Release trains use shared `release-YYYY-MM-DD` tags as date/ops aliases.
+  Artifact tags remain lane-specific (`desktop-v*`, `runtime-v*`,
+  `server-v*`) but use the same semver as the product version when emitted.
 - Changelog generation and feature launch pages are separate product surfaces.
   These workflows own deploy and artifact mechanics only.
 - Cloud template releases are manually dispatched. They publish immutable
@@ -881,8 +895,8 @@ Trigger model:
    promote owns deriving and invoking that desktop release from the promoted
    SHA.
 6. `Nightly Release Train` and `Hotfix Production` sit above this hosted spine:
-   they prepare shared train/hotfix ids, bump artifact versions, and then call
-   the same reusable deploy lanes.
+   they prepare the public product version, shared train/hotfix ids, matching
+   artifact tags, and then call the same reusable deploy lanes.
 
 Deploy graph:
 

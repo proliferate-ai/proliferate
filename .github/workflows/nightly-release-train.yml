@@ -13,6 +13,15 @@ on:
         description: Exact comma-separated surfaces to release, or all. Defaults to detected changes since the previous train.
         required: false
         type: string
+      version_bump:
+        description: Public Proliferate version bump for this train.
+        default: patch
+        required: false
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
       dry_run:
         description: Plan only; do not push commits, tags, releases, or deploys.
         default: false
@@ -40,6 +49,8 @@ jobs:
       base_sha: ${{ steps.meta.outputs.base_sha }}
       head_sha: ${{ steps.commit.outputs.head_sha }}
       dry_run: ${{ steps.meta.outputs.dry_run }}
+      product_version: ${{ steps.artifacts.outputs.product_version }}
+      product_tag: ${{ steps.artifacts.outputs.product_tag }}
       selected_surfaces: ${{ steps.detect.outputs.selected_surfaces }}
       server: ${{ steps.detect.outputs.server }}
       workers: ${{ steps.detect.outputs.workers }}
@@ -100,13 +111,13 @@ jobs:
         env:
           ONLY_SURFACES: ${{ github.event.inputs.only_surfaces || '' }}
 
-      - name: Prepare artifact versions
+      - name: Prepare product and artifact versions
         id: artifacts
         run: >
           node scripts/ci-cd/prepare-artifact-release.mjs
           --surfaces "${{ steps.detect.outputs.selected_surfaces }}"
           --release-id "${{ steps.meta.outputs.release_id }}"
-          --bump-patch true
+          --version-bump "${{ github.event.inputs.version_bump || 'patch' }}"
           --dry-run "${{ steps.meta.outputs.dry_run }}"
 
       - name: Commit version bumps
@@ -126,24 +137,34 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json apps/desktop/src-tauri/Cargo.toml anyharness/sdk/package.json
+          git add VERSION apps/desktop/package.json apps/desktop/src-tauri/tauri.conf.json apps/desktop/src-tauri/Cargo.toml anyharness/sdk/package.json
           git commit -m "release: prepare $RELEASE_ID"
           git push origin HEAD:main
           echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Create release train tag
-        if: steps.meta.outputs.dry_run != 'true'
-        run: >
-          node scripts/ci-cd/create-release-tags.mjs
-          --target "${{ steps.commit.outputs.head_sha }}"
-          --tags "${{ steps.meta.outputs.release_id }}"
-          --dry-run false
+      - name: Create release train tags
+        if: steps.meta.outputs.dry_run != 'true' && steps.artifacts.outputs.product_tag != ''
+        env:
+          ARTIFACT_TAGS: ${{ steps.artifacts.outputs.artifact_tags }}
+          PRODUCT_TAG: ${{ steps.artifacts.outputs.product_tag }}
+          RELEASE_ID: ${{ steps.meta.outputs.release_id }}
+        run: |
+          set -euo pipefail
+          tags="$PRODUCT_TAG,$RELEASE_ID"
+          if [[ -n "$ARTIFACT_TAGS" ]]; then
+            tags="$tags,$ARTIFACT_TAGS"
+          fi
+          node scripts/ci-cd/create-release-tags.mjs \
+            --target "${{ steps.commit.outputs.head_sha }}" \
+            --tags "$tags" \
+            --dry-run false
 
       - name: Summarize train
         run: |
           {
             echo "### Nightly release train"
-            echo "- Release: \`${{ steps.meta.outputs.release_id }}\`"
+            echo "- Product: \`${{ steps.artifacts.outputs.product_tag || 'no release' }}\`"
+            echo "- Train: \`${{ steps.meta.outputs.release_id }}\`"
             echo "- Base: \`${{ steps.meta.outputs.base_sha }}\`"
             echo "- Head: \`${{ steps.commit.outputs.head_sha }}\`"
             echo "- Dry run: \`${{ steps.meta.outputs.dry_run }}\`"
@@ -195,7 +216,7 @@ jobs:
 
   deploy-e2b:
     needs: [prepare]
-    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' }}
+    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.selected_surfaces != '' }}
     uses: ./.github/workflows/_deploy-e2b.yml
     with:
       environment: staging
@@ -207,7 +228,7 @@ jobs:
 
   deploy-server:
     needs: [prepare, deploy-e2b]
-    if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.selected_surfaces != '' }}
     uses: ./.github/workflows/_deploy-server.yml
     with:
       environment: staging
@@ -217,7 +238,7 @@ jobs:
 
   deploy-workers:
     needs: [prepare, deploy-server]
-    if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.selected_surfaces != '' }}
     uses: ./.github/workflows/_deploy-workers.yml
     with:
       environment: staging
@@ -227,7 +248,7 @@ jobs:
 
   deploy-web:
     needs: [prepare, deploy-server]
-    if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.selected_surfaces != '' }}
     uses: ./.github/workflows/_deploy-web.yml
     with:
       environment: staging
@@ -237,7 +258,7 @@ jobs:
 
   deploy-mobile:
     needs: [prepare]
-    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' }}
+    if: ${{ needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.selected_surfaces != '' }}
     uses: ./.github/workflows/_deploy-mobile.yml
     with:
       environment: staging
@@ -263,7 +284,8 @@ jobs:
         run: |
           {
             echo "### Nightly release train result"
-            echo "- Release: \`${{ needs.prepare.outputs.release_id }}\`"
+            echo "- Product: \`${{ needs.prepare.outputs.product_tag || 'no release' }}\`"
+            echo "- Train: \`${{ needs.prepare.outputs.release_id }}\`"
             echo "- Head: \`${{ needs.prepare.outputs.head_sha }}\`"
             echo "- Surfaces: \`${{ needs.prepare.outputs.selected_surfaces }}\`"
             echo "- Runtime release: \`${{ needs.release-runtime.result }}\`"
