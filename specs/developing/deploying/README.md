@@ -95,6 +95,10 @@ deployment variable ownership.
 - Do not call a deploy complete until every selected lane has finished and the
   relevant URLs, updater manifests, release artifacts, or app-store surfaces
   have been verified.
+- For launch posts, changelog entries, support notes, and customer-facing
+  version references, cite the public `Proliferate vX.Y.Z` version from
+  `VERSION` / `proliferate-v*` first. Artifact tags such as `desktop-v*`,
+  `runtime-v*`, and `server-v*` are technical release coordinates.
 - Treat GitHub environments as the deploy-time source of truth for hosted
   variables and secrets. Treat AWS SSM as the ECS runtime destination for
   copied server secrets.

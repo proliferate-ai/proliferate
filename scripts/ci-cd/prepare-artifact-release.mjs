@@ -8,12 +8,14 @@ import { fileURLToPath } from "node:url";
 import { parseSurfaceList } from "./detect-deploy-surfaces.mjs";
 
 const ARTIFACT_SURFACES = new Set(["desktop", "runtime", "server"]);
+const SHA_ONLY_SURFACES = new Set(["workers", "e2b", "web"]);
+const PRODUCT_TAG_PREFIX = "proliferate-v";
 
 function parseArgs(argv) {
   const parsed = {
     surfaces: "",
     releaseId: "",
-    bumpPatch: false,
+    versionBump: "patch",
     dryRun: false,
     root: process.cwd(),
     help: false,
@@ -30,8 +32,8 @@ function parseArgs(argv) {
         parsed.releaseId = argv[index + 1] || "";
         index += 1;
         break;
-      case "--bump-patch":
-        parsed.bumpPatch = parseBoolean(argv[index + 1] || "false");
+      case "--version-bump":
+        parsed.versionBump = argv[index + 1] || "";
         index += 1;
         break;
       case "--dry-run":
@@ -55,14 +57,15 @@ function parseArgs(argv) {
 }
 
 function printUsage() {
-  console.log(`Prepare artifact lane versions for a release train or hotfix.
+  console.log(`Prepare product and artifact lane versions for a release train or hotfix.
 
 Usage:
-  node scripts/ci-cd/prepare-artifact-release.mjs --surfaces <csv|all> --release-id <id> --bump-patch <true|false> --dry-run <true|false>
+  node scripts/ci-cd/prepare-artifact-release.mjs --surfaces <csv|all> --release-id <id> --version-bump <patch|minor|major|none> --dry-run <true|false>
 
-Writes GitHub outputs for desktop/runtime/server versions and tags. When
---bump-patch=true and --dry-run=false, updates tracked version files for lanes
-that require committed version metadata.
+Writes GitHub outputs for the public Proliferate product version and selected
+desktop/runtime/server artifact versions and tags. When a version bump is
+requested and --dry-run=false, updates VERSION plus tracked artifact version
+files for selected lanes that require committed version metadata.
 `);
 }
 
@@ -93,12 +96,39 @@ export function incrementPatch(value) {
   return `${major}.${minor}.${patch + 1}`;
 }
 
-export function nextPatchVersion(currentVersion, latestTagVersion = "") {
+export function incrementMinor(value) {
+  const [major, minor] = parseVersion(value);
+  return `${major}.${minor + 1}.0`;
+}
+
+export function incrementMajor(value) {
+  const [major] = parseVersion(value);
+  return `${major + 1}.0.0`;
+}
+
+export function nextVersion(currentVersion, latestTagVersion = "", versionBump = "patch") {
+  if (versionBump === "none") {
+    return currentVersion;
+  }
+  if (!["patch", "minor", "major"].includes(versionBump)) {
+    throw new Error(`Unsupported version bump: ${versionBump}`);
+  }
   if (!latestTagVersion) {
-    return incrementPatch(currentVersion);
+    return incrementVersion(currentVersion, versionBump);
   }
   const base = compareVersions(currentVersion, latestTagVersion) >= 0 ? currentVersion : latestTagVersion;
-  return incrementPatch(base);
+  return incrementVersion(base, versionBump);
+}
+
+export function nextPatchVersion(currentVersion, latestTagVersion = "") {
+  return nextVersion(currentVersion, latestTagVersion, "patch");
+}
+
+function incrementVersion(value, versionBump) {
+  if (versionBump === "patch") return incrementPatch(value);
+  if (versionBump === "minor") return incrementMinor(value);
+  if (versionBump === "major") return incrementMajor(value);
+  throw new Error(`Unsupported version bump: ${versionBump}`);
 }
 
 export function tagVersion(tag, prefix) {
@@ -143,6 +173,17 @@ function localTags(prefix) {
 
 function latestVersionForPrefix(prefix) {
   return latestVersionFromTags([...new Set([...remoteTags(prefix), ...localTags(prefix)])], prefix);
+}
+
+function readText(file) {
+  return fs.readFileSync(file, "utf8").trim();
+}
+
+function writeText(file, value, dryRun) {
+  if (!dryRun) {
+    fs.writeFileSync(file, `${value}\n`);
+  }
+  return true;
 }
 
 function readJson(file) {
@@ -207,36 +248,86 @@ function updateRuntimeVersion(root, version, dryRun) {
   return writeJson(packagePath, packageJson, dryRun) ? ["anyharness/sdk/package.json"] : [];
 }
 
-function artifactTagMap({ root, surfaces, bumpPatch, dryRun }) {
+function readProductVersion(root) {
+  const version = readText(path.join(root, "VERSION"));
+  parseVersion(version);
+  return version;
+}
+
+function updateProductVersion(root, version, dryRun) {
+  return writeText(path.join(root, "VERSION"), version, dryRun) ? ["VERSION"] : [];
+}
+
+function validateVersionBumpForSurfaces({ surfaces, versionBump }) {
+  if (!["patch", "minor", "major", "none"].includes(versionBump)) {
+    throw new Error(`Unsupported version bump: ${versionBump}`);
+  }
+  if (versionBump !== "none") {
+    return;
+  }
+  const invalid = [...surfaces].filter((surface) => !SHA_ONLY_SURFACES.has(surface));
+  if (invalid.length > 0) {
+    throw new Error(`version_bump=none is only allowed for SHA-based surfaces, not: ${invalid.join(", ")}`);
+  }
+}
+
+function productVersionPlan({ root, surfaces, versionBump, dryRun, latestProductTagVersion }) {
+  if (surfaces.size === 0) {
+    return {
+      currentVersion: readProductVersion(root),
+      version: "",
+      tag: "",
+      changedFiles: [],
+    };
+  }
+
+  validateVersionBumpForSurfaces({ surfaces, versionBump });
+  const currentVersion = readProductVersion(root);
+  if (versionBump === "none") {
+    return {
+      currentVersion,
+      version: currentVersion,
+      tag: "",
+      changedFiles: [],
+    };
+  }
+
+  const version = nextVersion(currentVersion, latestProductTagVersion, versionBump);
+  const changedFiles = version !== currentVersion ? updateProductVersion(root, version, dryRun) : [];
+  return {
+    currentVersion,
+    version,
+    tag: `${PRODUCT_TAG_PREFIX}${version}`,
+    changedFiles,
+  };
+}
+
+function artifactTagMap({ root, surfaces, productVersion, dryRun }) {
   const tags = {};
   const versions = {};
   const changedFiles = [];
 
   if (surfaces.has("desktop")) {
     const current = readDesktopVersion(root);
-    const version = bumpPatch ? nextPatchVersion(current, latestVersionForPrefix("desktop-v")) : current;
-    versions.desktop = version;
-    tags.desktop = `desktop-v${version}`;
-    if (bumpPatch && version !== current) {
-      changedFiles.push(...updateDesktopVersion(root, version, dryRun));
+    versions.desktop = productVersion;
+    tags.desktop = `desktop-v${productVersion}`;
+    if (productVersion !== current) {
+      changedFiles.push(...updateDesktopVersion(root, productVersion, dryRun));
     }
   }
 
   if (surfaces.has("runtime")) {
     const current = readRuntimeVersion(root);
-    const version = bumpPatch ? nextPatchVersion(current, latestVersionForPrefix("runtime-v")) : current;
-    versions.runtime = version;
-    tags.runtime = `runtime-v${version}`;
-    if (bumpPatch && version !== current) {
-      changedFiles.push(...updateRuntimeVersion(root, version, dryRun));
+    versions.runtime = productVersion;
+    tags.runtime = `runtime-v${productVersion}`;
+    if (productVersion !== current) {
+      changedFiles.push(...updateRuntimeVersion(root, productVersion, dryRun));
     }
   }
 
   if (surfaces.has("server")) {
-    const latest = latestVersionForPrefix("server-v") || "0.1.0";
-    const version = bumpPatch ? incrementPatch(latest) : latest;
-    versions.server = version;
-    tags.server = `server-v${version}`;
+    versions.server = productVersion;
+    tags.server = `server-v${productVersion}`;
   }
 
   return { tags, versions, changedFiles };
@@ -249,6 +340,8 @@ function writeGithubOutput(plan) {
   }
   const lines = [
     `release_id=${plan.releaseId}`,
+    `product_version=${plan.productVersion}`,
+    `product_tag=${plan.productTag}`,
     `selected_surfaces=${plan.selectedSurfaces.join(",")}`,
     `artifact_tags=${Object.values(plan.tags).filter(Boolean).join(",")}`,
     `artifact_tags_json=${JSON.stringify(plan.tags)}`,
@@ -261,22 +354,39 @@ function writeGithubOutput(plan) {
   fs.appendFileSync(outputPath, `${lines.join("\n")}\n`);
 }
 
-export function buildArtifactPlan({ root, surfaces, releaseId, bumpPatch, dryRun }) {
+export function buildArtifactPlan({
+  root,
+  surfaces,
+  releaseId,
+  versionBump,
+  dryRun,
+  latestProductTagVersion = latestVersionForPrefix(PRODUCT_TAG_PREFIX),
+}) {
+  validateVersionBumpForSurfaces({ surfaces, versionBump });
+  const product = productVersionPlan({
+    root,
+    surfaces,
+    versionBump,
+    dryRun,
+    latestProductTagVersion,
+  });
   const selectedSurfaces = [...surfaces].filter((surface) => ARTIFACT_SURFACES.has(surface));
   const artifact = artifactTagMap({
     root,
     surfaces: new Set(selectedSurfaces),
-    bumpPatch,
+    productVersion: product.version,
     dryRun,
   });
   return {
     releaseId,
-    bumpPatch,
+    versionBump,
     dryRun,
-    selectedSurfaces,
+    productVersion: product.version,
+    productTag: product.tag,
+    selectedSurfaces: [...surfaces],
     tags: artifact.tags,
     versions: artifact.versions,
-    changedFiles: [...new Set(artifact.changedFiles)],
+    changedFiles: [...new Set([...product.changedFiles, ...artifact.changedFiles])],
   };
 }
 
@@ -295,7 +405,7 @@ function main() {
     root: path.resolve(parsed.root),
     surfaces,
     releaseId: parsed.releaseId,
-    bumpPatch: parsed.bumpPatch,
+    versionBump: parsed.versionBump,
     dryRun: parsed.dryRun,
   });
   writeGithubOutput(plan);
