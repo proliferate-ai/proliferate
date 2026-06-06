@@ -20,8 +20,10 @@ anyharness_client/   # the local runtime substrate
 
 ## Cloud Client
 
-`cloud_client/` owns worker-facing Cloud HTTP endpoints and wire types — one
-file per endpoint, with typed DTOs generated from the shared contract.
+`cloud_client/` owns worker-facing Cloud HTTP endpoints — one file per endpoint.
+The wire DTOs themselves come from the generated `contract/` module (see
+[contract.md](contract.md)); the client imports them rather than defining them
+inline.
 
 Endpoints:
 
@@ -59,7 +61,8 @@ Endpoints:
 ## Allowed
 
 - base URL handling, auth headers, endpoint paths
-- request/response structs and HTTP method calls
+- HTTP method calls over `contract/` wire types (Cloud) or local request structs
+  (AnyHarness)
 - HTTP status parsing and small wire-compatibility shims
 
 ## Banned
@@ -80,5 +83,6 @@ Endpoints:
   `materialization`, not a client.
 - If code persists worker-local recovery state, it belongs in `store`, not a
   client.
-- Generated wire types may be used when available, but each client stays a
-  narrow explicit access layer.
+- Cloud wire DTOs come from the generated `contract/` module; a client never
+  hand-defines a Cloud wire type inline. Each client stays a narrow explicit
+  access layer.

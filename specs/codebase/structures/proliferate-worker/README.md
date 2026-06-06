@@ -116,6 +116,10 @@ src/
     agent_auth.rs
     manifest.rs
 
+  contract/                # generated Cloud<->Worker wire types — single source, never hand-edited
+    mod.rs
+    generated.rs
+
   cloud_client/            # transport TO cloud, one file per endpoint
     mod.rs
 
@@ -156,7 +160,8 @@ Use the lowest layer that can own the logic cleanly.
 | Lifecycle | `src/lifecycle/**` | Heartbeat liveness ping; compare desired (from the heartbeat response) vs installed versions; write the supervisor update-request mailbox. | Downloading/replacing binaries, restarting processes, rollback (supervisor owns those). | [guides/lifecycle.md](guides/lifecycle.md) |
 | Inventory | `src/inventory/**` | Read-only environment introspection (os/arch, tool versions, providers, MCPs, capabilities), reported once at startup. | Mutating target state; ongoing polling. | [guides/inventory.md](guides/inventory.md) |
 | Materialization | `src/materialization/**` | Target-local filesystem/Git/env/auth/runtime-config effects with centralized path safety and atomic private writes, called by command handlers. | Raw Cloud HTTP, Cloud policy, AnyHarness execution semantics, supervisor process management. | [guides/materialization.md](guides/materialization.md) |
-| Cloud client | `src/cloud_client/**` | Raw worker-facing Cloud HTTP — one file per endpoint, typed request/response DTOs, auth headers, status parsing. | Product workflows, retry beyond request mechanics, store writes, filesystem effects. | [guides/clients.md](guides/clients.md) |
+| Contract | `src/contract/**` | Generated Cloud↔Worker wire types — the four contracts plus `RevisionMap` — re-exported through a thin facade. | Transport, workflow logic, or hand-edits to generated code. | [guides/contract.md](guides/contract.md) |
+| Cloud client | `src/cloud_client/**` | Raw worker-facing Cloud HTTP — one file per endpoint, auth headers, status parsing, using wire types from `contract/`. | Defining wire DTOs inline, product workflows, retry beyond request mechanics, store writes, filesystem effects. | [guides/clients.md](guides/clients.md) |
 | AnyHarness client | `src/anyharness_client/**` | The only path to local AnyHarness: execute, push config, health-probe, pull events. | Command/reconcile policy, cursor reconciliation, exposure decisions. | [guides/clients.md](guides/clients.md) |
 | Store | `src/store/**` | Worker-local SQLite: worker token, applied-revisions + backoff, the up-cursor, exposure cache, pending command results. | Cloud/AnyHarness HTTP, command/reconcile/tail workflows, product authorization. | [guides/store.md](guides/store.md) |
 | Root support files | `src/config.rs`, `src/error.rs`, `src/logging.rs`, `src/observability.rs`, `src/process_lock.rs`, `src/versions.rs` | Cross-cutting support that is small, boring, and not a subsystem. | Workflows, generic utilities, hidden service layers. | [guides/root-support.md](guides/root-support.md) |
@@ -173,6 +178,7 @@ focused guide for the module being changed:
 - [guides/lifecycle.md](guides/lifecycle.md)
 - [guides/inventory.md](guides/inventory.md)
 - [guides/materialization.md](guides/materialization.md)
+- [guides/contract.md](guides/contract.md)
 - [guides/clients.md](guides/clients.md)
 - [guides/store.md](guides/store.md)
 - [guides/root-support.md](guides/root-support.md)
@@ -242,7 +248,8 @@ tail                  -> anyharness_client / cloud_client / store
 lifecycle             -> cloud_client / store / supervisor mailbox (a file)
 inventory             -> root support files
 materialization       -> root support files (no clients, no store)
-cloud_client          -> root support files only
+contract              -> nothing (generated pure wire types, consumed across the wire path)
+cloud_client          -> contract / root support files only
 anyharness_client     -> root support files only
 store                 -> root support files only
 identity              -> cloud_client (enroll) and store (save/load) through narrow helpers
@@ -300,6 +307,11 @@ restate them.
 - `applied` is read back from AnyHarness's real state, never an optimistic flag.
 - Materialization centralizes path safety and atomic private writes; command
   handlers call into it rather than hand-rolling filesystem effects.
+- Cloud↔Worker wire types are generated from the Cloud contract into
+  `contract/` and checked in — never hand-edit generated code or redefine a wire
+  DTO inline in a client. New command kinds are gated by
+  `supported_command_kinds`; contract evolution is additive-only and
+  unknown-tolerant.
 - Do not add `utils.rs`, `helpers.rs`, `misc.rs`, or broad service buckets.
 - Preserve current behavior unless an explicit behavior change is requested;
   delete dead code when replacing an implementation.
@@ -318,6 +330,8 @@ restate them.
 - Is `applied` read back from real AnyHarness state, with per-domain backoff and
   a terminal `failed` state both visible?
 - Did a client start making product decisions?
+- Are wire DTOs imported from generated `contract/` rather than hand-defined in
+  a client, and is contract evolution additive-only and capability-gated?
 - Did materialization start calling Cloud directly?
 - Did store become a workflow/service layer?
 - Did the worker start owning Cloud auth/exposure policy, AnyHarness execution
