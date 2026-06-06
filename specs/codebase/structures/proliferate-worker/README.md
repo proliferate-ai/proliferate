@@ -14,9 +14,9 @@ These standards apply to the target-side Proliferate Worker binary:
 - `anyharness/crates/proliferate-worker/**`
 
 Proliferate Worker is the target-side bridge between Proliferate Cloud and the
-local AnyHarness runtime. It runs inside the sandbox, enrolls once, then runs
-two long-polls plus a heartbeat: it leases nothing and holds no slot — it just
-pumps intent down and truth up.
+local AnyHarness runtime. It runs inside the sandbox, enrolls once, then runs a
+single control long-poll down and an event tail up, plus a heartbeat: it leases
+nothing and holds no slot — it just pumps intent down and truth up.
 
 Identity is **collapsed and ephemeral**: one runtime = one sandbox = one Target
 (1:1). A sandbox death is a fresh Target, not a re-enrollment, so there are
@@ -251,6 +251,34 @@ identity              -> cloud_client (enroll) and store (save/load) through nar
 When a dependency feels awkward, prefer moving a small DTO or pure helper to the
 owning boundary over importing across layers casually.
 
+## Cross-Cutting Conventions
+
+These hold across every module; the per-guide rules assume them rather than
+restate them.
+
+- **`mod.rs` is a facade.** Each `mod.rs` re-exports its folder's narrow public
+  surface and wires submodules. It owns no workflow logic, no HTTP, and no SQL.
+  Every guide repeats this for its folder; it is one rule.
+- **Named constants, not magic literals.** Cadences, timeouts, intervals, and
+  backoff schedules are named `const`s at the top of the module that uses them
+  (`tail/loop.rs`'s `EVENT_POLL_INTERVAL`, `control/loop.rs`'s
+  `EMPTY_LEASE_SLEEP`). Do not inline a bare `Duration::from_secs(...)` in flow
+  logic, and do not add a central `constants.rs` — a value lives with the code
+  it paces. Operator-tunable values (e.g. `heartbeat_interval_seconds`) come
+  from `config.rs`, not a `const`.
+- **Tests live next to the code.** The default is an inline
+  `#[cfg(test)] mod tests` at the bottom of the file under test. When a suite
+  grows large enough to crowd the file, extract it to a sibling `*_tests.rs`
+  wired with `#[path = "..."] mod ...` (as `tail/loop.rs` does with
+  `loop_tests.rs`) — the test still sits beside its module. Do not route unit
+  tests of internal modules through a crate-level `tests/` tree.
+- **Promote a file to a folder when it earns it.** When a `*.rs` file starts
+  owning two distinct responsibilities or outgrows comfortable single-pass
+  review, promote it to a `name/` folder: keep the old name as the folder's
+  `mod.rs` facade and split the responsibilities into focused files (the
+  `runtime.rs → runtime/` note in the runtime guide is the canonical example).
+  Splitting is structural — it is not a behavior change.
+
 ## Hard Rules
 
 - Identity is collapsed and ephemeral. Do not reintroduce slots,
@@ -295,6 +323,10 @@ owning boundary over importing across layers casually.
 - Did the worker start owning Cloud auth/exposure policy, AnyHarness execution
   truth, or supervisor update application?
 - Did anyone reintroduce a slot, fence, or second/third poll?
+- Are cadence/timeout values named `const`s at the top of the owning module —
+  no magic literals in flow logic, no central `constants.rs`?
+- Do tests sit beside their module (inline `#[cfg(test)] mod tests`, or a
+  sibling `*_tests.rs` when the suite is large)?
 - Do logs include the relevant correlation fields for the flow: `command_id`,
   `target_id`, `worker_id`, `cloud_workspace_id`, `anyharness_workspace_id`,
   `session_id`, `session_projection_id`, `exposure_id`, and — for reconcile —
