@@ -521,18 +521,7 @@
         },
         "launch": {
           "executableName": "codex-acp",
-          "defaultArgs": [
-            "-c",
-            "features.plugins=false",
-            "-c",
-            "features.tool_suggest=false",
-            "-c",
-            "plugins={}",
-            "-c",
-            "marketplaces={}",
-            "-c",
-            "mcp_servers={}"
-          ]
+          "defaultArgs": []
         },
         "auth": {
           "envVars": [

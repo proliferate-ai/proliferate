@@ -11,8 +11,6 @@ mod agent_process;
 mod downloads;
 mod native;
 mod npm;
-#[cfg(test)]
-mod test_support;
 
 #[cfg(test)]
 use self::agent_process::{
@@ -124,7 +122,6 @@ pub fn install_agent(
         if let Some(result) = install_agent_process_artifact(
             &descriptor.agent_process,
             &descriptor.kind,
-            &descriptor.launch.default_args,
             runtime_home,
             options,
         )? {
@@ -158,10 +155,36 @@ pub(crate) fn regenerate_seeded_agent_launchers(
 
 #[cfg(test)]
 mod tests {
-    use super::test_support::PathEnvGuard;
     use super::*;
     use std::fs;
     use url::Url;
+
+    struct PathEnvGuard {
+        original: Option<std::ffi::OsString>,
+    }
+
+    impl PathEnvGuard {
+        fn prepend(path: &Path) -> Self {
+            let original = std::env::var_os("PATH");
+            let mut paths = vec![path.to_path_buf()];
+            if let Some(original_path) = &original {
+                paths.extend(std::env::split_paths(original_path));
+            }
+            let joined = std::env::join_paths(paths).expect("join PATH");
+            std::env::set_var("PATH", joined);
+            Self { original }
+        }
+    }
+
+    impl Drop for PathEnvGuard {
+        fn drop(&mut self) {
+            if let Some(original) = &self.original {
+                std::env::set_var("PATH", original);
+            } else {
+                std::env::remove_var("PATH");
+            }
+        }
+    }
 
     #[test]
     fn direct_managed_npm_agent_processes_are_installable() {
@@ -277,7 +300,6 @@ mod tests {
             &launcher_path,
             &InstallOptions::default(),
             &[],
-            &[],
             &HashMap::new(),
             None,
         )
@@ -364,7 +386,6 @@ mod tests {
         );
         let managed_dir = TempDirGuard::new("npm-direct-managed").expect("managed dir");
         let launcher_path = managed_dir.path().join("direct-test-agent-launcher");
-        let launcher_args = vec!["--flag".to_string(), "value with space".to_string()];
 
         let result = install_managed_npm_package(
             &format!("file:{}", package_root.path().display()),
@@ -375,7 +396,6 @@ mod tests {
             &launcher_path,
             None,
             true,
-            &launcher_args,
             &[],
             &HashMap::new(),
             "managed_npm",
@@ -388,8 +408,6 @@ mod tests {
             .path()
             .join("node_modules/.bin/direct-test-agent")
             .exists());
-        let launcher = fs::read_to_string(&launcher_path).expect("read launcher");
-        assert!(launcher.contains("--flag 'value with space' \"$@\""));
     }
 
     #[test]
@@ -405,7 +423,6 @@ mod tests {
             &launcher_path,
             None,
             true,
-            &[],
             &[],
             &HashMap::new(),
             "managed_npm",
@@ -492,7 +509,6 @@ mod tests {
             None,
             true,
             &[],
-            &[],
             &HashMap::new(),
             "managed_npm",
         )
@@ -540,7 +556,6 @@ path = "src/main.rs"
             &launcher_path,
             None,
             true,
-            &[],
             &[],
             &HashMap::new(),
             "managed_npm",

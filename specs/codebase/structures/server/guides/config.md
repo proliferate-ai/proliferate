@@ -131,3 +131,19 @@ Ask these in order:
    file-local.
 
 If unsure, prefer `constants/<area>.py` over scattering the value inline.
+
+## Migration Exceptions
+
+Existing code may still keep product constants inline in services, handlers,
+workers, integrations, or stores. When touching that code:
+
+1. Search for module-level literals in `api.py`, `service.py`, worker files,
+   and `db/store/**`.
+2. Classify each as config, shared constant, or file-local mechanical detail.
+3. Move shared hardcoded policy values to `constants/<area>.py`.
+4. Move env-derived values or deployment defaults to `config.py`.
+5. Leave private mechanical values local and rename them with a leading
+   underscore if that clarifies scope.
+
+Do not mix constants cleanup with behavior changes. Moving a value should
+preserve the value exactly unless the task explicitly changes the policy.

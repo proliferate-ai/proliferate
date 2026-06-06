@@ -138,9 +138,6 @@ pub(in crate::live::sessions::actor) async fn finish_prompt_result(
                 last_raw_age_ms = age_ms(prompt_diagnostics.last_raw_at),
                 last_agent_chunk_age_ms = age_ms(prompt_diagnostics.last_agent_chunk_at),
                 last_agent_preview = prompt_diagnostics.last_agent_preview.as_deref().unwrap_or(""),
-                last_agent_thought_age_ms = age_ms(prompt_diagnostics.last_agent_thought_at),
-                last_transient_status_age_ms = age_ms(prompt_diagnostics.last_transient_status_at),
-                last_transient_status = prompt_diagnostics.last_transient_status.as_deref().unwrap_or(""),
                 open_assistant_item_id = ?sink_snapshot_before_turn_end.open_assistant_item_id,
                 open_tool_call_ids = ?sink_snapshot_before_turn_end.open_tool_call_ids,
                 open_plan_item_id = ?sink_snapshot_before_turn_end.open_plan_item_id,
@@ -164,8 +161,6 @@ pub(in crate::live::sessions::actor) async fn finish_prompt_result(
                     stop_reason = ?resp.stop_reason,
                     last_raw_kind = ?prompt_diagnostics.last_raw_kind,
                     last_raw_age_ms = age_ms(prompt_diagnostics.last_raw_at),
-                    last_transient_status_age_ms = age_ms(prompt_diagnostics.last_transient_status_at),
-                    last_transient_status = prompt_diagnostics.last_transient_status.as_deref().unwrap_or(""),
                     last_usage_age_ms = age_ms(prompt_diagnostics.last_usage_at),
                     "session.actor.prompt.empty_turn_error_emitted"
                 );
@@ -259,9 +254,6 @@ pub(in crate::live::sessions::actor) async fn finish_prompt_result(
                 last_raw_age_ms = age_ms(prompt_diagnostics.last_raw_at),
                 last_agent_chunk_age_ms = age_ms(prompt_diagnostics.last_agent_chunk_at),
                 last_agent_preview = prompt_diagnostics.last_agent_preview.as_deref().unwrap_or(""),
-                last_agent_thought_age_ms = age_ms(prompt_diagnostics.last_agent_thought_at),
-                last_transient_status_age_ms = age_ms(prompt_diagnostics.last_transient_status_at),
-                last_transient_status = prompt_diagnostics.last_transient_status.as_deref().unwrap_or(""),
                 open_assistant_item_id = ?sink_snapshot_on_error.open_assistant_item_id,
                 open_tool_call_ids = ?sink_snapshot_on_error.open_tool_call_ids,
                 open_plan_item_id = ?sink_snapshot_on_error.open_plan_item_id,

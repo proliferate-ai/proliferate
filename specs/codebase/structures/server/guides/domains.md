@@ -406,6 +406,62 @@ Two `service.py` files coexist when surfaces are genuinely distinct. They
 share `domain/` and the store. See [workers.md](workers.md) for the full
 worker organization.
 
+## Migration Example: Cloud Runtime Carving
+
+`cloud/runtime/` is a migration exception when it mixes vendor access,
+provisioning, credentials, config sync, and liveness concerns in one flat
+folder. The carved shape is:
+
+```text
+integrations/anyharness/                  <- moved out
+  __init__.py
+  client.py                               <- was anyharness_api.py
+  sessions.py                             <- was session_api.py
+  workspace_operations.py                 <- was workspace_operations.py
+  errors.py
+  models.py
+
+cloud/runtime/
+  api.py
+  service.py                              <- cross-cutting only
+  models.py                               <- shared types
+
+  provisioning/                           <- subdomain
+    service.py                            <- was provision.py
+    models.py                             <- provision input/result types
+    bootstrap.py                          <- runtime startup setup
+    git_operations.py
+    sandbox_helpers.py                    <- was sandbox_exec.py
+    scheduler.py                          <- provision task scheduling
+    domain/
+      step_tracker.py                     <- _StepTracker extracted
+      identity_resolver.py                <- _resolve_git_identity extracted
+      data_key.py                         <- was top-level
+
+  credentials/                            <- subdomain
+    service.py                            <- sync_workspace_credentials
+    models.py                             <- provision credential dataclasses
+    domain/
+      freshness.py                        <- was credential_freshness.py
+
+  config_sync/                            <- subdomain
+    service.py                            <- combines repo + worktree policy
+    repo_config.py                        <- was repo_config_apply.py
+    worktree_policy.py                    <- was worktree_policy_sync.py
+
+  liveness/                               <- subdomain
+    service.py                            <- ensure_running orchestration
+    reconciler.py                         <- was setup_monitor.py
+    domain/
+      restart_policy.py                   <- pure restart logic
+      health_checks.py                    <- provider-specific health waits
+```
+
+Each subdomain is coherent and reasonably sized. The AnyHarness vendor client
+leaves product code entirely. Large provisioning helpers that are pure product
+rules belong in `provisioning/domain/`; vendor calls belong in
+`integrations/anyharness/`.
+
 ## Patterns
 
 - A domain folder either has subfolder children consistently or is flat.

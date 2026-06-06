@@ -256,7 +256,7 @@ Rules:
   source, and link handle through the tab view model. Selecting a cowork child
   tab opens that session in the managed cowork workspace, not in the parent's
   current workspace.
-- Existing tab grouping stays supported, but the child-agent group is a sibling
+- Existing tab grouping can remain, but the child-agent group is a sibling
   attached to the parent, not a group that contains the parent.
 - Reordering normal tabs must not separate open delegated-agent tabs from their
   parent unless the user explicitly detaches them through a future advanced
@@ -303,7 +303,7 @@ Row rules:
 - icon-only actions need tooltips
 - raw ids do not appear unless the user opens debug/details
 - Finished successful work is hidden by default unless it produced an action or
-  durable notice that requires attention.
+  durable notice that still needs attention.
 
 The `Agents` trigger stays generic when it represents zero or multiple visible
 items. It may show a colored robot identity only when exactly one specific

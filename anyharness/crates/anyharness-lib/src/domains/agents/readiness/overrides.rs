@@ -1,14 +1,11 @@
 use std::path::{Path, PathBuf};
 
-use crate::domains::agents::model::{
-    AgentDescriptor, AgentKind, ArtifactRole, ResolvedArtifact, SpawnSpec,
-};
+use crate::domains::agents::model::{AgentKind, ArtifactRole, ResolvedArtifact, SpawnSpec};
 use crate::integrations::agent_cli::executable::{find_in_path, is_valid_executable};
 
 pub(super) fn resolve_agent_process_override(
-    descriptor: &AgentDescriptor,
+    kind: &AgentKind,
 ) -> Option<(SpawnSpec, ResolvedArtifact)> {
-    let kind = &descriptor.kind;
     let prefix = agent_override_prefix(kind);
     let program = std::env::var(format!("{prefix}_AGENT_PROGRAM")).ok()?;
     let program = program.trim();
@@ -33,10 +30,7 @@ pub(super) fn resolve_agent_process_override(
     Some((
         SpawnSpec {
             program: resolved_program.clone(),
-            args: merge_launch_args(
-                &descriptor.launch.default_args,
-                load_json_env_vec(&format!("{prefix}_AGENT_ARGS_JSON")),
-            ),
+            args: load_json_env_vec(&format!("{prefix}_AGENT_ARGS_JSON")),
             env: load_json_env_map(&format!("{prefix}_AGENT_ENV_JSON")),
             cwd: std::env::var(format!("{prefix}_AGENT_CWD"))
                 .ok()
@@ -53,12 +47,6 @@ pub(super) fn resolve_agent_process_override(
             message,
         },
     ))
-}
-
-fn merge_launch_args(default_args: &[String], extra_args: Vec<String>) -> Vec<String> {
-    let mut args = default_args.to_vec();
-    args.extend(extra_args);
-    args
 }
 
 fn resolve_override_program(program: &Path) -> Option<PathBuf> {

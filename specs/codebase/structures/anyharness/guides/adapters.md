@@ -514,8 +514,8 @@ status_code()
 problem_code()
 ```
 
-Those mappings belong in API error translation. Adapters must not expose those
-helpers.
+Those mappings belong in API error translation. If a transitional adapter
+already exposes those helpers, avoid spreading the pattern.
 
 ## Growth Rules
 

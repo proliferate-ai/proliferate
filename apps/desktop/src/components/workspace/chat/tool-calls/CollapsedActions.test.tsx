@@ -76,10 +76,6 @@ describe("CollapsedActions", () => {
     expect(activeButton.innerHTML).toContain("thinking-text");
     expect(activeButton.innerHTML).toContain("data-text=\"Exploring 1 file\"");
     expect(activeButton.innerHTML).not.toContain("motion-safe:animate-pulse");
-    const activeLabel = activeButton.querySelector("[data-thinking-text]");
-    const activeLabelClasses = activeLabel?.className.split(/\s+/) ?? [];
-    expect(activeLabelClasses).toContain("block");
-    expect(activeLabelClasses).toContain("leading-[inherit]");
 
     cleanup();
 

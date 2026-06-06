@@ -1267,6 +1267,34 @@ start automation / Slack session
 If target capability changes, Cloud should mark affected automation/Slack
 config as needing review rather than silently changing model class.
 
+## Open Questions
+
+These are intentionally deferred:
+
+- Whether team admins can define org-wide visibility defaults over
+  user-discovered models.
+- Whether Cloud should periodically prune old user model registry snapshots.
+- Whether model capability metadata should be normalized across providers or
+  mostly displayed as harness-specific metadata.
+- Whether managed cloud targets should have precomputed model registry
+  snapshots per image version.
+
+## Implementation Sequence
+
+Recommended order:
+
+1. Preserve Cloud product catalog as the optimistic default source.
+2. Add AnyHarness model registry snapshot table and internal model shape.
+3. Add Cursor discovery through `cursor-agent models`.
+4. Add OpenCode discovery through `opencode models --verbose`.
+5. Expose AnyHarness refresh/read endpoints for dynamic harnesses.
+6. Merge catalog metadata with live snapshots in AnyHarness launch options.
+7. Add Agent Defaults expandable per-harness visibility over effective
+   registries.
+8. Sync registry projections through Worker to Cloud.
+9. Save automation/Slack defaults as `ModelIntent`.
+10. Validate/resolve model intent at launch and report actionable errors.
+
 ## Non-Goals
 
 Do not implement these as part of the first model-registry pass:

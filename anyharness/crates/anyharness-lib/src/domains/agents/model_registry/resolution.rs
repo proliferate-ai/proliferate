@@ -107,20 +107,16 @@ pub fn resolve_model_id(
             let Some(default_model_id) = model_registry.default_model_id.as_deref() else {
                 return Ok(None);
             };
-            find_model_by_id(model_registry, default_model_id)
-                .ok_or_else(|| {
-                    ModelResolutionError::Invalid(format!("invalid model ID: '{default_model_id}'"))
-                })?
-                .into()
+            find_model_by_id(model_registry, default_model_id).ok_or_else(|| {
+                ModelResolutionError::Invalid(format!("invalid model ID: '{default_model_id}'"))
+            })?
         }
     };
 
-    Ok(Some(
-        selected_model
-            .launch_id_override
-            .map(str::to_string)
-            .unwrap_or_else(|| resolve_model_launch_id(model_registry, selected_model.model)),
-    ))
+    Ok(Some(resolve_model_launch_id(
+        model_registry,
+        selected_model,
+    )))
 }
 
 enum LaunchSnapshotDecision {
@@ -189,47 +185,16 @@ fn unusable_dynamic_snapshot_message(
     format!("{agent_kind} model registry is unusable; refresh models before launching")
 }
 
-struct ResolvedModelSelection<'a> {
-    model: &'a ModelRegistryModelMetadata,
-    launch_id_override: Option<&'static str>,
-}
-
-impl<'a> From<&'a ModelRegistryModelMetadata> for ResolvedModelSelection<'a> {
-    fn from(model: &'a ModelRegistryModelMetadata) -> Self {
-        Self {
-            model,
-            launch_id_override: None,
-        }
-    }
-}
-
 fn resolve_requested_model<'a>(
     model_registry: &'a ModelRegistryMetadata,
     provided_model_id: &str,
-) -> Option<ResolvedModelSelection<'a>> {
-    find_model_by_id(model_registry, provided_model_id)
-        .map(ResolvedModelSelection::from)
-        .or_else(|| {
-            let launch_id =
-                explicit_legacy_launch_id(model_registry.kind.as_str(), provided_model_id)?;
-            find_model_by_id_or_alias(model_registry, launch_id).map(|model| {
-                ResolvedModelSelection {
-                    model,
-                    launch_id_override: Some(launch_id),
-                }
-            })
-        })
-        .or_else(|| find_model_by_alias(model_registry, provided_model_id).map(Into::into))
-        .or_else(|| {
-            let normalized_model_id =
-                normalize_legacy_model_id(model_registry.kind.as_str(), provided_model_id)?;
-            find_model_by_id_or_alias(model_registry, normalized_model_id).map(|model| {
-                ResolvedModelSelection {
-                    model,
-                    launch_id_override: Some(normalized_model_id),
-                }
-            })
-        })
+) -> Option<&'a ModelRegistryModelMetadata> {
+    find_model_by_id(model_registry, provided_model_id).or_else(|| {
+        let normalized_model_id =
+            normalize_legacy_model_id(model_registry.kind.as_str(), provided_model_id)
+                .unwrap_or(provided_model_id);
+        find_model_by_id_or_alias(model_registry, normalized_model_id)
+    })
 }
 
 fn find_model_by_id<'a>(
@@ -252,30 +217,11 @@ fn find_model_by_id_or_alias<'a>(
         .find(|model| model.id == model_id || model.aliases.iter().any(|alias| alias == model_id))
 }
 
-fn find_model_by_alias<'a>(
-    model_registry: &'a ModelRegistryMetadata,
-    model_id: &str,
-) -> Option<&'a ModelRegistryModelMetadata> {
-    model_registry
-        .models
-        .iter()
-        .find(|model| model.aliases.iter().any(|alias| alias == model_id))
-}
-
 fn resolve_model_launch_id(
     model_registry: &ModelRegistryMetadata,
     model: &ModelRegistryModelMetadata,
 ) -> String {
     if model_registry.kind == "claude" {
-        if let Some(launch_id) = explicit_claude_launch_id(model.id.as_str()) {
-            return launch_id.to_string();
-        }
-        for alias in &model.aliases {
-            if let Some(launch_id) = explicit_claude_launch_id(alias.as_str()) {
-                return launch_id.to_string();
-            }
-        }
-
         for launch_id in ["sonnet", "sonnet[1m]", "opus[1m]", "haiku"] {
             if model.id == launch_id || model.aliases.iter().any(|alias| alias == launch_id) {
                 return launch_id.to_string();
@@ -287,30 +233,6 @@ fn resolve_model_launch_id(
     }
 
     model.id.clone()
-}
-
-fn explicit_claude_launch_id(model_id: &str) -> Option<&'static str> {
-    match model_id {
-        "claude-opus-4-8"
-        | "claude-opus-4-8-1m"
-        | "us.anthropic.claude-opus-4-8"
-        | "us.anthropic.claude-opus-4-8[1m]" => Some("claude-opus-4-8"),
-        _ => None,
-    }
-}
-
-fn explicit_legacy_launch_id(agent_kind: &str, model_id: &str) -> Option<&'static str> {
-    if agent_kind != "claude" {
-        return None;
-    }
-
-    match model_id {
-        "sonnet" => Some("sonnet"),
-        "sonnet[1m]" => Some("sonnet[1m]"),
-        "opus[1m]" => Some("opus[1m]"),
-        "haiku" => Some("haiku"),
-        _ => None,
-    }
 }
 
 fn normalize_legacy_model_id(agent_kind: &str, model_id: &str) -> Option<&'static str> {
@@ -329,10 +251,14 @@ fn normalize_legacy_model_id(agent_kind: &str, model_id: &str) -> Option<&'stati
         | "claude-opus-4-6-1m"
         | "claude-opus-4-7"
         | "claude-opus-4-7-1m"
+        | "claude-opus-4-8"
+        | "claude-opus-4-8-1m"
         | "us.anthropic.claude-opus-4-6-v1"
         | "us.anthropic.claude-opus-4-6-v1[1m]"
         | "us.anthropic.claude-opus-4-7"
         | "us.anthropic.claude-opus-4-7[1m]"
+        | "us.anthropic.claude-opus-4-8"
+        | "us.anthropic.claude-opus-4-8[1m]"
         | "opus" => Some("opus[1m]"),
         "claude-haiku-4-5" => Some("haiku"),
         _ => None,
@@ -433,11 +359,10 @@ mod tests {
     }
 
     #[test]
-    fn resolves_claude_catalog_ids_and_aliases_to_live_launch_ids() {
+    fn resolves_claude_catalog_ids_to_live_launch_ids() {
         let mut sonnet = plain_model("us.anthropic.claude-sonnet-4-6", true);
         sonnet.aliases = vec!["sonnet".to_string(), "claude-sonnet-4-6".to_string()];
-        let mut opus = plain_model("us.anthropic.claude-opus-4-8", false);
-        opus.aliases = vec!["claude-opus-4-8".to_string()];
+        let opus = plain_model("us.anthropic.claude-opus-4-8", false);
         let mut opus_1m = plain_model("us.anthropic.claude-opus-4-8[1m]", false);
         opus_1m.aliases = vec!["opus[1m]".to_string(), "claude-opus-4-8-1m".to_string()];
         let registry = ModelRegistryMetadata {
@@ -454,55 +379,10 @@ mod tests {
         let opus_1m_resolved =
             resolve_model_id(&registry, Some("us.anthropic.claude-opus-4-8[1m]"))
                 .expect("catalog Opus 1M model should resolve");
-        let opus_alias_resolved = resolve_model_id(&registry, Some("claude-opus-4-8"))
-            .expect("catalog Opus alias should resolve");
-        let opus_1m_alias_resolved = resolve_model_id(&registry, Some("claude-opus-4-8-1m"))
-            .expect("catalog Opus 1M alias should resolve");
-        let opus_alias_model = resolve_requested_model(&registry, "claude-opus-4-8")
-            .expect("catalog Opus alias should select the base catalog model");
 
         assert_eq!(default_resolved.as_deref(), Some("sonnet"));
-        assert_eq!(opus_resolved.as_deref(), Some("claude-opus-4-8"));
-        assert_eq!(opus_1m_resolved.as_deref(), Some("claude-opus-4-8"));
-        assert_eq!(opus_alias_resolved.as_deref(), Some("claude-opus-4-8"));
-        assert_eq!(opus_1m_alias_resolved.as_deref(), Some("claude-opus-4-8"));
-        assert_eq!(opus_alias_model.model.id, "us.anthropic.claude-opus-4-8");
-    }
-
-    #[test]
-    fn keeps_previous_claude_opus_alias_on_generic_opus_launch_id() {
-        let mut sonnet = plain_model("us.anthropic.claude-sonnet-4-6", true);
-        sonnet.aliases = vec!["sonnet".to_string(), "claude-sonnet-4-6".to_string()];
-        let mut opus_48_1m = plain_model("us.anthropic.claude-opus-4-8[1m]", false);
-        opus_48_1m.aliases = vec!["opus[1m]".to_string(), "claude-opus-4-8-1m".to_string()];
-        let mut opus_47 = plain_model("us.anthropic.claude-opus-4-7", false);
-        opus_47.aliases = vec!["claude-opus-4-7".to_string()];
-        let mut opus_47_1m = plain_model("us.anthropic.claude-opus-4-7[1m]", false);
-        opus_47_1m.aliases = vec!["claude-opus-4-7-1m".to_string()];
-        let opus_46_1m = plain_model("us.anthropic.claude-opus-4-6-v1[1m]", false);
-        let registry = ModelRegistryMetadata {
-            kind: "claude".to_string(),
-            display_name: "Claude".to_string(),
-            default_model_id: Some("us.anthropic.claude-sonnet-4-6".to_string()),
-            models: vec![sonnet, opus_48_1m, opus_47, opus_47_1m, opus_46_1m],
-        };
-
-        let opus_resolved = resolve_model_id(&registry, Some("us.anthropic.claude-opus-4-7"))
-            .expect("catalog Opus 4.7 model should resolve");
-        let opus_alias_resolved = resolve_model_id(&registry, Some("claude-opus-4-7"))
-            .expect("catalog Opus 4.7 alias should resolve");
-        let opus_1m_alias_resolved = resolve_model_id(&registry, Some("claude-opus-4-7-1m"))
-            .expect("catalog Opus 4.7 1M alias should resolve");
-        let opus_46_1m_legacy_resolved = resolve_model_id(&registry, Some("claude-opus-4-6-1m"))
-            .expect("legacy Opus 4.6 1M alias should resolve");
-        let generic_opus_resolved = resolve_model_id(&registry, Some("opus[1m]"))
-            .expect("legacy Opus launch id should resolve");
-
         assert_eq!(opus_resolved.as_deref(), Some("opus[1m]"));
-        assert_eq!(opus_alias_resolved.as_deref(), Some("opus[1m]"));
-        assert_eq!(opus_1m_alias_resolved.as_deref(), Some("opus[1m]"));
-        assert_eq!(opus_46_1m_legacy_resolved.as_deref(), Some("opus[1m]"));
-        assert_eq!(generic_opus_resolved.as_deref(), Some("opus[1m]"));
+        assert_eq!(opus_1m_resolved.as_deref(), Some("opus[1m]"));
     }
 
     #[test]

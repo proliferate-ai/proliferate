@@ -40,11 +40,11 @@ The implemented V1 slice covers the first end-to-end storage-management path:
 - Cloud stores the report, preserves the workspace record/history, and removes
   inactive worker exposure from active sync after successful dehydration.
 
-Full active lazy rehydration and cache cleanup depend on the AnyHarness
-materialization contract described below: either identity-preserving
-dehydrate/rehydrate APIs, or a generation-remapping contract that can recreate a
-target worktree and bridge session projections under the same Cloud workspace
-id.
+The V1 slice intentionally does not claim full active lazy rehydration or cache
+cleanup. Those need the AnyHarness materialization contract described below:
+either identity-preserving dehydrate/rehydrate APIs, or a generation-remapping
+contract that can recreate a target worktree and bridge session projections
+under the same Cloud workspace id.
 
 ## End-State UX
 
@@ -337,9 +337,11 @@ It owns:
 
 A workspace can be active even when no runnable checkout currently exists.
 
-For Cloud-backed workspaces, `CloudWorkspace.id` is the stable product id.
-Local-only workspaces use the same durable product lifecycle concept instead
-of relying on sidebar preference ids.
+For Cloud-backed workspaces, `CloudWorkspace.id` is the stable product id. For
+local-only workspaces, the target state should move toward the same durable
+product lifecycle concept instead of relying on sidebar preference ids. Until
+that migration exists, local-only archive can remain an optimistic Desktop
+overlay, but product code should treat that as transitional debt.
 
 ### Worktree
 
@@ -676,8 +678,8 @@ record." Runtime selection must come from target/materialization ownership.
 ## Data Model Additions
 
 Use a separate materialization table in v1 if feasible. It is the least
-ambiguous representation because one durable workspace can have materializations
-on multiple targets.
+ambiguous representation because one durable workspace may eventually have
+materializations on multiple targets.
 
 Recommended shape:
 
@@ -738,16 +740,17 @@ cloud_workspace_materializations(target_id, worktree_path)
   WHERE materialization_state = 'hydrated' AND worktree_path IS NOT NULL
 ```
 
-Compatibility rules:
+Migration note:
 
 - Existing `archived_at` is already used for active uniqueness and list
-  filtering. `product_lifecycle` is the canonical field; `archived_at` is an
-  indexed compatibility mirror for archived workspaces.
-- Existing `cleanup_state` is a compatibility projection. Service code derives
-  UI state from materialization `cleanup_status`.
-- If primary materialization storage lives on `cloud_workspaces`, the service
-  and SDK response must still expose the shape described below so UI and mobile
-  stay coupled to the canonical response contract.
+  filtering. For v1, add `product_lifecycle` and keep `archived_at` as an
+  indexed compatibility mirror for archived workspaces until all call sites are
+  migrated.
+- Existing `cleanup_state` can remain as a compatibility projection, but new
+  service code should derive UI state from materialization `cleanup_status`.
+- If implementation temporarily stores the primary materialization on
+  `cloud_workspaces`, the service and SDK response must still expose the shape
+  described below so UI and mobile do not learn the temporary storage layout.
 
 Exposure/projection rule:
 
@@ -803,9 +806,9 @@ Representative shape:
 }
 ```
 
-Compatibility fields such as `workspaceStatus`, `visibility`, and top-level
-`archivedAt` are not lifecycle truth. New UI must use the explicit lifecycle,
-materialization, target, and cloud-access fields.
+Deprecated compatibility fields such as `workspaceStatus`, `visibility`, and
+top-level `archivedAt` may remain during migration, but new UI must not use them
+as lifecycle truth.
 
 Required product APIs:
 
@@ -1207,9 +1210,9 @@ Automated tests:
   conflicts, archive/purge command superseding, response lifecycle fields,
   Desktop archive/restore query invalidation, worker prune command reporting,
   and AnyHarness retire cleanup safety.
-- Materialization contract tests must cover stale generation reports, target
+- Follow-up materialization tests must cover stale generation reports, target
   offline transitions, command expiry, cache cleanup, and identity-preserving
-  hydrate.
+  hydrate once those contracts move out of the future-materialization phase.
 - Dirty-work fixtures must continue proving archive cleanup preserves user work
   and surfaces blockers.
 
@@ -1226,10 +1229,133 @@ Manual profile QA:
   explains the blocker.
 - Restore an archived workspace and confirm the same Cloud workspace id/history
   returns to Active.
-- Hydration QA: select a dehydrated active workspace and confirm transcript
+- Future hydrate QA: select a dehydrated active workspace and confirm transcript
   loads without checkout hydration until a file/terminal/prompt action.
-- Hydration QA: send a prompt while dehydrated and confirm the prompt is
+- Future hydrate QA: send a prompt while dehydrated and confirm the prompt is
   visibly queued during hydration.
+
+## Implementation Plan
+
+### Phase 1: Name The Model
+
+Add service-layer vocabulary for:
+
+```text
+product_lifecycle
+materialization_state
+cleanup_status
+desired_materialization_state
+execution_target
+cloud_access
+```
+
+Do this before large UI changes so product code stops treating archive,
+cleanup, cloud access, cloud runtime, and worktree absence as the same thing.
+
+Acceptance:
+
+- Cloud workspace serializers expose product lifecycle and materialization
+  summary separately.
+- New UI reads `productLifecycle`, `executionTarget`, `cloudAccess`, and
+  `primaryMaterialization`.
+- Desktop sidebar local archive preference is no longer the long-term source of
+  truth for durable archive.
+
+### Phase 2: AnyHarness Contract
+
+Define and implement the runtime path for active dehydration/rehydration.
+
+Acceptance:
+
+- The spec has an implementation choice between identity-preserving dehydrate
+  and generation-remapping rehydrate.
+- Active dehydration does not rely on AnyHarness `retired` state as product
+  truth.
+- Runtime reports can distinguish missing, stale, blocked, failed, skipped, and
+  inconsistent materializations.
+
+### Phase 3: Materialization Reporting
+
+Add or formalize storage for target materialization state.
+
+Acceptance:
+
+- Worker reports hydrated/dehydrated/hydrating/unknown/inconsistent.
+- Worker reports cleanup idle/pruning/blocked/failed/skipped/completed.
+- Cloud can show current materialization state without querying AnyHarness
+  synchronously on every list render.
+- Blockers and errors are structured.
+
+### Phase 4: Archive / Restore Product Flow
+
+Implement durable archive and restore.
+
+Acceptance:
+
+- Archive moves workspace to Archived immediately.
+- Restore returns the same workspace to active or returns a structured conflict.
+- Archive schedules prune.
+- Cleanup blocker does not undo archive.
+
+### Phase 5: Active Dehydration And Lazy Rehydrate
+
+Allow active workspaces to be dehydrated by retention and rehydrated on demand.
+
+Acceptance:
+
+- Selecting an active dehydrated workspace shows transcript immediately.
+- Runtime actions trigger hydration.
+- Prompt dispatch is visibly queued during hydration.
+- Hydration targets the correct runtime: local desktop vs managed cloud.
+
+### Phase 6: Cache Cleanup
+
+Add safe generated-path cleanup as a separate storage action.
+
+Acceptance:
+
+- Cache cleanup reports reclaimed bytes.
+- Cache cleanup does not alter workspace lifecycle or transcript continuity.
+
+### Phase 7: UI Polish And Education
+
+Clean up visual affordances:
+
+- active vs archived navigation
+- runtime target icon
+- cloud access indicator
+- restoring state
+- cleanup attention state
+- restore/archive/delete action placement
+
+Acceptance:
+
+- Users can tell whether something is local, cloud-access-enabled, cloud
+  sandbox-backed, active, archived, hydrated, or restoring.
+
+## Open Questions
+
+Should archive ever be blocked entirely by dirty work, or should archive always
+move to Archived with cleanup attention? This spec recommends immediate archive
+with blocked cleanup, because that matches the desired UX: archive is product
+organization, cleanup is filesystem safety.
+
+Should implementation preserve AnyHarness workspace id across dehydration, or
+allow a new materialization generation under the same Cloud workspace id? This
+spec prefers identity preservation long term, but permits generation remapping
+for v1 if transcript projections and command routing remain correct.
+
+What is the first-class pinning model: pinned workspace, pinned repo, or pinned
+target materialization? This spec assumes pinned workspace for v1.
+
+Where does the generated-cache safe path policy live? This spec recommends
+Cloud policy version + AnyHarness enforcement, so targets never execute
+arbitrary server-provided deletion globs without validation.
+
+How much local-only lifecycle should be implemented before Cloud-backed archive
+ships? This spec allows transitional Desktop overlay behavior, but the target
+model should be durable local lifecycle rather than permanent sidebar
+preferences.
 
 ## Implementation Notes
 
@@ -1241,8 +1367,9 @@ The current cloud archive path already sets cleanup pending. Keep that useful
 intent, but split the user-visible archive state from the filesystem cleanup
 result.
 
-The current Desktop sidebar archive preference is an optimistic local UI cache
-that reconciles to durable workspace lifecycle state.
+The current Desktop sidebar archive preference can remain as an optimistic local
+UI cache during transition, but it should reconcile to durable workspace
+lifecycle state.
 
 The worktree policy UI should continue to speak about storage cleanup, not
 workspace deletion. Copy should make clear that history remains unless the user

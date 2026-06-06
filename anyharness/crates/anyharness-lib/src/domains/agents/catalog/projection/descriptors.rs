@@ -198,31 +198,3 @@ fn parse_credential_discovery(value: &str) -> anyhow::Result<CredentialDiscovery
         _ => anyhow::bail!("unsupported credential discovery '{value}'"),
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn bundled_codex_launch_disables_user_profile_extensions() {
-        let codex = bundled_agent_descriptors()
-            .into_iter()
-            .find(|descriptor| descriptor.kind == AgentKind::Codex)
-            .expect("codex descriptor");
-
-        let args = codex.launch.default_args;
-        for expected in [
-            "features.plugins=false",
-            "features.tool_suggest=false",
-            "plugins={}",
-            "marketplaces={}",
-            "mcp_servers={}",
-        ] {
-            assert!(
-                args.windows(2)
-                    .any(|pair| pair[0] == "-c" && pair[1] == expected),
-                "missing Codex launch override {expected}"
-            );
-        }
-    }
-}

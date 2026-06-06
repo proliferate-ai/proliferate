@@ -46,7 +46,6 @@ describe("hot-session-ingest-manager", () => {
       "session-b",
       expect.objectContaining({
         awaitOpen: true,
-        allowColdIdleNoStream: true,
         hydrateBeforeStream: false,
         skipInitialRefresh: true,
       }),
@@ -73,7 +72,6 @@ describe("hot-session-ingest-manager", () => {
       "session-a",
       expect.objectContaining({
         awaitOpen: true,
-        allowColdIdleNoStream: true,
         hydrateBeforeStream: true,
         skipInitialRefresh: true,
       }),

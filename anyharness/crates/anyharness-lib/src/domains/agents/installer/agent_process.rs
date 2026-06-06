@@ -13,9 +13,6 @@ use crate::integrations::agent_cli::acp_registry::{self, ResolvedRegistryDistrib
 use crate::integrations::agent_cli::executable::{find_real_binary_in_path, is_valid_executable};
 use crate::integrations::agent_cli::launcher::generate_launcher_script;
 
-#[cfg(test)]
-mod tests;
-
 pub(super) fn is_agent_process_installable(spec: &AgentProcessInstallSpec) -> bool {
     matches!(
         spec,
@@ -85,7 +82,6 @@ fn regenerate_agent_process_launcher(
 pub(super) fn install_agent_process_artifact(
     spec: &AgentProcessArtifactSpec,
     kind: &AgentKind,
-    _default_args: &[String],
     runtime_home: &Path,
     options: &InstallOptions,
 ) -> Result<Option<InstalledArtifactResult>, InstallError> {
@@ -116,7 +112,6 @@ pub(super) fn install_agent_process_artifact(
                 &managed_dir,
                 &launcher_path,
                 options.agent_process_version.as_deref(),
-                &[],
                 &launcher_path_prefixes,
                 &launcher_env,
             ) {
@@ -137,7 +132,6 @@ pub(super) fn install_agent_process_artifact(
                 &managed_dir,
                 &launcher_path,
                 options,
-                &[],
                 &launcher_path_prefixes,
                 &launcher_env,
                 if is_valid_executable(&managed_native_binary) {
@@ -161,7 +155,6 @@ pub(super) fn install_agent_process_artifact(
             &launcher_path,
             options.agent_process_version.as_deref(),
             options.reinstall,
-            &[],
             &launcher_path_prefixes,
             &launcher_env,
             "managed_npm",
@@ -239,7 +232,6 @@ fn install_from_registry(
     managed_dir: &Path,
     launcher_path: &Path,
     version_override: Option<&str>,
-    launcher_args: &[String],
     path_prefixes: &[PathBuf],
     launcher_env: &HashMap<String, String>,
 ) -> Result<InstalledArtifactResult, InstallError> {
@@ -281,13 +273,7 @@ fn install_from_registry(
                 merged.extend(launcher_env.clone());
                 merged
             };
-            generate_launcher_script(
-                launcher_path,
-                &cmd_path,
-                &merge_launch_args(&args, launcher_args),
-                &env,
-                path_prefixes,
-            )?;
+            generate_launcher_script(launcher_path, &cmd_path, &args, &env, path_prefixes)?;
 
             Ok(InstalledArtifactResult {
                 role: ArtifactRole::AgentProcess,
@@ -315,13 +301,7 @@ fn install_from_registry(
                 merged.extend(launcher_env.clone());
                 merged
             };
-            generate_launcher_script(
-                launcher_path,
-                &cmd_path,
-                &merge_launch_args(&args, launcher_args),
-                &env,
-                path_prefixes,
-            )?;
+            generate_launcher_script(launcher_path, &cmd_path, &args, &env, path_prefixes)?;
 
             Ok(InstalledArtifactResult {
                 role: ArtifactRole::AgentProcess,
@@ -358,7 +338,6 @@ pub(super) fn install_agent_process_fallback(
     managed_dir: &Path,
     launcher_path: &Path,
     options: &InstallOptions,
-    launcher_args: &[String],
     path_prefixes: &[PathBuf],
     launcher_env: &HashMap<String, String>,
     managed_native_binary: Option<PathBuf>,
@@ -378,7 +357,6 @@ pub(super) fn install_agent_process_fallback(
             launcher_path,
             options.agent_process_version.as_deref(),
             options.reinstall,
-            launcher_args,
             path_prefixes,
             launcher_env,
             "fallback_npm",
@@ -389,7 +367,7 @@ pub(super) fn install_agent_process_fallback(
             generate_launcher_script(
                 launcher_path,
                 &native_exec,
-                &merge_launch_args(args, launcher_args),
+                args,
                 launcher_env,
                 path_prefixes,
             )?;
@@ -412,13 +390,7 @@ pub(super) fn install_agent_process_fallback(
                 return Err(InstallError::NotInstallable);
             };
             std::fs::create_dir_all(managed_dir)?;
-            generate_launcher_script(
-                launcher_path,
-                &bin,
-                &merge_launch_args(args, launcher_args),
-                launcher_env,
-                path_prefixes,
-            )?;
+            generate_launcher_script(launcher_path, &bin, args, launcher_env, path_prefixes)?;
 
             Ok(Some(InstalledArtifactResult {
                 role: ArtifactRole::AgentProcess,
@@ -428,10 +400,4 @@ pub(super) fn install_agent_process_fallback(
             }))
         }
     }
-}
-
-fn merge_launch_args(prefix_args: &[String], default_args: &[String]) -> Vec<String> {
-    let mut args = prefix_args.to_vec();
-    args.extend(default_args.iter().cloned());
-    args
 }

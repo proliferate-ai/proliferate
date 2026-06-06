@@ -1,6 +1,7 @@
 # AnyHarness Repo Shape
 
-Status: authoritative for file/module shape in AnyHarness code.
+Status: authoritative for file/module shape and migration discipline in
+AnyHarness code.
 
 ## File Size
 
@@ -20,9 +21,9 @@ Use these thresholds for Rust source under `anyharness/crates/**`:
 | `adapters/**/*.rs` | 500 | 900 | Split by capability if the adapter grows. |
 | `integrations/**/*.rs` | 400 | 800 | Split by protocol concern. |
 
-Files above these limits require a split plan or justification.
+Existing files above these limits are migration debt, not precedent.
 
-Current split shapes:
+Current migration reality:
 
 - `domains/sessions/store/**` is the current split session store shape.
 - `domains/sessions/mcp_bindings/**` is the current split session MCP binding and
@@ -92,36 +93,36 @@ owning spec or guide. For example:
 - event/output sinks split by normalized event or output family.
 - integrations split by protocol/vendor mechanic.
 
-## Change Discipline
+## Migration Discipline
 
 - Preserve behavior unless the task explicitly asks for a behavior change.
 - Move one ownership boundary at a time.
-- Do not leave duplicate old and new code paths after replacing an
-  implementation.
+- Do not leave duplicate old and new code paths after a migration.
 - Do not create empty target folder trees.
 - Do not add generic `utils`, `helpers`, or `misc` buckets.
 - When moving files mechanically, run focused tests before beginning behavior
-  changes.
+  cleanup.
 - When splitting god files, split by responsibility, not by arbitrary line
   ranges.
 
 ## Boundary Ratchet
 
 CI runs `scripts/check_anyharness_boundaries.py` to keep AnyHarness dependency
-direction from regressing. Existing violations are count-based exceptions in
-`scripts/anyharness_boundaries_allowlist.txt`; new violations, increased
-counts, and stale allowlist entries fail the check.
+direction from regressing while cleanup is in progress. Existing violations are
+count-based debt in `scripts/anyharness_boundaries_allowlist.txt`; new
+violations, increased counts, and stale allowlist entries fail the check.
 
-When a change removes an allowlisted violation, reduce or delete that allowlist
-entry in the same change.
+When a cleanup removes an allowlisted violation, reduce or delete that
+allowlist entry in the same change. Completed splits should tighten any
+transitional allowances that no longer match the documented target shape.
 
 ## Old Path Ratchets
 
-Completed splits block old flat file paths from coming back. The
+After a split lands, block the old flat file path from coming back. The
 repo-shape CI job runs `scripts/check_anyharness_old_paths.py` for completed
-AnyHarness splits. Add paths to that check after the replacement lands on
-`main`, then keep the old path blocked instead of relying on review to catch
-resurrected flat files.
+AnyHarness splits. Add paths to that check only after the owning migration has
+landed on `main`, then keep the old path blocked instead of relying on review
+to catch resurrected flat files.
 
 ## Review Questions
 

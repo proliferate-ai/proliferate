@@ -814,6 +814,50 @@ apps/desktop/src/lib/storage/direct-attach-tokens.ts                (new)
   - revoke on user logout
 ```
 
+## 7. Implementation Chunks
+
+```text
+Chunk A  Cloud schema + claim service
+  - cloud_workspace_claim + cloud_workspace_claim_token migrations
+  - claims store
+  - claims service (insert; JWT issuance; per-token revoke)
+  - claims/access.py helpers (can_claim, can_request_direct_attach,
+    can_revoke_claim_token)
+  - claim + direct-attach + token-revoke API endpoints
+
+Chunk B  Signing key config + verification-key delivery
+  - config additions (cloud_jwt_*)
+  - target bootstrap/runtime config carries accepted public keys to AnyHarness
+  - test key overlap with two configured public keys
+
+Chunk C  AnyHarness JWT verification
+  - anyharness-lib/api/auth.rs classify+verify
+  - middleware stack: worker_or_user, require_permission,
+    scope_workspace, scope_session
+  - AppState gains runtime_target_id + accepted claim verification keys
+  - in-memory revoked-jti cache
+  - PUT /v1/auth/revoked-jtis local AnyHarness endpoint
+
+Chunk D  Worker revoked-jti reconciliation
+  - worker pulls from Cloud (every 60s)
+  - pushes hashed entries to AnyHarness on change
+
+Chunk E  Workspace listing + access policy refactor
+  - scope filters my | unclaimed | claimable | org-all
+  - access helpers (can_view / can_interact / can_claim /
+    can_request_direct_attach_token / can_revoke_claim_token)
+  - cmd enqueue uses can_interact
+
+Chunk F  Desktop direct-attach
+  - claim mutation (one-way)
+  - direct-attach-token + refresh + per-token revoke mutations
+  - new runtime location 'shared_cloud'
+  - JWT storage in OS keychain
+  - UI: claim CTA, audit view for admin, "Open in Desktop (direct)"
+
+Chunk G  Tests + smoke
+```
+
 ## 8. Acceptance Criteria
 
 1. `cloud_workspace_claim` has UNIQUE(`cloud_workspace_id`).
@@ -985,3 +1029,68 @@ Manual smoke:
 6. Web/mobile cannot get JWT
    - X-Client-Kind != 'desktop' -> 403 direct_attach_desktop_only
 ```
+
+## 10. Final Decisions / Deferred Questions
+
+1. **Token TTL: 20 minutes default, configurable. Right value?**
+
+   Tradeoffs:
+     short  better per-token revocation latency, more refresh traffic
+     long   fewer refresh, slower per-token revocation (until natural
+            expiry); push-cache mitigates
+
+   Decision: 20 minutes. With push-based jti revocation cache,
+   immediate cutoff is supported anyway.
+
+2. **`X-Client-Kind: desktop` gate hardening**
+
+   The header is spoofable. A user with a valid claim could
+   request the JWT from a non-Desktop client. The downside is
+   bounded: the JWT only works against the AnyHarness URL, which
+   is not exposed to web/mobile UI (no AnyHarness HTTP client).
+   Still, "spoofable" is a real concern.
+
+   Options:
+     (a) Tie to Desktop OAuth client_id
+     (b) Require a Desktop-only auth method (e.g. session token
+         issued by the Desktop installer)
+     (c) Accept the spoofability since attack surface is small
+
+   Decision: (c) for V1. Move to (a) when Desktop OAuth client
+   identity exists. Track as a follow-up.
+
+3. **Signing-key rotation operations**
+
+   The spec defines the model (active signing key + accepted verification key
+   set). Key generation, rotation cadence, and operator runbook live in
+   deployment docs. Decision: don't bloat the spec; reference the deployment doc
+   when written.
+
+4. **Admin viewing a claimed workspace's transcript — read or
+   read+events?**
+
+   Admin gets `can_view` for audit. Should admin also see live
+   event projection or just static transcript? Decision: full live
+   projection (events stream) but no interaction. Implementation
+   already supports this via projection_level + commandable; the
+   admin path uses the same projection_level=live, commandable=false
+   for their view session. No extra schema needed.
+
+5. **What if the claimer's user account is reinstated after
+   `claimed_by_user_id` became NULL?**
+
+   Decision: do not auto-restore. If a deleted user is reinstated and
+   their claim was orphaned, the workspace remains orphan-claimed
+   with NULL claimer. Admin manually archives or the user creates
+   new work. Reactivation would require explicit product UX which
+   we don't have.
+
+6. **`cloud_workspace_claim.cloud_session_id` — necessary?**
+
+   The claim is workspace-scoped. The captured session id is just
+   "the session at claim time" for UI deep-link convenience. If we
+   never use it, we can drop the column.
+
+   Decision: keep. It costs almost nothing and lets the post-claim UI
+   route the user back to the session they were looking at when
+   they clicked Claim.

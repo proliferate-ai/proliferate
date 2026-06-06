@@ -486,11 +486,86 @@ Desktop settings tree.
 - [ ] Agent credential readiness summary when surfaced by cloud APIs.
 - [ ] App build, environment, support link, and privacy/terms links.
 
+## Implementation Phases
+
+### Phase 0 - Mobile Facts And API Inventory
+
+- [ ] Inventory all mobile screens and fixture-backed surfaces.
+- [ ] Inventory reusable Web cloud helpers that are browser-specific today.
+- [ ] Identify which Web helpers can move to `apps/packages/product-domain` or a
+  cloud SDK helper without importing DOM/browser APIs.
+- [ ] Confirm whether mobile needs new cloud SDK React hooks for repo configs,
+  workspace live, session events, automations mutations, or orgs.
+
+### Phase 1 - Shared Product Rules For Cloud Chat
+
+- [x] Move Web-only pure helpers for cloud transcript rows into
+  `apps/packages/product-domain`.
+- [x] Move Web-only pure helpers for cloud composer controls into
+  `apps/packages/product-domain`.
+- [x] Keep browser persistence, navigation, and window timers out of shared
+  product logic.
+- [x] Add product-domain tests for transcript event/projection fallback.
+- [ ] Add product-domain tests for optimistic prompt reconciliation and config
+  reconciliation.
+
+### Phase 2 - Mobile New Chat And Workspace Handoff
+
+- [x] Replace `MobileHomeScreen` prototype modes with a repo/model prompt
+  surface.
+- [x] Create workspace from mobile.
+- [x] Persist and dispatch first prompt when workspace is ready.
+- [x] Route into a pending/final-looking chat shell immediately.
+- [ ] Verify the home-created workspace first-prompt path against a real cloud
+  runtime.
+
+### Phase 3 - Mobile Chat Surface
+
+- [x] Replace the `ScrollView` transcript with a virtualized list.
+- [x] Render the shared cloud transcript row view in React Native.
+- [x] Add optimistic prompt rows and assistant waiting rows.
+- [x] Add mobile-native composer config controls.
+- [x] Add branch copy/share, claim, and command status UI.
+
+### Phase 4 - Workspace, Session, And Sidebar Parity
+
+- [ ] Add workspace detail screen/sheet.
+- [x] Add all-session listing for a workspace.
+- [x] Add new-session creation for an existing workspace.
+- [ ] Upgrade drawer/sidebar grouping and sorting to match Web semantics.
+- [x] Preserve active workspace/session across reload/resume.
+
+### Phase 5 - Automations And Settings
+
+- [x] Wire real automation list.
+- [x] Add create/pause/resume lifecycle where cloud APIs support it.
+- [x] Replace static settings rows with account, teams, billing, and cloud
+  profile data.
+- [x] Add fallbacks for unsupported mobile-only actions.
+
+### Phase 6 - End-To-End QA
+
+- [ ] iOS simulator smoke.
+- [ ] Android simulator smoke.
+- [ ] Physical-device smoke when auth redirects or keyboard behavior change.
+- [ ] Flow 1: fresh auth to ready shell.
+- [ ] Flow 2: new personal cloud chat from Mobile.
+- [ ] Flow 3: new session in existing workspace.
+- [ ] Flow 4: existing session prompt send.
+- [ ] Flow 5: managed target materialization.
+- [ ] Flow 6: shared/unclaimed workspace claim.
+- [ ] Flow 7: live transcript, snapshot fallback, and reload.
+- [ ] Flow 8: chat configuration.
+- [ ] Flow 9: workspace navigation and identity.
+- [ ] Flow 10: automations.
+- [ ] Flow 11: settings and account.
+- [ ] Flow 12: mobile app lifecycle and failure recovery.
+
 ## Core Flow Acceptance Matrix
 
 Use this matrix as the implementation tracker. A flow is not complete until the
 manual path works against a real dev/prod-like cloud backend and the listed
-coverage exists or has an owner outside this matrix.
+coverage exists or is explicitly deferred.
 
 | Flow | User-visible success | Minimum coverage |
 | --- | --- | --- |
@@ -528,6 +603,18 @@ For full-stack local testing, use a dev profile instead of default ports:
 make dev-init PROFILE=<name>
 make dev PROFILE=<name>
 ```
+
+## Open Questions
+
+- Should Mobile support organization-owned workspace creation in the first
+  implementation pass, or personal owner scope only?
+- Which automation create/edit fields are mobile-safe for v1, and which should
+  remain Desktop/Web-only?
+- Do mobile chat config controls use a single bottom sheet for all controls or
+  one sheet per control?
+- Should branch copy use clipboard only, share sheet only, or both?
+- Is push notification support in scope for long-running mobile cloud sessions,
+  or does foreground/resume polling satisfy v1?
 
 ## Definition Of Done
 

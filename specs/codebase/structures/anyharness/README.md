@@ -246,9 +246,9 @@ Specs:
   `live/sessions/actor` state-machine split, actor-owned state, command
   handling, turn loop, config, notifications, interactions, and shutdown.
 - [../../primitives/agent-catalog-readiness.md](../../primitives/agent-catalog-readiness.md) for
-  the agents catalog/readiness model: single catalog input, trusted
-  descriptor/model projection, install/readiness topology, seed artifacts, and
-  launch resolution.
+  the current agents catalog/readiness migration: single catalog input,
+  trusted descriptor/model projection, transitional install/readiness topology,
+  seed artifacts, and launch resolution.
 - [../../primitives/mcp-runtime.md](../../primitives/mcp-runtime.md) for user MCP bindings, product MCP servers,
   session extensions, capability tokens, and MCP elicitation.
 - [../../features/agent-features/servers.md](../../features/agent-features/servers.md) for the repeatable product
@@ -258,8 +258,8 @@ Specs:
   MCP definitions currently being standardized: subagents, artifacts, reviews,
   and workspace naming.
 
-Subsystem docs under `specs/codebase/structures/anyharness/src/**` own
-behavior for runtime areas that do not yet have a focused guide or spec:
+Existing subsystem docs under `specs/codebase/structures/anyharness/src/**` remain valid during the
+migration. Treat them as subsystem specs until they are moved or rewritten:
 
 - [src/agents.md](src/agents.md)
 - [src/acp.md](src/acp.md)
@@ -287,7 +287,7 @@ Also read:
 Use this map when starting from a file, task, or feature idea and deciding
 which guide to read and where the code belongs.
 
-| You are changing or building | Paths | Owner | Read |
+| You are changing or building | Current common paths | Target owner | Read |
 | --- | --- | --- | --- |
 | Binary startup, CLI flags, runtime-home selection, command dispatch | `anyharness/crates/anyharness/src/**` | `anyharness` thin binary | [guides/crates.md](guides/crates.md) |
 | Public HTTP/SSE/WS schemas, OpenAPI-visible request/response types | `anyharness-contract/src/v1/**` | `anyharness-contract` | [guides/crates.md](guides/crates.md), [contract.md](contract.md) |
@@ -324,7 +324,8 @@ adapter in `api/http/**`.
 
 ## Target Shape
 
-This is the AnyHarness source organization.
+This is the target architecture. Existing code is transitional in several
+places. New code and cleanup work should move toward this structure.
 
 ```text
 anyharness/crates/
@@ -378,6 +379,70 @@ anyharness/crates/
 
 Do not add new top-level AnyHarness folders without updating this doc and the
 focused guide that owns the layer.
+
+## Transitional State
+
+The target shape is not fully implemented yet.
+
+Current high-level mappings:
+
+```text
+domains/sessions/      -> target domains/sessions/
+domains/workspaces/    -> target domains/workspaces/
+current domains/agents/ -> target domains/agents/ plus integrations/agent_cli/
+domains/repo_roots/    -> target domains/repo_roots/
+current cowork/        -> target domains/cowork/
+domains/artifacts/    -> target domains/artifacts/
+domains/reviews/      -> target domains/reviews/
+domains/plans/        -> target domains/plans/
+current mobility/      -> target domains/mobility/
+domains/plugins/      -> target domains/plugins/ (MCP plugin defs + skill rendering)
+domains/runtime_config/ -> target domains/runtime_config/ (applied MCP/skill/plugin session context)
+current live/sessions/ -> current and target live session runtime
+current acp/           -> remaining ACP permission/payload/error helpers; target integrations/acp only if reusable protocol mechanics earn it
+current domains/terminals/ + live/terminals/ -> current and target terminal durable/live split
+current observability/latency.rs -> current and target latency request context
+and trace-field helper owner
+```
+
+Known transitional issues:
+
+- Phase 1 topology moves are present: local file/git/hosting/process
+  capabilities live under `adapters/**`, shared MCP helpers live under
+  `integrations/mcp/**`, and provider CLI mechanics live under
+  `integrations/agent_cli/**`.
+- Product domains, including sessions, workspaces, agents, repo roots, cowork,
+  reviews, plans, mobility, and terminals, live under `domains/**`.
+- Session MCP assembly is split under `domains/sessions/mcp_bindings/**`,
+  including `assembly.rs`.
+- `SessionRuntime` is split under `domains/sessions/runtime/**`. The public
+  `SessionRuntime` type remains the API-facing use-case surface.
+- `SessionStore` is split under `domains/sessions/store/**`. The public
+  `SessionStore` type remains the caller-facing store surface.
+- `SessionEventSink` is split under `live/sessions/event_sink/**`.
+- Latency request context and trace-field helpers are already owned by
+  `observability/latency.rs`; lower layers should not import API transport
+  modules for latency context.
+- Contract request/response types leak below `api/`. Contract event payloads
+  may be a deliberate durable event-log type, but other contract types should
+  be mapped at the API boundary.
+- The live session runtime is split under `live/sessions/manager/**`,
+  `live/sessions/handle.rs`, `live/sessions/actor/**`,
+  `live/sessions/driver/**`, `live/sessions/event_sink/**`,
+  `live/sessions/interactions/**`,
+  `live/sessions/background_work/**`, and `live/sessions/replay/**`.
+  `RuntimeClient` remains the current low-level ACP client name under
+  `live/sessions/driver/runtime_client/**`; remaining `acp/**` files are
+  permission/payload/provider error helpers, not live-session owners.
+- Some product MCP endpoint scaffolding may still be feature-local. Common
+  protocol/auth scaffolding should use `integrations/mcp/`; product tool
+  semantics stay with their owning domain.
+- Some agent/provider CLI mechanics may still be mixed with agent
+  catalog/readiness logic. Provider-specific process/install/probe behavior
+  should move toward `integrations/agent_cli/`.
+
+Cleanup work should preserve behavior, then move code to the target owner.
+Do not leave duplicate old and new code paths after a migration.
 
 ## Hard Rules
 

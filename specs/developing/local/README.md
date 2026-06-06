@@ -217,7 +217,7 @@ uv --directory server run python scripts/provision_password_auth_user.py \
   --display-name 'Reviewer'
 ```
 
-The account can sign in on Web and Mobile immediately. It requires a linked
+The account can sign in on Web and Mobile immediately. It still needs a linked
 GitHub identity before cloud workspaces and automations are product-ready.
 Desktop keeps GitHub as the primary sign-in path, but an authenticated user can
 add or change an email/password credential from Account settings.

@@ -42,7 +42,7 @@ pub fn resolve_agent_with_env(
 
     let mut spawn = None;
     let mut agent_process = if let Some((spawn_spec, override_artifact)) =
-        resolve_agent_process_override(descriptor)
+        resolve_agent_process_override(&descriptor.kind)
     {
         spawn = Some(spawn_spec);
         override_artifact
@@ -127,35 +127,6 @@ mod tests {
                 std::env::set_var("PATH", original);
             } else {
                 std::env::remove_var("PATH");
-            }
-        }
-    }
-
-    struct EnvVarGuard {
-        name: &'static str,
-        original: Option<std::ffi::OsString>,
-    }
-
-    impl EnvVarGuard {
-        fn set(name: &'static str, value: &Path) -> Self {
-            let original = std::env::var_os(name);
-            std::env::set_var(name, value);
-            Self { name, original }
-        }
-
-        fn set_str(name: &'static str, value: &str) -> Self {
-            let original = std::env::var_os(name);
-            std::env::set_var(name, value);
-            Self { name, original }
-        }
-    }
-
-    impl Drop for EnvVarGuard {
-        fn drop(&mut self) {
-            if let Some(original) = &self.original {
-                std::env::set_var(self.name, original);
-            } else {
-                std::env::remove_var(self.name);
             }
         }
     }
@@ -389,37 +360,6 @@ mod tests {
             "/definitely/missing/agent-binary"
         )));
         assert!(is_override_program_valid(Path::new("sh")));
-    }
-
-    #[test]
-    fn override_launch_prepends_catalog_default_args() {
-        let registry = built_in_registry();
-        let codex = registry
-            .into_iter()
-            .find(|descriptor| descriptor.kind == AgentKind::Codex)
-            .expect("missing Codex descriptor");
-        let runtime_home = make_temp_dir("anyharness-codex-override-default-args-test");
-        let bin = runtime_home.join("codex-acp");
-        std::fs::write(&bin, "#!/bin/sh\nexit 0\n").expect("write override binary");
-        make_executable(&bin).expect("make override binary executable");
-
-        let _program_guard = EnvVarGuard::set("ANYHARNESS_CODEX_AGENT_PROGRAM", &bin);
-        let _args_guard =
-            EnvVarGuard::set_str("ANYHARNESS_CODEX_AGENT_ARGS_JSON", r#"["--extra-dev-arg"]"#);
-
-        let resolved = resolve_agent(&codex, &runtime_home);
-        let spawn = resolved.spawn.expect("override spawn spec");
-
-        assert!(spawn
-            .args
-            .windows(2)
-            .any(|pair| pair == ["-c", "features.plugins=false"]));
-        assert_eq!(
-            spawn.args.last().map(String::as_str),
-            Some("--extra-dev-arg")
-        );
-
-        let _ = std::fs::remove_dir_all(runtime_home);
     }
 
     #[test]

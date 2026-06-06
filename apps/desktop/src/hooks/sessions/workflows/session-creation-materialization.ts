@@ -73,33 +73,11 @@ export async function materializeSessionCreation({
   upsertWorkspaceSessionRecord,
   workspaceId,
 }: MaterializeSessionCreationInput): Promise<string> {
-  const materializeStartedAt = Date.now();
   const requestOptions = buildLatencyRequestOptions(options.latencyFlowId);
-  logLatency("session.create.materialize.start", {
-    clientSessionId: pendingSessionId,
-    workspaceId,
-    agentKind: options.agentKind,
-    modelId: options.modelId,
-    modeId: resolvedModeId,
-  });
   const runtimeUrl = await resolveDesktopRuntimeUrlForWorkspace(workspaceId);
-  logLatency("session.create.materialize.runtime_url_resolved", {
-    clientSessionId: pendingSessionId,
-    workspaceId,
-    elapsedMs: Date.now() - materializeStartedAt,
-  });
 
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
   const target = await resolveRuntimeTargetForWorkspace(runtimeUrl, workspaceId);
-  logLatency("session.create.materialize.target_resolved", {
-    clientSessionId: pendingSessionId,
-    workspaceId,
-    targetLocation: target.location,
-    runtimeGeneration: target.runtimeGeneration,
-    hasCloudWorkspaceId: Boolean(target.cloudWorkspaceId),
-    hasTargetId: Boolean(target.targetId),
-    elapsedMs: Date.now() - materializeStartedAt,
-  });
   const targetConnection = {
     runtimeUrl: target.baseUrl,
     authToken: target.authToken,
@@ -161,12 +139,6 @@ export async function materializeSessionCreation({
       targetConnection,
       requestOptions,
     );
-    logLatency("session.create.materialize.runtime_config_prepared", {
-      clientSessionId: pendingSessionId,
-      workspaceId,
-      hasExpectedRuntimeConfigRevision: Boolean(expectedRuntimeConfigRevision),
-      elapsedMs: Date.now() - materializeStartedAt,
-    });
     session = await createSession(targetConnection, {
       workspaceId: target.anyharnessWorkspaceId,
       agentKind: options.agentKind,
@@ -177,14 +149,6 @@ export async function materializeSessionCreation({
       origin: DESKTOP_ORIGIN,
     }, requestOptions);
   }
-  logLatency("session.create.materialize.session_created", {
-    clientSessionId: pendingSessionId,
-    materializedSessionId: session.id,
-    workspaceId,
-    agentKind: options.agentKind,
-    modelId: session.modelId ?? options.modelId,
-    elapsedMs: Date.now() - materializeStartedAt,
-  });
 
   annotateLatencyFlow(options.latencyFlowId, {
     targetSessionId: session.id,

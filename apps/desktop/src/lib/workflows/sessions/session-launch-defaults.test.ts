@@ -29,7 +29,6 @@ function liveConfig(overrides: {
   collaborationMode?: NormalizedSessionControl | null;
   reasoning?: NormalizedSessionControl | null;
   effort?: NormalizedSessionControl | null;
-  fastMode?: NormalizedSessionControl | null;
 }): SessionLiveConfigSnapshot {
   return {
     updatedAt: "2026-01-01T00:00:00Z",
@@ -44,7 +43,7 @@ function liveConfig(overrides: {
       mode: null,
       reasoning: overrides.reasoning ?? null,
       effort: overrides.effort ?? null,
-      fastMode: overrides.fastMode ?? null,
+      fastMode: null,
       collaborationMode: overrides.collaborationMode ?? null,
     },
   } as SessionLiveConfigSnapshot;
@@ -214,108 +213,6 @@ describe("applySessionLaunchDefaults", () => {
     });
     expect(result.session.liveConfig?.normalizedControls.collaborationMode?.currentValue)
       .toBe("plan");
-  });
-
-  it("applies catalog defaults when no saved user preference exists", async () => {
-    const firstLiveConfig = liveConfig({
-      effort: control("effort", "reasoning_effort", "xhigh", [
-        "low",
-        "medium",
-        "high",
-        "xhigh",
-      ]),
-      fastMode: control("fast_mode", "fast_mode", "on", ["off", "on"]),
-    });
-    const effortLiveConfig = liveConfig({
-      effort: control("effort", "reasoning_effort", "medium", [
-        "low",
-        "medium",
-        "high",
-        "xhigh",
-      ]),
-      fastMode: control("fast_mode", "fast_mode", "on", ["off", "on"]),
-    });
-    const finalLiveConfig = liveConfig({
-      effort: control("effort", "reasoning_effort", "medium", [
-        "low",
-        "medium",
-        "high",
-        "xhigh",
-      ]),
-      fastMode: control("fast_mode", "fast_mode", "off", ["off", "on"]),
-    });
-    const setConfigOption = vi.fn()
-      .mockResolvedValueOnce({
-        applyState: "applied",
-        session: session(effortLiveConfig),
-        liveConfig: effortLiveConfig,
-      })
-      .mockResolvedValueOnce({
-        applyState: "applied",
-        session: session(finalLiveConfig),
-        liveConfig: finalLiveConfig,
-      });
-    const client = {
-      sessions: {
-        setConfigOption,
-        getLiveConfig: vi.fn(),
-      },
-    } as unknown as AnyHarnessClient;
-    const registries: ModelRegistry[] = [{
-      kind: "codex",
-      displayName: "Codex",
-      defaultModelId: "gpt-5.5",
-      models: [{
-        id: "gpt-5.5",
-        aliases: [],
-        displayName: "GPT-5.5",
-        isDefault: true,
-        status: "active",
-        sessionDefaultControls: [
-          {
-            key: "effort",
-            label: "Reasoning Effort",
-            defaultValue: "medium",
-            values: [
-              { value: "low", label: "Low", isDefault: false },
-              { value: "medium", label: "Medium", isDefault: true },
-              { value: "high", label: "High", isDefault: false },
-              { value: "xhigh", label: "Xhigh", isDefault: false },
-            ],
-          },
-          {
-            key: "fast_mode",
-            label: "Fast Mode",
-            defaultValue: "off",
-            values: [
-              { value: "off", label: "Off", isDefault: true },
-              { value: "on", label: "On", isDefault: false },
-            ],
-          },
-        ],
-      }],
-    }];
-
-    const result = await applySessionLaunchDefaults({
-      client,
-      session: session(firstLiveConfig, {
-        agentKind: "codex",
-        modelId: "gpt-5.5",
-        requestedModelId: "gpt-5.5",
-      }),
-      agentKind: "codex",
-      modelRegistries: registries,
-      defaultLiveSessionControlValuesByAgentKind: {},
-    });
-
-    expect(setConfigOption.mock.calls.map((call) => call[1])).toEqual([
-      { configId: "reasoning_effort", value: "medium" },
-      { configId: "fast_mode", value: "off" },
-    ]);
-    expect(result.session.liveConfig?.normalizedControls.effort?.currentValue)
-      .toBe("medium");
-    expect(result.session.liveConfig?.normalizedControls.fastMode?.currentValue)
-      .toBe("off");
   });
 
   it("resolves model defaults from the requested model before a lagging current model", async () => {

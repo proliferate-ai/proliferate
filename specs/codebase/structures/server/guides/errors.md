@@ -143,6 +143,8 @@ Direct `HTTPException` is allowed only at actual HTTP boundaries:
   with FastAPI
 - routes returning non-product assets or callback pages where the response is
   not the normal JSON error contract
+- route-level translation in a migration exception that does not yet have a
+  domain error type
 
 It is banned in:
 
@@ -168,3 +170,17 @@ Banned:
 - Catching a domain error in an API route only to reformat it.
 - Integration code catching its own error type to produce an HTTP response.
 - Domain errors wrapping unrelated exceptions without adding product meaning.
+
+## Migration Exceptions
+
+Existing code may still translate domain errors inside route handlers or keep
+service error classes outside the domain error model. When touching that code:
+
+1. Add or update `server/<domain>/errors.py`.
+2. Convert service-layer `*ServiceError` classes to domain errors.
+3. Register or reuse the global `ProliferateError` handler.
+4. Delete per-route `except DomainError: raise HTTPException(...)` blocks.
+5. Keep integration errors integration-local and translate them in services.
+
+Do not mix error migration with unrelated behavior changes. Preserve codes,
+messages, and status codes unless the task explicitly changes the contract.

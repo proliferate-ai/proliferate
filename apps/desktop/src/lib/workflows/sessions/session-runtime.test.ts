@@ -274,26 +274,6 @@ describe("prepareLocalSessionRuntimeConfig", () => {
     expect(mocks.applyRuntimeConfig).not.toHaveBeenCalled();
   });
 
-  it("fails fast when Cloud runtime config preflight stalls", async () => {
-    vi.useFakeTimers();
-    try {
-      mocks.ensurePersonalSandboxProfile.mockImplementation(() => new Promise(() => {}));
-
-      const prepared = prepareLocalSessionRuntimeConfig(connection, undefined, {
-        cloudPreflightTimeoutMs: 50,
-      });
-      const expectation = expect(prepared).rejects.toThrow(/timed out/i);
-
-      await vi.advanceTimersByTimeAsync(50);
-
-      await expectation;
-      expect(mocks.getSandboxProfileDesktopRuntimeConfigApplyRequest).not.toHaveBeenCalled();
-      expect(mocks.applyRuntimeConfig).not.toHaveBeenCalled();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
   it("surfaces runtime config materialization failures", async () => {
     mocks.ensurePersonalSandboxProfile.mockResolvedValue({
       id: "profile-1",

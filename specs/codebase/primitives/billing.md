@@ -21,7 +21,7 @@ trial from re-creation abuse.
 
 In scope:
 
-- Wire spec 04's `kick_off_managed_sandbox_wake` to the existing
+- Wire spec 04's `kick_off_managed_slot_wake` to the existing
   `authorize_sandbox_start` gate. No new abstraction; the function
   is already the canonical billing check.
 - Tie `agent_gateway_budget_subject.included_budget_usd` to the
@@ -40,7 +40,7 @@ In scope:
 - Process additional Stripe webhook events that today's handler
   ignores: `invoice.upcoming`, `customer.subscription.trial_will_end`.
 - Acceptance tests that prove the wake gate consults billing
-  exactly as expected: paused sandbox + exhausted budget → command
+  exactly as expected: paused slot + exhausted budget → command
   transitions queued → `failed_delivery` with
   `error_code='sandbox_wake_blocked'`.
 
@@ -67,11 +67,11 @@ Out of scope:
   per-subject opt-in.
 - A managed LLM credits overage path. LLM credits remain hard-
   capped in V1 (per spec 02 §1).
-- Mobile billing UI. Desktop has the canonical billing pane and web gains
-  parity.
+- Mobile billing UI. Desktop has the canonical billing pane; web
+  gains parity. Mobile defers.
 - Per-org compute hard cap distinct from `overage_cap_cents_per_seat`.
-  Today's per-seat cap is the cap; an additional org-wide ceiling requires a
-  separate product spec.
+  Today's per-seat cap is the cap; if product needs an additional
+  org-wide ceiling, follow-up spec.
 
 ## 2. Mental Model
 
@@ -96,7 +96,7 @@ billing_grant                pre-paid compute time
   hours_granted, remaining_seconds
   effective_at, expires_at
 
-usage_segment                actual compute usage (one per sandbox run)
+usage_segment                actual compute usage (one per slot run)
   external_sandbox_id        E2B sandbox id
   started_at, ended_at
   is_billable
@@ -138,7 +138,7 @@ The flow:
 ```
 
 Spec 04's wake gate calls `authorize_sandbox_start` synchronously
-inside the background `run_managed_sandbox_wake_job`; if the result
+inside the background `run_managed_slot_wake_job`; if the result
 is `allowed=false`, queued wake-required commands transition to
 `failed_delivery` with `error_code='sandbox_wake_blocked'` and the
 `SandboxStartAuthorization.start_block_reason` populates the
@@ -164,9 +164,9 @@ offer free LLM credits — operational toggle).
 
 Hard:
 
-- Spec 00: `sandbox_profile`, `cloud_sandbox` lifecycle.
-  Billing snapshots reference the sandbox's `billing_subject_id`.
-- Spec 04: `kick_off_managed_sandbox_wake` is the V1 integration
+- Spec 00: `sandbox_profile`, `cloud_sandbox` slot lifecycle.
+  Billing snapshots reference the slot's `billing_subject_id`.
+- Spec 04: `kick_off_managed_slot_wake` is the V1 integration
   point. Spec 04 already names it as the spec-09 hook stub; spec
   09 fills it in.
 - Spec 02: `agent_gateway_budget_subject` exists; spec 09 wires
@@ -383,7 +383,7 @@ a fresh `free_trial_v2` grant.
 
 ### 4.2 Gaps spec 09 closes
 
-- `kick_off_managed_sandbox_wake` (spec 04) calls a stub billing
+- `kick_off_managed_slot_wake` (spec 04) calls a stub billing
   hook; spec 09 wires it to `authorize_sandbox_start`.
 - `agent_gateway_budget_subject.included_budget_usd` is a flat
   config value; spec 09 derives it from plan entitlement.
@@ -578,7 +578,7 @@ exactly:
 
 ```text
 server/proliferate/server/cloud/runtime/wake.py
-  run_managed_sandbox_wake_job(target_id):
+  run_managed_slot_wake_job(target_id):
     ...
     billing_subject = load_billing_subject_for_target(target_id)
     authorization = authorize_sandbox_start(
@@ -623,7 +623,7 @@ start_block_reason                error_code on the queued command
 'plan_not_allowed'                 'sandbox_wake_blocked'
 'subscription_required_for_team'   'sandbox_wake_blocked'
 'subject_not_allowed_for_cloud'    'sandbox_wake_blocked'
-(authorization_response.allowed=true but sandbox create fails)
+(authorization_response.allowed=true but slot create fails)
                                    'sandbox_wake_failed'
 (authorization_response.allowed=true but heartbeat times out)
                                    'sandbox_wake_timeout'
@@ -812,7 +812,7 @@ doesn't fully — web uses a subset of the design tokens; spec 08
 already wired `useCloudBilling`-style hooks indirectly via
 existing SDK).
 
-Mobile billing UI is outside this spec (spec 08 §10 decision #5).
+Mobile billing UI is deferred (spec 08 §10 decision #5).
 
 ### 5.9 Vocabulary alignment
 
@@ -872,7 +872,7 @@ server/proliferate/server/billing/stripe_webhooks.py
 
 server/proliferate/server/cloud/runtime/wake.py
   - import authorize_sandbox_start
-  - call it inside run_managed_sandbox_wake_job
+  - call it inside run_managed_slot_wake_job
   - fail queued wake-required commands on block
 
 server/proliferate/server/cloud/agent_auth/service.py
@@ -936,10 +936,10 @@ Mobile: no changes in V1.
 ```text
 Chunk A  Wake hook integration (smallest first)
   - load_billing_subject_for_target helper
-  - run_managed_sandbox_wake_job calls authorize_sandbox_start
+  - run_managed_slot_wake_job calls authorize_sandbox_start
   - failed wake transitions queued commands to failed_delivery
     with sandbox_wake_blocked + start_block_reason
-  - tests: paused sandbox + credits_exhausted hold -> command fails
+  - tests: paused slot + credits_exhausted hold -> command fails
 
 Chunk B  Managed credits budget from plan
   - _managed_credit_entitlement_budget rewrite
@@ -984,7 +984,7 @@ Preferred implementation is one PR per spec. Chunks are review checkpoints insid
 
 ## 8. Acceptance Criteria
 
-1. `kick_off_managed_sandbox_wake` (spec 04) calls
+1. `kick_off_managed_slot_wake` (spec 04) calls
    `authorize_sandbox_start` inside the background wake job.
    `allowed=false` transitions queued wake-required commands for
    the target to `failed_delivery` with
@@ -1068,9 +1068,9 @@ Targeted server tests:
 
 ```text
 server/tests/cloud/runtime/test_wake_hook_consults_billing.py
-  - paused sandbox + active billing_hold('credits_exhausted')
+  - paused slot + active billing_hold('credits_exhausted')
     -> command transitions to failed_delivery sandbox_wake_blocked
-  - paused sandbox + allowed -> wake proceeds
+  - paused slot + allowed -> wake proceeds
 server/tests/billing/test_free_trial_github_dedup.py
   - missing github_identity -> github_required_for_free_trial
   - first issuance succeeds
@@ -1192,3 +1192,99 @@ Manual smoke:
    - usage_segment ended_at matches event.timestamp
    - no billing_hold inserted
 ```
+
+## 10. Final Decisions / Deferred Questions
+
+1. **Should the free trial dedup also gate `team_trial`?**
+
+   V1 only `personal_free` is in use. `team_trial` would gate
+   when teams get a trial. Decision: yes, mirror the personal logic
+   when team trial ships; same table, different `allocation_kind`.
+
+2. **`customer.subscription.deleted` is reason-sensitive.**
+
+   The current handler always applies a payment_failed hold. That's
+   wrong for clean cancellations. Refined rule:
+
+   ```text
+   - Scheduled cancel reaches period end (cancel_at_period_end=true
+     terminating naturally):
+       downgrade now (no managed-credit budget refresh delay; we
+       are at the period boundary anyway). NO payment_failed hold.
+
+   - Payment failure / Stripe deletion driven by unpaid state
+     (subscription.status was 'unpaid' or 'past_due' before
+     deletion):
+       apply payment_failed hold. Keep current managed-credit
+       budget until current_period_end (already paid for).
+       At period_end the budget downgrades anyway.
+
+   - Immediate admin/user cancellation before period end
+     (Stripe effective_at < current_period_end):
+       honor Stripe's effective end. If no paid entitlement
+       remains for the rest of the period, downgrade immediately.
+       Apply payment_failed hold only if the cancellation was
+       driven by a payment problem.
+   ```
+
+   The handler reads `subscription.cancellation_details.reason`
+   from Stripe (when set) plus the prior `subscription.status` to
+   decide.
+
+3. **Mobile billing UI in V1?**
+
+   No. Spec 08 already deferred. Mobile users tap a "Manage in
+   web" deep-link that opens app.proliferate.ai/settings on the
+   browser (which then opens Stripe portal).
+
+4. **Should the GitHub-identity dedup also apply to anonymous-
+   to-authenticated transitions (e.g. user signs up email-first
+   then links GitHub)?**
+
+   Yes, at link-time — but **do not refuse the GitHub link
+   itself**. The dedup check denies the *free trial allocation*,
+   not the identity link.
+
+   Concretely, on the GitHub-link path:
+     1. Link the OAuth identity normally. (Cross-account linking
+        of the same GitHub identity to a second Proliferate user
+        is handled by the auth-identity uniqueness path, which is
+        a separate concern.)
+     2. After linking, run `ensure_free_cloud_allocation` for the
+        user's billing subject.
+     3. If the GitHub identity has already allocated a free trial
+        on a different `billing_subject_id`: do NOT issue a new
+        `free_trial_v2` grant. Surface
+        `github_identity_already_used` in the UI so the user
+        knows why they aren't on the trial. The link itself
+        remains intact.
+
+   This protects against the "create account with email,
+   exhaust trial, link GitHub later" abuse without blocking
+   legitimate identity linking (e.g. a user adopting GitHub
+   sign-in for an account whose trial is already in flight on a
+   matching identity).
+
+5. **Should `invoice.upcoming` and `trial_will_end` immediately
+   publish billing patches, or batch?**
+
+   Decision: immediate publish. UI surfaces these as banners; latency
+   matters more than throughput here.
+
+6. **Should the LLM credits hard cap stay forever, or is V2
+   overage path eventually allowed?**
+
+   Spec 02 §1 keeps managed LLM credits hard-capped. V2 with
+   per-org spend cap + opt-in overage is conceivable; deferred to
+   product decision. Schema is forward-compatible (the
+   `agent_gateway_budget_subject` already has a `status` enum
+   that can grow `overage_enabled` later).
+
+7. **Should the new `agent_gateway_managed_budget_*_usd` settings
+   be per-deployment (self-hosted operators choose) or per-plan
+   constants?**
+
+   Both. Plan constants are the canonical defaults; per-deploy
+   settings override (especially useful for self-hosted who may
+   ship without managed credits at all). Existing pattern in
+   `policy.py` and constants matches.

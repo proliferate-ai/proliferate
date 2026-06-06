@@ -10,7 +10,7 @@ describe("computeComposerTextareaAutosize", () => {
   it("clamps short content to the configured minimum height", () => {
     expect(computeComposerTextareaAutosize({
       scrollHeightPx: 12,
-      lineHeightPx: 16,
+      lineHeightPx: 18,
       rootFontSizePx: 16,
       lineHeightRem: CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
       minRows: WORKSPACE_CHAT_COMPOSER_INPUT.minRows,
@@ -25,14 +25,14 @@ describe("computeComposerTextareaAutosize", () => {
   it("caps workspace composer content at 16 rows", () => {
     expect(computeComposerTextareaAutosize({
       scrollHeightPx: 400,
-      lineHeightPx: 16,
+      lineHeightPx: 18,
       rootFontSizePx: 16,
       lineHeightRem: CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
       minRows: WORKSPACE_CHAT_COMPOSER_INPUT.minRows,
       maxRows: WORKSPACE_CHAT_COMPOSER_INPUT.maxRows,
       minHeightRem: WORKSPACE_CHAT_COMPOSER_INPUT.minHeightRem,
     })).toEqual({
-      heightPx: 256,
+      heightPx: 288,
       overflowY: "auto",
     });
   });
@@ -40,29 +40,29 @@ describe("computeComposerTextareaAutosize", () => {
   it("keeps the home composer cap at 8 rows", () => {
     expect(computeComposerTextareaAutosize({
       scrollHeightPx: 400,
-      lineHeightPx: 16,
+      lineHeightPx: 18,
       rootFontSizePx: 16,
       lineHeightRem: CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
       minRows: HOME_CHAT_COMPOSER_INPUT.minRows,
       maxRows: HOME_CHAT_COMPOSER_INPUT.maxRows,
       minHeightRem: HOME_CHAT_COMPOSER_INPUT.minHeightRem,
     })).toEqual({
-      heightPx: 128,
+      heightPx: 144,
       overflowY: "auto",
     });
   });
 
   it("does not scroll at the max-height threshold", () => {
     expect(computeComposerTextareaAutosize({
-      scrollHeightPx: 256,
-      lineHeightPx: 16,
+      scrollHeightPx: 288,
+      lineHeightPx: 18,
       rootFontSizePx: 16,
       lineHeightRem: CHAT_COMPOSER_INPUT_LINE_HEIGHT_REM,
       minRows: WORKSPACE_CHAT_COMPOSER_INPUT.minRows,
       maxRows: WORKSPACE_CHAT_COMPOSER_INPUT.maxRows,
       minHeightRem: WORKSPACE_CHAT_COMPOSER_INPUT.minHeightRem,
     })).toEqual({
-      heightPx: 256,
+      heightPx: 288,
       overflowY: "hidden",
     });
   });

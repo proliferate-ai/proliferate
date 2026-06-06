@@ -4,7 +4,7 @@ import { Textarea } from "./Textarea";
 type ComposerTextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement>;
 
 const COMPOSER_TEXTAREA_CLASSNAME =
-  "min-h-0 resize-none rounded-none border-0 bg-transparent px-0 py-0 text-[length:var(--text-chat,12px)] leading-[calc(var(--text-chat,12px)+4px)] text-foreground shadow-none outline-none placeholder:text-[color:color-mix(in_oklab,var(--color-faint)_50%,transparent)] focus:ring-0";
+  "min-h-0 resize-none rounded-none border-0 bg-transparent px-0 py-0 text-[length:0.6875rem] leading-[1.125rem] text-foreground shadow-none outline-none placeholder:text-[color:color-mix(in_oklab,var(--color-faint)_50%,transparent)] focus:ring-0";
 
 export const ComposerTextarea = forwardRef<HTMLTextAreaElement, ComposerTextareaProps>(
   function ComposerTextarea({ className = "", ...props }, ref) {

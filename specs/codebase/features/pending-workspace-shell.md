@@ -139,7 +139,7 @@ state.
 
 **Pending workspace UI key**
 
-`pending-workspace:<attemptId>` is the provisional logical workspace key used
+`pending-workspace:<attemptId>` is the temporary logical workspace key used
 before a real logical workspace exists. It is never persisted as the last stable
 workspace selection.
 
@@ -476,7 +476,7 @@ Intent statuses are:
 | `queued` | Client has recorded the user action; dispatch may wait for materialization or earlier intents. |
 | `preparing` | Dispatcher is preparing payloads, attachments, or local conversion. |
 | `dispatching` | Runtime/API call is in flight. |
-| `accepted` | Runtime/API accepted the action; stream or subsequent state still owns final reconciliation. |
+| `accepted` | Runtime/API accepted the action; stream or follow-up state still owns final reconciliation. |
 | `reconciled` | Runtime state caught up and the intent no longer needs to project UI. |
 | `failed` | The action failed and should remain inspectable/retryable where applicable. |
 | `cancelled` | The user cancelled before runtime acceptance. |
@@ -572,9 +572,9 @@ Rules:
   selecting multiple store fields.
 - Do not write stream-derived activity or viewed timestamps on every stream
   flush. Throttle or batch writes that affect sidebar/header/shell state.
-- Do not use debug logging state updates in render-heavy hooks. Diagnostic
-  logging must be behind an explicit debug flag and must not change render
-  identity.
+- Do not use debug logging state updates in render-heavy hooks. Logging can be
+  added temporarily for diagnosis, but remove it before finalizing unless it is
+  behind an explicit debug flag and does not change render identity.
 - Prefer disabled final-shape controls over conditional mounts when a control
   will become available shortly. Conditional mounting is a visible layout and
   focus shift.

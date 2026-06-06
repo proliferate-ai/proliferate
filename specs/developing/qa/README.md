@@ -178,7 +178,7 @@ the change crosses a shared contract.
 | Cloud workers/supervisor | Provision or reuse a cloud target, verify command delivery, target status, logs, failure handling, and runtime version expectations. | [../../codebase/structures/proliferate-worker/README.md](../../codebase/structures/proliferate-worker/README.md), [../../codebase/structures/proliferate-supervisor/README.md](../../codebase/structures/proliferate-supervisor/README.md) |
 | Billing | Use Stripe test mode, verify checkout/portal/refill/webhook behavior, budget/credit reconciliation, and UI state after webhook delivery. | [../local/stripe-local-testing.md](../local/stripe-local-testing.md), [../../codebase/primitives/billing.md](../../codebase/primitives/billing.md) |
 | Analytics/observability | Verify events, dashboards, replay gates, alerts, release health, and support-correlation ids without leaking sensitive content. | [../analytics/README.md](../analytics/README.md) |
-| Deploy/release | Verify the exact lanes that ran, environment gates, URLs, updater manifests, TestFlight submission, E2B smoke, and release/docs ownership. | [../deploying/ci-cd.md](../deploying/ci-cd.md) |
+| Deploy/release | Verify the exact lanes that ran, environment gates, URLs, updater manifests, TestFlight submission, E2B smoke, and release/docs follow-up. | [../deploying/ci-cd.md](../deploying/ci-cd.md) |
 
 ## Regression Rules
 

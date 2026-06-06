@@ -120,11 +120,12 @@ Use these terms consistently in code, copy, and review notes.
 
 - `apps/web/src/components/settings/screen/SettingsScreen.tsx` is a Web route
   screen with a separate section model and Web-only data wiring.
-- `apps/packages/product-ui/src/settings/**` contains reusable settings UI pieces;
-  Web keeps its route-screen IA while sharing primitives with Desktop.
-- `apps/desktop/src/components/settings/shared/**` already re-exports shared
-  settings primitives from `apps/packages/product-ui/src/settings/**`; extend
-  those primitives instead of re-extracting them.
+- `apps/packages/product-ui/src/settings/**` contains reusable settings UI pieces,
+  but the Web settings experience is not yet the same IA as Desktop in a modal.
+- `apps/desktop/src/components/settings/shared/**` already re-exports some shared
+  settings primitives from `apps/packages/product-ui/src/settings/**`; the migration
+  should extend those primitives instead of re-extracting them as if they do
+  not exist.
 
 ### Mobile
 
@@ -247,8 +248,8 @@ The sidebar should follow the spirit of
   last activity time.
 - The active row is obvious without using loud color.
 - The default sidebar should not permanently group by every taxonomy.
-- A group/filter popover lets the user filter by source, owner, status, repo,
-  runtime location, or attention state.
+- A group/filter popover lets the user temporarily slice by source, owner,
+  status, repo, runtime location, or attention state.
 - A "Show more" or "All workspaces" action navigates to the Workspaces view
   instead of expanding the sidebar into a second inventory product.
 - Session rows and workspace rows may appear together, but each row must carry
@@ -388,8 +389,8 @@ For a new session in an existing workspace:
 4. Client enqueues `start_session` for the workspace with an idempotency key
    and a client intent id.
 5. If the command result includes a session id before the workspace snapshot
-   projection catches up, the UI may route to a provisional session projection.
-   That provisional projection must reconcile with the later snapshot projection
+   projection catches up, the UI may route to a temporary session projection.
+   That temporary projection must reconcile with the later snapshot projection
    without duplicating the session row.
 6. Client enqueues `send_prompt` against that session with a correlated
    idempotency key.
@@ -477,7 +478,7 @@ Settings sections to include in Web by default:
 - `environments`: Cloud repo/environment configuration where relevant.
 - `support`: support/about/legal as appropriate.
 
-Conditional Web sections:
+Conditional/deferred Web sections:
 
 - Agent defaults.
 - Review.
@@ -580,6 +581,97 @@ Shared product-domain code must stay pure:
 - no side effects
 - no React
 - no browser/native APIs
+
+## Implementation Slices
+
+### Slice 1: Product Model Vocabulary
+
+- Add source/runtime/location view-model types in `apps/packages/product-domain`.
+- Normalize semantic ids, labels, and tooltip copy for Desktop-exposed,
+  cloud-hosted, Web, mobile, automation, Slack/API, online/offline/stale
+  states. Do not place React/native icon components in product-domain.
+- Consolidate or retire overlapping workspace/sidebar helpers in
+  `apps/web/src/lib/domain/sidebar/cloud-sidebar-model.ts`,
+  `apps/packages/product-domain/src/workspaces/cloud-work-inventory.ts`, and
+  `apps/packages/product-domain/src/workspaces/inventory-cloud.ts`.
+- Add the API/SDK field preflight for origin, creator context, sandbox type,
+  runtime status, exposure status, target kind, claim state, and command error
+  codes.
+- Update Web sidebar and Workspaces controllers to use the normalized model.
+- Do not change Desktop visuals yet unless using the same pure labels safely.
+
+Done when Web can show Cloud access and runtime location as separate facts.
+
+### Slice 2: Recents Sidebar
+
+- Update `ProductSidebar` or introduce a new shared sidebar row variant that
+  matches the compact reference row.
+- Use Recents as the primary default list.
+- Add a grouping/filter popover instead of permanent heavy grouping.
+- Add "Show more" or "All workspaces" navigation into the Workspaces view.
+- Preserve active workspace/session selection and accessibility labels.
+
+Done when a Desktop-exposed workspace no longer looks like a cloud sandbox
+just because it has a Cloud record.
+
+### Slice 3: Workspace And Session Identity Header
+
+- Extract presentational `WorkspaceIdentityHeader` and `SessionSwitcher`
+  components from current Web and Desktop patterns.
+- Add a clear session switcher for all sessions in a workspace.
+- Rename/copy "New chat" in workspace context to "New session" or "New session
+  in <workspace>".
+- Make no-session state explicitly scoped to the workspace.
+- Ensure pending new sessions appear in the session switcher.
+- Keep Desktop and Web controllers separate.
+
+Done when the user can glance at a new session and understand it is inside the
+same workspace.
+
+### Slice 4: Composer And Transcript Exactness
+
+- First extract composer leaves and config controls.
+- Then extract transcript message leaves.
+- Then extract plan cards.
+- Then extract tool/action rows.
+- Then extract transcript view/virtualization.
+- Prefer retained `TranscriptState` where envelopes exist; flat projected rows
+  remain only as a degraded fallback.
+- Preserve telemetry masking and long-history/virtualization behavior.
+- Move command/pending reconciliation rules that are not client-specific into
+  `apps/packages/product-domain`.
+- Keep Web command dispatch in Web.
+
+Done when Web chat no longer contains an alternate product implementation for
+core transcript/composer visuals.
+
+### Slice 5: Settings Modal
+
+- Extend existing shared settings shell/nav/cards/rows in
+  `apps/packages/product-ui/src/settings/**`.
+- Add a pure settings section definition model with Web capability filtering.
+- Replace the Web settings route experience with the modal route contract
+  above.
+- Remove Web exposure of Desktop-only pages listed above.
+- Keep existing Web account/org/billing/provider logic by adapting it into the
+  shared modal sections.
+
+Done when Web settings feels like Desktop settings in a modal, but only shows
+Cloud/Web-relevant settings.
+
+### Slice 6: Mobile Alignment
+
+- Reuse product-domain source/runtime/session/command/settings definitions.
+- Update Mobile recents/workspace/session views to match the same product
+  semantics.
+- Align Mobile existing-session prompt send with Web managed target config
+  readiness checks.
+- Align Web first-prompt retryable readiness classification with Mobile.
+- Keep native React Native surfaces and navigation.
+- Smoke real mobile lifecycle cases from `mobile-cloud-client.md`.
+
+Done when mobile can explain the same workspace/session/runtime facts as Web
+and complete the same core command flows.
 
 ## Acceptance Criteria
 
@@ -692,7 +784,7 @@ faux rows as proof that Cloud commands work.
 | Managed shared/unclaimed workspace | claim gating and permission copy | real or server-seeded commandable fixture |
 | Workspace with zero sessions | no-session start surface | real or faux visual |
 | Workspace with multiple sessions | session switcher and recents selection | real smoke |
-| Pending session before projection | provisional projection/reconciliation | controlled test |
+| Pending session before projection | temporary projection/reconciliation | controlled test |
 | Automation-originated workspace | source indicator and filtering | faux visual plus command smoke when available |
 | Mobile-origin workspace/session | source indicator and mobile parity | mobile-web/native smoke |
 | Slack/API-originated workspace | source indicator and filtering | faux visual acceptable for first UI slice |

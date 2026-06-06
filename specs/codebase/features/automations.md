@@ -32,8 +32,8 @@ In scope:
   with values from spec 03 vocabulary:
   `local | personal_cloud | shared_cloud`.
 - Route automation workspace/session creation through the new
-  `managed_profile_launch` helper from spec 04. Profile and target
-  are resolved through `ensure_*_sandbox_profile` and
+  `managed_profile_launch` helper from spec 04. Profile, target,
+  and slot are resolved through `ensure_*_sandbox_profile` and
   `ensure_primary_profile_target`.
 - Per-run preflight: runtime config (spec 01) and agent auth
   (spec 02). Stale state triggers **auto-cascade** — enqueue
@@ -999,6 +999,56 @@ cloud/sdk/src/client/agent-run-configs.ts                        (new)
 cloud/sdk/src/types/generated.ts                                  regen
 ```
 
+## 7. Implementation Chunks
+
+Preferred implementation is one PR per spec. Chunks are review checkpoints inside that PR and may be split only when the split does not leave duplicate models, dead paths, partially wired security checks, or visible inert UI.
+
+```text
+Chunk A  cloud_agent_run_config table + service + API
+  - migration; model; store; service; access; api
+  - validation: control_values_json against catalog at write time
+  - usable_in_* defaults
+
+Chunk B  Automation model migration + service updates
+  - add owner_scope + organization_id + created_by_user_id
+  - replace inline agent config columns with FK
+  - rename execution_target -> target_mode
+  - drop cloud_target_id
+  - CHECKs (owner_fields, target_mode_owner, target_mode_enum)
+  - validation in service: useIsAdmin gate for team automations
+
+Chunk C  AutomationRun model + snapshot pipeline
+  - add owner fields, sandbox_profile_id,
+    cloud_workspace_exposure_id, agent_run_config_snapshot_json,
+    cascade fields
+  - scheduler inherits + snapshots
+  - drop agent_*_snapshot columns
+
+Chunk D  Execution pipeline refactor
+  - new stages: resolve_owner_and_profile,
+    preflight_runtime_config, preflight_agent_auth
+  - rewrite stages/target.py to consume profile primary target
+  - rewrite stages/workspace.py to call managed_profile_launch
+  - cascade logic; cap = 3; typed error codes
+
+Chunk E  Workspace creation rewrite
+  - delete create_cloud_workspace_for_automation_run
+  - delete _raise_org_cloud_not_ready managed-cloud usages
+  - automations call managed_profile_launch directly with
+    origin='automation', source_kind='automation', visibility
+    derived from owner_scope
+
+Chunk F  Desktop UI
+  - Owner toggle
+  - AgentRunConfigSelector (consumes spec 03 primitive)
+  - RuntimeReadinessPanel embed
+  - team-automation gating via useIsAdmin
+  - AgentRunConfigsPage CRUD
+  - timeline cascade collapse
+
+Chunk G  Tests + smoke
+```
+
 ## 8. Acceptance Criteria
 
 1. `Automation.owner_scope` exists with CHECK enforcing the
@@ -1169,3 +1219,62 @@ Manual smoke:
    - pipeline skips preflight stages (no managed cloud)
    - local executor picks up the run; runs against Desktop AnyHarness
 ```
+
+## 10. Final Decisions / Deferred Questions
+
+1. **Should `cloud_agent_run_config` live under `db/models/cloud/`
+   or alongside automations?**
+
+   Decision: under `db/models/cloud/` because it's consumed by Slack,
+   automations, web, mobile, and Desktop new-chat. It is not
+   automation-specific. Slack reuses it directly.
+
+2. **Should the cascade attempt cap be per run or per
+   `(automation_id, day)`?**
+
+   V1 is per run (3 attempts per run). If a config is broken and
+   every scheduled run fails immediately, the cap doesn't help.
+
+   Decision: keep per-run for V1. Add a separate
+   `automation_failure_backoff` (e.g. pause automation after N
+   consecutive failed runs) as a follow-up. Spec 06 does not ship
+   the backoff.
+
+3. **What happens to in-flight runs when an automation is edited
+   mid-tick?**
+
+   Snapshots cover this: the AutomationRun row captures
+   `agent_run_config_snapshot_json`, `prompt_snapshot`, repo
+   snapshot. Edits to the parent Automation row do not affect the
+   in-flight run.
+
+   But: editing
+   `automation.cloud_agent_run_config_id` does not retroactively
+   update in-flight runs (good). Editing the
+   `cloud_agent_run_config` row's `control_values_json` also does
+   not (good, because we snapshot at trigger time).
+
+4. **Should team automations require an explicit
+   `created_by_user_id` AND admin role at trigger time, or only at
+   create time?**
+
+   Decision: admin only at create time. Triggering a manual run of an
+   existing team automation is open to any org member. Rationale:
+   ops folks who aren't admins should be able to fire team
+   automations.
+
+5. **Cascade enqueue idempotency key**
+
+   Decision: include `automation_run_id` and `cascade_reason` in the
+   idempotency key so a retried tick (executor lease expired and
+   re-claimed) collapses with the prior cascade.
+
+6. **Should the snapshot record a catalog version, or just the
+   resolved values?**
+
+   Just the resolved values. The catalog moves forward; old
+   snapshots remain valid because they record the values that were
+   used (not "what was allowed at the time"). If forensics ever
+   needs the catalog state at a past time, deploy history is the
+   source. Avoiding `catalog_version_pinned_at` keeps the schema
+   honest with "the catalog is the current source of truth."

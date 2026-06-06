@@ -120,7 +120,7 @@ export function useSessionLive(
                 client,
                 liveKey,
                 snapshot: event,
-                lastPatchAt: undefined,
+                lastPatchAt: new Date(),
                 isConnected: true,
                 error: undefined,
               });
@@ -253,7 +253,7 @@ export function useWorkspaceLive(
                 client,
                 liveKey,
                 snapshot: event,
-                lastPatchAt: undefined,
+                lastPatchAt: new Date(),
                 isConnected: true,
                 error: undefined,
               });
@@ -396,7 +396,7 @@ export function useTargetLive(
                 client,
                 liveKey,
                 snapshot: event,
-                lastPatchAt: undefined,
+                lastPatchAt: new Date(),
                 isConnected: true,
                 error: undefined,
               });

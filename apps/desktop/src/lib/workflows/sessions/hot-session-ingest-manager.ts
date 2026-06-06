@@ -6,7 +6,6 @@ interface EnsureSessionStreamOptions {
   awaitOpen?: boolean;
   openTimeoutMs?: number;
   resumeIfActive?: boolean;
-  allowColdIdleNoStream?: boolean;
   hydrateBeforeStream?: boolean;
   skipInitialRefresh?: boolean;
   refreshOnStartupReady?: boolean;
@@ -150,7 +149,6 @@ function connectHotTarget(
     awaitOpen: true,
     openTimeoutMs: 2_500,
     resumeIfActive: true,
-    allowColdIdleNoStream: true,
     hydrateBeforeStream: shouldHydrateBeforeStream,
     skipInitialRefresh: true,
     refreshOnStartupReady: true,

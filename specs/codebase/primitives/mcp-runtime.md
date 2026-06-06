@@ -232,8 +232,9 @@ integrations/mcp/
   tools.rs
 ```
 
-The shared `integrations/mcp/**` helpers are present. New HTTP transports use
-the shared product-MCP scaffolding instead of adding per-feature wrappers.
+The shared `integrations/mcp/**` helpers are present. Per-feature HTTP endpoint
+wrappers may remain until a focused transport cleanup moves common endpoint
+scaffolding behind one wrapper.
 
 ## Consolidation Rule
 

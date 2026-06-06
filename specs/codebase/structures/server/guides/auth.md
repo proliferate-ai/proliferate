@@ -310,3 +310,33 @@ the handler body.
   the right code; the handler shouldn't intercept.
 - Mixing authentication and authorization in one dep. Each dep does one
   job; compose them via `Depends(... = Depends(...))`.
+
+## Migration Exceptions
+
+Existing code may still keep shared authorization helpers inside product
+domains. When touching that code:
+
+1. Move `require_org_role` and related helpers from
+   `organizations/service.py`.
+2. Update every importer to use `from auth.authorization import
+   require_org_role`.
+3. Verify no domain-specific assumptions baked into the helpers; helpers
+   are domain-agnostic.
+
+Existing code may still do resource lookup and access checks inline in
+services. When introducing `<domain>/access.py`:
+
+1. Identify endpoints currently doing authorization inline in service.py.
+2. Move the lookup + access check to a route dep returning the resource.
+3. Update the handler to take the resource via `Depends(...)`.
+4. Remove the inline authorization from the service.
+5. Service now operates on a snapshot known to be authorized.
+
+Existing code may still keep state-based product rules inline in services.
+When introducing `<domain>/domain/policy.py`:
+
+1. Find inline `if not allowed: raise HTTPException(...)` blocks in
+   `service.py`.
+2. Convert each to a pure verdict function.
+3. Service calls the verdict, raises a domain error on `PolicyDenied`.
+4. Verify the function is unit-testable with no DB or HTTP context.

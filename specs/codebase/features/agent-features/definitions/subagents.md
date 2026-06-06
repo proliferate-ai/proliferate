@@ -24,10 +24,11 @@ The agent-facing API must hide transport and storage details. `sessionLinkId`
 and `childSessionId` are internal/debug identifiers. The normal handle is
 `subagentId`.
 
-MCP responses may include `sessionLinkId` and `childSessionId` compatibility
-fields so older transcript parsers, SDKs, and in-flight agent sessions keep
-working. New callers should treat those fields as compatibility aliases only.
-All examples and new code should prefer `subagentId` plus `label`.
+During the migration window, MCP responses may still include legacy
+`sessionLinkId` and `childSessionId` fields so older transcript parsers, SDKs,
+and in-flight agent sessions keep working. New callers should treat those
+fields as compatibility aliases only. All examples and new code should prefer
+`subagentId` plus `label`.
 
 ## Product Model
 
@@ -113,14 +114,14 @@ name for the child it is managing.
 
 Compatibility rule:
 
-- accept `childSessionId` as a compatibility alias when a caller does not yet
-  know `subagentId`
+- accept `childSessionId` during migration when a caller does not yet know
+  `subagentId`
 - if both `subagentId` and `childSessionId` are supplied, they must resolve to
   the same linked child or the call returns a validation error
-- return compatibility ids only as compatibility fields; do not require new
-  callers to store or echo them
+- return legacy ids only as compatibility fields; do not require new callers
+  to store or echo them
 
-Compatibility response shape:
+Current migration response shape:
 
 - create/send/status/wake/close responses include `subagentId` and `label`, and
   may also include `sessionLinkId` and `childSessionId`
@@ -129,7 +130,7 @@ Compatibility response shape:
 - `search_subagent_transcript` returns `query`, `seq`, `timestamp`, `turnId`,
   `itemId`, and `snippet`
 - `read_subagent_events` is a debug escape hatch and may return only raw event
-  cursors plus compatibility child routing fields
+  cursors plus legacy child routing fields
 
 These compatibility fields are not the agent-facing handle. The agent-facing
 handle remains `subagentId`.
@@ -469,8 +470,8 @@ Returns:
 The result may include concise assistant output, outcome, timestamps, and
 important tool errors. It should not stream raw low-level events.
 
-This response may also include `sessionLinkId` and `childSessionId` as
-compatibility routing aliases. The stable fields remain
+During migration, this response may also include `sessionLinkId` and
+`childSessionId` as legacy routing aliases. The stable fields remain
 `subagentId` and `label`.
 
 ### `search_subagent_transcript`

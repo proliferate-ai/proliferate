@@ -11,7 +11,7 @@ use super::config::persist::{load_startup_restore_snapshot, persisted_control_va
 use super::config::queue::queue_pending_config_change;
 use super::config::selection::{
     find_select_option_for_request, is_mode_config_request, is_model_config_request,
-    pending_config_rank, select_option_values,
+    pending_config_rank,
 };
 use super::config::types::{tracked_config_purpose, PersistedSessionConfigState};
 use super::interactions::cleanup::resolve_pending_interactions;

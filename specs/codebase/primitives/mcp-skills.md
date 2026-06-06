@@ -1033,7 +1033,7 @@ proactive:
 
 optional background:
   Cloud reconciler refreshes near-expiry tokens for connections used by
-  active sandbox profiles when background refresh is enabled
+  active sandbox profiles (deferred to a follow-up; not blocking V1)
 
 lazy launch:
   AnyHarness signals expired credential -> worker requests refresh ->
@@ -1312,6 +1312,69 @@ apps/desktop/src/lib/access/anyharness/sessions.ts
   carry expected_runtime_config_revision when known
 ```
 
+## 7. Implementation Phases
+
+The runtime substrate must be reliable before product state is layered on.
+Phases are ordered to keep launches fail-closed at each step.
+
+Preferred implementation is one PR per spec. Chunks are review checkpoints inside that PR and may be split only when the split does not leave duplicate models, dead paths, partially wired security checks, or visible inert UI. Phases here describe build-order inside that
+PR, not staged rollout.
+
+```text
+Chunk A  Runtime substrate
+  - AnyHarness domains/runtime_config domain (model/store/service/
+    artifact_cache/credentials/resolution)
+  - api/http/runtime_config.rs handlers; wire router
+  - SQLite tables runtime_config_current, runtime_artifact_cache
+  - resolution requests in-memory
+  - worker materialization/runtime_config.rs handler
+  - extend TargetConfigMaterializationPlan with runtime_config fragment;
+    drop raw mcp/skills dict fields and their write handlers
+  - AnyHarness contract: add expected_runtime_config_revision to
+    CreateSessionRequest/ResumeSessionRequest; remove plugin_bundle,
+    mcp_servers, mcp_binding_summaries from those requests
+  - SDK regen (anyharness/sdk, cloud/sdk)
+
+Chunk B  Cloud product schema
+  - migration: cloud_mcp_connection broadened (owner_scope, public_*,
+    rename user_id/org_id, partial unique indexes)
+  - migration: cloud_skill_configured_item
+  - migration: cloud_plugin_configured_item
+  - migration: sandbox_profile_runtime_config_revision/_current/_artifact
+  - stores returning frozen dataclass snapshots
+
+Chunk C  Resolver + compiler + write services
+  - domain/resolver.py and domain/manifest.py (pure)
+  - service.py compile + idempotent revision upsert by content_hash
+  - hook write sites (MCP create/patch/auth/oauth/delete, skill enable/
+    public, plugin install/enable/public)
+  - reconciler tick
+
+Chunk D  Worker apply + Cloud-side preflight
+  - worker applies runtime_config; reports applied/failed
+  - target_config.service builds plans with runtime_config fragment
+  - Cloud-side preflight before enqueueing start_session/send_prompt
+  - Desktop local target preflight before optimistic session create
+
+Chunk E  Legacy removal
+  - delete apps/desktop/src/lib/domain/plugins/session-plugin-bundle.ts
+  - delete AnyHarness PluginBundleRegistry and
+    PluginSessionLaunchExtension
+  - rewrite all callers of buildSessionPluginBundle to use the new
+    runtime-config preflight workflow
+  - proliferate_skills MCP server reads from runtime_config_current,
+    not from the in-memory bundle registry
+
+Chunk F  Product UI
+  - Plugins page rows: enabled, public_to_org, auth_status, runtime apply
+  - admin publicize toggle (gated by access.py)
+  - skills page integrated per spec 03 placement
+  - readiness panel reads /sandbox-profiles/{id}/runtime-config
+
+OAuth proactive refresh (optional follow-up after this PR)
+  - Cloud reconciler refreshes near-expiry tokens before apply
+```
+
 ## 8. Acceptance Criteria
 
 1. `cloud_mcp_connection` supports `owner_scope='personal'` and
@@ -1519,3 +1582,57 @@ Manual smoke cases:
      -> POST /resolve into AnyHarness
      -> session launches successfully
 ```
+
+## 10. Final Decisions / Deferred Questions
+
+1. **Persist `cloud_plugin_configured_item` in V1, or always materialize
+   into child MCPs/skills only?**
+
+   Decision: ship the table, but treat it as a thin grouping marker. Reasons:
+   - "Plugin installed" is a real product concept (Settings/Admin IA wants
+     a Plugins list).
+   - Uninstall/re-enable is cleaner when there is a parent row.
+   - Audit and `public_status` on the plugin row are useful.
+   The cost is a tiny extra table. Pros outweigh.
+
+2. **MCP `auth_status != 'ready'` — blocker or warning by default?**
+
+   Decision: blocker for personal profile if the user explicitly enabled the
+   MCP (it cannot do its job without auth). Warning for org profile
+   public-to-org cases when the source has not been reconnected (avoids
+   blocking the whole shared sandbox on one bad connection). Make it
+   configurable per plan or admin policy in a later spec.
+
+3. **Should runtime config storage be profile-scoped or
+   `(profile, target)`-scoped?**
+
+   Decision: profile-scoped. One revision per profile applies to all of
+   the profile's targets (one target in V1). Per-`(profile, target)`
+   applied state already lives on `sandbox_profile_target_state` (spec
+   00) and is sufficient for fencing.
+
+4. **Should the spec add `materialize_environment_runtime_config` as a
+   dedicated command kind?**
+
+   Decision: no in V1. Extending `materialize_environment` is correct cost
+   for the benefit. Revisit when independent retry or independent
+   metering of runtime-config applies becomes important.
+
+5. **Where should the Settings UI live for skills?**
+
+   Decision: as a section inside the Plugins page (so plugin-provided skills
+   live next to their plugin) plus a top-level "Skills" tab for
+   user-authored skills. Spec 03 (Settings/Admin IA) makes the final
+   call.
+
+6. **Should user-authored skills land in V1?**
+
+   Decision: no. `cloud_skill_configured_item.skill_source_kind='user'` and
+   `user_skill_payload_ref` are reserved for future use. Phase 5 UI
+   does not expose creation; it shows catalog and plugin-provided skills
+   only.
+
+7. **Live MCP remount inside a running actor?**
+
+   Out of scope. Changes apply at the next launch boundary. The
+   architecture spec already calls this out; spec 01 sticks with it.

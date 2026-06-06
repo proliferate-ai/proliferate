@@ -12,19 +12,8 @@ import {
   applyRuntimeConfig,
   type AnyHarnessRuntimeConfigConnection,
 } from "@/lib/access/anyharness/runtime-config";
-import { logLatency } from "@/lib/infra/measurement/debug-latency";
 
 type ApplyRuntimeConfigOptions = Parameters<typeof applyRuntimeConfig>[2];
-type DesktopRuntimeConfigApplyRequestResponse = Awaited<
-  ReturnType<typeof getSandboxProfileDesktopRuntimeConfigApplyRequest>
->;
-
-const LOCAL_RUNTIME_CONFIG_CLOUD_PREFLIGHT_TIMEOUT_MS = 2_500;
-const RUNTIME_CONFIG_PREFLIGHT_TIMEOUT = Symbol("runtime_config_preflight_timeout");
-
-interface PrepareLocalSessionRuntimeConfigOptions {
-  cloudPreflightTimeoutMs?: number;
-}
 
 export function assertDirectSessionCreateRuntimeConfigStamped(
   target: RuntimeTarget,
@@ -40,15 +29,13 @@ export function assertDirectSessionCreateRuntimeConfigStamped(
 export async function prepareLocalSessionRuntimeConfig(
   connection: AnyHarnessRuntimeConfigConnection,
   options?: ApplyRuntimeConfigOptions,
-  config?: PrepareLocalSessionRuntimeConfigOptions,
 ): Promise<RuntimeConfigRevisionExpectation | null> {
   try {
-    const response = await loadDesktopRuntimeConfigApplyRequest(
-      config?.cloudPreflightTimeoutMs ?? LOCAL_RUNTIME_CONFIG_CLOUD_PREFLIGHT_TIMEOUT_MS,
+    const profile = await ensurePersonalSandboxProfile();
+    const response = await getSandboxProfileDesktopRuntimeConfigApplyRequest(
+      profile.id,
+      { targetId: profile.primaryTargetId ?? null },
     );
-    if (!response) {
-      return null;
-    }
     const applied = await applyRuntimeConfig(
       connection,
       response.applyRequest as unknown as ApplyRuntimeConfigRequest,
@@ -66,44 +53,6 @@ export async function prepareLocalSessionRuntimeConfig(
     }
     throw error;
   }
-}
-
-async function loadDesktopRuntimeConfigApplyRequest(
-  timeoutMs: number,
-): Promise<DesktopRuntimeConfigApplyRequestResponse | null> {
-  const startedAt = Date.now();
-  let timeoutId: ReturnType<typeof globalThis.setTimeout> | null = null;
-  const preflight = (async () => {
-    const profile = await ensurePersonalSandboxProfile();
-    return getSandboxProfileDesktopRuntimeConfigApplyRequest(
-      profile.id,
-      { targetId: profile.primaryTargetId ?? null },
-    );
-  })();
-  void preflight.catch(() => null);
-
-  const timeout = new Promise<typeof RUNTIME_CONFIG_PREFLIGHT_TIMEOUT>((resolve) => {
-    timeoutId = globalThis.setTimeout(() => {
-      resolve(RUNTIME_CONFIG_PREFLIGHT_TIMEOUT);
-    }, timeoutMs);
-  });
-
-  const result = await Promise.race([preflight, timeout]);
-  if (timeoutId) {
-    globalThis.clearTimeout(timeoutId);
-  }
-  if (result === RUNTIME_CONFIG_PREFLIGHT_TIMEOUT) {
-    logLatency("session.runtime_config.cloud_preflight.timeout", {
-      elapsedMs: Date.now() - startedAt,
-      timeoutMs,
-    });
-    throw new Error(`Timed out preparing local runtime config after ${timeoutMs}ms.`);
-  }
-  logLatency("session.runtime_config.cloud_preflight.completed", {
-    elapsedMs: Date.now() - startedAt,
-    timeoutMs,
-  });
-  return result;
 }
 
 function isOptionalLocalRuntimeConfigError(error: unknown): boolean {

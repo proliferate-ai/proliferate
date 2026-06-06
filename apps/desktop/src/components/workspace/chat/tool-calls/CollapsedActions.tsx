@@ -75,7 +75,7 @@ export function CollapsedActions({
             ? (
               <ThinkingText
                 text={summary}
-                className="block max-w-full truncate font-normal leading-[inherit]"
+                className="max-w-full truncate font-normal"
               />
             )
             : summary}

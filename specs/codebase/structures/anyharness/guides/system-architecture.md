@@ -3,7 +3,9 @@
 Status: draft architecture reference for AnyHarness source organization.
 
 This document defines where AnyHarness code belongs and how folders should
-grow. It is intentionally about organization and ownership.
+grow. It is intentionally about organization and ownership, not current
+implementation completeness. Existing transitional paths should migrate toward
+this shape over time.
 
 ## Top-Level Shape
 

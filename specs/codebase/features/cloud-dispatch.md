@@ -48,8 +48,9 @@ In scope:
 
 Out of scope:
 
-- Push notifications (APNs, FCM). Spec 08 adds typed events that a push system
-  can consume, but no push infrastructure.
+- Push notifications (APNs, FCM). Surface and lifecycle deferred
+  to a follow-up spec; spec 08 adds typed events that a future
+  push system can consume, but no push infrastructure here.
 - Token-by-token live streaming on web/mobile. V1 uses the
   existing session-patch SSE flow; on-turn updates are sufficient
   for the UI. (Live token streams are bandwidth-heavy and add
@@ -279,8 +280,8 @@ for shared cloud work; that is spec 05.
   no SSH variant.
 - Mobile uses fixtures, not live API.
 - No Cowork API key model.
-- No push notifications. Spec 08 emits a typed event that a push surface can
-  consume.
+- No push notifications (deferred; spec 08 emits a typed event
+  the future spec can consume).
 
 ## 5. Target Model
 
@@ -746,22 +747,21 @@ apps/mobile/src/lib/access/cloud/                                 use existing S
 Mobile keeps its in-memory token model. No push notifications in
 V1.
 
-### 5.11 Push notifications
+### 5.11 Push notifications (deferred)
 
 Spec 08 does NOT add APNs / FCM infrastructure. It does emit a
-typed event a push surface can consume:
+typed event the future push spec can consume:
 
 ```text
 post-session-event registry (spec 07 §5.8) already exists.
-A push surface registers a processor that:
+Future push spec registers a processor that:
   - looks up affected users (claimer for claimed; org members for
     shared_unclaimed)
   - looks up their device tokens (future table)
   - posts via APNs/FCM
 ```
 
-The hook exists so a push system can consume the typed events when that surface
-has an owner.
+The hook is there; the implementation is a follow-up.
 
 ### 5.12 SSH variant in `SidebarWorkspaceVariant`
 
@@ -910,6 +910,53 @@ apps/mobile/app.json
 apps/mobile/src/lib/deep-links.ts                                         (new)
 
 apps/mobile/src/lib/fixtures/mobile-fixtures.ts                           kept for tests only
+```
+
+## 7. Implementation Chunks
+
+```text
+Chunk A  Live React hooks
+  - useSessionLive / useWorkspaceLive / useTargetLive
+  - pure reducer
+  - React Query interop (snapshot mirror)
+  - reconnect + StrictMode safety
+
+Chunk B  Workspace listing scope=exposed + response extensions
+  - server: add scope handler; include exposure +
+    last_session_summary in response
+  - SDK: extend types
+  - web + mobile + Desktop consume
+
+Chunk C  Web / mobile transcript + prompt + claim
+  - web ChatPage live transcript + composer
+  - mobile MobileChatScreen live + composer
+  - claim button calls spec 05 endpoint
+  - mobile cuts over from fixtures
+
+Chunk D  Desktop verbs + deep links
+  - context menu: Continue remotely / Disable remote access /
+    Open in web / Open on mobile / Open in Desktop (direct)
+  - deep-link generators (shared module)
+  - mobile universal links + Desktop URL scheme config
+
+Chunk E  "Open in Desktop (direct)" for shared cloud
+  - shared_cloud runtime location in runtime-target.ts
+  - use-direct-attach-token consumer
+  - CTA visibility gates
+
+Chunk F  Workspace sidebar enhancements
+  - ssh variant
+  - personal_cloud / shared_cloud subkinds
+  - exposure / slack / claimed / shared_unclaimed indicators
+
+Chunk G  Cowork API keys
+  - cloud_api_key table
+  - bearer classifier in auth middleware
+  - CRUD endpoints + token mint
+  - auto_cascade query param + handler shared with spec 06
+  - Desktop + web Settings sections
+
+Chunk H  Tests + smoke
 ```
 
 ## 8. Acceptance Criteria
@@ -1129,6 +1176,7 @@ Manual smoke:
    - web/mobile listing drops the workspace
    - Desktop local view unaffected
 ```
+
 ## 10. Final Decisions / Deferred Questions
 
 1. **Live token-by-token streaming on web/mobile?**
@@ -1179,7 +1227,7 @@ Manual smoke:
    replaced)?**
 
    The JWT carries `target_id`; AnyHarness checks
-   `target_id == AppState.target_id`. If the target was replaced
+   `target_id == AppState.target_id`. If the slot was replaced
    and AnyHarness booted with a new target_id, old JWTs fail
    target check and Desktop refreshes via
    `use-direct-attach-token`. Spec 05 §10 decision #4 already

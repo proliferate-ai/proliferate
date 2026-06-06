@@ -57,6 +57,9 @@ reliability. The accepted fixes are now part of the branch:
 - Push now prefers the branch's configured upstream remote when available,
   rather than always defaulting to `origin`.
 
+The intentionally deferred items are listed in "Open Decisions / Risks". They
+should be visible in PR review rather than hidden as implementation TODOs.
+
 ## Source Docs Read
 
 - `AGENTS.md`
@@ -620,6 +623,262 @@ blockers:
 
 Desktop UI branching should consume these codes instead of parsing strings.
 
+## Implementation Plan
+
+### Phase 0: Runtime and control-plane safety contracts
+
+This should land before the UI starts auto-continuing moves.
+
+Likely files:
+
+- `anyharness/crates/anyharness-contract/src/v1/mobility.rs`
+- `anyharness/crates/anyharness-lib/src/domains/mobility/service.rs`
+- `anyharness/crates/anyharness-lib/src/domains/mobility/workspace_delta.rs`
+- `anyharness/crates/anyharness-lib/src/workspaces/resolver.rs`
+- `anyharness/crates/anyharness-lib/src/workspaces/runtime/mobility.rs`
+- `anyharness/crates/anyharness-lib/src/adapters/git/operations/worktrees.rs`
+- `server/proliferate/server/cloud/mobility/models.py`
+- `server/proliferate/server/cloud/mobility/service.py`
+- `server/proliferate/server/cloud/mobility/domain/lifecycle.py`
+- `server/proliferate/db/models/cloud/mobility.py`
+- `server/proliferate/db/store/cloud_mobility.py`
+- Cloud SDK generated files if API schema changes require regeneration
+
+Plan:
+
+- Add `expectedBaseCommitSha`, `expectedBranchName`, `expectedHandoffOpId`, and
+  `requireCleanGitState` to AnyHarness export. Reject export when runtime state
+  is not `FrozenForHandoff` for the expected op, or when source branch, `HEAD`,
+  cleanliness, conflict state, or Git operation no longer matches the prepared
+  snapshot.
+- Keep install's destination base-SHA equality check. Add destination preflight
+  helpers so local destinations can fetch the requested SHA, verify reachability,
+  confirm clean/no-conflict/no-operation state, and refuse destructive branch
+  movement before `prepare-destination`.
+- Validate destination runtime `HEAD` before source freeze. Existing ready cloud
+  workspaces must either recheckout/rematerialize the requested SHA or fail
+  before the source is frozen.
+- For GitHub-backed migration starts, require a full non-empty
+  `requestedBaseSha`; do not allow start/preflight to proceed with a missing,
+  short, or malformed source SHA.
+- Move `remote_owned` assignment to after Cloud finalize/cutover, or add an
+  explicit repair path that restores `normal` if Desktop dies while Cloud still
+  says canonical side is source.
+- Add typed Cloud mobility blockers and typed handoff failure codes before UI
+  branching depends on them.
+- Add start/finalize/cleanup idempotency keys and clarify DB uniqueness for one
+  active handoff per mobility workspace and the intended per-user active-handoff
+  scope.
+- Store durable source/destination handoff snapshots and keep the mobility row's
+  `cloud_workspace_id` aligned with `canonical_side`.
+- Add a reconciler path from async destination provisioning error to handoff
+  `handoff_failed` or `repair_required`. Carry a durable handoff/provision
+  attempt id through scheduling/provisioning so an unrelated later workspace
+  error cannot fail the wrong move.
+- Preserve and redact failure causes: GitHub link missing, repo access revoked,
+  branch deleted, commit unreachable, billing hold/payment/admin denial, agent
+  credentials missing, runtime config not ready, worker startup timeout, direct
+  access unavailable, and tokenized clone/push failures.
+- Make cleanup item ownership explicit: server executes server-owned items;
+  Desktop reports AnyHarness source cleanup; manual repair requires actor,
+  reason, and audit fields.
+
+### Phase 1: Shared branch-prep product/workflow extraction
+
+Likely files:
+
+- `apps/desktop/src/lib/domain/workspaces/creation/publish-workflow-steps.ts`
+- `apps/desktop/src/lib/domain/workspaces/creation/publish-file-groups.ts`
+- `apps/desktop/src/lib/workflows/workspaces/run-workspace-publish-workflow.ts`
+- new `apps/desktop/src/lib/domain/workspaces/git/branch-prep-workflow*.ts` or
+  migration-local equivalent if the extraction is narrower
+- new `apps/desktop/src/lib/workflows/workspaces/run-branch-prep-workflow.ts`
+
+Plan:
+
+- Extract the commit/push-neutral pieces from publish into a branch-prep domain
+  model that can power both PublishDialog and migration prep.
+- Keep PR-specific logic in the publish domain.
+- Add migration defaults:
+  - `includeUnstaged: true`
+  - default commit message `Save workspace changes before move`
+  - push required after commit
+- Keep disabled reasons for conflicts, detached head, behind, Git operation in
+  progress, and empty commit message.
+- Push to the remote that backs the mobility workspace's GitHub owner/repo.
+  Surface a typed remote-mismatch blocker when the local branch remote does not
+  match the mobility workspace.
+
+### Phase 2: Desktop mobility Git durability gate
+
+Likely files:
+
+- new `apps/desktop/src/lib/domain/workspaces/mobility/migration-git-durability.ts`
+- `apps/desktop/src/lib/domain/workspaces/mobility/types.ts`
+- `apps/desktop/src/lib/domain/workspaces/mobility/presentation.ts`
+- `apps/desktop/src/lib/domain/workspaces/mobility/mobility-prompt.ts`
+- `apps/desktop/src/lib/domain/workspaces/mobility/mobility-warnings.ts`
+- `apps/desktop/src/hooks/workspaces/derived/mobility/use-workspace-mobility-state.ts`
+- `apps/desktop/src/hooks/workspaces/workflows/mobility/use-workspace-mobility-handoff-actions.ts`
+- `apps/desktop/src/hooks/workspaces/ui/mobility/use-workspace-mobility-footer-flow.ts`
+- `apps/desktop/src/stores/workspaces/workspace-mobility-ui-store.ts`
+- `apps/desktop/src/components/workspace/chat/input/WorkspaceMobilityLocationPopover.tsx`
+- a new component under the existing workspace/chat surface, for example
+  `apps/desktop/src/components/workspace/chat/input/PrepareBranchForMoveDialog.tsx`
+
+Plan:
+
+- Add prompt action kinds for `prepare_branch_for_move`, `commit_push_and_move`,
+  `open_git_tools`, and keep `push_commits` as "Push and move".
+- Query Git status for the selected source workspace after a migration target is
+  selected. For local-to-cloud, source is the local workspace id. For
+  cloud-to-local, source is the cloud materialization synthetic id.
+- Derive the Git durability state from source Git status plus mobility
+  preflights.
+- Replace the dirty blocker copy with the branch-prep surface instead of "Commit
+  or stash".
+- Remove dirty-archive copy such as "Uncommitted changes will move with the
+  workspace" from mobility prompt and warning tests.
+- Make "Push and move" use the existing push mutation, then rerun preparation and
+  auto-confirm only when preflight is safe.
+- Make "Commit, push, and move" run branch prep, refetch status, rerun
+  preparation, and auto-confirm only when safe.
+- Make dirty prep's "Open Git panel" open the existing working-tree review
+  surface for inspection/staging. For behind/rebase/conflict/detached recovery,
+  either add real Git recovery actions or route to terminal/external Git tools.
+- Use source-neutral actions such as `syncBranchForMove(sourceWorkspaceId)` and
+  `prepareBranchForMove(sourceWorkspaceId)`, not local-only
+  `syncBranchForCloudMove`.
+- Add explicit cloud-source states for cloud runtime not ready, direct token
+  expired, repo credential missing, and push rejected.
+- Keep dirty cloud-to-local prep feature-gated or hidden until Phase 5 proves
+  cloud-source commit/push works reliably.
+- Ensure `requestId` and logical workspace id guards still prevent stale async
+  work from moving a different workspace after a target switch.
+- Prevent duplicate submit/double click while commit/push/preflight continuation
+  is running.
+
+### Phase 3: Handoff guardrails and rerun semantics
+
+Likely files:
+
+- `apps/desktop/src/hooks/workspaces/workflows/mobility/use-local-to-cloud-handoff.ts`
+- `apps/desktop/src/hooks/workspaces/workflows/mobility/use-cloud-to-local-handoff.ts`
+- `apps/desktop/src/hooks/workspaces/workflows/mobility/use-workspace-mobility-handoff-actions.ts`
+
+Plan:
+
+- Split "prepare selected migration" from "confirm selected migration" so Git
+  prep can call:
+  1. prep branch,
+  2. rerun source preflight,
+  3. rerun cloud preflight,
+  4. confirm using the fresh snapshot.
+- Add a final source Git status/preflight guard immediately before start/freeze
+  every time, not only when the snapshot seems stale. Require clean Git state,
+  no operation, no conflicts, `headOid === sourcePreflight.baseCommitSha`, and
+  matching source/destination/request id before calling `startHandoff`.
+- Ensure the confirm snapshot's `baseCommitSha` always comes from the fresh
+  preflight after prep.
+- Pass the fresh `baseCommitSha` into AnyHarness export as
+  `expectedBaseCommitSha` with `expectedHandoffOpId` and
+  `requireCleanGitState: true`.
+- Validate destination runtime `HEAD`, cleanliness, conflicts, and Git operation
+  state before source freeze and before install.
+- On prep failure, leave the workspace unfrozen and handoff unstarted.
+- On push success but subsequent cloud preflight failure, show the new blocker
+  and keep the committed/pushed branch as normal Git history.
+- After cutover, verify selected workspace/session now point at the destination
+  runtime before re-enabling the composer.
+
+### Phase 4: Server and AnyHarness preflight hardening
+
+Likely files:
+
+- `anyharness/crates/anyharness-contract/src/v1/mobility.rs`
+- `anyharness/crates/anyharness-lib/src/domains/mobility/service.rs`
+- `server/proliferate/server/cloud/mobility/service.py`
+- `server/proliferate/server/cloud/mobility/domain/lifecycle.py`
+- `server/proliferate/server/cloud/workspaces/service.py`
+- `server/proliferate/server/cloud/runtime/git_operations.py`
+- Cloud SDK generated files if API schema changes require regeneration
+
+Plan:
+
+- Keep AnyHarness preflight strict for runtime/session/setup/archive blockers.
+- Keep the UI Git status query for rich display, but rely on the Phase 0 export
+  guard as the authoritative final source check.
+- Change AnyHarness dirty policy so dirty source workspaces are surfaced
+  consistently. Frontend can downgrade a prepable `workspace_dirty` blocker into
+  the branch-prep UI; non-prepable dirty/unknown states remain blockers.
+- Keep archive export/install base-SHA validation unchanged.
+- Extend Cloud mobility preflight branch/head validation to every GitHub-backed
+  direction that needs a target to check out `requestedBaseSha`, not just
+  local-to-cloud.
+- Replace string cloud preflight blockers with typed blocker codes. This is
+  required before UI branching, not a best-effort cleanup.
+- Preserve owner and active-handoff checks on `start_cloud_workspace_handoff`.
+- Improve cloud startup failure surfaces:
+  - GitHub link missing.
+  - GitHub repo access missing.
+  - branch missing.
+  - requested commit missing/not reachable.
+  - billing denied.
+  - agent auth/runtime config not ready.
+  - provision task failed.
+  - worker heartbeat/runtime startup timeout.
+  - target direct access unavailable.
+- Reconcile existing ready cloud workspaces whose `HEAD` is stale relative to
+  the requested SHA before freezing source: recheckout/rematerialize or fail
+  early.
+- Reusing an existing ready cloud destination must still revalidate connection
+  health, billing/start policy, agent-auth/runtime-config policy, repo access,
+  and exact requested SHA before source freeze.
+- Tighten cleanup and repair semantics around item leases, retry counts,
+  stale `in_progress`, manual resolution, and source/destination canonical copy.
+
+### Phase 5: Cloud source push verification
+
+Likely areas:
+
+- cloud provisioning Git remote setup
+- cloud AnyHarness direct access
+- AnyHarness Git push mutation against cloud synthetic ids
+
+Plan:
+
+- Treat this as a blocking prerequisite for cloud-to-local dirty support.
+- Verify that a cloud sandbox cloned with the tokenized GitHub URL can push
+  through the existing AnyHarness Git push endpoint.
+- If not, add an explicit cloud runtime Git credential setup step or a server
+  mediated credential refresh for Git push from cloud runtime.
+- Ensure token material is not exposed in UI, logs, screenshots, or error text.
+- Ensure push errors become user-safe messages.
+
+### Phase 6: Post-move runnable-state verification
+
+Likely files:
+
+- `apps/desktop/src/lib/workflows/sessions/session-runtime.ts`
+- `apps/desktop/src/hooks/sessions/lifecycle/use-session-intent-dispatcher.ts`
+- `apps/desktop/src/lib/access/cloud/session-commands.ts`
+- `apps/desktop/src/hooks/chat/derived/use-chat-availability-state.ts`
+- transcript/session selection stores and mobility cache hooks
+
+Plan:
+
+- Define move success as "the user can keep working," not just "cutover
+  completed."
+- Treat this as a release gate for enabling the move flow, not late hardening.
+- After local-to-cloud and cloud-to-local, verify transcript renders, active
+  workspace/session selection points at the destination, composer availability
+  resolves against the destination runtime, a new prompt is accepted, agent
+  execution starts, and transcript updates stream/project.
+- Include web/mobile Cloud-command send after local-to-cloud because the cloud
+  side must be commandable after migration.
+- Surface MCP/agent-auth reconnection prompts as normal destination capability
+  state rather than confusing migration failures.
+
 ## Reuse Plan
 
 Reuse from Git publish:
@@ -934,3 +1193,72 @@ Server should remain strict about:
 - Async provisioning failure reconciliation to handoff failure/repair.
 - Cutover ordering, cleanup item durability, cleanup item ownership, and manual
   repair audit.
+
+## Open Decisions / Risks
+
+- AnyHarness preflight `gitState`: UI still composes separate Git status plus
+  mobility preflight. Export is the correctness mechanism because it requires
+  expected handoff, branch, base commit, and clean Git state.
+- Cloud-source Git push: still needs a real cloud runtime verification loop. If
+  tokenized cloud clones cannot push reliably, choose between cloud runtime
+  credential refresh and a server-mediated credential setup endpoint before
+  relying on dirty cloud-to-local prep in production.
+- Push remote ownership: push now prefers the configured upstream remote, but no
+  final guard verifies that the remote URL matches the mobility workspace's
+  GitHub owner/repo when a branch has no upstream. Add canonical remote
+  validation before treating this as fully closed.
+- Async cloud provisioning failure linkage: desktop polling can surface failed
+  destination provisioning while the UI is open, and stale handoff expiry handles
+  abandoned attempts, but the server provision task does not yet carry a
+  handoff op id all the way into failure reconciliation.
+- Existing cloud destination at stale `HEAD`: source freeze is still guarded
+  until destination readiness succeeds, so this should fail safe, but a ready
+  cloud workspace reused for a newer requested SHA can still fall into
+  provision-error recovery instead of automatically rematerializing a clean idle
+  destination. Follow-up should add an explicit safe rematerialize/recheckout
+  path or a typed "sync destination" blocker.
+- `remote_owned` timing: source runtime ownership is still flipped immediately
+  before server finalize/cutover. The client now treats post-`remote_owned`
+  finalize errors as ambiguous and refuses to restore the source unless Cloud
+  confirms cutover did not happen. Follow-up should still make the
+  transition/finalize pair server-idempotent with operation-id repair for both
+  directions.
+- Cleanup/repair UI: cleanup failures are visible through existing lifecycle
+  status/toasts, but there is no itemized footer recovery action yet.
+- Review/reviewer state: active review runs are blocked instead of migrated.
+  Completed review durable rows are not copied as first-class review state.
+- Handoff concurrency: recommended V1 rule is one active handoff per mobility
+  workspace, plus whatever per-user singleton policy the current store already
+  intends. Make both explicit and database-backed before relying on UI guards.
+- Git recovery surface: current Git panel is not enough for pull/rebase/conflict
+  recovery. Either add those actions or route users to terminal/external Git
+  tools for behind/detached/in-progress-operation cases.
+- Push failure recovery: compact "Push and move" and dirty prep surface raw push
+  errors today. Strict rerun-preflight/export guards keep migration safe, but a
+  richer follow-up should classify push rejected/auth/repo-access failures into
+  first-class recovery copy and actions.
+- Unsupported sessions: recommended V1 behavior is to block. If product wants to
+  allow partial migration, add explicit session-loss confirmation and audit.
+- Default commit message: `Save workspace changes before move` is safe. Adding
+  workspace or branch name is acceptable only if it stays short and editable.
+- Compact popover vs dialog: keep "Push and move" in the compact popover because
+  it is low-friction; dirty prep should open a dialog because it needs review,
+  editable commit copy, and three actions.
+
+## Recommended Delivery Slices
+
+1. Land AnyHarness export clean guards, destination Git safety, and runtime-state
+   ordering repair tests.
+2. Land Cloud typed blockers, start-time branch/head revalidation, idempotency,
+   durable handoff snapshots, and async provisioning-to-handoff reconciliation.
+3. Add pure migration Git durability resolver and tests.
+4. Extract/reuse branch-prep workflow with migration defaults and tests.
+5. Wire Desktop mobility UI for "Push and move" and "Prepare branch for move",
+   including source-neutral cloud-to-local Git prep states.
+6. Add rerun-preflight-and-auto-continue semantics with final guards and
+   duplicate-submit locks.
+7. Verify cloud-source commit/push and add credential support if needed before
+   enabling dirty cloud-to-local prep.
+8. Add itemized cleanup/repair UI and post-move runnable-state verification.
+9. Run the full local-to-cloud and cloud-to-local manual runbook in
+   `PROFILE=mobility-git`.

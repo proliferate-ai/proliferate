@@ -12,9 +12,7 @@ use crate::live::sessions::actor::config::apply::{
 };
 use crate::live::sessions::actor::config::persist::persist_requested_config_value_if_changed;
 use crate::live::sessions::actor::config::queue::queue_pending_config_change;
-use crate::live::sessions::actor::config::selection::{
-    find_select_option_by_purpose, find_select_option_for_request, select_option_values,
-};
+use crate::live::sessions::actor::config::selection::find_select_option_for_request;
 use crate::live::sessions::actor::config::types::{
     tracked_config_purpose, ConfigApplyOutcome, ConfigPurpose, PersistedSessionConfigState,
 };
@@ -28,23 +26,7 @@ pub(in crate::live::sessions::actor) async fn apply_requested_session_preference
 ) -> anyhow::Result<()> {
     if let Some(model_id) = session.requested_model_id.as_deref() {
         match try_apply_model_preference(conn, native_session_id, model_id, startup_state).await {
-            Ok(ConfigApplyOutcome::NotApplied) => {
-                tracing::warn!(
-                    native_session_id,
-                    requested_model_id = model_id,
-                    current_model_id = ?startup_state.current_model_id,
-                    available_model_ids = ?live_model_ids(startup_state),
-                    "requested model is not available in active session; keeping agent-selected model"
-                );
-            }
-            Ok(outcome) => {
-                tracing::debug!(
-                    native_session_id,
-                    requested_model_id = model_id,
-                    outcome = ?outcome,
-                    "applied requested model preference"
-                );
-            }
+            Ok(_) => {}
             Err(error) => {
                 // Model prefs are best-effort at startup because live ACP/provider IDs can
                 // drift while the session remains usable. Mode prefs stay strict below.
@@ -78,23 +60,6 @@ pub(in crate::live::sessions::actor) async fn apply_requested_session_preference
     }
 
     Ok(())
-}
-
-fn live_model_ids(startup_state: &SessionStartupState) -> Vec<String> {
-    if let Some(option) =
-        find_select_option_by_purpose(&startup_state.config_options, ConfigPurpose::Model)
-    {
-        let values = select_option_values(option);
-        if !values.is_empty() {
-            return values;
-        }
-    }
-
-    startup_state
-        .available_models
-        .iter()
-        .map(|model| model.id.clone())
-        .collect()
 }
 
 pub(in crate::live::sessions::actor) async fn handle_idle_config_command(

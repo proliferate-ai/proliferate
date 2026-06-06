@@ -79,7 +79,7 @@ on top of it.
 - `@anyharness/sdk-react` must not depend on product policy, app stores, Tauri
   APIs, or synthetic workspace logic.
 - Keep the public core client API resource-grouped.
-- Keep one clear public API per package. Do not preserve duplicate flat
+- Keep one clear public API per package. Do not preserve duplicate flat legacy
   methods or duplicate wrapper layers.
 - `src/index.ts` is the curated public surface for each package.
 - Generated OpenAPI files must not be hand-edited.

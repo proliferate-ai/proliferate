@@ -22,7 +22,7 @@ debugging, and performance profiling. Product behavior belongs under
 6. Capture the narrowest useful evidence: failing command, request id, run id,
    screenshot, sanitized log tail, and exact surface/version.
 7. Update the GitHub issue with the diagnosis, linked PR or deploy, and any
-   user-facing owner needed.
+   user-facing follow-up needed.
 
 If there is no GitHub issue yet, search for an existing issue before creating a
 new one. If the failure came from a support report, create or update the issue
@@ -100,5 +100,5 @@ When finishing debugging work, report:
   workspace/session/command ids when relevant
 - shortest confirmed reproduction path or why reproduction was not possible
 - Sentry, logs, dashboards, or workflow evidence checked
-- diagnosis, linked fix/deploy, remaining owner, and user-facing owner
+- diagnosis, linked fix/deploy, remaining owner, and user-facing follow-up
 - secrets or sensitive content omitted from the report

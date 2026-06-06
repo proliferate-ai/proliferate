@@ -2,10 +2,6 @@ use std::time::Instant;
 
 use agent_client_protocol as acp;
 
-const ANYHARNESS_TRANSCRIPT_META_KEY: &str = "anyharness";
-const ANYHARNESS_TRANSCRIPT_EVENT_KEY: &str = "transcriptEvent";
-const TRANSIENT_STATUS_EVENT: &str = "transient_status";
-
 #[derive(Debug, Clone)]
 pub(in crate::live::sessions::actor) struct PromptDiagnostics {
     pub(in crate::live::sessions::actor) prompt_started_at: Instant,
@@ -15,8 +11,6 @@ pub(in crate::live::sessions::actor) struct PromptDiagnostics {
     pub(in crate::live::sessions::actor) last_agent_chunk_at: Option<Instant>,
     pub(in crate::live::sessions::actor) last_agent_thought_at: Option<Instant>,
     pub(in crate::live::sessions::actor) last_agent_preview: Option<String>,
-    pub(in crate::live::sessions::actor) last_transient_status_at: Option<Instant>,
-    pub(in crate::live::sessions::actor) last_transient_status: Option<String>,
     pub(in crate::live::sessions::actor) last_tool_event_at: Option<Instant>,
     pub(in crate::live::sessions::actor) last_plan_at: Option<Instant>,
     pub(in crate::live::sessions::actor) last_usage_at: Option<Instant>,
@@ -32,8 +26,6 @@ impl PromptDiagnostics {
             last_agent_chunk_at: None,
             last_agent_thought_at: None,
             last_agent_preview: None,
-            last_transient_status_at: None,
-            last_transient_status: None,
             last_tool_event_at: None,
             last_plan_at: None,
             last_usage_at: None,
@@ -59,13 +51,8 @@ impl PromptDiagnostics {
                 }
             }
             acp::SessionUpdate::AgentThoughtChunk(chunk) => {
-                let preview = content_block_preview(&chunk.content);
-                if !preview.trim().is_empty() {
+                if !content_block_preview(&chunk.content).trim().is_empty() {
                     self.last_agent_thought_at = Some(now);
-                }
-                if is_transient_status_chunk(chunk) && !preview.trim().is_empty() {
-                    self.last_transient_status_at = Some(now);
-                    self.last_transient_status = Some(preview);
                 }
             }
             acp::SessionUpdate::ToolCall(_) | acp::SessionUpdate::ToolCallUpdate(_) => {
@@ -80,16 +67,6 @@ impl PromptDiagnostics {
             _ => {}
         }
     }
-}
-
-fn is_transient_status_chunk(chunk: &acp::ContentChunk) -> bool {
-    chunk
-        .meta
-        .as_ref()
-        .and_then(|meta| meta.get(ANYHARNESS_TRANSCRIPT_META_KEY))
-        .and_then(|anyharness| anyharness.get(ANYHARNESS_TRANSCRIPT_EVENT_KEY))
-        .and_then(serde_json::Value::as_str)
-        == Some(TRANSIENT_STATUS_EVENT)
 }
 
 fn content_block_preview(content: &acp::ContentBlock) -> String {

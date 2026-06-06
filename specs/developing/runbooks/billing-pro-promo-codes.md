@@ -67,10 +67,10 @@ header.
   customer with the coupon applied — fires the same webhooks. Prefer the
   code-redeem path so the user stays in control.
 
-## Free usage credits (cloud hours)
+## Free usage credits (cloud hours) — not yet built
 
 Separate from plan access. Mechanism exists (`BillingGrant` via
 `ensure_billing_grant_record`, grant types in
 `server/proliferate/constants/billing.py`) but there is **no** manual/admin path
-to comp hours. A comp-hours path needs a script or admin route, likely a new
-`comp` grant type wired into `server/proliferate/server/billing/domain/plans.py`.
+to comp hours yet; it needs a small build (script or admin route, likely a new
+`comp` grant type wired into `server/proliferate/server/billing/domain/plans.py`).

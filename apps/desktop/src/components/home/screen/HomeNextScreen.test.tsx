@@ -5,10 +5,6 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HomeNextScreen } from "./HomeNextScreen";
 import { HOME_NEXT_TARGET_SELECTION_STORAGE_KEY } from "@/hooks/home/ui/use-home-next-target-selection-state";
-import {
-  CHAT_COMPOSER_INPUT_LINE_HEIGHT_CSS,
-  HOME_CHAT_COMPOSER_INPUT,
-} from "@/config/chat";
 
 const screenMocks = vi.hoisted(() => {
   const handleHomeAction = vi.fn();
@@ -253,17 +249,6 @@ describe("HomeNextScreen model availability notices", () => {
     expect(screen.queryByText("No ready models")).toBeNull();
     expect(screen.queryByText("Loading models")).toBeNull();
     expect(screen.queryByText("Couldn't load models")).toBeNull();
-  });
-
-  it("caps the home composer using the scaled textarea line-height", () => {
-    render(<HomeNextScreen />);
-
-    const textarea = screen.getByLabelText("Prompt") as HTMLTextAreaElement;
-    const expectedMaxHeight =
-      `calc(${CHAT_COMPOSER_INPUT_LINE_HEIGHT_CSS} * ${HOME_CHAT_COMPOSER_INPUT.maxRows})`;
-
-    expect(textarea.style.maxHeight).toBe(expectedMaxHeight);
-    expect(textarea.parentElement?.style.maxHeight).toBe(expectedMaxHeight);
   });
 
   it("still renders target-specific disabled reasons after typing", () => {

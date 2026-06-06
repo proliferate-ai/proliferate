@@ -54,11 +54,11 @@ Guides: `system-architecture`, `crates`, `api`, `app`, `domains`, `live-runtime`
 ### Proliferate Worker
 **`specs/codebase/structures/proliferate-worker/README.md`** — `anyharness/crates/proliferate-worker/**`.
 
-Target-side bridge, collapsed/ephemeral identity (one worker = one sandbox = one Target, no slots/fencing): two long-polls — `control` down (`Cloud → Worker → AnyHarness`: commands + per-domain reconcile incl. revoked-jti) and `tail` up (`AnyHarness → Worker → Cloud`: events) — plus a heartbeat carrying the self-update check.
+Target-side bridge: `Cloud → Worker → AnyHarness` (command downlink) and `AnyHarness → Worker → Cloud` (event uplink).
 
-Folders: `control/` (`commands/` + `reconcile/`), `tail/`, `lifecycle/` (heartbeat + self-update mailbox), `inventory/` (startup capabilities), `materialization/` (target-local effects), `cloud_client/` + `anyharness_client/` (raw HTTP only), `store/` (SQLite: applied-revisions/up-cursor), `identity/` (enrollment/credentials). Consolidated narrative in `architecture.md`.
+Folders: `command_downlink/`, `event_uplink/`, `target_status/`, `target/` (materialization/inventory/updates), `clients/` (raw HTTP only), `store/` (SQLite cursors/mappings), `identity/` (enrollment/credentials).
 
-Guides: `runtime`, `identity`, `control`, `tail`, `lifecycle`, `inventory`, `materialization`, `clients`, `store`, `root-support`.
+Guides: `runtime`, `command-downlink`, `event-uplink`, `target-status`, `target`, `clients`, `store`, `identity`, `root-support`.
 
 ### Proliferate Supervisor
 **`specs/codebase/structures/proliferate-supervisor/README.md`** — `anyharness/crates/proliferate-supervisor/**`.
@@ -72,7 +72,7 @@ Folders: `process/`, `install/`, `update/` (manifest, staging, rollback).
 
 Domain shape: `api.py` (transport) → `service.py` (orchestration) → `domain/policy.py` (pure rules) + `db/store/` (queries). Type pipeline: ORM → frozen `@dataclass` → Pydantic; ORM never leaves the store.
 
-Guides: `domains`, `database`, `auth`, `errors`, `integrations`, `config`, `workers`.
+Guides: `domains`, `database`, `auth`, `errors`, `integrations`, `config`, `workers`. Audits: `phase6-billing-reconciler`, `phase6-cloud-runtime-background-loops`, `server-structure-hygiene`.
 
 ### SDK
 **`specs/codebase/structures/sdk/README.md`** — `anyharness/sdk/**` and `anyharness/sdk-react/**`.
@@ -100,9 +100,9 @@ deployed or separately owned codebase boundary.
 ### Sandbox Provisioning (spec 00)
 **`specs/codebase/primitives/sandbox-provisioning.md`**
 
-Two objects kept separate: `sandbox_profile` (stable product/config identity, survives replacement) and the **ephemeral managed target = sandbox** (`cloud_target` is the addressable endpoint, `cloud_sandbox` its 1:1 provider-lifecycle row). The target is replaced as a new target, not edited; there is no slot layer.
+Three objects kept separate: `sandbox_profile` (stable product/config identity), `cloud_target` (addressable worker endpoint), `cloud_sandbox` (managed compute slot — replaced, not edited).
 
-New tables: `cloud_target_runtime_access` (AnyHarness URL/token/data key per target), `sandbox_profile_target_state` (rename+broaden of agent-auth-only table; carries both runtime-config and agent-auth applied state, keyed by `(profile, target)`, no slot fence). Collapsed identity: managed target = sandbox (1:1, ephemeral), no slots/`slot_generation`/fencing — `target_id` is the epoch.
+New tables: `cloud_target_runtime_access` (AnyHarness URL/token/data key per target), `sandbox_profile_target_state` (rename+broaden of agent-auth-only table; carries both runtime-config and agent-auth applied state plus slot fence).
 
 Sync path: inserts rows, mints enrollment token — **never calls E2B**. Background path: `provision_profile_slot` (E2B create → worker boot → enrollment → runtime access write). Reconciler: `reconcile_sandbox_profile_target`.
 
@@ -125,7 +125,7 @@ Core split: `Workspace` = durable product record; `Worktree` = filesystem materi
 
 State model: product lifecycle (`active / archived / deleted`) × materialization state (`hydrated / dehydrated / hydrating / unknown / inconsistent`) × cleanup status (`idle / pruning / blocked / failed / skipped / completed`).
 
-7 documented flows. Safety rule: never auto-prune uncommitted/conflicted work, live sessions, or paths outside Proliferate-managed roots.
+7 documented flows. 7 implementation phases. Safety rule: never auto-prune uncommitted/conflicted work, live sessions, or paths outside Proliferate-managed roots.
 
 ### MCP + Skills Flow
 **`specs/codebase/primitives/mcp-runtime.md`** — MCP inside AnyHarness.
@@ -154,7 +154,7 @@ One question per profile per harness: which credential + which materialization m
 
 Command flow: `client → enqueue_command (preflight + wake) → Worker → AnyHarness → event uplink (exposure-gated) → Cloud DB ← passive GET reads`.
 
-Key additions: `cloud_workspace_exposure` table (visibility, commandable, projection_level), session projection columns on `cloud_sessions`, worker projection cursor (SQLite), `target_id` correlation on lease/result/ingest (no slot fence), `_validate_runtime_config_preflight()`, async wake gate (wake-required kinds never block `enqueue_command`; background job; failed wakes → `failed_delivery` with typed error code).
+Key additions: `cloud_workspace_exposure` table (visibility, commandable, projection_level), session projection columns on `cloud_sessions`, worker projection cursor (SQLite), slot-fence on lease/result/ingest, `_validate_runtime_config_preflight()`, async wake gate (wake-required kinds never block `enqueue_command`; background job; failed wakes → `failed_delivery` with typed error code).
 
 `managed_profile_launch(...)` — canonical entry point for every managed cloud workspace creation. Passive UI rule: GET endpoints on workspaces/sessions/transcript never wake a sandbox.
 
@@ -232,10 +232,10 @@ MCPs + permissions: GitHub MCP / `gh`, AWS (ECS, ECR, RDS, S3, SSM,
 CloudFront), GitHub Actions environment admin, Apple developer account, Vercel,
 Expo/EAS, App Store Connect, and browser/Chrome access for provider dashboards.
 
-Release docs/public-surface ownership is explicit in `deploying/README.md` and
-`deploying/ci-cd.md`: user-facing releases must confirm whether landing page,
-public docs, changelog/release notes, in-app copy, install docs, or support
-docs need to change.
+Release docs/public-surface follow-up is now explicit in
+`deploying/README.md` and `deploying/ci-cd.md`: user-facing releases must
+confirm whether landing page, public docs, changelog/release notes, in-app
+copy, install docs, or support docs need to change.
 
 ---
 
@@ -360,6 +360,7 @@ until the operator-safe replacement flow and audit trail are implemented.
 | File | Topic |
 | --- | --- |
 | `anyharness-structure-alignment-swarms.md` | AnyHarness structure alignment |
+| `cloud-shared-sandbox-spec-pack.md` | Shared sandbox planning |
 | `cloud-worker-control-loop.md` | Worker control loop design |
 | `frontend-structure-alignment-migration.md` | Frontend structure migration |
 | `security.md` | **⚠️ Security spec — not yet authoritative** |

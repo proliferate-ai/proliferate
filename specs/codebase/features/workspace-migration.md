@@ -44,7 +44,7 @@ In scope:
   work is moved, the destination inherits `private` because
   claim doesn't transfer).
 - Desktop "Move to another target" verb in the workspace context
-  menu. Spec 10 owns this interaction.
+  menu (spec 08 deferred this; spec 10 turns it on).
 - Migration editor UI: destination picker + risk/preflight
   summary + progress + failure UX.
 - Cleanup of old Cloud rows after cutover (workspace, exposure,
@@ -57,8 +57,9 @@ Out of scope:
 
 - Worker-driven migration without a Desktop executor in the
   loop. V1 requires the user's Desktop to be online to drive
-  the move; Spec 10 does not add worker command kinds for
-  headless export/import.
+  the move; "headless" migration (e.g. admin moves a workspace
+  while no user is online) is deferred. Spec 10 does not add
+  worker command kinds for export/import.
 - Cross-organization moves. Workspaces stay within their
   organization. Cross-org transfer is a different operation
   (re-create) and not on the V1 roadmap.
@@ -346,8 +347,8 @@ to the new destination but doesn't archive the source row.
   is not archived; destination exposure is not created.
 - No spec 05 direct-attach integration for shared-cloud
   source/destination.
-- Desktop "Move to another target" verb is not in the workspace
-  context menu. Spec 10 owns the verb.
+- Desktop "Move to another target" verb is NOT in the workspace
+  context menu (spec 08 §10 #20 deferred this to spec 10).
 
 ## 5. Target Model
 
@@ -584,7 +585,7 @@ until Desktop completes the AnyHarness destroy; the user sees a
 non-blocking notification on next Desktop open.
 
 If the user never returns, the orphan source AnyHarness workspace
-is pruned by AnyHarness's own retention policy
+is eventually pruned by AnyHarness's own retention policy
 (outside spec 10 scope). The cleanup item stays pending
 indefinitely until either Desktop completes it or the workspace
 is hard-archived by ops.
@@ -710,7 +711,8 @@ PUT that unfreezes or `destroy-source`.
 
 ### 5.7 Desktop "Move to another target" verb
 
-Spec 10 owns this verb:
+Spec 08 §6 deferred this verb pending spec 10. Spec 10 turns it
+on:
 
 ```text
 apps/desktop/src/components/workspace/shell/sidebar/
@@ -737,7 +739,7 @@ sections:
   Destination             SourceTargetPicker (filtered by allowed
                           directions for source type)
   Scope                   "Move whole workspace" (default; only V1
-                          option). Session-only export is outside V1.
+                          option). Session-only export deferred.
   Source handling         (radio buttons; default: archive)
     - Archive source after success                                                    (default)
     - Keep source read-only for 7 days                                                (then delete)
@@ -976,6 +978,59 @@ apps/desktop/src/components/workspace/shell/sidebar/
   use-workspace-sidebar-native-context-menu.ts    + "Move to another target..."
 ```
 
+## 7. Implementation Chunks
+
+```text
+Chunk A  Schema + canonical_side
+  - migration adds canonical_side, extends enums, adds
+    cutover_committed + repair_required phases
+  - lifecycle.py updates
+  - all existing flows continue to work; direction defaults to
+    local_to_cloud / cloud_to_local as before; canonical_side
+    defaults to 'source'
+
+Chunk B  cloud_workspace_move_cleanup_item
+  - new model + migration
+  - store helpers
+  - cutover_committed phase handler atomically inserts items
+  - per-item endpoints
+
+Chunk C  Cloud-side cleanup executor
+  - cleanup_executor.py for Cloud-side items
+    (cloud_workspace, cloud_exposure, cloud_session_projection,
+     cloud_transcript_projection, worker_projection_cursor)
+  - integration with spec 04 exposure status
+  - reconciler tick re-surfaces failed items
+
+Chunk D  New directions (shared_to_*, personal_to_shared,
+                         cloud_to_cloud)
+  - lifecycle policy: allowed direction matrix
+  - direction selector in MigrationEditorModal
+  - shared_to_* fetches direct-attach JWT (spec 05)
+  - cloud_to_cloud preflight on both sides
+
+Chunk E  repair_required state + UI
+  - stale heartbeat handler with canonical_side branch
+  - repair endpoint
+  - WorkspaceMobilityOverlay branch for repair_required
+  - per-item retry UI
+
+Chunk F  Migration editor
+  - MigrationEditorModal sections
+  - destination target picker
+  - extended preflight call
+  - progress state machine view
+  - failure UX
+
+Chunk G  Desktop "Move to another target" verb
+  - context menu item with visibility gates
+  - opens MigrationEditorModal
+
+Chunk H  Tests + smoke
+```
+
+Preferred implementation is one PR per spec. Chunks are review checkpoints inside that PR and may be split only when the split does not leave duplicate models, dead paths, partially wired security checks, or visible inert UI.
+
 ## 8. Acceptance Criteria
 
 1. `cloud_workspace_handoff_op.direction` accepts
@@ -1173,3 +1228,79 @@ Manual smoke:
    - on first session resume at destination, the live config
      matches the source
 ```
+
+## 10. Final Decisions / Deferred Questions
+
+1. **Should `cleanup_failed` permit "Mark complete" without
+   actually running the cleanup?**
+
+   Decision: yes, with audit. Sometimes the source environment is
+   permanently unreachable (machine destroyed, account deleted).
+   The user attests; the items get marked completed manually
+   with `error_code='manual_resolution'` + an audit note. The
+   move's canonical side stays at destination.
+
+2. **`cloud_to_cloud` between two managed cloud targets the user
+   does NOT have direct-attach to.**
+
+   V1 limitation: Desktop must have direct-attach to both sides.
+   If a user has personal cloud A and personal cloud B but is
+   only direct-attached to A, the move fails. Acceptable for V1
+   because V1 has one personal cloud per user. Multi-personal-cloud
+   is not on the roadmap.
+
+3. **`personal_to_shared` for admin promoting a personal
+   workspace.**
+
+   V1 supports the model but the UX rarely makes sense (the
+   workspace contents are still authored by one person; the
+   "share with team" use case is better served by re-running
+   the work in the shared sandbox). Decision: keep the direction
+   in the enum + admin gate, but do not promote it in the UI
+   beyond an advanced "Move to shared cloud" option that
+   requires admin.
+
+4. **Session-only export** (move one session out of a workspace
+   that has multiple).
+
+   The archive contains all sessions; AnyHarness doesn't
+   currently support exporting a subset. Spec 10 V1: whole
+   workspace only. Session-only export is a future capability
+   that needs AnyHarness contract support first.
+
+5. **Backward-compat with existing `lifecycle_state`
+   ('moving_to_cloud'/'moving_to_local').**
+
+   These values are kept for the two original directions. New
+   directions get new lifecycle_state values:
+   `moving_to_shared_personal`, `moving_to_shared_local`,
+   `moving_personal_to_shared`, `moving_cloud_to_cloud`. Or we
+   could collapse to a single `moving` state with phase as the
+   detail. Decision: collapse to `moving` and rely on `phase` +
+   `direction` for granularity. Reduces enum sprawl.
+
+6. **Should we worker-drive headless moves?**
+
+   When neither side has Desktop online (e.g. admin schedules a
+   move while user is offline), no V1 path. The infrastructure
+   exists (Cloud holds state; AnyHarness mobility endpoints work
+   over the worker JWT path); but the orchestration logic is
+   complex. Decision: defer to V2; spec 10 explicitly does not add
+   `export_workspace_state` / `import_workspace_state` worker
+   command kinds.
+
+7. **Cleanup item ordering.**
+
+   Some items have dependencies: `anyharness_workspace` destroy
+   should happen before `cloud_workspace` archive (the AH side
+   needs to confirm the workspace is gone before the Cloud row
+   is archived, otherwise lookup-by-anyharness_workspace_id
+   breaks). Decision: cleanup_executor.py runs items in a fixed
+   order:
+     1. anyharness_workspace (destroy source AH)
+     2. cloud_session_projection (end source projections)
+     3. cloud_exposure (archive source exposure)
+     4. worker_projection_cursor (confirm)
+     5. cloud_workspace (archive)
+   Each gates on the previous succeeding. Failed item blocks
+   subsequent items.

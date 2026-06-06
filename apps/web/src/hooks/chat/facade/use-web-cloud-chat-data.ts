@@ -37,9 +37,7 @@ export function useWebCloudChatData() {
   const agentCatalog = useCloudAgentCatalog();
   const cloudCapabilities = useCloudCapabilities();
   const agentAuthCredentials = useAgentAuthCredentials();
-  const workspaceLive = useWorkspaceLive(workspaceId ?? null, {
-    enabled: Boolean(workspaceId) && Boolean(workspaceQuery.data),
-  });
+  const workspaceLive = useWorkspaceLive(workspaceId ?? null, { enabled: Boolean(workspaceId) });
   const snapshot = useMemo(
     () => mergeWorkspaceSnapshot(workspaceQuery.data, workspaceLive.snapshot),
     [workspaceLive.snapshot, workspaceQuery.data],
@@ -55,6 +53,10 @@ export function useWebCloudChatData() {
     ? sessions.find((candidate) => candidate.sessionId === chatId) ?? null
     : null;
   const activeTranscriptSessionId = session?.sessionId ?? chatId ?? null;
+  const sessionLive = useSessionLive(session?.sessionId ?? null, {
+    targetId: session?.targetId ?? null,
+    enabled: Boolean(session),
+  });
   const transcriptQuery = useCloudTranscriptSnapshot(
     session?.targetId ?? null,
     session?.sessionId ?? null,
@@ -65,10 +67,6 @@ export function useWebCloudChatData() {
     session?.sessionId ?? null,
     Boolean(session),
   );
-  const sessionLive = useSessionLive(session?.sessionId ?? null, {
-    targetId: session?.targetId ?? null,
-    enabled: Boolean(session) && (transcriptQuery.isFetched || transcriptQuery.isError),
-  });
   const transcriptItems = sessionLive.snapshot?.transcriptItems
     ?? transcriptQuery.data?.transcriptItems
     ?? EMPTY_TRANSCRIPT_ITEMS;

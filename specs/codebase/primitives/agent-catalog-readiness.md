@@ -1,6 +1,7 @@
 # Agent Catalog And Readiness
 
-Status: authoritative for AnyHarness agent catalog/readiness truth sources.
+Status: authoritative for AnyHarness agent catalog/readiness truth sources and
+the current catalog migration.
 
 ## Goal
 
@@ -19,12 +20,14 @@ It does not answer:
 - how to speak provider-specific CLI, ACP registry, or MCP protocols
 - how a session actor processes turns
 
-AnyHarness uses one supported catalog input and does not support split
-model/launch catalog paths. Registry, credentials, readiness resolution,
-reconcile execution, install, seed, and portability code live outside
-`catalog/**`. The `installer.rs` facade delegates to focused child modules for
-native artifacts, agent-process artifacts, npm/source-build mechanics, and
-download helpers.
+The current migration establishes one supported catalog input and removes the
+old split model/launch catalog paths. It promotes the cheap ownership folders
+for registry, credentials, readiness resolution, and reconcile execution.
+Install files remain transitional until the install/update boundary is promoted
+cleanly. The current `installer.rs` facade delegates to focused child modules
+for native artifacts, agent-process artifacts, npm/source-build mechanics, and
+download helpers. All install, credentials, registry, reconcile, readiness, and
+seed code must live outside `catalog/**`.
 
 ## Truth Sources
 
@@ -80,7 +83,7 @@ The catalog document describes supported agent families:
 - fallback session model/control metadata
 - compatibility and status metadata
 
-There must be no split catalog inputs:
+There must be no split legacy catalog inputs:
 
 ```text
 old model-catalog document type
@@ -89,7 +92,7 @@ old model-catalog URL environment variable
 old launch-catalog URL environment variable
 old model/launch cache readers
 old model/launch cache writers
-split launch catalog directory
+legacy split launch catalog directory
 ```
 
 Runtime catalog refresh/fetch/cache behavior is not supported in the migrated
@@ -113,9 +116,9 @@ The trusted bundled catalog may define:
 This boundary should be visible in code. The projection that produces
 `AgentDescriptor` must be sourced from trusted catalog data only.
 
-## Source Shape
+## Catalog Migration Source Shape
 
-Required shape:
+Required shape for this migration:
 
 ```text
 anyharness-lib/src/domains/agents/
@@ -148,13 +151,13 @@ anyharness-lib/src/domains/agents/
     service.rs
   credentials/
     mod.rs
-  installer.rs                # facade outside catalog/**
+  installer.rs                # transitional facade: outside catalog/**
   installer/
     agent_process.rs
     downloads.rs
     native.rs
     npm.rs
-  install_lock.rs             # outside catalog/**
+  install_lock.rs             # transitional: outside catalog/**
   registry/
     mod.rs
   reconcile/
@@ -163,6 +166,36 @@ anyharness-lib/src/domains/agents/
   seed/
     mod.rs
   portability/
+    mod.rs
+```
+
+Follow-up topology may promote those transitional files into focused folders
+once their boundaries are split cleanly:
+
+```text
+anyharness-lib/src/domains/agents/
+  registry/
+    mod.rs
+  credentials/
+    mod.rs
+  readiness/
+    mod.rs
+    launch_options.rs
+    resolver.rs
+    artifacts.rs
+    compatibility.rs
+    overrides.rs
+    paths.rs
+    status.rs
+  install/
+    mod.rs
+    native.rs
+    agent_process.rs
+    launcher.rs
+    locks.rs
+  reconcile/
+    mod.rs
+  seed/
     mod.rs
 ```
 
@@ -256,7 +289,7 @@ Dynamic providers such as OpenCode may expose model lists at live ACP runtime.
 Readiness should say whether the provider is launchable; it should not try to
 precompute every live model choice when the provider owns that dynamically.
 
-### Install Files
+### `install/` Or Transitional Install Files
 
 Owns managed install/update workflows.
 
@@ -417,13 +450,13 @@ Do not add:
 - install/update execution inside `catalog/**`
 - provider CLI mechanics inside `catalog/**`
 
-## Acceptance
+## Migration Acceptance
 
-The catalog/readiness structure is complete when:
+The catalog migration is done only when:
 
 - `domains/agents/catalog.rs` is gone.
 - `domains/agents/catalog/**` exists with focused submodules.
-- split launch catalog files are gone.
+- legacy split launch catalog files are gone.
 - old split catalog structs/functions/env vars are gone.
 - all launch/model metadata AnyHarness still uses is projected from
   `AgentCatalogDocument`.
@@ -437,6 +470,10 @@ The catalog/readiness structure is complete when:
   - fallback model projection
   - internal launch-option projection
   - readiness code touched by the migration
+
+Agents-domain topology promotion is a separate cleanup. It is not complete
+until transitional files such as `installer.rs` and `install_lock.rs` are
+either promoted into final focused folders or documented as intentionally flat.
 
 Verification examples:
 

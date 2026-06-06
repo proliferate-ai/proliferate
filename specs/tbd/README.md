@@ -2,7 +2,7 @@
 
 Status: non-authoritative planning index.
 
-Files in this folder are useful notes, plans, and draft spec packs.
+Files in this folder are useful notes, migration plans, and draft spec packs.
 They are not operating law until they are promoted into `specs/codebase/**` or
 `specs/developing/**` with a clear owner and contract.
 
@@ -11,11 +11,12 @@ They are not operating law until they are promoted into `specs/codebase/**` or
 | Draft | Use |
 | --- | --- |
 | [anyharness-structure-alignment-swarms.md](anyharness-structure-alignment-swarms.md) | Planning notes for AnyHarness structure-alignment agent work. |
+| [cloud-shared-sandbox-spec-pack.md](cloud-shared-sandbox-spec-pack.md) | Cloud/shared sandbox planning pack. |
 | [cloud-worker-control-loop.md](cloud-worker-control-loop.md) | Cloud worker control-loop load-reduction planning. |
-| [frontend-structure-alignment-migration.md](frontend-structure-alignment-migration.md) | Frontend structure-alignment notes. |
+| [frontend-structure-alignment-migration.md](frontend-structure-alignment-migration.md) | Frontend structure-alignment migration notes. |
 | [security.md](security.md) | Draft security notes. |
 | [structure-alignment-coordinator-model.md](structure-alignment-coordinator-model.md) | Coordinator model for structure-alignment planning. |
-| [support-debug-correlation.md](support-debug-correlation.md) | Support/debug correlation notes. |
+| [support-debug-correlation.md](support-debug-correlation.md) | Support/debug correlation follow-up notes. |
 | [workspace-migration-git-durability-plan.md](workspace-migration-git-durability-plan.md) | Workspace migration git durability planning. |
 
 ## Promotion Rules

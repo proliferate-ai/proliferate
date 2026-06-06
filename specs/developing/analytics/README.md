@@ -137,4 +137,4 @@ When finishing analytics work, report:
 - source files, migrations, dashboards, env vars, or vendor settings touched
 - privacy posture and any replay/masking implications
 - verification performed, including dashboard/tool checks when applicable
-- docs/dashboard freshness owner recorded when docs are unchanged
+- docs updated or explicit follow-up owner for docs/dashboard freshness

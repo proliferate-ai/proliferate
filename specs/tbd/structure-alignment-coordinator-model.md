@@ -25,7 +25,7 @@ Area-specific rules and workstream inventories live in their owning docs, such
 as:
 
 - `specs/tbd/frontend-structure-alignment-migration.md`
-- `specs/codebase/structures/server/README.md`
+- `specs/codebase/structures/server/audits/server-structure-hygiene.md`
 - `specs/tbd/anyharness-structure-alignment-swarms.md`
 
 Canonical architecture rules remain in each area doc under `specs/codebase/structures/**`
@@ -75,7 +75,7 @@ while-I-sleep, all-phases, or keep-going run. In unattended mode, Codex should:
   instead of waiting for every other lane in the phase
 - wake the original implementer for fix-up after reviews finish
 - continue until every lane in the phase is ready, merged if merge permission
-  and tooling were provided, or has an owned exception
+  and tooling were provided, or explicitly deferred with an owned exception
 - update downstream worktrees from the integration branch before starting the
   next phase
 - continue into the next phase without asking for confirmation when there are
@@ -109,6 +109,8 @@ Examples:
     `specs/codebase/structures/frontend/guides/**`,
     `specs/codebase/structures/frontend/packages/README.md`
 - Server:
+  - area migration plan:
+    `specs/codebase/structures/server/audits/server-structure-hygiene.md`
   - canonical docs:
     `specs/codebase/structures/server/README.md`,
     `specs/codebase/structures/server/guides/**`
@@ -133,8 +135,8 @@ Examples:
   did not create.
 - Preserve behavior unless the lane explicitly owns a behavior change.
 - Prefer direct imports. Do not introduce barrels or convenience re-exports.
-- Exceptions should be rare and must name path, rule, owner/lane, reason, and
-  resolution owner.
+- Temporary migration exceptions should be rare and must name path, rule,
+  owner/lane, reason, and target follow-up PR or branch.
 - If GitHub, PR, or subagent tooling is unavailable, fall back to local
   worktrees and structured review output, and state the limitation.
 
@@ -268,8 +270,9 @@ Implementation expectations:
 - Delete replaced dead code; do not leave duplicate old and new paths.
 - If a rule is ambiguous, make the smallest doc clarification needed in the
   same PR, or report the ambiguity if it would change the lane scope.
-- Exceptions are allowed only when removing the violation is unsafe in this PR.
-  Each exception must name path, rule, owner/lane, reason, and resolution owner.
+- Temporary migration exceptions are allowed only when removing the violation is
+  unsafe in this PR. Each exception must name path, rule, owner/lane, reason,
+  and target follow-up PR or branch.
 
 Verification expectations:
 
@@ -359,7 +362,7 @@ Finding format:
   - P0: blocks merge, data loss/security/major breakage
   - P1: likely regression or clear doc-contract violation
   - P2: important maintainability/ownership issue
-  - P3: minor maintainability suggestion
+  - P3: minor issue or follow-up suggestion
 - Include file path and exact line when possible.
 - Explain the impact and the requested fix.
 - Do not leave comments for subjective style preferences that are not tied to
@@ -368,7 +371,7 @@ Finding format:
 Final review output:
 
 - Findings, ordered by severity.
-- Questions that affect merge readiness, if any.
+- Open questions, if any.
 - Checks you ran or inspected.
 - Short merge-readiness assessment.
 ```
@@ -465,8 +468,8 @@ For a phase or multi-lane run, report:
 
 Codex should not begin the next phase until:
 
-- all required lanes in the current phase are ready to merge, merged, or have
-  owned exceptions
+- all required lanes in the current phase are ready to merge, merged, or
+  explicitly deferred with owned exceptions
 - downstream worktrees have been updated from the integration branch
 - the guardrail report, if available, reflects the current reduced inventory
 
@@ -475,7 +478,8 @@ blockers, PRs, and merge readiness before starting the next phase.
 
 In unattended mode, Codex should leave the phase-boundary status in the thread
 and continue into the next phase without waiting for confirmation when all
-current-phase lanes are ready, merged, or have owned exceptions.
+current-phase lanes are ready, merged, or explicitly deferred with owned
+exceptions.
 
 ## Merge Handling
 

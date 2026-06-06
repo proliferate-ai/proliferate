@@ -618,6 +618,68 @@ UI should not expose:
 - raw MCP headers
 - manifest editing
 
+## Migration Plan
+
+Phase 1: extract artifact domain without changing behavior.
+
+```text
+MOVE/COPY RESPONSIBILITY
+  domains/cowork/manifest.rs      -> domains/artifacts/manifest.rs
+  domains/cowork/artifacts.rs     -> domains/artifacts/runtime.rs + service.rs
+  domains/cowork/artifacts.rs protection helpers -> domains/artifacts/protection.rs
+  cowork artifact contract mapping remains behavior-compatible
+
+KEEP TEMPORARILY
+  cowork manifest re-exports and runtime wrapper
+  cowork HTTP routes as the current compatibility surface until generic
+    artifact routes exist
+  cowork MCP routes as the current compatibility surface until generic
+    artifact MCP routes exist
+  CoworkArtifact* contract names if contract rename would create too much churn
+```
+
+Phase 2: split MCP behavior.
+
+```text
+CREATE
+  domains/artifacts/mcp/definition.rs
+  domains/artifacts/mcp/auth.rs
+  domains/artifacts/mcp/context.rs
+  domains/artifacts/mcp/tools.rs
+  domains/artifacts/mcp/calls.rs
+
+MOVE
+  artifact tools from domains/cowork/mcp/tools.rs
+  artifact tool calls from domains/cowork/mcp/calls.rs
+
+LEAVE
+  cowork delegation tools in cowork
+```
+
+Phase 3: central session selection/injection.
+
+```text
+ADD
+  domains/sessions/mcp_bindings/product_registry.rs entry for artifacts
+  domains/sessions/mcp_bindings/selection.rs artifact selection policy
+  domains/sessions/mcp_bindings/injection.rs artifact HTTP MCP injection
+
+REMOVE
+  cowork-specific construction of artifact MCP server config where possible
+```
+
+Phase 4: promote API names.
+
+```text
+ADD
+  /v1/workspaces/{workspace_id}/artifacts/manifest
+  /v1/workspaces/{workspace_id}/artifacts/{artifact_id}
+  /v1/workspaces/{workspace_id}/sessions/{session_id}/mcp/artifacts
+
+KEEP OR REMOVE
+  cowork aliases based on client migration state
+```
+
 ## Tests
 
 Domain tests:
@@ -658,7 +720,7 @@ API tests:
 - missing artifact maps to 404
 - invalid manifest maps to 409
 
-## Acceptance
+## Migration Acceptance
 
 Done when:
 
