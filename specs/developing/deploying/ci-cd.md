@@ -83,6 +83,8 @@ Operating invariants:
 - A selected lane that fails means the deploy run failed, even if another lane
   produced the artifact the operator cared about.
 - `force_surfaces` is additive. It cannot suppress other detected lanes.
+- `only_surfaces` is exact. Use it for targeted staging plans, production
+  hotfixes, and any release where unrelated detected lanes must not move.
 - Staging desktop validates the plan but does not publish the stable updater.
   Production desktop publish is the point where `latest.json` becomes live.
 - Publishing the same desktop version twice does not update installed apps.
@@ -106,7 +108,7 @@ Before deploying:
 1. Confirm the target commit is on `main`.
 2. Confirm CI passed for that commit.
 3. Decide whether this is a normal detected-surface deploy, a forced full
-   deploy, or a deliberately gated partial deploy.
+   deploy, or an exact `only_surfaces` deploy.
 4. Inspect the target environment gates before dispatching:
    - `MOBILE_DEPLOY_ENABLED`
    - `EAS_SUBMIT_ENABLED`
@@ -136,6 +138,7 @@ when explicitly requested:
 Workflow: Deploy Staging
 ref: <main SHA or ref>
 force_surfaces: <blank, comma-separated surfaces, or all>
+only_surfaces: <blank, comma-separated surfaces, or all>
 dry_run: false
 ```
 
@@ -155,6 +158,7 @@ Production is promoted manually from a staging-tested commit:
 Workflow: Promote Production
 ref: <main SHA>
 force_surfaces: <blank, comma-separated surfaces, or all>
+only_surfaces: <blank, comma-separated surfaces, or all>
 require_staging_success: true
 dry_run: false
 ```
@@ -192,11 +196,71 @@ Dry-run production promotes upload `deploy-plan-production`, not
 `deploy-summary-production`, and are excluded from future production
 deploy-base resolution.
 
+### Nightly Release Train
+
+The nightly train coordinates artifact versions, artifact releases, and staging
+deploys from `main`.
+
+```text
+Workflow: Nightly Release Train
+ref: <blank or main SHA/ref>
+only_surfaces: <blank, comma-separated surfaces, or all>
+dry_run: false
+```
+
+Train behavior:
+
+1. Resolve a shared release id, `release-YYYY-MM-DD`.
+2. Diff the selected SHA against the previous `release-*` train tag.
+3. If `only_surfaces` is blank, release the detected surfaces. If
+   `only_surfaces` is set, release exactly those surfaces.
+4. Bump patch versions for selected artifact lanes:
+   - desktop updates `apps/desktop/package.json`,
+     `apps/desktop/src-tauri/tauri.conf.json`, and
+     `apps/desktop/src-tauri/Cargo.toml`
+   - runtime updates `anyharness/sdk/package.json`
+   - server derives the next `server-v*` tag without a tracked version file
+5. Commit version bumps back to `main` when needed.
+6. Create the `release-YYYY-MM-DD` train tag.
+7. Run selected artifact release lanes and selected staging deploy lanes.
+
+The train does not publish public changelog pages or raw release-note pages.
+Those surfaces are owned by separate product/website automation.
+
+### Production Hotfix
+
+Use `Hotfix Production` when an urgent fix must move exact surfaces to
+production without waiting for the next train.
+
+```text
+Workflow: Hotfix Production
+ref: <main SHA or ref>
+only_surfaces: <comma-separated surfaces or all>
+reason: <short reason>
+bump_patch: true
+dry_run: false
+```
+
+Hotfix behavior:
+
+1. Require `only_surfaces`; no detected-surface spillover is allowed.
+2. Verify the input ref is reachable from `main`.
+3. Bump selected artifact-lane patch versions when `bump_patch=true`.
+4. Commit version bumps back to `main` when needed.
+5. Create a `hotfix-YYYY-MM-DD-<run-number>` tag.
+6. Publish selected runtime/server artifacts and deploy selected production
+   lanes. Desktop hotfixes publish the stable updater feed.
+
+For production hotfixes, prefer `dry_run=true` first. Then dispatch the real
+run from the exact SHA after confirming the plan selected only the intended
+surfaces.
+
 ### Surface Selection
 
 The workflow detects deploy surfaces from the diff against the previous
-successful deploy. `force_surfaces` is additive: it adds surfaces to whatever
-the diff already detected. It is not an "only these surfaces" filter.
+successful deploy. `force_surfaces` and `only_surfaces` are different tools:
+`force_surfaces` adds lanes to detection, while `only_surfaces` replaces
+detection with the exact listed lanes.
 
 Use these values:
 
@@ -204,15 +268,16 @@ Use these values:
 force_surfaces=<blank>  # deploy only detected surfaces
 force_surfaces=all      # deploy every lane that is enabled by env gates
 force_surfaces=web      # deploy detected surfaces plus web
+only_surfaces=web       # deploy only web
+only_surfaces=all       # deploy every lane that is enabled by env gates
 ```
 
 If the intent is "only web" but the diff also detects mobile, server, E2B, or
-desktop, do not assume `force_surfaces=web` will suppress the other lanes.
+desktop, use `only_surfaces=web`.
 Only mobile, desktop, and workers currently have environment gates. Setting
 `EAS_SUBMIT_ENABLED=false` skips TestFlight submission only; the mobile build
 can still run when `MOBILE_DEPLOY_ENABLED=true`. Server, web, and E2B do not
-have skip gates, so do not dispatch a mixed deploy when those detected lanes
-must not run.
+have skip gates, so use `only_surfaces` when those detected lanes must not run.
 
 ### Verification
 
@@ -303,6 +368,8 @@ and any remaining owner.
   cloud-live-webhook.yml     # manual/nightly live E2B webhook delivery smoke
   release-cloud-template.yml # public E2B cloud template build + publish + staging promote
   promote-cloud-template.yml # manual production promote for public E2B templates
+  nightly-release-train.yml  # scheduled release train, staging deploy, artifact release coordinator
+  hotfix-production.yml      # exact-surface production hotfix coordinator
   pr-metadata.yml            # PR title and release/area label validation
   release-desktop.yml        # desktop packaging, draft release, updater publish
   release-runtime.yml        # AnyHarness binary release + npm publish for @anyharness/sdk
@@ -323,7 +390,9 @@ server/
   deploy/                    # self-hosted production compose + update scripts
 scripts/
   ci-cd/
+    create-release-tags.mjs
     detect-deploy-surfaces.mjs
+    prepare-artifact-release.mjs
     resolve-deploy-base.mjs
   build-agent-seed.mjs
   generate-desktop-installer-manifest.mjs
@@ -338,6 +407,10 @@ vercel.json                  # web app deploy config (Vercel project proliferate
   surface. Do not update one without checking the others.
 - Desktop releases create/use the `desktop-v*` tag line. Runtime releases ship
   off the `runtime-v*` tag line.
+- Release trains use shared `release-YYYY-MM-DD` tags. Artifact versions remain
+  lane-specific: `desktop-v*`, `runtime-v*`, and `server-v*`.
+- Changelog generation and feature launch pages are separate product surfaces.
+  These workflows own deploy and artifact mechanics only.
 - Cloud template releases are manually dispatched. They publish immutable
   `sha-*` tags, then move rolling `staging` and `production` tags separately.
 - Desktop versioning must stay consistent across
@@ -436,6 +509,10 @@ CI, release infra, dependency bumps, codegen, logging, dev tooling, and cleanup.
 Use `release:skip` only when the PR should not appear in generated release
 notes.
 
+Artifact GitHub Releases may still use GitHub-generated notes for downloads,
+checksums, and PR-level history. Public feature changelog pages and raw release
+note generation are separate from this release/deploy automation.
+
 Before making `.github/workflows/pr-metadata.yml` required in branch
 protection, create the full `release:*` and `area:*` label set in GitHub.
 Example:
@@ -525,6 +602,8 @@ Flow:
    When the desktop surface is enabled and `DESKTOP_DEPLOY_ENABLED=true` for
    the target environment, the promote workflow derives `desktop-v<VERSION>`
    from the promoted SHA and calls `release-desktop.yml` directly.
+   Promote-sourced releases create the missing lightweight `desktop-v<VERSION>`
+   git tag before creating the draft GitHub Release.
 4. Low-level/manual path: from updated `main`, create and push a tag like
    `desktop-v0.1.0`. The tag-push workflow still triggers automatically and
    publishes updater/download assets after the build succeeds.
@@ -631,7 +710,7 @@ Useful local wrappers:
 make release-desktop-dry-run DESKTOP_RELEASE_REF=feat/my-branch
 
 # Draft GitHub release preview from an already-pushed desktop tag.
-# Creates a draft release with generated notes, but does not publish updater assets.
+# Creates a draft release, but does not publish updater assets.
 make release-desktop-draft DESKTOP_RELEASE_TAG=desktop-v0.1.28
 ```
 
@@ -801,6 +880,9 @@ Trigger model:
    trigger. Desktop still produces `desktop-v*` release tags, but production
    promote owns deriving and invoking that desktop release from the promoted
    SHA.
+6. `Nightly Release Train` and `Hotfix Production` sit above this hosted spine:
+   they prepare shared train/hotfix ids, bump artifact versions, and then call
+   the same reusable deploy lanes.
 
 Deploy graph:
 
@@ -823,8 +905,8 @@ Deploy graph:
    - `web`
    - `mobile`
    - `desktop`
-   - `runtime` as a detector-only advisory output for runtime-shaped changes;
-     hosted staging/production do not have a runtime deploy lane
+   - `runtime` for runtime-shaped artifact releases; hosted
+     staging/production do not have a runtime deploy lane
 3. Deploy changed surfaces:
    - E2B builds immutable `sha-*` tags for staging, then moves the rolling
      `staging` tag after smoke
@@ -842,12 +924,10 @@ Deploy graph:
 4. Upload a deploy summary artifact.
 
 Important: `force_surfaces` is additive. It forces listed surfaces to deploy in
-addition to any surfaces detected from the diff; it is not an "only these
-surfaces" filter. Do not use `force_surfaces=web` when the diff also detects
-mobile/E2B/server and the intent is web-only. Only mobile, desktop, and workers
-currently have environment gates. Server, web, and E2B have no skip gate; until
-an explicit `only_surfaces`/`skip_surfaces` input exists, do not dispatch a
-deploy whose detected server/web/E2B lanes must not run.
+addition to any surfaces detected from the diff. Use `only_surfaces` when the
+intent is exact, such as `only_surfaces=web` for a web-only hotfix. Only mobile,
+desktop, and workers currently have environment gates. Setting `only_surfaces`
+is the supported way to keep detected server/web/E2B lanes from running.
 
 Required GitHub environment vars/secrets:
 

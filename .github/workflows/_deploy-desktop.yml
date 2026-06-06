@@ -74,7 +74,7 @@ jobs:
 
           tag_name="desktop-v$package_version"
           tag_target="$(git ls-remote --tags origin "refs/tags/$tag_name" | awk '{ print $1 }' | head -n 1)"
-          if [[ -n "$tag_target" && "$tag_target" == "$GIT_SHA" && "$DRY_RUN" != "true" ]]; then
+          if [[ -n "$tag_target" && "$tag_target" == "$GIT_SHA" && "$DRY_RUN" != "true" && "$PUBLISH_UPDATER" != "true" ]]; then
             echo "Desktop tag $tag_name already points at $GIT_SHA; skipping duplicate release."
             {
               echo "enabled=false"
@@ -82,6 +82,9 @@ jobs:
               echo "tag_name=$tag_name"
             } >> "$GITHUB_OUTPUT"
             exit 0
+          fi
+          if [[ -n "$tag_target" && "$tag_target" == "$GIT_SHA" && "$PUBLISH_UPDATER" == "true" ]]; then
+            echo "Desktop tag $tag_name already points at $GIT_SHA; continuing so updater assets can be published."
           fi
           if [[ -n "$tag_target" && "$tag_target" != "$GIT_SHA" && "$DRY_RUN" != "true" ]]; then
             echo "::error::Desktop tag $tag_name already exists at $tag_target, not $GIT_SHA. Bump the desktop version before publishing desktop from this SHA."
