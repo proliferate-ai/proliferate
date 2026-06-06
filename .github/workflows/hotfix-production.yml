@@ -34,6 +34,7 @@ permissions:
   contents: write
   id-token: write
   packages: write
+  pull-requests: read
 
 concurrency:
   group: hotfix-production
@@ -47,6 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release_id: ${{ steps.meta.outputs.release_id }}
+      base_sha: ${{ steps.meta.outputs.base_sha }}
       head_sha: ${{ steps.commit.outputs.head_sha }}
       dry_run: ${{ steps.meta.outputs.dry_run }}
       product_version: ${{ steps.artifacts.outputs.product_version }}
@@ -65,6 +67,7 @@ jobs:
       desktop_tag: ${{ steps.artifacts.outputs.desktop_tag }}
       runtime_tag: ${{ steps.artifacts.outputs.runtime_tag }}
       server_tag: ${{ steps.artifacts.outputs.server_tag }}
+      artifact_tags: ${{ steps.artifacts.outputs.artifact_tags }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -84,9 +87,16 @@ jobs:
           git fetch origin main --tags --prune
           head_sha="$(git rev-parse HEAD)"
           git merge-base --is-ancestor "$head_sha" refs/remotes/origin/main
+          previous_product="$(git tag --list 'proliferate-v*' --sort=-creatordate | head -n 1 || true)"
+          if [[ -n "$previous_product" ]]; then
+            base_sha="$(git rev-parse "$previous_product")"
+          else
+            base_sha="$(git rev-parse "${head_sha}^" 2>/dev/null || git rev-list --max-parents=0 "$head_sha" | tail -n1)"
+          fi
           release_id="hotfix-$(date -u +%F)-${GITHUB_RUN_NUMBER}"
           {
             echo "release_id=$release_id"
+            echo "base_sha=$base_sha"
             echo "head_sha=$head_sha"
             echo "dry_run=$DRY_RUN"
           } >> "$GITHUB_OUTPUT"
@@ -264,6 +274,80 @@ jobs:
       dry_run: false
       publish_updater: true
     secrets: inherit
+
+  publish-product-release:
+    needs:
+      - prepare
+      - release-runtime
+      - release-server
+      - promote-e2b
+      - deploy-server
+      - deploy-workers
+      - deploy-web
+      - deploy-mobile
+      - deploy-desktop
+    if: >-
+      ${{
+        always() &&
+        needs.prepare.result == 'success' &&
+        needs.prepare.outputs.selected_surfaces != '' &&
+        (
+          needs.prepare.outputs.dry_run == 'true' ||
+          (
+            (needs.prepare.outputs.runtime != 'true' || needs.release-runtime.result == 'success') &&
+            (needs.prepare.outputs.server != 'true' || (needs.release-server.result == 'success' && needs.deploy-server.result == 'success')) &&
+            (needs.prepare.outputs.desktop != 'true' || needs.deploy-desktop.result == 'success') &&
+            (needs.prepare.outputs.e2b != 'true' || needs.promote-e2b.result == 'success') &&
+            (needs.prepare.outputs.workers != 'true' || needs.deploy-workers.result == 'success') &&
+            (needs.prepare.outputs.web != 'true' || needs.deploy-web.result == 'success') &&
+            (needs.prepare.outputs.mobile != 'true' || needs.deploy-mobile.result == 'success')
+          )
+        )
+      }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Publish product GitHub Release
+        id: publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.product_tag || needs.prepare.outputs.release_id }}
+        run: >
+          node scripts/ci-cd/publish-product-release.mjs
+          --kind hotfix
+          --release-tag "$RELEASE_TAG"
+          --product-tag "${{ needs.prepare.outputs.product_tag }}"
+          --release-id "${{ needs.prepare.outputs.release_id }}"
+          --base "${{ needs.prepare.outputs.base_sha }}"
+          --head "${{ needs.prepare.outputs.head_sha }}"
+          --surfaces "${{ needs.prepare.outputs.selected_surfaces }}"
+          --artifact-tags "${{ needs.prepare.outputs.artifact_tags }}"
+          --reason "${{ github.event.inputs.reason }}"
+          --workflow-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          --repository "${{ github.repository }}"
+          --body-out product-release.md
+          --dry-run "${{ needs.prepare.outputs.dry_run }}"
+
+      - name: Summarize product release page
+        run: |
+          {
+            echo "### Product GitHub Release"
+            echo "- Action: \`${{ steps.publish.outputs.release_action }}\`"
+            echo "- Tag: \`${{ steps.publish.outputs.release_tag }}\`"
+            echo "- URL: ${{ steps.publish.outputs.release_url }}"
+            echo ""
+            cat product-release.md
+          } >> "$GITHUB_STEP_SUMMARY"
 
   summary:
     needs:

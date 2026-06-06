@@ -62,6 +62,7 @@ jobs:
           node --check scripts/ci-cd/create-release-tags.mjs
           node --check scripts/ci-cd/detect-deploy-surfaces.mjs
           node --check scripts/ci-cd/prepare-artifact-release.mjs
+          node --check scripts/ci-cd/publish-product-release.mjs
           node --check scripts/ci-cd/resolve-deploy-base.mjs
 
       - name: Test CI/CD scripts
