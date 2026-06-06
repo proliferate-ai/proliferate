@@ -101,7 +101,7 @@ documentation, and a no-op task. This slice must not move business work.
 
 Requirements:
 
-- update `specs/codebase/structures/server/README.md` and the worker guide to
+- update `specs/codebase/structures/server/README.md` and the background guide to
   ratify `server/proliferate/background/**` before adding the package
 
 Verification:
@@ -188,7 +188,7 @@ configuration/route tests.
 
 The next implementation agent should do **Slice 1 only**:
 
-1. Read this ratification, the server worker guide, and deployment env-var docs.
+1. Read this ratification, the server background guide, and deployment env-var docs.
 2. Add `server/proliferate/background/**` with a Celery app and no-op task.
 3. Update server structure docs for the new `background/**` top-level package.
 4. Add settings/env documentation for RabbitMQ, Celery worker queues, Redis

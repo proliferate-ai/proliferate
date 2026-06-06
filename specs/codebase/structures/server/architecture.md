@@ -40,7 +40,11 @@ server/proliferate/
   main.py · config.py · errors.py
   constants/<area>.py        # hardcoded policy values
   middleware/                # cross-cutting HTTP lifecycle
-  auth/                      # authn deps + shared authz helpers
+  permissions.py             # org-authz factory deps + verdict types (leaf, imported everywhere)
+  auth/                      # actor authn deps + viewer/desktop/identity APIs + crypto utils
+  lib/                       # reusable cross-domain logic (leaf below domains)
+    infra/ product/ capabilities/
+  background/                # Celery substrate: app, config, beat, relay, tasks
   db/
     models/<resource>.py     # ORM tables (leaf)
     store/<resource>.py      # ALL database access
@@ -48,7 +52,7 @@ server/proliferate/
   server/<domain>/           # the product areas (most code)
     api.py service.py models.py
     access.py errors.py domain/<concern>.py
-    worker.py reconciler.py scheduler.py worker/
+    worker/service.py        # worker-facing background service
     <subdomain>/
 ```
 
@@ -105,7 +109,8 @@ workers → call services, not stores; own the transaction at the entry
 **The request lifecycle:**
 ```text
 request → middleware → api handler
-   Depends(get_current_user)            # authn
+   Depends(current_product_user)        # authn (actor dep)
+   Depends(require_org_role(org_id, …)) # permissions.py: org standing → OwnerContext
    Depends(<domain>_user_can_<action>)  # access.py: lookup + check → resource or 403/404
    db = Depends(get_async_session)
    → service(db, …)
@@ -167,8 +172,8 @@ outbox row and let a worker do the call.
 ### `server/<domain>/access.py`
 - Resource-access route deps: look up the resource, check the user can touch it,
   return it (or raise 403/404). Read-only.
-- **Never:** mutating writes, business logic, inline authz helpers (use
-  `auth/authorization`).
+- **Never:** mutating writes, business logic, inline authz helpers (compose the
+  `proliferate.permissions` factories).
 
 ### `server/<domain>/errors.py`
 - Domain error types subclassing the shared base, with a `code`. Types only.
@@ -191,16 +196,36 @@ outbox row and let a worker do the call.
 - **Never:** import server domain code (leaf). Raw third-party calls live *only*
   here; product domains orchestrate results.
 
-### `auth/**`
-- `dependencies.py` = authn (`get_current_user` → `User`). `authorization.py` =
-  shared helpers (`require_org_role`, `OwnerContext`, `PolicyVerdict`). Importable
-  by every layer; cross-domain authz always comes from here, never another service.
+### `auth/**` / `permissions.py`
+- Authorization is enforced at the endpoint via `Depends()`; services get a
+  pre-authorized context and run no auth checks. `auth/dependencies.py` = all
+  actor deps (`current_active_user`, `current_product_user` (default for product
+  surfaces), `current_worker` → `WorkerAuthContext`). `permissions.py` (server
+  root) = org-authorization factory deps (`require_org_role(org_id, roles)`,
+  `require_org_membership`) returning `OwnerContext`, plus `PolicyVerdict`. It is
+  a leaf importing neither `auth/**` nor `server/<domain>/**`; cross-domain authz
+  always comes from `proliferate.permissions`, never another service. `auth/` also
+  owns the `viewer_api/`, `desktop_api/`, `identity_api/` surfaces and `utils/`
+  crypto primitives.
 
-### `worker.py` / `reconciler.py` / `scheduler.py` / `worker/`
-- Non-HTTP entry points; same layer law (call services, not stores; no ORM; no
-  vendor client construction). **Open the session at the entry point.** Loop bodies
-  belong in `service.py`; `domain/` holds pure logic; `worker/` is promoted only
-  for substantial worker-only logic (`main.py` + worker-facing `service.py`).
+### `background/**` / `server/<domain>/worker/service.py`
+- One background model: a Celery task. **Beat** fires periodic ones (scheduler
+  polls, surviving reconciler passes); the **outbox relay** fires on-demand ones
+  (durable jobs tied to a committed state change). `background/**` is substrate —
+  `celery_app.py`, `config.py`, `beat_schedule.py`, `relay.py`, thin `tasks/`;
+  the work a task performs lives in the domain's `worker/service.py` (or
+  `service.py`), same layer law (call services/stores, no ORM, no vendor client).
+  The task opens the session at its boundary. There are no per-domain `worker.py`,
+  `reconciler.py`, or `scheduler.py` process or loop files. Request-driven
+  external-process claim/heartbeat/report surfaces are APIs, not background work.
+
+### `lib/**`
+- Reusable cross-domain logic owned by no single domain: `infra/` (generic, no
+  product/vendor/DB), `product/` (cross-domain pure product logic, no I/O, never
+  imports `integrations/`), `capabilities/` (reusable orchestration over an
+  integration). A leaf below the domains: never imports `server/<domain>/**` or
+  `db/store`, owns no durable state or product policy, and a concern enters only
+  at its second domain consumer. Replaces any `utils/` bucket.
 
 ### `config.py` / `constants/<area>.py`
 - `config.py` = env-derived runtime settings (secrets, URLs, flags). `constants/`
