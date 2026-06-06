@@ -3,8 +3,8 @@
 Status: draft background and rationale. The executable first-slice decisions
 are ratified in `worker-tier-durable-jobs-ratification.md`.
 
-Owner: TBD. Drafted from the worker guide
-(`specs/codebase/structures/server/guides/workers.md`), the two worker audits,
+Owner: TBD. Drafted from the background guide
+(`specs/codebase/structures/server/guides/background.md`), the two worker audits,
 and the server structure hygiene handoff.
 
 Shared Redis/wake ownership is ratified in

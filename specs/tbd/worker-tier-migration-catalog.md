@@ -1,8 +1,12 @@
 # Worker Tier Migration Catalog + Mental Model
 
-Status: inventory + classification for the worker-tier migration. Companion to
-`worker-tier-scalability-rfc.md`. First-slice decisions are ratified in
-`worker-tier-durable-jobs-ratification.md`.
+Status: live tracker for the in-flight worker-tier migration — transitional by
+design. Companion to `worker-tier-scalability-rfc.md`; first-slice decisions are
+ratified in `worker-tier-durable-jobs-ratification.md`. The authoritative
+end-state (where this all lands) is
+`specs/codebase/structures/server/guides/background.md` — one execution model, two
+triggers (Beat / outbox relay). This doc is the bridge from current code to that
+end-state and is retired once the migration completes.
 
 ## Mental Model: Four Archetypes
 
@@ -37,7 +41,57 @@ Two cross-cutting facts the sweep revealed:
   risk once the commit has succeeded. These are the sharpest "jobs lost" risk
   in the codebase.
 
+## Migration Status (live)
+
+Last verified against `main`: 2026-06-06.
+
+**Infrastructure — done.**
+
+- **Slice 1 (skeleton):** `background/{celery_app,config,beat_schedule,relay}.py`,
+  `background/tasks/**`, and a health no-op task all exist.
+- **Slice 2 (outbox foundation):** `db/store/background_outbox.py` plus the
+  `background_outbox_task` migration; the relay claims, publishes, and marks
+  outbox rows; the `automation_execution_outbox_backfill` migration is in.
+
+**Done — cut over.**
+
+- **2 Automations cloud executor** — broker-delivered via outbox → relay →
+  `automations.execute_run`; the stage pipeline runs as the task body; backfill
+  migration landed.
+- **8 Support tracker** — Beat-fired `support.reconcile_tracker` (wired in
+  `beat_schedule.py`); `support/reconciler.py` is gone.
+- **10 Runtime wake** — durable via
+  `cloud/commands/wake.py::enqueue_managed_target_wake_outbox` → outbox →
+  `runtime.wake_target` (covered by `test_runtime_config_wake_outbox`). A residual
+  in-process `kick_off_managed_target_wake` helper in `wake.py` is left to retire.
+- **12 Signup Slack** — after-commit enqueue via `celery_app.send_task` →
+  `notifications.send_slack` (loose consistency, as classified).
+
+**Pending — still old shape.**
+
+- **1 Automations scheduler** — still a poll loop/process
+  (`automations/worker/scheduler.py`); convert to Beat.
+- **4 Billing**, **5 Setup monitor**, **6 Agent gateway**, **7 Mobility**,
+  **9 Telemetry** — still in-process lifespan loops; convert to Beat-fired tasks.
+- **11 Worktree cleanup**, **15 Workspace provisioning**, **16 Customer.io
+  lifecycle** — still detached `create_task`; move to outbox / direct enqueue.
+- **17 Support diagnostics kick** — the tracker reconcile is done (8); the
+  immediate diagnostics kick is not yet on the broker.
+
+**Unchanged by design.**
+
+- **3 Local executor**, **13 Cloud command worker control** — external-pull
+  control-plane APIs; stay on the Postgres claim/lease, never behind the broker.
+- **14 Slack worker** — parked.
+
+**Retirement condition.** Delete this catalog when every Pending item is Done and
+the old loop / `create_task` files it indexes are gone. The authoritative
+end-state then lives only in `guides/background.md`.
+
 ## Inventory
+
+The table records state **at sweep time**; current per-item status is in
+*Migration Status* above.
 
 | # | Item | File(s) | Runs today | What it does | Durability gap | Archetype → target |
 | --- | --- | --- | --- | --- | --- | --- |

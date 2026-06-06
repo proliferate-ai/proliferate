@@ -14,7 +14,8 @@ A `server/<domain>/` folder is one product area's home. It owns:
 - Pure rules via `domain/<concern>.py`
 - Resource-access route deps via `access.py` (when the domain has protected resources)
 - Domain-specific errors via `errors.py` (when needed)
-- Non-HTTP entry points via `worker.py` / `reconciler.py` (when applicable)
+- Worker-facing background service via `worker/service.py` (when the domain runs
+  background work a Celery task calls)
 - Promoted subdomains via `<subdomain>/` (when earned)
 
 A domain folder must answer "what product area?" — not transport, not UI shape,
@@ -43,8 +44,8 @@ server/<domain>/
   domain/                   # pure logic
     policy.py
     <concern>.py
-  worker.py                 # non-HTTP entry point (or worker/ subfolder)
-  reconciler.py             # state-drift loop (when applicable)
+  worker/                   # worker-facing background service (when applicable)
+    service.py
   <subdomain>/              # promoted subdomain
     api.py
     service.py
@@ -55,8 +56,8 @@ server/<domain>/
 The hierarchy answers three questions, in order:
 
 1. What product area? — the domain folder name.
-2. Which surface within that area? — `api.py` (HTTP), `worker.py` (background),
-   `<subdomain>/` (promoted concept).
+2. Which surface within that area? — `api.py` (HTTP), `worker/service.py`
+   (background), `<subdomain>/` (promoted concept).
 3. What part of that surface? — `service.py` (orchestration), `domain/`
    (pure rules), `access.py` (auth), `errors.py` (types).
 
@@ -71,7 +72,7 @@ Allowed:
 
 - Route declarations with typed Pydantic return annotations.
 - Resource-access deps via `Depends(<domain>_user_can_<action>)`.
-- Authentication deps via `Depends(get_current_user)`.
+- Authentication deps via an actor dep (`Depends(current_product_user)`).
 - Session injection via `db: AsyncSession = Depends(get_async_session)` —
   the handler receives the request session and passes it to the service.
 - Response construction via `<domain>/models.py` payload functions.
@@ -161,7 +162,7 @@ Allowed:
 - Mappings (status → tone, kind → label).
 - Planners (return command lists for an executor to run).
 - Frozen dataclasses for internal types.
-- Imports from `auth/authorization` (for `PolicyVerdict`, etc.) and other
+- Imports from `proliferate.permissions` (for `PolicyVerdict`, etc.) and other
   `domain/` modules.
 
 Banned:
@@ -196,11 +197,11 @@ touch it, returns the resource (or raises 403/404).
 
 Allowed:
 
-- `async def` functions taking `Depends(get_current_user)` and any path/query
-  params.
+- `async def` functions taking an actor dep (`Depends(current_product_user)`) and
+  any path/query params.
 - `db: AsyncSession = Depends(get_async_session)` for the lookup.
 - Calls to `db/store/**` for the resource lookup.
-- Calls to `auth/authorization.py` helpers (`require_org_role`, etc.).
+- Composing `proliferate.permissions` factory deps (`require_org_role`, etc.).
 - Calls to `domain/policy.py` for state-based access checks.
 - Returning the resource as a frozen dataclass.
 
@@ -208,7 +209,7 @@ Banned:
 
 - Mutating writes. Access deps are read-only.
 - Business logic beyond access.
-- Inline authorization helpers (use `auth/authorization`).
+- Inline authorization helpers (compose the `proliferate.permissions` factories).
 
 ### `errors.py`
 
@@ -287,11 +288,12 @@ webhook parsing — it leaves the product folder. See
 [integrations.md](integrations.md). No exceptions for "but only this domain
 uses it."
 
-### 5. Add a non-HTTP entry point
+### 5. Add a worker-facing background service
 
-`worker.py`, `scheduler.py`, `reconciler.py` for background work. See
-[workers.md](workers.md). Same layer law: no ORM imports, calls service or
-store functions.
+`worker/service.py` for background work a Celery task calls. See
+[background.md](background.md). Same layer law: no ORM imports, calls service or
+store functions. The task itself is substrate in `background/**`, not a file in
+the domain.
 
 ### Forbidden
 
@@ -326,7 +328,8 @@ Examples that qualify in `cloud/`:
 Examples that don't qualify:
 
 - A pricing helper for billing — that's `domain/pricing.py`.
-- A reconciler — that's `reconciler.py` at the parent.
+- A reconciliation pass — that's a Beat-fired task in `background/**` calling the
+  domain's `worker/service.py`.
 - A two-function helper — keep inline.
 
 Internal-only subdomains exist when there's enough orchestration mass without
@@ -372,7 +375,7 @@ The owning service runs its own policy, invariants, and audit.
 - Importing a service's private helpers (`from cloud.workspaces.service
   import _internal`). Public functions only.
 - Cross-domain imports for auth infrastructure. Always use
-  `auth.authorization`.
+  `proliferate.permissions`.
 - Two domains both writing the same ORM resource. The resource has one
   owning domain whose service is the write boundary.
 
@@ -381,10 +384,11 @@ via service.
 
 ## Worker-Side Logic
 
-When a domain has substantial worker-side logic that's distinct from
-HTTP-side work, promote it to a `worker/` (or `runtime/`) subfolder. Inside,
-the shape mirrors a subdomain: `main.py` (entry), `service.py` (worker-facing
-orchestration), other named modules for substantial concerns.
+When a domain has substantial worker-side logic that's distinct from HTTP-side
+work, promote it to a `worker/` subfolder holding a worker-facing
+`service.py` — the orchestration a Celery task calls to do the domain's
+background work. The domain owns no process entry, scheduler, or reconciliation
+loop: the task is substrate in `background/**`, and Beat owns scheduling.
 
 ```text
 server/automations/
@@ -395,16 +399,14 @@ server/automations/
     recurrence.py       # pure RRULE parsing
     policy.py
   worker/
-    main.py             # process entry
     service.py          # worker-facing service: pick due, dispatch, record
-    scheduler.py        # scheduler loop body
-    cloud_executor.py
-    local_executor.py
 ```
 
-Two `service.py` files coexist when surfaces are genuinely distinct. They
-share `domain/` and the store. See [workers.md](workers.md) for the full
-worker organization.
+Two `service.py` files coexist only when surfaces are genuinely distinct; they
+share `domain/` and the store. Request-driven external-executor surfaces — where
+an outside process claims, heartbeats, or reports against a Postgres lease — are
+APIs, not worker code, and stay near `api.py`/`service.py`. See
+[background.md](background.md) for the full background-work organization.
 
 ## Patterns
 
