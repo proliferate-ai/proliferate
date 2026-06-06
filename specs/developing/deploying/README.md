@@ -99,6 +99,9 @@ deployment variable ownership.
   version references, cite the public `Proliferate vX.Y.Z` version from
   `VERSION` / `proliferate-v*` first. Artifact tags such as `desktop-v*`,
   `runtime-v*`, and `server-v*` are technical release coordinates.
+- For raw technical release notes, link the GitHub Release at
+  `proliferate-v*`; no-version hotfixes use the `hotfix-*` GitHub Release.
+  Handwritten changelog pages are separate polished product surfaces.
 - Treat GitHub environments as the deploy-time source of truth for hosted
   variables and secrets. Treat AWS SSM as the ECS runtime destination for
   copied server secrets.
