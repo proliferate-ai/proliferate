@@ -151,7 +151,9 @@ run loop keeps children alive; on an update request:
 
 **`cloud_client/`** (transport TO cloud)
 - One file per endpoint; typed request/response DTOs (generated from the shared
-  contract). **Never** business logic — it sends/receives, callers decide.
+  contract). `mod.rs` is the module root/facade for shared client setup and
+  child module declarations, not the place to accumulate every endpoint.
+  **Never** business logic — it sends/receives, callers decide.
 
 **`anyharness_client/`** (the local runtime substrate)
 - The only path to local AnyHarness: execute commands, push config

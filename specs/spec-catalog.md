@@ -362,9 +362,7 @@ until the operator-safe replacement flow and audit trail are implemented.
 | `anyharness-structure-alignment-swarms.md` | AnyHarness structure alignment |
 | `cloud-worker-control-loop.md` | Worker control loop design |
 | `frontend-structure-alignment-migration.md` | Frontend structure migration |
-| `security.md` | **⚠️ Security spec — not yet authoritative** |
 | `structure-alignment-coordinator-model.md` | Coordinator model |
-| `support-debug-correlation.md` | Should move to `developing/debugging/` once authoritative |
 | `workspace-migration-git-durability-plan.md` | Workspace migration / git durability |
 
 ---
@@ -378,7 +376,7 @@ until the operator-safe replacement flow and audit trail are implemented.
 | Browsers feature | Write `features/browsers.md` |
 | Terminals feature | Write `features/terminals.md` |
 | Computer Use feature | Write `features/computer-use.md` |
-| Security spec | Promote `tbd/security.md` to authoritative or rewrite |
+| Security spec | Write an authoritative security spec (no draft exists) |
 
 ### 🟡 Thin or split
 
