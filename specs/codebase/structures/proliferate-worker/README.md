@@ -117,7 +117,12 @@ src/
     manifest.rs
 
   cloud_client/            # transport TO cloud, one file per endpoint
-    mod.rs
+    mod.rs                 # module root/facade, not the only client file
+    control.rs
+    commands.rs
+    heartbeat.rs
+    events.rs
+    ...
 
   anyharness_client/       # the local runtime substrate
     mod.rs

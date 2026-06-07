@@ -12,16 +12,25 @@ the path tells you which side a call talks to.
 
 ```text
 cloud_client/        # transport TO cloud — one file per endpoint
-  mod.rs
+  mod.rs             # module root/facade: CloudClient, shared helpers, module declarations
+  control.rs         # endpoint-specific DTOs and CloudClient methods
+  heartbeat.rs
+  ...
 
 anyharness_client/   # the local runtime substrate
-  mod.rs
+  mod.rs             # module root/facade; split endpoint files when it grows
 ```
 
 ## Cloud Client
 
 `cloud_client/` owns worker-facing Cloud HTTP endpoints and wire types — one
 file per endpoint, with typed DTOs generated from the shared contract.
+
+`mod.rs` is not the "put the whole client here" file. It is the module root:
+declare child modules, define the shared `CloudClient` handle, and keep shared
+request helpers there. Endpoint-specific request/response structs and
+`impl CloudClient` methods belong in the endpoint file unless they are genuinely
+shared by multiple endpoints.
 
 Endpoints:
 
