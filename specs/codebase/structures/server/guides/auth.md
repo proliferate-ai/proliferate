@@ -22,6 +22,9 @@ Authorization currency — `OwnerContext`, `PolicyVerdict`, `require_org_role`,
 `auth/`. It is product-wide vocabulary imported by ~every domain and has no
 auth-specific logic, so it sits at the server root next to `config.py` and
 `errors.py`. `auth/` owns only authentication and the OAuth/identity surfaces.
+In this guide, `auth/dependencies.py` centralizes **actor dependencies**, not
+every FastAPI dependency used by a route. Resource-specific dependencies stay in
+the domain that owns the resource.
 
 ## The actor dependency hierarchy
 
@@ -73,6 +76,114 @@ server/proliferate/
 (`jwt`, `oauth`, `passwords`, `pkce`); it is not a general bucket. Not every
 domain needs `access.py` or `domain/policy.py` — only domains that protect
 resources or carry product rules.
+
+## Placement Rule
+
+Use the question the code answers to decide where it lives:
+
+- "Who is calling?" belongs in `auth/dependencies.py`.
+- "What organization standing does the caller have?" belongs in `permissions.py`.
+- "Can this caller touch this concrete route resource?" belongs in
+  `server/<domain>/access.py`.
+- "Does the current product state allow this action?" belongs in
+  `server/<domain>/domain/policy.py`.
+
+Do not move resource-access deps into `auth/dependencies.py` just because they
+are implemented with `Depends()`. A resource-access dep consumes route params,
+loads domain-owned snapshots, composes actor/org authorization, and returns a
+pre-authorized resource for the handler. Keeping that code in
+`server/<domain>/access.py` prevents `auth/` from importing product stores and
+rules, and keeps the route signature explicit about which resource permission is
+required.
+
+## Layer Examples
+
+Use `auth/dependencies.py` for actor-only checks. This file may verify a session,
+load the actor, and enforce account readiness, but it does not consume resource
+IDs or import product-domain stores.
+
+```python
+# auth/dependencies.py
+async def current_product_user(
+    user: User = Depends(current_active_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> User:
+    readiness = await get_account_readiness(db, user_id=user.id)
+    if not readiness.product_ready:
+        raise PermissionDenied(
+            "Connect GitHub before using Proliferate Cloud product surfaces.",
+            code="github_link_required",
+        )
+    return user
+```
+
+Use `server/<domain>/access.py` when a route needs a concrete resource already
+loaded and authorized. The dep receives route params, composes actor/org deps,
+reads the store, calls pure policy if needed, raises 403/404, and returns the
+snapshot the handler or service will use.
+
+```python
+# server/cloud/workspaces/access.py
+async def workspace_user_can_archive(
+    workspace_id: UUID,
+    user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> WorkspaceSnapshot:
+    workspace = await cloud_workspaces_store.get_workspace_snapshot(db, workspace_id)
+    if workspace is None:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    role = await organizations_store.get_active_membership_role(
+        db,
+        organization_id=workspace.organization_id,
+        user_id=user.id,
+    )
+    verdict = policy.can_archive_workspace(
+        workspace=workspace,
+        actor_user_id=user.id,
+        membership_role=role,
+    )
+    if isinstance(verdict, PolicyDenied):
+        if verdict.code == "workspace_not_found":
+            raise HTTPException(status_code=404, detail=verdict.reason)
+        raise HTTPException(status_code=403, detail=verdict.reason)
+    return workspace
+```
+
+Use `domain/policy.py` for pure product decisions. The function takes already
+loaded facts, performs no I/O, imports no FastAPI or stores, and returns a
+verdict instead of raising an HTTP exception.
+
+```python
+# server/cloud/workspaces/domain/policy.py
+def can_archive_workspace(
+    *,
+    workspace: WorkspaceSnapshot,
+    actor_user_id: UUID,
+    membership_role: str | None,
+) -> PolicyVerdict:
+    if workspace.owner_scope == "personal":
+        if workspace.owner_user_id == actor_user_id:
+            return PolicyAllowed()
+        return PolicyDenied(
+            code="workspace_not_found",
+            reason="Workspace not found.",
+        )
+
+    if workspace.organization_id is None:
+        return PolicyDenied(
+            code="workspace_not_found",
+            reason="Workspace not found.",
+        )
+
+    if membership_role in {"owner", "admin"}:
+        return PolicyAllowed()
+
+    return PolicyDenied(
+        code="workspace_permission_denied",
+        reason="You do not have permission to archive this workspace.",
+    )
+```
 
 ## Authentication
 
@@ -234,6 +345,10 @@ PolicyVerdict = PolicyAllowed | PolicyDenied
 
 `server/<domain>/access.py` owns deps that look up a resource, check the caller
 can touch it, and return the resource (or raise 403/404).
+
+These deps are the adapter between request-time information and pure policy:
+they may read stores and raise HTTP-shaped permission results, while
+`domain/policy.py` remains synchronous and side-effect free.
 
 ### Allowed
 

@@ -18,7 +18,7 @@ Scope: `apps/packages/{design,ui,product-domain,product-ui,product-surfaces}/**`
 
 Everything else derives from these:
 
-1. **Promotion — app-local first.** Code starts in the app. Move it to a package **only when ≥2 apps need the same thing.** A package is never the default home.
+1. **Future-facing.** When adding new code, consider whether multiple apps will need it. Move it to a package **only when ≥2 apps need the same thing.** A package is never the default home.
 2. **Platform — Mobile is DOM-free.** Mobile may import **only `product-domain` + `design/react-native`** (+ SDK packages). It must **never** import the DOM packages: `ui`, `product-ui`, `product-surfaces`.
 
 What promotion *adds* is predictable: a package loses all app internals (stores, routes, Tauri, AnyHarness wiring) — and **`components → product-ui` additionally loses hooks** (it becomes pure presentational: props in, callbacks out, because hooks stay app-local).
