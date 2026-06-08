@@ -55,17 +55,25 @@ pub(super) async fn run_setup_process(
     let mut child = match cmd.spawn() {
         Ok(child) => child,
         Err(error) => {
+            let stderr = format!("failed to spawn setup command: {error}");
             complete_command_run(
                 &mut record,
                 TerminalCommandRunStatus::Failed,
                 Some(-1),
                 Some(String::new()),
-                Some(format!("failed to spawn setup command: {error}")),
+                Some(stderr.clone()),
                 None,
                 false,
                 Some(started_at.elapsed().as_millis() as u64),
             );
-            let _ = command_service.update_command_run(&record);
+            emit_setup_output(
+                hub.as_ref(),
+                &mut terminal_formatter,
+                format!("{stderr}\n").into_bytes(),
+                Some("stderr"),
+                &record.id,
+            )
+            .await;
             emit_setup_prompt(
                 hub.as_ref(),
                 &mut terminal_formatter,
@@ -73,6 +81,7 @@ pub(super) async fn run_setup_process(
                 &workspace_path,
             )
             .await;
+            let _ = command_service.update_command_run(&record);
             return;
         }
     };
@@ -216,7 +225,6 @@ pub(super) async fn run_setup_process(
             Some(started_at.elapsed().as_millis() as u64),
         );
     }
-    let _ = command_service.update_command_run(&record);
     emit_setup_prompt(
         hub.as_ref(),
         &mut terminal_formatter,
@@ -224,6 +232,7 @@ pub(super) async fn run_setup_process(
         &workspace_path,
     )
     .await;
+    let _ = command_service.update_command_run(&record);
 }
 
 async fn emit_setup_output(
