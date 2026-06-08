@@ -11,8 +11,9 @@ use crate::domains::terminals::service::{
     TerminalCommandService,
 };
 
-use super::handle::TerminalRegistry;
+use super::handle::{TerminalOutputRegistry, TerminalRegistry};
 use super::output_sink::TerminalOutputHub;
+use super::stream_format::terminal_command_preface;
 
 pub(super) struct ActivePtyCommand {
     pub(super) command_run_id: String,
@@ -29,6 +30,7 @@ pub(super) struct ActivePtyCommand {
 
 pub(super) async fn run_terminal_command(
     terminals: &TerminalRegistry,
+    output_hubs: &TerminalOutputRegistry,
     command_service: &TerminalCommandService,
     runtime_home: &Path,
     terminal_id: &str,
@@ -40,37 +42,10 @@ pub(super) async fn run_terminal_command(
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("terminal not found"))?
     };
-
-    let mut h = handle.lock().await;
-    if !h.shell_kind.is_posix() {
-        anyhow::bail!("unsupported_terminal_shell");
-    }
-    if h.record.purpose == TerminalPurpose::Setup
-        && command_service.is_setup_running(&h.record.workspace_id)
-    {
-        anyhow::bail!("setup terminal input is blocked while setup is running");
-    }
-
-    if let Some(active) = h.active_pty_command.as_ref() {
-        if !request.interrupt {
-            anyhow::bail!(
-                "terminal command already running: {}",
-                active.command_run_id
-            );
-        }
-    }
-
-    if request.interrupt {
-        if let Some(mut active) = h.active_pty_command.take() {
-            if let Some(timeout_task) = active.timeout_task.take() {
-                timeout_task.abort();
-            }
-            let _ = h.writer.write_all(b"\x03");
-            let _ = h.writer.flush();
-            command_service.mark_command_interrupted(&active.command_run_id)?;
-            let _ = std::fs::remove_file(active.script_path);
-        }
-    }
+    let hub = {
+        let hubs = output_hubs.read().await;
+        hubs.get(terminal_id).cloned()
+    };
 
     let command = request.command.trim().to_string();
     if command.is_empty() {
@@ -78,57 +53,104 @@ pub(super) async fn run_terminal_command(
     }
     validate_env_vars(&request.env, true)?;
 
-    let command_run_id = uuid::Uuid::new_v4().to_string();
-    let mut record = new_command_run_record(
-        &command_run_id,
-        &h.record.workspace_id,
-        Some(&h.record.id),
-        h.record.purpose,
-        &command,
-        TerminalCommandOutputMode::Combined,
-    );
-    record.status = TerminalCommandRunStatus::Running;
-    record.started_at = Some(chrono::Utc::now().to_rfc3339());
-    record.updated_at = record
-        .started_at
-        .clone()
-        .unwrap_or_else(|| record.created_at.clone());
-    command_service.insert_command_run(&record)?;
-
-    let nonce = uuid::Uuid::new_v4().simple().to_string();
-    let script = write_command_script(runtime_home, &command, &request.env)?;
-    let wrapper = build_pty_command_wrapper(&nonce, &script);
-    h.active_pty_command = Some(ActivePtyCommand {
-        command_run_id: command_run_id.clone(),
-        nonce,
-        script_path: script,
-        buffer: String::new(),
-        capturing: false,
-        combined: String::new(),
-        output_truncated: false,
-        timed_out: false,
-        timeout_task: None,
-        started_at: Instant::now(),
-    });
-    if let Some(timeout_ms) = request.timeout_ms {
-        let timeout_task = tokio::spawn(enforce_pty_command_timeout(
-            terminals.clone(),
-            command_service.clone(),
-            h.record.id.clone(),
-            command_run_id.clone(),
-            Duration::from_millis(timeout_ms),
-        ));
-        if let Some(active) = h.active_pty_command.as_mut() {
-            active.timeout_task = Some(timeout_task.abort_handle());
+    let (record, wrapper, cwd) = {
+        let mut h = handle.lock().await;
+        if !h.shell_kind.is_posix() {
+            anyhow::bail!("unsupported_terminal_shell");
         }
+        if h.record.purpose == TerminalPurpose::Setup
+            && command_service.is_setup_running(&h.record.workspace_id)
+        {
+            anyhow::bail!("setup terminal input is blocked while setup is running");
+        }
+
+        if let Some(active) = h.active_pty_command.as_ref() {
+            if !request.interrupt {
+                anyhow::bail!(
+                    "terminal command already running: {}",
+                    active.command_run_id
+                );
+            }
+        }
+
+        if request.interrupt {
+            if let Some(mut active) = h.active_pty_command.take() {
+                if let Some(timeout_task) = active.timeout_task.take() {
+                    timeout_task.abort();
+                }
+                let _ = h.writer.write_all(b"\x03");
+                let _ = h.writer.flush();
+                command_service.mark_command_interrupted(&active.command_run_id)?;
+                let _ = std::fs::remove_file(active.script_path);
+            }
+        }
+
+        let command_run_id = uuid::Uuid::new_v4().to_string();
+        let mut record = new_command_run_record(
+            &command_run_id,
+            &h.record.workspace_id,
+            Some(&h.record.id),
+            h.record.purpose,
+            &command,
+            TerminalCommandOutputMode::Combined,
+        );
+        record.status = TerminalCommandRunStatus::Running;
+        record.started_at = Some(chrono::Utc::now().to_rfc3339());
+        record.updated_at = record
+            .started_at
+            .clone()
+            .unwrap_or_else(|| record.created_at.clone());
+        command_service.insert_command_run(&record)?;
+
+        let nonce = uuid::Uuid::new_v4().simple().to_string();
+        let script = write_command_script(runtime_home, &command, &request.env)?;
+        let wrapper = build_pty_command_wrapper(&nonce, &script);
+        h.active_pty_command = Some(ActivePtyCommand {
+            command_run_id: command_run_id.clone(),
+            nonce,
+            script_path: script,
+            buffer: String::new(),
+            capturing: false,
+            combined: String::new(),
+            output_truncated: false,
+            timed_out: false,
+            timeout_task: None,
+            started_at: Instant::now(),
+        });
+        if let Some(timeout_ms) = request.timeout_ms {
+            let timeout_task = tokio::spawn(enforce_pty_command_timeout(
+                terminals.clone(),
+                command_service.clone(),
+                h.record.id.clone(),
+                command_run_id.clone(),
+                Duration::from_millis(timeout_ms),
+            ));
+            if let Some(active) = h.active_pty_command.as_mut() {
+                active.timeout_task = Some(timeout_task.abort_handle());
+            }
+        }
+        h.record.command_run = Some(record.clone());
+        (record, wrapper, h.record.cwd.clone())
+    };
+
+    if let Some(hub) = &hub {
+        hub.emit_data(
+            terminal_command_preface(&cwd, &record.command),
+            None,
+            Some(record.id.clone()),
+        )
+        .await?;
     }
-    h.record.command_run = Some(record.clone());
-    h.writer
-        .write_all(wrapper.as_bytes())
-        .map_err(|e| anyhow::anyhow!("write failed: {e}"))?;
-    h.writer
-        .flush()
-        .map_err(|e| anyhow::anyhow!("flush failed: {e}"))?;
+
+    {
+        let mut h = handle.lock().await;
+        h.writer
+            .write_all(wrapper.as_bytes())
+            .map_err(|e| anyhow::anyhow!("write failed: {e}"))?;
+        h.writer
+            .flush()
+            .map_err(|e| anyhow::anyhow!("flush failed: {e}"))?;
+    }
     Ok(record)
 }
 
@@ -218,9 +240,9 @@ fn filter_pty_command_output(
                 };
                 let exit_text = &tail[..end_idx];
                 let exit_code = exit_text.parse::<i32>().unwrap_or(-1);
-                let remainder = tail[end_idx + 2..]
-                    .trim_start_matches(['\r', '\n'])
-                    .to_string();
+                let remainder =
+                    command_remainder_after_marker(&active.combined, &tail[end_idx + 2..]);
+                output.push_str(&remainder);
                 active.buffer = remainder;
                 let mut record = command_service
                     .get_command_run(&active.command_run_id)?
@@ -261,6 +283,14 @@ fn filter_pty_command_output(
     }
 
     Ok(output.into_bytes())
+}
+
+fn command_remainder_after_marker(captured: &str, remainder: &str) -> String {
+    if captured.ends_with('\n') || captured.ends_with('\r') {
+        remainder.trim_start_matches(['\r', '\n']).to_string()
+    } else {
+        remainder.to_string()
+    }
 }
 
 fn safe_emit_len_before_marker(buffer: &str, marker: &str) -> usize {
@@ -477,9 +507,55 @@ mod tests {
         )
         .expect("filter second chunk");
 
-        assert!(output.is_empty());
+        assert_eq!(String::from_utf8(output).expect("utf8"), "$ ");
         let completed = completed.expect("command completed");
         assert_eq!(completed.status, TerminalCommandRunStatus::Succeeded);
         assert_eq!(completed.combined_output.as_deref(), Some("hello\n"));
+    }
+
+    #[test]
+    fn pty_command_parser_keeps_prompt_on_next_line_for_output_without_newline() {
+        let db = Db::open_in_memory().expect("open db");
+        insert_test_workspace(&db, "workspace-1", "/tmp/workspace-1");
+        let command_service = TerminalCommandService::new(TerminalStore::new(db));
+        let mut record = new_command_run_record(
+            "run-1",
+            "workspace-1",
+            Some("terminal-1"),
+            TerminalPurpose::Run,
+            "printf hello",
+            TerminalCommandOutputMode::Combined,
+        );
+        record.status = TerminalCommandRunStatus::Running;
+        command_service
+            .insert_command_run(&record)
+            .expect("insert run");
+
+        let mut active = ActivePtyCommand {
+            command_run_id: "run-1".to_string(),
+            nonce: "nonce".to_string(),
+            script_path: PathBuf::from("/tmp/missing-anyharness-test-script"),
+            buffer: String::new(),
+            capturing: true,
+            combined: String::new(),
+            output_truncated: false,
+            timed_out: false,
+            timeout_task: None,
+            started_at: Instant::now(),
+        };
+        let mut completed = None;
+
+        let output = filter_pty_command_output(
+            &mut active,
+            b"hello__ANYHARNESS_CMD_END_nonce_0__\r\n$ ",
+            &command_service,
+            &mut completed,
+        )
+        .expect("filter chunk");
+
+        assert_eq!(String::from_utf8(output).expect("utf8"), "hello\r\n$ ");
+        let completed = completed.expect("command completed");
+        assert_eq!(completed.status, TerminalCommandRunStatus::Succeeded);
+        assert_eq!(completed.combined_output.as_deref(), Some("hello"));
     }
 }

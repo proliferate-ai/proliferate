@@ -11,6 +11,7 @@ use crate::domains::terminals::service::{
 };
 
 use super::output_sink::TerminalOutputHub;
+use super::stream_format::{terminal_command_preface, workspace_prompt, TerminalStreamFormatter};
 
 pub(super) struct ActiveSetupTask {
     pub(super) command_run_id: String,
@@ -28,10 +29,21 @@ pub(super) async fn run_setup_process(
     timeout: Duration,
 ) {
     let started_at = Instant::now();
+    let hub = hubs.read().await.get(&terminal_id).cloned();
+    let mut terminal_formatter = TerminalStreamFormatter::default();
+    emit_setup_output(
+        hub.as_ref(),
+        &mut terminal_formatter,
+        terminal_command_preface(&workspace_path, &command),
+        None,
+        &record.id,
+    )
+    .await;
+
     let mut cmd = tokio::process::Command::new("/bin/sh");
     cmd.arg("-lc")
-        .arg(command)
-        .current_dir(workspace_path)
+        .arg(&command)
+        .current_dir(&workspace_path)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     cmd.kill_on_drop(true);
@@ -53,6 +65,13 @@ pub(super) async fn run_setup_process(
                 Some(started_at.elapsed().as_millis() as u64),
             );
             let _ = command_service.update_command_run(&record);
+            emit_setup_prompt(
+                hub.as_ref(),
+                &mut terminal_formatter,
+                &record.id,
+                &workspace_path,
+            )
+            .await;
             return;
         }
     };
@@ -95,7 +114,6 @@ pub(super) async fn run_setup_process(
     }
     drop(tx);
 
-    let hub = hubs.read().await.get(&terminal_id).cloned();
     let deadline = tokio::time::Instant::now() + timeout;
     let mut stdout_capture = String::new();
     let mut stderr_capture = String::new();
@@ -112,9 +130,14 @@ pub(super) async fn run_setup_process(
                     } else {
                         append_bounded(&mut stderr_capture, &String::from_utf8_lossy(&data), &mut output_truncated);
                     }
-                    if let Some(hub) = &hub {
-                        let _ = hub.emit_data(data, Some(stream), Some(record.id.clone())).await;
-                    }
+                    emit_setup_output(
+                        hub.as_ref(),
+                        &mut terminal_formatter,
+                        data,
+                        Some(stream),
+                        &record.id,
+                    )
+                    .await;
                 }
             }
             result = child.wait() => {
@@ -125,9 +148,14 @@ pub(super) async fn run_setup_process(
                     } else {
                         append_bounded(&mut stderr_capture, &String::from_utf8_lossy(&data), &mut output_truncated);
                     }
-                    if let Some(hub) = &hub {
-                        let _ = hub.emit_data(data, Some(stream), Some(record.id.clone())).await;
-                    }
+                    emit_setup_output(
+                        hub.as_ref(),
+                        &mut terminal_formatter,
+                        data,
+                        Some(stream),
+                        &record.id,
+                    )
+                    .await;
                 }
                 break;
             }
@@ -141,9 +169,14 @@ pub(super) async fn run_setup_process(
                     } else {
                         append_bounded(&mut stderr_capture, &String::from_utf8_lossy(&data), &mut output_truncated);
                     }
-                    if let Some(hub) = &hub {
-                        let _ = hub.emit_data(data, Some(stream), Some(record.id.clone())).await;
-                    }
+                    emit_setup_output(
+                        hub.as_ref(),
+                        &mut terminal_formatter,
+                        data,
+                        Some(stream),
+                        &record.id,
+                    )
+                    .await;
                 }
                 break;
             }
@@ -183,4 +216,40 @@ pub(super) async fn run_setup_process(
         );
     }
     let _ = command_service.update_command_run(&record);
+    emit_setup_prompt(
+        hub.as_ref(),
+        &mut terminal_formatter,
+        &record.id,
+        &workspace_path,
+    )
+    .await;
+}
+
+async fn emit_setup_output(
+    hub: Option<&TerminalOutputHub>,
+    formatter: &mut TerminalStreamFormatter,
+    data: Vec<u8>,
+    stream: Option<&'static str>,
+    command_run_id: &str,
+) {
+    if let Some(hub) = hub {
+        let data = formatter.normalize(data);
+        let _ = hub
+            .emit_data(data, stream, Some(command_run_id.to_string()))
+            .await;
+    }
+}
+
+async fn emit_setup_prompt(
+    hub: Option<&TerminalOutputHub>,
+    formatter: &mut TerminalStreamFormatter,
+    command_run_id: &str,
+    workspace_path: &str,
+) {
+    if let Some(hub) = hub {
+        let data = formatter.normalize_prompt(workspace_prompt(workspace_path));
+        let _ = hub
+            .emit_data(data, None, Some(command_run_id.to_string()))
+            .await;
+    }
 }

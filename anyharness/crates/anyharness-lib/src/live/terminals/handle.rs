@@ -71,6 +71,7 @@ impl TerminalHandle {
     ) -> anyhow::Result<TerminalCommandRunRecord> {
         pty_command::run_terminal_command(
             &self.registry,
+            &self.output_hubs,
             &self.command_service,
             &self.runtime_home,
             &self.terminal_id,
