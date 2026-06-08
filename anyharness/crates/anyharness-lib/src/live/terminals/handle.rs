@@ -162,6 +162,7 @@ impl TerminalHandle {
 
 pub(super) struct PtyHandle {
     pub(super) record: TerminalRecord,
+    pub(super) workspace_path: String,
     pub(super) _shell_path: String,
     pub(super) shell_kind: ShellKind,
     pub(super) master: Box<dyn MasterPty + Send>,

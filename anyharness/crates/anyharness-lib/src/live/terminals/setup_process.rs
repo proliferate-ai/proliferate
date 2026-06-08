@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use tokio::io::AsyncReadExt;
 use tokio::sync::RwLock;
 
+use crate::domains::terminals::model::ShellKind;
 use crate::domains::terminals::model::{TerminalCommandRunRecord, TerminalCommandRunStatus};
 use crate::domains::terminals::service::{
     append_bounded, complete_command_run, TerminalCommandService,
@@ -34,7 +35,7 @@ pub(super) async fn run_setup_process(
     emit_setup_output(
         hub.as_ref(),
         &mut terminal_formatter,
-        terminal_command_preface(&workspace_path, &command),
+        terminal_command_preface(&workspace_path, &workspace_path, ShellKind::Bash, &command),
         None,
         &record.id,
     )
@@ -247,7 +248,11 @@ async fn emit_setup_prompt(
     workspace_path: &str,
 ) {
     if let Some(hub) = hub {
-        let data = formatter.normalize_prompt(workspace_prompt(workspace_path));
+        let data = formatter.normalize_prompt(workspace_prompt(
+            workspace_path,
+            workspace_path,
+            ShellKind::Bash,
+        ));
         let _ = hub
             .emit_data(data, None, Some(command_run_id.to_string()))
             .await;

@@ -23,6 +23,7 @@ pub(super) struct ActivePtyCommand {
     capturing: bool,
     pub(super) combined: String,
     pub(super) output_truncated: bool,
+    last_captured_ended_with_newline: bool,
     timed_out: bool,
     pub(super) timeout_task: Option<tokio::task::AbortHandle>,
     pub(super) started_at: Instant,
@@ -53,7 +54,7 @@ pub(super) async fn run_terminal_command(
     }
     validate_env_vars(&request.env, true)?;
 
-    let (record, wrapper, cwd) = {
+    let record = {
         let mut h = handle.lock().await;
         if !h.shell_kind.is_posix() {
             anyhow::bail!("unsupported_terminal_shell");
@@ -113,6 +114,7 @@ pub(super) async fn run_terminal_command(
             capturing: false,
             combined: String::new(),
             output_truncated: false,
+            last_captured_ended_with_newline: true,
             timed_out: false,
             timeout_task: None,
             started_at: Instant::now(),
@@ -130,27 +132,28 @@ pub(super) async fn run_terminal_command(
             }
         }
         h.record.command_run = Some(record.clone());
-        (record, wrapper, h.record.cwd.clone())
-    };
-
-    if let Some(hub) = &hub {
-        hub.emit_data(
-            terminal_command_preface(&cwd, &record.command),
-            None,
-            Some(record.id.clone()),
-        )
-        .await?;
-    }
-
-    {
-        let mut h = handle.lock().await;
+        if let Some(hub) = &hub {
+            let _ = hub
+                .emit_data(
+                    terminal_command_preface(
+                        &h.workspace_path,
+                        &h.record.cwd,
+                        h.shell_kind,
+                        &record.command,
+                    ),
+                    None,
+                    Some(record.id.clone()),
+                )
+                .await;
+        }
         h.writer
             .write_all(wrapper.as_bytes())
             .map_err(|e| anyhow::anyhow!("write failed: {e}"))?;
         h.writer
             .flush()
             .map_err(|e| anyhow::anyhow!("flush failed: {e}"))?;
-    }
+        record
+    };
     Ok(record)
 }
 
@@ -226,12 +229,7 @@ fn filter_pty_command_output(
         if active.capturing {
             if let Some(index) = active.buffer.find(&end_prefix) {
                 let captured = active.buffer[..index].to_string();
-                output.push_str(&captured);
-                append_bounded(
-                    &mut active.combined,
-                    &captured,
-                    &mut active.output_truncated,
-                );
+                append_captured_output(active, &mut output, &captured);
                 let after_prefix = index + end_prefix.len();
                 let tail = &active.buffer[after_prefix..];
                 let Some(end_idx) = tail.find("__") else {
@@ -240,8 +238,10 @@ fn filter_pty_command_output(
                 };
                 let exit_text = &tail[..end_idx];
                 let exit_code = exit_text.parse::<i32>().unwrap_or(-1);
-                let remainder =
-                    command_remainder_after_marker(&active.combined, &tail[end_idx + 2..]);
+                let remainder = command_remainder_after_marker(
+                    active.last_captured_ended_with_newline,
+                    &tail[end_idx + 2..],
+                );
                 output.push_str(&remainder);
                 active.buffer = remainder;
                 let mut record = command_service
@@ -270,12 +270,7 @@ fn filter_pty_command_output(
                 let emit_len = safe_emit_len_before_marker(&active.buffer, &end_prefix);
                 let captured = active.buffer[..emit_len].to_string();
                 let retained = active.buffer[emit_len..].to_string();
-                output.push_str(&captured);
-                append_bounded(
-                    &mut active.combined,
-                    &captured,
-                    &mut active.output_truncated,
-                );
+                append_captured_output(active, &mut output, &captured);
                 active.buffer = retained;
                 break;
             }
@@ -285,8 +280,20 @@ fn filter_pty_command_output(
     Ok(output.into_bytes())
 }
 
-fn command_remainder_after_marker(captured: &str, remainder: &str) -> String {
-    if captured.ends_with('\n') || captured.ends_with('\r') {
+fn append_captured_output(active: &mut ActivePtyCommand, output: &mut String, captured: &str) {
+    if captured.is_empty() {
+        return;
+    }
+    output.push_str(captured);
+    active.last_captured_ended_with_newline = captured.ends_with('\n') || captured.ends_with('\r');
+    append_bounded(&mut active.combined, captured, &mut active.output_truncated);
+}
+
+fn command_remainder_after_marker(
+    last_captured_ended_with_newline: bool,
+    remainder: &str,
+) -> String {
+    if last_captured_ended_with_newline {
         remainder.trim_start_matches(['\r', '\n']).to_string()
     } else {
         remainder.to_string()
@@ -481,6 +488,7 @@ mod tests {
             capturing: false,
             combined: String::new(),
             output_truncated: false,
+            last_captured_ended_with_newline: true,
             timed_out: false,
             timeout_task: None,
             started_at: Instant::now(),
@@ -539,6 +547,7 @@ mod tests {
             capturing: true,
             combined: String::new(),
             output_truncated: false,
+            last_captured_ended_with_newline: true,
             timed_out: false,
             timeout_task: None,
             started_at: Instant::now(),
@@ -557,5 +566,52 @@ mod tests {
         let completed = completed.expect("command completed");
         assert_eq!(completed.status, TerminalCommandRunStatus::Succeeded);
         assert_eq!(completed.combined_output.as_deref(), Some("hello"));
+    }
+
+    #[test]
+    fn pty_command_parser_uses_latest_output_for_prompt_spacing_after_truncation() {
+        let db = Db::open_in_memory().expect("open db");
+        insert_test_workspace(&db, "workspace-1", "/tmp/workspace-1");
+        let command_service = TerminalCommandService::new(TerminalStore::new(db));
+        let mut record = new_command_run_record(
+            "run-1",
+            "workspace-1",
+            Some("terminal-1"),
+            TerminalPurpose::Run,
+            "printf tail",
+            TerminalCommandOutputMode::Combined,
+        );
+        record.status = TerminalCommandRunStatus::Running;
+        command_service
+            .insert_command_run(&record)
+            .expect("insert run");
+
+        let mut active = ActivePtyCommand {
+            command_run_id: "run-1".to_string(),
+            nonce: "nonce".to_string(),
+            script_path: PathBuf::from("/tmp/missing-anyharness-test-script"),
+            buffer: String::new(),
+            capturing: true,
+            combined: format!("{}\n", "x".repeat(64 * 1024 - 1)),
+            output_truncated: true,
+            last_captured_ended_with_newline: true,
+            timed_out: false,
+            timeout_task: None,
+            started_at: Instant::now(),
+        };
+        let mut completed = None;
+
+        let output = filter_pty_command_output(
+            &mut active,
+            b"tail__ANYHARNESS_CMD_END_nonce_0__\r\n$ ",
+            &command_service,
+            &mut completed,
+        )
+        .expect("filter chunk");
+
+        assert_eq!(String::from_utf8(output).expect("utf8"), "tail\r\n$ ");
+        let completed = completed.expect("command completed");
+        assert_eq!(completed.status, TerminalCommandRunStatus::Succeeded);
+        assert!(completed.output_truncated);
     }
 }

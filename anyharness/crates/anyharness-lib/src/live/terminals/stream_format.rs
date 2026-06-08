@@ -1,3 +1,7 @@
+use std::path::Path;
+
+use crate::domains::terminals::model::ShellKind;
+
 #[derive(Debug, Default)]
 pub(super) struct TerminalStreamFormatter {
     previous_was_cr: bool,
@@ -10,7 +14,6 @@ impl TerminalStreamFormatter {
         for byte in data {
             if byte == b'\n' && !self.previous_was_cr {
                 normalized.push(b'\r');
-                self.at_line_start = true;
             }
             normalized.push(byte);
             self.previous_was_cr = byte == b'\r';
@@ -30,26 +33,34 @@ impl TerminalStreamFormatter {
     }
 }
 
-pub(super) fn terminal_command_preface(workspace_path: &str, command: &str) -> Vec<u8> {
-    terminal_command_preface_with_prompt(workspace_prompt(workspace_path), command)
+pub(super) fn terminal_command_preface(
+    workspace_path: &str,
+    cwd: &str,
+    shell_kind: ShellKind,
+    command: &str,
+) -> Vec<u8> {
+    terminal_command_preface_with_prompt(workspace_prompt(workspace_path, cwd, shell_kind), command)
 }
 
 fn terminal_command_preface_with_prompt(mut prompt: Vec<u8>, command: &str) -> Vec<u8> {
     let mut formatter = TerminalStreamFormatter::default();
-    let mut data = Vec::with_capacity(prompt.len() + command.len() + 3);
+    let mut data = Vec::with_capacity(prompt.len() + command.len() + 7);
     data.push(b'\r');
+    data.extend_from_slice(b"\x1b[2K");
     data.append(&mut prompt);
     data.extend_from_slice(command.as_bytes());
     data.extend_from_slice(b"\r\n");
     formatter.normalize(data)
 }
 
-pub(super) fn workspace_prompt(_workspace_path: &str) -> Vec<u8> {
+pub(super) fn workspace_prompt(workspace_path: &str, cwd: &str, shell_kind: ShellKind) -> Vec<u8> {
+    let user = current_user();
     format!(
-        "{}@{}:workspace{} ",
-        current_user(),
+        "{}@{}:{}{} ",
+        user,
         current_host(),
-        prompt_symbol()
+        prompt_path_label(workspace_path, cwd),
+        prompt_symbol(shell_kind, &user)
     )
     .into_bytes()
 }
@@ -67,14 +78,29 @@ fn current_host() -> String {
     std::env::var("HOSTNAME")
         .ok()
         .and_then(|value| normalize_host(&value))
-        .or_else(|| {
-            std::process::Command::new("hostname")
-                .output()
-                .ok()
-                .and_then(|output| String::from_utf8(output.stdout).ok())
-                .and_then(|value| normalize_host(&value))
-        })
         .unwrap_or_else(|| "localhost".to_string())
+}
+
+fn prompt_path_label(workspace_path: &str, cwd: &str) -> String {
+    let workspace = Path::new(workspace_path);
+    let cwd = Path::new(cwd);
+    if cwd == workspace {
+        return "workspace".to_string();
+    }
+
+    if let Ok(relative) = cwd.strip_prefix(workspace) {
+        let relative = relative.to_string_lossy();
+        if relative.is_empty() {
+            return "workspace".to_string();
+        }
+        return format!("workspace/{relative}");
+    }
+
+    cwd.file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or("workspace")
+        .to_string()
 }
 
 fn normalize_host(value: &str) -> Option<String> {
@@ -85,9 +111,11 @@ fn normalize_host(value: &str) -> Option<String> {
     Some(host.split('.').next().unwrap_or(host).to_string())
 }
 
-fn prompt_symbol() -> &'static str {
-    if current_user() == "root" {
+fn prompt_symbol(shell_kind: ShellKind, user: &str) -> &'static str {
+    if user == "root" {
         "#"
+    } else if matches!(shell_kind, ShellKind::Zsh) {
+        "%"
     } else {
         "$"
     }
@@ -95,6 +123,8 @@ fn prompt_symbol() -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use crate::domains::terminals::model::ShellKind;
+
     use super::{terminal_command_preface_with_prompt, TerminalStreamFormatter};
 
     #[test]
@@ -130,7 +160,7 @@ mod tests {
     fn terminal_command_preface_repaints_prompt_with_command() {
         assert_eq!(
             terminal_command_preface_with_prompt(b"user@host:workspace$ ".to_vec(), "ls"),
-            b"\ruser@host:workspace$ ls\r\n"
+            b"\r\x1b[2Kuser@host:workspace$ ls\r\n"
         );
     }
 
@@ -141,7 +171,17 @@ mod tests {
                 b"user@host:workspace$ ".to_vec(),
                 "echo one\necho two"
             ),
-            b"\ruser@host:workspace$ echo one\r\necho two\r\n"
+            b"\r\x1b[2Kuser@host:workspace$ echo one\r\necho two\r\n"
         );
+    }
+
+    #[test]
+    fn workspace_prompt_labels_workspace_relative_cwd() {
+        let prompt =
+            super::workspace_prompt("/tmp/repo", "/tmp/repo/packages/app", ShellKind::Bash);
+
+        assert!(String::from_utf8(prompt)
+            .expect("utf8")
+            .contains(":workspace/packages/app$ "));
     }
 }
