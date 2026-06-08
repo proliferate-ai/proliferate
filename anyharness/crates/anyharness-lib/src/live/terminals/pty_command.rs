@@ -11,7 +11,7 @@ use crate::domains::terminals::service::{
     TerminalCommandService,
 };
 
-use super::handle::{TerminalOutputRegistry, TerminalRegistry};
+use super::handle::{PtyHandle, TerminalOutputRegistry, TerminalRegistry};
 use super::output_sink::TerminalOutputHub;
 use super::stream_format::terminal_command_preface;
 
@@ -87,6 +87,9 @@ pub(super) async fn run_terminal_command(
         }
 
         let command_run_id = uuid::Uuid::new_v4().to_string();
+        let nonce = uuid::Uuid::new_v4().simple().to_string();
+        let script = write_command_script(runtime_home, &command, &request.env)?;
+        let wrapper = build_pty_command_wrapper(&nonce, &script);
         let mut record = new_command_run_record(
             &command_run_id,
             &h.record.workspace_id,
@@ -103,9 +106,6 @@ pub(super) async fn run_terminal_command(
             .unwrap_or_else(|| record.created_at.clone());
         command_service.insert_command_run(&record)?;
 
-        let nonce = uuid::Uuid::new_v4().simple().to_string();
-        let script = write_command_script(runtime_home, &command, &request.env)?;
-        let wrapper = build_pty_command_wrapper(&nonce, &script);
         h.active_pty_command = Some(ActivePtyCommand {
             command_run_id: command_run_id.clone(),
             nonce,
@@ -146,15 +146,70 @@ pub(super) async fn run_terminal_command(
                 )
                 .await;
         }
-        h.writer
+        let write_result = h
+            .writer
             .write_all(wrapper.as_bytes())
-            .map_err(|e| anyhow::anyhow!("write failed: {e}"))?;
-        h.writer
-            .flush()
-            .map_err(|e| anyhow::anyhow!("flush failed: {e}"))?;
+            .map_err(|e| anyhow::anyhow!("write failed: {e}"))
+            .and_then(|_| {
+                h.writer
+                    .flush()
+                    .map_err(|e| anyhow::anyhow!("flush failed: {e}"))
+            });
+        if let Err(error) = write_result {
+            rollback_started_pty_command(&mut h, command_service, &record, &error);
+            return Err(error);
+        }
         record
     };
     Ok(record)
+}
+
+fn rollback_started_pty_command(
+    handle: &mut PtyHandle,
+    command_service: &TerminalCommandService,
+    record: &TerminalCommandRunRecord,
+    error: &anyhow::Error,
+) {
+    let Some(mut active) = handle.active_pty_command.take() else {
+        return;
+    };
+    if active.command_run_id != record.id {
+        handle.active_pty_command = Some(active);
+        return;
+    }
+
+    if let Some(timeout_task) = active.timeout_task.take() {
+        timeout_task.abort();
+    }
+    let _ = std::fs::remove_file(&active.script_path);
+
+    let mut failed = record.clone();
+    let combined_output = if active.combined.is_empty() {
+        format!("failed to start terminal command: {error}")
+    } else {
+        format!(
+            "{}\nfailed to start terminal command: {error}",
+            active.combined
+        )
+    };
+    complete_command_run(
+        &mut failed,
+        TerminalCommandRunStatus::Failed,
+        Some(-1),
+        None,
+        None,
+        Some(combined_output),
+        active.output_truncated,
+        Some(active.started_at.elapsed().as_millis() as u64),
+    );
+    handle.record.command_run = Some(failed.clone());
+    if let Err(update_error) = command_service.update_command_run(&failed) {
+        tracing::warn!(
+            command_run_id = %record.id,
+            error = %update_error,
+            "failed to rollback terminal command startup"
+        );
+    }
 }
 
 pub(super) async fn process_pty_output(
@@ -184,6 +239,11 @@ pub(super) async fn process_pty_output(
                 }
             }
             Some(id)
+        } else if h.record.purpose == TerminalPurpose::Setup
+            && command_service.is_setup_running(&h.record.workspace_id)
+        {
+            output = Vec::new();
+            None
         } else {
             output = data;
             None
