@@ -4,7 +4,9 @@ use tokio::sync::{broadcast, Mutex};
 
 use crate::domains::terminals::model::TerminalOutputEvent;
 
-use super::replay::ReplayBuffer;
+use replay::ReplayBuffer;
+
+mod replay;
 
 #[derive(Clone)]
 pub(super) struct TerminalOutputHub {

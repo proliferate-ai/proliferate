@@ -11,16 +11,16 @@ use crate::domains::terminals::service::{
     append_bounded, complete_command_run, TerminalCommandService,
 };
 
-use super::handle::TerminalRegistry;
-use super::output_sink::TerminalOutputHub;
+use super::super::handle::TerminalRegistry;
+use super::super::output_sink::TerminalOutputHub;
 use super::stream_format::{terminal_command_preface, workspace_prompt, TerminalStreamFormatter};
 
-pub(super) struct ActiveSetupTask {
-    pub(super) command_run_id: String,
-    pub(super) abort_handle: tokio::task::AbortHandle,
+pub(in crate::live::terminals) struct ActiveSetupTask {
+    pub(in crate::live::terminals) command_run_id: String,
+    pub(in crate::live::terminals) abort_handle: tokio::task::AbortHandle,
 }
 
-pub(super) async fn run_setup_process(
+pub(in crate::live::terminals) async fn run_setup_process(
     command_service: TerminalCommandService,
     terminals: TerminalRegistry,
     hubs: Arc<RwLock<HashMap<String, TerminalOutputHub>>>,
@@ -239,7 +239,7 @@ pub(super) async fn run_setup_process(
     let _ = command_service.update_command_run(&record);
 }
 
-pub(super) async fn set_terminal_output_suppressed(
+pub(in crate::live::terminals) async fn set_terminal_output_suppressed(
     terminals: &TerminalRegistry,
     terminal_id: &str,
     suppress_output: bool,

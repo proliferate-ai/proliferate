@@ -12,9 +12,9 @@ use crate::domains::terminals::model::{
 };
 use crate::domains::terminals::service::TerminalCommandService;
 
+use super::command_runs;
+use super::command_runs::ActivePtyCommand;
 use super::output_sink::TerminalOutputHub;
-use super::pty_command;
-use super::pty_command::ActivePtyCommand;
 
 pub(super) type PtyHandleRef = Arc<Mutex<PtyHandle>>;
 pub(super) type TerminalRegistry = Arc<RwLock<HashMap<String, PtyHandleRef>>>;
@@ -69,7 +69,7 @@ impl TerminalHandle {
         &self,
         request: RunTerminalCommandOptions,
     ) -> anyhow::Result<TerminalCommandRunRecord> {
-        pty_command::run_terminal_command(
+        command_runs::run_terminal_command(
             &self.registry,
             &self.output_hubs,
             &self.command_service,
