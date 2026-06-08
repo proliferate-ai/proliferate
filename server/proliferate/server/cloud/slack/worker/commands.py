@@ -17,6 +17,7 @@ from proliferate.db import session_ops as db_session
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store import cloud_repo_config as repo_store
 from proliferate.db.store import cloud_sandbox_profiles as profile_store
+from proliferate.db.store import users as users_store
 from proliferate.db.store.cloud_sync import command_records
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
@@ -55,6 +56,9 @@ from proliferate.server.cloud.commands.wake import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.live.service import publish_worker_control_after_commit
+from proliferate.server.cloud.repos.service import (
+    get_repo_branches_for_user as get_github_repo_branches,
+)
 from proliferate.utils.crypto import encrypt_json
 from proliferate.utils.time import utcnow
 
@@ -83,6 +87,25 @@ async def create_and_materialize_workspace(
         sandbox_profile_id=profile.id,
         created_by_user_id=created_by_user_id,
     )
+    installer = await users_store.get_user_with_oauth_accounts_by_id(db, created_by_user_id)
+    if installer is None:
+        raise CloudApiError(
+            "slack_installer_not_found",
+            "Slack workspace installer was not found.",
+            status_code=404,
+        )
+    repo_branches = await get_github_repo_branches(
+        installer,
+        git_owner=repo.git_owner,
+        git_repo_name=repo.git_repo_name,
+        missing_access_message=(
+            "Connect GitHub before creating Slack-triggered cloud workspaces."
+        ),
+        repo_access_required_message=(
+            "Reconnect GitHub and grant repository access before creating "
+            "Slack-triggered cloud workspaces."
+        ),
+    )
     proposed_branch_name = _slack_branch_name(job_id=job_id)
     taken_branch_names = await list_active_managed_cloud_workspace_branches_for_profile_repo(
         db,
@@ -92,7 +115,10 @@ async def create_and_materialize_workspace(
         git_owner=repo.git_owner,
         git_repo_name=repo.git_repo_name,
     )
-    branch_name = resolve_generated_branch_name(proposed_branch_name, taken_branch_names)
+    branch_name = resolve_generated_branch_name(
+        proposed_branch_name,
+        set(repo_branches.branches) | taken_branch_names,
+    )
     repo_root_path, worktree_path = _workspace_paths(
         repo=repo,
         branch_name=branch_name,

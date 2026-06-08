@@ -175,7 +175,13 @@ export function useCreateCloudWorkspace() {
         displayName: attempt.request.displayName ?? attempt.branchName,
         repoLabel,
         baseBranchName: attempt.request.baseBranch ?? null,
-        request: { kind: "cloud", input: attempt.request },
+        request: {
+          kind: "cloud",
+          input: {
+            ...attempt.request,
+            generatedName: attempt.request.generatedName ?? false,
+          },
+        },
       });
 
       if (currentEntry === null) {

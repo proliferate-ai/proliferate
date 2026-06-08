@@ -38,7 +38,7 @@ async def create_cloud_workspace_endpoint(
             base_branch=body.base_branch,
             branch_name=body.branch_name,
             display_name=body.display_name,
-            generated_name=body.generated_name,
+            generated_name=bool(body.generated_name),
             required_agent_kind=body.required_agent_kind,
             source=body.source or "desktop",
             owner_selection=OwnerSelection(

@@ -140,6 +140,8 @@ The generated TypeScript mirror lives in
 `apps/packages/product-domain/src/workspaces/workspace-name-catalog.generated.ts`.
 The generated Python mirror lives in
 `server/proliferate/lib/product/workspace_naming/animal_names_generated.py`.
+The generator filters known unsafe or confusing catalog entries before writing
+the checked-in mirrors.
 
 Explicit user-provided branch/worktree names fail on conflicts. Generated
 names may be suffixed. Desktop local worktree creation sends
@@ -148,7 +150,8 @@ path are all generated. Cloud-owned materialization sends
 `nameConflictPolicy: "suffix_path"` because the server preflight reserves the
 final Cloud branch first, then AnyHarness owns the final worktree path. Worker
 materialization results must persist the returned AnyHarness `path` so Cloud
-records reflect any runtime suffix.
+records reflect any runtime suffix. Server creation paths retry generated-name
+branch uniqueness races by rerunning preflight and selecting the next suffix.
 
 ## Invariants
 

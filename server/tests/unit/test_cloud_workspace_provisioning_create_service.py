@@ -120,6 +120,9 @@ async def test_create_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
     async def _existing_workspace(*_args, **_kwargs):
         return None
 
+    async def _active_cloud_branches(*_args, **_kwargs):
+        return set()
+
     async def _authorization(**_kwargs) -> SandboxStartAuthorization:
         return _denied_start_authorization(
             blocked_reason=WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED
@@ -141,6 +144,11 @@ async def test_create_cloud_workspace_blocks_when_billing_snapshot_is_blocked(
         provisioning_preflight,
         "get_existing_cloud_workspace",
         _existing_workspace,
+    )
+    monkeypatch.setattr(
+        provisioning_preflight,
+        "list_active_cloud_workspace_branches_for_user_repo",
+        _active_cloud_branches,
     )
     monkeypatch.setattr(provisioning_preflight, "load_repo_config_value", _repo_config_value)
     monkeypatch.setattr(provisioning_preflight, "authorize_sandbox_start", _authorization)
@@ -184,6 +192,9 @@ async def test_automation_workspace_requires_selected_agent_credentials(
     async def _existing_workspace(*_args, **_kwargs):
         return None
 
+    async def _active_cloud_branches(*_args, **_kwargs):
+        return set()
+
     async def _authorization(**_kwargs) -> SandboxStartAuthorization:
         return _allowed_start_authorization()
 
@@ -206,6 +217,11 @@ async def test_automation_workspace_requires_selected_agent_credentials(
         provisioning_preflight,
         "get_existing_cloud_workspace",
         _existing_workspace,
+    )
+    monkeypatch.setattr(
+        provisioning_preflight,
+        "list_active_cloud_workspace_branches_for_user_repo",
+        _active_cloud_branches,
     )
     monkeypatch.setattr(provisioning_preflight, "load_repo_config_value", _repo_config_value)
     monkeypatch.setattr(provisioning_preflight, "authorize_sandbox_start", _authorization)

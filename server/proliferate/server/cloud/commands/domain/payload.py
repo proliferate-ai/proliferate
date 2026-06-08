@@ -122,7 +122,7 @@ def validate_command_payload(*, kind: str, payload: dict[str, object]) -> None:
         _optional_string_choice(
             payload,
             "nameConflictPolicy",
-            {"fail", "suffix_path", "suffix_path_and_branch"},
+            {"fail", "suffix_path"},
         )
         _optional_object(payload, "origin")
         _optional_object(payload, "creatorContext")

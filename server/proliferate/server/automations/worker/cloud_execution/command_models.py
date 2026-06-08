@@ -48,7 +48,6 @@ class MaterializeWorkspacePayload:
     name_conflict_policy: Literal[
         "fail",
         "suffix_path",
-        "suffix_path_and_branch",
     ] | None = None
     origin: dict[str, object] | None = None
     creator_context: dict[str, object] | None = None

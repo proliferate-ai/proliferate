@@ -52,7 +52,6 @@ class MaterializeWorkspaceWorktreePayload(BaseModel):
     name_conflict_policy: Literal[
         "fail",
         "suffix_path",
-        "suffix_path_and_branch",
     ] | None = Field(default=None, alias="nameConflictPolicy")
     origin: dict[str, object] | None = None
     creator_context: dict[str, object] | None = Field(default=None, alias="creatorContext")

@@ -20,7 +20,10 @@ from proliferate.db.store import billing_subjects as billing_subject_store
 from proliferate.db.store.cloud_repo_config import get_cloud_repo_config
 from proliferate.db.store.cloud_sync import commands as command_store
 from proliferate.db.store.cloud_sync import targets as targets_store
-from proliferate.db.store.cloud_workspace_creation import create_direct_target_cloud_workspace
+from proliferate.db.store.cloud_workspace_creation import (
+    CloudWorkspaceUniqueConflictError,
+    create_direct_target_cloud_workspace,
+)
 from proliferate.db.store.cloud_workspace_runtime import mark_workspace_error_by_id
 from proliferate.db.store.cloud_workspaces import (
     get_cloud_workspace_by_id,
@@ -49,7 +52,7 @@ from proliferate.server.cloud.commands.client_state import (
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
 from proliferate.server.cloud.commands.service import enqueue_command
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.event_logging import format_exception_message
+from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.live.service import publish_command_status_after_commit
 from proliferate.server.cloud.repos.service import (
     get_linked_github_account,
@@ -67,6 +70,7 @@ from proliferate.utils.time import utcnow
 
 CLOUD_TARGET_LAUNCH_TEMPLATE_VERSION = "desktop-target-launch-v1"
 TARGET_LAUNCH_COMMAND_WAIT_TIMEOUT = timedelta(seconds=240)
+GENERATED_TARGET_LAUNCH_CREATE_MAX_ATTEMPTS = 5
 
 
 @dataclass(frozen=True)
@@ -80,6 +84,14 @@ class ResolvedDirectTargetWorkspaceCreate:
     active_sandbox_count: int
     selected_agent_kinds: tuple[str, ...]
     cloud_repo_limit: int | None
+
+
+def _target_launch_create_attempts(generated_name: bool) -> int:
+    return GENERATED_TARGET_LAUNCH_CREATE_MAX_ATTEMPTS if generated_name else 1
+
+
+def _should_retry_target_launch_create(generated_name: bool, attempt: int) -> bool:
+    return generated_name and attempt + 1 < GENERATED_TARGET_LAUNCH_CREATE_MAX_ATTEMPTS
 
 
 async def launch_workspace_on_target(
@@ -128,47 +140,70 @@ async def launch_workspace_on_target(
             status_code=409,
         )
 
-    resolved = await _resolve_new_direct_target_workspace_create(
-        db,
-        user=user,
-        body=body,
-    )
-    repo_root_path, worktree_path = _direct_target_workspace_paths(
-        git_owner=resolved.git_owner,
-        git_repo_name=resolved.git_repo_name,
-        branch_name=resolved.git_branch,
-        target_kind=target.kind,
-        workspace_root=target.default_workspace_root,
-    )
-    billing_subject = await billing_subject_store.ensure_personal_billing_subject(db, user.id)
-    workspace = await create_direct_target_cloud_workspace(
-        db,
-        target_id=target.id,
-        user_id=user.id,
-        billing_subject_id=billing_subject.id,
-        created_by_user_id=user.id,
-        display_name=resolved.display_name,
-        git_provider=resolved.git_provider,
-        git_owner=resolved.git_owner,
-        git_repo_name=resolved.git_repo_name,
-        git_branch=resolved.git_branch,
-        git_base_branch=resolved.git_base_branch,
-        worktree_path=worktree_path,
-        origin_json=json.dumps(
-            {
-                "kind": "human",
-                "entrypoint": body.source,
-                "targetId": str(target.id),
-                "agentKind": body.agent_kind,
-            },
-            separators=(",", ":"),
-            sort_keys=True,
-        ),
-        template_version=CLOUD_TARGET_LAUNCH_TEMPLATE_VERSION,
-        origin="manual_mobile" if body.source == "mobile" else "manual_web",
-    )
-    workspace_id = workspace.id
-    await db_session.commit_session(db)
+    for attempt in range(_target_launch_create_attempts(body.generated_name is True)):
+        resolved = await _resolve_new_direct_target_workspace_create(
+            db,
+            user=user,
+            body=body,
+        )
+        repo_root_path, worktree_path = _direct_target_workspace_paths(
+            git_owner=resolved.git_owner,
+            git_repo_name=resolved.git_repo_name,
+            branch_name=resolved.git_branch,
+            target_kind=target.kind,
+            workspace_root=target.default_workspace_root,
+        )
+        billing_subject = await billing_subject_store.ensure_personal_billing_subject(db, user.id)
+        try:
+            workspace = await create_direct_target_cloud_workspace(
+                db,
+                target_id=target.id,
+                user_id=user.id,
+                billing_subject_id=billing_subject.id,
+                created_by_user_id=user.id,
+                display_name=resolved.display_name,
+                git_provider=resolved.git_provider,
+                git_owner=resolved.git_owner,
+                git_repo_name=resolved.git_repo_name,
+                git_branch=resolved.git_branch,
+                git_base_branch=resolved.git_base_branch,
+                worktree_path=worktree_path,
+                origin_json=json.dumps(
+                    {
+                        "kind": "human",
+                        "entrypoint": body.source,
+                        "targetId": str(target.id),
+                        "agentKind": body.agent_kind,
+                    },
+                    separators=(",", ":"),
+                    sort_keys=True,
+                ),
+                template_version=CLOUD_TARGET_LAUNCH_TEMPLATE_VERSION,
+                origin="manual_mobile" if body.source == "mobile" else "manual_web",
+            )
+            workspace_id = workspace.id
+            await db_session.commit_session(db)
+            break
+        except CloudWorkspaceUniqueConflictError as error:
+            await db.rollback()
+            if _should_retry_target_launch_create(body.generated_name is True, attempt):
+                log_cloud_event(
+                    "generated target launch workspace branch collided; retrying",
+                    user_id=user.id,
+                    target_id=target.id,
+                    repo=f"{body.git_owner}/{body.git_repo_name}",
+                    branch_name=resolved.git_branch,
+                    attempt=attempt + 1,
+                )
+                continue
+            raise CloudApiError(
+                "cloud_branch_already_exists",
+                (
+                    f"A cloud workspace already exists for branch '{resolved.git_branch}'. "
+                    "Open the existing workspace or choose a different branch."
+                ),
+                status_code=400,
+            ) from error
 
     try:
         checkout = await _enqueue_target_launch_command(
@@ -411,7 +446,7 @@ async def _resolve_new_direct_target_workspace_create(
         git_repo_name=body.git_repo_name,
         git_branch=cleaned_branch_name,
     )
-    if body.generated_name:
+    if body.generated_name is True:
         cleaned_branch_name = resolve_generated_branch_name(
             cleaned_branch_name,
             set(repo_branches.branches) | active_cloud_branches,

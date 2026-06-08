@@ -5606,11 +5606,8 @@ export interface components {
             branchName: string;
             /** Displayname */
             displayName?: string | null;
-            /**
-             * Generatedname
-             * @default false
-             */
-            generatedName: boolean;
+            /** Generatedname */
+            generatedName?: boolean | null;
             /**
              * Ownerscope
              * @default personal
@@ -5922,11 +5919,8 @@ export interface components {
             branchName: string;
             /** Displayname */
             displayName?: string | null;
-            /**
-             * Generatedname
-             * @default false
-             */
-            generatedName: boolean;
+            /** Generatedname */
+            generatedName?: boolean | null;
             /** Prompt */
             prompt: string;
             /** Promptid */

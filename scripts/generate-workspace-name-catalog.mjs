@@ -15,6 +15,27 @@ const serverOutputPath = path.join(
   repoRoot,
   "server/proliferate/lib/product/workspace_naming/animal_names_generated.py",
 );
+const deniedNames = new Set([
+  "afghan",
+  "arab",
+  "arabian",
+  "argentine",
+  "ass",
+  "assault",
+  "bitch",
+  "booby",
+  "brit",
+  "britt",
+  "cock",
+  "cocker",
+  "cockroach",
+  "coon",
+  "homo",
+  "puss",
+  "pussy",
+  "pussycat",
+  "tit",
+]);
 
 function parseCatalog(raw) {
   const parsed = JSON.parse(raw);
@@ -62,7 +83,7 @@ ${lines}
 }
 
 const raw = await readFile(catalogPath, "utf8");
-const names = parseCatalog(raw);
+const names = parseCatalog(raw).filter((name) => !deniedNames.has(name));
 const hash = createHash("sha256").update(JSON.stringify(names)).digest("hex");
 
 await writeFile(typeScriptOutputPath, renderTypeScript(names, hash));
