@@ -5,6 +5,7 @@ use crate::domains::workspaces::retention::WorkspaceRetentionService;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::domains::workspaces::setup_runtime::{WorkspaceSetupError, WorkspaceSetupRuntime};
 use crate::domains::workspaces::types::CreateWorktreeResult;
+use crate::domains::workspaces::worktree_checkout::WorktreeCheckoutMode;
 use crate::domains::workspaces::worktree_names::WorktreeNameConflictPolicy;
 use crate::origin::OriginContext;
 
@@ -21,6 +22,7 @@ pub struct CreateWorktreeWorkflowInput {
     pub target_path: String,
     pub new_branch_name: String,
     pub base_branch: Option<String>,
+    pub checkout_mode: WorktreeCheckoutMode,
     pub setup_script: Option<String>,
     pub surface: String,
     pub name_conflict_policy: WorktreeNameConflictPolicy,
@@ -66,18 +68,20 @@ impl WorkspaceWorktreeRuntime {
         let target_path = input.target_path.clone();
         let new_branch_name = input.new_branch_name.clone();
         let base_branch = input.base_branch.clone();
+        let checkout_mode = input.checkout_mode;
         let surface = input.surface.clone();
         let name_conflict_policy = input.name_conflict_policy;
         let origin = input.origin;
         let creator_context = input.creator_context;
         let worktree = tokio::task::spawn_blocking(move || {
-            workspace_runtime.create_worktree_with_surface(
+            workspace_runtime.create_worktree_with_surface_and_checkout_mode(
                 &repo_root_id,
                 &target_path,
                 &new_branch_name,
                 base_branch.as_deref(),
                 None,
                 &surface,
+                checkout_mode,
                 name_conflict_policy,
                 origin,
                 creator_context,

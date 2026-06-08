@@ -17,6 +17,7 @@ pub(super) fn build_workspace_record(
     kind: WorkspaceKind,
     surface: WorkspaceSurface,
     current_branch: Option<String>,
+    original_branch: Option<String>,
     origin: OriginContext,
     creator_context: Option<WorkspaceCreatorContext>,
 ) -> WorkspaceRecord {
@@ -27,7 +28,7 @@ pub(super) fn build_workspace_record(
         repo_root_id: repo_root.id.clone(),
         path: path.to_string(),
         surface,
-        original_branch: current_branch.clone(),
+        original_branch,
         current_branch,
         display_name: None,
         origin: Some(origin),

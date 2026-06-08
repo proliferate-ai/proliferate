@@ -8,6 +8,7 @@ use crate::adapters::git::GitService;
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceSurface};
 use crate::domains::workspaces::types::CreateWorktreeResult;
+use crate::domains::workspaces::worktree_checkout::WorktreeCheckoutMode;
 use crate::domains::workspaces::worktree_names::WorktreeNameConflictPolicy;
 use crate::origin::OriginContext;
 
@@ -47,13 +48,43 @@ impl WorkspaceRuntime {
         origin: OriginContext,
         creator_context: Option<WorkspaceCreatorContext>,
     ) -> anyhow::Result<CreateWorktreeResult> {
+        self.create_worktree_with_surface_and_checkout_mode(
+            repo_root_id,
+            target_path,
+            new_branch_name,
+            base_branch,
+            _setup_script,
+            surface,
+            WorktreeCheckoutMode::NewBranch,
+            name_conflict_policy,
+            origin,
+            creator_context,
+        )
+    }
+
+    pub fn create_worktree_with_surface_and_checkout_mode(
+        &self,
+        repo_root_id: &str,
+        target_path: &str,
+        new_branch_name: &str,
+        base_branch: Option<&str>,
+        _setup_script: Option<&str>,
+        surface: &str,
+        checkout_mode: WorktreeCheckoutMode,
+        name_conflict_policy: WorktreeNameConflictPolicy,
+        origin: OriginContext,
+        creator_context: Option<WorkspaceCreatorContext>,
+    ) -> anyhow::Result<CreateWorktreeResult> {
         let started = Instant::now();
+        let effective_conflict_policy =
+            effective_name_conflict_policy(checkout_mode, name_conflict_policy);
         tracing::info!(
             repo_root_id = %repo_root_id,
             target_path = %target_path,
             new_branch_name = %new_branch_name,
             base_branch = ?base_branch,
             surface = %surface,
+            checkout_mode = ?checkout_mode,
             "[workspace-latency] workspace.worktree.runtime_create.start"
         );
 
@@ -75,16 +106,19 @@ impl WorkspaceRuntime {
             } else {
                 Some(attempt_index + 1)
             };
-            let candidate = name_conflict_policy.candidate(target_path, new_branch_name, suffix);
+            let candidate =
+                effective_conflict_policy.candidate(target_path, new_branch_name, suffix);
             let candidate_target_path = candidate.target_path.to_string_lossy().to_string();
             let canonical_target = canonical_target_path(&candidate.target_path);
             let canonical_candidate_path = canonical_target.to_string_lossy().to_string();
 
-            if GitService::ref_exists(
-                Path::new(&source.path),
-                &format!("refs/heads/{}", candidate.branch_name),
-            ) {
-                if name_conflict_policy.can_retry_branch() {
+            if checkout_mode.creates_branch()
+                && GitService::ref_exists(
+                    Path::new(&source.path),
+                    &format!("refs/heads/{}", candidate.branch_name),
+                )
+            {
+                if effective_conflict_policy.can_retry_branch() {
                     continue;
                 }
                 anyhow::bail!("worktree branch already exists: {}", candidate.branch_name);
@@ -92,7 +126,7 @@ impl WorkspaceRuntime {
 
             let existing_lookup_started = Instant::now();
             if let Some(error) = self.path_conflict_error(&canonical_target)? {
-                if name_conflict_policy.can_retry() {
+                if effective_conflict_policy.can_retry() {
                     continue;
                 }
                 return Err(error);
@@ -101,11 +135,13 @@ impl WorkspaceRuntime {
                 repo_root_id = %repo_root_id,
                 target_path = %canonical_candidate_path,
                 new_branch_name = %candidate.branch_name,
+                checkout_mode = ?checkout_mode,
                 elapsed_ms = existing_lookup_started.elapsed().as_millis(),
                 "[workspace-latency] workspace.worktree.runtime_create.path_checked"
             );
 
-            match GitService::create_worktree(
+            match create_git_worktree_for_checkout_mode(
+                checkout_mode,
                 &source.path,
                 &candidate_target_path,
                 &candidate.branch_name,
@@ -130,6 +166,8 @@ impl WorkspaceRuntime {
                         repo_root_id,
                         &canonical_path,
                         &candidate.branch_name,
+                        base_branch,
+                        checkout_mode,
                         surface,
                         origin,
                         creator_context,
@@ -137,7 +175,7 @@ impl WorkspaceRuntime {
                     );
                 }
                 Err(error)
-                    if should_retry_git_worktree_name_error(&error, name_conflict_policy) =>
+                    if should_retry_git_worktree_name_error(&error, effective_conflict_policy) =>
                 {
                     continue;
                 }
@@ -190,6 +228,8 @@ impl WorkspaceRuntime {
         repo_root_id: &str,
         canonical_path: &str,
         branch_name: &str,
+        base_branch: Option<&str>,
+        checkout_mode: WorktreeCheckoutMode,
         surface: &str,
         origin: OriginContext,
         creator_context: Option<WorkspaceCreatorContext>,
@@ -200,9 +240,8 @@ impl WorkspaceRuntime {
             canonical_path,
             WorkspaceKind::Worktree,
             WorkspaceSurface::try_from(surface)?,
-            // `git worktree add -b <name>` either creates this branch or
-            // fails; avoid an extra post-create branch probe on the hot path.
-            Some(branch_name.to_string()),
+            current_branch_for_checkout_mode(checkout_mode, branch_name),
+            original_branch_for_checkout_mode(checkout_mode, branch_name, base_branch),
             origin,
             creator_context,
         );
@@ -237,6 +276,56 @@ fn canonical_target_path(target: &Path) -> std::path::PathBuf {
         .and_then(|parent| std::fs::canonicalize(parent).ok())
         .map(|parent| parent.join(target.file_name().unwrap_or_default()))
         .unwrap_or_else(|| target.to_path_buf())
+}
+
+fn effective_name_conflict_policy(
+    checkout_mode: WorktreeCheckoutMode,
+    policy: WorktreeNameConflictPolicy,
+) -> WorktreeNameConflictPolicy {
+    match (checkout_mode, policy) {
+        (WorktreeCheckoutMode::DetachedRef, WorktreeNameConflictPolicy::SuffixPathAndBranch) => {
+            WorktreeNameConflictPolicy::SuffixPath
+        }
+        _ => policy,
+    }
+}
+
+fn create_git_worktree_for_checkout_mode(
+    checkout_mode: WorktreeCheckoutMode,
+    source_repo_root: &str,
+    target_path: &str,
+    branch_name: &str,
+    base_branch: Option<&str>,
+) -> anyhow::Result<()> {
+    match checkout_mode {
+        WorktreeCheckoutMode::NewBranch => {
+            GitService::create_worktree(source_repo_root, target_path, branch_name, base_branch)
+        }
+        WorktreeCheckoutMode::DetachedRef => {
+            GitService::create_detached_worktree(source_repo_root, target_path, base_branch)
+        }
+    }
+}
+
+fn current_branch_for_checkout_mode(
+    checkout_mode: WorktreeCheckoutMode,
+    branch_name: &str,
+) -> Option<String> {
+    match checkout_mode {
+        WorktreeCheckoutMode::NewBranch => Some(branch_name.to_string()),
+        WorktreeCheckoutMode::DetachedRef => None,
+    }
+}
+
+fn original_branch_for_checkout_mode(
+    checkout_mode: WorktreeCheckoutMode,
+    branch_name: &str,
+    base_branch: Option<&str>,
+) -> Option<String> {
+    match checkout_mode {
+        WorktreeCheckoutMode::NewBranch => Some(branch_name.to_string()),
+        WorktreeCheckoutMode::DetachedRef => Some(base_branch.unwrap_or("HEAD").to_string()),
+    }
 }
 
 fn should_retry_git_worktree_name_error(

@@ -84,6 +84,14 @@ impl GitService {
         worktrees::create_worktree(source_repo_root, target_path, new_branch, base_branch)
     }
 
+    pub fn create_detached_worktree(
+        source_repo_root: &str,
+        target_path: &str,
+        base_branch: Option<&str>,
+    ) -> anyhow::Result<()> {
+        worktrees::create_detached_worktree(source_repo_root, target_path, base_branch)
+    }
+
     pub fn create_worktree_at_ref(
         source_repo_root: &str,
         target_path: &str,

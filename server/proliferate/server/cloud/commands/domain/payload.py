@@ -18,6 +18,7 @@ _MATERIALIZE_WORKTREE_FIELDS = {
     "targetPath",
     "newBranchName",
     "baseBranch",
+    "checkoutMode",
     "setupScript",
     "nameConflictPolicy",
     "origin",
@@ -118,6 +119,11 @@ def validate_command_payload(*, kind: str, payload: dict[str, object]) -> None:
             message="worktree workspace materialization requires newBranchName.",
         )
         _optional_string(payload, "baseBranch")
+        _optional_string_choice(
+            payload,
+            "checkoutMode",
+            {"new_branch", "detached_ref"},
+        )
         _optional_string(payload, "setupScript")
         _optional_string_choice(
             payload,

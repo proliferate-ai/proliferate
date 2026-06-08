@@ -29,6 +29,34 @@ impl Drop for TempDirGuard {
 }
 
 #[test]
+fn create_detached_worktree_checks_out_ref_without_branch() {
+    let repo_root = TempDirGuard::new("git-worktree-root-detached");
+    let worktree_root = TempDirGuard::new("git-worktree-detached-target");
+    let _ = fs::remove_dir_all(worktree_root.path());
+
+    init_repo(repo_root.path());
+    let initial_sha = git_stdout(repo_root.path(), ["rev-parse", "HEAD"]);
+    run_git(
+        repo_root.path(),
+        ["branch", "feature/landing", initial_sha.trim()],
+    );
+
+    GitService::create_detached_worktree(
+        &repo_root.path().display().to_string(),
+        &worktree_root.path().display().to_string(),
+        Some("feature/landing"),
+    )
+    .expect("create detached worktree");
+
+    let checked_out_branch =
+        git_stdout(worktree_root.path(), ["rev-parse", "--abbrev-ref", "HEAD"]);
+    let checked_out_sha = git_stdout(worktree_root.path(), ["rev-parse", "HEAD"]);
+
+    assert_eq!(checked_out_branch.trim(), "HEAD");
+    assert_eq!(checked_out_sha.trim(), initial_sha.trim());
+}
+
+#[test]
 fn create_worktree_at_ref_fast_forwards_clean_existing_branch() {
     let repo_root = TempDirGuard::new("git-worktree-root");
     let worktree_root = TempDirGuard::new("git-worktree-target");

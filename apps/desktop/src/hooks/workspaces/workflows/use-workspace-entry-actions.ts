@@ -297,6 +297,7 @@ export function useWorkspaceEntryActions() {
         repoLabel: resolved.repoName,
         branchName: resolved.params.branchName,
         baseRef: resolved.params.baseRef,
+        checkoutMode: resolved.params.checkoutMode,
         resolveElapsedMs: elapsedMs(resolveStartedAt),
       });
 
@@ -308,6 +309,7 @@ export function useWorkspaceEntryActions() {
         targetPath: resolved.params.targetPath,
         branchName: resolved.params.branchName,
         baseRef: resolved.params.baseRef,
+        checkoutMode: resolved.params.checkoutMode,
         elapsedSincePendingMs: elapsedSince(entry.createdAt),
       });
       const result = await createWorktreeWorkspace(resolved.params, {

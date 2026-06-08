@@ -45,6 +45,7 @@ class MaterializeWorkspacePayload:
     target_path: str | None = None
     new_branch_name: str | None = None
     base_branch: str | None = None
+    checkout_mode: Literal["new_branch", "detached_ref"] | None = None
     name_conflict_policy: Literal[
         "fail",
         "suffix_path",
@@ -69,6 +70,8 @@ class MaterializeWorkspacePayload:
             }
             if self.base_branch:
                 payload["baseBranch"] = self.base_branch
+            if self.checkout_mode:
+                payload["checkoutMode"] = self.checkout_mode
             if self.name_conflict_policy:
                 payload["nameConflictPolicy"] = self.name_conflict_policy
         if self.origin:

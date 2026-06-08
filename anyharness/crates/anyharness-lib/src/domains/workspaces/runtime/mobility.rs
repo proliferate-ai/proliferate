@@ -148,6 +148,7 @@ impl WorkspaceRuntime {
             WorkspaceKind::Worktree,
             WorkspaceSurface::Standard,
             ctx.current_branch.clone(),
+            ctx.current_branch.clone(),
             OriginContext::system_local_runtime(),
             None,
         );
@@ -335,6 +336,7 @@ impl WorkspaceRuntime {
             &ctx.repo_root,
             WorkspaceKind::Worktree,
             WorkspaceSurface::Standard,
+            ctx.current_branch.clone(),
             ctx.current_branch.clone(),
             OriginContext::system_local_runtime(),
             None,

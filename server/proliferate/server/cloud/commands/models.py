@@ -48,6 +48,10 @@ class MaterializeWorkspaceWorktreePayload(BaseModel):
     target_path: str = Field(alias="targetPath", min_length=1)
     new_branch_name: str = Field(alias="newBranchName", min_length=1)
     base_branch: str | None = Field(default=None, alias="baseBranch")
+    checkout_mode: Literal["new_branch", "detached_ref"] | None = Field(
+        default=None,
+        alias="checkoutMode",
+    )
     setup_script: str | None = Field(default=None, alias="setupScript")
     name_conflict_policy: Literal[
         "fail",

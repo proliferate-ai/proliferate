@@ -116,6 +116,7 @@ impl WorkspaceRuntime {
             &workspace_path,
             workspace_kind,
             WorkspaceSurface::Standard,
+            ctx.current_branch.clone(),
             ctx.current_branch,
             origin,
             creator_context,

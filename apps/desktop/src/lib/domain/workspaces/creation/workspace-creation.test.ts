@@ -41,7 +41,62 @@ describe("worktree creation params", () => {
     expect(resolved.params).toMatchObject({
       branchName: "ada/otter",
       targetPath: "/Users/ada/.proliferate/worktrees/proliferate/otter",
+      checkoutMode: "new_branch",
       nameConflictPolicy: "suffix_path_and_branch",
+    });
+  });
+
+  it("detaches generated worktrees when an explicit non-default base ref is selected", () => {
+    const resolved = resolveWorktreeCreationParams({
+      repoRoot,
+      sourceWorkspace,
+      rawInput: {
+        repoRootId: "repo-root-1",
+        workspaceName: "otter",
+        baseBranch: "feature/existing",
+        generatedName: true,
+      },
+      homeDir: "/Users/ada",
+      branchPrefixType: "github_username",
+      authUser: {
+        id: "user-1",
+        email: "ada@example.com",
+        display_name: "Ada",
+        github_login: "ada",
+      },
+      repoConfig: null,
+    });
+
+    expect(resolved.params).toMatchObject({
+      branchName: "ada/otter",
+      baseRef: "feature/existing",
+      checkoutMode: "detached_ref",
+      nameConflictPolicy: "suffix_path",
+    });
+  });
+
+  it("keeps explicit branch names in new-branch mode even with a non-default base ref", () => {
+    const resolved = resolveWorktreeCreationParams({
+      repoRoot,
+      sourceWorkspace,
+      rawInput: {
+        repoRootId: "repo-root-1",
+        workspaceName: "otter",
+        baseBranch: "feature/existing",
+        branchName: "codex/custom",
+        generatedName: true,
+      },
+      homeDir: "/Users/ada",
+      branchPrefixType: "none",
+      authUser: null,
+      repoConfig: null,
+    });
+
+    expect(resolved.params).toMatchObject({
+      branchName: "codex/custom",
+      baseRef: "feature/existing",
+      checkoutMode: "new_branch",
+      nameConflictPolicy: "fail",
     });
   });
 

@@ -8335,6 +8335,16 @@
               "null"
             ]
           },
+          "checkoutMode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorktreeCheckoutMode"
+              }
+            ]
+          },
           "creatorContext": {
             "oneOf": [
               {
@@ -17536,6 +17546,13 @@
         "enum": [
           "standard",
           "cowork"
+        ]
+      },
+      "WorktreeCheckoutMode": {
+        "type": "string",
+        "enum": [
+          "new_branch",
+          "detached_ref"
         ]
       },
       "WorktreeInventoryAction": {

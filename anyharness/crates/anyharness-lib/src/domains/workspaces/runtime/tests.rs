@@ -14,6 +14,7 @@ use crate::domains::sessions::store::SessionStore;
 use crate::domains::workspaces::deletion::WorkspaceDeleteWorkflow;
 use crate::domains::workspaces::model::WorkspaceKind;
 use crate::domains::workspaces::store::WorkspaceStore;
+use crate::domains::workspaces::worktree_checkout::WorktreeCheckoutMode;
 use crate::domains::workspaces::worktree_names::WorktreeNameConflictPolicy;
 use crate::origin::OriginContext;
 use crate::persistence::Db;
@@ -187,6 +188,57 @@ fn create_worktree_suffix_path_policy_keeps_reserved_branch() {
     assert_eq!(
         result.workspace.current_branch.as_deref(),
         Some("codex/cloud-reserved")
+    );
+}
+
+#[test]
+fn create_worktree_detached_ref_ignores_generated_branch_conflict() {
+    let remote = TempDirGuard::new("runtime-worktree-detached-remote");
+    let source = TempDirGuard::new("runtime-worktree-detached-source");
+    let target = TempDirGuard::new("runtime-worktree-detached-target");
+    let runtime_home = TempDirGuard::new("runtime-worktree-detached-home");
+    let _ = fs::remove_dir_all(target.path());
+
+    run_git(remote.path(), ["init", "--bare", "-b", "main"]);
+    init_repo(source.path());
+    let remote_path = remote.path().display().to_string();
+    run_git(source.path(), ["remote", "add", "origin", &remote_path]);
+    run_git(source.path(), ["push", "-u", "origin", "main"]);
+    run_git(source.path(), ["branch", "feature/base"]);
+    run_git(source.path(), ["branch", "codex/otter"]);
+
+    let db = Db::open_in_memory().expect("open db");
+    let runtime = make_runtime(&db, runtime_home.path());
+    let source_workspace = runtime
+        .create_workspace(&source.path().display().to_string())
+        .expect("create source workspace");
+
+    let result = runtime
+        .create_worktree_with_surface_and_checkout_mode(
+            &source_workspace.repo_root.id,
+            &target.path().display().to_string(),
+            "codex/otter",
+            Some("feature/base"),
+            None,
+            "standard",
+            WorktreeCheckoutMode::DetachedRef,
+            WorktreeNameConflictPolicy::SuffixPath,
+            OriginContext::api_local_runtime(),
+            None,
+        )
+        .expect("create detached worktree");
+
+    let worktree_path = Path::new(&result.workspace.path);
+    let detached_head = git_stdout(worktree_path, ["rev-parse", "--abbrev-ref", "HEAD"]);
+    let worktree_head = git_stdout(worktree_path, ["rev-parse", "HEAD"]);
+    let base_head = git_stdout(source.path(), ["rev-parse", "feature/base"]);
+
+    assert_eq!(detached_head.trim(), "HEAD");
+    assert_eq!(worktree_head.trim(), base_head.trim());
+    assert_eq!(result.workspace.current_branch, None);
+    assert_eq!(
+        result.workspace.original_branch.as_deref(),
+        Some("feature/base")
     );
 }
 

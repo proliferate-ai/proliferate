@@ -29,6 +29,7 @@ def test_managed_materialize_workspace_accepts_path_suffix_policy() -> None:
             "repoRootId": "repo-root-1",
             "targetPath": "/workspace/otter",
             "newBranchName": "codex/otter",
+            "checkoutMode": "detached_ref",
             "nameConflictPolicy": "suffix_path",
         },
     )

@@ -302,12 +302,21 @@ pub enum WorktreeNameConflictPolicy {
     SuffixPathAndBranch,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorktreeCheckoutMode {
+    NewBranch,
+    DetachedRef,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateWorktreeWorkspaceRequest {
     pub repo_root_id: String,
     pub target_path: String,
     pub new_branch_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkout_mode: Option<WorktreeCheckoutMode>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name_conflict_policy: Option<WorktreeNameConflictPolicy>,
     #[serde(skip_serializing_if = "Option::is_none")]

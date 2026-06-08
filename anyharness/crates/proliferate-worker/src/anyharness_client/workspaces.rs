@@ -34,6 +34,8 @@ pub enum MaterializeWorkspaceRequest {
         new_branch_name: String,
         #[serde(rename = "baseBranch")]
         base_branch: Option<String>,
+        #[serde(rename = "checkoutMode")]
+        checkout_mode: Option<String>,
         #[serde(rename = "setupScript")]
         setup_script: Option<String>,
         #[serde(rename = "nameConflictPolicy")]
@@ -99,6 +101,7 @@ impl MaterializeWorkspaceRequest {
                 target_path,
                 new_branch_name,
                 base_branch,
+                checkout_mode,
                 setup_script,
                 name_conflict_policy,
                 origin,
@@ -108,6 +111,7 @@ impl MaterializeWorkspaceRequest {
                 "targetPath": expand_home(target_path),
                 "newBranchName": new_branch_name,
                 "baseBranch": base_branch,
+                "checkoutMode": checkout_mode,
                 "setupScript": setup_script,
                 "nameConflictPolicy": name_conflict_policy,
                 "origin": origin,
@@ -175,6 +179,8 @@ impl MaterializeWorkspaceRequest {
         let Self::Worktree {
             repo_root_id,
             new_branch_name,
+            base_branch,
+            checkout_mode,
             ..
         } = self
         else {
@@ -185,6 +191,16 @@ impl MaterializeWorkspaceRequest {
         };
         if result.kind != "worktree" || result.repo_root_id != *repo_root_id {
             return false;
+        }
+        if checkout_mode.as_deref() == Some("detached_ref") {
+            let is_detached = matches!(result.current_branch.as_deref(), None | Some("HEAD"));
+            if !is_detached {
+                return false;
+            }
+            return match (base_branch.as_deref(), result.original_branch.as_deref()) {
+                (Some(expected), Some(original)) => original == expected,
+                _ => true,
+            };
         }
         match result.current_branch.as_deref() {
             Some(current_branch) => current_branch == new_branch_name,
@@ -453,6 +469,7 @@ mod tests {
             target_path: "/workspace/feature".to_string(),
             new_branch_name: "feature".to_string(),
             base_branch: Some("main".to_string()),
+            checkout_mode: None,
             setup_script: None,
             name_conflict_policy: None,
             origin: None,
@@ -480,6 +497,7 @@ mod tests {
             target_path: "/workspace/feature".to_string(),
             new_branch_name: "feature".to_string(),
             base_branch: Some("main".to_string()),
+            checkout_mode: Some("detached_ref".to_string()),
             setup_script: Some("pnpm install".to_string()),
             name_conflict_policy: Some("suffix_path".to_string()),
             origin: None,
@@ -492,6 +510,7 @@ mod tests {
                 "targetPath": "/workspace/feature",
                 "newBranchName": "feature",
                 "baseBranch": "main",
+                "checkoutMode": "detached_ref",
                 "setupScript": "pnpm install",
                 "nameConflictPolicy": "suffix_path"
             })
@@ -505,6 +524,7 @@ mod tests {
             target_path: "/workspace/feature".to_string(),
             new_branch_name: "feature".to_string(),
             base_branch: Some("main".to_string()),
+            checkout_mode: None,
             setup_script: None,
             name_conflict_policy: None,
             origin: None,
@@ -535,6 +555,41 @@ mod tests {
                 "path": "/workspace/feature",
                 "kind": "worktree",
                 "currentBranch": "feature"
+            }
+        })));
+    }
+
+    #[test]
+    fn detached_worktree_recovery_accepts_head_with_expected_original_branch() {
+        let request = MaterializeWorkspaceRequest::Worktree {
+            repo_root_id: "repo-root-1".to_string(),
+            target_path: "/workspace/feature".to_string(),
+            new_branch_name: "generated/otter".to_string(),
+            base_branch: Some("feature/base".to_string()),
+            checkout_mode: Some("detached_ref".to_string()),
+            setup_script: None,
+            name_conflict_policy: Some("suffix_path".to_string()),
+            origin: None,
+            creator_context: None,
+        };
+        assert!(request.recovered_worktree_is_expected(&json!({
+            "workspace": {
+                "id": "workspace-2",
+                "repoRootId": "repo-root-1",
+                "path": "/workspace/feature",
+                "kind": "worktree",
+                "currentBranch": "HEAD",
+                "originalBranch": "feature/base"
+            }
+        })));
+        assert!(!request.recovered_worktree_is_expected(&json!({
+            "workspace": {
+                "id": "workspace-2",
+                "repoRootId": "repo-root-1",
+                "path": "/workspace/feature",
+                "kind": "worktree",
+                "currentBranch": "feature/base",
+                "originalBranch": "feature/base"
             }
         })));
     }

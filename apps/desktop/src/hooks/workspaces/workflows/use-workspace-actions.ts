@@ -140,6 +140,7 @@ export function useWorkspaceActions() {
         targetPath: params.targetPath,
         newBranchName: params.branchName,
         baseBranch: params.baseRef || undefined,
+        checkoutMode: params.checkoutMode,
         setupScript: params.setupScript?.trim() || undefined,
         nameConflictPolicy: params.nameConflictPolicy,
         origin: DESKTOP_ORIGIN,
