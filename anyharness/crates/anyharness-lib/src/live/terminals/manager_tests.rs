@@ -59,7 +59,7 @@ async fn run_terminal_command_rejects_overlap_without_interrupt() {
             &workspace_path_string,
             CreateTerminalOptions {
                 cwd: None,
-                shell: Some(super::super::shell::detect_posix_shell()),
+                shell: Some(super::super::driver::detect_posix_shell()),
                 title: Some("Run command".to_string()),
                 purpose: TerminalPurpose::Run,
                 env: Vec::new(),

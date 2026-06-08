@@ -11,25 +11,25 @@ use crate::domains::terminals::service::{
     TerminalCommandService,
 };
 
-use super::handle::{PtyHandle, TerminalOutputRegistry, TerminalRegistry};
-use super::output_sink::TerminalOutputHub;
+use super::super::handle::{PtyHandle, TerminalOutputRegistry, TerminalRegistry};
+use super::super::output_sink::TerminalOutputHub;
 use super::stream_format::terminal_command_preface;
 
-pub(super) struct ActivePtyCommand {
-    pub(super) command_run_id: String,
+pub(in crate::live::terminals) struct ActivePtyCommand {
+    pub(in crate::live::terminals) command_run_id: String,
     nonce: String,
-    pub(super) script_path: PathBuf,
+    pub(in crate::live::terminals) script_path: PathBuf,
     buffer: String,
     capturing: bool,
-    pub(super) combined: String,
-    pub(super) output_truncated: bool,
+    pub(in crate::live::terminals) combined: String,
+    pub(in crate::live::terminals) output_truncated: bool,
     last_captured_ended_with_newline: bool,
     timed_out: bool,
-    pub(super) timeout_task: Option<tokio::task::AbortHandle>,
-    pub(super) started_at: Instant,
+    pub(in crate::live::terminals) timeout_task: Option<tokio::task::AbortHandle>,
+    pub(in crate::live::terminals) started_at: Instant,
 }
 
-pub(super) async fn run_terminal_command(
+pub(in crate::live::terminals) async fn run_terminal_command(
     terminals: &TerminalRegistry,
     output_hubs: &TerminalOutputRegistry,
     command_service: &TerminalCommandService,
@@ -212,7 +212,7 @@ fn rollback_started_pty_command(
     }
 }
 
-pub(super) async fn process_pty_output(
+pub(in crate::live::terminals) async fn process_pty_output(
     terminals: &TerminalRegistry,
     command_service: &TerminalCommandService,
     hub: &TerminalOutputHub,

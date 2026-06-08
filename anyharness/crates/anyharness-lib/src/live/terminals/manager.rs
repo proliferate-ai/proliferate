@@ -15,10 +15,10 @@ use crate::domains::terminals::service::{
 };
 use crate::domains::terminals::store::TerminalStore;
 
+use super::command_runs::{run_setup_process, set_terminal_output_suppressed, ActiveSetupTask};
 use super::driver;
+use super::driver::detect_posix_shell;
 use super::handle::{TerminalHandle, TerminalOutputRegistry, TerminalRegistry};
-use super::setup_process::{run_setup_process, set_terminal_output_suppressed, ActiveSetupTask};
-use super::shell::detect_posix_shell;
 
 const DEFAULT_SETUP_TIMEOUT: Duration = Duration::from_secs(300);
 

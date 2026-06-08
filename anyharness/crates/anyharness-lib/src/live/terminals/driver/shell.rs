@@ -56,7 +56,7 @@ pub(super) fn detect_shell_kind(shell: &str) -> ShellKind {
     }
 }
 
-pub(super) fn detect_posix_shell() -> String {
+pub(in crate::live::terminals) fn detect_posix_shell() -> String {
     for candidate in [
         "/bin/bash",
         "/usr/bin/bash",

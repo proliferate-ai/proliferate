@@ -14,14 +14,14 @@ use crate::domains::terminals::service::{
 };
 use crate::process_env::remove_runtime_private_pty_env;
 
-use super::handle::{PtyHandle, TerminalOutputRegistry, TerminalRegistry};
-use super::output_sink::TerminalOutputHub;
-use super::pty_command::process_pty_output;
+use super::super::command_runs::process_pty_output;
+use super::super::handle::{PtyHandle, TerminalOutputRegistry, TerminalRegistry};
+use super::super::output_sink::TerminalOutputHub;
 use super::shell::{
     configure_compact_prompt, detect_default_shell, detect_posix_shell, detect_shell_kind,
 };
 
-pub(super) async fn create_terminal_shell(
+pub(in crate::live::terminals) async fn create_terminal_shell(
     terminals: &TerminalRegistry,
     output_hubs: &TerminalOutputRegistry,
     command_service: &TerminalCommandService,
