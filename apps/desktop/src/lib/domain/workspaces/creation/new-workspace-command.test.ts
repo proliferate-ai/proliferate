@@ -98,6 +98,7 @@ describe("new workspace command targets", () => {
       repository,
       "feature/base",
       "home",
+      "main",
     );
 
     expect(resolveNewWorkspaceCommandTarget({
@@ -108,6 +109,7 @@ describe("new workspace command targets", () => {
       repoRootId: "repo-root-1",
       sourceWorkspaceId: "workspace-local",
       baseBranch: "feature/base",
+      defaultBranch: "main",
       repoGroupKeyToExpand: "/repos/proliferate",
       disabledReason: null,
     });

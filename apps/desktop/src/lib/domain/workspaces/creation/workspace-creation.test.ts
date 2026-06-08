@@ -132,6 +132,102 @@ describe("worktree creation params", () => {
     });
   });
 
+  it("uses the provided default-branch hint to detach generated non-default worktrees", () => {
+    const resolved = resolveWorktreeCreationParams({
+      repoRoot: {
+        ...repoRoot,
+        defaultBranch: null,
+      } as RepoRoot,
+      sourceWorkspace,
+      rawInput: {
+        repoRootId: "repo-root-1",
+        workspaceName: "otter",
+        baseBranch: "staging-mobile-config",
+        defaultBranch: "main",
+        generatedName: true,
+      },
+      homeDir: "/Users/ada",
+      branchPrefixType: "github_username",
+      authUser: {
+        id: "user-1",
+        email: "ada@example.com",
+        display_name: "Ada",
+        github_login: "ada",
+      },
+      repoConfig: null,
+    });
+
+    expect(resolved.params).toMatchObject({
+      branchName: "ada/otter",
+      baseRef: "staging-mobile-config",
+      checkoutMode: "detached_ref",
+      nameConflictPolicy: "suffix_path",
+    });
+  });
+
+  it("keeps generated default-branch worktrees in new-branch mode with a default hint", () => {
+    const resolved = resolveWorktreeCreationParams({
+      repoRoot: {
+        ...repoRoot,
+        defaultBranch: null,
+      } as RepoRoot,
+      sourceWorkspace,
+      rawInput: {
+        repoRootId: "repo-root-1",
+        workspaceName: "otter",
+        baseBranch: "main",
+        defaultBranch: "main",
+        generatedName: true,
+      },
+      homeDir: "/Users/ada",
+      branchPrefixType: "github_username",
+      authUser: {
+        id: "user-1",
+        email: "ada@example.com",
+        display_name: "Ada",
+        github_login: "ada",
+      },
+      repoConfig: null,
+    });
+
+    expect(resolved.params).toMatchObject({
+      branchName: "ada/otter",
+      baseRef: "main",
+      checkoutMode: "new_branch",
+      nameConflictPolicy: "suffix_path_and_branch",
+    });
+  });
+
+  it("uses the provided default-branch hint as the base ref fallback", () => {
+    const resolved = resolveWorktreeCreationParams({
+      repoRoot: {
+        ...repoRoot,
+        defaultBranch: null,
+      } as RepoRoot,
+      sourceWorkspace: null,
+      rawInput: {
+        repoRootId: "repo-root-1",
+        workspaceName: "otter",
+        defaultBranch: "main",
+        generatedName: true,
+      },
+      homeDir: "/Users/ada",
+      branchPrefixType: "github_username",
+      authUser: {
+        id: "user-1",
+        email: "ada@example.com",
+        display_name: "Ada",
+        github_login: "ada",
+      },
+      repoConfig: null,
+    });
+
+    expect(resolved.params).toMatchObject({
+      baseRef: "main",
+      checkoutMode: "new_branch",
+    });
+  });
+
   it("fails fast for generated names when branch or target path is explicit", () => {
     const withExplicitBranch = resolveWorktreeCreationParams({
       repoRoot,

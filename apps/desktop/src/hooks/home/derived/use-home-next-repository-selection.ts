@@ -153,8 +153,10 @@ export function useHomeNextRepositorySelection({
       repository: selectedRepository,
       repoLaunchKind,
       baseBranch: selectedBranchName,
+      defaultBranch: defaultBranchName,
       existingLocalWorkspaceId: existingLocalWorkspace?.id ?? null,
     }), [
+    defaultBranchName,
     destination,
     existingLocalWorkspace?.id,
     repoLaunchKind,
@@ -168,6 +170,7 @@ export function useHomeNextRepositorySelection({
     selectedRepoRoot,
     existingLocalWorkspace,
     branchOptions,
+    defaultBranchName,
     selectedBranchName,
     branchQuery,
     cloudActive,

@@ -372,6 +372,7 @@ describe("resolveHomeLaunchTarget", () => {
       repository,
       repoLaunchKind: "cloud",
       baseBranch: "main",
+      defaultBranch: "main",
       existingLocalWorkspaceId: null,
     })).toEqual({
       kind: "cloud",
@@ -387,11 +388,29 @@ describe("resolveHomeLaunchTarget", () => {
       repository,
       repoLaunchKind: "local",
       baseBranch: null,
+      defaultBranch: null,
       existingLocalWorkspaceId: "local-1",
     })).toEqual({
       kind: "local",
       sourceRoot: "/repo",
       existingWorkspaceId: "local-1",
+    });
+  });
+
+  it("resolves worktree launch targets with the selected and default branches", () => {
+    expect(resolveHomeLaunchTarget({
+      destination: "repository",
+      repository,
+      repoLaunchKind: "worktree",
+      baseBranch: "staging-mobile-config",
+      defaultBranch: "main",
+      existingLocalWorkspaceId: null,
+    })).toEqual({
+      kind: "worktree",
+      repoRootId: "repo-root-1",
+      sourceWorkspaceId: "worktree-source",
+      baseBranch: "staging-mobile-config",
+      defaultBranch: "main",
     });
   });
 });

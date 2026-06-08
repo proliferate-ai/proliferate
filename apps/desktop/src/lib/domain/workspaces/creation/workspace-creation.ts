@@ -14,6 +14,7 @@ export interface CreateWorktreeWorkspaceInput {
   targetPath?: string;
   workspaceName?: string;
   generatedName?: boolean;
+  defaultBranch?: string | null;
 }
 
 export interface WorktreeCreationParams {
@@ -64,8 +65,12 @@ export function resolveWorktreeCreationParams(input: {
   const hasExplicitBranch = Boolean(rawInput.branchName?.trim());
   const hasExplicitTargetPath = Boolean(rawInput.targetPath?.trim());
   const explicitBaseRef = rawInput.baseBranch?.trim();
-  const repoDefaultRef = repoConfig?.defaultBranch?.trim() || repoRoot.defaultBranch?.trim() || null;
+  const repoDefaultRef = rawInput.defaultBranch?.trim()
+    || repoConfig?.defaultBranch?.trim()
+    || repoRoot.defaultBranch?.trim()
+    || null;
   const baseRef = rawInput.baseBranch?.trim()
+    || rawInput.defaultBranch?.trim()
     || repoConfig?.defaultBranch?.trim()
     || repoRoot.defaultBranch?.trim()
     || sourceWorkspace?.currentBranch

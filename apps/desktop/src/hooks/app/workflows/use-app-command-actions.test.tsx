@@ -40,6 +40,7 @@ const hookMocks = vi.hoisted(() => ({
       gitRepoName: "repo-b",
     },
     selectedBranchName: "main",
+    defaultBranchName: "main",
   },
 }));
 
@@ -184,6 +185,7 @@ describe("useAppCommandActions", () => {
       repoRootId: "repo-root-b",
       sourceWorkspaceId: "workspace-local-b",
       baseBranch: "main",
+      defaultBranch: "main",
     }, expect.objectContaining({
       latencyFlowId: "latency-flow-1",
       repoGroupKeyToExpand: "/repo-b",

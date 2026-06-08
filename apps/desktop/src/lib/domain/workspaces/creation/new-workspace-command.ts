@@ -30,6 +30,7 @@ export interface NewWorkspaceCommandScope {
   sourceWorkspaceId: string | null;
   cloudRepoTarget: CloudWorkspaceRepoTarget | null;
   baseBranch: string | null;
+  defaultBranch: string | null;
 }
 
 export type NewWorkspaceDisabledCommandTarget<
@@ -54,6 +55,7 @@ export type NewWorktreeWorkspaceCommandTarget =
     repoRootId: string;
     sourceWorkspaceId: string | null;
     baseBranch: string | null;
+    defaultBranch: string | null;
     repoGroupKeyToExpand: string | null;
     disabledReason: null;
   }
@@ -130,6 +132,7 @@ export function buildSidebarNewWorkspaceCommandScope(input: {
     sourceWorkspaceId: null,
     cloudRepoTarget: input.cloudRepoTarget,
     baseBranch: null,
+    defaultBranch: null,
   };
 }
 
@@ -137,6 +140,7 @@ export function buildRepositoryNewWorkspaceCommandScope(
   repository: SettingsRepositoryEntry | null,
   baseBranch: string | null,
   source: "home",
+  defaultBranch?: string | null,
 ): NewWorkspaceCommandScope | null {
   const sourceRoot = trimToNull(repository?.sourceRoot);
   if (!repository || !sourceRoot) {
@@ -159,6 +163,7 @@ export function buildRepositoryNewWorkspaceCommandScope(
     sourceWorkspaceId: trimToNull(repository.localWorkspaceId),
     cloudRepoTarget,
     baseBranch: normalizedBaseBranch,
+    defaultBranch: trimToNull(defaultBranch),
   };
 }
 
@@ -199,6 +204,7 @@ export function buildSelectedWorkspaceNewWorkspaceCommandScope(
     sourceWorkspaceId: trimToNull(repoWs?.id),
     cloudRepoTarget,
     baseBranch: null,
+    defaultBranch: null,
   };
 }
 
@@ -238,6 +244,7 @@ export function resolveNewWorkspaceCommandTarget(
         repoRootId,
         sourceWorkspaceId: trimToNull(input.scope?.sourceWorkspaceId),
         baseBranch: trimToNull(input.scope?.baseBranch),
+        defaultBranch: trimToNull(input.scope?.defaultBranch),
         repoGroupKeyToExpand: trimToNull(input.scope?.repoGroupKeyToExpand),
         disabledReason: null,
       }
