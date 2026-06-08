@@ -11,6 +11,7 @@ use crate::domains::terminals::service::{
     append_bounded, complete_command_run, TerminalCommandService,
 };
 
+use super::handle::TerminalRegistry;
 use super::output_sink::TerminalOutputHub;
 use super::stream_format::{terminal_command_preface, workspace_prompt, TerminalStreamFormatter};
 
@@ -21,6 +22,7 @@ pub(super) struct ActiveSetupTask {
 
 pub(super) async fn run_setup_process(
     command_service: TerminalCommandService,
+    terminals: TerminalRegistry,
     hubs: Arc<RwLock<HashMap<String, TerminalOutputHub>>>,
     mut record: TerminalCommandRunRecord,
     terminal_id: String,
@@ -81,6 +83,7 @@ pub(super) async fn run_setup_process(
                 &workspace_path,
             )
             .await;
+            set_terminal_output_suppressed(&terminals, &terminal_id, false).await;
             let _ = command_service.update_command_run(&record);
             return;
         }
@@ -232,7 +235,23 @@ pub(super) async fn run_setup_process(
         &workspace_path,
     )
     .await;
+    set_terminal_output_suppressed(&terminals, &terminal_id, false).await;
     let _ = command_service.update_command_run(&record);
+}
+
+pub(super) async fn set_terminal_output_suppressed(
+    terminals: &TerminalRegistry,
+    terminal_id: &str,
+    suppress_output: bool,
+) {
+    let handle = {
+        let map = terminals.read().await;
+        map.get(terminal_id).cloned()
+    };
+    if let Some(handle) = handle {
+        let mut h = handle.lock().await;
+        h.suppress_output = suppress_output;
+    }
 }
 
 async fn emit_setup_output(

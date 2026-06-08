@@ -18,8 +18,7 @@ use super::handle::{PtyHandle, TerminalOutputRegistry, TerminalRegistry};
 use super::output_sink::TerminalOutputHub;
 use super::pty_command::process_pty_output;
 use super::shell::{
-    configure_compact_prompt, configure_silent_prompt, detect_default_shell, detect_posix_shell,
-    detect_shell_kind,
+    configure_compact_prompt, detect_default_shell, detect_posix_shell, detect_shell_kind,
 };
 
 pub(super) async fn create_terminal_shell(
@@ -75,11 +74,7 @@ pub(super) async fn create_terminal_shell(
         cmd.env(key, value);
     }
     cmd.env("TERM", "xterm-256color");
-    if request.purpose == TerminalPurpose::Setup {
-        configure_silent_prompt(&mut cmd, &shell);
-    } else {
-        configure_compact_prompt(&mut cmd, &shell, workspace_path);
-    }
+    configure_compact_prompt(&mut cmd, &shell, workspace_path);
     remove_runtime_private_pty_env(&mut cmd);
 
     let child = pair
@@ -131,6 +126,7 @@ pub(super) async fn create_terminal_shell(
         writer,
         child,
         active_pty_command: None,
+        suppress_output: request.purpose == TerminalPurpose::Setup,
     };
 
     {

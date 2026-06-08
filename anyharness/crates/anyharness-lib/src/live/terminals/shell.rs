@@ -40,30 +40,6 @@ pub(super) fn configure_compact_prompt(
     }
 }
 
-pub(super) fn configure_silent_prompt(cmd: &mut CommandBuilder, shell: &str) {
-    cmd.env("PS1", "");
-    cmd.env("PROMPT", "");
-    cmd.env("RPROMPT", "");
-    cmd.env("PROMPT2", "");
-    cmd.env("PROMPT3", "");
-    cmd.env("PROMPT4", "");
-
-    match detect_shell_kind(shell) {
-        ShellKind::Bash => {
-            cmd.arg("--noprofile");
-            cmd.arg("--norc");
-            cmd.arg("-i");
-        }
-        ShellKind::Zsh => {
-            cmd.arg("-f");
-        }
-        ShellKind::Sh => {
-            cmd.arg("-i");
-        }
-        ShellKind::Other => {}
-    }
-}
-
 pub(super) fn detect_shell_kind(shell: &str) -> ShellKind {
     let name = Path::new(shell)
         .file_name()

@@ -169,6 +169,7 @@ pub(super) struct PtyHandle {
     pub(super) writer: Box<dyn IoWrite + Send>,
     pub(super) child: Box<dyn portable_pty::Child + Send>,
     pub(super) active_pty_command: Option<ActivePtyCommand>,
+    pub(super) suppress_output: bool,
 }
 
 impl PtyHandle {

@@ -239,9 +239,7 @@ pub(super) async fn process_pty_output(
                 }
             }
             Some(id)
-        } else if h.record.purpose == TerminalPurpose::Setup
-            && command_service.is_setup_running(&h.record.workspace_id)
-        {
+        } else if h.suppress_output {
             output = Vec::new();
             None
         } else {
