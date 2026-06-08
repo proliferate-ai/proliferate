@@ -315,8 +315,7 @@ export function buildLogicalWorkspaces(args: {
           : entry.mobilityWorkspace
             ? cloudWorkspaceGroupKey(entry.mobilityWorkspace)
             : id;
-      const sourceRoot = entry.localWorkspace?.sourceRepoRootPath
-        ?? repoRoot?.path
+      const sourceRoot = repoRoot?.path
         ?? entry.localWorkspace?.repoRootId
         ?? entry.localWorkspace?.path
         ?? repoKey;
@@ -335,19 +334,16 @@ export function buildLogicalWorkspaces(args: {
         repoRoot,
         provider:
           repoRoot?.remoteProvider
-          ?? entry.localWorkspace?.gitProvider
           ?? entry.cloudWorkspace?.repo.provider
           ?? entry.mobilityWorkspace?.repo.provider
           ?? null,
         owner:
           repoRoot?.remoteOwner
-          ?? entry.localWorkspace?.gitOwner
           ?? entry.cloudWorkspace?.repo.owner
           ?? entry.mobilityWorkspace?.repo.owner
           ?? null,
         repoName:
           repoRoot?.remoteRepoName
-          ?? entry.localWorkspace?.gitRepoName
           ?? entry.cloudWorkspace?.repo.name
           ?? entry.mobilityWorkspace?.repo.name
           ?? null,

@@ -11,7 +11,9 @@ use super::blocking::run_blocking;
 use super::error::ApiError;
 use super::workspaces_contract::workspace_to_contract;
 use crate::app::AppState;
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{
+    WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceLifecycleState, WorkspaceRecord,
+};
 use crate::domains::workspaces::retire_preflight::RetirePreflightMode;
 
 #[utoipa::path(
@@ -52,9 +54,9 @@ pub async fn retire_workspace(
         .ok_or_else(|| {
             ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
         })?;
-    if current.lifecycle_state == "retired" {
+    if current.lifecycle_state == WorkspaceLifecycleState::Retired {
         let preflight = build_retire_preflight(&state, &workspace_id).await?;
-        if current.cleanup_operation.as_deref() == Some("purge") {
+        if current.cleanup_operation == Some(WorkspaceCleanupOperation::Purge) {
             return Ok(Json(WorkspaceRetireResponse {
                 workspace: workspace_to_contract(&state, current).await?,
                 outcome: WorkspaceRetireOutcome::Blocked,
@@ -66,7 +68,7 @@ pub async fn retire_workspace(
                 ),
             }));
         }
-        let cleanup_succeeded = current.cleanup_state == "complete";
+        let cleanup_succeeded = current.cleanup_state == WorkspaceCleanupState::Complete;
         let cleanup_message = retired_cleanup_message(&current);
         return Ok(Json(WorkspaceRetireResponse {
             workspace: workspace_to_contract(&state, current).await?,
@@ -102,9 +104,9 @@ pub async fn retire_workspace(
         .ok_or_else(|| {
             ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
         })?;
-    if workspace.lifecycle_state == "retired" {
+    if workspace.lifecycle_state == WorkspaceLifecycleState::Retired {
         let preflight = build_retire_preflight(&state, &workspace_id).await?;
-        if workspace.cleanup_operation.as_deref() == Some("purge") {
+        if workspace.cleanup_operation == Some(WorkspaceCleanupOperation::Purge) {
             return Ok(Json(WorkspaceRetireResponse {
                 workspace: workspace_to_contract(&state, workspace).await?,
                 outcome: WorkspaceRetireOutcome::Blocked,
@@ -116,7 +118,7 @@ pub async fn retire_workspace(
                 ),
             }));
         }
-        let cleanup_succeeded = workspace.cleanup_state == "complete";
+        let cleanup_succeeded = workspace.cleanup_state == WorkspaceCleanupState::Complete;
         let cleanup_message = retired_cleanup_message(&workspace);
         return Ok(Json(WorkspaceRetireResponse {
             workspace: workspace_to_contract(&state, workspace).await?,
@@ -183,9 +185,9 @@ pub async fn retire_workspace(
         .workspace_runtime
         .set_lifecycle_cleanup_state(
             &workspace_id,
-            "retired",
-            "pending",
-            Some("retire"),
+            WorkspaceLifecycleState::Retired,
+            WorkspaceCleanupState::Pending,
+            Some(WorkspaceCleanupOperation::Retire),
             None,
             None,
             Some(&attempted_at),
@@ -210,7 +212,7 @@ pub async fn retire_workspace(
                 WorkspaceRetireOutcome::Retired,
                 true,
                 None,
-                "complete",
+                WorkspaceCleanupState::Complete,
                 None,
             ),
             Err(error) => {
@@ -219,7 +221,7 @@ pub async fn retire_workspace(
                     WorkspaceRetireOutcome::CleanupFailed,
                     false,
                     Some(message),
-                    "failed",
+                    WorkspaceCleanupState::Failed,
                     Some(chrono::Utc::now().to_rfc3339()),
                 )
             }
@@ -228,9 +230,9 @@ pub async fn retire_workspace(
         .workspace_runtime
         .set_lifecycle_cleanup_state(
             &workspace_id,
-            "retired",
+            WorkspaceLifecycleState::Retired,
             cleanup_state,
-            Some("retire"),
+            Some(WorkspaceCleanupOperation::Retire),
             cleanup_message.as_deref(),
             error_at.as_deref(),
             Some(&attempted_at),
@@ -271,9 +273,12 @@ pub async fn retry_retire_cleanup(
         .ok_or_else(|| {
             ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
         })?;
-    if workspace.lifecycle_state != "retired"
-        || !matches!(workspace.cleanup_state.as_str(), "failed" | "pending")
-        || workspace.cleanup_operation.as_deref() == Some("purge")
+    if workspace.lifecycle_state != WorkspaceLifecycleState::Retired
+        || !matches!(
+            workspace.cleanup_state,
+            WorkspaceCleanupState::Failed | WorkspaceCleanupState::Pending
+        )
+        || workspace.cleanup_operation == Some(WorkspaceCleanupOperation::Purge)
     {
         let preflight = build_retire_preflight(&state, &workspace_id).await?;
         return Ok(Json(WorkspaceRetireResponse {
@@ -329,9 +334,9 @@ pub async fn retry_retire_cleanup(
         .workspace_runtime
         .set_lifecycle_cleanup_state(
             &workspace_id,
-            "retired",
-            "pending",
-            Some("retire"),
+            WorkspaceLifecycleState::Retired,
+            WorkspaceCleanupState::Pending,
+            Some(WorkspaceCleanupOperation::Retire),
             None,
             None,
             Some(&attempted_at),
@@ -351,7 +356,7 @@ pub async fn retry_retire_cleanup(
                 WorkspaceRetireOutcome::Retired,
                 true,
                 None,
-                "complete",
+                WorkspaceCleanupState::Complete,
                 None,
             ),
             Err(error) => {
@@ -360,7 +365,7 @@ pub async fn retry_retire_cleanup(
                     WorkspaceRetireOutcome::CleanupFailed,
                     false,
                     Some(message),
-                    "failed",
+                    WorkspaceCleanupState::Failed,
                     Some(chrono::Utc::now().to_rfc3339()),
                 )
             }
@@ -369,9 +374,9 @@ pub async fn retry_retire_cleanup(
         .workspace_runtime
         .set_lifecycle_cleanup_state(
             &workspace_id,
-            "retired",
+            WorkspaceLifecycleState::Retired,
             cleanup_state,
-            Some("retire"),
+            Some(WorkspaceCleanupOperation::Retire),
             cleanup_message.as_deref(),
             error_at.as_deref(),
             Some(&attempted_at),
@@ -402,9 +407,12 @@ async fn build_retire_preflight(
         .ok_or_else(|| {
             ApiError::not_found("Workspace not found".to_string(), "WORKSPACE_NOT_FOUND")
         })?;
-    let mode = if current.lifecycle_state == "retired"
-        && matches!(current.cleanup_state.as_str(), "pending" | "failed")
-        && current.cleanup_operation.as_deref() != Some("purge")
+    let mode = if current.lifecycle_state == WorkspaceLifecycleState::Retired
+        && matches!(
+            current.cleanup_state,
+            WorkspaceCleanupState::Pending | WorkspaceCleanupState::Failed
+        )
+        && current.cleanup_operation != Some(WorkspaceCleanupOperation::Purge)
     {
         RetirePreflightMode::RetiredCleanupRetry
     } else {
@@ -466,14 +474,16 @@ fn active_path_owner_retire_blocker(active: &WorkspaceRecord) -> WorkspaceRetire
 }
 
 fn retired_cleanup_message(workspace: &WorkspaceRecord) -> Option<String> {
-    match workspace.cleanup_state.as_str() {
-        "complete" => None,
-        "failed" => workspace
+    match workspace.cleanup_state {
+        WorkspaceCleanupState::Complete => None,
+        WorkspaceCleanupState::Failed => workspace
             .cleanup_error_message
             .clone()
             .or_else(|| Some("retired workspace cleanup failed".to_string())),
-        "pending" => Some("retired workspace cleanup is still pending".to_string()),
-        _ => Some(format!(
+        WorkspaceCleanupState::Pending => {
+            Some("retired workspace cleanup is still pending".to_string())
+        }
+        WorkspaceCleanupState::None => Some(format!(
             "retired workspace cleanup is not complete: {}",
             workspace.cleanup_state
         )),

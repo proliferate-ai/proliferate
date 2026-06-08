@@ -21,17 +21,16 @@ const repoRoot = {
 const localWorkspace = {
   id: "workspace-local",
   kind: "local",
-  surface: "workspace",
+  surface: "standard",
   path: "/repos/proliferate",
   repoRootId: "repo-root-1",
-  sourceRepoRootPath: "/repos/proliferate",
-  gitProvider: "github",
-  gitOwner: "proliferate-ai",
-  gitRepoName: "proliferate",
   currentBranch: "main",
   originalBranch: "main",
+  lifecycleState: "active",
+  cleanupState: "none",
+  createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
-} as unknown as Workspace;
+} satisfies Workspace;
 
 const repository = {
   sourceRoot: "/repos/proliferate",

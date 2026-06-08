@@ -29,6 +29,7 @@ use crate::domains::sessions::workspace_naming::mcp::{
     auth::WorkspaceNamingMcpAuth, WorkspaceNamingProductMcpServer,
 };
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
+use crate::domains::workspaces::model::WorkspaceSurface;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::persistence::Db;
@@ -92,7 +93,7 @@ pub(super) fn build_product_mcp_launch_catalog(deps: LaunchCatalogDeps) -> Produ
                     // Reviews intentionally preload on standard sessions. A parent session can
                     // start unrelated and become a review parent later; without live MCP refresh,
                     // the endpoint resolves the current review role on each request.
-                    Ok(ctx.workspace.surface == "standard")
+                    Ok(ctx.workspace.surface == WorkspaceSurface::Standard)
                 }),
                 Arc::new(move |workspace_id: &str, session_id: &str| {
                     review_auth.mint_capability_token(workspace_id, session_id)
@@ -102,7 +103,9 @@ pub(super) fn build_product_mcp_launch_catalog(deps: LaunchCatalogDeps) -> Produ
             ProductMcpLaunchRegistration::new(
                 &crate::domains::sessions::subagents::mcp::definition::DEFINITION,
                 Arc::new(move |ctx: ProductMcpSelectionContext<'_>| {
-                    if ctx.workspace.surface != "standard" || !ctx.session.subagents_enabled {
+                    if ctx.workspace.surface != WorkspaceSurface::Standard
+                        || !ctx.session.subagents_enabled
+                    {
                         return Ok(false);
                     }
                     Ok(subagent_selector_service
@@ -137,7 +140,7 @@ pub(super) fn build_product_mcp_launch_catalog(deps: LaunchCatalogDeps) -> Produ
             ProductMcpLaunchRegistration::new(
                 &cowork_mcp::definition::DEFINITION,
                 Arc::new(|ctx: ProductMcpSelectionContext<'_>| {
-                    Ok(ctx.workspace.surface == "cowork"
+                    Ok(ctx.workspace.surface == WorkspaceSurface::Cowork
                         && !cowork_mcp::definition::launch_disabled())
                 }),
                 Arc::new(move |workspace_id: &str, session_id: &str| {

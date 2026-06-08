@@ -124,6 +124,6 @@ describe("local-slot sidebar aliases", () => {
         hasDisplayNameOverride: true,
       },
     ]);
-    expect(secondGroupItems?.[0]?.name).toBe("repo-a");
+    expect(secondGroupItems?.[0]?.name).toBe("repo-b");
   });
 });

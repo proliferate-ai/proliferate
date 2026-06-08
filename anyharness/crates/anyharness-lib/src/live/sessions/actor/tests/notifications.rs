@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::test_support;
 
 #[test]
 fn title_from_markdown_uses_first_heading_without_marker() {
@@ -24,15 +25,7 @@ fn extract_tagged_proposed_plan_requires_complete_wrapper() {
 #[tokio::test]
 async fn handle_notification_persists_raw_acp_notifications() {
     let db = Db::open_in_memory().expect("open db");
-    db.with_conn(|conn| {
-        conn.execute(
-            "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
-             VALUES (?1, 'repo', '/tmp/workspace', '/tmp/workspace', ?2, ?2)",
-            rusqlite::params!["workspace-1", "2026-03-25T00:00:00Z"],
-        )?;
-        Ok(())
-    })
-    .expect("seed workspace");
+    test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace");
 
     let store = SessionStore::new(db.clone());
     store
@@ -224,15 +217,7 @@ fn resume_replay_filter_stays_disabled_for_zero_turn_fresh_native_resumes() {
 #[tokio::test]
 async fn replay_filter_keeps_raw_notifications_but_skips_normalized_transcript_events() {
     let db = Db::open_in_memory().expect("open db");
-    db.with_conn(|conn| {
-        conn.execute(
-            "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
-             VALUES (?1, 'repo', '/tmp/workspace', '/tmp/workspace', ?2, ?2)",
-            rusqlite::params!["workspace-1", "2026-03-25T00:00:00Z"],
-        )?;
-        Ok(())
-    })
-    .expect("seed workspace");
+    test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace");
 
     let store = SessionStore::new(db.clone());
     store

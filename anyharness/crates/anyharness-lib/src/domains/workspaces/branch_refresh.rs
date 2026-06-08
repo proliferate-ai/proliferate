@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use super::model::WorkspaceRecord;
+use super::model::{WorkspaceLifecycleState, WorkspaceRecord};
 use super::store::WorkspaceStore;
 
 const BRANCH_REFRESH_THROTTLE: Duration = Duration::from_secs(30);
@@ -124,7 +124,7 @@ impl WorkspaceBranchRefreshCoordinator {
         };
 
         for record in records {
-            if record.lifecycle_state != "active" {
+            if record.lifecycle_state != WorkspaceLifecycleState::Active {
                 stats.skipped_inactive_count = stats.skipped_inactive_count.saturating_add(1);
                 continue;
             }
@@ -226,7 +226,7 @@ fn refresh_workspace_branch(
     record: WorkspaceRecord,
 ) -> BranchRefreshWorkerOutcome {
     let current = match store.find_by_id(&record.id) {
-        Ok(Some(current)) if current.lifecycle_state == "active" => current,
+        Ok(Some(current)) if current.lifecycle_state == WorkspaceLifecycleState::Active => current,
         Ok(_) => return BranchRefreshWorkerOutcome::SkippedMissing,
         Err(_) => return BranchRefreshWorkerOutcome::Failed,
     };

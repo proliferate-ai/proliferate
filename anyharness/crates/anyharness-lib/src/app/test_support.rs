@@ -2,6 +2,7 @@ use std::ffi::OsString;
 use std::sync::{Mutex, OnceLock};
 
 use crate::domains::sessions::mcp_bindings::crypto::DATA_KEY_ENV_VAR;
+use crate::persistence::Db;
 
 pub(crate) static ENV_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
 
@@ -69,4 +70,27 @@ pub(crate) fn set_proliferate_dev_env(value: Option<&str>) -> ProliferateDevEnvG
         None => std::env::remove_var("PROLIFERATE_DEV"),
     }
     ProliferateDevEnvGuard { previous }
+}
+
+pub(crate) fn seed_workspace_with_repo_root(db: &Db, workspace_id: &str, kind: &str, path: &str) {
+    let repo_root_id = format!("repo-root-{workspace_id}");
+    let now = "2026-03-25T00:00:00Z";
+    db.with_conn(|conn| {
+        conn.execute(
+            "INSERT OR IGNORE INTO repo_roots (
+                id, kind, path, display_name, default_branch, remote_provider, remote_owner,
+                remote_repo_name, remote_url, created_at, updated_at
+             ) VALUES (?1, 'external', ?2, NULL, 'main', NULL, NULL, NULL, NULL, ?3, ?3)",
+            rusqlite::params![repo_root_id, path, now],
+        )?;
+        conn.execute(
+            "INSERT INTO workspaces (
+                id, kind, repo_root_id, path, surface, lifecycle_state, cleanup_state,
+                created_at, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, 'standard', 'active', 'none', ?5, ?5)",
+            rusqlite::params![workspace_id, kind, repo_root_id, path, now],
+        )?;
+        Ok(())
+    })
+    .expect("seed workspace and repo root");
 }

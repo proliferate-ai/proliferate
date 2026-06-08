@@ -29,6 +29,7 @@ function upsertLocalWorkspaceForRuntime(
   queryClient: QueryClient,
   runtimeUrl: string,
   workspace: Workspace,
+  repoRoot?: RepoRoot | null,
 ): WorkspaceCollectionsLocalUpsertSummary {
   let previousLocalCount = 0;
   let nextLocalCount = 0;
@@ -41,7 +42,7 @@ function upsertLocalWorkspaceForRuntime(
       alreadyPresent = collections?.localWorkspaces.some(
         (existing) => existing.id === workspace.id,
       ) ?? false;
-      const nextCollections = upsertLocalWorkspaceCollections(collections, workspace);
+      const nextCollections = upsertLocalWorkspaceCollections(collections, workspace, repoRoot);
       nextLocalCount = nextCollections?.localWorkspaces.length ?? previousLocalCount;
       return nextCollections;
     },
@@ -85,8 +86,11 @@ export function useWorkspaceCollectionsMutationCache(runtimeUrl: string) {
   const queryClient = useQueryClient();
 
   const upsertLocalWorkspace = useCallback(
-    (workspace: Workspace): WorkspaceCollectionsLocalUpsertSummary =>
-      upsertLocalWorkspaceForRuntime(queryClient, runtimeUrl, workspace),
+    (
+      workspace: Workspace,
+      repoRoot?: RepoRoot | null,
+    ): WorkspaceCollectionsLocalUpsertSummary =>
+      upsertLocalWorkspaceForRuntime(queryClient, runtimeUrl, workspace, repoRoot),
     [queryClient, runtimeUrl],
   );
 

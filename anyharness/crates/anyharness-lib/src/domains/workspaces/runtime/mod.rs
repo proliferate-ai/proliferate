@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use super::branch_refresh::WorkspaceBranchRefreshCoordinator;
 use super::deletion::WorkspaceDeleteWorkflow;
-use super::service::WorkspaceService;
 use super::store::WorkspaceStore;
 use crate::domains::repo_roots::model::RepoRootRecord;
 use crate::domains::repo_roots::service::RepoRootService;
@@ -22,7 +21,6 @@ mod worktrees;
 mod tests;
 
 pub struct WorkspaceRuntime {
-    service: WorkspaceService,
     store: WorkspaceStore,
     delete_workflow: WorkspaceDeleteWorkflow,
     repo_root_service: RepoRootService,
@@ -38,14 +36,12 @@ pub struct WorkspaceResolution {
 
 impl WorkspaceRuntime {
     pub fn new(
-        service: WorkspaceService,
         store: WorkspaceStore,
         delete_workflow: WorkspaceDeleteWorkflow,
         repo_root_service: RepoRootService,
         runtime_home: PathBuf,
     ) -> Self {
         Self {
-            service,
             store,
             delete_workflow,
             repo_root_service,

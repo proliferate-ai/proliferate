@@ -1,12 +1,5 @@
-import type {
-  CurrentPullRequestResponse,
-  GitStatusSnapshot,
-  Workspace,
-} from "@anyharness/sdk";
-import {
-  useCurrentPullRequestQuery,
-  useGitStatusQuery,
-} from "@anyharness/sdk-react";
+import type { CurrentPullRequestResponse, GitStatusSnapshot, RepoRoot, Workspace } from "@anyharness/sdk";
+import { useCurrentPullRequestQuery, useGitStatusQuery } from "@anyharness/sdk-react";
 import {
   useCallback,
   useEffect,
@@ -88,6 +81,7 @@ export interface MainScreenDataState {
   workspaceUiKey: string | null;
   selectedWorkspaceId: string | null;
   selectedWorkspace: Workspace | undefined;
+  selectedRepoRoot: RepoRoot | undefined;
   selectedCloudWorkspace: CloudWorkspaceSummary | undefined;
   gitStatus: GitStatusSnapshot | undefined;
   existingPr: NonNullable<CurrentPullRequestResponse["pullRequest"]> | null;
@@ -287,6 +281,7 @@ export function useMainScreenState(): MainScreenState {
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const { data: workspaceCollections } = useWorkspaces();
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
+  const repoRoots = workspaceCollections?.repoRoots ?? [];
   const activeLaunchIntentIdForShell =
     selectedWorkspaceId || pendingWorkspaceEntry
       ? activeLaunchIntent?.id ?? null
@@ -323,6 +318,12 @@ export function useMainScreenState(): MainScreenState {
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId),
     [selectedWorkspaceId, workspaces],
+  );
+  const selectedRepoRoot = useMemo(
+    () => selectedWorkspace?.repoRootId
+      ? repoRoots.find((repoRoot) => repoRoot.id === selectedWorkspace.repoRootId)
+      : undefined,
+    [repoRoots, selectedWorkspace?.repoRootId],
   );
   const selectedCloudWorkspace = useMemo(
     () => workspaceCollections?.cloudWorkspaces.find(
@@ -386,6 +387,7 @@ export function useMainScreenState(): MainScreenState {
       workspaceUiKey,
       selectedWorkspaceId,
       selectedWorkspace,
+      selectedRepoRoot,
       selectedCloudWorkspace,
       gitStatus,
       existingPr: currentPullRequest?.pullRequest ?? null,

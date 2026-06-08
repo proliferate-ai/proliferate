@@ -60,9 +60,9 @@ export function buildSettingsRepositoryEntries(
       workspaceCount: repoWorkspaces.length,
       repoRootId: repoRoot.id,
       localWorkspaceId: localWorkspace?.id ?? null,
-      gitProvider: repoRoot.remoteProvider?.trim() ?? localWorkspace?.gitProvider?.trim() ?? null,
-      gitOwner: repoRoot.remoteOwner?.trim() ?? localWorkspace?.gitOwner?.trim() ?? null,
-      gitRepoName: repoRoot.remoteRepoName?.trim() ?? localWorkspace?.gitRepoName?.trim() ?? null,
+      gitProvider: repoRoot.remoteProvider?.trim() ?? null,
+      gitOwner: repoRoot.remoteOwner?.trim() ?? null,
+      gitRepoName: repoRoot.remoteRepoName?.trim() ?? null,
     } satisfies SettingsRepositoryEntry;
   }).sort((a, b) => {
     const byName = a.name.localeCompare(b.name);

@@ -3,15 +3,16 @@ use std::path::Path;
 
 use super::WorkspaceRuntime;
 use crate::adapters::git::GitService;
+use crate::domains::repo_roots::model::RepoRootRecord;
 use crate::domains::workspaces::managed_root::canonical_managed_worktrees_root;
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceRecord};
 
 impl WorkspaceRuntime {
     pub fn retire_worktree_materialization(
         &self,
         workspace: &WorkspaceRecord,
     ) -> anyhow::Result<()> {
-        if workspace.kind != "worktree" {
+        if workspace.kind != WorkspaceKind::Worktree {
             anyhow::bail!("unsupported workspace kind for retire: {}", workspace.kind);
         }
         let worktree = Path::new(&workspace.path);
@@ -28,8 +29,8 @@ impl WorkspaceRuntime {
                 workspace.path
             );
         }
-        let output =
-            GitService::remove_worktree_force(&workspace.source_repo_root_path, &workspace.path)?;
+        let repo_root = self.repo_root_for_workspace(workspace)?;
+        let output = GitService::remove_worktree_force(&repo_root.path, &workspace.path)?;
         if !output.success && worktree.exists() {
             anyhow::bail!(
                 "failed to remove worktree materialization: {}",
@@ -52,13 +53,12 @@ impl WorkspaceRuntime {
         workspace: &WorkspaceRecord,
         default_branch: Option<&str>,
     ) -> anyhow::Result<()> {
-        match workspace.kind.as_str() {
-            "worktree" => self.remove_worktree_workspace(
-                &workspace.source_repo_root_path,
-                &workspace.id,
-                &workspace.path,
-            ),
-            "local" => {
+        match workspace.kind {
+            WorkspaceKind::Worktree => {
+                let repo_root = self.repo_root_for_workspace(workspace)?;
+                self.remove_worktree_workspace(&repo_root.path, &workspace.id, &workspace.path)
+            }
+            WorkspaceKind::Local => {
                 let branch = default_branch
                     .map(str::trim)
                     .filter(|value| !value.is_empty())
@@ -67,8 +67,16 @@ impl WorkspaceRuntime {
                     })?;
                 self.park_local_workspace(workspace, branch)
             }
-            kind => anyhow::bail!("unsupported workspace kind for mobility source destroy: {kind}"),
         }
+    }
+
+    fn repo_root_for_workspace(
+        &self,
+        workspace: &WorkspaceRecord,
+    ) -> anyhow::Result<RepoRootRecord> {
+        self.repo_root_service
+            .get_repo_root(&workspace.repo_root_id)?
+            .ok_or_else(|| anyhow::anyhow!("repo root not found: {}", workspace.repo_root_id))
     }
 
     fn remove_worktree_workspace(

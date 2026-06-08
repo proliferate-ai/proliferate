@@ -10,7 +10,9 @@ use crate::domains::sessions::store::SessionStore;
 use crate::domains::terminals::store::TerminalStore;
 use crate::domains::workspaces::checkout_gate::{CheckoutDeletionGate, CheckoutPathLockKey};
 use crate::domains::workspaces::managed_root::canonical_managed_worktrees_root;
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{
+    WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceLifecycleState, WorkspaceRecord,
+};
 use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::domains::workspaces::retention_policy::{
     WorktreeRetentionPolicyRecord, WorktreeRetentionPolicyStore,
@@ -45,7 +47,7 @@ pub struct WorkspaceRetentionService {
 pub struct WorktreeRetentionRunRow {
     pub workspace_id: String,
     pub path: String,
-    pub repo_root_id: Option<String>,
+    pub repo_root_id: String,
     pub outcome: WorktreeRetentionRowOutcome,
     pub message: String,
 }
@@ -171,12 +173,7 @@ impl WorkspaceRetentionService {
                 continue;
             }
             by_repo
-                .entry(
-                    workspace
-                        .repo_root_id
-                        .clone()
-                        .unwrap_or_else(|| workspace.id.clone()),
-                )
+                .entry(workspace.repo_root_id.clone())
                 .or_default()
                 .push(workspace);
         }
@@ -329,9 +326,9 @@ impl WorkspaceRetentionService {
                 attempted_count += 1;
                 let pending = self.workspace_runtime.set_lifecycle_cleanup_state(
                     &reloaded.id,
-                    "retired",
-                    "pending",
-                    Some("retire"),
+                    WorkspaceLifecycleState::Retired,
+                    WorkspaceCleanupState::Pending,
+                    Some(WorkspaceCleanupOperation::Retire),
                     None,
                     None,
                     Some(&attempted_at),
@@ -354,23 +351,23 @@ impl WorkspaceRetentionService {
                 .await
                 .map_err(|error| anyhow::anyhow!("retention cleanup task failed: {error}"))?;
                 let (state, message, failed_at) = match cleanup {
-                    Ok(()) => ("complete", None, None),
+                    Ok(()) => (WorkspaceCleanupState::Complete, None, None),
                     Err(error) => (
-                        "failed",
+                        WorkspaceCleanupState::Failed,
                         Some(error.to_string()),
                         Some(chrono::Utc::now().to_rfc3339()),
                     ),
                 };
                 self.workspace_runtime.set_lifecycle_cleanup_state(
                     &reloaded.id,
-                    "retired",
+                    WorkspaceLifecycleState::Retired,
                     state,
-                    Some("retire"),
+                    Some(WorkspaceCleanupOperation::Retire),
                     message.as_deref(),
                     failed_at.as_deref(),
                     Some(&attempted_at),
                 )?;
-                if state == "complete" {
+                if state == WorkspaceCleanupState::Complete {
                     retired_count += 1;
                     rows.push(row(
                         &reloaded,

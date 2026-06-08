@@ -51,7 +51,6 @@ export function resolveWorktreeCreationParams(input: {
 
   const workspaceName = rawInput.workspaceName?.trim() || "workspace";
   const repoName = repoRoot.remoteRepoName?.trim()
-    || sourceWorkspace?.gitRepoName
     || repoRoot.path.split("/").pop()
     || "repo";
   const targetPath = rawInput.targetPath?.trim()

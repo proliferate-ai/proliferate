@@ -5,7 +5,7 @@ use crate::domains::artifacts::model::{
     UpdateArtifactInput,
 };
 use crate::domains::artifacts::runtime::ArtifactRuntime;
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{WorkspaceRecord, WorkspaceSurface};
 
 pub type CreateCoworkArtifactInput = CreateArtifactInput;
 pub type UpdateCoworkArtifactInput = UpdateArtifactInput;
@@ -80,7 +80,7 @@ impl Default for CoworkArtifactRuntime {
 }
 
 fn ensure_cowork_workspace(workspace: &WorkspaceRecord) -> Result<(), ArtifactError> {
-    if workspace.surface != "cowork" {
+    if workspace.surface != WorkspaceSurface::Cowork {
         return Err(ArtifactError::WorkspaceNotCowork);
     }
     Ok(())
@@ -89,6 +89,9 @@ fn ensure_cowork_workspace(workspace: &WorkspaceRecord) -> Result<(), ArtifactEr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domains::workspaces::model::{
+        WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
+    };
     use uuid::Uuid;
 
     #[test]
@@ -116,22 +119,17 @@ mod tests {
             let now = chrono::Utc::now().to_rfc3339();
             let record = WorkspaceRecord {
                 id: format!("workspace-{}", Uuid::new_v4()),
-                kind: "local".to_string(),
-                repo_root_id: None,
+                kind: WorkspaceKind::Local,
+                repo_root_id: format!("repo-root-{}", Uuid::new_v4()),
                 path: path.to_string_lossy().to_string(),
-                surface: surface.to_string(),
-                source_repo_root_path: path.to_string_lossy().to_string(),
-                source_workspace_id: None,
-                git_provider: None,
-                git_owner: None,
-                git_repo_name: None,
+                surface: WorkspaceSurface::try_from(surface).expect("test workspace surface"),
                 original_branch: None,
                 current_branch: None,
                 display_name: None,
                 origin: None,
                 creator_context: None,
-                lifecycle_state: "ready".to_string(),
-                cleanup_state: "none".to_string(),
+                lifecycle_state: WorkspaceLifecycleState::Active,
+                cleanup_state: WorkspaceCleanupState::None,
                 cleanup_operation: None,
                 cleanup_error_message: None,
                 cleanup_failed_at: None,

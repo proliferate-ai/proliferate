@@ -1,12 +1,16 @@
+use std::path::Path;
 use std::time::Instant;
 
 #[cfg(test)]
 use super::super::branch_refresh::BranchRefreshBatchOutcome;
 use super::WorkspaceRuntime;
+use crate::domains::workspaces::detector;
 use crate::domains::workspaces::model::WorkspaceRecord;
 use crate::domains::workspaces::types::{
     ProjectSetupDetectionResult, SetWorkspaceDisplayNameError,
 };
+
+const MAX_WORKSPACE_DISPLAY_NAME_CHARS: usize = 160;
 
 impl WorkspaceRuntime {
     pub fn get_workspace(&self, workspace_id: &str) -> anyhow::Result<Option<WorkspaceRecord>> {
@@ -27,11 +31,42 @@ impl WorkspaceRuntime {
         workspace_id: &str,
         display_name: Option<&str>,
     ) -> Result<WorkspaceRecord, SetWorkspaceDisplayNameError> {
-        self.service.set_display_name(workspace_id, display_name)
+        let normalized = display_name
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+
+        if let Some(value) = normalized.as_deref() {
+            if value.chars().count() > MAX_WORKSPACE_DISPLAY_NAME_CHARS {
+                return Err(SetWorkspaceDisplayNameError::TooLong(
+                    MAX_WORKSPACE_DISPLAY_NAME_CHARS,
+                ));
+            }
+        }
+
+        let existing = self
+            .store
+            .find_by_id(workspace_id)
+            .map_err(SetWorkspaceDisplayNameError::Unexpected)?
+            .ok_or_else(|| SetWorkspaceDisplayNameError::NotFound(workspace_id.to_string()))?;
+
+        let now = chrono::Utc::now().to_rfc3339();
+        self.store
+            .update_display_name(workspace_id, normalized.as_deref(), &now)
+            .map_err(SetWorkspaceDisplayNameError::Unexpected)?;
+
+        let mut updated = existing;
+        updated.display_name = normalized;
+        updated.updated_at = now;
+        Ok(updated)
     }
 
     pub fn detect_setup(&self, workspace_id: &str) -> anyhow::Result<ProjectSetupDetectionResult> {
-        self.service.detect_setup(workspace_id)
+        let record = self
+            .store
+            .find_by_id(workspace_id)?
+            .ok_or_else(|| anyhow::anyhow!("workspace not found: {workspace_id}"))?;
+        Ok(detector::detect_project_setup(Path::new(&record.path)))
     }
 
     pub fn list_workspaces(&self) -> anyhow::Result<Vec<WorkspaceRecord>> {

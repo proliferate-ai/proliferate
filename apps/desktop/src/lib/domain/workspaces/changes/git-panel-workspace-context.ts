@@ -52,7 +52,7 @@ export function resolveGitPanelWorkspaceContext(
   return {
     activeWorkspaceId,
     sourceRepoRootPath: sourceRootForGitPanel(
-      selectedWorkspace?.sourceRepoRootPath ?? repoRoot?.path ?? null,
+      repoRoot?.path ?? null,
       selectedWorkspace?.path ?? null,
     ),
     repoRoot,

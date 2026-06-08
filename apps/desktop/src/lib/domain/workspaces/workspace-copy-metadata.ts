@@ -20,7 +20,6 @@ export function workspaceCopyMetadataForLogicalWorkspace(
   const workspacePath = firstTrimmed(localWorkspace
     ? [
       localWorkspace.path,
-      localWorkspace.sourceRepoRootPath,
       workspace?.repoRoot?.path,
       workspace?.sourceRoot,
     ]

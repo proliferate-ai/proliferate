@@ -1,8 +1,6 @@
 import type { components } from "../generated/openapi.js";
 
-type GeneratedWorkspace = components["schemas"]["Workspace"];
-
-export type WorkspaceKind = components["schemas"]["WorkspaceKind"] | "repo";
+export type WorkspaceKind = components["schemas"]["WorkspaceKind"];
 export type WorkspaceSurface = components["schemas"]["WorkspaceSurface"];
 export type WorkspaceExecutionPhase = components["schemas"]["WorkspaceExecutionPhase"];
 export type WorkspaceExecutionSummary = components["schemas"]["WorkspaceExecutionSummary"];
@@ -12,16 +10,7 @@ export type OriginKind = components["schemas"]["OriginKind"];
 export type OriginEntrypoint = components["schemas"]["OriginEntrypoint"];
 export type OriginContext = components["schemas"]["OriginContext"];
 export type WorkspaceCreatorContext = components["schemas"]["WorkspaceCreatorContext"];
-export type Workspace = Omit<GeneratedWorkspace, "kind" | "repoRootId" | "surface"> & {
-  kind: WorkspaceKind;
-  repoRootId?: string;
-  surface?: WorkspaceSurface;
-  sourceRepoRootPath?: string;
-  sourceWorkspaceId?: string | null;
-  gitProvider?: string | null;
-  gitOwner?: string | null;
-  gitRepoName?: string | null;
-};
+export type Workspace = components["schemas"]["Workspace"];
 export type ResolveWorkspaceResponse = components["schemas"]["ResolveWorkspaceResponse"];
 export type UpdateWorkspaceDisplayNameRequest =
   components["schemas"]["UpdateWorkspaceDisplayNameRequest"];

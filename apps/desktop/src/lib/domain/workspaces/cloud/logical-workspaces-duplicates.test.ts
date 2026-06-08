@@ -13,6 +13,7 @@ import {
 } from "@/lib/domain/workspaces/cloud/logical-workspace-id";
 import {
   makeCloudWorkspace,
+  makeRepoRoot,
   makeWorkspace,
 } from "@/lib/domain/workspaces/sidebar/sidebar-test-fixtures";
 
@@ -81,14 +82,19 @@ function makeMobilityWorkspace(args: {
 
 describe("logical workspace duplicate local records", () => {
   it("splits duplicate local workspaces while merging cloud and mobility only with canonical", () => {
+    const repoRoot = makeRepoRoot();
     const olderLocal = makeWorkspace({
       id: "local-older",
+      kind: "worktree",
       branch: "main",
+      path: "/tmp/proliferate/worktrees/local-older",
       updatedAt: "2026-04-13T10:00:00.000Z",
     });
     const newerLocal = makeWorkspace({
       id: "local-newer",
+      kind: "worktree",
       branch: "main",
+      path: "/tmp/proliferate/worktrees/local-newer",
       updatedAt: "2026-04-13T11:00:00.000Z",
     });
     const cloudWorkspace = makeCloudWorkspace({
@@ -111,7 +117,7 @@ describe("logical workspace duplicate local records", () => {
 
     const logicalWorkspaces = buildLogicalWorkspaces({
       localWorkspaces: [newerLocal, olderLocal],
-      repoRoots: [],
+      repoRoots: [repoRoot],
       cloudWorkspaces: [cloudWorkspace],
       cloudMobilityWorkspaces: [mobilityWorkspace],
       currentSelectionId: null,
@@ -147,7 +153,6 @@ describe("logical workspace duplicate local records", () => {
         }),
       }),
       path: checkoutPath,
-      sourceRepoRootPath: checkoutPath,
     };
     const historicalLocal = {
       ...makeWorkspace({
@@ -161,7 +166,6 @@ describe("logical workspace duplicate local records", () => {
         }),
       }),
       path: checkoutPath,
-      sourceRepoRootPath: checkoutPath,
     };
 
     const logicalWorkspaces = buildLogicalWorkspaces({
@@ -223,7 +227,7 @@ describe("logical workspace duplicate local records", () => {
 
     const afterDeletion = buildLogicalWorkspaces({
       localWorkspaces: [newerLocal],
-      repoRoots: [],
+      repoRoots: [makeRepoRoot()],
       cloudWorkspaces: [makeCloudWorkspace({ id: "cloud-main", branch: "main" })],
       cloudMobilityWorkspaces: [makeMobilityWorkspace({
         id: "mobility-main",

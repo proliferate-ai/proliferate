@@ -5,6 +5,11 @@ use std::sync::Arc;
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::workspaces::checkout_gate::{CheckoutDeletionGate, CheckoutPathLockKey};
 use crate::domains::workspaces::managed_root::canonical_managed_worktrees_root;
+use crate::domains::workspaces::model::{
+    WorkspaceCleanupOperation as DomainWorkspaceCleanupOperation,
+    WorkspaceCleanupState as DomainWorkspaceCleanupState, WorkspaceKind as DomainWorkspaceKind,
+    WorkspaceLifecycleState as DomainWorkspaceLifecycleState,
+};
 use crate::domains::workspaces::store::WorkspaceStore;
 
 #[derive(Debug, Clone)]
@@ -112,7 +117,7 @@ impl WorktreeInventoryService {
         let mut by_path: BTreeMap<String, Vec<_>> = BTreeMap::new();
         for workspace in workspaces
             .into_iter()
-            .filter(|workspace| workspace.kind == "worktree")
+            .filter(|workspace| workspace.kind == DomainWorkspaceKind::Worktree)
         {
             by_path
                 .entry(workspace.path.clone())
@@ -150,12 +155,12 @@ impl WorktreeInventoryService {
                         .unwrap_or(0);
                     WorktreeInventoryWorkspaceSummary {
                         id: workspace.id.clone(),
-                        kind: workspace_kind(&workspace.kind),
-                        lifecycle_state: workspace_lifecycle(&workspace.lifecycle_state),
-                        cleanup_state: workspace_cleanup(&workspace.cleanup_state),
-                        cleanup_operation: workspace_cleanup_operation(
-                            workspace.cleanup_operation.as_deref(),
-                        ),
+                        kind: workspace_kind(workspace.kind),
+                        lifecycle_state: workspace_lifecycle(workspace.lifecycle_state),
+                        cleanup_state: workspace_cleanup(workspace.cleanup_state),
+                        cleanup_operation: workspace
+                            .cleanup_operation
+                            .map(workspace_cleanup_operation),
                         display_name: workspace.display_name.clone(),
                         branch: workspace.current_branch.clone(),
                         session_count,
@@ -171,8 +176,11 @@ impl WorktreeInventoryService {
                 actions.push(WorktreeInventoryAction::DeleteWorkspaceHistory);
             }
             if associated.iter().any(|workspace| {
-                workspace.cleanup_operation.as_deref() == Some("purge")
-                    && matches!(workspace.cleanup_state.as_str(), "pending" | "failed")
+                workspace.cleanup_operation == Some(DomainWorkspaceCleanupOperation::Purge)
+                    && matches!(
+                        workspace.cleanup_state,
+                        DomainWorkspaceCleanupState::Pending | DomainWorkspaceCleanupState::Failed
+                    )
             }) {
                 actions.push(WorktreeInventoryAction::RetryPurge);
             }
@@ -185,17 +193,17 @@ impl WorktreeInventoryService {
                 materialized,
                 repo_root_id: associated
                     .first()
-                    .and_then(|workspace| workspace.repo_root_id.clone()),
+                    .map(|workspace| workspace.repo_root_id.clone()),
                 repo_root_name: None,
                 branch: associated
                     .first()
                     .and_then(|workspace| workspace.current_branch.clone()),
                 cleanup_operation: associated.first().and_then(|workspace| {
-                    workspace_cleanup_operation(workspace.cleanup_operation.as_deref())
+                    workspace.cleanup_operation.map(workspace_cleanup_operation)
                 }),
                 cleanup_state: associated
                     .first()
-                    .map(|workspace| workspace_cleanup(&workspace.cleanup_state)),
+                    .map(|workspace| workspace_cleanup(workspace.cleanup_state)),
                 associated_workspaces: summaries,
                 total_session_count,
                 available_actions: actions,
@@ -297,7 +305,7 @@ impl WorktreeInventoryService {
     ) -> anyhow::Result<bool> {
         if self
             .workspace_store
-            .find_by_path_and_kind(requested_path, "worktree")?
+            .find_by_path_and_kind(requested_path, DomainWorkspaceKind::Worktree)?
             .is_some()
         {
             return Ok(true);
@@ -307,7 +315,7 @@ impl WorktreeInventoryService {
         if canonical_string != requested_path
             && self
                 .workspace_store
-                .find_by_path_and_kind(&canonical_string, "worktree")?
+                .find_by_path_and_kind(&canonical_string, DomainWorkspaceKind::Worktree)?
                 .is_some()
         {
             return Ok(true);
@@ -317,7 +325,7 @@ impl WorktreeInventoryService {
             .workspace_store
             .list_all()?
             .into_iter()
-            .filter(|workspace| workspace.kind == "worktree")
+            .filter(|workspace| workspace.kind == DomainWorkspaceKind::Worktree)
         {
             if std::fs::canonicalize(&workspace.path).ok().as_deref() == Some(canonical_path) {
                 return Ok(true);
@@ -346,34 +354,35 @@ fn git_worktree_paths(worktree: &Path) -> anyhow::Result<Vec<PathBuf>> {
     Ok(paths)
 }
 
-fn workspace_kind(kind: &str) -> WorkspaceKind {
+fn workspace_kind(kind: DomainWorkspaceKind) -> WorkspaceKind {
     match kind {
-        "worktree" => WorkspaceKind::Worktree,
-        _ => WorkspaceKind::Local,
+        DomainWorkspaceKind::Worktree => WorkspaceKind::Worktree,
+        DomainWorkspaceKind::Local => WorkspaceKind::Local,
     }
 }
 
-fn workspace_lifecycle(state: &str) -> WorkspaceLifecycleState {
+fn workspace_lifecycle(state: DomainWorkspaceLifecycleState) -> WorkspaceLifecycleState {
     match state {
-        "retired" => WorkspaceLifecycleState::Retired,
-        _ => WorkspaceLifecycleState::Active,
+        DomainWorkspaceLifecycleState::Retired => WorkspaceLifecycleState::Retired,
+        DomainWorkspaceLifecycleState::Active => WorkspaceLifecycleState::Active,
     }
 }
 
-fn workspace_cleanup(state: &str) -> WorkspaceCleanupState {
+fn workspace_cleanup(state: DomainWorkspaceCleanupState) -> WorkspaceCleanupState {
     match state {
-        "pending" => WorkspaceCleanupState::Pending,
-        "complete" => WorkspaceCleanupState::Complete,
-        "failed" => WorkspaceCleanupState::Failed,
-        _ => WorkspaceCleanupState::None,
+        DomainWorkspaceCleanupState::Pending => WorkspaceCleanupState::Pending,
+        DomainWorkspaceCleanupState::Complete => WorkspaceCleanupState::Complete,
+        DomainWorkspaceCleanupState::Failed => WorkspaceCleanupState::Failed,
+        DomainWorkspaceCleanupState::None => WorkspaceCleanupState::None,
     }
 }
 
-fn workspace_cleanup_operation(operation: Option<&str>) -> Option<WorkspaceCleanupOperation> {
+fn workspace_cleanup_operation(
+    operation: DomainWorkspaceCleanupOperation,
+) -> WorkspaceCleanupOperation {
     match operation {
-        Some("retire") => Some(WorkspaceCleanupOperation::Retire),
-        Some("purge") => Some(WorkspaceCleanupOperation::Purge),
-        _ => None,
+        DomainWorkspaceCleanupOperation::Retire => WorkspaceCleanupOperation::Retire,
+        DomainWorkspaceCleanupOperation::Purge => WorkspaceCleanupOperation::Purge,
     }
 }
 
@@ -385,7 +394,10 @@ mod tests {
 
     use super::*;
     use crate::domains::workspaces::managed_root::ANYHARNESS_WORKTREES_ROOT_ENV;
-    use crate::domains::workspaces::model::WorkspaceRecord;
+    use crate::domains::workspaces::model::{
+        WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+        WorkspaceSurface,
+    };
     use crate::persistence::Db;
 
     #[test]
@@ -399,6 +411,20 @@ mod tests {
         std::fs::create_dir_all(&checkout).expect("checkout");
 
         let db = Db::open_in_memory().expect("open db");
+        db.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO repo_roots (
+                    id, kind, path, display_name, default_branch, remote_provider, remote_owner,
+                    remote_repo_name, remote_url, created_at, updated_at
+                 ) VALUES (
+                    'repo-root-1', 'external', '/tmp/repo-root-1', NULL, 'main', NULL, NULL,
+                    NULL, NULL, '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z'
+                 )",
+                [],
+            )?;
+            Ok(())
+        })
+        .expect("seed repo root");
         let workspace_store = WorkspaceStore::new(db.clone());
         workspace_store
             .insert(&workspace_record(
@@ -427,22 +453,17 @@ mod tests {
     fn workspace_record(id: &str, path: &str) -> WorkspaceRecord {
         WorkspaceRecord {
             id: id.to_string(),
-            kind: "worktree".to_string(),
-            repo_root_id: None,
+            kind: WorkspaceKind::Worktree,
+            repo_root_id: "repo-root-1".to_string(),
             path: path.to_string(),
-            surface: "standard".to_string(),
-            source_repo_root_path: path.to_string(),
-            source_workspace_id: None,
-            git_provider: None,
-            git_owner: None,
-            git_repo_name: None,
+            surface: WorkspaceSurface::Standard,
             original_branch: Some("main".to_string()),
             current_branch: Some("main".to_string()),
             display_name: None,
             origin: None,
             creator_context: None,
-            lifecycle_state: "active".to_string(),
-            cleanup_state: "none".to_string(),
+            lifecycle_state: WorkspaceLifecycleState::Active,
+            cleanup_state: WorkspaceCleanupState::None,
             cleanup_operation: None,
             cleanup_error_message: None,
             cleanup_failed_at: None,

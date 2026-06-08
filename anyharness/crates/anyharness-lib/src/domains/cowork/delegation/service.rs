@@ -20,7 +20,7 @@ use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::prompt::provenance::PromptProvenance;
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceRecord, WorkspaceSurface};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 
 #[derive(Debug, thiserror::Error)]
@@ -486,14 +486,14 @@ impl CoworkDelegationService {
     }
 
     fn source_workspace_block_reason(&self, workspace: &WorkspaceRecord) -> Option<String> {
-        if workspace.surface != "standard" {
+        if workspace.surface != WorkspaceSurface::Standard {
             return Some("workspace is not a standard coding workspace".to_string());
         }
-        if !matches!(workspace.kind.as_str(), "local" | "worktree") {
+        if !matches!(
+            workspace.kind,
+            WorkspaceKind::Local | WorkspaceKind::Worktree
+        ) {
             return Some("workspace is not local/worktree-backed".to_string());
-        }
-        if workspace.repo_root_id.is_none() {
-            return Some("workspace has no repo root metadata".to_string());
         }
         if self
             .cowork_service

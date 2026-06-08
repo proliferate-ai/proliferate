@@ -29,71 +29,8 @@ export function repoRootGroupKey(
   return repoRoot.path.trim();
 }
 
-function buildRepresentativeWorkspaceIds(
-  workspaces: Workspace[],
-): Map<string, string> {
-  const representatives = new Map<string, Workspace>();
-
-  for (const workspace of workspaces) {
-    const key = workspace.repoRootId?.trim();
-    if (!key) {
-      continue;
-    }
-
-    const current = representatives.get(key);
-    if (!current || (workspace.kind === "local" && current.kind !== "local")) {
-      representatives.set(key, workspace);
-    }
-  }
-
-  return new Map(
-    Array.from(representatives.entries()).map(([repoRootId, workspace]) => [
-      repoRootId,
-      workspace.id,
-    ]),
-  );
-}
-
-function enrichLocalWorkspace(
-  workspace: Workspace,
-  repoRoot: RepoRoot | null,
-  representativeWorkspaceId: string | null,
-): Workspace {
-  return {
-    ...workspace,
-    sourceRepoRootPath: repoRoot?.path ?? workspace.sourceRepoRootPath ?? workspace.path,
-    sourceWorkspaceId: representativeWorkspaceId,
-    gitProvider: repoRoot?.remoteProvider ?? workspace.gitProvider ?? null,
-    gitOwner: repoRoot?.remoteOwner ?? workspace.gitOwner ?? null,
-    gitRepoName: repoRoot?.remoteRepoName ?? workspace.gitRepoName ?? null,
-  };
-}
-
-function enrichLocalWorkspaces(
-  localWorkspaces: Workspace[],
-  repoRoots: RepoRoot[],
-): Workspace[] {
-  const repoRootsById = new Map(repoRoots.map((repoRoot) => [repoRoot.id, repoRoot]));
-  const representativeWorkspaceIds = buildRepresentativeWorkspaceIds(localWorkspaces);
-
-  return localWorkspaces.map((workspace) =>
-    enrichLocalWorkspace(
-      workspace,
-      workspace.repoRootId ? repoRootsById.get(workspace.repoRootId) ?? null : null,
-      workspace.repoRootId
-        ? representativeWorkspaceIds.get(workspace.repoRootId) ?? workspace.id
-        : workspace.id,
-    ),
-  );
-}
-
 export function localWorkspaceGroupKey(workspace: Workspace): string {
-  if (workspace.gitProvider && workspace.gitOwner && workspace.gitRepoName) {
-    return `${workspace.gitProvider}:${workspace.gitOwner}:${workspace.gitRepoName}`;
-  }
-
-  return workspace.sourceRepoRootPath?.trim()
-    || workspace.repoRootId?.trim()
+  return workspace.repoRootId?.trim()
     || workspace.path;
 }
 
@@ -116,13 +53,11 @@ export function buildWorkspaceCollections(
   repoRoots: RepoRoot[] = [],
   cloudWorkspaces: CloudWorkspaceSummary[] = [],
 ): WorkspaceCollections {
-  const enrichedLocalWorkspaces = sortWorkspacesByUpdatedAtDesc(
-    enrichLocalWorkspaces(localWorkspaces, repoRoots),
-  );
-  const activeLocalWorkspaces = enrichedLocalWorkspaces.filter(
+  const sortedLocalWorkspaces = sortWorkspacesByUpdatedAtDesc(localWorkspaces);
+  const activeLocalWorkspaces = sortedLocalWorkspaces.filter(
     (workspace) => workspace.lifecycleState !== "retired",
   );
-  const retiredLocalWorkspaces = enrichedLocalWorkspaces.filter(
+  const retiredLocalWorkspaces = sortedLocalWorkspaces.filter(
     (workspace) => workspace.lifecycleState === "retired",
   );
   const cleanupAttentionWorkspaces = retiredLocalWorkspaces.filter(
@@ -135,7 +70,7 @@ export function buildWorkspaceCollections(
     repoRoots,
     cloudWorkspaces,
     workspaces: activeLocalWorkspaces,
-    allWorkspaces: enrichedLocalWorkspaces,
+    allWorkspaces: sortedLocalWorkspaces,
     cleanupAttentionWorkspaces,
   };
 }

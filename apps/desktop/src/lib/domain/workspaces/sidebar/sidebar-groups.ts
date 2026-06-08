@@ -235,7 +235,7 @@ export function buildSidebarGroupStates(args: {
             ?? null,
           localSourceRoot:
             repoRoot?.path
-            ?? groupWorkspaces.find((entry) => entry.localWorkspace)?.localWorkspace?.sourceRepoRootPath
+            ?? groupWorkspaces.find((entry) => entry.localWorkspace)?.localWorkspace?.path
             ?? (pendingProjection?.repoKey === repoKey ? pendingProjection.repoRoot?.path : null)
             ?? null,
           cloudRepoTarget:

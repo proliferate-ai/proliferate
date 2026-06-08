@@ -9,10 +9,7 @@ use crate::domains::workspaces::types::{
 
 impl WorkspaceService {
     pub fn get_workspace(&self, id: &str) -> anyhow::Result<Option<WorkspaceRecord>> {
-        self.store
-            .find_by_id(id)?
-            .map(|record| self.reconcile_current_branch(record))
-            .transpose()
+        self.store.find_by_id(id)
     }
 
     /// Set or clear the user-provided workspace display name.

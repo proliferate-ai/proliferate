@@ -124,7 +124,10 @@ mod tests {
     use crate::domains::sessions::extensions::{SessionExtension, SessionLaunchContext};
     use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
     use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
-    use crate::domains::workspaces::model::WorkspaceRecord;
+    use crate::domains::workspaces::model::{
+        WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+        WorkspaceSurface,
+    };
     use crate::persistence::Db;
 
     #[test]
@@ -316,22 +319,17 @@ mod tests {
     fn workspace_record() -> WorkspaceRecord {
         WorkspaceRecord {
             id: "workspace-1".to_string(),
-            kind: "local".to_string(),
-            repo_root_id: None,
+            kind: WorkspaceKind::Local,
+            repo_root_id: "repo-root-1".to_string(),
             path: "/workspace".to_string(),
-            surface: "coding".to_string(),
-            source_repo_root_path: "/workspace".to_string(),
-            source_workspace_id: None,
-            git_provider: None,
-            git_owner: None,
-            git_repo_name: None,
+            surface: WorkspaceSurface::Standard,
             original_branch: None,
             current_branch: None,
             display_name: None,
             origin: None,
             creator_context: None,
-            lifecycle_state: "active".to_string(),
-            cleanup_state: "none".to_string(),
+            lifecycle_state: WorkspaceLifecycleState::Active,
+            cleanup_state: WorkspaceCleanupState::None,
             cleanup_operation: None,
             cleanup_error_message: None,
             cleanup_failed_at: None,

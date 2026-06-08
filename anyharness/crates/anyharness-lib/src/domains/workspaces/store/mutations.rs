@@ -2,15 +2,17 @@ use rusqlite::{params, Connection};
 
 use super::row::insert_workspace;
 use super::WorkspaceStore;
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{
+    WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceLifecycleState, WorkspaceRecord,
+};
 
 impl WorkspaceStore {
     pub fn update_lifecycle_cleanup_state(
         &self,
         workspace_id: &str,
-        lifecycle_state: &str,
-        cleanup_state: &str,
-        cleanup_operation: Option<&str>,
+        lifecycle_state: WorkspaceLifecycleState,
+        cleanup_state: WorkspaceCleanupState,
+        cleanup_operation: Option<WorkspaceCleanupOperation>,
         cleanup_error_message: Option<&str>,
         cleanup_failed_at: Option<&str>,
         cleanup_attempted_at: Option<&str>,
@@ -29,9 +31,9 @@ impl WorkspaceStore {
                  WHERE id = ?1",
                 params![
                     workspace_id,
-                    lifecycle_state,
-                    cleanup_state,
-                    cleanup_operation,
+                    lifecycle_state.as_str(),
+                    cleanup_state.as_str(),
+                    cleanup_operation.map(WorkspaceCleanupOperation::as_str),
                     cleanup_error_message,
                     cleanup_failed_at,
                     cleanup_attempted_at,

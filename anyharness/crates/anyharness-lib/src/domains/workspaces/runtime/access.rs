@@ -1,13 +1,16 @@
 use super::WorkspaceRuntime;
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{
+    WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
+    WorkspaceRecord,
+};
 
 impl WorkspaceRuntime {
     pub fn set_lifecycle_cleanup_state(
         &self,
         workspace_id: &str,
-        lifecycle_state: &str,
-        cleanup_state: &str,
-        cleanup_operation: Option<&str>,
+        lifecycle_state: WorkspaceLifecycleState,
+        cleanup_state: WorkspaceCleanupState,
+        cleanup_operation: Option<WorkspaceCleanupOperation>,
         cleanup_error_message: Option<&str>,
         cleanup_failed_at: Option<&str>,
         cleanup_attempted_at: Option<&str>,
@@ -29,7 +32,7 @@ impl WorkspaceRuntime {
     pub fn find_active_workspace_by_path_and_kind(
         &self,
         path: &str,
-        kind: &str,
+        kind: WorkspaceKind,
     ) -> anyhow::Result<Option<WorkspaceRecord>> {
         self.store.find_active_by_path_and_kind(path, kind)
     }
@@ -39,7 +42,10 @@ impl WorkspaceRuntime {
         path: &str,
         excluded_id: &str,
     ) -> anyhow::Result<Option<WorkspaceRecord>> {
-        self.store
-            .find_active_by_path_and_kind_excluding_id(path, "worktree", excluded_id)
+        self.store.find_active_by_path_and_kind_excluding_id(
+            path,
+            WorkspaceKind::Worktree,
+            excluded_id,
+        )
     }
 }

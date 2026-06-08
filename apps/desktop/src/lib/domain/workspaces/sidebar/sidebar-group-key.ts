@@ -19,18 +19,7 @@ function findRepoRootForWorkspace(
     }
   }
 
-  const provider = nonEmpty(workspace.gitProvider);
-  const owner = nonEmpty(workspace.gitOwner);
-  const repoName = nonEmpty(workspace.gitRepoName);
-  if (!provider || !owner || !repoName) {
-    return null;
-  }
-
-  return repoRoots.find((repoRoot) =>
-    repoRoot.remoteProvider === provider
-    && repoRoot.remoteOwner === owner
-    && repoRoot.remoteRepoName === repoName
-  ) ?? null;
+  return null;
 }
 
 export function sidebarRepoGroupKeyForWorkspace(
@@ -39,8 +28,6 @@ export function sidebarRepoGroupKeyForWorkspace(
 ): string {
   const repoRoot = findRepoRootForWorkspace(workspace, repoRoots);
   return nonEmpty(repoRoot?.path)
-    ?? nonEmpty(workspace.sourceRepoRootPath)
-    ?? nonEmpty(workspace.repoRootId)
     ?? nonEmpty(workspace.path)
     ?? localWorkspaceGroupKey(workspace);
 }

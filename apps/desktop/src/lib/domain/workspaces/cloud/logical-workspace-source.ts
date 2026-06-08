@@ -38,7 +38,7 @@ export function remoteRepoKey(
 export function resolveLocalWorkspaceRepoRoot(
   workspace: Workspace,
   repoRootsById: Map<string, RepoRoot>,
-  repoRootsByRemoteKey: Map<string, RepoRoot>,
+  _repoRootsByRemoteKey: Map<string, RepoRoot>,
 ): RepoRoot | null {
   if (workspace.repoRootId) {
     const repoRoot = repoRootsById.get(workspace.repoRootId);
@@ -47,12 +47,7 @@ export function resolveLocalWorkspaceRepoRoot(
     }
   }
 
-  const workspaceRemoteKey = remoteRepoKey(
-    workspace.gitProvider,
-    workspace.gitOwner,
-    workspace.gitRepoName,
-  );
-  return workspaceRemoteKey ? repoRootsByRemoteKey.get(workspaceRemoteKey) ?? null : null;
+  return null;
 }
 
 export function buildBaseLogicalWorkspaceIdForLocalWorkspace(
@@ -68,21 +63,12 @@ export function buildBaseLogicalWorkspaceIdForLocalWorkspace(
     );
   }
 
-  if (workspace.gitProvider && workspace.gitOwner && workspace.gitRepoName) {
-    return buildRemoteLogicalWorkspaceId(
-      workspace.gitProvider,
-      workspace.gitOwner,
-      workspace.gitRepoName,
-      workspaceBranchKey(workspace),
-    );
-  }
-
   if (workspace.repoRootId) {
     return buildRepoRootLogicalWorkspaceId(workspace.repoRootId, workspaceBranchKey(workspace));
   }
 
   return buildPathLogicalWorkspaceId(
-    workspace.sourceRepoRootPath ?? workspace.path,
+    workspace.path,
     workspaceBranchKey(workspace),
   );
 }

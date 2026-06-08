@@ -291,9 +291,12 @@ export function useWorkspaceRemoteAccessActions() {
           anyharnessWorkspaceId: localWorkspace.id,
           displayName: logicalWorkspace?.displayName ?? localWorkspace.displayName ?? null,
           repo: {
-            provider: logicalWorkspace?.provider ?? localWorkspace.gitProvider ?? "local",
-            owner: logicalWorkspace?.owner ?? localWorkspace.gitOwner ?? "local",
-            name: logicalWorkspace?.repoName ?? localWorkspace.gitRepoName ?? localWorkspace.id,
+            provider: logicalWorkspace?.provider ?? "local",
+            owner: logicalWorkspace?.owner ?? "local",
+            name: logicalWorkspace?.repoName
+              ?? logicalWorkspace?.repoRoot?.displayName
+              ?? localWorkspace.displayName
+              ?? localWorkspace.id,
             branch,
             baseBranch: localWorkspace.originalBranch ?? branch,
           },

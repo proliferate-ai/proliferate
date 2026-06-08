@@ -83,16 +83,16 @@ export function buildWorkspaceArrivalViewModel(args: {
   workspace: Workspace;
   configuredSetupScript: string;
   setupTerminalId?: string | null;
+  repoName?: string | null;
 }): WorkspaceArrivalViewModel {
   const { event, workspace } = args;
   const workspaceName = workspace.kind === "worktree"
     ? worktreeArrivalName(workspace)
     : workspace.path.split("/").pop()
-      ?? workspace.gitRepoName
       ?? "workspace";
-  const repoName = workspace.gitRepoName
-    ?? workspace.sourceRepoRootPath?.split("/").pop()
-    ?? workspaceName;
+  const repoName = args.repoName?.trim()
+    || workspace.path.split("/").filter(Boolean).pop()
+    || workspaceName;
   const isWorktree = workspace.kind === "worktree";
 
   const setupScriptCommand = (event.setupScript?.command ?? args.configuredSetupScript).trim();
@@ -270,19 +270,11 @@ export function buildPendingWorkspaceArrivalViewModel(args: {
       || entry.displayName
     : entry.baseBranchName?.trim()
       || "HEAD";
-  const sourceRepoRootPath = request.kind === "local"
-    ? request.sourceRoot
-    : undefined;
   const workspace: Workspace = {
     id: pendingWorkspaceId,
-    kind: isWorktree ? "worktree" : "repo",
-    repoRootId: isWorktree ? request.input.repoRootId : undefined,
+    kind: isWorktree ? "worktree" : "local",
+    repoRootId: isWorktree ? request.input.repoRootId : pendingWorkspaceId,
     path: workspacePath,
-    sourceRepoRootPath,
-    sourceWorkspaceId: isWorktree ? request.input.sourceWorkspaceId ?? null : null,
-    gitProvider: null,
-    gitOwner: null,
-    gitRepoName: repoName,
     currentBranch: branchName,
     originalBranch: entry.baseBranchName,
     displayName: entry.displayName,
@@ -302,5 +294,6 @@ export function buildPendingWorkspaceArrivalViewModel(args: {
     }),
     workspace,
     configuredSetupScript: args.configuredSetupScript ?? "",
+    repoName,
   });
 }

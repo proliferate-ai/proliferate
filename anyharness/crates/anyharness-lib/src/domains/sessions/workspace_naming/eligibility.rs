@@ -198,11 +198,16 @@ fn is_human_desktop_or_cloud(origin: Option<&OriginContext>) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use crate::domains::repo_roots::model::RepoRootRecord;
+    use crate::domains::repo_roots::store::RepoRootStore;
     use crate::domains::sessions::model::{
         SessionEventRecord, SessionMcpBindingPolicy, SessionRecord,
     };
     use crate::domains::sessions::store::SessionStore;
-    use crate::domains::workspaces::model::WorkspaceRecord;
+    use crate::domains::workspaces::model::{
+        WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+        WorkspaceSurface,
+    };
     use crate::domains::workspaces::store::WorkspaceStore;
     use crate::origin::OriginContext;
     use crate::persistence::Db;
@@ -212,22 +217,17 @@ mod tests {
     fn workspace(id: &str) -> WorkspaceRecord {
         WorkspaceRecord {
             id: id.to_string(),
-            kind: "local".to_string(),
-            repo_root_id: None,
+            kind: WorkspaceKind::Local,
+            repo_root_id: format!("repo-root-{id}"),
             path: format!("/tmp/{id}"),
-            surface: "standard".to_string(),
-            source_repo_root_path: format!("/tmp/{id}"),
-            source_workspace_id: None,
-            git_provider: None,
-            git_owner: None,
-            git_repo_name: None,
+            surface: WorkspaceSurface::Standard,
             original_branch: Some("main".to_string()),
             current_branch: Some("main".to_string()),
             display_name: None,
             origin: Some(OriginContext::human_desktop()),
             creator_context: None,
-            lifecycle_state: "active".to_string(),
-            cleanup_state: "none".to_string(),
+            lifecycle_state: WorkspaceLifecycleState::Active,
+            cleanup_state: WorkspaceCleanupState::None,
             cleanup_operation: None,
             cleanup_error_message: None,
             cleanup_failed_at: None,
@@ -235,6 +235,25 @@ mod tests {
             created_at: "2026-01-01T00:00:00Z".to_string(),
             updated_at: "2026-01-01T00:00:00Z".to_string(),
         }
+    }
+
+    fn insert_workspace(db: &Db, store: &WorkspaceStore, workspace: &WorkspaceRecord) {
+        RepoRootStore::new(db.clone())
+            .insert(&RepoRootRecord {
+                id: workspace.repo_root_id.clone(),
+                kind: "external".to_string(),
+                path: workspace.path.clone(),
+                display_name: None,
+                default_branch: workspace.original_branch.clone(),
+                remote_provider: None,
+                remote_owner: None,
+                remote_repo_name: None,
+                remote_url: None,
+                created_at: workspace.created_at.clone(),
+                updated_at: workspace.updated_at.clone(),
+            })
+            .expect("insert repo root");
+        store.insert(workspace).expect("insert workspace");
     }
 
     fn session(id: &str, workspace_id: &str) -> SessionRecord {
@@ -294,12 +313,10 @@ mod tests {
     fn tool_call_is_allowed_during_first_open_turn() {
         let db = Db::open_in_memory().expect("db");
         let workspace_store = WorkspaceStore::new(db.clone());
-        let session_store = SessionStore::new(db);
+        let session_store = SessionStore::new(db.clone());
         let workspace = workspace("workspace-1");
         let session = session("session-1", &workspace.id);
-        workspace_store
-            .insert(&workspace)
-            .expect("insert workspace");
+        insert_workspace(&db, &workspace_store, &workspace);
         session_store.insert(&session).expect("insert session");
         append_event(&session_store, &session.id, 1, "turn_started");
 
@@ -310,12 +327,10 @@ mod tests {
     fn tool_call_is_rejected_after_terminal_turn_event() {
         let db = Db::open_in_memory().expect("db");
         let workspace_store = WorkspaceStore::new(db.clone());
-        let session_store = SessionStore::new(db);
+        let session_store = SessionStore::new(db.clone());
         let workspace = workspace("workspace-1");
         let session = session("session-1", &workspace.id);
-        workspace_store
-            .insert(&workspace)
-            .expect("insert workspace");
+        insert_workspace(&db, &workspace_store, &workspace);
         session_store.insert(&session).expect("insert session");
         append_event(&session_store, &session.id, 1, "turn_started");
         append_event(&session_store, &session.id, 2, "turn_ended");
@@ -329,13 +344,11 @@ mod tests {
     fn tool_call_is_rejected_when_workspace_already_has_display_name() {
         let db = Db::open_in_memory().expect("db");
         let workspace_store = WorkspaceStore::new(db.clone());
-        let session_store = SessionStore::new(db);
+        let session_store = SessionStore::new(db.clone());
         let mut workspace = workspace("workspace-1");
         workspace.display_name = Some("Existing name".to_string());
         let session = session("session-1", &workspace.id);
-        workspace_store
-            .insert(&workspace)
-            .expect("insert workspace");
+        insert_workspace(&db, &workspace_store, &workspace);
         session_store.insert(&session).expect("insert session");
 
         let error = validate_tool_call(&session_store, &workspace, &session)
@@ -347,13 +360,11 @@ mod tests {
     fn tool_call_allows_other_visible_sessions_without_prompt_history() {
         let db = Db::open_in_memory().expect("db");
         let workspace_store = WorkspaceStore::new(db.clone());
-        let session_store = SessionStore::new(db);
+        let session_store = SessionStore::new(db.clone());
         let workspace = workspace("workspace-1");
         let first_session = session("session-1", &workspace.id);
         let second_session = session("session-2", &workspace.id);
-        workspace_store
-            .insert(&workspace)
-            .expect("insert workspace");
+        insert_workspace(&db, &workspace_store, &workspace);
         session_store
             .insert(&first_session)
             .expect("insert session");
@@ -370,15 +381,13 @@ mod tests {
     fn tool_call_honors_launch_binding_when_another_session_prompts_after_launch() {
         let db = Db::open_in_memory().expect("db");
         let workspace_store = WorkspaceStore::new(db.clone());
-        let session_store = SessionStore::new(db);
+        let session_store = SessionStore::new(db.clone());
         let workspace = workspace("workspace-1");
         let mut first_session = session("session-1", &workspace.id);
         attach_workspace_naming_binding(&mut first_session);
         let mut second_session = session("session-2", &workspace.id);
         second_session.last_prompt_at = Some("2026-01-01T00:00:30Z".to_string());
-        workspace_store
-            .insert(&workspace)
-            .expect("insert workspace");
+        insert_workspace(&db, &workspace_store, &workspace);
         session_store
             .insert(&first_session)
             .expect("insert session");
@@ -395,14 +404,12 @@ mod tests {
     fn tool_call_is_rejected_when_another_visible_session_has_prompt_history() {
         let db = Db::open_in_memory().expect("db");
         let workspace_store = WorkspaceStore::new(db.clone());
-        let session_store = SessionStore::new(db);
+        let session_store = SessionStore::new(db.clone());
         let workspace = workspace("workspace-1");
         let first_session = session("session-1", &workspace.id);
         let mut second_session = session("session-2", &workspace.id);
         second_session.last_prompt_at = Some("2026-01-01T00:00:30Z".to_string());
-        workspace_store
-            .insert(&workspace)
-            .expect("insert workspace");
+        insert_workspace(&db, &workspace_store, &workspace);
         session_store
             .insert(&first_session)
             .expect("insert session");

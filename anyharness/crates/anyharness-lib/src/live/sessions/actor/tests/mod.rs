@@ -27,6 +27,7 @@ use super::turn::diagnostics::PromptDiagnostics;
 use super::turn::finish::should_emit_empty_turn_error;
 use super::turn::handle::first_prompt_system_prompt_append_for_codex_prompt;
 use super::turn::start::prepend_system_prompt_append_to_acp_blocks;
+use crate::app::test_support;
 use crate::domains::agents::model::AgentKind;
 use crate::domains::plans::{service::PlanService, store::PlanStore};
 use crate::domains::sessions::live_config::{
@@ -66,15 +67,7 @@ async fn actor_exit_test_context(
     Arc<LiveSessionHandle>,
 ) {
     let db = Db::open_in_memory().expect("open db");
-    db.with_conn(|conn| {
-        conn.execute(
-            "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
-             VALUES (?1, 'repo', '/tmp/workspace', '/tmp/workspace', ?2, ?2)",
-            rusqlite::params!["workspace-1", "2026-03-25T00:00:00Z"],
-        )?;
-        Ok(())
-    })
-    .expect("seed workspace");
+    test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace");
 
     let store = SessionStore::new(db.clone());
     store

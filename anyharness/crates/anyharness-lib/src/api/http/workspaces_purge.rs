@@ -140,12 +140,12 @@ async fn build_purge_preflight(
         .map_err(|error| ApiError::internal(error.to_string()))?;
     Ok(WorkspacePurgePreflightResponse {
         workspace_id: workspace.id,
-        workspace_kind: workspace_kind_to_contract(&workspace.kind),
-        lifecycle_state: workspace_lifecycle_to_contract(&workspace.lifecycle_state),
-        cleanup_state: workspace_cleanup_to_contract(&workspace.cleanup_state),
-        cleanup_operation: workspace_cleanup_operation_to_contract(
-            workspace.cleanup_operation.as_deref(),
-        ),
+        workspace_kind: workspace_kind_to_contract(workspace.kind),
+        lifecycle_state: workspace_lifecycle_to_contract(workspace.lifecycle_state),
+        cleanup_state: workspace_cleanup_to_contract(workspace.cleanup_state),
+        cleanup_operation: workspace
+            .cleanup_operation
+            .map(workspace_cleanup_operation_to_contract),
         can_purge: preflight.can_purge,
         materialized: preflight.materialized,
         blockers: preflight.blockers,
@@ -217,7 +217,10 @@ mod tests {
     use super::*;
     use crate::app::test_support;
     use crate::domains::agents::seed::AgentSeedStore;
-    use crate::domains::workspaces::model::WorkspaceRecord;
+    use crate::domains::workspaces::model::{
+        WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
+        WorkspaceRecord, WorkspaceSurface,
+    };
     use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
     use crate::domains::workspaces::store::WorkspaceStore;
     use crate::persistence::Db;
@@ -354,10 +357,25 @@ mod tests {
             .expect("env mutex");
         let _bearer_guard = test_support::set_bearer_token_env(None);
         let _data_key_guard = test_support::set_data_key_env(None);
+        let db = Db::open_in_memory().expect("open db");
+        db.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO repo_roots (
+                    id, kind, path, display_name, default_branch, remote_provider, remote_owner,
+                    remote_repo_name, remote_url, created_at, updated_at
+                 ) VALUES (
+                    'repo-root-1', 'external', '/tmp/repo-root-1', NULL, 'main', NULL, NULL,
+                    NULL, NULL, '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z'
+                 )",
+                [],
+            )?;
+            Ok(())
+        })
+        .expect("seed repo root");
         AppState::new(
             PathBuf::from(format!("/tmp/anyharness-{name}-runtime")),
             "http://127.0.0.1:8457".to_string(),
-            Db::open_in_memory().expect("open db"),
+            db,
             false,
             AgentSeedStore::not_configured_dev(),
         )
@@ -408,23 +426,22 @@ mod tests {
     ) -> WorkspaceRecord {
         WorkspaceRecord {
             id: id.to_string(),
-            kind: kind.to_string(),
-            repo_root_id: None,
+            kind: WorkspaceKind::try_from(kind).expect("test workspace kind"),
+            repo_root_id: "repo-root-1".to_string(),
             path: path.to_string(),
-            surface: surface.to_string(),
-            source_repo_root_path: path.to_string(),
-            source_workspace_id: None,
-            git_provider: None,
-            git_owner: None,
-            git_repo_name: None,
+            surface: WorkspaceSurface::try_from(surface).expect("test workspace surface"),
             original_branch: Some("main".to_string()),
             current_branch: Some("main".to_string()),
             display_name: None,
             origin: None,
             creator_context: None,
-            lifecycle_state: lifecycle_state.to_string(),
-            cleanup_state: cleanup_state.to_string(),
-            cleanup_operation: cleanup_operation.map(str::to_string),
+            lifecycle_state: WorkspaceLifecycleState::try_from(lifecycle_state)
+                .expect("test lifecycle state"),
+            cleanup_state: WorkspaceCleanupState::try_from(cleanup_state)
+                .expect("test cleanup state"),
+            cleanup_operation: cleanup_operation.map(|operation| {
+                WorkspaceCleanupOperation::try_from(operation).expect("test cleanup operation")
+            }),
             cleanup_error_message: None,
             cleanup_failed_at: None,
             cleanup_attempted_at: None,

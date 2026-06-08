@@ -1,28 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { Workspace } from "@anyharness/sdk";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import {
   resolveChatSurfaceState,
   resolveLaunchIntentSurfaceOverride,
   shouldMountWorkspaceShell,
   shouldKeepBootstrappedWorkspaceLoading,
-  shouldShowStructuralRepoWorkspaceStatus,
   type ResolveChatSurfaceStateInput,
 } from "@/lib/domain/chat/surface/chat-surface";
-
-function makeWorkspace(overrides: Partial<Workspace>): Workspace {
-  return {
-    id: "workspace-1",
-    kind: "repo",
-    path: "/tmp/repo",
-    sourceRepoRootPath: "/tmp/repo",
-    lifecycleState: "active",
-    cleanupState: "none",
-    createdAt: "2025-01-01T00:00:00.000Z",
-    updatedAt: "2025-01-01T00:00:00.000Z",
-    ...overrides,
-  };
-}
 
 function surfaceInput(
   overrides: Partial<ResolveChatSurfaceStateInput> = {},
@@ -50,44 +33,6 @@ function surfaceInput(
 }
 
 describe("chat surface", () => {
-  it("shows repo workspace status when there is no active session", () => {
-    expect(shouldShowStructuralRepoWorkspaceStatus(
-      makeWorkspace({ id: "repo-1", kind: "repo" }),
-      null,
-    )).toBe(true);
-  });
-
-  it("keeps repo workspace transcripts visible once a session is active", () => {
-    expect(shouldShowStructuralRepoWorkspaceStatus(
-      makeWorkspace({ id: "repo-1", kind: "repo" }),
-      "session-1",
-    )).toBe(false);
-  });
-
-  it("does not treat worktrees as status-only", () => {
-    expect(shouldShowStructuralRepoWorkspaceStatus(
-      makeWorkspace({
-        id: "worktree-1",
-        kind: "worktree",
-        path: "/tmp/repo-feature",
-        sourceWorkspaceId: "repo-1",
-      }),
-      null,
-    )).toBe(false);
-  });
-
-  it("does not treat cloud repo rows as structural", () => {
-    expect(shouldShowStructuralRepoWorkspaceStatus(
-      makeWorkspace({
-        id: cloudWorkspaceSyntheticId("cloud-1"),
-        kind: "repo",
-        path: "github:owner:repo",
-        sourceRepoRootPath: "github:owner:repo",
-      }),
-      null,
-    )).toBe(false);
-  });
-
   it("keeps a bootstrapped workspace on loading when restoring a remembered session", () => {
     expect(shouldKeepBootstrappedWorkspaceLoading({
       activeSessionId: null,

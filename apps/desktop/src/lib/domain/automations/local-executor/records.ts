@@ -25,9 +25,6 @@ export interface AutomationWorkspaceRecord {
   kind: string;
   path?: string;
   repoRootId?: string | null;
-  gitProvider?: string | null;
-  gitOwner?: string | null;
-  gitRepoName?: string | null;
   displayName?: string | null;
   currentBranch?: string | null;
   originalBranch?: string | null;

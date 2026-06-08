@@ -6,7 +6,7 @@ use super::records::build_workspace_record;
 use super::WorkspaceRuntime;
 use crate::adapters::git::GitService;
 use crate::domains::repo_roots::model::RepoRootRecord;
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceRecord, WorkspaceSurface};
 use crate::domains::workspaces::resolver;
 use crate::domains::workspaces::types::PreparedWorkspaceMobilityDestination;
 use crate::origin::OriginContext;
@@ -145,8 +145,8 @@ impl WorkspaceRuntime {
         let record = build_workspace_record(
             &repo_root,
             &ctx.repo_root,
-            "worktree",
-            "standard",
+            WorkspaceKind::Worktree,
+            WorkspaceSurface::Standard,
             ctx.current_branch.clone(),
             OriginContext::system_local_runtime(),
             None,
@@ -165,8 +165,8 @@ impl WorkspaceRuntime {
         requested_branch: &str,
         requested_base_sha: &str,
     ) -> anyhow::Result<()> {
-        if workspace.kind != "worktree"
-            || workspace.surface != "standard"
+        if workspace.kind != WorkspaceKind::Worktree
+            || workspace.surface != WorkspaceSurface::Standard
             || workspace.current_branch.as_deref() != Some(requested_branch)
         {
             anyhow::bail!(
@@ -221,8 +221,8 @@ impl WorkspaceRuntime {
             .join(repo_root_id);
         let canonical_base_dir = fs::canonicalize(&base_dir).unwrap_or(base_dir);
         for workspace in self.store.list_active_by_repo_root_id(repo_root_id)? {
-            if workspace.kind != "worktree"
-                || workspace.surface != "standard"
+            if workspace.kind != WorkspaceKind::Worktree
+                || workspace.surface != WorkspaceSurface::Standard
                 || workspace.current_branch.as_deref() != Some(requested_branch)
                 || !Path::new(&workspace.path).exists()
                 || !Path::new(&workspace.path).starts_with(&canonical_base_dir)
@@ -276,7 +276,10 @@ impl WorkspaceRuntime {
 
         if let Some(retired) = self
             .store
-            .find_retired_incomplete_cleanup_by_path_and_kind(&target_path_string, "worktree")?
+            .find_retired_incomplete_cleanup_by_path_and_kind(
+                &target_path_string,
+                WorkspaceKind::Worktree,
+            )?
         {
             anyhow::bail!(
                 "mobility destination conflict: destination path has pending cleanup from retired workspace {}",
@@ -330,8 +333,8 @@ impl WorkspaceRuntime {
         let record = build_workspace_record(
             repo_root,
             &ctx.repo_root,
-            "worktree",
-            "standard",
+            WorkspaceKind::Worktree,
+            WorkspaceSurface::Standard,
             ctx.current_branch.clone(),
             OriginContext::system_local_runtime(),
             None,

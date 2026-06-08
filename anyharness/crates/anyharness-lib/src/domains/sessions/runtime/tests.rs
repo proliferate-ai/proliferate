@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use super::fork::validate_fork_parent;
 use super::launch_env::build_session_launch_env;
 use super::startup::choose_session_startup_strategy;
+use crate::app::test_support;
 use crate::domains::agents::model::{
     AgentKind, ArtifactRole, CredentialState, ResolvedAgent, ResolvedAgentStatus, ResolvedArtifact,
 };
@@ -99,15 +100,7 @@ impl Drop for EnvVarGuard {
 }
 
 fn seed_workspace(db: &Db) {
-    db.with_conn(|conn| {
-        conn.execute(
-            "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
-                 VALUES (?1, 'repo', '/tmp/workspace', '/tmp/workspace', ?2, ?2)",
-            rusqlite::params!["workspace-1", "2026-03-25T00:00:00Z"],
-        )?;
-        Ok(())
-    })
-    .expect("seed workspace");
+    test_support::seed_workspace_with_repo_root(db, "workspace-1", "local", "/tmp/workspace");
 }
 
 fn session_record(agent_kind: &str) -> SessionRecord {

@@ -1,5 +1,8 @@
 use super::{order_worktrees_by_activity, should_spawn_startup_pass};
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{
+    WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+    WorkspaceSurface,
+};
 
 #[test]
 fn startup_deferral_is_startup_only_gate() {
@@ -53,22 +56,17 @@ fn active_worktree_activity_order_uses_true_row_max() {
 fn workspace_record(id: &str) -> WorkspaceRecord {
     WorkspaceRecord {
         id: id.to_string(),
-        kind: "worktree".to_string(),
-        repo_root_id: Some("repo-root-1".to_string()),
+        kind: WorkspaceKind::Worktree,
+        repo_root_id: "repo-root-1".to_string(),
         path: format!("/tmp/{id}"),
-        surface: "standard".to_string(),
-        source_repo_root_path: "/tmp/repo-root-1".to_string(),
-        source_workspace_id: None,
-        git_provider: None,
-        git_owner: None,
-        git_repo_name: None,
+        surface: WorkspaceSurface::Standard,
         original_branch: Some("main".to_string()),
         current_branch: Some("main".to_string()),
         display_name: None,
         origin: None,
         creator_context: None,
-        lifecycle_state: "active".to_string(),
-        cleanup_state: "none".to_string(),
+        lifecycle_state: WorkspaceLifecycleState::Active,
+        cleanup_state: WorkspaceCleanupState::None,
         cleanup_operation: None,
         cleanup_error_message: None,
         cleanup_failed_at: None,
