@@ -5,12 +5,15 @@ use std::time::{Duration, Instant};
 use tokio::io::AsyncReadExt;
 use tokio::sync::RwLock;
 
+use crate::domains::terminals::model::ShellKind;
 use crate::domains::terminals::model::{TerminalCommandRunRecord, TerminalCommandRunStatus};
 use crate::domains::terminals::service::{
     append_bounded, complete_command_run, TerminalCommandService,
 };
 
+use super::handle::TerminalRegistry;
 use super::output_sink::TerminalOutputHub;
+use super::stream_format::{terminal_command_preface, workspace_prompt, TerminalStreamFormatter};
 
 pub(super) struct ActiveSetupTask {
     pub(super) command_run_id: String,
@@ -19,6 +22,7 @@ pub(super) struct ActiveSetupTask {
 
 pub(super) async fn run_setup_process(
     command_service: TerminalCommandService,
+    terminals: TerminalRegistry,
     hubs: Arc<RwLock<HashMap<String, TerminalOutputHub>>>,
     mut record: TerminalCommandRunRecord,
     terminal_id: String,
@@ -28,10 +32,21 @@ pub(super) async fn run_setup_process(
     timeout: Duration,
 ) {
     let started_at = Instant::now();
+    let hub = hubs.read().await.get(&terminal_id).cloned();
+    let mut terminal_formatter = TerminalStreamFormatter::default();
+    emit_setup_output(
+        hub.as_ref(),
+        &mut terminal_formatter,
+        terminal_command_preface(&workspace_path, &workspace_path, ShellKind::Bash, &command),
+        None,
+        &record.id,
+    )
+    .await;
+
     let mut cmd = tokio::process::Command::new("/bin/sh");
     cmd.arg("-lc")
-        .arg(command)
-        .current_dir(workspace_path)
+        .arg(&command)
+        .current_dir(&workspace_path)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     cmd.kill_on_drop(true);
@@ -42,16 +57,33 @@ pub(super) async fn run_setup_process(
     let mut child = match cmd.spawn() {
         Ok(child) => child,
         Err(error) => {
+            let stderr = format!("failed to spawn setup command: {error}");
             complete_command_run(
                 &mut record,
                 TerminalCommandRunStatus::Failed,
                 Some(-1),
                 Some(String::new()),
-                Some(format!("failed to spawn setup command: {error}")),
+                Some(stderr.clone()),
                 None,
                 false,
                 Some(started_at.elapsed().as_millis() as u64),
             );
+            emit_setup_output(
+                hub.as_ref(),
+                &mut terminal_formatter,
+                format!("{stderr}\n").into_bytes(),
+                Some("stderr"),
+                &record.id,
+            )
+            .await;
+            emit_setup_prompt(
+                hub.as_ref(),
+                &mut terminal_formatter,
+                &record.id,
+                &workspace_path,
+            )
+            .await;
+            set_terminal_output_suppressed(&terminals, &terminal_id, false).await;
             let _ = command_service.update_command_run(&record);
             return;
         }
@@ -95,7 +127,6 @@ pub(super) async fn run_setup_process(
     }
     drop(tx);
 
-    let hub = hubs.read().await.get(&terminal_id).cloned();
     let deadline = tokio::time::Instant::now() + timeout;
     let mut stdout_capture = String::new();
     let mut stderr_capture = String::new();
@@ -112,9 +143,14 @@ pub(super) async fn run_setup_process(
                     } else {
                         append_bounded(&mut stderr_capture, &String::from_utf8_lossy(&data), &mut output_truncated);
                     }
-                    if let Some(hub) = &hub {
-                        let _ = hub.emit_data(data, Some(stream), Some(record.id.clone())).await;
-                    }
+                    emit_setup_output(
+                        hub.as_ref(),
+                        &mut terminal_formatter,
+                        data,
+                        Some(stream),
+                        &record.id,
+                    )
+                    .await;
                 }
             }
             result = child.wait() => {
@@ -125,9 +161,14 @@ pub(super) async fn run_setup_process(
                     } else {
                         append_bounded(&mut stderr_capture, &String::from_utf8_lossy(&data), &mut output_truncated);
                     }
-                    if let Some(hub) = &hub {
-                        let _ = hub.emit_data(data, Some(stream), Some(record.id.clone())).await;
-                    }
+                    emit_setup_output(
+                        hub.as_ref(),
+                        &mut terminal_formatter,
+                        data,
+                        Some(stream),
+                        &record.id,
+                    )
+                    .await;
                 }
                 break;
             }
@@ -141,9 +182,14 @@ pub(super) async fn run_setup_process(
                     } else {
                         append_bounded(&mut stderr_capture, &String::from_utf8_lossy(&data), &mut output_truncated);
                     }
-                    if let Some(hub) = &hub {
-                        let _ = hub.emit_data(data, Some(stream), Some(record.id.clone())).await;
-                    }
+                    emit_setup_output(
+                        hub.as_ref(),
+                        &mut terminal_formatter,
+                        data,
+                        Some(stream),
+                        &record.id,
+                    )
+                    .await;
                 }
                 break;
             }
@@ -182,5 +228,61 @@ pub(super) async fn run_setup_process(
             Some(started_at.elapsed().as_millis() as u64),
         );
     }
+    emit_setup_prompt(
+        hub.as_ref(),
+        &mut terminal_formatter,
+        &record.id,
+        &workspace_path,
+    )
+    .await;
+    set_terminal_output_suppressed(&terminals, &terminal_id, false).await;
     let _ = command_service.update_command_run(&record);
+}
+
+pub(super) async fn set_terminal_output_suppressed(
+    terminals: &TerminalRegistry,
+    terminal_id: &str,
+    suppress_output: bool,
+) {
+    let handle = {
+        let map = terminals.read().await;
+        map.get(terminal_id).cloned()
+    };
+    if let Some(handle) = handle {
+        let mut h = handle.lock().await;
+        h.suppress_output = suppress_output;
+    }
+}
+
+async fn emit_setup_output(
+    hub: Option<&TerminalOutputHub>,
+    formatter: &mut TerminalStreamFormatter,
+    data: Vec<u8>,
+    stream: Option<&'static str>,
+    command_run_id: &str,
+) {
+    if let Some(hub) = hub {
+        let data = formatter.normalize(data);
+        let _ = hub
+            .emit_data(data, stream, Some(command_run_id.to_string()))
+            .await;
+    }
+}
+
+async fn emit_setup_prompt(
+    hub: Option<&TerminalOutputHub>,
+    formatter: &mut TerminalStreamFormatter,
+    command_run_id: &str,
+    workspace_path: &str,
+) {
+    if let Some(hub) = hub {
+        let data = formatter.normalize_prompt(workspace_prompt(
+            workspace_path,
+            workspace_path,
+            ShellKind::Bash,
+        ));
+        let _ = hub
+            .emit_data(data, None, Some(command_run_id.to_string()))
+            .await;
+    }
 }

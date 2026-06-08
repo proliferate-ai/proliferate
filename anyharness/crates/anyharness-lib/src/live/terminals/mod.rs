@@ -7,6 +7,7 @@ mod pty_command;
 mod replay;
 mod setup_process;
 mod shell;
+mod stream_format;
 
 pub use crate::domains::terminals::model::TerminalOutputEvent;
 pub use agent_login::{

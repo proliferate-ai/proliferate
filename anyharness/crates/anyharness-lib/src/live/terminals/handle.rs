@@ -71,6 +71,7 @@ impl TerminalHandle {
     ) -> anyhow::Result<TerminalCommandRunRecord> {
         pty_command::run_terminal_command(
             &self.registry,
+            &self.output_hubs,
             &self.command_service,
             &self.runtime_home,
             &self.terminal_id,
@@ -161,12 +162,14 @@ impl TerminalHandle {
 
 pub(super) struct PtyHandle {
     pub(super) record: TerminalRecord,
+    pub(super) workspace_path: String,
     pub(super) _shell_path: String,
     pub(super) shell_kind: ShellKind,
     pub(super) master: Box<dyn MasterPty + Send>,
     pub(super) writer: Box<dyn IoWrite + Send>,
     pub(super) child: Box<dyn portable_pty::Child + Send>,
     pub(super) active_pty_command: Option<ActivePtyCommand>,
+    pub(super) suppress_output: bool,
 }
 
 impl PtyHandle {

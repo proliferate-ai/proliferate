@@ -119,12 +119,14 @@ pub(super) async fn create_terminal_shell(
 
     let handle = PtyHandle {
         record: record.clone(),
+        workspace_path: workspace_path.to_string(),
         _shell_path: shell,
         shell_kind,
         master,
         writer,
         child,
         active_pty_command: None,
+        suppress_output: request.purpose == TerminalPurpose::Setup,
     };
 
     {

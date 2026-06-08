@@ -17,7 +17,7 @@ use crate::domains::terminals::store::TerminalStore;
 
 use super::driver;
 use super::handle::{TerminalHandle, TerminalOutputRegistry, TerminalRegistry};
-use super::setup_process::{run_setup_process, ActiveSetupTask};
+use super::setup_process::{run_setup_process, set_terminal_output_suppressed, ActiveSetupTask};
 use super::shell::detect_posix_shell;
 
 const DEFAULT_SETUP_TIMEOUT: Duration = Duration::from_secs(300);
@@ -230,8 +230,10 @@ impl TerminalService {
             .set_latest_setup_run(workspace_id, &command_run_id)?;
         self.set_terminal_command_run(&terminal.id, record.clone())
             .await;
+        set_terminal_output_suppressed(&self.terminals, &terminal.id, true).await;
 
         let command_service = self.command_service.clone();
+        let terminals = self.terminals.clone();
         let hubs = self.output_hubs.clone();
         let active_setup_tasks = self.active_setup_tasks.clone();
         let terminal_id = terminal.id.clone();
@@ -245,6 +247,7 @@ impl TerminalService {
         let handle = tokio::spawn(async move {
             run_setup_process(
                 command_service,
+                terminals,
                 hubs,
                 task_record,
                 terminal_id,
