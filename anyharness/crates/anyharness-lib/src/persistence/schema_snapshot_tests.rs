@@ -52,6 +52,33 @@ fn schema_snapshot_path() -> PathBuf {
         .join("../../../specs/generated/anyharness-db-schema.sql")
 }
 
+fn assert_schema_snapshot_matches(actual: &str, expected: &str) {
+    if actual == expected {
+        return;
+    }
+
+    let actual_lines: Vec<&str> = actual.lines().collect();
+    let expected_lines: Vec<&str> = expected.lines().collect();
+    for (index, (actual_line, expected_line)) in
+        actual_lines.iter().zip(expected_lines.iter()).enumerate()
+    {
+        if actual_line != expected_line {
+            panic!(
+                "schema snapshot mismatch at line {}:\n  actual:   {actual_line}\n  expected: {expected_line}\n\
+                 Run `cargo test -p anyharness-lib update_anyharness_schema_snapshot -- --ignored` to regenerate.",
+                index + 1
+            );
+        }
+    }
+
+    panic!(
+        "schema snapshot line count differs: actual {} vs expected {} lines.\n\
+         Run `cargo test -p anyharness-lib update_anyharness_schema_snapshot -- --ignored` to regenerate.",
+        actual_lines.len(),
+        expected_lines.len()
+    );
+}
+
 #[test]
 fn anyharness_schema_snapshot_matches_migrations() {
     let conn = migrated_connection().expect("migrated db");
@@ -64,7 +91,7 @@ fn anyharness_schema_snapshot_matches_migrations() {
         )
     });
 
-    assert_eq!(actual, expected);
+    assert_schema_snapshot_matches(&actual, &expected);
 }
 
 #[test]
