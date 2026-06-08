@@ -2329,6 +2329,7 @@ export interface components {
         CreateWorktreeWorkspaceRequest: {
             baseBranch?: string | null;
             creatorContext?: null | components["schemas"]["WorkspaceCreatorContext"];
+            nameConflictPolicy?: null | components["schemas"]["WorktreeNameConflictPolicy"];
             newBranchName: string;
             origin?: null | components["schemas"]["OriginContext"];
             repoRootId: string;
@@ -4441,6 +4442,8 @@ export interface components {
             lifecycleState: components["schemas"]["WorkspaceLifecycleState"];
             sessionCount: number;
         };
+        /** @enum {string} */
+        WorktreeNameConflictPolicy: "fail" | "suffix_path" | "suffix_path_and_branch";
         WorktreeRetentionPolicy: {
             /** Format: int32 */
             maxMaterializedWorktreesPerRepo: number;

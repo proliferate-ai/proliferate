@@ -105,7 +105,7 @@ use anyharness_contract::v1::{
     WorkspaceRetireBlockerSeverity, WorkspaceRetireOutcome, WorkspaceRetirePreflightResponse,
     WorkspaceRetireResponse, WorkspaceSurface, WorktreeInventoryAction, WorktreeInventoryResponse,
     WorktreeInventoryRow, WorktreeInventoryState, WorktreeInventoryWorkspaceSummary,
-    WriteWorkspaceFileRequest, WriteWorkspaceFileResponse,
+    WorktreeNameConflictPolicy, WriteWorkspaceFileRequest, WriteWorkspaceFileResponse,
 };
 
 #[derive(OpenApi)]
@@ -368,6 +368,7 @@ use anyharness_contract::v1::{
         ResolveWorkspaceFromPathRequest,
         ResolveWorkspaceResponse,
         CreateWorkspaceRequest,
+        WorktreeNameConflictPolicy,
         CreateWorktreeWorkspaceRequest,
         SetupScriptStatus,
         SetupScriptExecution,
@@ -694,6 +695,7 @@ mod tests {
             "Workspace",
             "ResolveWorkspaceFromPathRequest",
             "CreateWorkspaceRequest",
+            "WorktreeNameConflictPolicy",
             "CreateWorktreeWorkspaceRequest",
             "SetupScriptStatus",
             "SetupScriptExecution",

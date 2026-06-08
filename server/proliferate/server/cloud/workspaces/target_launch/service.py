@@ -25,7 +25,9 @@ from proliferate.db.store.cloud_workspace_runtime import mark_workspace_error_by
 from proliferate.db.store.cloud_workspaces import (
     get_cloud_workspace_by_id,
     get_existing_cloud_workspace,
+    list_active_cloud_workspace_branches_for_user_repo,
 )
+from proliferate.lib.product.workspace_naming import resolve_generated_branch_name
 from proliferate.server.automations.worker.cloud_execution.command_models import (
     EnsureRepoCheckoutPayload,
     MaterializeWorkspacePayload,
@@ -61,6 +63,7 @@ from proliferate.server.cloud.workspaces.target_launch.models import (
     WorkspaceTargetLaunchCommandIds,
     WorkspaceTargetLaunchResponse,
 )
+from proliferate.utils.time import utcnow
 
 CLOUD_TARGET_LAUNCH_TEMPLATE_VERSION = "desktop-target-launch-v1"
 TARGET_LAUNCH_COMMAND_WAIT_TIMEOUT = timedelta(seconds=240)
@@ -218,6 +221,7 @@ async def launch_workspace_on_target(
                 target_path=worktree_path,
                 new_branch_name=resolved.git_branch,
                 base_branch=resolved.git_base_branch,
+                name_conflict_policy="suffix_path",
                 origin={"kind": "system", "entrypoint": "cloud"},
                 creator_context={"kind": "human", "label": "Mobile"},
             ).to_json(),
@@ -227,6 +231,10 @@ async def launch_workspace_on_target(
         materialized = parse_materialize_workspace_result(
             await _wait_for_target_launch_command(worktree_command, workspace_id=workspace_id),
         )
+        if materialized.path != worktree_path:
+            workspace.worktree_path = materialized.path
+            workspace.updated_at = utcnow()
+            await db_session.commit_session(db)
 
         start_payload = StartSessionPayload(
             workspace_id=materialized.anyharness_workspace_id,
@@ -388,12 +396,13 @@ async def _resolve_new_direct_target_workspace_create(
             f"The base branch '{resolved_base_branch}' was not found on GitHub.",
             status_code=400,
         )
-    if cleaned_branch_name in repo_branches.branches:
-        raise CloudApiError(
-            "github_branch_already_exists",
-            f"The branch '{cleaned_branch_name}' already exists on GitHub.",
-            status_code=400,
-        )
+    active_cloud_branches = await list_active_cloud_workspace_branches_for_user_repo(
+        db,
+        user_id=user.id,
+        git_provider=body.git_provider,
+        git_owner=body.git_owner,
+        git_repo_name=body.git_repo_name,
+    )
     existing_cloud_workspace = await get_existing_cloud_workspace(
         db,
         user_id=user.id,
@@ -402,7 +411,18 @@ async def _resolve_new_direct_target_workspace_create(
         git_repo_name=body.git_repo_name,
         git_branch=cleaned_branch_name,
     )
-    if existing_cloud_workspace is not None:
+    if body.generated_name:
+        cleaned_branch_name = resolve_generated_branch_name(
+            cleaned_branch_name,
+            set(repo_branches.branches) | active_cloud_branches,
+        )
+    elif cleaned_branch_name in repo_branches.branches:
+        raise CloudApiError(
+            "github_branch_already_exists",
+            f"The branch '{cleaned_branch_name}' already exists on GitHub.",
+            status_code=400,
+        )
+    elif existing_cloud_workspace is not None:
         raise CloudApiError(
             "cloud_branch_already_exists",
             (

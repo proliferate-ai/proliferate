@@ -15,9 +15,11 @@ from proliferate.db.store.cloud_repo_config import (
 from proliferate.db.store.cloud_workspace_creation import CloudRepoLimitExceededError
 from proliferate.db.store.cloud_workspaces import (
     get_existing_cloud_workspace,
-    get_existing_managed_cloud_workspace_for_profile,
+    list_active_cloud_workspace_branches_for_user_repo,
+    list_active_managed_cloud_workspace_branches_for_profile_repo,
     load_any_cloud_workspace_for_repo,
 )
+from proliferate.lib.product.workspace_naming import resolve_generated_branch_name
 from proliferate.server.billing.authorization import (
     authorize_sandbox_start,
     authorize_sandbox_start_for_billing_subject,
@@ -112,6 +114,7 @@ async def resolve_new_cloud_workspace_create(
     base_branch: str | None,
     branch_name: str,
     display_name: str | None,
+    generated_name: bool = False,
     required_agent_kind: str | None = None,
 ) -> ResolvedCloudWorkspaceCreate:
     if git_provider != SUPPORTED_GIT_PROVIDER:
@@ -191,14 +194,14 @@ async def resolve_new_cloud_workspace_create(
             f"The base branch '{resolved_base_branch}' was not found on GitHub.",
             status_code=400,
         )
-    if cleaned_branch_name in repo_branches.branches:
-        raise CloudApiError(
-            "github_branch_already_exists",
-            f"The branch '{cleaned_branch_name}' already exists on GitHub.",
-            status_code=400,
-        )
-
     async with db_session.open_async_session() as db:
+        active_cloud_branches = await list_active_cloud_workspace_branches_for_user_repo(
+            db,
+            user_id=user.id,
+            git_provider=git_provider,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+        )
         existing_cloud_workspace = await get_existing_cloud_workspace(
             db,
             user_id=user.id,
@@ -207,7 +210,18 @@ async def resolve_new_cloud_workspace_create(
             git_repo_name=git_repo_name,
             git_branch=cleaned_branch_name,
         )
-    if existing_cloud_workspace is not None:
+    if generated_name:
+        cleaned_branch_name = resolve_generated_branch_name(
+            cleaned_branch_name,
+            set(repo_branches.branches) | active_cloud_branches,
+        )
+    elif cleaned_branch_name in repo_branches.branches:
+        raise CloudApiError(
+            "github_branch_already_exists",
+            f"The branch '{cleaned_branch_name}' already exists on GitHub.",
+            status_code=400,
+        )
+    elif existing_cloud_workspace is not None:
         raise CloudApiError(
             "cloud_branch_already_exists",
             (
@@ -280,6 +294,7 @@ async def resolve_new_managed_cloud_workspace_create(
     base_branch: str | None,
     branch_name: str,
     display_name: str | None,
+    generated_name: bool = False,
     required_agent_kind: str | None = None,
 ) -> ResolvedCloudWorkspaceCreate:
     if git_provider != SUPPORTED_GIT_PROVIDER:
@@ -345,16 +360,17 @@ async def resolve_new_managed_cloud_workspace_create(
                 "Configure cloud settings for this repo before creating a cloud workspace.",
                 status_code=409,
             )
-        existing_cloud_workspace = await get_existing_managed_cloud_workspace_for_profile(
-            db,
-            sandbox_profile_id=profile.id,
-            target_id=target_id,
-            git_provider=git_provider,
-            git_owner=git_owner,
-            git_repo_name=git_repo_name,
-            git_branch=cleaned_branch_name,
+        active_cloud_branches = (
+            await list_active_managed_cloud_workspace_branches_for_profile_repo(
+                db,
+                sandbox_profile_id=profile.id,
+                target_id=target_id,
+                git_provider=git_provider,
+                git_owner=git_owner,
+                git_repo_name=git_repo_name,
+            )
         )
-        if existing_cloud_workspace is not None:
+        if not generated_name and cleaned_branch_name in active_cloud_branches:
             raise CloudApiError(
                 "cloud_branch_already_exists",
                 (
@@ -402,7 +418,12 @@ async def resolve_new_managed_cloud_workspace_create(
             f"The base branch '{resolved_base_branch}' was not found on GitHub.",
             status_code=400,
         )
-    if cleaned_branch_name in repo_branches.branches:
+    if generated_name:
+        cleaned_branch_name = resolve_generated_branch_name(
+            cleaned_branch_name,
+            set(repo_branches.branches) | active_cloud_branches,
+        )
+    elif cleaned_branch_name in repo_branches.branches:
         raise CloudApiError(
             "github_branch_already_exists",
             f"The branch '{cleaned_branch_name}' already exists on GitHub.",

@@ -122,6 +122,7 @@ async def create_cloud_workspace(
     base_branch: str | None,
     branch_name: str,
     display_name: str | None,
+    generated_name: bool = False,
     required_agent_kind: str | None = None,
     source: str = "desktop",
     owner_selection: OwnerSelection | None = None,
@@ -146,6 +147,7 @@ async def create_cloud_workspace(
         base_branch=base_branch,
         branch_name=branch_name,
         display_name=display_name,
+        generated_name=generated_name,
         required_agent_kind=required_agent_kind,
     )
 
@@ -194,6 +196,7 @@ async def create_cloud_workspace_for_automation_run(
     branch_name: str,
     worktree_path: str | None = None,
     display_name: str | None,
+    generated_name: bool = False,
     required_agent_kind: str,
 ) -> ProvisioningWorkspaceRecord | None:
     if target_id is None or sandbox_profile_id is None:
@@ -212,6 +215,7 @@ async def create_cloud_workspace_for_automation_run(
         base_branch=None,
         branch_name=branch_name,
         display_name=display_name,
+        generated_name=generated_name,
         required_agent_kind=required_agent_kind,
     )
     try:

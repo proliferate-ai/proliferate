@@ -3,6 +3,8 @@ import { buildBranchName } from "@/lib/domain/workspaces/creation/branch-naming"
 import type { AuthUser } from "@/lib/domain/auth/auth-user";
 import type { BranchPrefixType } from "@/lib/domain/preferences/user/model";
 
+export type WorktreeNameConflictPolicy = "fail" | "suffix_path" | "suffix_path_and_branch";
+
 export interface CreateWorktreeWorkspaceInput {
   repoRootId: string;
   sourceWorkspaceId?: string | null;
@@ -10,6 +12,7 @@ export interface CreateWorktreeWorkspaceInput {
   baseBranch?: string;
   targetPath?: string;
   workspaceName?: string;
+  generatedName?: boolean;
 }
 
 export interface WorktreeCreationParams {
@@ -19,6 +22,7 @@ export interface WorktreeCreationParams {
   targetPath: string;
   baseRef: string;
   setupScript: string | null;
+  nameConflictPolicy: WorktreeNameConflictPolicy;
 }
 
 export interface ResolvedWorktreeCreation {
@@ -55,6 +59,8 @@ export function resolveWorktreeCreationParams(input: {
     || "repo";
   const targetPath = rawInput.targetPath?.trim()
     || `${homeDir}/.proliferate/worktrees/${repoName}/${workspaceName}`;
+  const hasExplicitBranch = Boolean(rawInput.branchName?.trim());
+  const hasExplicitTargetPath = Boolean(rawInput.targetPath?.trim());
   const baseRef = rawInput.baseBranch?.trim()
     || repoConfig?.defaultBranch?.trim()
     || repoRoot.defaultBranch?.trim()
@@ -75,6 +81,9 @@ export function resolveWorktreeCreationParams(input: {
       targetPath,
       baseRef,
       setupScript: repoConfig?.setupScript?.trim() || null,
+      nameConflictPolicy: rawInput.generatedName && !hasExplicitBranch && !hasExplicitTargetPath
+        ? "suffix_path_and_branch"
+        : "fail",
     },
     source: sourceWorkspace,
     repoName,

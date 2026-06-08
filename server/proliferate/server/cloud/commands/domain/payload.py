@@ -19,6 +19,7 @@ _MATERIALIZE_WORKTREE_FIELDS = {
     "newBranchName",
     "baseBranch",
     "setupScript",
+    "nameConflictPolicy",
     "origin",
     "creatorContext",
 }
@@ -118,6 +119,11 @@ def validate_command_payload(*, kind: str, payload: dict[str, object]) -> None:
         )
         _optional_string(payload, "baseBranch")
         _optional_string(payload, "setupScript")
+        _optional_string_choice(
+            payload,
+            "nameConflictPolicy",
+            {"fail", "suffix_path", "suffix_path_and_branch"},
+        )
         _optional_object(payload, "origin")
         _optional_object(payload, "creatorContext")
         return
@@ -474,6 +480,24 @@ def _optional_string(payload: dict[str, object], field: str) -> None:
             f"{_MAX_MATERIALIZE_WORKSPACE_DISPLAY_NAME_CHARS} characters.",
             status_code=400,
         )
+
+
+def _optional_string_choice(
+    payload: dict[str, object],
+    field: str,
+    allowed_values: set[str],
+) -> None:
+    _optional_string(payload, field)
+    value = payload.get(field)
+    if value is None:
+        return
+    if isinstance(value, str) and value in allowed_values:
+        return
+    raise CloudApiError(
+        "cloud_command_materialize_workspace_payload_invalid",
+        f"materialize_workspace payload field is invalid: {field}",
+        status_code=400,
+    )
 
 
 def _optional_object(payload: dict[str, object], field: str) -> None:

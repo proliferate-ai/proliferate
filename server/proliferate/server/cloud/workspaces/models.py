@@ -15,6 +15,7 @@ class CreateCloudWorkspaceRequest(BaseModel):
     base_branch: str | None = Field(default=None, alias="baseBranch")
     branch_name: str = Field(alias="branchName")
     display_name: str | None = Field(default=None, alias="displayName")
+    generated_name: bool = Field(default=False, alias="generatedName")
     owner_scope: Literal["personal", "organization"] = Field(
         default="personal",
         alias="ownerScope",

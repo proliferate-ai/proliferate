@@ -28,12 +28,15 @@ export function normalizeWorktreeInput(
     return {
       repoRootId: input,
       workspaceName: generateWorkspaceSlug(existingBasenames),
+      generatedName: true,
     };
   }
 
+  const explicitWorkspaceName = input.workspaceName?.trim();
   return {
     ...input,
-    workspaceName: input.workspaceName?.trim() || generateWorkspaceSlug(existingBasenames),
+    workspaceName: explicitWorkspaceName || generateWorkspaceSlug(existingBasenames),
+    generatedName: Boolean(input.generatedName || !explicitWorkspaceName),
   };
 }
 

@@ -187,6 +187,11 @@ async def record_command_result(
         status=status,
         result_json=result_json,
     )
+    materialized_workspace_path = _materialized_workspace_path(
+        kind=row.kind,
+        status=status,
+        result_json=result_json,
+    )
     result_cloud_workspace_id = cloud_workspace_id or _result_cloud_workspace_id(result_json)
     if (
         row.kind == CloudCommandKind.materialize_workspace.value
@@ -257,6 +262,7 @@ async def record_command_result(
             db,
             cloud_workspace_id=row.cloud_workspace_id,
             anyharness_workspace_id=anyharness_workspace_id or materialized_workspace_id or "",
+            worktree_path=materialized_workspace_path,
             target_id=row.target_id,
             now=now,
         )
@@ -288,6 +294,7 @@ async def _record_materialized_cloud_workspace(
     *,
     cloud_workspace_id: UUID,
     anyharness_workspace_id: str,
+    worktree_path: str | None,
     target_id: UUID,
     now: datetime,
 ) -> None:
@@ -295,6 +302,8 @@ async def _record_materialized_cloud_workspace(
     if workspace is None:
         return
     workspace.anyharness_workspace_id = anyharness_workspace_id
+    if worktree_path is not None:
+        workspace.worktree_path = worktree_path
     workspace.target_id = target_id
     workspace.materialized_target_id = target_id
     workspace.status = "ready"
@@ -595,6 +604,27 @@ def _materialized_workspace_id(
     if not isinstance(workspace_id, str) or not workspace_id.strip():
         return None
     return workspace_id.strip()
+
+
+def _materialized_workspace_path(
+    *,
+    kind: str,
+    status: str,
+    result_json: str | None,
+) -> str | None:
+    if kind != CloudCommandKind.materialize_workspace.value or status not in {
+        CloudCommandStatus.accepted.value,
+        CloudCommandStatus.accepted_but_queued.value,
+    }:
+        return None
+    try:
+        result = json.loads(result_json or "{}")
+    except ValueError:
+        return None
+    if not isinstance(result, dict) or result.get("mode") != "worktree":
+        return None
+    value = result.get("path")
+    return value.strip() if isinstance(value, str) and value.strip() else None
 
 
 def _result_cloud_workspace_id(result_json: str | None) -> UUID | None:

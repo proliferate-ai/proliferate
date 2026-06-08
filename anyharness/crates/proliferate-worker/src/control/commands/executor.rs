@@ -170,7 +170,9 @@ pub(crate) async fn process_command(
         }
     }
     let result = command_result(&command, &mapped, response);
-    report_command_result(cloud, identity, store, &command.command_id, &result).await
+    report_command_result(cloud, identity, store, &command.command_id, &result).await?;
+    report_hydrated_materialization_if_needed(cloud, identity, &mapped, &result).await;
+    Ok(())
 }
 
 async fn process_refresh_agent_auth_config_command(
@@ -1069,6 +1071,43 @@ async fn report_materialization_state(
             cloud_workspace_id, state, "failed to report materialization state"
         );
     }
+}
+
+async fn report_hydrated_materialization_if_needed(
+    cloud: &CloudClient,
+    identity: &WorkerIdentity,
+    mapped: &AnyHarnessCommand,
+    result: &CommandResultRequest,
+) {
+    if !matches!(mapped, AnyHarnessCommand::MaterializeWorkspace { .. })
+        || !matches!(result.status.as_str(), "accepted" | "accepted_but_queued")
+    {
+        return;
+    }
+    let Some(cloud_workspace_id) = result.cloud_workspace_id.as_deref() else {
+        return;
+    };
+    let Some(anyharness_workspace_id) = result.anyharness_workspace_id.as_deref() else {
+        return;
+    };
+    let worktree_path = result
+        .result
+        .as_ref()
+        .and_then(|value| value.get("path"))
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned);
+    report_materialization_state(
+        cloud,
+        identity,
+        cloud_workspace_id,
+        Some(anyharness_workspace_id),
+        "hydrated",
+        None,
+        None,
+        Vec::new(),
+        worktree_path,
+    )
+    .await;
 }
 
 async fn report_prune_failed_and_command_result(

@@ -36,6 +36,8 @@ pub enum MaterializeWorkspaceRequest {
         base_branch: Option<String>,
         #[serde(rename = "setupScript")]
         setup_script: Option<String>,
+        #[serde(rename = "nameConflictPolicy")]
+        name_conflict_policy: Option<String>,
         origin: Option<Value>,
         #[serde(rename = "creatorContext")]
         creator_context: Option<Value>,
@@ -98,6 +100,7 @@ impl MaterializeWorkspaceRequest {
                 new_branch_name,
                 base_branch,
                 setup_script,
+                name_conflict_policy,
                 origin,
                 creator_context,
             } => compact_object(json!({
@@ -106,6 +109,7 @@ impl MaterializeWorkspaceRequest {
                 "newBranchName": new_branch_name,
                 "baseBranch": base_branch,
                 "setupScript": setup_script,
+                "nameConflictPolicy": name_conflict_policy,
                 "origin": origin,
                 "creatorContext": creator_context,
             })),
@@ -450,6 +454,7 @@ mod tests {
             new_branch_name: "feature".to_string(),
             base_branch: Some("main".to_string()),
             setup_script: None,
+            name_conflict_policy: None,
             origin: None,
             creator_context: None,
         };
@@ -476,6 +481,7 @@ mod tests {
             new_branch_name: "feature".to_string(),
             base_branch: Some("main".to_string()),
             setup_script: Some("pnpm install".to_string()),
+            name_conflict_policy: Some("suffix_path".to_string()),
             origin: None,
             creator_context: None,
         };
@@ -486,7 +492,8 @@ mod tests {
                 "targetPath": "/workspace/feature",
                 "newBranchName": "feature",
                 "baseBranch": "main",
-                "setupScript": "pnpm install"
+                "setupScript": "pnpm install",
+                "nameConflictPolicy": "suffix_path"
             })
         );
     }
@@ -499,6 +506,7 @@ mod tests {
             new_branch_name: "feature".to_string(),
             base_branch: Some("main".to_string()),
             setup_script: None,
+            name_conflict_policy: None,
             origin: None,
             creator_context: None,
         };

@@ -127,6 +127,7 @@ describe("cloud workspace creation helpers", () => {
       baseBranch: undefined,
       branchName: attempt.branchName,
       displayName: null,
+      generatedName: true,
       ownerScope: "personal",
     });
     expect(attempt.triedBranchNames).toEqual(new Set([attempt.branchName]));
@@ -162,6 +163,7 @@ describe("cloud workspace creation helpers", () => {
       gitRepoName: "rocket",
       branchName: "proliferate/acacia",
       displayName: null,
+      generatedName: false,
       ownerScope: "personal" as const,
     };
 

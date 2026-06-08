@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,11 @@ class MaterializeWorkspacePayload:
     target_path: str | None = None
     new_branch_name: str | None = None
     base_branch: str | None = None
+    name_conflict_policy: Literal[
+        "fail",
+        "suffix_path",
+        "suffix_path_and_branch",
+    ] | None = None
     origin: dict[str, object] | None = None
     creator_context: dict[str, object] | None = None
 
@@ -64,6 +70,8 @@ class MaterializeWorkspacePayload:
             }
             if self.base_branch:
                 payload["baseBranch"] = self.base_branch
+            if self.name_conflict_policy:
+                payload["nameConflictPolicy"] = self.name_conflict_policy
         if self.origin:
             payload["origin"] = self.origin
         if self.creator_context:

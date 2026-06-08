@@ -126,6 +126,30 @@ Managed workspace creation should follow this sequence:
 | Billing wake authorization | [billing.md](billing.md) |
 | Shared/unclaimed team workspace claim path | [claiming.md](claiming.md) |
 
+## Generated Workspace Names
+
+Generated workspace names use the shared animal-name catalog at
+`catalogs/workspace-names/v1/animals.json`. Regenerate the TypeScript and
+Python catalog mirrors with:
+
+```bash
+node scripts/generate-workspace-name-catalog.mjs
+```
+
+The generated TypeScript mirror lives in
+`apps/packages/product-domain/src/workspaces/workspace-name-catalog.generated.ts`.
+The generated Python mirror lives in
+`server/proliferate/lib/product/workspace_naming/animal_names_generated.py`.
+
+Explicit user-provided branch/worktree names fail on conflicts. Generated
+names may be suffixed. Desktop local worktree creation sends
+`nameConflictPolicy: "suffix_path_and_branch"` only when the name, branch, and
+path are all generated. Cloud-owned materialization sends
+`nameConflictPolicy: "suffix_path"` because the server preflight reserves the
+final Cloud branch first, then AnyHarness owns the final worktree path. Worker
+materialization results must persist the returned AnyHarness `path` so Cloud
+records reflect any runtime suffix.
+
 ## Invariants
 
 - Every managed creation path uses the same server-owned launch service named

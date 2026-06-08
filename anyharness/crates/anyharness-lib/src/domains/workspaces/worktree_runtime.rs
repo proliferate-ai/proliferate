@@ -5,6 +5,7 @@ use crate::domains::workspaces::retention::WorkspaceRetentionService;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::domains::workspaces::setup_runtime::{WorkspaceSetupError, WorkspaceSetupRuntime};
 use crate::domains::workspaces::types::CreateWorktreeResult;
+use crate::domains::workspaces::worktree_names::WorktreeNameConflictPolicy;
 use crate::origin::OriginContext;
 
 #[derive(Clone)]
@@ -22,6 +23,7 @@ pub struct CreateWorktreeWorkflowInput {
     pub base_branch: Option<String>,
     pub setup_script: Option<String>,
     pub surface: String,
+    pub name_conflict_policy: WorktreeNameConflictPolicy,
     pub origin: OriginContext,
     pub creator_context: Option<WorkspaceCreatorContext>,
 }
@@ -65,6 +67,7 @@ impl WorkspaceWorktreeRuntime {
         let new_branch_name = input.new_branch_name.clone();
         let base_branch = input.base_branch.clone();
         let surface = input.surface.clone();
+        let name_conflict_policy = input.name_conflict_policy;
         let origin = input.origin;
         let creator_context = input.creator_context;
         let worktree = tokio::task::spawn_blocking(move || {
@@ -75,6 +78,7 @@ impl WorkspaceWorktreeRuntime {
                 base_branch.as_deref(),
                 None,
                 &surface,
+                name_conflict_policy,
                 origin,
                 creator_context,
             )

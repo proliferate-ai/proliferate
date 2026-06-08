@@ -14,6 +14,7 @@ use crate::domains::sessions::store::SessionStore;
 use crate::domains::workspaces::deletion::WorkspaceDeleteWorkflow;
 use crate::domains::workspaces::model::WorkspaceKind;
 use crate::domains::workspaces::store::WorkspaceStore;
+use crate::domains::workspaces::worktree_names::WorktreeNameConflictPolicy;
 use crate::origin::OriginContext;
 use crate::persistence::Db;
 
@@ -86,6 +87,106 @@ fn create_worktree_keeps_created_branch_local() {
             "--symbolic-full-name",
             "@{upstream}",
         ],
+    );
+}
+
+#[test]
+fn create_worktree_suffixes_generated_path_and_branch_on_conflict() {
+    let remote = TempDirGuard::new("runtime-worktree-suffix-generated-remote");
+    let source = TempDirGuard::new("runtime-worktree-suffix-generated-source");
+    let target = TempDirGuard::new("runtime-worktree-suffix-generated-target");
+    let runtime_home = TempDirGuard::new("runtime-worktree-suffix-generated-home");
+    let _ = fs::remove_dir_all(target.path());
+
+    run_git(remote.path(), ["init", "--bare", "-b", "main"]);
+    init_repo(source.path());
+    let remote_path = remote.path().display().to_string();
+    run_git(source.path(), ["remote", "add", "origin", &remote_path]);
+    run_git(source.path(), ["push", "-u", "origin", "main"]);
+    run_git(source.path(), ["branch", "codex/otter"]);
+
+    let db = Db::open_in_memory().expect("open db");
+    let runtime = make_runtime(&db, runtime_home.path());
+    let source_workspace = runtime
+        .create_workspace(&source.path().display().to_string())
+        .expect("create source workspace");
+
+    let result = runtime
+        .create_worktree_with_surface(
+            &source_workspace.repo_root.id,
+            &target.path().display().to_string(),
+            "codex/otter",
+            Some("main"),
+            None,
+            "standard",
+            WorktreeNameConflictPolicy::SuffixPathAndBranch,
+            OriginContext::api_local_runtime(),
+            None,
+        )
+        .expect("create suffixed worktree");
+
+    let worktree_path = Path::new(&result.workspace.path);
+    let expected_basename = format!("{}-2", target.path().file_name().unwrap().to_string_lossy());
+    assert_eq!(
+        worktree_path.file_name().unwrap().to_string_lossy(),
+        expected_basename
+    );
+    assert_eq!(
+        git_stdout(worktree_path, ["branch", "--show-current"]).trim(),
+        "codex/otter-2"
+    );
+    assert_eq!(
+        result.workspace.current_branch.as_deref(),
+        Some("codex/otter-2")
+    );
+}
+
+#[test]
+fn create_worktree_suffix_path_policy_keeps_reserved_branch() {
+    let remote = TempDirGuard::new("runtime-worktree-suffix-path-remote");
+    let source = TempDirGuard::new("runtime-worktree-suffix-path-source");
+    let target = TempDirGuard::new("runtime-worktree-suffix-path-target");
+    let runtime_home = TempDirGuard::new("runtime-worktree-suffix-path-home");
+
+    run_git(remote.path(), ["init", "--bare", "-b", "main"]);
+    init_repo(source.path());
+    let remote_path = remote.path().display().to_string();
+    run_git(source.path(), ["remote", "add", "origin", &remote_path]);
+    run_git(source.path(), ["push", "-u", "origin", "main"]);
+
+    let db = Db::open_in_memory().expect("open db");
+    let runtime = make_runtime(&db, runtime_home.path());
+    let source_workspace = runtime
+        .create_workspace(&source.path().display().to_string())
+        .expect("create source workspace");
+
+    let result = runtime
+        .create_worktree_with_surface(
+            &source_workspace.repo_root.id,
+            &target.path().display().to_string(),
+            "codex/cloud-reserved",
+            Some("main"),
+            None,
+            "standard",
+            WorktreeNameConflictPolicy::SuffixPath,
+            OriginContext::api_local_runtime(),
+            None,
+        )
+        .expect("create path-suffixed worktree");
+
+    let worktree_path = Path::new(&result.workspace.path);
+    let expected_basename = format!("{}-2", target.path().file_name().unwrap().to_string_lossy());
+    assert_eq!(
+        worktree_path.file_name().unwrap().to_string_lossy(),
+        expected_basename
+    );
+    assert_eq!(
+        git_stdout(worktree_path, ["branch", "--show-current"]).trim(),
+        "codex/cloud-reserved"
+    );
+    assert_eq!(
+        result.workspace.current_branch.as_deref(),
+        Some("codex/cloud-reserved")
     );
 }
 

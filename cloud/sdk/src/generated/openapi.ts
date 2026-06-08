@@ -706,6 +706,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/workspaces/{workspace_id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Cloud Workspace Endpoint */
+        post: operations["start_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workspaces/target-launch": {
         parameters: {
             query?: never;
@@ -735,24 +752,6 @@ export interface paths {
         /** Bootstrap Workspace Remote Access Endpoint */
         post: operations["bootstrap_workspace_remote_access_endpoint_v1_cloud_workspaces_remote_access_post"];
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/workspaces/{workspace_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Cloud Workspace Endpoint */
-        get: operations["get_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__get"];
-        put?: never;
-        post?: never;
-        /** Delete Cloud Workspace Endpoint */
-        delete: operations["delete_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -803,23 +802,6 @@ export interface paths {
         put?: never;
         /** Disable Cloud Workspace Remote Access Endpoint */
         post: operations["disable_cloud_workspace_remote_access_endpoint_v1_cloud_workspaces__workspace_id__remote_access_disable_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/cloud/workspaces/{workspace_id}/start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Start Cloud Workspace Endpoint */
-        post: operations["start_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__start_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -890,6 +872,24 @@ export interface paths {
         post: operations["purge_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__purge_post"];
         /** Purge Cloud Workspace Endpoint */
         delete: operations["purge_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__purge_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspaces/{workspace_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Cloud Workspace Endpoint */
+        get: operations["get_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Cloud Workspace Endpoint */
+        delete: operations["delete_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2841,6 +2841,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/billing/team-checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Team Checkout */
+        post: operations["create_team_checkout_v1_billing_team_checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/team-checkout/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Current Team Checkout Endpoint */
+        get: operations["get_current_team_checkout_endpoint_v1_billing_team_checkout_current_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/team-checkout/{intent_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Current Team Checkout Endpoint */
+        post: operations["cancel_current_team_checkout_endpoint_v1_billing_team_checkout__intent_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/billing/plan": {
         parameters: {
             query?: never;
@@ -2903,57 +2954,6 @@ export interface paths {
         put?: never;
         /** Create Cloud Checkout */
         post: operations["create_cloud_checkout_v1_billing_cloud_checkout_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/billing/team-checkout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create Team Checkout */
-        post: operations["create_team_checkout_v1_billing_team_checkout_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/billing/team-checkout/current": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Current Team Checkout Endpoint */
-        get: operations["get_current_team_checkout_endpoint_v1_billing_team_checkout_current_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/billing/team-checkout/{intent_id}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Cancel Current Team Checkout Endpoint */
-        post: operations["cancel_current_team_checkout_endpoint_v1_billing_team_checkout__intent_id__cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5607,6 +5607,11 @@ export interface components {
             /** Displayname */
             displayName?: string | null;
             /**
+             * Generatedname
+             * @default false
+             */
+            generatedName: boolean;
+            /**
              * Ownerscope
              * @default personal
              * @enum {string}
@@ -5917,6 +5922,11 @@ export interface components {
             branchName: string;
             /** Displayname */
             displayName?: string | null;
+            /**
+             * Generatedname
+             * @default false
+             */
+            generatedName: boolean;
             /** Prompt */
             prompt: string;
             /** Promptid */
@@ -8236,6 +8246,13 @@ export interface components {
             leaseTimeoutSeconds?: number | null;
             /** Controlcursor */
             controlCursor?: string | null;
+            /** Revokedjticursor */
+            revokedJtiCursor?: string | null;
+            /**
+             * Leasecommands
+             * @default true
+             */
+            leaseCommands: boolean;
             /** Waitseconds */
             waitSeconds?: number | null;
         };
@@ -8244,6 +8261,7 @@ export interface components {
             command?: components["schemas"]["WorkerCommandEnvelope"] | null;
             /** Exposures */
             exposures?: components["schemas"]["WorkerExposureSnapshotResponse"][] | null;
+            revokedJtis?: components["schemas"]["WorkerRevokedJtisResponse"] | null;
             /** Controlcursor */
             controlCursor: string;
             /** Reason */
@@ -8951,6 +8969,14 @@ export interface components {
              * @enum {string}
              */
             status: "active" | "paused" | "stale" | "revoked";
+        };
+        /** WorkspaceLifecycleMutationResponse */
+        WorkspaceLifecycleMutationResponse: {
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
         };
         /** WorkspaceMaterializationSummary */
         WorkspaceMaterializationSummary: {
@@ -10590,6 +10616,37 @@ export interface operations {
             };
         };
     };
+    start_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     launch_workspace_on_target_endpoint_v1_cloud_workspaces_target_launch_post: {
         parameters: {
             query?: never;
@@ -10643,70 +10700,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: boolean;
-                    };
                 };
             };
             /** @description Validation Error */
@@ -10783,37 +10776,6 @@ export interface operations {
         };
     };
     disable_cloud_workspace_remote_access_endpoint_v1_cloud_workspaces__workspace_id__remote_access_disable_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                workspace_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspaceDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    start_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__start_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -10954,9 +10916,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: boolean;
-                    };
+                    "application/json": components["schemas"]["WorkspaceLifecycleMutationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -10987,9 +10947,69 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: boolean;
-                    };
+                    "application/json": components["schemas"]["WorkspaceLifecycleMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_cloud_workspace_endpoint_v1_cloud_workspaces__workspace_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceLifecycleMutationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -15036,6 +15056,90 @@ export interface operations {
             };
         };
     };
+    create_team_checkout_v1_billing_team_checkout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamCheckoutRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamCheckoutResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_current_team_checkout_endpoint_v1_billing_team_checkout_current_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentTeamCheckoutResponse"];
+                };
+            };
+        };
+    };
+    cancel_current_team_checkout_endpoint_v1_billing_team_checkout__intent_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentTeamCheckoutResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_plan_v1_billing_plan_get: {
         parameters: {
             query?: never;
@@ -15140,90 +15244,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BillingUrlResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_team_checkout_v1_billing_team_checkout_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TeamCheckoutRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TeamCheckoutResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_current_team_checkout_endpoint_v1_billing_team_checkout_current_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CurrentTeamCheckoutResponse"];
-                };
-            };
-        };
-    };
-    cancel_current_team_checkout_endpoint_v1_billing_team_checkout__intent_id__cancel_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                intent_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CurrentTeamCheckoutResponse"];
                 };
             };
             /** @description Validation Error */

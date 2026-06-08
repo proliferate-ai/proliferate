@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from datetime import timedelta
 from uuid import UUID
 
@@ -25,7 +24,14 @@ from proliferate.db.store.cloud_sync import targets as target_store
 from proliferate.db.store.cloud_workspace_creation import (
     create_managed_cloud_workspace_for_profile,
 )
+from proliferate.db.store.cloud_workspaces import (
+    list_active_managed_cloud_workspace_branches_for_profile_repo,
+)
 from proliferate.integrations.sandbox import get_configured_sandbox_provider
+from proliferate.lib.product.workspace_naming import (
+    pick_generated_workspace_name,
+    resolve_generated_branch_name,
+)
 from proliferate.server.automations.worker.cloud_execution.command_models import (
     EnsureRepoCheckoutPayload,
     MaterializeWorkspacePayload,
@@ -66,6 +72,7 @@ async def create_and_materialize_workspace(
     agent_kind: object,
     job_id: UUID,
 ) -> tuple[CloudWorkspace, str]:
+    del prompt
     profile = await profile_store.ensure_organization_sandbox_profile(
         db,
         organization_id=organization_id,
@@ -76,7 +83,16 @@ async def create_and_materialize_workspace(
         sandbox_profile_id=profile.id,
         created_by_user_id=created_by_user_id,
     )
-    branch_name = _slack_branch_name(prompt=prompt, job_id=job_id)
+    proposed_branch_name = _slack_branch_name(job_id=job_id)
+    taken_branch_names = await list_active_managed_cloud_workspace_branches_for_profile_repo(
+        db,
+        sandbox_profile_id=profile.id,
+        target_id=target.id,
+        git_provider="github",
+        git_owner=repo.git_owner,
+        git_repo_name=repo.git_repo_name,
+    )
+    branch_name = resolve_generated_branch_name(proposed_branch_name, taken_branch_names)
     repo_root_path, worktree_path = _workspace_paths(
         repo=repo,
         branch_name=branch_name,
@@ -185,6 +201,7 @@ async def create_and_materialize_workspace(
             target_path=worktree_path,
             new_branch_name=branch_name,
             base_branch=repo.default_branch,
+            name_conflict_policy="suffix_path",
             origin={"kind": "system", "entrypoint": "cloud"},
             creator_context={"kind": "human", "label": "Slack"},
         ).to_json(),
@@ -394,13 +411,10 @@ def snapshot_session_config_updates(snapshot: dict[str, object]) -> list[tuple[s
     return updates
 
 
-def _slack_branch_name(*, prompt: str, job_id: UUID) -> str:
+def _slack_branch_name(*, job_id: UUID) -> str:
     config = default_cloud_executor_config()
-    slug = re.sub(r"[^a-zA-Z0-9._-]+", "-", prompt.lower()).strip("-._")[
-        : config.max_branch_slug_chars
-    ]
-    slug = slug or "slack"
-    return f"{config.branch_prefix}/{slug}-{job_id.hex[:12]}"
+    slug = pick_generated_workspace_name(seed=job_id.hex)
+    return f"{config.branch_prefix}/{slug}"
 
 
 def _workspace_paths(

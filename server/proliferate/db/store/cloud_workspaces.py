@@ -267,6 +267,49 @@ async def get_existing_managed_cloud_workspace_for_profile(
     ).scalar_one_or_none()
 
 
+async def list_active_cloud_workspace_branches_for_user_repo(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    git_provider: str,
+    git_owner: str,
+    git_repo_name: str,
+) -> set[str]:
+    rows = await db.execute(
+        select(CloudWorkspace.git_branch).where(
+            CloudWorkspace.owner_scope == "personal",
+            CloudWorkspace.owner_user_id == user_id,
+            CloudWorkspace.git_provider == git_provider,
+            CloudWorkspace.git_owner == git_owner,
+            CloudWorkspace.git_repo_name == git_repo_name,
+            CloudWorkspace.archived_at.is_(None),
+        )
+    )
+    return {branch for branch in rows.scalars().all() if branch}
+
+
+async def list_active_managed_cloud_workspace_branches_for_profile_repo(
+    db: AsyncSession,
+    *,
+    sandbox_profile_id: UUID,
+    target_id: UUID,
+    git_provider: str,
+    git_owner: str,
+    git_repo_name: str,
+) -> set[str]:
+    rows = await db.execute(
+        select(CloudWorkspace.git_branch).where(
+            CloudWorkspace.sandbox_profile_id == sandbox_profile_id,
+            CloudWorkspace.target_id == target_id,
+            CloudWorkspace.git_provider == git_provider,
+            CloudWorkspace.git_owner == git_owner,
+            CloudWorkspace.git_repo_name == git_repo_name,
+            CloudWorkspace.archived_at.is_(None),
+        )
+    )
+    return {branch for branch in rows.scalars().all() if branch}
+
+
 async def load_any_cloud_workspace_for_repo(
     db: AsyncSession,
     *,

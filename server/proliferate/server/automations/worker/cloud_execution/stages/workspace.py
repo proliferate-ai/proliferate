@@ -100,7 +100,6 @@ async def _create_workspace_record(
         await fail_claim(current, code="user_not_found")
         return None
     branch_name = automation_branch_name(current, config=config)
-    _repo_root_path, worktree_path = _workspace_paths(ctx, branch_name=branch_name)
     try:
         workspace = await create_cloud_workspace_for_automation_run(
             user,
@@ -111,8 +110,9 @@ async def _create_workspace_record(
             git_owner=current.git_owner,
             git_repo_name=current.git_repo_name,
             branch_name=branch_name,
-            worktree_path=worktree_path,
+            worktree_path=None,
             display_name=current.title,
+            generated_name=True,
             required_agent_kind=current.agent_kind or "",
         )
     except CloudApiError as exc:
@@ -144,6 +144,8 @@ async def materialize_workspace_stage(
             else automation_branch_name(ctx.claim, config=config)
         )
         _repo_root_path, worktree_path = _workspace_paths(ctx, branch_name=branch_name)
+        if workspace is not None and workspace.worktree_path:
+            worktree_path = workspace.worktree_path
         return ctx.with_workspace(
             WorkspaceExecutionContext(
                 cloud_workspace_id=ctx.claim.cloud_workspace_id,
@@ -225,6 +227,7 @@ async def materialize_workspace_stage(
                 target_path=worktree_path,
                 new_branch_name=branch_name,
                 base_branch=base_branch,
+                name_conflict_policy="suffix_path",
                 origin=origin,
                 creator_context=creator_context,
             ),
@@ -271,7 +274,7 @@ async def materialize_workspace_stage(
             cloud_workspace_id=cloud_workspace_id,
             anyharness_workspace_id=materialized.anyharness_workspace_id,
             anyharness_repo_root_id=materialized.repo_root_id,
-            path=worktree_path,
+            path=materialized.path,
             branch=materialized.current_branch,
         )
     )

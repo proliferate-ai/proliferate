@@ -27,6 +27,7 @@ export interface PendingCloudWorkspaceRequestInput {
   baseBranch?: string | null;
   branchName: string;
   displayName?: string | null;
+  generatedName: boolean;
   ownerScope: "personal" | "organization";
   organizationId?: string | null;
 }

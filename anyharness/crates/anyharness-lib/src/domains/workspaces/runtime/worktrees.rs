@@ -8,7 +8,10 @@ use crate::adapters::git::GitService;
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceSurface};
 use crate::domains::workspaces::types::CreateWorktreeResult;
+use crate::domains::workspaces::worktree_names::WorktreeNameConflictPolicy;
 use crate::origin::OriginContext;
+
+const MAX_WORKTREE_NAME_ATTEMPTS: usize = 10_000;
 
 impl WorkspaceRuntime {
     pub fn create_worktree(
@@ -26,6 +29,7 @@ impl WorkspaceRuntime {
             base_branch,
             setup_script,
             "standard",
+            WorktreeNameConflictPolicy::Fail,
             OriginContext::api_local_runtime(),
             None,
         )
@@ -39,6 +43,7 @@ impl WorkspaceRuntime {
         base_branch: Option<&str>,
         _setup_script: Option<&str>,
         surface: &str,
+        name_conflict_policy: WorktreeNameConflictPolicy,
         origin: OriginContext,
         creator_context: Option<WorkspaceCreatorContext>,
     ) -> anyhow::Result<CreateWorktreeResult> {
@@ -64,23 +69,104 @@ impl WorkspaceRuntime {
             "[workspace-latency] workspace.worktree.runtime_create.source_loaded"
         );
 
-        let target = Path::new(target_path);
-        let canonical_target = target
-            .parent()
-            .and_then(|parent| std::fs::canonicalize(parent).ok())
-            .map(|parent| parent.join(target.file_name().unwrap_or_default()))
-            .unwrap_or_else(|| target.to_path_buf());
-        let canonical_path = canonical_target.to_string_lossy().to_string();
+        for attempt_index in 0..MAX_WORKTREE_NAME_ATTEMPTS {
+            let suffix = if attempt_index == 0 {
+                None
+            } else {
+                Some(attempt_index + 1)
+            };
+            let candidate = name_conflict_policy.candidate(target_path, new_branch_name, suffix);
+            let candidate_target_path = candidate.target_path.to_string_lossy().to_string();
+            let canonical_target = canonical_target_path(&candidate.target_path);
+            let canonical_candidate_path = canonical_target.to_string_lossy().to_string();
 
-        if canonical_target.exists() {
-            anyhow::bail!("worktree target path already exists: {canonical_path}");
+            if GitService::ref_exists(
+                Path::new(&source.path),
+                &format!("refs/heads/{}", candidate.branch_name),
+            ) {
+                if name_conflict_policy.can_retry_branch() {
+                    continue;
+                }
+                anyhow::bail!("worktree branch already exists: {}", candidate.branch_name);
+            }
+
+            let existing_lookup_started = Instant::now();
+            if let Some(error) = self.path_conflict_error(&canonical_target)? {
+                if name_conflict_policy.can_retry() {
+                    continue;
+                }
+                return Err(error);
+            }
+            tracing::info!(
+                repo_root_id = %repo_root_id,
+                target_path = %canonical_candidate_path,
+                new_branch_name = %candidate.branch_name,
+                elapsed_ms = existing_lookup_started.elapsed().as_millis(),
+                "[workspace-latency] workspace.worktree.runtime_create.path_checked"
+            );
+
+            match GitService::create_worktree(
+                &source.path,
+                &candidate_target_path,
+                &candidate.branch_name,
+                base_branch,
+            ) {
+                Ok(()) => {
+                    // The pre-create canonical target is only for checking the
+                    // requested target before it exists. Persist the canonical
+                    // path of the worktree that git actually materialized.
+                    let canonical_path = fs::canonicalize(&candidate_target_path)
+                        .map_err(|error| {
+                            anyhow::anyhow!(
+                                "failed to canonicalize created worktree path {}: {error}",
+                                candidate_target_path
+                            )
+                        })?
+                        .to_string_lossy()
+                        .to_string();
+
+                    return self.insert_created_worktree_record(
+                        &source,
+                        repo_root_id,
+                        &canonical_path,
+                        &candidate.branch_name,
+                        surface,
+                        origin,
+                        creator_context,
+                        started,
+                    );
+                }
+                Err(error)
+                    if should_retry_git_worktree_name_error(&error, name_conflict_policy) =>
+                {
+                    continue;
+                }
+                Err(error) => return Err(error),
+            }
         }
 
-        let existing_lookup_started = Instant::now();
+        anyhow::bail!(
+            "could not find an available worktree path for {target_path} after {MAX_WORKTREE_NAME_ATTEMPTS} attempts"
+        )
+    }
+
+    fn path_conflict_error(
+        &self,
+        canonical_target: &Path,
+    ) -> anyhow::Result<Option<anyhow::Error>> {
+        let canonical_path = canonical_target.to_string_lossy().to_string();
+        if canonical_target.exists() {
+            return Ok(Some(anyhow::anyhow!(
+                "worktree target path already exists: {canonical_path}"
+            )));
+        }
+
         // Worktrees own their materialized checkout path across workspace
         // kinds; do not create a worktree where any active workspace points.
         if self.store.find_active_by_path(&canonical_path)?.is_some() {
-            anyhow::bail!("a workspace record already exists for path: {canonical_path}");
+            return Ok(Some(anyhow::anyhow!(
+                "a workspace record already exists for path: {canonical_path}"
+            )));
         }
         if let Some(retired) = self
             .store
@@ -89,40 +175,34 @@ impl WorkspaceRuntime {
                 WorkspaceKind::Worktree,
             )?
         {
-            anyhow::bail!(
+            return Ok(Some(anyhow::anyhow!(
                 "workspace path still has pending cleanup from retired workspace {}: {}",
                 retired.id,
                 canonical_path
-            );
+            )));
         }
-        tracing::info!(
-            repo_root_id = %repo_root_id,
-            target_path = %canonical_path,
-            elapsed_ms = existing_lookup_started.elapsed().as_millis(),
-            "[workspace-latency] workspace.worktree.runtime_create.path_checked"
-        );
+        Ok(None)
+    }
 
-        GitService::create_worktree(&source.path, target_path, new_branch_name, base_branch)?;
-        // The pre-create canonical target is only for checking the requested
-        // target before it exists. Persist the canonical path of the worktree
-        // that git actually materialized.
-        let canonical_path = fs::canonicalize(target_path)
-            .map_err(|error| {
-                anyhow::anyhow!(
-                    "failed to canonicalize created worktree path {target_path}: {error}"
-                )
-            })?
-            .to_string_lossy()
-            .to_string();
-
+    fn insert_created_worktree_record(
+        &self,
+        source: &crate::domains::repo_roots::model::RepoRootRecord,
+        repo_root_id: &str,
+        canonical_path: &str,
+        branch_name: &str,
+        surface: &str,
+        origin: OriginContext,
+        creator_context: Option<WorkspaceCreatorContext>,
+        started: Instant,
+    ) -> anyhow::Result<CreateWorktreeResult> {
         let record = build_workspace_record(
-            &source,
-            &canonical_path,
+            source,
+            canonical_path,
             WorkspaceKind::Worktree,
             WorkspaceSurface::try_from(surface)?,
             // `git worktree add -b <name>` either creates this branch or
             // fails; avoid an extra post-create branch probe on the hot path.
-            Some(new_branch_name.to_string()),
+            Some(branch_name.to_string()),
             origin,
             creator_context,
         );
@@ -149,4 +229,32 @@ impl WorkspaceRuntime {
             setup_script,
         })
     }
+}
+
+fn canonical_target_path(target: &Path) -> std::path::PathBuf {
+    target
+        .parent()
+        .and_then(|parent| std::fs::canonicalize(parent).ok())
+        .map(|parent| parent.join(target.file_name().unwrap_or_default()))
+        .unwrap_or_else(|| target.to_path_buf())
+}
+
+fn should_retry_git_worktree_name_error(
+    error: &anyhow::Error,
+    policy: WorktreeNameConflictPolicy,
+) -> bool {
+    if !policy.can_retry() {
+        return false;
+    }
+    let message = error.to_string().to_lowercase();
+    if message.contains("already exists") && !git_error_mentions_branch_conflict(&message) {
+        return true;
+    }
+    policy.can_retry_branch() && git_error_mentions_branch_conflict(&message)
+}
+
+fn git_error_mentions_branch_conflict(message: &str) -> bool {
+    message.contains("branch named")
+        || message.contains("a branch")
+        || (message.contains("branch") && message.contains("already exists"))
 }

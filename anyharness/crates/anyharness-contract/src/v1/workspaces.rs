@@ -294,12 +294,22 @@ pub struct CreateWorkspaceRequest {
     pub creator_context: Option<WorkspaceCreatorContext>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WorktreeNameConflictPolicy {
+    Fail,
+    SuffixPath,
+    SuffixPathAndBranch,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateWorktreeWorkspaceRequest {
     pub repo_root_id: String,
     pub target_path: String,
     pub new_branch_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name_conflict_policy: Option<WorktreeNameConflictPolicy>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_branch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

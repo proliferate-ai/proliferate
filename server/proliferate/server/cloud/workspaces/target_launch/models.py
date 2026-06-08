@@ -21,6 +21,7 @@ class LaunchWorkspaceOnTargetRequest(BaseModel):
     base_branch: str | None = Field(default=None, alias="baseBranch")
     branch_name: str = Field(alias="branchName")
     display_name: str | None = Field(default=None, alias="displayName")
+    generated_name: bool = Field(default=False, alias="generatedName")
     prompt: str = Field(min_length=1)
     prompt_id: str | None = Field(default=None, alias="promptId")
     agent_kind: str = Field(default="claude", alias="agentKind")

@@ -8345,6 +8345,16 @@
               }
             ]
           },
+          "nameConflictPolicy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorktreeNameConflictPolicy"
+              }
+            ]
+          },
           "newBranchName": {
             "type": "string"
           },
@@ -17706,6 +17716,14 @@
             "minimum": 0
           }
         }
+      },
+      "WorktreeNameConflictPolicy": {
+        "type": "string",
+        "enum": [
+          "fail",
+          "suffix_path",
+          "suffix_path_and_branch"
+        ]
       },
       "WorktreeRetentionPolicy": {
         "type": "object",

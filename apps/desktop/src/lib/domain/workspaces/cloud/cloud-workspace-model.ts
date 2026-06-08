@@ -210,6 +210,7 @@ export interface CreateCloudWorkspaceRequest {
   baseBranch?: string | null;
   branchName: string;
   displayName?: string | null;
+  generatedName: boolean;
   ownerScope: "personal" | "organization";
   organizationId?: string | null;
 }
