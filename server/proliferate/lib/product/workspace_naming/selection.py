@@ -20,8 +20,10 @@ def pick_generated_workspace_name(
     if not WORKSPACE_ANIMAL_NAMES:
         return "workspace"
 
-    start = _seeded_index(seed) if seed is not None else random.SystemRandom().randrange(
-        len(WORKSPACE_ANIMAL_NAMES)
+    start = (
+        _seeded_index(seed)
+        if seed is not None
+        else random.SystemRandom().randrange(len(WORKSPACE_ANIMAL_NAMES))
     )
     for offset in range(len(WORKSPACE_ANIMAL_NAMES)):
         candidate = WORKSPACE_ANIMAL_NAMES[(start + offset) % len(WORKSPACE_ANIMAL_NAMES)]

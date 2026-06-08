@@ -100,6 +100,38 @@ describe("worktree creation params", () => {
     });
   });
 
+  it("keeps explicit base refs in new-branch mode when the repo default is unknown", () => {
+    const resolved = resolveWorktreeCreationParams({
+      repoRoot: {
+        ...repoRoot,
+        defaultBranch: null,
+      } as RepoRoot,
+      sourceWorkspace,
+      rawInput: {
+        repoRootId: "repo-root-1",
+        workspaceName: "otter",
+        baseBranch: "main",
+        generatedName: true,
+      },
+      homeDir: "/Users/ada",
+      branchPrefixType: "github_username",
+      authUser: {
+        id: "user-1",
+        email: "ada@example.com",
+        display_name: "Ada",
+        github_login: "ada",
+      },
+      repoConfig: null,
+    });
+
+    expect(resolved.params).toMatchObject({
+      branchName: "ada/otter",
+      baseRef: "main",
+      checkoutMode: "new_branch",
+      nameConflictPolicy: "suffix_path_and_branch",
+    });
+  });
+
   it("fails fast for generated names when branch or target path is explicit", () => {
     const withExplicitBranch = resolveWorktreeCreationParams({
       repoRoot,

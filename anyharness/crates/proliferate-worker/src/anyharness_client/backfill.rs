@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::debug;
 
@@ -19,10 +19,11 @@ pub struct AnyHarnessRepoRoot {
     pub remote_repo_name: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AnyHarnessWorkspace {
     pub id: String,
+    pub kind: String,
     pub repo_root_id: String,
     pub path: String,
     pub original_branch: Option<String>,
@@ -112,7 +113,7 @@ impl AnyHarnessClient {
         self.get_json("/v1/repo-roots").await
     }
 
-    async fn list_workspaces(&self) -> Result<Vec<AnyHarnessWorkspace>, WorkerError> {
+    pub(crate) async fn list_workspaces(&self) -> Result<Vec<AnyHarnessWorkspace>, WorkerError> {
         self.get_json("/v1/workspaces").await
     }
 

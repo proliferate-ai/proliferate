@@ -18,6 +18,8 @@ export type ResolveWorkspaceFromPathRequest =
   components["schemas"]["ResolveWorkspaceFromPathRequest"];
 export type CreateWorkspaceRequest = components["schemas"]["CreateWorkspaceRequest"];
 export type WorktreeCheckoutMode = components["schemas"]["WorktreeCheckoutMode"];
+export type WorktreeNameConflictPolicy =
+  components["schemas"]["WorktreeNameConflictPolicy"];
 export type CreateWorktreeWorkspaceRequest =
   components["schemas"]["CreateWorktreeWorkspaceRequest"];
 export type SetupScriptStatus = components["schemas"]["SetupScriptStatus"];

@@ -53,10 +53,13 @@ class MaterializeWorkspaceWorktreePayload(BaseModel):
         alias="checkoutMode",
     )
     setup_script: str | None = Field(default=None, alias="setupScript")
-    name_conflict_policy: Literal[
-        "fail",
-        "suffix_path",
-    ] | None = Field(default=None, alias="nameConflictPolicy")
+    name_conflict_policy: (
+        Literal[
+            "fail",
+            "suffix_path",
+        ]
+        | None
+    ) = Field(default=None, alias="nameConflictPolicy")
     origin: dict[str, object] | None = None
     creator_context: dict[str, object] | None = Field(default=None, alias="creatorContext")
 

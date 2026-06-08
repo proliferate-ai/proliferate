@@ -30,8 +30,20 @@ async def resolve_command_workspace(
     kind: str,
     body: CreateCloudCommandRequest,
 ) -> tuple[str | None, dict[str, object], str | None]:
-    if kind == CloudCommandKind.materialize_workspace.value and target_requires_cloud_workspace(
-        target
+    if (
+        kind == CloudCommandKind.materialize_workspace.value
+        and body.cloud_workspace_id is not None
+        and not _materialize_payload_allows_cloud_workspace_scope(body.payload)
+    ):
+        raise CloudApiError(
+            "cloud_command_cloud_workspace_not_allowed",
+            "existing_path materialize_workspace commands cannot scope a Cloud workspace.",
+            status_code=400,
+        )
+    if (
+        kind == CloudCommandKind.materialize_workspace.value
+        and target_requires_cloud_workspace(target)
+        and _materialize_payload_requires_cloud_workspace(body.payload)
     ):
         if body.cloud_workspace_id is None:
             raise CloudApiError(
@@ -534,6 +546,14 @@ def direct_start_session_workspace_id(payload: dict[str, object]) -> str | None:
     if not isinstance(value, str) or not value.strip():
         return None
     return value.strip()
+
+
+def _materialize_payload_requires_cloud_workspace(payload: dict[str, object]) -> bool:
+    return payload.get("mode") != "existing_path"
+
+
+def _materialize_payload_allows_cloud_workspace_scope(payload: dict[str, object]) -> bool:
+    return payload.get("mode") != "existing_path"
 
 
 def command_has_managed_cloud_workspace(

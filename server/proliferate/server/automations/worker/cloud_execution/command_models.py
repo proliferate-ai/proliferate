@@ -46,10 +46,13 @@ class MaterializeWorkspacePayload:
     new_branch_name: str | None = None
     base_branch: str | None = None
     checkout_mode: Literal["new_branch", "detached_ref"] | None = None
-    name_conflict_policy: Literal[
-        "fail",
-        "suffix_path",
-    ] | None = None
+    name_conflict_policy: (
+        Literal[
+            "fail",
+            "suffix_path",
+        ]
+        | None
+    ) = None
     origin: dict[str, object] | None = None
     creator_context: dict[str, object] | None = None
 

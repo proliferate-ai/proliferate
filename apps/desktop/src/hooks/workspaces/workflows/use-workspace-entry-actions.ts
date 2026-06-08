@@ -3,9 +3,7 @@ import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
-import type {
-  PendingWorkspaceEntry,
-} from "@/lib/domain/workspaces/creation/pending-entry";
+import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
 import {
   buildSubmittingPendingWorkspaceEntry as buildSubmittingPendingEntry,
   createPendingWorkspaceAttemptId as createAttemptId,
@@ -35,6 +33,7 @@ import {
 } from "@/hooks/workspaces/workflows/use-pending-workspace-session-materialization";
 import { getSessionRecord } from "@/stores/sessions/session-records";
 import {
+  buildMaterializedWorktreePendingEntry,
   normalizeWorktreeInput,
   resolveDisplayNameFromPath,
   resolveErrorMessage,
@@ -53,12 +52,10 @@ import type {
   WorkspaceEntryResult,
 } from "@/hooks/workspaces/workflows/workspace-entry-types";
 
-const EMPTY_REPO_ROOTS: RepoRoot[] = [];
-const EMPTY_WORKSPACES: Workspace[] = [];
+const EMPTY_REPO_ROOTS: RepoRoot[] = [], EMPTY_WORKSPACES: Workspace[] = [];
 
-function isAttemptCurrent(attemptId: string): boolean {
-  return useSessionSelectionStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
-}
+const isAttemptCurrent = (attemptId: string): boolean =>
+  useSessionSelectionStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
 
 function requestChatInputFocus(): void { useChatInputStore.getState().requestFocus(); }
 
@@ -328,12 +325,14 @@ export function useWorkspaceEntryActions() {
         return null;
       }
 
-      const selectionEntry: PendingWorkspaceEntry = {
-        ...entry,
-        workspaceId: result.workspace.id,
-        baseBranchName: resolved.params.baseRef,
+      const selectionEntry = buildMaterializedWorktreePendingEntry({
+        entry,
+        resolvedInput,
+        workspace: result.workspace,
+        fallbackBranchName: resolved.params.branchName,
+        fallbackBaseRef: resolved.params.baseRef,
         setupScript: result.setupScript ?? null,
-      };
+      });
 
       const selectionFinalized = await finalizeSelection(selectionEntry, result.workspace.id, {
         latencyFlowId: options?.latencyFlowId,
@@ -365,7 +364,6 @@ export function useWorkspaceEntryActions() {
     repoRoots,
     resolveWorktreeCreationInput,
     selectWorkspaceWithArrival,
-    setPendingWorkspaceEntry,
     workspaceCollections,
   ]);
 

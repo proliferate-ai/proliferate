@@ -122,13 +122,13 @@ function resolveCheckoutMode(input: {
   repoDefaultRef: string | null;
   hasExplicitBranch: boolean;
 }): WorktreeCheckoutMode {
-  if (input.hasExplicitBranch || !input.explicitBaseRef) {
+  if (input.hasExplicitBranch || !input.explicitBaseRef || !input.repoDefaultRef) {
     return "new_branch";
   }
 
   const selectedRef = normalizeBranchRef(input.explicitBaseRef);
   const defaultRef = normalizeBranchRef(input.repoDefaultRef);
-  return defaultRef && selectedRef === defaultRef ? "new_branch" : "detached_ref";
+  return selectedRef && defaultRef && selectedRef !== defaultRef ? "detached_ref" : "new_branch";
 }
 
 function normalizeBranchRef(value: string | null | undefined): string | null {

@@ -21,7 +21,8 @@ from proliferate.db.store.cloud_sync.command_records import (
     snapshot_command,
 )
 from proliferate.db.store.cloud_sync.command_scope import (
-    target_is_managed_cloud,
+    command_allows_cloud_workspace_scope,
+    command_requires_managed_workspace_for_target,
 )
 from proliferate.utils.time import utcnow
 
@@ -66,13 +67,17 @@ async def create_command(
 ) -> CloudCommandSnapshot:
     now = utcnow()
     target = await db.get(CloudTarget, target_id)
+    if cloud_workspace_id is not None and not command_allows_cloud_workspace_scope(
+        kind=kind,
+        payload_json=payload_json,
+    ):
+        raise RuntimeError(f"{kind} commands with existing_path cannot scope a Cloud workspace.")
     if (
-        kind
-        in {
-            CloudCommandKind.materialize_workspace.value,
-            CloudCommandKind.backfill_exposed_workspace.value,
-        }
-        and target_is_managed_cloud(target)
+        command_requires_managed_workspace_for_target(
+            kind=kind,
+            payload_json=payload_json,
+            target=target,
+        )
         and cloud_workspace_id is None
     ):
         raise RuntimeError(f"Managed {kind} commands require cloud_workspace_id.")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from uuid import UUID
 
 from sqlalchemy import select
@@ -30,7 +31,37 @@ async def leased_target_is_stale(
 
 
 async def command_requires_managed_workspace(db: AsyncSession, row: CloudCommand) -> bool:
-    return target_is_managed_cloud(await db.get(CloudTarget, row.target_id))
+    return command_requires_managed_workspace_for_target(
+        kind=row.kind,
+        payload_json=row.payload_json,
+        target=await db.get(CloudTarget, row.target_id),
+    )
+
+
+def command_requires_managed_workspace_for_target(
+    *,
+    kind: str,
+    payload_json: str | None,
+    target: CloudTarget | None,
+) -> bool:
+    if not target_is_managed_cloud(target):
+        return False
+    if kind == CloudCommandKind.backfill_exposed_workspace.value:
+        return True
+    if kind != CloudCommandKind.materialize_workspace.value:
+        return False
+    return _materialize_workspace_mode(payload_json) != "existing_path"
+
+
+def command_allows_cloud_workspace_scope(
+    *,
+    kind: str,
+    payload_json: str | None,
+) -> bool:
+    return (
+        kind != CloudCommandKind.materialize_workspace.value
+        or _materialize_workspace_mode(payload_json) != "existing_path"
+    )
 
 
 def target_is_managed_cloud(target: CloudTarget | None) -> bool:
@@ -41,6 +72,17 @@ def target_is_managed_cloud(target: CloudTarget | None) -> bool:
         and target.profile_target_role == "primary"
         and target.archived_at is None
     )
+
+
+def _materialize_workspace_mode(payload_json: str | None) -> str | None:
+    try:
+        payload = json.loads(payload_json or "{}")
+    except ValueError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    mode = payload.get("mode")
+    return mode if isinstance(mode, str) and mode else None
 
 
 async def cloud_workspace_matches_command(db: AsyncSession, row: CloudCommand) -> bool:

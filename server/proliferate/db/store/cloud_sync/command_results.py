@@ -31,6 +31,9 @@ from proliferate.db.store.cloud_sync.command_scope import (
     load_active_workspace_exposure,
     workspace_matches_command_target,
 )
+from proliferate.db.store.cloud_sync.materialized_workspace_results import (
+    materialized_workspace_result,
+)
 
 
 async def mark_command_delivered(
@@ -182,15 +185,21 @@ async def record_command_result(
     effective_status = status
     effective_error_code = error_code
     effective_error_message = error_message
-    materialized_workspace_id = _materialized_workspace_id(
+    materialized_workspace = materialized_workspace_result(
         kind=row.kind,
         status=status,
         result_json=result_json,
     )
-    materialized_workspace_path = _materialized_workspace_path(
-        kind=row.kind,
-        status=status,
-        result_json=result_json,
+    materialized_workspace_id = (
+        materialized_workspace.anyharness_workspace_id
+        if materialized_workspace is not None
+        else None
+    )
+    materialized_workspace_mode = (
+        materialized_workspace.mode if materialized_workspace is not None else None
+    )
+    materialized_workspace_path = (
+        materialized_workspace.worktree_path if materialized_workspace is not None else None
     )
     result_cloud_workspace_id = cloud_workspace_id or _result_cloud_workspace_id(result_json)
     if (
@@ -202,6 +211,16 @@ async def record_command_result(
         effective_error_code = "cloud_workspace_required"
         effective_error_message = (
             "Managed materialize_workspace command is missing Cloud workspace."
+        )
+    elif (
+        row.kind == CloudCommandKind.materialize_workspace.value
+        and row.cloud_workspace_id is not None
+        and materialized_workspace_mode == "existing_path"
+    ):
+        effective_status = CloudCommandStatus.rejected.value
+        effective_error_code = "cloud_workspace_not_allowed"
+        effective_error_message = (
+            "existing_path materialize_workspace results cannot update a Cloud workspace."
         )
     elif (
         row.kind == CloudCommandKind.materialize_workspace.value
@@ -256,6 +275,8 @@ async def record_command_result(
             CloudCommandStatus.accepted_but_queued.value,
         }
         and row.cloud_workspace_id is not None
+        and materialized_workspace_mode == "worktree"
+        and materialized_workspace_path is not None
         and (materialized_workspace_id or anyharness_workspace_id)
     ):
         await _record_materialized_cloud_workspace(
@@ -574,57 +595,6 @@ def _start_session_agent_kind(payload_json: str | None) -> str | None:
         return None
     normalized = value.strip()
     return normalized if normalized in SUPPORTED_CLOUD_AGENTS else None
-
-
-def _materialized_workspace_id(
-    *,
-    kind: str,
-    status: str,
-    result_json: str | None,
-) -> str | None:
-    if kind != CloudCommandKind.materialize_workspace.value or status not in {
-        CloudCommandStatus.accepted.value,
-        CloudCommandStatus.accepted_but_queued.value,
-    }:
-        return None
-    try:
-        result = json.loads(result_json or "{}")
-    except ValueError:
-        return None
-    if not isinstance(result, dict):
-        return None
-    mode = result.get("mode")
-    if mode not in {"existing_path", "worktree"}:
-        return None
-    for field in ("repoRootId", "path", "kind"):
-        value = result.get(field)
-        if not isinstance(value, str) or not value.strip():
-            return None
-    workspace_id = result.get("anyharnessWorkspaceId")
-    if not isinstance(workspace_id, str) or not workspace_id.strip():
-        return None
-    return workspace_id.strip()
-
-
-def _materialized_workspace_path(
-    *,
-    kind: str,
-    status: str,
-    result_json: str | None,
-) -> str | None:
-    if kind != CloudCommandKind.materialize_workspace.value or status not in {
-        CloudCommandStatus.accepted.value,
-        CloudCommandStatus.accepted_but_queued.value,
-    }:
-        return None
-    try:
-        result = json.loads(result_json or "{}")
-    except ValueError:
-        return None
-    if not isinstance(result, dict) or result.get("mode") != "worktree":
-        return None
-    value = result.get("path")
-    return value.strip() if isinstance(value, str) and value.strip() else None
 
 
 def _result_cloud_workspace_id(result_json: str | None) -> UUID | None:

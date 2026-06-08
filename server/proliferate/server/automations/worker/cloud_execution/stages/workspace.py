@@ -203,7 +203,7 @@ async def materialize_workspace_stage(
             ctx,
             target_id=ctx.target.target_id,
             stage="materialize-workspace:repo-root",
-            cloud_workspace_id=current.cloud_workspace_id,
+            cloud_workspace_id=None,
             payload=MaterializeWorkspacePayload(
                 mode="existing_path",
                 path=repo_root_path,
