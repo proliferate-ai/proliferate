@@ -12,9 +12,11 @@ processes.
 
 Three rules generate the entire structure. Everything else is a consequence.
 
-1. **Every line of code does exactly one job.** The eight jobs are: declare
-   shapes, translate shapes, decide, orchestrate, perform effects, hold state,
-   wire, observe. Slop is one function doing two jobs.
+1. **Every function does exactly one job, and every file holds one job for
+   one concern.** The eight jobs are: declare shapes, translate shapes,
+   decide, orchestrate, perform effects, hold state, wire, observe. Every
+   line in the codebase is classifiable into exactly one — there is no ninth
+   category. Slop is one function doing two jobs.
 2. **A path tells you what is allowed before you open the file.** The root of
    any module — domain or concern — reads as a table of contents.
 3. **Dependency direction is one-way**, and composition is licensed: exactly
