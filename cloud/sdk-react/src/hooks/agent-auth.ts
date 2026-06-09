@@ -61,11 +61,10 @@ export function useAgentAuthCredentials(
   const client = useCloudClient();
   const organizationId = options.organizationId ?? null;
   const credentialProviderId = options.credentialProviderId ?? null;
-  const agentKind = options.agentKind ?? null;
   return useQuery<AgentAuthCredential[]>({
-    queryKey: agentAuthCredentialsKey(organizationId, credentialProviderId, agentKind),
+    queryKey: agentAuthCredentialsKey(organizationId, credentialProviderId),
     queryFn: () =>
-      listAgentAuthCredentials({ organizationId, credentialProviderId, agentKind }, client),
+      listAgentAuthCredentials({ organizationId, credentialProviderId }, client),
     enabled: options.enabled ?? true,
     placeholderData: EMPTY_CREDENTIALS,
   });

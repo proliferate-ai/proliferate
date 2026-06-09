@@ -1507,26 +1507,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/agent-auth-selections/{agent_kind}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Select Agent Auth Credential Default Slot Endpoint
-         * @deprecated
-         */
-        put: operations["select_agent_auth_credential_default_slot_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__agent_auth_selections__agent_kind__put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/agent-auth-target-states": {
         parameters: {
             query?: never;
@@ -11914,7 +11894,6 @@ export interface operations {
             query?: {
                 organizationId?: string | null;
                 credentialProviderId?: string | null;
-                agentKind?: ("claude" | "codex" | "opencode" | "gemini") | null;
             };
             header?: never;
             path?: never;
@@ -12214,42 +12193,6 @@ export interface operations {
                 sandbox_profile_id: string;
                 agent_kind: "claude" | "codex" | "opencode" | "gemini";
                 auth_slot_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SelectAgentAuthCredentialRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SandboxAgentAuthSelectionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    select_agent_auth_credential_default_slot_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__agent_auth_selections__agent_kind__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                sandbox_profile_id: string;
-                agent_kind: "claude" | "codex" | "opencode" | "gemini";
             };
             cookie?: never;
         };

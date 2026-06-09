@@ -31,9 +31,6 @@ from proliferate.server.cloud.agent_auth.gateway_policies import (
     _require_credential_ready_for_selection,
 )
 from proliferate.server.cloud.agent_auth.refresh import _mark_target_pending_and_queue_refresh
-from proliferate.server.cloud.agent_auth.registry import (
-    default_auth_slot_id_for_credential_provider,
-)
 from proliferate.server.cloud.agent_auth.router_materializations import (
     _disable_bifrost_runtime_materializations_for_selection,
 )
@@ -100,17 +97,7 @@ async def select_credential_for_profile(
         raise AgentAuthError("Credential not found.", code="credential_not_found", status_code=404)
     await _require_credential_ready_for_selection(db, credential)
     if not auth_slot_id:
-        inferred_auth_slot_id = default_auth_slot_id_for_credential_provider(
-            agent_kind=agent_kind,
-            credential_provider_id=credential.credential_provider_id,
-        )
-        if inferred_auth_slot_id is None:
-            raise AgentAuthError(
-                "Credential provider is not supported by this agent.",
-                code="credential_provider_not_supported",
-                status_code=400,
-            )
-        auth_slot_id = inferred_auth_slot_id
+        raise AgentAuthError("Auth slot is required.", code="auth_slot_required", status_code=400)
     share = None
     if credential_share_id is not None:
         share = await store.get_active_credential_share(

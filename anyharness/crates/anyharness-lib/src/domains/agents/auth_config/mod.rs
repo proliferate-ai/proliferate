@@ -143,7 +143,6 @@ impl AgentAuthConfigService {
                 });
             }
         }
-        self.write_managed_config_files(&input)?;
         let plaintext = serde_json::to_vec(&input)?;
         let ciphertext = encrypt_bytes(cipher, &plaintext)?;
         let applied = self
@@ -279,6 +278,7 @@ impl AgentAuthConfigService {
                 );
             }
             if agent_kind == "codex" && selection.protected_config.contains_key("codex") {
+                self.write_managed_codex_config(selection)?;
                 protected_env.insert(
                     "CODEX_HOME".to_string(),
                     self.codex_home_dir().to_string_lossy().into_owned(),
@@ -305,25 +305,22 @@ impl AgentAuthConfigService {
         Ok(config)
     }
 
-    fn write_managed_config_files(&self, request: &AgentAuthConfigInput) -> anyhow::Result<()> {
-        for selection in &request.selections {
-            if selection.agent_kind != "codex" {
-                continue;
-            }
-            let Some(config) = selection.protected_config.get("codex") else {
-                continue;
-            };
-            write_codex_config(
-                &self.codex_home_dir(),
-                config,
-                selection
-                    .protected_env
-                    .get("OPENAI_API_KEY")
-                    .or_else(|| selection.protected_env.get("CODEX_API_KEY"))
-                    .map(String::as_str),
-            )?;
-        }
-        Ok(())
+    fn write_managed_codex_config(
+        &self,
+        selection: &AgentAuthSelectionConfig,
+    ) -> anyhow::Result<()> {
+        let Some(config) = selection.protected_config.get("codex") else {
+            return Ok(());
+        };
+        write_codex_config(
+            &self.codex_home_dir(),
+            config,
+            selection
+                .protected_env
+                .get("OPENAI_API_KEY")
+                .or_else(|| selection.protected_env.get("CODEX_API_KEY"))
+                .map(String::as_str),
+        )
     }
 
     fn codex_home_dir(&self) -> PathBuf {

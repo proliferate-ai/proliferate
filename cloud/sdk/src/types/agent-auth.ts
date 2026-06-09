@@ -55,7 +55,6 @@ export type SandboxAgentAuthTargetState =
 export interface AgentAuthCredentialListOptions {
   organizationId?: string | null;
   credentialProviderId?: AgentAuthCredentialProviderId | null;
-  agentKind?: AgentAuthAgentKind | null;
 }
 
 export interface AgentAuthCredentialOwnerInput {
