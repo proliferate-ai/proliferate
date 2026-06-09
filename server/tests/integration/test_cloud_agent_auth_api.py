@@ -146,9 +146,9 @@ def _codex_file_payload(api_key: str) -> dict[str, object]:
         "files": [
             {
                 "relativePath": ".codex/auth.json",
-                "contentBase64": b64encode(
-                    f'{{"OPENAI_API_KEY":"{api_key}"}}'.encode()
-                ).decode("ascii"),
+                "contentBase64": b64encode(f'{{"OPENAI_API_KEY":"{api_key}"}}'.encode()).decode(
+                    "ascii"
+                ),
             }
         ],
     }

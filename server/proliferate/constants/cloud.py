@@ -587,6 +587,7 @@ CLOUD_COMMAND_DEFAULT_LEASE_SECONDS: Final = 30
 CLOUD_COMMAND_MAX_LEASE_SECONDS: Final = 300
 CLOUD_COMMAND_MAX_PAYLOAD_BYTES: Final = 262_144
 
+
 class CloudTargetConfigStatus(StrEnum):
     pending = "pending"
     queued = "queued"

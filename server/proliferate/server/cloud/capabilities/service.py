@@ -147,14 +147,9 @@ def _agent_auth_slots() -> list[AgentAuthSlotCapability]:
         if slot.agent_kind in supported
         and (slot.agent_kind != "opencode" or settings.agent_gateway_opencode_enabled)
     ]
-    first_slot_by_agent = {
-        slot.agent_kind: slot.auth_slot_id
-        for slot in reversed(slots)
-    }
+    first_slot_by_agent = {slot.agent_kind: slot.auth_slot_id for slot in reversed(slots)}
     required_slot_by_agent = {
-        slot.agent_kind: slot.auth_slot_id
-        for slot in slots
-        if slot.required_for_readiness
+        slot.agent_kind: slot.auth_slot_id for slot in slots if slot.required_for_readiness
     }
     return [
         AgentAuthSlotCapability(
