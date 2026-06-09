@@ -26,6 +26,7 @@ from proliferate.server.cloud.agent_auth.models import (
     WorkerAgentAuthSelectionPlan,
     WorkerAgentAuthSyncedFilesConfig,
 )
+from proliferate.server.cloud.agent_auth.registry import default_auth_slot_id
 from proliferate.server.cloud.agent_auth.runtime_keys import _worker_gateway_config
 from proliferate.server.cloud.agent_auth.synced_files import _worker_synced_files_config
 from proliferate.server.cloud.agent_auth.worker_cleanup import (
@@ -169,14 +170,12 @@ def _worker_cleanup_plan_from_entry(
     except (KeyError, TypeError, ValueError):
         return None
     agent_kind = entry.get("agentKind")
-    auth_slot_id = entry.get("authSlotId")
     materialization_mode = entry.get("materializationMode")
     credential_revision = entry.get("credentialRevision")
-    if (
-        not isinstance(agent_kind, str)
-        or not isinstance(auth_slot_id, str)
-        or not isinstance(materialization_mode, str)
-    ):
+    if not isinstance(agent_kind, str) or not isinstance(materialization_mode, str):
+        return None
+    auth_slot_id = _cleanup_entry_auth_slot_id(entry, agent_kind)
+    if auth_slot_id is None:
         return None
     if not isinstance(credential_revision, int) or isinstance(credential_revision, bool):
         return None
@@ -203,6 +202,15 @@ def _worker_cleanup_plan_from_entry(
             cleanup=cleanup,
         ),
     )
+
+
+def _cleanup_entry_auth_slot_id(entry: dict[str, object], agent_kind: str) -> str | None:
+    auth_slot_id = entry.get("authSlotId")
+    if isinstance(auth_slot_id, str) and auth_slot_id:
+        return auth_slot_id
+    if "authSlotId" in entry:
+        return None
+    return default_auth_slot_id(agent_kind)
 
 
 def _optional_uuid_value(value: object) -> UUID | None:
