@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from proliferate.server.catalogs.api import router
 from proliferate.server.catalogs.domain.schema import agent_catalog_schema_version_is_supported
 from proliferate.server.catalogs.service import CATALOG_PATH, read_agent_catalog
+from proliferate.server.cloud.agent_auth.registry import REGISTRY_PATH, _resolve_registry_path
 
 
 def test_agent_catalog_endpoint_returns_typed_catalog_with_etag() -> None:
@@ -49,6 +50,29 @@ def test_agent_catalog_schema_version_policy() -> None:
 
 def test_agent_catalog_file_is_available_from_source_checkout() -> None:
     assert CATALOG_PATH.is_file()
+
+
+def test_agent_registry_file_is_available_from_source_checkout() -> None:
+    assert REGISTRY_PATH.is_file()
+
+
+def test_agent_registry_path_resolves_server_docker_layout(tmp_path: Path) -> None:
+    app_root = tmp_path / "app"
+    packaged_registry = app_root / "catalogs" / "agents" / "v1" / "registry.json"
+    packaged_registry.parent.mkdir(parents=True)
+    packaged_registry.write_text("{}", encoding="utf-8")
+    service_path = (
+        app_root
+        / "proliferate"
+        / "server"
+        / "cloud"
+        / "agent_auth"
+        / "registry.py"
+    )
+    service_path.parent.mkdir(parents=True)
+    service_path.write_text("", encoding="utf-8")
+
+    assert _resolve_registry_path(service_path) == packaged_registry
 
 
 def test_server_dockerfile_packages_agent_catalog() -> None:

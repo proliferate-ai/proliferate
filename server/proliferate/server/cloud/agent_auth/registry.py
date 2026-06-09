@@ -10,7 +10,6 @@ from typing import Literal
 
 from proliferate.constants.agent_catalog import AGENT_REGISTRY_RELATIVE_PATH
 
-_REPO_ROOT = Path(__file__).resolve().parents[5]
 AgentAuthMaterializationMode = Literal["gateway_env", "synced_files"]
 AgentAuthProtocolFacade = Literal["anthropic", "openai", "genai"]
 
@@ -41,9 +40,24 @@ class RegistryAuthSlot:
     synced_files: RegistrySyncedFilesPolicy | None
 
 
+def _resolve_registry_path(service_path: Path | None = None) -> Path:
+    resolved_path = service_path or Path(__file__).resolve()
+    candidates = (
+        resolved_path.parents[4] / AGENT_REGISTRY_RELATIVE_PATH,
+        resolved_path.parents[5] / AGENT_REGISTRY_RELATIVE_PATH,
+    )
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
+REGISTRY_PATH = _resolve_registry_path()
+
+
 @cache
 def registry_auth_slots() -> tuple[RegistryAuthSlot, ...]:
-    raw = json.loads((_REPO_ROOT / AGENT_REGISTRY_RELATIVE_PATH).read_text())
+    raw = json.loads(REGISTRY_PATH.read_text())
     slots: list[RegistryAuthSlot] = []
     for agent in raw.get("agents", []):
         agent_kind = str(agent.get("kind", ""))

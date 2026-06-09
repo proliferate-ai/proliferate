@@ -19,6 +19,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_STATUS_ACTIVE,
 )
 from proliferate.db.models.auth import AuthIdentity, OAuthAccount, ProviderGrant, User
+from proliferate.db.models.cloud.agent_auth_profiles import SandboxProfile
 from proliferate.db.models.cloud.agent_auth_gateway import AgentGatewayRuntimeGrant
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.cloud_agent_auth import store
@@ -1427,13 +1428,12 @@ async def test_bifrost_runtime_key_issuance_records_and_rotates_runtime_grants(
     assert second.virtual_key == first.virtual_key
     assert len(fake_bifrost.virtual_keys) == 1
 
-    row = (
-        await db_session.execute(
-            select(AgentGatewayRuntimeGrant).where(AgentGatewayRuntimeGrant.id == first_grant.id)
-        )
-    ).scalar_one()
-    row.expires_at = utcnow() + timedelta(hours=12)
+    profile_row = await db_session.get(SandboxProfile, profile.id)
+    assert profile_row is not None
+    profile_row.desired_agent_auth_revision = profile.agent_auth_revision + 1
     await db_session.flush()
+    revised_profile = await store.get_sandbox_profile(db_session, profile.id)
+    assert revised_profile is not None
 
     third = await agent_auth_service._issue_bifrost_runtime_virtual_key_for_selection(
         db_session,
@@ -1441,21 +1441,58 @@ async def test_bifrost_runtime_key_issuance_records_and_rotates_runtime_grants(
             target_id=profile.primary_target_id,
             worker_id=uuid.uuid4(),
         ),
-        profile=profile,
+        profile=revised_profile,
         selection=selection,
     )
-    old_grant = await store.get_runtime_grant_by_token_hash(
+    stale_revision_grant = await store.get_runtime_grant_by_token_hash(
         db_session,
         _runtime_grant_token_hash(first.virtual_key),
     )
-    new_grant = await store.get_runtime_grant_by_token_hash(
+    revised_grant = await store.get_runtime_grant_by_token_hash(
         db_session,
         _runtime_grant_token_hash(third.virtual_key),
     )
     assert third.virtual_key != first.virtual_key
     assert len(fake_bifrost.virtual_keys) == 2
     assert fake_bifrost.disabled_virtual_keys == [first.virtual_key_id]
-    assert old_grant is not None and old_grant.revoked_at is not None
+    assert stale_revision_grant is not None
+    assert stale_revision_grant.revoked_at is not None
+    assert revised_grant is not None
+    assert revised_grant.revoked_at is None
+    assert revised_grant.issued_profile_revision == revised_profile.agent_auth_revision
+
+    row = (
+        await db_session.execute(
+            select(AgentGatewayRuntimeGrant).where(AgentGatewayRuntimeGrant.id == revised_grant.id)
+        )
+    ).scalar_one()
+    row.expires_at = utcnow() + timedelta(hours=12)
+    await db_session.flush()
+
+    fourth = await agent_auth_service._issue_bifrost_runtime_virtual_key_for_selection(
+        db_session,
+        auth=WorkerAuthContext(
+            target_id=profile.primary_target_id,
+            worker_id=uuid.uuid4(),
+        ),
+        profile=revised_profile,
+        selection=selection,
+    )
+    expiring_grant = await store.get_runtime_grant_by_token_hash(
+        db_session,
+        _runtime_grant_token_hash(third.virtual_key),
+    )
+    new_grant = await store.get_runtime_grant_by_token_hash(
+        db_session,
+        _runtime_grant_token_hash(fourth.virtual_key),
+    )
+    assert fourth.virtual_key != third.virtual_key
+    assert len(fake_bifrost.virtual_keys) == 3
+    assert fake_bifrost.disabled_virtual_keys == [
+        first.virtual_key_id,
+        third.virtual_key_id,
+    ]
+    assert expiring_grant is not None and expiring_grant.revoked_at is not None
     assert new_grant is not None and new_grant.revoked_at is None
 
 

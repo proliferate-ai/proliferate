@@ -75,9 +75,6 @@ async def reconcile_agent_gateway_runtime_grant_freshness(
             if profile is None:
                 skipped += 1
                 continue
-            if grant.issued_profile_revision != profile.agent_auth_revision:
-                skipped += 1
-                continue
             if profile.primary_target_id != grant.target_id:
                 skipped += 1
                 continue
@@ -86,7 +83,7 @@ async def reconcile_agent_gateway_runtime_grant_freshness(
                 profile=profile,
                 actor_user_id=None,
                 reason="runtime_grant_expiring",
-                force_restart=False,
+                force_restart=True,
             )
             refreshed_targets.add(key)
         except Exception:

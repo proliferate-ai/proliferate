@@ -203,6 +203,7 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
             sandbox_profile_id=profile.id,
             agent_kind=selection.agent_kind,
             auth_slot_id=selection.auth_slot_id,
+            issued_profile_revision=profile.agent_auth_revision,
         ):
             return BifrostRuntimeVirtualKeyResult(
                 virtual_key=existing_secret,
@@ -337,11 +338,13 @@ def _runtime_grant_reusable(
     sandbox_profile_id: UUID,
     agent_kind: str,
     auth_slot_id: str,
+    issued_profile_revision: int,
 ) -> bool:
     return (
         grant is not None
         and grant.revoked_at is None
         and grant.expires_at > now + _GATEWAY_GRANT_REFRESH_WINDOW
+        and grant.issued_profile_revision == issued_profile_revision
         and grant.policy_id == policy_id
         and grant.credential_id == credential_id
         and grant.selection_id == selection_id
