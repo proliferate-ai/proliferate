@@ -136,42 +136,6 @@ def default_auth_slot_id(agent_kind: str) -> str | None:
     )
 
 
-def credential_provider_id_for_legacy_agent_kind(agent_kind: str) -> str | None:
-    auth_slot_id = default_auth_slot_id(agent_kind)
-    slot = auth_slot(agent_kind, auth_slot_id or "")
-    if slot is None or not slot.credential_provider_ids:
-        return None
-    return slot.credential_provider_ids[0]
-
-
-def default_auth_slot_id_for_credential_provider(
-    *,
-    agent_kind: str,
-    credential_provider_id: str,
-) -> str | None:
-    required = next(
-        (
-            slot.auth_slot_id
-            for slot in registry_auth_slots()
-            if slot.agent_kind == agent_kind
-            and slot.required_for_readiness
-            and credential_provider_id in slot.credential_provider_ids
-        ),
-        None,
-    )
-    if required is not None:
-        return required
-    return next(
-        (
-            slot.auth_slot_id
-            for slot in registry_auth_slots()
-            if slot.agent_kind == agent_kind
-            and credential_provider_id in slot.credential_provider_ids
-        ),
-        None,
-    )
-
-
 def credential_provider_id_for_provider_kind(provider_kind: str) -> str:
     if provider_kind in {
         "anthropic_api_key",

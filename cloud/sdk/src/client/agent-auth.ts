@@ -46,7 +46,6 @@ export async function listAgentAuthCredentials(
     query: {
       organizationId: options.organizationId,
       credentialProviderId: options.credentialProviderId,
-      agentKind: options.agentKind,
     },
   });
 }

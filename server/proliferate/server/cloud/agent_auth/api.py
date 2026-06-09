@@ -40,9 +40,6 @@ from proliferate.server.cloud.agent_auth.models import (
     selection_response,
     target_state_response,
 )
-from proliferate.server.cloud.agent_auth.registry import (
-    credential_provider_id_for_legacy_agent_kind,
-)
 from proliferate.server.cloud.agent_auth.service import (
     create_gateway_credential,
     ensure_free_managed_credits_for_user,
@@ -71,12 +68,9 @@ worker_router = APIRouter(
 async def list_agent_auth_credentials_endpoint(
     organization_id: UUID | None = Query(default=None, alias="organizationId"),
     credential_provider_id: str | None = Query(default=None, alias="credentialProviderId"),
-    agent_kind: CloudAgentKind | None = Query(default=None, alias="agentKind"),
     user: User = Depends(current_product_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> list[AgentAuthCredentialResponse]:
-    if credential_provider_id is None and agent_kind is not None:
-        credential_provider_id = credential_provider_id_for_legacy_agent_kind(agent_kind)
     return [
         credential_response(
             item.credential,
@@ -266,30 +260,6 @@ async def select_agent_auth_credential_endpoint(
         sandbox_profile_id=sandbox_profile_id,
         agent_kind=agent_kind,
         auth_slot_id=auth_slot_id,
-        credential_id=body.credential_id,
-        credential_share_id=body.credential_share_id,
-        force_restart=body.force_restart,
-    )
-    return selection_response(selection)
-
-
-@router.put(
-    "/sandbox-profiles/{sandbox_profile_id}/agent-auth-selections/{agent_kind}",
-    deprecated=True,
-)
-async def select_agent_auth_credential_default_slot_endpoint(
-    sandbox_profile_id: UUID,
-    agent_kind: CloudAgentKind,
-    body: SelectAgentAuthCredentialRequest,
-    user: User = Depends(current_product_user),
-    db: AsyncSession = Depends(get_async_session),
-) -> SandboxAgentAuthSelectionResponse:
-    selection = await select_credential_for_profile(
-        db,
-        actor_user_id=user.id,
-        sandbox_profile_id=sandbox_profile_id,
-        agent_kind=agent_kind,
-        auth_slot_id="",
         credential_id=body.credential_id,
         credential_share_id=body.credential_share_id,
         force_restart=body.force_restart,

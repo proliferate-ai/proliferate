@@ -192,7 +192,6 @@ fn start_session_body(command: &CloudCommandEnvelope) -> Result<Value, CommandMa
     );
     copy_optional_value_field(&mut body, object, "sandboxProfileId", "sandbox_profile_id");
     if let Some(sandbox_profile_id) = string_field(object, "sandboxProfileId", "sandbox_profile_id")
-        .or_else(|| non_empty(command.sandbox_profile_id.as_deref()))
     {
         body.insert(
             "agentAuthScope".to_string(),
@@ -692,7 +691,7 @@ mod tests {
     }
 
     #[test]
-    fn maps_start_session_agent_auth_scope_from_envelope() {
+    fn does_not_synthesize_start_session_agent_auth_scope_from_envelope() {
         let mut command = test_command(json!({
             "workspaceId": "workspace-1",
             "agentKind": "claude",
@@ -705,9 +704,7 @@ mod tests {
         let AnyHarnessCommand::StartSession { body } = mapped else {
             panic!("expected start session");
         };
-        assert_eq!(body["agentAuthScope"]["provider"], "proliferate-cloud");
-        assert_eq!(body["agentAuthScope"]["id"], "profile-from-envelope");
-        assert_eq!(body["agentAuthScope"]["targetId"], "target-1");
+        assert!(body.get("agentAuthScope").is_none());
     }
 
     #[test]

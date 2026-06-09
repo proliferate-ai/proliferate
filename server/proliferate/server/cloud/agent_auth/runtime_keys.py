@@ -178,6 +178,8 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
         target_id=auth.target_id,
     )
     now = utcnow()
+    stale_virtual_key_id: str | None = None
+    stale_grant_ids: set[UUID] = set()
     if (
         existing is not None
         and existing.status == "active"
@@ -208,6 +210,9 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
                 virtual_key_id=existing.router_object_id,
                 expires_at_iso=existing_grant.expires_at.isoformat(),
             )
+        stale_virtual_key_id = existing.router_object_id
+        if existing_grant is not None:
+            stale_grant_ids.add(existing_grant.id)
 
     client = new_bifrost_admin_client()
 
@@ -294,6 +299,16 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
         protocol_facade=plan.protocol_facade,
         expires_at=expires_at,
     )
+    if stale_virtual_key_id and stale_virtual_key_id != materialization.router_object_id:
+        try:
+            await client.disable_virtual_key(stale_virtual_key_id)
+        except BifrostIntegrationError as exc:
+            raise AgentAuthError(
+                "Bifrost previous runtime virtual key could not be disabled.",
+                code="bifrost_runtime_virtual_key_rotation_failed",
+                status_code=502,
+            ) from exc
+        await store.revoke_runtime_grants_by_ids(db, stale_grant_ids)
     return BifrostRuntimeVirtualKeyResult(
         virtual_key=secret,
         virtual_key_id=materialization.router_object_id,
