@@ -8,6 +8,7 @@ use anyharness_contract::v1::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::domains::agents::registry::built_in_registry;
 use crate::domains::sessions::mcp_bindings::crypto::{
     decrypt_bytes, encrypt_bytes, SessionDataCipher,
 };
@@ -115,8 +116,9 @@ impl AgentAuthConfigService {
 
     pub fn apply_config(
         &self,
-        input: AgentAuthConfigInput,
+        mut input: AgentAuthConfigInput,
     ) -> anyhow::Result<AgentAuthConfigApplyOutcome> {
+        normalize_legacy_auth_slot_ids(&mut input);
         validate_config_input(&input)?;
         let _guard = self
             .apply_lock
@@ -222,11 +224,12 @@ impl AgentAuthConfigService {
             }
         }
         let config = self.decrypt_record(&record)?;
-        let Some(selection) = config
+        let selections = config
             .selections
             .iter()
-            .find(|selection| selection.agent_kind == agent_kind)
-        else {
+            .filter(|selection| selection.agent_kind == agent_kind)
+            .collect::<Vec<_>>();
+        if selections.is_empty() {
             if scope.is_some() || required_revision.is_some() {
                 return Err(selection_required_error(
                     scope.cloned(),
@@ -235,42 +238,46 @@ impl AgentAuthConfigService {
                 ));
             }
             return Ok(AgentAuthLaunchOverlay::default());
-        };
-        if let Some(status) = selection.status.as_deref() {
-            if !matches!(status, "active" | "ready") {
-                return Err(selection_required_error(
-                    scope.cloned(),
-                    agent_kind,
-                    if status == "needs_resync" {
-                        "needs_resync"
-                    } else {
-                        "invalid"
-                    },
-                ));
+        }
+        let mut support_env = BTreeMap::new();
+        let mut protected_env = BTreeMap::new();
+        for selection in selections {
+            if let Some(status) = selection.status.as_deref() {
+                if !matches!(status, "active" | "ready") {
+                    return Err(selection_required_error(
+                        scope.cloned(),
+                        agent_kind,
+                        if status == "needs_resync" {
+                            "needs_resync"
+                        } else {
+                            "invalid"
+                        },
+                    ));
+                }
             }
-        }
-        reject_expired_selection(selection)
-            .map_err(|_| selection_required_error(scope.cloned(), agent_kind, "expired"))?;
-        let mut support_env = selection.support_env.clone();
-        let mut protected_env = selection.protected_env.clone();
-        if agent_kind == "claude" && selection.materialization_mode == "gateway_env" {
-            let config_dir = self.claude_gateway_config_dir();
-            std::fs::create_dir_all(&config_dir).map_err(|error| {
-                anyhow::anyhow!(
-                    "failed to create Claude gateway config dir {}: {error}",
-                    config_dir.display()
-                )
-            })?;
-            support_env.insert(
-                CLAUDE_CONFIG_DIR_ENV.to_string(),
-                config_dir.to_string_lossy().into_owned(),
-            );
-        }
-        if agent_kind == "codex" && selection.protected_config.contains_key("codex") {
-            protected_env.insert(
-                "CODEX_HOME".to_string(),
-                self.codex_home_dir().to_string_lossy().into_owned(),
-            );
+            reject_expired_selection(selection)
+                .map_err(|_| selection_required_error(scope.cloned(), agent_kind, "expired"))?;
+            support_env.extend(selection.support_env.clone());
+            protected_env.extend(selection.protected_env.clone());
+            if agent_kind == "claude" && selection.materialization_mode == "gateway_env" {
+                let config_dir = self.claude_gateway_config_dir();
+                std::fs::create_dir_all(&config_dir).map_err(|error| {
+                    anyhow::anyhow!(
+                        "failed to create Claude gateway config dir {}: {error}",
+                        config_dir.display()
+                    )
+                })?;
+                support_env.insert(
+                    CLAUDE_CONFIG_DIR_ENV.to_string(),
+                    config_dir.to_string_lossy().into_owned(),
+                );
+            }
+            if agent_kind == "codex" && selection.protected_config.contains_key("codex") {
+                protected_env.insert(
+                    "CODEX_HOME".to_string(),
+                    self.codex_home_dir().to_string_lossy().into_owned(),
+                );
+            }
         }
         Ok(AgentAuthLaunchOverlay {
             support_env,
@@ -316,6 +323,25 @@ impl AgentAuthConfigService {
 
     fn claude_gateway_config_dir(&self) -> PathBuf {
         self.runtime_home.join("agent-auth").join("claude-gateway")
+    }
+}
+
+fn normalize_legacy_auth_slot_ids(input: &mut AgentAuthConfigInput) {
+    let registry = built_in_registry();
+    for selection in &mut input.selections {
+        if !selection.auth_slot_id.trim().is_empty() {
+            continue;
+        }
+        let Some(descriptor) = registry
+            .iter()
+            .find(|descriptor| descriptor.kind.as_str() == selection.agent_kind)
+        else {
+            continue;
+        };
+        if descriptor.auth.slots.len() != 1 {
+            continue;
+        }
+        selection.auth_slot_id = descriptor.auth.slots[0].id.clone();
     }
 }
 

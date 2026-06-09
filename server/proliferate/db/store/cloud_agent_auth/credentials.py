@@ -30,14 +30,14 @@ async def list_visible_credentials(
     *,
     actor_user_id: UUID,
     organization_id: UUID | None = None,
-    agent_kind: str | None = None,
+    credential_provider_id: str | None = None,
 ) -> tuple[AgentAuthCredentialRecord, ...]:
     filters = [
         AgentAuthCredential.revoked_at.is_(None),
         AgentAuthCredential.status != "revoked",
     ]
-    if agent_kind is not None:
-        filters.append(AgentAuthCredential.agent_kind == agent_kind)
+    if credential_provider_id is not None:
+        filters.append(AgentAuthCredential.credential_provider_id == credential_provider_id)
     visibility = [
         AgentAuthCredential.owner_scope == "system",
         and_(
@@ -63,7 +63,7 @@ async def list_visible_credentials(
                 select(AgentAuthCredential)
                 .where(*filters, or_(*visibility))
                 .order_by(
-                    AgentAuthCredential.agent_kind.asc(),
+                    AgentAuthCredential.credential_provider_id.asc(),
                     AgentAuthCredential.owner_scope.asc(),
                     AgentAuthCredential.display_name.asc(),
                 )
@@ -116,7 +116,7 @@ async def create_agent_auth_credential(
     owner_user_id: UUID | None,
     organization_id: UUID | None,
     created_by_user_id: UUID | None,
-    agent_kind: str,
+    credential_provider_id: str,
     credential_kind: str,
     display_name: str,
     redacted_summary_json: str,
@@ -130,7 +130,7 @@ async def create_agent_auth_credential(
         owner_user_id=owner_user_id,
         organization_id=organization_id,
         created_by_user_id=created_by_user_id,
-        agent_kind=agent_kind,
+        credential_provider_id=credential_provider_id,
         credential_kind=credential_kind,
         display_name=display_name,
         redacted_summary_json=redacted_summary_json,
@@ -193,7 +193,7 @@ async def get_active_personal_synced_credential_for_update(
     db: AsyncSession,
     *,
     user_id: UUID,
-    agent_kind: str,
+    credential_provider_id: str,
 ) -> AgentAuthCredentialRecord | None:
     row = (
         (
@@ -203,7 +203,7 @@ async def get_active_personal_synced_credential_for_update(
                     AgentAuthCredential.owner_scope == "personal",
                     AgentAuthCredential.owner_user_id == user_id,
                     AgentAuthCredential.organization_id.is_(None),
-                    AgentAuthCredential.agent_kind == agent_kind,
+                    AgentAuthCredential.credential_provider_id == credential_provider_id,
                     AgentAuthCredential.credential_kind == "synced_path",
                     AgentAuthCredential.revoked_at.is_(None),
                     AgentAuthCredential.status != "revoked",

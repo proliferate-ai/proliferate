@@ -161,7 +161,8 @@ SandboxProfileAgentAuthTargetState
 
 AgentAuthCredential
   id, owner_scope (system|personal|organization), owner_user_id,
-  organization_id, created_by_user_id, agent_kind (claude|codex|opencode|gemini),
+  organization_id, created_by_user_id,
+  credential_provider_id (anthropic|openai|gemini|cursor),
   credential_kind (managed_gateway|synced_path), display_name,
   redacted_summary_json,
   status (pending|ready|needs_resync|invalid|revoked),
@@ -171,7 +172,7 @@ AgentAuthCredential
 AgentAuthCredentialShare
   id, credential_id, owner_user_id, organization_id,
   share_scope='organization', shared_by_user_id,
-  status (active|revoked), allowed_agent_kind,
+  status (active|revoked), allowed_credential_provider_id,
   created_at, revoked_at, revoked_by_user_id
 
 AgentGatewayBudgetSubject
@@ -646,7 +647,7 @@ gemini   + synced_files
   GEMINI_API_KEY, GOOGLE_API_KEY  (rare; only if synced file format demands it)
 
 gemini   + gateway_env
-  rejected in V1
+  GEMINI_API_KEY, GOOGLE_GEMINI_BASE_URL
 ```
 
 `ApplyAgentAuthConfigRequest` validation:
@@ -801,6 +802,7 @@ visible credentials for selection:
   - organization credentials marked usable in personal sandboxes
     (future policy column; not exposed in V1)
 selection picks one credential per agent_kind
+selection is stored per (agent_kind, auth_slot_id)
 ```
 
 Organization shared sandbox selection (admin-only):
@@ -811,14 +813,14 @@ visible credentials for selection:
   - system credentials (managed credits) when policy permits
   - personal credentials of org members that have an active
     agent_auth_credential_share with share_scope='organization' and
-    allowed_agent_kind matches
-selection picks one credential per agent_kind
+    allowed_credential_provider_id matches the slot provider
+selection is stored per (agent_kind, auth_slot_id)
 ```
 
 Selection writes:
 
 ```text
-PUT /v1/cloud/sandbox-profiles/{id}/agent-auth-selections/{agent_kind}
+PUT /v1/cloud/sandbox-profiles/{id}/agent-auth-selections/{agent_kind}/{auth_slot_id}
   body: { credential_id, credential_share_id? }
   server:
     validate visibility for the actor (owner / org admin)
@@ -1073,10 +1075,9 @@ Tests in §9.
     target switch).
 16. BYOK provider credential paths remain feature-gated and unreachable
     when `agent_gateway_byok_enabled=false`. The schema is unchanged.
-17. Gemini gateway requests remain rejected
-    (`gateway_byok_disabled`, `gateway_not_supported_for_agent`, or
-    `gateway_route_unavailable` depending on the failing layer).
-    Gemini synced auth continues to work.
+17. Gemini gateway requests are accepted when the deployment has a
+    gateway-backed Gemini provider available. Gemini synced auth continues
+    to work for local-account materialization.
 18. OpenCode gateway is reachable only when
     `agent_gateway_opencode_enabled=true`. Default is false; capability
     API exposes the current value.
@@ -1112,7 +1113,7 @@ server/tests/cloud/agent_auth/test_freshness_apply_signal.py
 server/tests/cloud/capabilities/test_capabilities_endpoint.py
 server/tests/cloud/agent_auth/test_byok_remains_gated.py
 server/tests/cloud/agent_auth/test_opencode_gated.py
-server/tests/cloud/agent_auth/test_gemini_gateway_rejected.py
+server/tests/cloud/agent_auth/test_gemini_gateway_supported.py
 ```
 
 AnyHarness:

@@ -10,10 +10,7 @@ import {
   isHostedCloudV1AgentAuthCredential,
   isProliferateManagedCreditsCredential,
 } from "./agent-auth-credential-presentation";
-import {
-  agentAuthCanCreateGatewayCredentialForAgent,
-  agentAuthManagedCreditsCapabilityLabel,
-} from "./agent-auth-gateway-capabilities";
+import { agentAuthManagedCreditsCapabilityLabel } from "./agent-auth-gateway-capabilities";
 
 function credential(
   overrides: Partial<AgentAuthCredential>,
@@ -24,10 +21,10 @@ function credential(
     ownerUserId: "user-1",
     organizationId: null,
     createdByUserId: "user-1",
-    agentKind: "claude",
+    credentialProviderId: "anthropic",
     credentialKind: "synced_path",
     displayName: "Synced Claude auth",
-    redactedSummary: {},
+    redactedSummary: { agentKind: "claude" },
     status: "ready",
     revision: 1,
     activeCredentialShareId: null,
@@ -101,15 +98,22 @@ describe("isHostedCloudV1AgentAuthCredential", () => {
 });
 
 describe("isProliferateManagedCreditsCredential", () => {
-  it("matches only the Proliferate managed gateway provider", () => {
-    expect(
-      isProliferateManagedCreditsCredential(
-        credential({
-          credentialKind: "managed_gateway",
-          redactedSummary: { providerKind: "proliferate_bedrock_pool" },
-        }),
-      ),
-    ).toBe(true);
+  it("matches Proliferate managed gateway providers", () => {
+    for (const providerKind of [
+      "proliferate_bedrock_pool",
+      "proliferate_managed_anthropic",
+      "proliferate_managed_openai",
+      "proliferate_managed_gemini",
+    ]) {
+      expect(
+        isProliferateManagedCreditsCredential(
+          credential({
+            credentialKind: "managed_gateway",
+            redactedSummary: { providerKind },
+          }),
+        ),
+      ).toBe(true);
+    }
     expect(isProliferateManagedCreditsCredential(credential({}))).toBe(false);
   });
 });
@@ -232,25 +236,6 @@ describe("agentAuthManagedCreditsCapabilityLabel", () => {
         "organization",
       ),
     ).toBe("Managed credits are not enabled for shared cloud sandboxes.");
-  });
-});
-
-describe("agentAuthCanCreateGatewayCredentialForAgent", () => {
-  it("matches gateway provider forms to the harness they can configure", () => {
-    const inputCapabilities = capabilities({
-      byokProviders: {
-        anthropicApiKey: true,
-        openaiApiKey: true,
-        geminiApiKey: true,
-        bedrockAssumeRole: false,
-        openaiCompatible: false,
-      },
-    });
-
-    expect(agentAuthCanCreateGatewayCredentialForAgent("claude", inputCapabilities)).toBe(true);
-    expect(agentAuthCanCreateGatewayCredentialForAgent("codex", inputCapabilities)).toBe(true);
-    expect(agentAuthCanCreateGatewayCredentialForAgent("opencode", inputCapabilities)).toBe(false);
-    expect(agentAuthCanCreateGatewayCredentialForAgent("gemini", inputCapabilities)).toBe(true);
   });
 });
 

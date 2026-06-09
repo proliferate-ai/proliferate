@@ -31,7 +31,7 @@ async def create_or_reactivate_credential_share(
     owner_user_id: UUID,
     organization_id: UUID,
     shared_by_user_id: UUID,
-    allowed_agent_kind: str,
+    allowed_credential_provider_id: str,
 ) -> AgentAuthCredentialShareRecord:
     row = (
         await db.execute(
@@ -52,7 +52,7 @@ async def create_or_reactivate_credential_share(
             share_scope="organization",
             shared_by_user_id=shared_by_user_id,
             status="active",
-            allowed_agent_kind=allowed_agent_kind,
+            allowed_credential_provider_id=allowed_credential_provider_id,
             created_at=now,
             revoked_at=None,
             revoked_by_user_id=None,
@@ -60,7 +60,7 @@ async def create_or_reactivate_credential_share(
         db.add(row)
     else:
         row.status = "active"
-        row.allowed_agent_kind = allowed_agent_kind
+        row.allowed_credential_provider_id = allowed_credential_provider_id
         row.revoked_at = None
         row.revoked_by_user_id = None
     await db.flush()

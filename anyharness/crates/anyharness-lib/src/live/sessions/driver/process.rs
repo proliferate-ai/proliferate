@@ -205,6 +205,7 @@ mod tests {
             descriptor,
             status: ResolvedAgentStatus::Ready,
             credential_state: CredentialState::Ready,
+            auth_slots: Vec::new(),
             native: None,
             agent_process: ResolvedArtifact {
                 role: ArtifactRole::AgentProcess,

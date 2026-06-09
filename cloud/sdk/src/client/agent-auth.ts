@@ -3,6 +3,7 @@ import type {
   AgentAuthAgentKind,
   AgentAuthCredential,
   AgentAuthCredentialListOptions,
+  AgentAuthCredentialProviderId,
   AgentAuthCredentialShare,
   AgentAuthMutationResponse,
   CloudCapabilities,
@@ -44,6 +45,7 @@ export async function listAgentAuthCredentials(
     path: "/v1/cloud/agent-auth/credentials",
     query: {
       organizationId: options.organizationId,
+      credentialProviderId: options.credentialProviderId,
       agentKind: options.agentKind,
     },
   });
@@ -81,7 +83,7 @@ export function createAnthropicApiKeyCredential(
     {
       ownerScope: input.ownerScope,
       organizationId: input.organizationId ?? null,
-      agentKind: "claude",
+      credentialProviderId: "anthropic",
       displayName: input.displayName,
       policyKind: policyKindForOwner(input.ownerScope),
       providerKind: "anthropic_api_key",
@@ -99,7 +101,7 @@ export function createOpenAiApiKeyCredential(
     {
       ownerScope: input.ownerScope,
       organizationId: input.organizationId ?? null,
-      agentKind: input.agentKind,
+      credentialProviderId: "openai",
       displayName: input.displayName,
       policyKind: policyKindForOwner(input.ownerScope),
       providerKind: "openai_api_key",
@@ -117,7 +119,7 @@ export function createOpenAiCompatibleCredential(
     {
       ownerScope: input.ownerScope,
       organizationId: input.organizationId ?? null,
-      agentKind: input.agentKind,
+      credentialProviderId: "openai",
       displayName: input.displayName,
       policyKind: policyKindForOwner(input.ownerScope),
       providerKind: "openai_compatible",
@@ -138,7 +140,7 @@ export function createGeminiApiKeyCredential(
     {
       ownerScope: input.ownerScope,
       organizationId: input.organizationId ?? null,
-      agentKind: "gemini",
+      credentialProviderId: "gemini",
       displayName: input.displayName,
       policyKind: policyKindForOwner(input.ownerScope),
       providerKind: "gemini_api_key",
@@ -156,7 +158,7 @@ export function createBedrockAssumeRoleCredential(
     {
       ownerScope: input.ownerScope,
       organizationId: input.organizationId ?? null,
-      agentKind: "claude",
+      credentialProviderId: "anthropic",
       displayName: input.displayName,
       policyKind: policyKindForOwner(input.ownerScope),
       providerKind: "bedrock_assume_role",
@@ -261,15 +263,17 @@ export async function getSandboxAgentAuthSelections(
 export async function putSandboxAgentAuthSelection(
   sandboxProfileId: string,
   agentKind: AgentAuthAgentKind,
+  authSlotId: AgentAuthCredentialProviderId | string,
   input: SelectAgentAuthCredentialInput,
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<SandboxAgentAuthSelection> {
   return client.requestJson<SandboxAgentAuthSelection>({
     method: "PUT",
-    path: "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/agent-auth-selections/{agent_kind}",
+    path: "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/agent-auth-selections/{agent_kind}/{auth_slot_id}",
     pathParams: {
       sandbox_profile_id: sandboxProfileId,
       agent_kind: agentKind,
+      auth_slot_id: authSlotId,
     },
     body: {
       credentialId: input.credentialId,

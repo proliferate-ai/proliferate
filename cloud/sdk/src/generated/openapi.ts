@@ -1490,7 +1490,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/agent-auth-selections/{agent_kind}": {
+    "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/agent-auth-selections/{agent_kind}/{auth_slot_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1499,7 +1499,27 @@ export interface paths {
         };
         get?: never;
         /** Select Agent Auth Credential Endpoint */
-        put: operations["select_agent_auth_credential_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__agent_auth_selections__agent_kind__put"];
+        put: operations["select_agent_auth_credential_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__agent_auth_selections__agent_kind___auth_slot_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/sandbox-profiles/{sandbox_profile_id}/agent-auth-selections/{agent_kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Select Agent Auth Credential Default Slot Endpoint
+         * @deprecated
+         */
+        put: operations["select_agent_auth_credential_default_slot_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__agent_auth_selections__agent_kind__put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3488,8 +3508,8 @@ export interface components {
             organizationId: string | null;
             /** Createdbyuserid */
             createdByUserId: string | null;
-            /** Agentkind */
-            agentKind: string;
+            /** Credentialproviderid */
+            credentialProviderId: string;
             /** Credentialkind */
             credentialKind: string;
             /** Displayname */
@@ -3538,8 +3558,8 @@ export interface components {
             sharedByUserId: string;
             /** Status */
             status: string;
-            /** Allowedagentkind */
-            allowedAgentKind: string;
+            /** Allowedcredentialproviderid */
+            allowedCredentialProviderId: string;
             /** Revokedat */
             revokedAt: string | null;
             /** Revokedbyuserid */
@@ -3570,7 +3590,7 @@ export interface components {
             /** Description */
             description?: string | null;
             /** Process */
-            process: {
+            process?: {
                 [key: string]: unknown;
             };
             session: components["schemas"]["AgentCatalogSession"];
@@ -5630,11 +5650,8 @@ export interface components {
             ownerScope: "personal" | "organization";
             /** Organizationid */
             organizationId?: string | null;
-            /**
-             * Agentkind
-             * @enum {string}
-             */
-            agentKind: "claude" | "codex" | "opencode" | "gemini";
+            /** Credentialproviderid */
+            credentialProviderId?: ("anthropic" | "openai" | "gemini" | "cursor") | null;
             /** Displayname */
             displayName: string;
             /**
@@ -6928,6 +6945,8 @@ export interface components {
             ownerScope: string;
             /** Agentkind */
             agentKind: string;
+            /** Authslotid */
+            authSlotId: string;
             /**
              * Credentialid
              * Format: uuid
@@ -7962,6 +7981,8 @@ export interface components {
         WorkerAgentAuthSelectionPlan: {
             /** Agentkind */
             agentKind: string;
+            /** Authslotid */
+            authSlotId: string;
             /** Materializationmode */
             materializationMode: string;
             /**
@@ -11873,7 +11894,8 @@ export interface operations {
         parameters: {
             query?: {
                 organizationId?: string | null;
-                agentKind?: string | null;
+                credentialProviderId?: string | null;
+                agentKind?: ("claude" | "codex" | "opencode" | "gemini") | null;
             };
             header?: never;
             path?: never;
@@ -12165,7 +12187,44 @@ export interface operations {
             };
         };
     };
-    select_agent_auth_credential_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__agent_auth_selections__agent_kind__put: {
+    select_agent_auth_credential_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__agent_auth_selections__agent_kind___auth_slot_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sandbox_profile_id: string;
+                agent_kind: "claude" | "codex" | "opencode" | "gemini";
+                auth_slot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelectAgentAuthCredentialRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxAgentAuthSelectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    select_agent_auth_credential_default_slot_endpoint_v1_cloud_sandbox_profiles__sandbox_profile_id__agent_auth_selections__agent_kind__put: {
         parameters: {
             query?: never;
             header?: never;

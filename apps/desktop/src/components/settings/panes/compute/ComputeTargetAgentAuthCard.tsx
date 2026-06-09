@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   AgentAuthAgentKind,
   AgentAuthCredential,
+  AgentAuthCredentialProviderId,
   SandboxProfile,
 } from "@proliferate/cloud-sdk";
 import {
@@ -15,16 +16,21 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Select } from "@proliferate/ui/primitives/Select";
 import {
-  AGENT_AUTH_AGENT_ORDER,
   agentAuthAgentLabel,
 } from "@/lib/domain/agent-auth/agent-auth-agent-presentation";
+import {
+  AGENT_AUTH_SLOT_DEFINITIONS,
+  agentAuthSlotLabel,
+  credentialsForAgentAuthSlot,
+  selectionByAgentAuthSlot,
+  type AgentAuthSlotDefinition,
+} from "@/lib/domain/agent-auth/auth-slots";
 import {
   agentAuthCredentialKindLabel,
   agentAuthCredentialStatusLabel,
   agentAuthCredentialStatusTone,
   credentialSelectableReason,
   isAgentAuthCredentialVisibleForCapabilities,
-  selectionByAgentKind,
   targetStateSummary,
 } from "@/lib/domain/agent-auth/agent-auth-credential-presentation";
 import type {
@@ -58,7 +64,7 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
         isAgentAuthCredentialVisibleForCapabilities(credential, agentGatewayCapabilities)),
     [agentGatewayCapabilities, credentials],
   );
-  const selectionsByAgent = useMemo(() => selectionByAgentKind(selections), [selections]);
+  const selectionsBySlot = useMemo(() => selectionByAgentAuthSlot(selections), [selections]);
   const targetState = profile ? targetStateSummary(targetStates, target.id) : null;
 
   useEffect(() => {
@@ -84,7 +90,11 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
     }
   }
 
-  async function handleSelect(agentKind: AgentAuthAgentKind, credentialId: string) {
+  async function handleSelect(
+    agentKind: AgentAuthAgentKind,
+    authSlotId: AgentAuthCredentialProviderId | string,
+    credentialId: string,
+  ) {
     if (!profile || !credentialId || !canManageAgentAuth) {
       return;
     }
@@ -93,10 +103,11 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
       await mutations.selectCredential({
         sandboxProfileId: profile.id,
         agentKind,
+        authSlotId,
         selection: {
           credentialId,
           credentialShareId: credentials.find(
-            (credential) => credential.id === credentialId && credential.agentKind === agentKind,
+            (credential) => credential.id === credentialId,
           )?.activeCredentialShareId ?? null,
         },
       });
@@ -154,16 +165,14 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
         </div>
       ) : (
         <div className="divide-y divide-border/40 rounded-md border border-border/50">
-          {AGENT_AUTH_AGENT_ORDER.map((agentKind) => {
-            const selection = selectionsByAgent.get(agentKind);
-            const agentCredentials = visibleCredentials.filter(
-              (credential) => credential.agentKind === agentKind,
-            );
+          {AGENT_AUTH_SLOT_DEFINITIONS.map((slot) => {
+            const selection = selectionsBySlot.get(`${slot.agentKind}:${slot.authSlotId}`);
+            const slotCredentials = credentialsForAgentAuthSlot(visibleCredentials, slot);
             const selectedCredential = selection
               ? credentials.find((credential) => credential.id === selection.credentialId)
               : undefined;
             const selectedCredentialVisible = selectedCredential
-              ? agentCredentials.some((credential) => credential.id === selectedCredential.id)
+              ? slotCredentials.some((credential) => credential.id === selectedCredential.id)
               : selection === undefined;
             let unavailableSelectedCredentialLabel: string | null = null;
             if (selection && !selectedCredential) {
@@ -173,10 +182,10 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
             }
             return (
               <AgentAuthSelectionRow
-                key={agentKind}
-                agentKind={agentKind}
+                key={`${slot.agentKind}-${slot.authSlotId}`}
+                slot={slot}
                 profile={profile}
-                credentials={agentCredentials}
+                credentials={slotCredentials}
                 selectedCredentialId={selection?.credentialId ?? ""}
                 unavailableSelectedCredentialLabel={unavailableSelectedCredentialLabel}
                 selecting={mutations.isSelectingCredential}
@@ -193,7 +202,7 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
 }
 
 function AgentAuthSelectionRow({
-  agentKind,
+  slot,
   profile,
   credentials,
   selectedCredentialId,
@@ -202,22 +211,26 @@ function AgentAuthSelectionRow({
   disabled,
   onSelect,
 }: {
-  agentKind: AgentAuthAgentKind;
+  slot: AgentAuthSlotDefinition;
   profile: SandboxProfile;
   credentials: AgentAuthCredential[];
   selectedCredentialId: string;
   unavailableSelectedCredentialLabel: string | null;
   selecting: boolean;
   disabled: boolean;
-  onSelect: (agentKind: AgentAuthAgentKind, credentialId: string) => void;
+  onSelect: (
+    agentKind: AgentAuthAgentKind,
+    authSlotId: AgentAuthCredentialProviderId | string,
+    credentialId: string,
+  ) => void;
 }) {
   return (
     <div className="grid gap-2 px-3 py-3 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-center">
-      <div className="text-sm font-medium text-foreground">{agentAuthAgentLabel(agentKind)}</div>
+      <div className="text-sm font-medium text-foreground">{agentAuthSlotLabel(slot)}</div>
       <Select
         value={selectedCredentialId}
         disabled={disabled || selecting || credentials.length === 0}
-        onChange={(event) => onSelect(agentKind, event.target.value)}
+        onChange={(event) => onSelect(slot.agentKind, slot.authSlotId, event.target.value)}
       >
         <option value="">
           {credentials.length === 0 ? "No compatible credentials" : "Select credential"}

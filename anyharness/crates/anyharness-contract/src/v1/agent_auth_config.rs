@@ -17,6 +17,8 @@ pub struct AgentAuthExternalScope {
 #[serde(rename_all = "camelCase")]
 pub struct AgentAuthSelectionConfig {
     pub agent_kind: String,
+    #[serde(default)]
+    pub auth_slot_id: String,
     pub materialization_mode: String,
     pub credential_id: String,
     pub credential_revision: i64,
@@ -52,6 +54,7 @@ pub struct ApplyAgentAuthConfigRequest {
 #[serde(rename_all = "camelCase")]
 pub struct AgentAuthSelectionStatus {
     pub agent_kind: String,
+    pub auth_slot_id: String,
     pub materialization_mode: String,
     pub credential_id: String,
     pub credential_revision: i64,

@@ -33,6 +33,9 @@ from proliferate.server.cloud.agent_auth.managed_credit_rules import (
 from proliferate.server.cloud.agent_auth.models import (
     EnsureManagedCreditsRequest,
 )
+from proliferate.server.cloud.agent_auth.registry import (
+    credential_provider_id_for_provider_kind,
+)
 from proliferate.server.cloud.agent_auth.results import EnsureManagedCreditsResult
 
 _ORG_ADMIN_ROLES = {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN}
@@ -111,14 +114,19 @@ async def ensure_managed_credits_for_organization(
 
     credentials: list[AgentAuthCredentialRecord] = []
     policies: list[AgentGatewayPolicyRecord] = []
+    seen_credential_provider_ids: set[str] = set()
     for agent_kind in requested_agent_kinds:
         provider_kind, deployments = _managed_credit_deployments_for_agent(agent_kind)
         if not deployments:
             continue
+        credential_provider_id = credential_provider_id_for_provider_kind(provider_kind)
+        if credential_provider_id in seen_credential_provider_ids:
+            continue
+        seen_credential_provider_ids.add(credential_provider_id)
         credential = await store.get_managed_gateway_credential(
             db,
             organization_id=organization_id,
-            agent_kind=agent_kind,
+            credential_provider_id=credential_provider_id,
         )
         if credential is None:
             credential = await store.create_agent_auth_credential(
@@ -127,7 +135,7 @@ async def ensure_managed_credits_for_organization(
                 owner_user_id=None,
                 organization_id=organization_id,
                 created_by_user_id=actor_user_id,
-                agent_kind=agent_kind,
+                credential_provider_id=credential_provider_id,
                 credential_kind="managed_gateway",
                 display_name="Proliferate managed credits",
                 redacted_summary_json=json.dumps(

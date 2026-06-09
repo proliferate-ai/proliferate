@@ -22,6 +22,7 @@ from proliferate.db.store.cloud_agent_auth.records import (
 from proliferate.server.cloud.agent_auth.domain.types import SyncedCredentialAuthMode
 
 AgentKind = Literal["claude", "codex", "opencode", "gemini"]
+CredentialProviderId = Literal["anthropic", "openai", "gemini", "cursor"]
 
 
 class GatewayModelDeploymentRequest(BaseModel):
@@ -41,7 +42,10 @@ class EnsureFreeManagedCreditsRequest(BaseModel):
 class CreateGatewayCredentialRequest(BaseModel):
     owner_scope: Literal["personal", "organization"] = Field(alias="ownerScope")
     organization_id: UUID | None = Field(default=None, alias="organizationId")
-    agent_kind: AgentKind = Field(alias="agentKind")
+    credential_provider_id: CredentialProviderId | None = Field(
+        default=None,
+        alias="credentialProviderId",
+    )
     display_name: str = Field(alias="displayName")
     policy_kind: Literal["org_byok", "personal_byok"] = Field(alias="policyKind")
     provider_kind: Literal[
@@ -105,7 +109,7 @@ class AgentAuthCredentialResponse(BaseModel):
     owner_user_id: UUID | None = Field(alias="ownerUserId")
     organization_id: UUID | None = Field(alias="organizationId")
     created_by_user_id: UUID | None = Field(alias="createdByUserId")
-    agent_kind: str = Field(alias="agentKind")
+    credential_provider_id: str = Field(alias="credentialProviderId")
     credential_kind: str = Field(alias="credentialKind")
     display_name: str = Field(alias="displayName")
     redacted_summary: dict[str, object] = Field(alias="redactedSummary")
@@ -126,7 +130,7 @@ class AgentAuthCredentialShareResponse(BaseModel):
     share_scope: str = Field(alias="shareScope")
     shared_by_user_id: UUID = Field(alias="sharedByUserId")
     status: str
-    allowed_agent_kind: str = Field(alias="allowedAgentKind")
+    allowed_credential_provider_id: str = Field(alias="allowedCredentialProviderId")
     revoked_at: str | None = Field(alias="revokedAt")
     revoked_by_user_id: UUID | None = Field(alias="revokedByUserId")
 
@@ -181,6 +185,7 @@ class SandboxAgentAuthSelectionResponse(BaseModel):
     sandbox_profile_id: UUID = Field(alias="sandboxProfileId")
     owner_scope: str = Field(alias="ownerScope")
     agent_kind: str = Field(alias="agentKind")
+    auth_slot_id: str = Field(alias="authSlotId")
     credential_id: UUID = Field(alias="credentialId")
     credential_share_id: UUID | None = Field(alias="credentialShareId")
     materialization_mode: str = Field(alias="materializationMode")
@@ -233,6 +238,7 @@ class WorkerAgentAuthSyncedFilesConfig(BaseModel):
 
 class WorkerAgentAuthSelectionPlan(BaseModel):
     agent_kind: str = Field(alias="agentKind")
+    auth_slot_id: str = Field(alias="authSlotId")
     materialization_mode: str = Field(alias="materializationMode")
     credential_id: UUID = Field(alias="credentialId")
     credential_revision: int = Field(alias="credentialRevision")
@@ -353,7 +359,7 @@ def credential_response(
         ownerUserId=record.owner_user_id,
         organizationId=record.organization_id,
         createdByUserId=record.created_by_user_id,
-        agentKind=record.agent_kind,
+        credentialProviderId=record.credential_provider_id,
         credentialKind=record.credential_kind,
         displayName=record.display_name,
         redactedSummary=_json_object(record.redacted_summary_json),
@@ -375,7 +381,7 @@ def credential_share_response(
         shareScope=record.share_scope,
         sharedByUserId=record.shared_by_user_id,
         status=record.status,
-        allowedAgentKind=record.allowed_agent_kind,
+        allowedCredentialProviderId=record.allowed_credential_provider_id,
         revokedAt=_iso(record.revoked_at),
         revokedByUserId=record.revoked_by_user_id,
     )
@@ -461,6 +467,7 @@ def selection_response(
         sandboxProfileId=record.sandbox_profile_id,
         ownerScope=record.owner_scope,
         agentKind=record.agent_kind,
+        authSlotId=record.auth_slot_id,
         credentialId=record.credential_id,
         credentialShareId=record.credential_share_id,
         materializationMode=record.materialization_mode,

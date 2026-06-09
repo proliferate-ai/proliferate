@@ -1,5 +1,4 @@
 import type {
-  AgentAuthAgentKind,
   AgentAuthCredential,
   AgentGatewayCapabilities,
 } from "@proliferate/cloud-sdk";
@@ -47,37 +46,6 @@ export function agentAuthByokCapabilityLabel(
     return "Organization BYOK is unavailable until gateway route isolation is verified.";
   }
   return "BYOK provider forms are enabled for this deployment.";
-}
-
-export function agentAuthCanCreateGatewayCredentialForAgent(
-  agentKind: AgentAuthAgentKind,
-  capabilities: AgentGatewayCapabilities | null | undefined,
-): boolean {
-  if (!capabilities?.enabled || !capabilities.byokEnabled) {
-    return false;
-  }
-  if (!capabilities.byokPersonalEnabled && !capabilities.byokOrganizationEnabled) {
-    return false;
-  }
-  if (agentKind === "claude") {
-    return capabilities.byokProviders.anthropicApiKey
-      || capabilities.byokProviders.bedrockAssumeRole;
-  }
-  if (agentKind === "codex") {
-    return capabilities.byokProviders.openaiApiKey
-      || capabilities.byokProviders.openaiCompatible;
-  }
-  if (agentKind === "gemini") {
-    return capabilities.byokProviders.geminiApiKey;
-  }
-  if (agentKind === "opencode") {
-    return capabilities.opencodeGatewayEnabled === true
-      && (
-        capabilities.byokProviders.openaiApiKey
-        || capabilities.byokProviders.openaiCompatible
-      );
-  }
-  return false;
 }
 
 export function gatewayByokCredentialEnabled(

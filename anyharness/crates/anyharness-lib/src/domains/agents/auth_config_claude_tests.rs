@@ -30,6 +30,7 @@ fn claude_gateway_launch_overlay_sets_managed_config_dir() {
             revision: 1,
             selections: vec![AgentAuthSelectionConfig {
                 agent_kind: "claude".to_string(),
+                auth_slot_id: "anthropic".to_string(),
                 materialization_mode: "gateway_env".to_string(),
                 credential_id: "credential-1".to_string(),
                 credential_revision: 1,
@@ -83,6 +84,7 @@ fn apply_config_rejects_support_env_claude_config_dir() {
             revision: 1,
             selections: vec![AgentAuthSelectionConfig {
                 agent_kind: "claude".to_string(),
+                auth_slot_id: "anthropic".to_string(),
                 materialization_mode: "gateway_env".to_string(),
                 credential_id: "credential-1".to_string(),
                 credential_revision: 1,

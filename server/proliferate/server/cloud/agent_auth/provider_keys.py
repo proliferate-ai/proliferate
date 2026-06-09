@@ -238,7 +238,7 @@ def _bifrost_provider_key_plan(
     object_id: str,
     display_name: str,
 ) -> dict[str, object]:
-    models = [deployment.provider_model for deployment in deployments]
+    models = list(dict.fromkeys(deployment.provider_model for deployment in deployments))
     if provider_kind in {
         "proliferate_bedrock_pool",
         "proliferate_managed_anthropic",

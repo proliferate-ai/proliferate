@@ -1,6 +1,7 @@
 import type { components } from "../generated/openapi.js";
 
 export type AgentAuthAgentKind = "claude" | "codex" | "opencode" | "gemini";
+export type AgentAuthCredentialProviderId = "anthropic" | "openai" | "gemini" | "cursor";
 export type AgentAuthOwnerScope = "system" | "personal" | "organization";
 export type SandboxProfileOwnerScope = "personal" | "organization";
 export type AgentAuthCredentialKind = "managed_gateway" | "synced_path";
@@ -53,6 +54,7 @@ export type SandboxAgentAuthTargetState =
 
 export interface AgentAuthCredentialListOptions {
   organizationId?: string | null;
+  credentialProviderId?: AgentAuthCredentialProviderId | null;
   agentKind?: AgentAuthAgentKind | null;
 }
 
@@ -69,13 +71,11 @@ export interface CreateAnthropicApiKeyCredentialInput
 
 export interface CreateOpenAiApiKeyCredentialInput
   extends AgentAuthCredentialOwnerInput {
-  agentKind: Extract<AgentAuthAgentKind, "codex" | "opencode">;
   apiKey: string;
 }
 
 export interface CreateOpenAiCompatibleCredentialInput
   extends AgentAuthCredentialOwnerInput {
-  agentKind: Extract<AgentAuthAgentKind, "codex" | "opencode">;
   baseUrl: string;
   apiKey: string;
 }

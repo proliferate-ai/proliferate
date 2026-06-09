@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type {
   AgentAuthAgentKind,
   AgentAuthCredential,
+  AgentAuthCredentialProviderId,
   AgentGatewayCapabilities,
   SandboxAgentAuthSelection,
 } from "@proliferate/cloud-sdk";
@@ -20,8 +21,6 @@ import type {
   LocalAgentAuthSource,
 } from "@/hooks/access/tauri/use-credentials-actions";
 import {
-  AGENT_AUTH_AGENT_ORDER,
-  agentAuthAgentLabel,
   agentAuthHarnessDescription,
 } from "@/lib/domain/agent-auth/agent-auth-agent-presentation";
 import {
@@ -30,8 +29,15 @@ import {
   agentAuthCredentialKindLabel,
   credentialSelectableReason,
   credentialSummaryDetails,
-  selectionByAgentKind,
 } from "@/lib/domain/agent-auth/agent-auth-credential-presentation";
+import {
+  AGENT_AUTH_SLOT_DEFINITIONS,
+  agentAuthSlotLabel,
+  agentAuthSlotDomId,
+  credentialsForAgentAuthSlot,
+  selectionByAgentAuthSlot,
+  type AgentAuthSlotDefinition,
+} from "@/lib/domain/agent-auth/auth-slots";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 
 interface CloudAgentAuthLibraryProps {
@@ -43,8 +49,8 @@ export function CloudAgentAuthLibrary({ initialAgentKind = null }: CloudAgentAut
   const navigate = useNavigate();
   const credentialLoadError = library.personalCredentialsError;
   const personalCredentials = useMemo(
-    () => [...library.personalCredentialsByAgent.values()].flat(),
-    [library.personalCredentialsByAgent],
+    () => [...library.personalCredentialsByProvider.values()].flat(),
+    [library.personalCredentialsByProvider],
   );
 
   return (
@@ -86,7 +92,7 @@ export function CloudAgentAuthLibrary({ initialAgentKind = null }: CloudAgentAut
 
       <PersonalAuthInUseSection
         capabilities={library.capabilities}
-        credentialsByAgent={library.personalCredentialsByAgent}
+        credentialsByProvider={library.personalCredentialsByProvider}
         credentialsLoading={library.personalCredentialsLoading}
         localSourceError={library.localSourceError}
         localSourcesByProvider={library.localSourcesByProvider}
@@ -109,6 +115,8 @@ export function CloudAgentAuthLibrary({ initialAgentKind = null }: CloudAgentAut
         personalCredentials={personalCredentials}
         rescanning={library.rescanning}
         revokingCredentialId={library.revokingCredentialId}
+        revokingShareId={library.revokingShareId}
+        sharingCredentialId={library.sharingCredentialId}
         ensuringFreeCredits={library.ensuringFreeCredits}
         syncingLocalProvider={library.syncingLocalProvider}
         organizations={library.organizationOptions}
@@ -116,6 +124,8 @@ export function CloudAgentAuthLibrary({ initialAgentKind = null }: CloudAgentAut
         onSelectedOrganizationChange={library.setSelectedOrganizationId}
         onRescan={library.handleRescan}
         onRevokeCredential={library.handleRevokeCredential}
+        onRevokeShare={library.handleRevokeShare}
+        onShareCredential={library.handleShareCredential}
         onEnsureFreeCredits={library.handleEnsureFreeCredits}
         onSyncLocalCredential={library.handleSyncLocalCredential}
       />
@@ -125,7 +135,7 @@ export function CloudAgentAuthLibrary({ initialAgentKind = null }: CloudAgentAut
 
 function PersonalAuthInUseSection({
   capabilities,
-  credentialsByAgent,
+  credentialsByProvider,
   credentialsLoading,
   localSourceError,
   localSourcesByProvider,
@@ -141,7 +151,7 @@ function PersonalAuthInUseSection({
   onSyncLocalCredential,
 }: {
   capabilities: AgentGatewayCapabilities | null;
-  credentialsByAgent: Map<string, AgentAuthCredential[]>;
+  credentialsByProvider: Map<string, AgentAuthCredential[]>;
   credentialsLoading: boolean;
   localSourceError: string | null;
   localSourcesByProvider: Map<AgentAuthProvider, LocalAgentAuthSource>;
@@ -153,10 +163,15 @@ function PersonalAuthInUseSection({
   onEnsureFreeCredits: () => void;
   onEnsurePersonalProfile: () => void;
   onRescan: () => void;
-  onSelectPersonalDefault: (agentKind: AgentAuthAgentKind, credentialId: string) => void;
+  onSelectPersonalDefault: (
+    agentKind: AgentAuthAgentKind,
+    authSlotId: AgentAuthCredentialProviderId | string,
+    credentialId: string,
+  ) => void;
   onSyncLocalCredential: (provider: AgentAuthProvider) => void;
 }) {
-  const selectionsByAgent = selectionByAgentKind(personalSelections);
+  const selectionsBySlot = selectionByAgentAuthSlot(personalSelections);
+  const credentials = [...credentialsByProvider.values()].flat();
   return (
     <section className="space-y-3">
       <div className="flex items-end justify-between gap-3">
@@ -184,33 +199,33 @@ function PersonalAuthInUseSection({
           <span>Local sandbox</span>
           <span>Personal cloud</span>
         </div>
-        {AGENT_AUTH_AGENT_ORDER.map((agentKind) => {
-          const provider = providerForAgentKind(agentKind);
+        {AGENT_AUTH_SLOT_DEFINITIONS.map((slot) => {
+          const slotCredentials = credentialsForAgentAuthSlot(credentials, slot);
           return (
             <div
-              key={agentKind}
-              id={`agent-auth-${agentKind}`}
+              key={`${slot.agentKind}-${slot.authSlotId}`}
+              id={agentAuthSlotDomId(slot.agentKind, slot.authSlotId)}
               className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.1fr)] items-center gap-3 border-b border-border-light px-4 py-3 last:border-b-0"
             >
-              <HarnessIdentity agentKind={agentKind} />
+              <HarnessIdentity slot={slot} />
               <LocalAuthCell
-                agentKind={agentKind}
-                localSource={provider
-                  ? localSourcesByProvider.get(provider) ?? null
+                slot={slot}
+                localSource={slot.localProvider
+                  ? localSourcesByProvider.get(slot.localProvider) ?? null
                   : null}
                 localSourceError={localSourceError}
-                provider={provider}
+                provider={slot.localProvider}
                 syncingLocalProvider={syncingLocalProvider}
                 onSyncLocalCredential={onSyncLocalCredential}
               />
               <PersonalCloudAuthCell
-                agentKind={agentKind}
+                slot={slot}
                 capabilities={capabilities}
-                credentials={credentialsByAgent.get(agentKind) ?? []}
+                credentials={slotCredentials}
                 credentialsLoading={credentialsLoading}
                 ensuringFreeCredits={ensuringFreeCredits}
                 selecting={selecting}
-                selection={selectionsByAgent.get(agentKind)}
+                selection={selectionsBySlot.get(`${slot.agentKind}:${slot.authSlotId}`)}
                 onEnsureFreeCredits={onEnsureFreeCredits}
                 onEnsurePersonalProfile={onEnsurePersonalProfile}
                 onSelectPersonalDefault={onSelectPersonalDefault}
@@ -223,18 +238,18 @@ function PersonalAuthInUseSection({
   );
 }
 
-function HarnessIdentity({ agentKind }: { agentKind: AgentAuthAgentKind }) {
+function HarnessIdentity({ slot }: { slot: AgentAuthSlotDefinition }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
       <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-border-light bg-foreground/5 text-foreground">
-        <ProviderIcon kind={agentKind} className="size-4" />
+        <ProviderIcon kind={slot.agentKind} className="size-4" />
       </span>
       <span className="min-w-0">
         <span className="block text-sm font-medium text-foreground">
-          {agentAuthAgentLabel(agentKind)}
+          {agentAuthSlotLabel(slot)}
         </span>
         <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-          {agentAuthHarnessDescription(agentKind)}
+          {agentAuthHarnessDescription(slot.agentKind)}
         </span>
       </span>
     </div>
@@ -242,14 +257,14 @@ function HarnessIdentity({ agentKind }: { agentKind: AgentAuthAgentKind }) {
 }
 
 function LocalAuthCell({
-  agentKind,
+  slot,
   localSource,
   localSourceError,
   provider,
   syncingLocalProvider,
   onSyncLocalCredential,
 }: {
-  agentKind: AgentAuthAgentKind;
+  slot: AgentAuthSlotDefinition;
   localSource: LocalAgentAuthSource | null;
   localSourceError: string | null;
   provider: AgentAuthProvider | null;
@@ -283,13 +298,13 @@ function LocalAuthCell({
       >
         Sync
       </Button>
-      <span className="sr-only">{agentAuthAgentLabel(agentKind)}</span>
+      <span className="sr-only">{agentAuthSlotLabel(slot)}</span>
     </div>
   );
 }
 
 function PersonalCloudAuthCell({
-  agentKind,
+  slot,
   capabilities,
   credentials,
   credentialsLoading,
@@ -300,7 +315,7 @@ function PersonalCloudAuthCell({
   onEnsurePersonalProfile,
   onSelectPersonalDefault,
 }: {
-  agentKind: AgentAuthAgentKind;
+  slot: AgentAuthSlotDefinition;
   capabilities: AgentGatewayCapabilities | null;
   credentials: AgentAuthCredential[];
   credentialsLoading: boolean;
@@ -309,7 +324,11 @@ function PersonalCloudAuthCell({
   selection: SandboxAgentAuthSelection | undefined;
   onEnsureFreeCredits: () => void;
   onEnsurePersonalProfile: () => void;
-  onSelectPersonalDefault: (agentKind: AgentAuthAgentKind, credentialId: string) => void;
+  onSelectPersonalDefault: (
+    agentKind: AgentAuthAgentKind,
+    authSlotId: AgentAuthCredentialProviderId | string,
+    credentialId: string,
+  ) => void;
 }) {
   const selectedCredential = selection
     ? credentials.find((credential) => credential.id === selection.credentialId) ?? null
@@ -326,7 +345,7 @@ function PersonalCloudAuthCell({
   if (credentials.length === 0) {
     const canUseFreeCredits = capabilities?.enabled === true
       && capabilities.managedCreditsPersonalEnabled
-      && capabilities.managedCreditAgentKinds.includes(agentKind);
+      && capabilities.managedCreditAgentKinds.includes(slot.agentKind);
     return (
       <Button
         type="button"
@@ -342,7 +361,7 @@ function PersonalCloudAuthCell({
           onEnsurePersonalProfile();
         }}
       >
-        <ProviderIcon kind={agentKind} className="size-3.5 shrink-0 text-muted-foreground" />
+        <ProviderIcon kind={slot.authSlotId} className="size-3.5 shrink-0 text-muted-foreground" />
         {canUseFreeCredits ? "Use free credits" : "No credential"}
       </Button>
     );
@@ -353,13 +372,13 @@ function PersonalCloudAuthCell({
       label={selectedCredential
         ? agentAuthCredentialDisplayLabel(selectedCredential)
         : "Choose credential"}
-      leading={<ProviderIcon kind={agentKind} className="size-3.5 shrink-0 text-muted-foreground" />}
+      leading={<ProviderIcon kind={slot.authSlotId} className="size-3.5 shrink-0 text-muted-foreground" />}
       className="w-full"
       menuClassName="w-72"
       groups={[
         {
           id: "credentials",
-          label: agentAuthAgentLabel(agentKind),
+          label: `${agentAuthSlotLabel(slot)} credentials`,
           options: credentials.map((credential) => {
             const availability = agentAuthCredentialAvailability(credential, capabilities);
             const disabledReason = availability.reason
@@ -367,24 +386,18 @@ function PersonalCloudAuthCell({
             return {
               id: credential.id,
               label: agentAuthCredentialDisplayLabel(credential),
-              icon: <ProviderIcon kind={credential.agentKind} className="size-3.5" />,
+              icon: <ProviderIcon kind={credential.credentialProviderId} className="size-3.5" />,
               detail: disabledReason
                 ?? (credentialSummaryDetails(credential)
                   || agentAuthCredentialKindLabel(credential)),
               selected: selectedCredential?.id === credential.id,
               disabled: selecting || disabledReason !== null,
-              onSelect: () => onSelectPersonalDefault(agentKind, credential.id),
+              onSelect: () =>
+                onSelectPersonalDefault(slot.agentKind, slot.authSlotId, credential.id),
             };
           }),
         },
       ]}
     />
   );
-}
-
-function providerForAgentKind(agentKind: AgentAuthAgentKind): AgentAuthProvider | null {
-  if (agentKind === "claude" || agentKind === "codex" || agentKind === "gemini") {
-    return agentKind;
-  }
-  return null;
 }

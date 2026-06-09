@@ -136,6 +136,20 @@ def _claude_file_payload(api_key: str) -> dict[str, object]:
     }
 
 
+def _codex_file_payload(api_key: str) -> dict[str, object]:
+    return {
+        "authMode": "file",
+        "files": [
+            {
+                "relativePath": ".codex/auth.json",
+                "contentBase64": b64encode(
+                    f'{{"OPENAI_API_KEY":"{api_key}"}}'.encode()
+                ).decode("ascii"),
+            }
+        ],
+    }
+
+
 def _enable_anthropic_gateway_byok(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "proliferate.server.cloud.agent_auth.service.settings.agent_gateway_byok_enabled",
@@ -341,6 +355,43 @@ async def test_synced_credential_sync_creates_personal_profile_selection(
     assert selections[0]["agentKind"] == "claude"
     assert selections[0]["materializationMode"] == "synced_files"
     assert selections[0]["status"] == "active"
+
+
+@pytest.mark.asyncio
+async def test_synced_credential_cannot_be_selected_for_different_agent_slot(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-sync-cross-agent@example.com",
+    )
+
+    sync_response = await client.put(
+        "/v1/cloud/agent-auth/credentials/synced/codex",
+        headers=_headers(tokens),
+        json=_codex_file_payload("sk-openai-test"),
+    )
+    assert sync_response.status_code == 200
+    credential_id = sync_response.json()["credential"]["id"]
+
+    profile_response = await client.post(
+        "/v1/cloud/sandbox-profiles/personal",
+        headers=_headers(tokens),
+        json={},
+    )
+    assert profile_response.status_code == 200
+
+    select_response = await client.put(
+        f"/v1/cloud/sandbox-profiles/{profile_response.json()['id']}"
+        "/agent-auth-selections/opencode/openai",
+        headers=_headers(tokens),
+        json={"credentialId": credential_id},
+    )
+
+    assert select_response.status_code == 400
+    assert select_response.json()["detail"]["code"] == "synced_credential_agent_mismatch"
 
 
 @pytest.mark.asyncio
@@ -600,7 +651,6 @@ async def test_gateway_byok_credential_creation_disabled_by_default(
         headers=_headers(tokens),
         json={
             "ownerScope": "personal",
-            "agentKind": "claude",
             "displayName": "Personal Anthropic gateway",
             "policyKind": "personal_byok",
             "providerKind": "anthropic_api_key",
@@ -633,7 +683,6 @@ async def test_gateway_byok_provider_flag_must_be_enabled(
         headers=_headers(tokens),
         json={
             "ownerScope": "personal",
-            "agentKind": "claude",
             "displayName": "Personal Anthropic gateway",
             "policyKind": "personal_byok",
             "providerKind": "anthropic_api_key",
@@ -671,7 +720,6 @@ async def test_personal_gateway_byok_requires_explicit_personal_flag(
         headers=_headers(tokens),
         json={
             "ownerScope": "personal",
-            "agentKind": "claude",
             "displayName": "Personal Anthropic gateway",
             "policyKind": "personal_byok",
             "providerKind": "anthropic_api_key",
@@ -702,7 +750,6 @@ async def test_gateway_credential_provisions_bifrost_provider_key_when_byok_enab
         headers=_headers(tokens),
         json={
             "ownerScope": "personal",
-            "agentKind": "claude",
             "displayName": "Personal Anthropic gateway",
             "policyKind": "personal_byok",
             "providerKind": "anthropic_api_key",
@@ -726,6 +773,36 @@ async def test_gateway_credential_provisions_bifrost_provider_key_when_byok_enab
 
 
 @pytest.mark.asyncio
+async def test_gateway_credential_rejects_mismatched_provider_id(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _enable_anthropic_gateway_byok(monkeypatch)
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-gateway-provider-mismatch@example.com",
+    )
+
+    response = await client.post(
+        "/v1/cloud/agent-auth/credentials/gateway",
+        headers=_headers(tokens),
+        json={
+            "ownerScope": "personal",
+            "credentialProviderId": "openai",
+            "displayName": "Mismatched Anthropic gateway",
+            "policyKind": "personal_byok",
+            "providerKind": "anthropic_api_key",
+            "payload": {"apiKey": "sk-ant-test"},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "credential_provider_mismatch"
+
+
+@pytest.mark.asyncio
 async def test_ready_gateway_credential_can_be_selected(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -744,7 +821,6 @@ async def test_ready_gateway_credential_can_be_selected(
         headers=_headers(tokens),
         json={
             "ownerScope": "personal",
-            "agentKind": "claude",
             "displayName": "Ready Anthropic gateway",
             "policyKind": "personal_byok",
             "providerKind": "anthropic_api_key",
@@ -763,12 +839,22 @@ async def test_ready_gateway_credential_can_be_selected(
     profile_id = profile_response.json()["id"]
 
     select_response = await client.put(
-        f"/v1/cloud/sandbox-profiles/{profile_id}/agent-auth-selections/claude",
+        f"/v1/cloud/sandbox-profiles/{profile_id}/agent-auth-selections/claude/anthropic",
         headers=_headers(tokens),
         json={"credentialId": credential_id},
     )
     assert select_response.status_code == 200
     assert select_response.json()["credentialId"] == credential_id
+    assert select_response.json()["authSlotId"] == "anthropic"
+
+    legacy_select_response = await client.put(
+        f"/v1/cloud/sandbox-profiles/{profile_id}/agent-auth-selections/claude",
+        headers=_headers(tokens),
+        json={"credentialId": credential_id},
+    )
+    assert legacy_select_response.status_code == 200
+    assert legacy_select_response.json()["credentialId"] == credential_id
+    assert legacy_select_response.json()["authSlotId"] == "anthropic"
 
 
 @pytest.mark.asyncio
@@ -788,7 +874,7 @@ async def test_existing_byok_gateway_credential_cannot_be_selected_when_disabled
         owner_user_id=actor_user_id,
         organization_id=None,
         created_by_user_id=actor_user_id,
-        agent_kind="claude",
+        credential_provider_id="anthropic",
         credential_kind="managed_gateway",
         display_name="Dormant Claude BYOK",
         redacted_summary_json='{"providerKind":"anthropic_api_key"}',
@@ -820,7 +906,7 @@ async def test_existing_byok_gateway_credential_cannot_be_selected_when_disabled
     assert profile_response.status_code == 200
 
     select_response = await client.put(
-        f"/v1/cloud/sandbox-profiles/{profile_response.json()['id']}/agent-auth-selections/claude",
+        f"/v1/cloud/sandbox-profiles/{profile_response.json()['id']}/agent-auth-selections/claude/anthropic",
         headers=_headers(tokens),
         json={"credentialId": str(credential.id)},
     )
@@ -848,7 +934,7 @@ async def test_existing_byok_gateway_credential_without_provider_cannot_be_selec
         owner_user_id=actor_user_id,
         organization_id=None,
         created_by_user_id=actor_user_id,
-        agent_kind="claude",
+        credential_provider_id="anthropic",
         credential_kind="managed_gateway",
         display_name="Missing Provider Claude BYOK",
         redacted_summary_json='{"providerKind":"anthropic_api_key"}',
@@ -880,7 +966,7 @@ async def test_existing_byok_gateway_credential_without_provider_cannot_be_selec
     assert profile_response.status_code == 200
 
     select_response = await client.put(
-        f"/v1/cloud/sandbox-profiles/{profile_response.json()['id']}/agent-auth-selections/claude",
+        f"/v1/cloud/sandbox-profiles/{profile_response.json()['id']}/agent-auth-selections/claude/anthropic",
         headers=_headers(tokens),
         json={"credentialId": str(credential.id)},
     )
@@ -907,7 +993,6 @@ async def test_gateway_policy_kind_must_match_owner_scope(
         headers=_headers(tokens),
         json={
             "ownerScope": "personal",
-            "agentKind": "claude",
             "displayName": "Wrong policy scope",
             "policyKind": "org_byok",
             "providerKind": "anthropic_api_key",
@@ -1017,9 +1102,9 @@ async def test_free_managed_credits_use_bifrost_provider_key_materialization(
         "codex",
         "gemini",
     }
-    assert {credential["agentKind"] for credential in body["credentials"]} == {
-        "claude",
-        "codex",
+    assert {credential["credentialProviderId"] for credential in body["credentials"]} == {
+        "anthropic",
+        "openai",
         "gemini",
     }
     assert len(fake_bifrost.provider_keys) == 3
@@ -1053,7 +1138,7 @@ async def test_free_managed_credits_use_bifrost_provider_key_materialization(
     codex_credential_id = next(
         UUID(credential["id"])
         for credential in body["credentials"]
-        if credential["agentKind"] == "codex"
+        if credential["credentialProviderId"] == "openai"
     )
     stale_credential = await store.update_credential_status(
         db_session,
@@ -1481,7 +1566,6 @@ async def test_bifrost_revoke_byok_disables_provider_key_and_runtime_virtual_key
         headers=_headers(tokens),
         json={
             "ownerScope": "personal",
-            "agentKind": "claude",
             "displayName": "Personal Anthropic Bifrost BYOK",
             "policyKind": "personal_byok",
             "providerKind": "anthropic_api_key",
@@ -1502,7 +1586,7 @@ async def test_bifrost_revoke_byok_disables_provider_key_and_runtime_virtual_key
     profile = await store.get_active_personal_sandbox_profile_for_user(db_session, actor_user_id)
     assert profile is not None and profile.primary_target_id is not None
     select_response = await client.put(
-        f"/v1/cloud/sandbox-profiles/{profile.id}/agent-auth-selections/claude",
+        f"/v1/cloud/sandbox-profiles/{profile.id}/agent-auth-selections/claude/anthropic",
         headers=_headers(tokens),
         json={"credentialId": credential["id"]},
     )
@@ -1573,7 +1657,6 @@ async def test_bifrost_selection_change_disables_old_runtime_virtual_key(
         headers=_headers(tokens),
         json={
             "ownerScope": "personal",
-            "agentKind": "claude",
             "displayName": "First Anthropic Bifrost BYOK",
             "policyKind": "personal_byok",
             "providerKind": "anthropic_api_key",
@@ -1586,7 +1669,6 @@ async def test_bifrost_selection_change_disables_old_runtime_virtual_key(
         headers=_headers(tokens),
         json={
             "ownerScope": "personal",
-            "agentKind": "claude",
             "displayName": "Second Anthropic Bifrost BYOK",
             "policyKind": "personal_byok",
             "providerKind": "anthropic_api_key",
@@ -1607,7 +1689,7 @@ async def test_bifrost_selection_change_disables_old_runtime_virtual_key(
     assert profile is not None and profile.primary_target_id is not None
 
     select_first = await client.put(
-        f"/v1/cloud/sandbox-profiles/{profile.id}/agent-auth-selections/claude",
+        f"/v1/cloud/sandbox-profiles/{profile.id}/agent-auth-selections/claude/anthropic",
         headers=_headers(tokens),
         json={"credentialId": first_credential["id"]},
     )
@@ -1631,7 +1713,7 @@ async def test_bifrost_selection_change_disables_old_runtime_virtual_key(
     await db_session.commit()
 
     select_second = await client.put(
-        f"/v1/cloud/sandbox-profiles/{profile.id}/agent-auth-selections/claude",
+        f"/v1/cloud/sandbox-profiles/{profile.id}/agent-auth-selections/claude/anthropic",
         headers=_headers(tokens),
         json={"credentialId": second_credential["id"]},
     )

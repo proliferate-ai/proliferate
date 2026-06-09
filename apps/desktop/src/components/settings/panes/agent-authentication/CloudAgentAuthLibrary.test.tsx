@@ -35,7 +35,8 @@ describe("CloudAgentAuthLibrary", () => {
     render(<CloudAgentAuthLibrary />);
 
     expect(screen.queryByRole("button", { name: "Loading..." })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Choose credential/i })).not.toBeNull();
+    expect(screen.queryAllByRole("button", { name: /Choose credential/i }).length)
+      .toBeGreaterThan(0);
   });
 });
 
@@ -56,6 +57,7 @@ function makeLibraryState(overrides: Record<string, unknown> = {}) {
     handleEnsurePersonalProfile: vi.fn(),
     handleRescan: vi.fn(),
     handleRevokeCredential: vi.fn(),
+    handleRevokeShare: vi.fn(),
     handleSelectPersonalDefault: vi.fn(),
     handleShareCredential: vi.fn(),
     handleSyncLocalCredential: vi.fn(),
@@ -68,11 +70,11 @@ function makeLibraryState(overrides: Record<string, unknown> = {}) {
     organizationOptions: [],
     organizationProfile: null,
     organizationSelectionsLoading: false,
-    personalCredentialsByAgent: new Map([
-      ["claude", [
+    personalCredentialsByProvider: new Map([
+      ["anthropic", [
         {
           id: "cred-claude",
-          agentKind: "claude",
+          credentialProviderId: "anthropic",
           credentialKind: "managed_gateway",
           displayName: "Proliferate Default Free credits",
           ownerScope: "personal",
@@ -80,7 +82,7 @@ function makeLibraryState(overrides: Record<string, unknown> = {}) {
           organizationId: null,
           activeCredentialShareId: null,
           status: "ready",
-          redactedSummary: { providerKind: "anthropic_api_key" },
+          redactedSummary: { providerKind: "anthropic_api_key", agentKind: "claude" },
         },
       ]],
     ]),
@@ -91,9 +93,11 @@ function makeLibraryState(overrides: Record<string, unknown> = {}) {
     personalSelectionsLoading: false,
     rescanning: false,
     revokingCredentialId: null,
+    revokingShareId: null,
     selectedOrganizationId: null,
     setSelectedOrganizationId: vi.fn(),
     selectingTeamDefault: false,
+    sharingCredentialId: null,
     syncingLocalProvider: null,
     ...overrides,
   };

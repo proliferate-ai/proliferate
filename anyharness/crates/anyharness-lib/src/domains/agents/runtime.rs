@@ -201,8 +201,7 @@ impl AgentRuntime {
         let descriptor = descriptor_for_kind(kind)?;
         let login = descriptor
             .auth
-            .login
-            .as_ref()
+            .primary_login()
             .ok_or_else(|| AgentRuntimeError::LoginNotSupported(kind.to_string()))?;
         let command = AgentLoginCommand {
             program: login.command.program.clone(),
@@ -228,8 +227,7 @@ impl AgentRuntime {
         let descriptor = descriptor_for_kind(kind)?;
         let login = descriptor
             .auth
-            .login
-            .as_ref()
+            .primary_login()
             .ok_or_else(|| AgentRuntimeError::LoginNotSupported(kind.to_string()))?;
         let resolved = resolve_login_command(&descriptor, &self.runtime_home)?;
 
@@ -272,7 +270,7 @@ fn managed_login_command(
     descriptor: &AgentDescriptor,
     runtime_home: &Path,
 ) -> Option<(AgentLoginCommand, Vec<PathBuf>)> {
-    let login = descriptor.auth.login.as_ref()?;
+    let login = descriptor.auth.primary_login()?;
     let resolved = resolve_agent(descriptor, runtime_home);
     if let Some(native) = resolved.native.as_ref() {
         if native.source.as_deref() != Some("path") {
@@ -322,8 +320,7 @@ fn resolve_login_command(
 ) -> Result<ResolvedAgentLoginCommand, AgentRuntimeError> {
     let login = descriptor
         .auth
-        .login
-        .as_ref()
+        .primary_login()
         .ok_or_else(|| AgentRuntimeError::LoginNotSupported(descriptor.kind.as_str().into()))?;
 
     let (command, path_prefixes) =
@@ -504,8 +501,12 @@ mod tests {
     fn resolve_login_command_uses_path_only_when_binary_exists() {
         let _env_lock = env_lock();
         let mut gemini = descriptor_for_kind("gemini").expect("gemini descriptor");
-        gemini.auth.login.as_mut().expect("login").command.program =
-            "anyharness-test-gemini".into();
+        gemini.auth.slots[0]
+            .login
+            .as_mut()
+            .expect("login")
+            .command
+            .program = "anyharness-test-gemini".into();
         let runtime_home = make_temp_dir("anyharness-login-path-test");
         let bin_dir = make_temp_dir("anyharness-login-path-bin-test");
         let binary_path = bin_dir.join("anyharness-test-gemini");
@@ -529,8 +530,12 @@ mod tests {
     fn resolve_login_command_errors_when_command_is_missing() {
         let _env_lock = env_lock();
         let mut gemini = descriptor_for_kind("gemini").expect("gemini descriptor");
-        gemini.auth.login.as_mut().expect("login").command.program =
-            format!("missing-gemini-{}", uuid::Uuid::new_v4());
+        gemini.auth.slots[0]
+            .login
+            .as_mut()
+            .expect("login")
+            .command
+            .program = format!("missing-gemini-{}", uuid::Uuid::new_v4());
         let runtime_home = make_temp_dir("anyharness-login-missing-test");
         let _guard = PathEnvGuard::clear();
 

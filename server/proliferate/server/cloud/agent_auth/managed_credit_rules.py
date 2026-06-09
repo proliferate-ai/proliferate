@@ -25,6 +25,9 @@ from proliferate.server.cloud.agent_auth.errors import AgentAuthError
 from proliferate.server.cloud.agent_auth.models import (
     GatewayModelDeploymentRequest,
 )
+from proliferate.server.cloud.agent_auth.registry import (
+    credential_provider_id_for_provider_kind,
+)
 from proliferate.server.cloud.agent_auth.value_redaction import _budget_amount
 from proliferate.utils.time import utcnow
 
@@ -91,6 +94,20 @@ def _managed_credit_agent_kind_has_provider(agent_kind: str) -> bool:
 
 def _managed_credit_provider_kind_for_agent(agent_kind: str) -> str:
     if agent_kind == "claude":
+        return _managed_credit_provider_kind_for_provider("anthropic")
+    if agent_kind in {"codex", "opencode"}:
+        return _managed_credit_provider_kind_for_provider("openai")
+    if agent_kind == "gemini":
+        return _managed_credit_provider_kind_for_provider("gemini")
+    raise AgentAuthError(
+        "No managed-credit provider is configured for this agent.",
+        code="managed_credit_provider_not_configured",
+        status_code=409,
+    )
+
+
+def _managed_credit_provider_kind_for_provider(credential_provider_id: str) -> str:
+    if credential_provider_id == "anthropic":
         if (
             settings.agent_gateway_managed_bedrock_region.strip()
             and settings.agent_gateway_managed_bedrock_role_arn.strip()
@@ -98,14 +115,14 @@ def _managed_credit_provider_kind_for_agent(agent_kind: str) -> str:
             return "proliferate_bedrock_pool"
         if settings.agent_gateway_managed_anthropic_api_key.strip():
             return "proliferate_managed_anthropic"
-    elif agent_kind in {"codex", "opencode"}:
+    elif credential_provider_id == "openai":
         if settings.agent_gateway_managed_openai_api_key.strip():
             return "proliferate_managed_openai"
-    elif agent_kind == "gemini":
+    elif credential_provider_id == "gemini":
         if settings.agent_gateway_managed_gemini_api_key.strip():
             return "proliferate_managed_gemini"
     raise AgentAuthError(
-        "No managed-credit provider is configured for this agent.",
+        "No managed-credit provider is configured for this credential provider.",
         code="managed_credit_provider_not_configured",
         status_code=409,
     )
@@ -115,8 +132,10 @@ def _managed_credit_deployments_for_agent(
     agent_kind: str,
 ) -> tuple[str, tuple[GatewayModelDeploymentRequest, ...]]:
     provider_kind = _managed_credit_provider_kind_for_agent(agent_kind)
+    credential_provider_id = credential_provider_id_for_provider_kind(provider_kind)
     deployments = _gateway_deployments_for_credential(
         agent_kind=agent_kind,
+        credential_provider_id=credential_provider_id,
         provider_kind=provider_kind,
     )
     return provider_kind, deployments
