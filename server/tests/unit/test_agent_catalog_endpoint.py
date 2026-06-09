@@ -61,14 +61,7 @@ def test_agent_registry_path_resolves_server_docker_layout(tmp_path: Path) -> No
     packaged_registry = app_root / "catalogs" / "agents" / "v1" / "registry.json"
     packaged_registry.parent.mkdir(parents=True)
     packaged_registry.write_text("{}", encoding="utf-8")
-    service_path = (
-        app_root
-        / "proliferate"
-        / "server"
-        / "cloud"
-        / "agent_auth"
-        / "registry.py"
-    )
+    service_path = app_root / "proliferate" / "server" / "cloud" / "agent_auth" / "registry.py"
     service_path.parent.mkdir(parents=True)
     service_path.write_text("", encoding="utf-8")
 

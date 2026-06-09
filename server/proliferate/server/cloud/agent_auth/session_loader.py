@@ -82,13 +82,10 @@ def _decrypt_synced_payload(credential: AgentAuthCredentialRecord) -> dict[str, 
             status_code=409,
         )
     payload = decrypt_json(credential.payload_ciphertext)
-    if (
-        not isinstance(payload, dict)
-        or not synced_payload_provider_matches(
-            payload_provider=payload.get("provider"),
-            credential_provider_id=credential.credential_provider_id,
-            redacted_summary_json=credential.redacted_summary_json,
-        )
+    if not isinstance(payload, dict) or not synced_payload_provider_matches(
+        payload_provider=payload.get("provider"),
+        credential_provider_id=credential.credential_provider_id,
+        redacted_summary_json=credential.redacted_summary_json,
     ):
         raise AgentAuthError(
             "Synced credential payload is invalid.",

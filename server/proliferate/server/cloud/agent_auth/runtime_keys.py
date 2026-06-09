@@ -214,11 +214,7 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
             stale_grant_ids.add(existing_grant.id)
 
     client = new_bifrost_admin_client()
-    if (
-        existing is not None
-        and existing.status == "active"
-        and existing.router_object_id
-    ):
+    if existing is not None and existing.status == "active" and existing.router_object_id:
         await _disable_bifrost_virtual_key_materialization(
             db,
             client=client,
