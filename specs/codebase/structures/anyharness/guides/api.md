@@ -102,14 +102,19 @@ api/http/
   *_contract.rs
 ```
 
-Every handler is the same five-line stanza, and nothing else:
+Every handler is the same stanza, and nothing else:
 
 ```rust
-assert_<scope>_auth(&auth, ...)?;                 // 1. authorize: ONE named assertion
-let input = <usecase>_input(req)?;                // 2. translate in (dep-less seam fn)
-let view  = state.<domain>.<usecase>(input).await?; // 3. call ONE use case; errors ride `?`
-Ok(Json(<resource>_response(view)))               // 4. translate out (dep-less seam fn)
+assert_<scope>_auth(&auth, ...)?;                   // 1. authorize: ONE named assertion
+let input = <usecase>_input(req)?;                  // 2. translate in — OPTIONAL, earned at
+                                                    //    >3 fields; otherwise pass plain args
+let result = state.<domain>.<usecase>(input).await?; // 3. call ONE use case; errors ride `?`
+Ok(Json(<resource>_response(result)))               // 4. translate out (dep-less seam fn)
 ```
+
+`result` is usually the plain domain record; it is a composed view model only
+when the response needs composition — and assembling that view is the use
+case's job, never the handler's or the mapper's.
 
 Litmus rules (greppable):
 
@@ -127,9 +132,10 @@ checking both is correct; the edge checking preconditions is not.
 
 Proportionality: the `*_input()` constructor is earned at >3 fields or when
 defaults/grouping logic exists; below that, passing `&req.name` as a plain
-argument IS the translation. GET handlers collapse steps 2–3 (`Path(id)` is
-the input). The outbound `*_response()` constructor always exists — that is
-where wire stability lives.
+argument IS the translation — the invariant is "no contract type crosses into
+`domains/`", not "a constructor function exists". GET handlers drop step 2
+entirely (`Path(id)` is already the input). The outbound `*_response()`
+constructor always exists — that is where wire stability lives.
 
 If a handler contains product sequencing, move that sequence to the owning
 domain `runtime.rs` or `service.rs`. Migration exception:
