@@ -50,12 +50,19 @@ RESERVED_CLOUD_REPO_ENV_VARS: frozenset[str] = frozenset(
     {
         "AMP_API_KEY",
         "ANTHROPIC_API_KEY",
+        "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_BASE_URL",
+        "ANTHROPIC_CUSTOM_HEADERS",
+        "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
         "CODEX_API_KEY",
+        "CODEX_HOME",
         "CURSOR_API_KEY",
         "GEMINI_API_KEY",
         "GOOGLE_API_KEY",
+        "GOOGLE_GEMINI_BASE_URL",
         "GOOGLE_GENAI_USE_VERTEXAI",
         "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
     }
 )
 

@@ -83,7 +83,7 @@ async def reconcile_agent_gateway_runtime_grant_freshness(
                 profile=profile,
                 actor_user_id=None,
                 reason="runtime_grant_expiring",
-                force_restart=True,
+                force_restart=False,
             )
             refreshed_targets.add(key)
         except Exception:

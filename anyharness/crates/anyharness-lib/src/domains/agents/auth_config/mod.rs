@@ -258,8 +258,13 @@ impl AgentAuthConfigService {
             }
             reject_expired_selection(selection)
                 .map_err(|_| selection_required_error(scope.cloned(), agent_kind, "expired"))?;
-            support_env.extend(selection.support_env.clone());
-            protected_env.extend(selection.protected_env.clone());
+            merge_selection_env(&mut support_env, &selection.support_env, scope, agent_kind)?;
+            merge_selection_env(
+                &mut protected_env,
+                &selection.protected_env,
+                scope,
+                agent_kind,
+            )?;
             if agent_kind == "claude" && selection.materialization_mode == "gateway_env" {
                 let config_dir = self.claude_gateway_config_dir();
                 std::fs::create_dir_all(&config_dir).map_err(|error| {
@@ -347,6 +352,28 @@ fn normalize_legacy_auth_slot_ids(input: &mut AgentAuthConfigInput) {
         }
         selection.auth_slot_id = descriptor.auth.slots[0].id.clone();
     }
+}
+
+fn merge_selection_env(
+    target: &mut BTreeMap<String, String>,
+    incoming: &BTreeMap<String, String>,
+    scope: Option<&AgentAuthExternalScope>,
+    agent_kind: &str,
+) -> Result<(), AgentAuthLaunchOverlayError> {
+    for (key, value) in incoming {
+        if let Some(existing) = target.get(key) {
+            if existing != value {
+                return Err(selection_required_error(
+                    scope.cloned(),
+                    agent_kind,
+                    "conflict",
+                ));
+            }
+            continue;
+        }
+        target.insert(key.clone(), value.clone());
+    }
+    Ok(())
 }
 
 #[cfg(test)]

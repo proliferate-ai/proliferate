@@ -1454,9 +1454,9 @@ async def test_bifrost_runtime_key_issuance_records_and_rotates_runtime_grants(
     )
     assert third.virtual_key != first.virtual_key
     assert len(fake_bifrost.virtual_keys) == 2
-    assert fake_bifrost.disabled_virtual_keys == [first.virtual_key_id]
+    assert fake_bifrost.disabled_virtual_keys == []
     assert stale_revision_grant is not None
-    assert stale_revision_grant.revoked_at is not None
+    assert stale_revision_grant.revoked_at is None
     assert revised_grant is not None
     assert revised_grant.revoked_at is None
     assert revised_grant.issued_profile_revision == revised_profile.agent_auth_revision
@@ -1488,11 +1488,8 @@ async def test_bifrost_runtime_key_issuance_records_and_rotates_runtime_grants(
     )
     assert fourth.virtual_key != third.virtual_key
     assert len(fake_bifrost.virtual_keys) == 3
-    assert fake_bifrost.disabled_virtual_keys == [
-        first.virtual_key_id,
-        third.virtual_key_id,
-    ]
-    assert expiring_grant is not None and expiring_grant.revoked_at is not None
+    assert fake_bifrost.disabled_virtual_keys == []
+    assert expiring_grant is not None and expiring_grant.revoked_at is None
     assert new_grant is not None and new_grant.revoked_at is None
 
 
