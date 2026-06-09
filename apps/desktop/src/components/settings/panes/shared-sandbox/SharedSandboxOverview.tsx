@@ -55,12 +55,13 @@ export function SharedSandboxOverview({
   const configuredAuthSlotCount = countConfiguredAuthSlots(
     agentAuthLibrary.selections,
     agentAuthLibrary.organizationCredentials,
+    authSlots,
   );
   const readinessLoading =
     agentAuthLibrary.organizationSelectionsLoading
     || agentAuthLibrary.organizationCredentialsLoading
     || connectorsQuery.isLoading;
-  const ready = !readinessLoading && configuredAuthSlotCount > 0;
+  const ready = !readinessLoading && authSlots.length > 0 && configuredAuthSlotCount === authSlots.length;
 
   return (
     <>
@@ -383,7 +384,15 @@ function sharedCredentialTypeBadgeLabel(credential: AgentAuthCredential): string
 function countConfiguredAuthSlots(
   selections: SandboxAgentAuthSelection[],
   credentials: AgentAuthCredential[],
+  slots: AgentAuthSlotDefinition[],
 ): number {
   const credentialIds = new Set(credentials.map((credential) => credential.id));
-  return selections.filter((selection) => credentialIds.has(selection.credentialId)).length;
+  const configuredKeys = new Set(
+    selections
+      .filter((selection) => credentialIds.has(selection.credentialId))
+      .map((selection) => `${selection.agentKind}:${selection.authSlotId}`),
+  );
+  return slots.filter((slot) =>
+    configuredKeys.has(`${slot.agentKind}:${slot.authSlotId}`)
+  ).length;
 }

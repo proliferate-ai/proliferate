@@ -8,6 +8,7 @@ import {
   type CloudLaunchComposerSelection,
 } from "./composer-controls";
 import {
+  readyCloudAgentKinds,
   readySyncedCloudAgentKinds,
   resolveCloudHarnessAvailability,
 } from "./harness-availability";
@@ -454,6 +455,39 @@ describe("resolveCloudHarnessAvailability", () => {
       },
     })).toMatchObject({
       launchableAgentKinds: ["claude", "codex"],
+      message: null,
+    });
+  });
+
+  it("normalizes ready gateway credentials through capability auth slots", () => {
+    const readyAgentKinds = readyCloudAgentKinds({
+      credentials: [
+        { credentialKind: "managed_gateway", credentialProviderId: "openai", status: "ready" },
+        { credentialKind: "managed_gateway", credentialProviderId: "gemini", status: "ready" },
+        { credentialKind: "managed_gateway", credentialProviderId: "anthropic", status: "invalid" },
+      ],
+      agentGateway: {
+        enabled: true,
+        agentAuthSlots: [
+          { agentKind: "codex", credentialProviderIds: ["openai"] },
+          { agentKind: "opencode", credentialProviderIds: ["openai", "anthropic", "gemini"] },
+          { agentKind: "gemini", credentialProviderIds: ["gemini"] },
+        ],
+      },
+    });
+
+    expect(readyAgentKinds).toEqual(["codex", "gemini", "opencode"]);
+    expect(resolveCloudHarnessAvailability({
+      allowedAgentKinds: ["codex", "gemini", "opencode"],
+      readyAgentKinds,
+      agentGateway: {
+        enabled: true,
+        managedCreditsPersonalEnabled: false,
+        managedCreditsOrganizationEnabled: false,
+        opencodeGatewayEnabled: true,
+      },
+    })).toMatchObject({
+      launchableAgentKinds: ["codex", "gemini", "opencode"],
       message: null,
     });
   });

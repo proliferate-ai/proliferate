@@ -8,7 +8,6 @@ use anyharness_contract::v1::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::domains::agents::model::AuthReadinessPolicy;
 use crate::domains::agents::registry::built_in_registry;
 use crate::domains::sessions::mcp_bindings::crypto::{
     decrypt_bytes, encrypt_bytes, SessionDataCipher,
@@ -199,6 +198,7 @@ impl AgentAuthConfigService {
         scope: Option<&AgentAuthExternalScope>,
         required_revision: Option<i64>,
     ) -> Result<AgentAuthLaunchOverlay, AgentAuthLaunchOverlayError> {
+        let scoped_launch = scope.is_some() || required_revision.is_some();
         let record = if let Some(scope) = scope {
             let scope_key = scope_key(scope);
             self.store.find_by_scope(&scope_key)?
@@ -206,9 +206,7 @@ impl AgentAuthConfigService {
             self.store.find_by_scope(LOCAL_SCOPE_KEY)?
         };
         let Some(record) = record else {
-            if agent_requires_launch_auth_selection(agent_kind)
-                && (scope.is_some() || required_revision.is_some())
-            {
+            if scoped_launch {
                 return Err(selection_required_error(
                     scope.cloned(),
                     agent_kind,
@@ -224,9 +222,7 @@ impl AgentAuthConfigService {
             .filter(|selection| selection.agent_kind == agent_kind)
             .collect::<Vec<_>>();
         if let Some(required_revision) = required_revision {
-            if record.revision < required_revision
-                && (agent_requires_launch_auth_selection(agent_kind) || !selections.is_empty())
-            {
+            if record.revision < required_revision {
                 return Err(selection_required_error(
                     scope.cloned(),
                     agent_kind,
@@ -235,9 +231,7 @@ impl AgentAuthConfigService {
             }
         }
         if selections.is_empty() {
-            if agent_requires_launch_auth_selection(agent_kind)
-                && (scope.is_some() || required_revision.is_some())
-            {
+            if scoped_launch {
                 return Err(selection_required_error(
                     scope.cloned(),
                     agent_kind,
@@ -334,23 +328,6 @@ impl AgentAuthConfigService {
     fn claude_gateway_config_dir(&self) -> PathBuf {
         self.runtime_home.join("agent-auth").join("claude-gateway")
     }
-}
-
-fn agent_requires_launch_auth_selection(agent_kind: &str) -> bool {
-    built_in_registry()
-        .iter()
-        .find(|descriptor| descriptor.kind.as_str() == agent_kind)
-        .map(|descriptor| match descriptor.auth.readiness_policy {
-            AuthReadinessPolicy::AnyRequiredSlot | AuthReadinessPolicy::AllRequiredSlots => {
-                descriptor
-                    .auth
-                    .slots
-                    .iter()
-                    .any(|slot| slot.required_for_readiness)
-            }
-            AuthReadinessPolicy::ProviderManaged | AuthReadinessPolicy::None => false,
-        })
-        .unwrap_or(true)
 }
 
 fn normalize_legacy_auth_slot_ids(input: &mut AgentAuthConfigInput) {

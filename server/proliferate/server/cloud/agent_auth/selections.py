@@ -135,12 +135,11 @@ async def select_credential_for_profile(
         profile.owner_scope == "organization"
         and credential.owner_scope == "personal"
         and credential.credential_kind == "synced_path"
-        and credential.owner_user_id != actor_user_id
         and not has_active_share
     ):
         raise AgentAuthError(
-            "Credential is not visible to this sandbox profile.",
-            code="credential_not_visible",
+            "Personal synced credentials require an active organization share.",
+            code="credential_share_required",
             status_code=403,
         )
     verdict = can_select_credential_for_profile(

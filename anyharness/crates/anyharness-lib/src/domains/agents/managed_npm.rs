@@ -324,7 +324,7 @@ mod tests {
         std::fs::write(package_dir.join("package.json"), r#"{"version":"0.11.6"}"#)
             .expect("write installed package metadata");
 
-        let issue = managed_npm_install_issue("@proliferateai/codex-acp@0.11.7", &managed_dir);
+        let issue = managed_npm_install_issue("@proliferateai/codex-acp@0.11.8", &managed_dir);
 
         assert!(issue.is_some());
         let _ = std::fs::remove_dir_all(managed_dir);
