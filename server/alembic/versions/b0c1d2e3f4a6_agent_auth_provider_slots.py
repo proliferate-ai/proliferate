@@ -92,15 +92,8 @@ def _agent_to_provider_case(column_name: str) -> str:
 
 
 def _agent_to_slot_case(column_name: str) -> str:
-    return (
-        f"CASE {column_name} "
-        "WHEN 'claude' THEN 'anthropic' "
-        "WHEN 'codex' THEN 'openai' "
-        "WHEN 'opencode' THEN 'openai' "
-        "WHEN 'gemini' THEN 'gemini' "
-        "WHEN 'cursor' THEN 'cursor' "
-        "ELSE 'openai' END"
-    )
+    # Legacy rows only had agent_kind; v1 default slot ids intentionally match provider ids.
+    return _agent_to_provider_case(column_name)
 
 
 def _provider_to_agent_case(column_name: str) -> str:
