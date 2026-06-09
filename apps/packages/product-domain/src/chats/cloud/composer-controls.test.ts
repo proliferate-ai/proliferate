@@ -25,7 +25,6 @@ function claudeCatalog(): Catalog {
       kind: "claude",
       displayName: "Claude",
       description: null,
-      process: {},
       session: {
         defaultModelId: "us.anthropic.claude-opus-4-6",
         defaultModeId: "default",
@@ -253,7 +252,6 @@ function multiAgentCatalog(): Catalog {
     kind: "codex",
     displayName: "Codex",
     description: null,
-    process: {},
     session: {
       defaultModelId: "gpt-5-codex",
       defaultModeId: "default",

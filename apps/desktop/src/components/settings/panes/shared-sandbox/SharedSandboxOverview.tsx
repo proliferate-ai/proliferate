@@ -24,7 +24,7 @@ import { useAgentAuthLibraryActions } from "@/hooks/settings/workflows/use-agent
 import { SharedPluginsSection } from "@/components/settings/panes/shared-sandbox/SharedPluginsSection";
 import { buildPluginSharedExposurePresentation } from "@/lib/domain/plugins/plugin-package-view-model";
 import {
-  AGENT_AUTH_SLOT_DEFINITIONS,
+  agentAuthSlotDefinitions,
   agentAuthSlotLabel,
   credentialsForAgentAuthSlot,
   selectionByAgentAuthSlot,
@@ -51,6 +51,7 @@ export function SharedSandboxOverview({
   const exposedPlugins = installedPlugins.filter((record) =>
     buildPluginSharedExposurePresentation(record).hasPublicItems
   );
+  const authSlots = agentAuthSlotDefinitions(agentAuthLibrary.capabilities);
   const configuredAuthSlotCount = countConfiguredAuthSlots(
     agentAuthLibrary.selections,
     agentAuthLibrary.organizationCredentials,
@@ -67,6 +68,7 @@ export function SharedSandboxOverview({
 
       <SharedReadinessCard
         configuredAuthSlotCount={configuredAuthSlotCount}
+        authSlotCount={authSlots.length}
         exposedPluginCount={exposedPlugins.length}
         loading={readinessLoading}
         ready={ready}
@@ -148,6 +150,7 @@ function SharedRuntimeScopeCard() {
 
 function SharedReadinessCard({
   configuredAuthSlotCount,
+  authSlotCount,
   exposedPluginCount,
   loading,
   ready,
@@ -155,6 +158,7 @@ function SharedReadinessCard({
   onVerify,
 }: {
   configuredAuthSlotCount: number;
+  authSlotCount: number;
   exposedPluginCount: number;
   loading: boolean;
   ready: boolean;
@@ -175,7 +179,7 @@ function SharedReadinessCard({
         <div className="mt-1 text-sm text-muted-foreground">
           {loading
             ? "Loading shared sandbox auth and plugin exposure"
-            : `${configuredAuthSlotCount} of ${AGENT_AUTH_SLOT_DEFINITIONS.length} auth slots configured · ${exposedPluginCount} plugins exposed · Last verified just now`}
+            : `${configuredAuthSlotCount} of ${authSlotCount} auth slots configured · ${exposedPluginCount} plugins exposed · Last verified just now`}
         </div>
       </div>
       <Button
@@ -212,6 +216,7 @@ function SharedAgentAuthenticationSection({
   ) => void;
 }) {
   const selectionsBySlot = selectionByAgentAuthSlot(selections);
+  const slots = agentAuthSlotDefinitions(capabilities);
   return (
     <section className="space-y-3">
       <div className="space-y-1">
@@ -228,7 +233,7 @@ function SharedAgentAuthenticationSection({
           <span>Type</span>
           <span className="text-right">Action</span>
         </div>
-        {AGENT_AUTH_SLOT_DEFINITIONS.map((slot) => (
+        {slots.map((slot) => (
           <SharedAgentAuthRow
             key={`${slot.agentKind}-${slot.authSlotId}`}
             slot={slot}

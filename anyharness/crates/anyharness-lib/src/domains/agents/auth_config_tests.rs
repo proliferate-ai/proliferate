@@ -435,6 +435,81 @@ fn launch_overlay_fails_closed_for_missing_scoped_selection() {
 }
 
 #[test]
+fn launch_overlay_allows_missing_scoped_selection_for_provider_managed_agent() {
+    let service = AgentAuthConfigService::new(
+        AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
+        Some(cipher()),
+        std::env::temp_dir(),
+    );
+    let scope = AgentAuthExternalScope {
+        provider: "proliferate-cloud".to_string(),
+        id: "profile-1".to_string(),
+        target_id: Some("target-1".to_string()),
+    };
+
+    let missing_record = service
+        .launch_overlay("opencode", Some(&scope), Some(1))
+        .expect("provider-managed agent can launch without applied auth config");
+    assert!(missing_record.protected_env.is_empty());
+
+    service
+        .apply_config(AgentAuthConfigInput {
+            external_auth_scope: Some(scope.clone()),
+            revision: 1,
+            selections: Vec::new(),
+        })
+        .expect("apply empty provider-managed config");
+
+    let empty_record = service
+        .launch_overlay("opencode", Some(&scope), Some(1))
+        .expect("provider-managed agent can launch without selected auth slot");
+    assert!(empty_record.protected_env.is_empty());
+}
+
+#[test]
+fn launch_overlay_fails_stale_provider_managed_agent_when_optional_selection_exists() {
+    let service = AgentAuthConfigService::new(
+        AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
+        Some(cipher()),
+        std::env::temp_dir(),
+    );
+    let scope = AgentAuthExternalScope {
+        provider: "proliferate-cloud".to_string(),
+        id: "profile-1".to_string(),
+        target_id: Some("target-1".to_string()),
+    };
+    service
+        .apply_config(AgentAuthConfigInput {
+            external_auth_scope: Some(scope.clone()),
+            revision: 1,
+            selections: vec![AgentAuthSelectionConfig {
+                agent_kind: "opencode".to_string(),
+                auth_slot_id: "openai".to_string(),
+                materialization_mode: "gateway_env".to_string(),
+                credential_id: "credential-1".to_string(),
+                credential_revision: 1,
+                status: Some("active".to_string()),
+                credential_share_id: None,
+                expires_at: None,
+                protected_env: BTreeMap::from([(
+                    "OPENAI_API_KEY".to_string(),
+                    "runtime-token".to_string(),
+                )]),
+                support_env: BTreeMap::new(),
+                protected_config: BTreeMap::new(),
+                support_config: BTreeMap::new(),
+                synced_file_paths: Vec::new(),
+            }],
+        })
+        .expect("apply optional opencode selection");
+
+    let error = service
+        .launch_overlay("opencode", Some(&scope), Some(2))
+        .expect_err("stale optional selection should not be used");
+    assert!(error.to_string().contains("needs_resync"));
+}
+
+#[test]
 fn launch_overlay_fails_closed_for_invalid_scoped_selection() {
     let service = AgentAuthConfigService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
@@ -532,8 +607,8 @@ fn apply_config_rejects_cursor_api_key_in_support_env() {
                 credential_share_id: None,
                 expires_at: None,
                 protected_env: BTreeMap::from([(
-                    "ANTHROPIC_API_KEY".to_string(),
-                    "secret".to_string(),
+                    "ANTHROPIC_BASE_URL".to_string(),
+                    "https://gateway.example".to_string(),
                 )]),
                 support_env: BTreeMap::from([(
                     "CURSOR_API_KEY".to_string(),

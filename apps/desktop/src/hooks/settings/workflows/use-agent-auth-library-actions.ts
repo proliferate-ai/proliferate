@@ -97,12 +97,12 @@ export function useAgentAuthLibraryActions(
     }
     setFocusedAgentKind(initialAgentKind);
     window.requestAnimationFrame(() => {
-      const primarySlot = agentAuthPrimarySlotForAgent(initialAgentKind);
+      const primarySlot = agentAuthPrimarySlotForAgent(initialAgentKind, agentGatewayCapabilities);
       document
         .getElementById(agentAuthSlotDomId(primarySlot.agentKind, primarySlot.authSlotId))
         ?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
-  }, [initialAgentKind]);
+  }, [agentGatewayCapabilities, initialAgentKind]);
 
   async function handleSyncLocalCredential(provider: AgentAuthProvider) {
     setSyncingLocalProvider(provider);

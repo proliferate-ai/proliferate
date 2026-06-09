@@ -110,6 +110,7 @@ class AgentAuthCredentialResponse(BaseModel):
     organization_id: UUID | None = Field(alias="organizationId")
     created_by_user_id: UUID | None = Field(alias="createdByUserId")
     credential_provider_id: str = Field(alias="credentialProviderId")
+    agent_kind: str | None = Field(default=None, alias="agentKind")
     credential_kind: str = Field(alias="credentialKind")
     display_name: str = Field(alias="displayName")
     redacted_summary: dict[str, object] = Field(alias="redactedSummary")
@@ -131,6 +132,7 @@ class AgentAuthCredentialShareResponse(BaseModel):
     shared_by_user_id: UUID = Field(alias="sharedByUserId")
     status: str
     allowed_credential_provider_id: str = Field(alias="allowedCredentialProviderId")
+    allowed_agent_kind: str | None = Field(default=None, alias="allowedAgentKind")
     revoked_at: str | None = Field(alias="revokedAt")
     revoked_by_user_id: UUID | None = Field(alias="revokedByUserId")
 
@@ -353,6 +355,7 @@ def credential_response(
     *,
     active_credential_share_id: UUID | None = None,
 ) -> AgentAuthCredentialResponse:
+    redacted_summary = _json_object(record.redacted_summary_json)
     return AgentAuthCredentialResponse(
         id=record.id,
         ownerScope=record.owner_scope,
@@ -360,9 +363,13 @@ def credential_response(
         organizationId=record.organization_id,
         createdByUserId=record.created_by_user_id,
         credentialProviderId=record.credential_provider_id,
+        agentKind=_legacy_agent_kind_for_credential(
+            record.credential_provider_id,
+            redacted_summary,
+        ),
         credentialKind=record.credential_kind,
         displayName=record.display_name,
-        redactedSummary=_json_object(record.redacted_summary_json),
+        redactedSummary=redacted_summary,
         status=record.status,
         revision=record.revision,
         activeCredentialShareId=active_credential_share_id,
@@ -382,6 +389,7 @@ def credential_share_response(
         sharedByUserId=record.shared_by_user_id,
         status=record.status,
         allowedCredentialProviderId=record.allowed_credential_provider_id,
+        allowedAgentKind=_legacy_agent_kind_for_provider(record.allowed_credential_provider_id),
         revokedAt=_iso(record.revoked_at),
         revokedByUserId=record.revoked_by_user_id,
     )
@@ -499,6 +507,28 @@ def target_state_response(
 def _json_object(value: str) -> dict[str, object]:
     parsed = json.loads(value or "{}")
     return parsed if isinstance(parsed, dict) else {}
+
+
+def _legacy_agent_kind_for_credential(
+    credential_provider_id: str,
+    redacted_summary: dict[str, object],
+) -> str | None:
+    agent_kind = redacted_summary.get("agentKind")
+    if isinstance(agent_kind, str) and agent_kind:
+        return agent_kind
+    return _legacy_agent_kind_for_provider(credential_provider_id)
+
+
+def _legacy_agent_kind_for_provider(credential_provider_id: str) -> str | None:
+    if credential_provider_id == "anthropic":
+        return "claude"
+    if credential_provider_id == "openai":
+        return "codex"
+    if credential_provider_id == "gemini":
+        return "gemini"
+    if credential_provider_id == "cursor":
+        return "cursor"
+    return None
 
 
 def _iso(value: object) -> str | None:
