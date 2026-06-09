@@ -94,24 +94,33 @@ pub async fn run(args: CatalogProbeArgs) -> Result<()> {
             // config names. Only a successful inference turn counts.
             send_test_prompt: true,
         };
-        let accepted = match local.run_until(probe_agent(trial_options)).await {
-            Ok(trial_snapshot) => match &trial_snapshot.prompt_result {
-                Some(result) if result.ok => true,
-                Some(result) => {
-                    println!("trial {trial_id}: prompt rejected ({})", result.detail);
-                    false
+        let (accepted, name, config_options) =
+            match local.run_until(probe_agent(trial_options)).await {
+                Ok(trial_snapshot) => {
+                    let accepted = match &trial_snapshot.prompt_result {
+                        Some(result) if result.ok => true,
+                        Some(result) => {
+                            println!("trial {trial_id}: prompt rejected ({})", result.detail);
+                            false
+                        }
+                        None => false,
+                    };
+                    let name = trial_model_name(&trial_snapshot.baseline_config_options, trial_id);
+                    let config_options =
+                        accepted.then(|| trial_snapshot.baseline_config_options.clone());
+                    (accepted, name, config_options)
                 }
-                None => false,
-            },
-            Err(error) => {
-                println!("trial {trial_id}: probe failed ({error}) — recording as rejected");
-                false
-            }
-        };
+                Err(error) => {
+                    println!("trial {trial_id}: probe failed ({error}) — recording as rejected");
+                    (false, None, None)
+                }
+            };
         snapshot.trials.push(
             anyharness_lib::live::sessions::probe::ProbeTrialResult {
                 model_id: trial_id.clone(),
                 accepted,
+                name,
+                config_options,
             },
         );
     }
@@ -179,6 +188,26 @@ fn auth_env_for_context(
             env.insert("ANTHROPIC_API_KEY".to_string(), require_env("ANTHROPIC_API_KEY")?);
             Ok(env)
         }
+        // Claude under subscription OAuth: requires a credentials file
+        // produced by `claude setup-token` (or copied from a logged-in
+        // ~/.claude/.credentials.json). We copy it into an isolated config
+        // dir so nothing else from the machine leaks in.
+        (AgentKind::Claude, "anthropic-oauth") => {
+            let credentials_path = std::env::var("PROBE_CLAUDE_OAUTH_CREDENTIALS").map_err(|_| {
+                anyhow!(
+                    "auth context anthropic-oauth requires PROBE_CLAUDE_OAUTH_CREDENTIALS=\
+                     /path/to/.credentials.json (produce one with `claude setup-token`)"
+                )
+            })?;
+            let env = isolation_env(auth_context, &[("CLAUDE_CONFIG_DIR", "claude-config")])?;
+            let config_dir = env.get("CLAUDE_CONFIG_DIR").expect("claude isolation dir");
+            std::fs::copy(
+                &credentials_path,
+                std::path::Path::new(config_dir).join(".credentials.json"),
+            )
+            .with_context(|| format!("failed to copy {credentials_path}"))?;
+            Ok(env)
+        }
         // OpenCode resolves credentials from env vars AND its own config/auth
         // storage (XDG dirs), so every opencode context isolates those dirs —
         // otherwise machine-local opencode.jsonc / auth.json would pollute the
@@ -187,6 +216,24 @@ fn auth_env_for_context(
         (AgentKind::OpenCode, "anthropic-api") => {
             let mut env = opencode_isolation_env(auth_context)?;
             env.insert("ANTHROPIC_API_KEY".to_string(), require_env("ANTHROPIC_API_KEY")?);
+            Ok(env)
+        }
+        (AgentKind::OpenCode, "openai-api") => {
+            let mut env = opencode_isolation_env(auth_context)?;
+            env.insert("OPENAI_API_KEY".to_string(), require_env("OPENAI_API_KEY")?);
+            Ok(env)
+        }
+        // Codex reads credentials from CODEX_HOME/auth.json; we materialize an
+        // isolated CODEX_HOME the same way production launch_env does.
+        (AgentKind::Codex, "openai-api") => {
+            let key = require_env("OPENAI_API_KEY")?;
+            let mut env = isolation_env(auth_context, &[("CODEX_HOME", "codex-home")])?;
+            let codex_home = env.get("CODEX_HOME").expect("codex isolation dir");
+            std::fs::write(
+                std::path::Path::new(codex_home).join("auth.json"),
+                serde_json::json!({ "OPENAI_API_KEY": key }).to_string(),
+            )?;
+            env.insert("OPENAI_API_KEY".to_string(), key);
             Ok(env)
         }
         _ => bail!(
@@ -198,6 +245,23 @@ fn auth_env_for_context(
 
 fn require_env(key: &str) -> Result<String> {
     std::env::var(key).map_err(|_| anyhow!("this auth context requires {key} in the environment"))
+}
+
+/// Extract the display name the harness assigned to a (seeded) model id from
+/// the raw baseline config options: find the model select option and the
+/// entry whose value matches.
+fn trial_model_name(baseline_config_options: &serde_json::Value, model_id: &str) -> Option<String> {
+    let options = baseline_config_options.as_array()?;
+    let model_option = options.iter().find(|option| {
+        option.get("id").and_then(|v| v.as_str()) == Some("model")
+            || option.get("category").and_then(|v| v.as_str()) == Some("model")
+    })?;
+    let values = model_option.get("options")?.as_array()?;
+    values
+        .iter()
+        .find(|value| value.get("value").and_then(|v| v.as_str()) == Some(model_id))
+        .and_then(|value| value.get("name").and_then(|v| v.as_str()))
+        .map(str::to_string)
 }
 
 fn opencode_isolation_env(auth_context: &str) -> Result<BTreeMap<String, String>> {

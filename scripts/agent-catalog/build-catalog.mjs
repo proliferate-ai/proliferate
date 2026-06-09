@@ -79,16 +79,42 @@ for (const [kind, runs] of byAgent) {
   }
   const attestation = runs[0].data.attestation ?? null;
 
-  // observation table: modelId -> { name, description, observedIn[], matrixByContext }
+  // observation table: modelId -> { name, description, observedIn[], matrices,
+  //   onMenu } — menu observations set defaultVisible; accepted trials add
+  //   available-but-hidden rows (observed via a real inference turn).
   const observed = new Map();
+  const note = (modelId, fields) => {
+    if (!observed.has(modelId)) {
+      observed.set(modelId, { name: modelId, description: undefined, observedIn: [], matrices: {}, onMenu: false });
+    }
+    const entry = observed.get(modelId);
+    if (fields.name) entry.name = fields.name;
+    if (fields.description) entry.description = fields.description;
+    if (fields.onMenu) entry.onMenu = true;
+    entry.observedIn.push(fields.observedIn);
+    if (fields.matrix) entry.matrices[fields.matrixKey] = fields.matrix;
+    return entry;
+  };
   for (const run of runs) {
+    const ctx = run.data.authContext;
     for (const model of run.data.models) {
-      if (!observed.has(model.modelId)) {
-        observed.set(model.modelId, { name: model.name, description: model.description, observedIn: [], matrices: {} });
-      }
-      const entry = observed.get(model.modelId);
-      entry.observedIn.push(`${kind}.${run.data.authContext}`);
-      if (model.configOptions) entry.matrices[run.data.authContext] = matrixFrom(model.configOptions);
+      note(model.modelId, {
+        name: model.name,
+        description: model.description,
+        onMenu: true,
+        observedIn: `${kind}.${ctx}`,
+        matrix: model.configOptions ? matrixFrom(model.configOptions) : undefined,
+        matrixKey: ctx,
+      });
+    }
+    for (const trial of run.data.trials ?? []) {
+      if (!trial.accepted) continue;
+      note(trial.modelId, {
+        name: trial.name,
+        observedIn: `${kind}.${ctx}`,
+        matrix: trial.configOptions ? matrixFrom(trial.configOptions) : undefined,
+        matrixKey: `${ctx}#trial`,
+      });
     }
   }
 
@@ -111,11 +137,15 @@ for (const [kind, runs] of byAgent) {
       displayName: entry.name,
       ...(entry.description ? { description: entry.description } : {}),
       availability: { anyOf: contexts },
+      // On a harness menu somewhere -> advertised; trial-only -> available
+      // but hidden unless curation opts it in.
+      defaultVisible: entry.onMenu,
       controls: matrix,
       status: "active",
       provenance: {
-        observedIn: entry.observedIn,
+        observedIn: [...new Set(entry.observedIn)],
         observedInAllContexts: contexts.length === probedContexts.length,
+        viaTrialOnly: !entry.onMenu,
       },
     };
   });

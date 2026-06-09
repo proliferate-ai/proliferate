@@ -69,6 +69,13 @@ pub struct ProbeNativeCli {
 pub struct ProbeTrialResult {
     pub model_id: String,
     pub accepted: bool,
+    /// Display name the harness used for the seeded model, when observable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Raw config options observed on the trial session (the seeded model was
+    /// current) — the per-model matrix for this off-menu model.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config_options: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize)]
