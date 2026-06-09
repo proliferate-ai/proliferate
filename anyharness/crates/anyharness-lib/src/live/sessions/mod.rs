@@ -5,6 +5,7 @@ mod event_sink;
 pub mod handle;
 mod interactions;
 mod manager;
+pub mod probe;
 mod replay;
 
 pub use actor::spawn::ActorReadyResult;

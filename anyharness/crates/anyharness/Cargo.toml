@@ -10,6 +10,7 @@ name = "anyharness"
 path = "src/main.rs"
 
 [dependencies]
+serde_json.workspace = true
 anyharness-lib.workspace = true
 axum.workspace = true
 clap.workspace = true

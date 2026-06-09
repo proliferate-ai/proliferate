@@ -1,0 +1,1128 @@
+{
+  "schemaVersion": 2,
+  "catalogVersion": "2026-06-09.1",
+  "generatedAt": "2026-06-09T23:01:16.999Z",
+  "agents": [
+    {
+      "kind": "claude",
+      "displayName": "Claude",
+      "harness": {
+        "agentProcess": {
+          "version": "0.29.0"
+        }
+      },
+      "authContexts": [
+        {
+          "id": "anthropic-api",
+          "authSlotId": "anthropic"
+        }
+      ],
+      "session": {
+        "controls": [
+          {
+            "key": "model",
+            "mapping": {
+              "createField": "modelId",
+              "switchVia": "setSessionModel",
+              "liveConfigId": "model"
+            }
+          },
+          {
+            "key": "mode",
+            "values": [
+              "auto",
+              "default",
+              "acceptEdits",
+              "plan",
+              "dontAsk",
+              "bypassPermissions"
+            ]
+          },
+          {
+            "key": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "models": [
+          {
+            "id": "sonnet",
+            "displayName": "Sonnet",
+            "description": "Sonnet 4.6 · Efficient for routine tasks · $3/$15 per Mtok",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "high"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.anthropic-api"
+              ],
+              "observedInAllContexts": true
+            }
+          },
+          {
+            "id": "sonnet[1m]",
+            "displayName": "Sonnet (1M context)",
+            "description": "Sonnet 4.6 for long sessions · $3/$15 per Mtok",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "high"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.anthropic-api"
+              ],
+              "observedInAllContexts": true
+            }
+          },
+          {
+            "id": "haiku",
+            "displayName": "Haiku",
+            "description": "Haiku 4.5 · Fastest for quick answers · $1/$5 per Mtok",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.anthropic-api"
+              ],
+              "observedInAllContexts": true
+            }
+          }
+        ],
+        "observedDefaults": {
+          "anthropic-api": "sonnet"
+        }
+      },
+      "provenance": {
+        "probedAt": "2026-06-09T23:01:01.051749+00:00",
+        "attestation": {
+          "name": "@agentclientprotocol/claude-agent-acp",
+          "version": "0.29.0",
+          "title": "Claude Agent"
+        },
+        "runs": [
+          {
+            "id": "claude.anthropic-api",
+            "snapshotPath": "generated/claude.anthropic-api.probe.json"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "opencode",
+      "displayName": "OpenCode",
+      "harness": {
+        "agentProcess": {
+          "version": "1.16.2"
+        }
+      },
+      "authContexts": [
+        {
+          "id": "anthropic-api",
+          "authSlotId": "anthropic"
+        },
+        {
+          "id": "baseline"
+        }
+      ],
+      "session": {
+        "controls": [
+          {
+            "key": "model",
+            "mapping": {
+              "createField": "modelId",
+              "switchVia": "configOption",
+              "liveConfigId": "model"
+            }
+          },
+          {
+            "key": "effort",
+            "values": [
+              "high",
+              "max",
+              "low",
+              "medium",
+              "xhigh"
+            ]
+          },
+          {
+            "key": "mode",
+            "values": [
+              "build",
+              "plan"
+            ]
+          }
+        ],
+        "models": [
+          {
+            "id": "anthropic/claude-fable-5",
+            "displayName": "Anthropic/Claude Fable 5",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-3-5-haiku-latest",
+            "displayName": "Anthropic/Claude Haiku 3.5 (latest)",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-haiku-4-5-20251001",
+            "displayName": "Anthropic/Claude Haiku 4.5",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-haiku-4-5",
+            "displayName": "Anthropic/Claude Haiku 4.5 (latest)",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-opus-4-20250514",
+            "displayName": "Anthropic/Claude Opus 4",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-opus-4-0",
+            "displayName": "Anthropic/Claude Opus 4 (latest)",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-opus-4-1-20250805",
+            "displayName": "Anthropic/Claude Opus 4.1",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-opus-4-1",
+            "displayName": "Anthropic/Claude Opus 4.1 (latest)",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-opus-4-5-20251101",
+            "displayName": "Anthropic/Claude Opus 4.5",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-opus-4-5",
+            "displayName": "Anthropic/Claude Opus 4.5 (latest)",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-opus-4-6",
+            "displayName": "Anthropic/Claude Opus 4.6",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-opus-4-6-fast",
+            "displayName": "Anthropic/Claude Opus 4.6 Fast",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-opus-4-7",
+            "displayName": "Anthropic/Claude Opus 4.7",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-opus-4-7-fast",
+            "displayName": "Anthropic/Claude Opus 4.7 Fast",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-opus-4-8",
+            "displayName": "Anthropic/Claude Opus 4.8",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-opus-4-8-fast",
+            "displayName": "Anthropic/Claude Opus 4.8 Fast",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-sonnet-4-20250514",
+            "displayName": "Anthropic/Claude Sonnet 4",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-sonnet-4-0",
+            "displayName": "Anthropic/Claude Sonnet 4 (latest)",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-sonnet-4-5-20250929",
+            "displayName": "Anthropic/Claude Sonnet 4.5",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-sonnet-4-5",
+            "displayName": "Anthropic/Claude Sonnet 4.5 (latest)",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "anthropic/claude-sonnet-4-6",
+            "displayName": "Anthropic/Claude Sonnet 4.6",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "opencode/big-pickle",
+            "displayName": "OpenCode Zen/Big Pickle",
+            "availability": {
+              "anyOf": [
+                "anthropic-api",
+                "baseline"
+              ]
+            },
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api",
+                "opencode.baseline"
+              ],
+              "observedInAllContexts": true
+            }
+          },
+          {
+            "id": "opencode/deepseek-v4-flash-free",
+            "displayName": "OpenCode Zen/DeepSeek V4 Flash Free",
+            "availability": {
+              "anyOf": [
+                "anthropic-api",
+                "baseline"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api",
+                "opencode.baseline"
+              ],
+              "observedInAllContexts": true
+            }
+          },
+          {
+            "id": "opencode/mimo-v2.5-free",
+            "displayName": "OpenCode Zen/MiMo V2.5 Free",
+            "availability": {
+              "anyOf": [
+                "anthropic-api",
+                "baseline"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api",
+                "opencode.baseline"
+              ],
+              "observedInAllContexts": true
+            }
+          },
+          {
+            "id": "opencode/nemotron-3-ultra-free",
+            "displayName": "OpenCode Zen/Nemotron 3 Ultra Free",
+            "availability": {
+              "anyOf": [
+                "anthropic-api",
+                "baseline"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api",
+                "opencode.baseline"
+              ],
+              "observedInAllContexts": true
+            }
+          },
+          {
+            "id": "opencode/north-mini-code-free",
+            "displayName": "OpenCode Zen/North Mini Code Free",
+            "availability": {
+              "anyOf": [
+                "anthropic-api"
+              ]
+            },
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api"
+              ],
+              "observedInAllContexts": false
+            }
+          },
+          {
+            "id": "opencode/minimax-m3-free",
+            "displayName": "OpenCode Zen/MiniMax M3 Free",
+            "availability": {
+              "anyOf": [
+                "baseline"
+              ]
+            },
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.baseline"
+              ],
+              "observedInAllContexts": false
+            }
+          }
+        ],
+        "observedDefaults": {
+          "anthropic-api": "opencode/big-pickle",
+          "baseline": "opencode/big-pickle"
+        }
+      },
+      "provenance": {
+        "probedAt": "2026-06-09T22:45:49.055258+00:00",
+        "attestation": {
+          "name": "OpenCode",
+          "version": "1.16.2",
+          "title": null
+        },
+        "runs": [
+          {
+            "id": "opencode.anthropic-api",
+            "snapshotPath": "generated/opencode.anthropic-api.probe.json"
+          },
+          {
+            "id": "opencode.baseline",
+            "snapshotPath": "generated/opencode.baseline.probe.json"
+          }
+        ]
+      }
+    }
+  ]
+}

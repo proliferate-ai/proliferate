@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 
+use crate::commands::catalog_probe::CatalogProbeArgs;
 use crate::commands::install_agents::InstallAgentsArgs;
 use crate::commands::serve::ServeArgs;
 
@@ -19,4 +20,6 @@ pub enum Commands {
     InstallAgents(InstallAgentsArgs),
     /// Print the OpenAPI JSON schema for the runtime API
     PrintOpenapi,
+    /// Probe an installed agent harness over ACP and snapshot its model/mode catalog
+    CatalogProbe(CatalogProbeArgs),
 }

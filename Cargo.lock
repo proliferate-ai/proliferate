@@ -339,6 +339,7 @@ dependencies = [
  "sentry",
  "sentry-anyhow",
  "sentry-tracing",
+ "serde_json",
  "tokio",
  "tower",
  "tower-http",
@@ -4196,7 +4197,7 @@ dependencies = [
 
 [[package]]
 name = "proliferate"
-version = "0.1.50"
+version = "0.1.51"
 dependencies = [
  "anyharness-credential-discovery",
  "base64 0.22.1",
