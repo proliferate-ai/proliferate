@@ -183,6 +183,7 @@ fn worktree_recovery_accepts_suffixed_path_with_expected_branch() {
             original_branch: Some("main".to_string()),
             current_branch: Some("feature".to_string()),
             display_name: None,
+            creator_context: None,
             updated_at: "2026-01-01T00:00:00Z".to_string(),
         })
     );
@@ -195,6 +196,7 @@ fn worktree_recovery_accepts_suffixed_path_with_expected_branch() {
             original_branch: Some("main".to_string()),
             current_branch: Some("other".to_string()),
             display_name: None,
+            creator_context: None,
             updated_at: "2026-01-01T00:00:00Z".to_string(),
         })
     );
@@ -207,6 +209,70 @@ fn worktree_recovery_accepts_suffixed_path_with_expected_branch() {
             original_branch: Some("main".to_string()),
             current_branch: Some("feature".to_string()),
             display_name: None,
+            creator_context: None,
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+        })
+    );
+}
+
+#[test]
+fn worktree_recovery_requires_matching_creator_context_when_present() {
+    let request = MaterializeWorkspaceRequest::Worktree {
+        repo_root_id: "repo-root-1".to_string(),
+        target_path: "/workspace/feature".to_string(),
+        new_branch_name: "feature".to_string(),
+        base_branch: Some("main".to_string()),
+        checkout_mode: None,
+        setup_script: None,
+        name_conflict_policy: Some("suffix_path".to_string()),
+        origin: None,
+        creator_context: Some(json!({
+            "kind": "automation",
+            "automationRunId": "run-1"
+        })),
+    };
+    assert!(
+        request.recovered_worktree_workspace_is_expected(&AnyHarnessWorkspace {
+            id: "workspace-2".to_string(),
+            kind: "worktree".to_string(),
+            repo_root_id: "repo-root-1".to_string(),
+            path: "/workspace/feature-2".to_string(),
+            original_branch: Some("main".to_string()),
+            current_branch: Some("feature".to_string()),
+            display_name: None,
+            creator_context: Some(json!({
+                "kind": "automation",
+                "automationRunId": "run-1"
+            })),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+        })
+    );
+    assert!(
+        !request.recovered_worktree_workspace_is_expected(&AnyHarnessWorkspace {
+            id: "workspace-3".to_string(),
+            kind: "worktree".to_string(),
+            repo_root_id: "repo-root-1".to_string(),
+            path: "/workspace/feature-3".to_string(),
+            original_branch: Some("main".to_string()),
+            current_branch: Some("feature".to_string()),
+            display_name: None,
+            creator_context: Some(json!({
+                "kind": "automation",
+                "automationRunId": "run-2"
+            })),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+        })
+    );
+    assert!(
+        !request.recovered_worktree_workspace_is_expected(&AnyHarnessWorkspace {
+            id: "workspace-4".to_string(),
+            kind: "worktree".to_string(),
+            repo_root_id: "repo-root-1".to_string(),
+            path: "/workspace/feature-4".to_string(),
+            original_branch: Some("main".to_string()),
+            current_branch: Some("feature".to_string()),
+            display_name: None,
+            creator_context: None,
             updated_at: "2026-01-01T00:00:00Z".to_string(),
         })
     );
@@ -234,6 +300,7 @@ fn strict_worktree_recovery_rejects_suffixed_path() {
             original_branch: Some("main".to_string()),
             current_branch: Some("feature".to_string()),
             display_name: None,
+            creator_context: None,
             updated_at: "2026-01-01T00:00:00Z".to_string(),
         })
     );
@@ -246,6 +313,7 @@ fn strict_worktree_recovery_rejects_suffixed_path() {
             original_branch: Some("main".to_string()),
             current_branch: Some("feature".to_string()),
             display_name: None,
+            creator_context: None,
             updated_at: "2026-01-01T00:00:00Z".to_string(),
         })
     );
@@ -302,6 +370,7 @@ fn detached_worktree_recovery_accepts_head_with_expected_original_branch() {
             original_branch: Some("feature/base".to_string()),
             current_branch: Some("HEAD".to_string()),
             display_name: None,
+            creator_context: None,
             updated_at: "2026-01-01T00:00:00Z".to_string(),
         })
     );

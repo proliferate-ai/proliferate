@@ -140,11 +140,13 @@ async def launch_workspace_on_target(
             status_code=409,
         )
 
+    generated_branch_conflicts: set[str] = set()
     for attempt in range(_target_launch_create_attempts(body.generated_name is True)):
         resolved = await _resolve_new_direct_target_workspace_create(
             db,
             user=user,
             body=body,
+            generated_branch_conflicts=generated_branch_conflicts,
         )
         repo_root_path, worktree_path = _direct_target_workspace_paths(
             git_owner=resolved.git_owner,
@@ -187,6 +189,7 @@ async def launch_workspace_on_target(
         except CloudWorkspaceUniqueConflictError as error:
             await db.rollback()
             if _should_retry_target_launch_create(body.generated_name is True, attempt):
+                generated_branch_conflicts.add(resolved.git_branch)
                 log_cloud_event(
                     "generated target launch workspace branch collided; retrying",
                     user_id=user.id,
@@ -372,6 +375,7 @@ async def _resolve_new_direct_target_workspace_create(
     *,
     user: ActorIdentity,
     body: LaunchWorkspaceOnTargetRequest,
+    generated_branch_conflicts: set[str] | None = None,
 ) -> ResolvedDirectTargetWorkspaceCreate:
     if body.git_provider != SUPPORTED_GIT_PROVIDER:
         raise CloudApiError(
@@ -449,7 +453,9 @@ async def _resolve_new_direct_target_workspace_create(
     if body.generated_name is True:
         cleaned_branch_name = resolve_generated_branch_name(
             cleaned_branch_name,
-            set(repo_branches.branches) | active_cloud_branches,
+            set(repo_branches.branches)
+            | active_cloud_branches
+            | (generated_branch_conflicts or set()),
         )
     elif cleaned_branch_name in repo_branches.branches:
         raise CloudApiError(

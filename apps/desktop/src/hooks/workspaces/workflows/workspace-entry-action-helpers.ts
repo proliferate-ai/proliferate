@@ -72,6 +72,9 @@ export function buildMaterializedWorktreePendingEntry(input: {
         baseBranch,
         targetPath: input.workspace.path,
       },
+      retryInput: input.entry.request.kind === "worktree"
+        ? input.entry.request.retryInput
+        : undefined,
     },
     setupScript: input.setupScript,
   };

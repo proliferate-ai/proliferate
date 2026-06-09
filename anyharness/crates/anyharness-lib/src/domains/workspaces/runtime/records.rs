@@ -47,12 +47,11 @@ pub(super) fn build_workspace_record(
 pub(super) fn reconcile_current_branch(
     mut record: WorkspaceRecord,
 ) -> anyhow::Result<WorkspaceRecord> {
-    let next_branch = resolver::resolve_git_context(&record.path)
-        .ok()
-        .and_then(|ctx| ctx.current_branch)
-        .or(record.current_branch.clone());
-
-    record.current_branch = next_branch;
+    if let Ok(ctx) = resolver::resolve_git_context(&record.path) {
+        record.current_branch = ctx.current_branch;
+    } else if record.current_branch.as_deref() == Some("HEAD") {
+        record.current_branch = None;
+    }
     Ok(record)
 }
 pub(super) fn path_basename(path: &str) -> String {

@@ -29,6 +29,8 @@ pub struct AnyHarnessWorkspace {
     pub original_branch: Option<String>,
     pub current_branch: Option<String>,
     pub display_name: Option<String>,
+    #[serde(default)]
+    pub creator_context: Option<Value>,
     pub updated_at: String,
 }
 

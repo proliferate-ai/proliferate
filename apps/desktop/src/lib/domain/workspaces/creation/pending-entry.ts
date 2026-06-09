@@ -34,10 +34,25 @@ export interface PendingCloudWorkspaceRequestInput {
 
 export type PendingWorkspaceRequest =
   | { kind: "local"; sourceRoot: string }
-  | { kind: "worktree"; input: CreateWorktreeWorkspaceInput }
+  | {
+    kind: "worktree";
+    input: CreateWorktreeWorkspaceInput;
+    retryInput?: CreateWorktreeWorkspaceInput;
+  }
   | { kind: "cloud"; input: PendingCloudWorkspaceRequestInput }
   | { kind: "cowork"; input: PendingCoworkRequestInput }
   | { kind: "select-existing"; workspaceId: string };
+
+export type PendingWorktreeWorkspaceRequest = Extract<
+  PendingWorkspaceRequest,
+  { kind: "worktree" }
+>;
+
+export function resolvePendingWorktreeRetryInput(
+  request: PendingWorktreeWorkspaceRequest,
+): CreateWorktreeWorkspaceInput {
+  return request.retryInput ?? request.input;
+}
 
 export type PendingWorkspaceOriginTarget =
   | { kind: "home" }

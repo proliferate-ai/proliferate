@@ -209,6 +209,17 @@ describe("useWorkspaceEntryActions", () => {
         },
       },
     });
+    expect(pendingEntry?.request.kind).toBe("worktree");
+    if (pendingEntry?.request.kind === "worktree") {
+      expect(pendingEntry.request.retryInput).toMatchObject({
+        repoRootId: "repo-root-1",
+        sourceWorkspaceId: "workspace-source",
+        baseBranch: "main",
+        generatedName: true,
+      });
+      expect(pendingEntry.request.retryInput).not.toHaveProperty("branchName");
+      expect(pendingEntry.request.retryInput).not.toHaveProperty("targetPath");
+    }
     expect(useSessionSelectionStore.getState().activeSessionId).toEqual(
       expect.stringContaining("client-session:codex:"),
     );

@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::Path;
 
+use crate::domains::workspaces::store::WorkspaceStore;
 use crate::domains::workspaces::worktree_checkout::WorktreeCheckoutMode;
 use crate::domains::workspaces::worktree_names::WorktreeNameConflictPolicy;
 use crate::origin::OriginContext;
@@ -213,4 +214,16 @@ fn create_worktree_detached_ref_ignores_generated_branch_conflict() {
         .workspace_env(&result.workspace)
         .expect("build workspace env");
     assert!(!env.contains_key("PROLIFERATE_BRANCH"));
+
+    let outcome = runtime
+        .refresh_workspace_branches_for_test()
+        .expect("refresh branches");
+    assert_eq!(outcome.schedule.scheduled_count, 2);
+    assert_eq!(outcome.updated_count, 0);
+
+    let refreshed = WorkspaceStore::new(db.clone())
+        .find_by_id(&result.workspace.id)
+        .expect("load refreshed workspace")
+        .expect("workspace exists");
+    assert_eq!(refreshed.current_branch, None);
 }

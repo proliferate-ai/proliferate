@@ -220,6 +220,7 @@ impl MaterializeWorkspaceRequest {
             base_branch,
             checkout_mode,
             name_conflict_policy,
+            creator_context,
             ..
         } = self
         else {
@@ -234,6 +235,11 @@ impl MaterializeWorkspaceRequest {
             name_conflict_policy_allows_suffix(name_conflict_policy.as_deref()),
         ) {
             return false;
+        }
+        if let Some(expected_creator_context) = creator_context {
+            if workspace.creator_context.as_ref() != Some(expected_creator_context) {
+                return false;
+            }
         }
         if checkout_mode.as_deref() == Some("detached_ref") {
             let is_detached = matches!(workspace.current_branch.as_deref(), None | Some("HEAD"));

@@ -255,7 +255,7 @@ fn probe_current_branch_quiet(path: &str) -> Result<Option<String>, ()> {
         return Err(());
     }
     let branch = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    Ok(if branch.is_empty() {
+    Ok(if branch.is_empty() || branch == "HEAD" {
         None
     } else {
         Some(branch)

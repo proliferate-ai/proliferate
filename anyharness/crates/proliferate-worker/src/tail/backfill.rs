@@ -176,17 +176,35 @@ fn workspace_payload(
             provider: repo_root.and_then(|repo| repo.remote_provider.clone()),
             owner: repo_root.and_then(|repo| repo.remote_owner.clone()),
             name: repo_root.and_then(|repo| repo.remote_repo_name.clone()),
-            branch: workspace
-                .current_branch
-                .clone()
-                .or_else(|| workspace.original_branch.clone())
-                .or_else(|| repo_root.and_then(|repo| repo.default_branch.clone())),
-            base_branch: workspace
-                .original_branch
-                .clone()
-                .or_else(|| repo_root.and_then(|repo| repo.default_branch.clone())),
+            branch: workspace_live_branch(workspace, repo_root),
+            base_branch: normalize_branch(workspace.original_branch.as_deref()).or_else(|| {
+                repo_root.and_then(|repo| normalize_branch(repo.default_branch.as_deref()))
+            }),
         }),
         updated_at: Some(workspace.updated_at.clone()),
+    }
+}
+
+fn workspace_live_branch(
+    workspace: &AnyHarnessWorkspace,
+    repo_root: Option<&AnyHarnessRepoRoot>,
+) -> Option<String> {
+    let current_branch = normalize_branch(workspace.current_branch.as_deref());
+    if workspace.kind == "worktree" {
+        return current_branch;
+    }
+
+    current_branch
+        .or_else(|| normalize_branch(workspace.original_branch.as_deref()))
+        .or_else(|| repo_root.and_then(|repo| normalize_branch(repo.default_branch.as_deref())))
+}
+
+fn normalize_branch(branch: Option<&str>) -> Option<String> {
+    let branch = branch?.trim();
+    if branch.is_empty() || branch == "HEAD" {
+        None
+    } else {
+        Some(branch.to_string())
     }
 }
 
@@ -241,5 +259,78 @@ fn object_or_wrapped(value: Value) -> Option<Value> {
         Value::Null => None,
         Value::Object(_) => Some(value),
         other => Some(serde_json::json!({ "value": other })),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn worktree_backfill_keeps_detached_base_out_of_live_branch() {
+        let repo_root = repo_root();
+        let payload = workspace_payload(
+            &workspace("worktree", None, Some("feature/base")),
+            &HashMap::from([(repo_root.id.clone(), repo_root)]),
+        );
+
+        let repo = payload.repo.expect("repo payload");
+        assert_eq!(repo.branch, None);
+        assert_eq!(repo.base_branch.as_deref(), Some("feature/base"));
+    }
+
+    #[test]
+    fn worktree_backfill_ignores_head_live_branch() {
+        let repo_root = repo_root();
+        let payload = workspace_payload(
+            &workspace("worktree", Some("HEAD"), Some("feature/base")),
+            &HashMap::from([(repo_root.id.clone(), repo_root)]),
+        );
+
+        let repo = payload.repo.expect("repo payload");
+        assert_eq!(repo.branch, None);
+        assert_eq!(repo.base_branch.as_deref(), Some("feature/base"));
+    }
+
+    #[test]
+    fn worktree_backfill_uses_current_branch_when_attached() {
+        let repo_root = repo_root();
+        let payload = workspace_payload(
+            &workspace("worktree", Some("codex/otter"), Some("codex/otter")),
+            &HashMap::from([(repo_root.id.clone(), repo_root)]),
+        );
+
+        let repo = payload.repo.expect("repo payload");
+        assert_eq!(repo.branch.as_deref(), Some("codex/otter"));
+        assert_eq!(repo.base_branch.as_deref(), Some("codex/otter"));
+    }
+
+    fn repo_root() -> AnyHarnessRepoRoot {
+        AnyHarnessRepoRoot {
+            id: "repo-root-1".to_string(),
+            display_name: Some("proliferate".to_string()),
+            default_branch: Some("main".to_string()),
+            remote_provider: Some("github".to_string()),
+            remote_owner: Some("proliferate-ai".to_string()),
+            remote_repo_name: Some("proliferate".to_string()),
+        }
+    }
+
+    fn workspace(
+        kind: &str,
+        current_branch: Option<&str>,
+        original_branch: Option<&str>,
+    ) -> AnyHarnessWorkspace {
+        AnyHarnessWorkspace {
+            id: "workspace-1".to_string(),
+            kind: kind.to_string(),
+            repo_root_id: "repo-root-1".to_string(),
+            path: "/workspace".to_string(),
+            original_branch: original_branch.map(str::to_string),
+            current_branch: current_branch.map(str::to_string),
+            display_name: None,
+            creator_context: None,
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+        }
     }
 }

@@ -279,7 +279,7 @@ export function useWorkspaceEntryActions() {
         displayName: resolved.params.workspaceName,
         repoLabel: resolved.repoName,
         baseBranchName: resolved.params.baseRef,
-        request: { kind: "worktree", input: resolvedInput },
+        request: { kind: "worktree", input: resolvedInput, retryInput: normalizedInput },
       });
       projectedSessionId = beginPendingWorkspace(entry, {
         initialSession: options?.initialSession,

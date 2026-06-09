@@ -10,12 +10,19 @@ const repoRoot = {
   defaultBranch: "main",
 } as RepoRoot;
 
-const sourceWorkspace = {
+const sourceWorkspace: Workspace = {
   id: "workspace-1",
+  kind: "local",
+  repoRootId: "repo-root-1",
+  path: "/repos/proliferate",
+  surface: "standard",
   currentBranch: "main",
   originalBranch: "main",
-  gitRepoName: "proliferate",
-} as Workspace;
+  lifecycleState: "active",
+  cleanupState: "none",
+  createdAt: "2026-01-01T00:00:00Z",
+  updatedAt: "2026-01-01T00:00:00Z",
+};
 
 describe("worktree creation params", () => {
   it("suffixes generated local worktree path and branch conflicts", () => {
