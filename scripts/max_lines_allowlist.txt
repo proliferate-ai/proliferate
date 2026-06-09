@@ -29,12 +29,12 @@ apps/desktop/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 662 exis
 apps/desktop/src/lib/workflows/mcp/connector-persistence.test.ts 704 existing desktop oversized test file
 server/proliferate/server/cloud/commands/domain/payload.py 530 existing cloud command payload validator with workspace materialization policies
 server/proliferate/server/cloud/agent_auth/models.py 535 existing cloud agent auth API schema module pending request/response split
-server/proliferate/server/cloud/agent_auth/runtime_keys.py 671 existing cloud agent auth runtime key service pending gateway/router split
+server/proliferate/server/cloud/agent_auth/runtime_keys.py 674 existing cloud agent auth runtime key service pending gateway/router split
 server/tests/integration/schema_migration_assertions.py 878 existing server oversized test helper
 server/tests/integration/test_auth_flow.py 2057 existing server oversized integration test
 server/tests/integration/test_billing_accounting.py 872 existing server oversized integration test
 server/tests/integration/test_billing_api.py 2054 existing server oversized integration test
-server/tests/integration/test_cloud_agent_auth_api.py 1862 existing server oversized integration test
+server/tests/integration/test_cloud_agent_auth_api.py 1899 existing server oversized integration test
 server/tests/integration/test_cloud_api.py 2346 existing server oversized integration test
 server/tests/integration/test_cloud_commands_api.py 4889 existing server oversized integration test
 server/tests/integration/test_sandbox_profile_foundation.py 1222 existing server oversized integration test

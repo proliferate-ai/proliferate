@@ -128,11 +128,12 @@ async def delete_agent_auth_credential(
         headers=auth.headers,
     )
     credentials_response.raise_for_status()
+    credential_provider_id = credential_provider_id_for_sync_provider(provider)
     credential_id = next(
         (
             credential.get("id")
             for credential in credentials_response.json()
-            if credential.get("credentialProviderId") == credential_provider_id_for_sync_provider(provider)
+            if credential.get("credentialProviderId") == credential_provider_id
             and credential.get("credentialKind") == "synced_path"
             and credential.get("status") != "revoked"
         ),
@@ -172,11 +173,12 @@ def _status_for_synced_credential(
     credentials: list[dict[str, Any]],
     provider: str,
 ) -> dict[str, Any]:
+    credential_provider_id = credential_provider_id_for_sync_provider(provider)
     credential = next(
         (
             item
             for item in credentials
-            if item.get("credentialProviderId") == credential_provider_id_for_sync_provider(provider)
+            if item.get("credentialProviderId") == credential_provider_id
             and item.get("credentialKind") == "synced_path"
             and item.get("status") == "ready"
         ),

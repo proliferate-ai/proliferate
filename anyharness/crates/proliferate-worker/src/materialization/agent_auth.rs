@@ -177,6 +177,11 @@ pub fn build_anyharness_agent_auth_request(
     let mut applied_cleanup_paths = Vec::new();
     for selection in &plan.selections {
         let auth_slot_id = resolved_auth_slot_id(&selection.agent_kind, &selection.auth_slot_id)?;
+        let launchable = selection
+            .status
+            .as_deref()
+            .map(|status| matches!(status, "active" | "ready"))
+            .unwrap_or(true);
         let mut protected_env = BTreeMap::new();
         let mut support_env = BTreeMap::new();
         let mut protected_config = BTreeMap::new();
@@ -218,14 +223,20 @@ pub fn build_anyharness_agent_auth_request(
                 &auth_slot_id,
                 &synced.cleanup,
             )?);
-            let written = write_synced_auth_files(
-                allowed_root,
-                &selection.agent_kind,
-                &auth_slot_id,
-                &synced.files,
-                &mut synced_file_paths,
-            )?;
-            synced_file_count += written;
+            if launchable {
+                let written = write_synced_auth_files(
+                    allowed_root,
+                    &selection.agent_kind,
+                    &auth_slot_id,
+                    &synced.files,
+                    &mut synced_file_paths,
+                )?;
+                synced_file_count += written;
+            }
+        }
+
+        if !launchable {
+            continue;
         }
 
         selections.push(json!({
@@ -245,6 +256,7 @@ pub fn build_anyharness_agent_auth_request(
         }));
     }
 
+    let selection_count = selections.len();
     Ok((
         json!({
             "externalAuthScope": {
@@ -260,7 +272,7 @@ pub fn build_anyharness_agent_auth_request(
             reason: None,
             revision: plan.revision,
             current_revision: plan.current_revision,
-            selection_count: plan.selections.len(),
+            selection_count,
             synced_file_count,
             applied_cleanup_paths,
         },
