@@ -36,7 +36,10 @@ async def list_selections_for_profile(
             await db.execute(
                 select(SandboxAgentAuthSelection)
                 .where(SandboxAgentAuthSelection.sandbox_profile_id == sandbox_profile_id)
-                .order_by(SandboxAgentAuthSelection.agent_kind.asc())
+                .order_by(
+                    SandboxAgentAuthSelection.agent_kind.asc(),
+                    SandboxAgentAuthSelection.auth_slot_id.asc(),
+                )
             )
         )
         .scalars()
@@ -74,7 +77,7 @@ async def list_selected_personal_synced_credentials_for_user(
                     SandboxAgentAuthSelection.materialization_mode == "synced_files",
                     SandboxAgentAuthSelection.selected_revision == AgentAuthCredential.revision,
                 )
-                .order_by(AgentAuthCredential.agent_kind.asc())
+                .order_by(AgentAuthCredential.credential_provider_id.asc())
             )
         )
         .scalars()
@@ -89,6 +92,7 @@ async def upsert_selection(
     sandbox_profile_id: UUID,
     owner_scope: str,
     agent_kind: str,
+    auth_slot_id: str,
     credential_id: UUID,
     credential_share_id: UUID | None,
     materialization_mode: str,
@@ -103,6 +107,7 @@ async def upsert_selection(
             .where(
                 SandboxAgentAuthSelection.sandbox_profile_id == sandbox_profile_id,
                 SandboxAgentAuthSelection.agent_kind == agent_kind,
+                SandboxAgentAuthSelection.auth_slot_id == auth_slot_id,
             )
             .with_for_update()
         )
@@ -113,6 +118,7 @@ async def upsert_selection(
             sandbox_profile_id=sandbox_profile_id,
             owner_scope=owner_scope,
             agent_kind=agent_kind,
+            auth_slot_id=auth_slot_id,
             credential_id=credential_id,
             credential_share_id=credential_share_id,
             materialization_mode=materialization_mode,

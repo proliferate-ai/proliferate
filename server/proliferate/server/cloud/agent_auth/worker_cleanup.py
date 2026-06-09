@@ -102,6 +102,7 @@ async def _pending_cleanup_entries_for_selection(
     return [
         {
             "agentKind": selection.agent_kind,
+            "authSlotId": selection.auth_slot_id,
             "credentialId": str(selection.credential_id),
             "credentialRevision": selection.selected_revision,
             "credentialShareId": (
@@ -149,5 +150,5 @@ async def _cleanup_paths_from_credential_payload(
     files = payload.get("files")
     if not isinstance(files, dict):
         return ()
-    allowed_paths = set(_native_auth_file_paths(selection.agent_kind))
+    allowed_paths = set(_native_auth_file_paths(selection.agent_kind, selection.auth_slot_id))
     return tuple(sorted(path for path in files if isinstance(path, str) and path in allowed_paths))

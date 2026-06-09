@@ -128,7 +128,7 @@ async def test_shared_personal_synced_credential_lists_active_share_for_org_sele
     response = await client.get(
         "/v1/cloud/agent-auth/credentials",
         headers=_headers(tokens),
-        params={"organizationId": organization_id, "agentKind": "claude"},
+        params={"organizationId": organization_id, "credentialProviderId": "anthropic"},
     )
     assert response.status_code == 200
     credential = next(
@@ -148,7 +148,7 @@ async def test_shared_personal_synced_credential_lists_active_share_for_org_sele
     response = await client.get(
         "/v1/cloud/agent-auth/credentials",
         headers=_headers(tokens),
-        params={"organizationId": organization_id, "agentKind": "claude"},
+        params={"organizationId": organization_id, "credentialProviderId": "anthropic"},
     )
     assert response.status_code == 200
     shared_credential = next(
@@ -165,7 +165,7 @@ async def test_shared_personal_synced_credential_lists_active_share_for_org_sele
     profile_id = profile_response.json()["id"]
 
     select_response = await client.put(
-        f"/v1/cloud/sandbox-profiles/{profile_id}/agent-auth-selections/claude",
+        f"/v1/cloud/sandbox-profiles/{profile_id}/agent-auth-selections/claude/anthropic",
         headers=_headers(tokens),
         json={"credentialId": credential["id"], "credentialShareId": share_id},
     )
@@ -266,7 +266,6 @@ async def test_managed_credits_do_not_reuse_org_byok_credential_with_same_name(
         json={
             "ownerScope": "organization",
             "organizationId": organization_id,
-            "agentKind": "claude",
             "displayName": "Proliferate managed credits",
             "policyKind": "org_byok",
             "providerKind": "anthropic_api_key",

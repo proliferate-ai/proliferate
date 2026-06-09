@@ -399,13 +399,13 @@ fn to_summary(
                 resolved.native.as_ref().and_then(|n| n.message.clone())
             }
         }
-        ResolvedAgentStatus::CredentialsRequired => {
-            Some(format!("Set one of: {}", desc.auth.env_vars.join(", ")))
-        }
+        ResolvedAgentStatus::CredentialsRequired => Some(format!(
+            "Set one of: {}",
+            desc.auth.expected_env_vars().join(", ")
+        )),
         ResolvedAgentStatus::LoginRequired => desc
             .auth
-            .login
-            .as_ref()
+            .primary_login()
             .map(|_| format!("Sign in with {} in Proliferate.", desc.kind.display_name())),
         ResolvedAgentStatus::Unsupported => resolved
             .agent_process
@@ -440,8 +440,8 @@ fn to_summary(
         agent_process: to_artifact_status(&resolved.agent_process),
         credential_state,
         readiness,
-        supports_login: desc.auth.login.is_some(),
-        expected_env_vars: desc.auth.env_vars.clone(),
+        supports_login: desc.auth.supports_login(),
+        expected_env_vars: desc.auth.expected_env_vars(),
         docs_url: desc.docs_url.clone(),
         message,
     }

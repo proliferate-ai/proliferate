@@ -11,6 +11,7 @@ from proliferate.constants.cloud import (
     SUPPORTED_AGENT_AUTH_CREDENTIAL_SHARE_STATUSES,
     SUPPORTED_AGENT_AUTH_CREDENTIAL_STATUSES,
     SUPPORTED_AGENT_AUTH_OWNER_SCOPES,
+    SUPPORTED_AGENT_CREDENTIAL_PROVIDERS,
     SUPPORTED_CLOUD_AGENTS,
     SUPPORTED_SANDBOX_AGENT_AUTH_MATERIALIZATION_MODES,
     SUPPORTED_SANDBOX_AGENT_AUTH_SELECTION_STATUSES,
@@ -36,8 +37,8 @@ class AgentAuthCredential(Base):
             name="ck_agent_auth_credential_owner_fields",
         ),
         CheckConstraint(
-            f"agent_kind IN {SUPPORTED_CLOUD_AGENTS}",
-            name="ck_agent_auth_credential_agent_kind",
+            f"credential_provider_id IN {SUPPORTED_AGENT_CREDENTIAL_PROVIDERS}",
+            name="ck_agent_auth_credential_provider",
         ),
         CheckConstraint(
             f"credential_kind IN {SUPPORTED_AGENT_AUTH_CREDENTIAL_KINDS}",
@@ -48,17 +49,17 @@ class AgentAuthCredential(Base):
             name="ck_agent_auth_credential_status",
         ),
         Index(
-            "ix_agent_auth_credential_owner_user_kind_status",
+            "ix_agent_auth_credential_owner_user_provider_status",
             "owner_scope",
             "owner_user_id",
-            "agent_kind",
+            "credential_provider_id",
             "status",
         ),
         Index(
-            "ix_agent_auth_credential_org_kind_status",
+            "ix_agent_auth_credential_org_provider_status",
             "owner_scope",
             "organization_id",
-            "agent_kind",
+            "credential_provider_id",
             "status",
         ),
     )
@@ -80,7 +81,7 @@ class AgentAuthCredential(Base):
         index=True,
         nullable=True,
     )
-    agent_kind: Mapped[str] = mapped_column(String(32), index=True)
+    credential_provider_id: Mapped[str] = mapped_column(String(64), index=True)
     credential_kind: Mapped[str] = mapped_column(String(32), index=True)
     display_name: Mapped[str] = mapped_column(String(255))
     redacted_summary_json: Mapped[str] = mapped_column(Text, default="{}")
@@ -109,8 +110,8 @@ class AgentAuthCredentialShare(Base):
             name="ck_agent_auth_credential_share_status",
         ),
         CheckConstraint(
-            f"allowed_agent_kind IN {SUPPORTED_CLOUD_AGENTS}",
-            name="ck_agent_auth_credential_share_agent_kind",
+            f"allowed_credential_provider_id IN {SUPPORTED_AGENT_CREDENTIAL_PROVIDERS}",
+            name="ck_agent_auth_credential_share_provider",
         ),
         Index(
             "uq_agent_auth_active_share_credential_org",
@@ -120,9 +121,9 @@ class AgentAuthCredentialShare(Base):
             postgresql_where=text("status = 'active'"),
         ),
         Index(
-            "ix_agent_auth_share_org_kind_status",
+            "ix_agent_auth_share_org_provider_status",
             "organization_id",
-            "allowed_agent_kind",
+            "allowed_credential_provider_id",
             "status",
         ),
     )
@@ -146,7 +147,7 @@ class AgentAuthCredentialShare(Base):
         index=True,
     )
     status: Mapped[str] = mapped_column(String(32), default="active", index=True)
-    allowed_agent_kind: Mapped[str] = mapped_column(String(32), index=True)
+    allowed_credential_provider_id: Mapped[str] = mapped_column(String(64), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -180,9 +181,10 @@ class SandboxAgentAuthSelection(Base):
             name="ck_sandbox_agent_auth_selection_revision_positive",
         ),
         Index(
-            "uq_sandbox_agent_auth_selection_profile_agent",
+            "uq_sandbox_agent_auth_selection_profile_agent_slot",
             "sandbox_profile_id",
             "agent_kind",
+            "auth_slot_id",
             unique=True,
         ),
     )
@@ -194,6 +196,7 @@ class SandboxAgentAuthSelection(Base):
     )
     owner_scope: Mapped[str] = mapped_column(String(32), index=True)
     agent_kind: Mapped[str] = mapped_column(String(32), index=True)
+    auth_slot_id: Mapped[str] = mapped_column(String(64), index=True)
     credential_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("agent_auth_credential.id", ondelete="CASCADE"),
         index=True,

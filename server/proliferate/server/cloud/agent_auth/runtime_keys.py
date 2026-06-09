@@ -42,7 +42,7 @@ from proliferate.server.cloud.agent_auth.gateway_policies import (
     _require_credential_ready_for_selection,
 )
 from proliferate.server.cloud.agent_auth.managed_credit_rules import (
-    _managed_credit_provider_kind_for_agent,
+    _managed_credit_provider_kind_for_provider,
 )
 from proliferate.server.cloud.agent_auth.models import (
     WorkerAgentAuthGatewayConfig,
@@ -112,6 +112,8 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
         )
     plan = selection_plan_for_credential(
         agent_kind=selection.agent_kind,
+        auth_slot_id=selection.auth_slot_id,
+        credential_provider_id=credential.credential_provider_id,
         credential_kind=credential.credential_kind,
     )
     if not isinstance(plan, SelectionPlan) or plan.protocol_facade is None:
@@ -129,6 +131,7 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
         db,
         policy=policy,
         agent_kind=selection.agent_kind,
+        credential_provider_id=credential.credential_provider_id,
     )
     provider = str(provider_key["provider"])
     provider_key_id = str(provider_key["key_id"])
@@ -151,6 +154,7 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
         models=models,
         budget_limit=budget_limit,
         agent_kind=selection.agent_kind,
+        auth_slot_id=selection.auth_slot_id,
         policy_id=policy.id,
     )
     existing = await store.get_runtime_router_materialization(
@@ -210,6 +214,7 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
     description = json.dumps(
         {
             "credentialId": str(credential.id),
+            "authSlotId": selection.auth_slot_id,
             "policyId": str(policy.id),
             "sandboxProfileId": str(profile.id),
             "targetId": str(auth.target_id),
@@ -264,9 +269,10 @@ async def _bifrost_provider_key_for_policy(
     *,
     policy: AgentGatewayPolicyRecord,
     agent_kind: str,
+    credential_provider_id: str,
 ) -> dict[str, object]:
     if policy.policy_kind == "proliferate_managed":
-        provider_kind = _managed_credit_provider_kind_for_agent(agent_kind)
+        provider_kind = _managed_credit_provider_kind_for_provider(credential_provider_id)
         if policy.budget_subject_id is None:
             raise AgentAuthError(
                 "Managed gateway policy is missing a budget subject.",
@@ -298,6 +304,7 @@ async def _bifrost_provider_key_for_policy(
             )
         deployments = _gateway_deployments_for_credential(
             agent_kind=agent_kind,
+            credential_provider_id=credential_provider_id,
             provider_kind=provider_kind,
         )
         if not deployments:
@@ -324,6 +331,7 @@ async def _bifrost_provider_key_for_policy(
         provider_kind = provider_credential.provider_kind
         deployments = _gateway_deployments_for_credential(
             agent_kind=agent_kind,
+            credential_provider_id=credential_provider_id,
             provider_kind=provider_kind,
         )
         if not deployments:
@@ -438,6 +446,7 @@ async def _worker_gateway_config(
         )
         _reject_unallowed_selection_protected_env(
             agent_kind=selection.agent_kind,
+            auth_slot_id=selection.auth_slot_id,
             materialization_mode=selection.materialization_mode,
             protected_env=config.protected_env,
         )
@@ -475,27 +484,61 @@ async def _worker_gateway_config(
         )
         _reject_unallowed_selection_protected_env(
             agent_kind=selection.agent_kind,
+            auth_slot_id=selection.auth_slot_id,
             materialization_mode=selection.materialization_mode,
             protected_env=config.protected_env,
         )
         return config
     if selection.agent_kind == "opencode":
-        facade_base = f"{base}/openai/v1"
-        config = WorkerAgentAuthGatewayConfig(
-            protocolFacade="openai",
-            baseUrls={"openai": facade_base},
-            runtimeGrantToken=result.virtual_key,
-            expiresAt=result.expires_at_iso,
-            protectedEnv={
-                "OPENAI_API_KEY": result.virtual_key,
-                "OPENAI_BASE_URL": facade_base,
-            },
-            supportEnv={},
-            protectedConfig={},
-            supportConfig={},
-        )
+        if selection.auth_slot_id == "anthropic":
+            facade_base = f"{base}/anthropic"
+            config = WorkerAgentAuthGatewayConfig(
+                protocolFacade="anthropic",
+                baseUrls={"anthropic": facade_base},
+                runtimeGrantToken=result.virtual_key,
+                expiresAt=result.expires_at_iso,
+                protectedEnv={
+                    "ANTHROPIC_API_KEY": result.virtual_key,
+                    "ANTHROPIC_AUTH_TOKEN": result.virtual_key,
+                    "ANTHROPIC_BASE_URL": facade_base,
+                },
+                supportEnv={},
+                protectedConfig={},
+                supportConfig={},
+            )
+        elif selection.auth_slot_id == "gemini":
+            facade_base = f"{base}/genai"
+            config = WorkerAgentAuthGatewayConfig(
+                protocolFacade="genai",
+                baseUrls={"genai": facade_base},
+                runtimeGrantToken=result.virtual_key,
+                expiresAt=result.expires_at_iso,
+                protectedEnv={
+                    "GEMINI_API_KEY": result.virtual_key,
+                    "GOOGLE_GEMINI_BASE_URL": facade_base,
+                },
+                supportEnv={},
+                protectedConfig={},
+                supportConfig={},
+            )
+        else:
+            facade_base = f"{base}/openai/v1"
+            config = WorkerAgentAuthGatewayConfig(
+                protocolFacade="openai",
+                baseUrls={"openai": facade_base},
+                runtimeGrantToken=result.virtual_key,
+                expiresAt=result.expires_at_iso,
+                protectedEnv={
+                    "OPENAI_API_KEY": result.virtual_key,
+                    "OPENAI_BASE_URL": facade_base,
+                },
+                supportEnv={},
+                protectedConfig={},
+                supportConfig={},
+            )
         _reject_unallowed_selection_protected_env(
             agent_kind=selection.agent_kind,
+            auth_slot_id=selection.auth_slot_id,
             materialization_mode=selection.materialization_mode,
             protected_env=config.protected_env,
         )
@@ -517,6 +560,7 @@ async def _worker_gateway_config(
         )
         _reject_unallowed_selection_protected_env(
             agent_kind=selection.agent_kind,
+            auth_slot_id=selection.auth_slot_id,
             materialization_mode=selection.materialization_mode,
             protected_env=config.protected_env,
         )

@@ -1,0 +1,438 @@
+{
+  "schemaVersion": 1,
+  "registryVersion": "2026-05-31.1",
+  "generatedAt": "2026-05-31T00:00:00Z",
+  "agents": [
+    {
+      "kind": "claude",
+      "displayName": "Claude",
+      "description": "Claude Code through claude-agent-acp.",
+      "native": {
+        "install": {
+          "kind": "direct_binary",
+          "latestVersionUrl": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest",
+          "binaryUrlTemplate": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/{version}/{platform}/claude",
+          "platformMap": {
+            "macos_arm64": "darwin-arm64",
+            "macos_x64": "darwin-x64",
+            "linux_x64": "linux-x64",
+            "linux_arm64": "linux-arm64",
+            "windows_x64": "win32-x64",
+            "windows_arm64": "win32-arm64"
+          }
+        }
+      },
+      "agentProcess": {
+        "install": {
+          "kind": "managed_npm_package",
+          "package": "git+https://github.com/proliferate-ai/claude-agent-acp.git#906204b3cd798180df75502783a587bad19614ec",
+          "packageSubdir": null,
+          "sourceBuildBinaryName": null,
+          "executableRelpath": "node_modules/.bin/claude-agent-acp"
+        }
+      },
+      "launch": {
+        "executableName": "claude-agent-acp",
+        "defaultArgs": []
+      },
+      "auth": {
+        "readinessPolicy": "any_required_slot",
+        "slots": [
+          {
+            "id": "anthropic",
+            "label": "Anthropic",
+            "credentialProviderIds": [
+              "anthropic"
+            ],
+            "requiredForReadiness": true,
+            "envVars": [
+              "ANTHROPIC_AUTH_TOKEN",
+              "ANTHROPIC_API_KEY"
+            ],
+            "discovery": "claude",
+            "materialization": {
+              "gatewayEnv": {
+                "protocolFacade": "anthropic",
+                "protectedEnvKeys": [
+                  "ANTHROPIC_AUTH_TOKEN",
+                  "ANTHROPIC_BASE_URL",
+                  "ANTHROPIC_CUSTOM_HEADERS",
+                  "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST"
+                ],
+                "supportEnvKeys": []
+              },
+              "syncedFiles": {
+                "protectedEnvKeys": [],
+                "allowedFilePaths": [
+                  ".claude/.credentials.json",
+                  ".claude.json"
+                ],
+                "cleanupFilePaths": [
+                  ".claude/.credentials.json",
+                  ".claude.json"
+                ]
+              }
+            },
+            "login": {
+              "label": "Log in with Claude",
+              "command": {
+                "program": "claude",
+                "args": [
+                  "/login"
+                ]
+              },
+              "reusesUserState": true,
+              "message": null
+            }
+          }
+        ]
+      },
+      "docsUrl": "https://github.com/proliferate-ai/claude-agent-acp"
+    },
+    {
+      "kind": "codex",
+      "displayName": "Codex",
+      "description": "OpenAI Codex through codex-acp.",
+      "native": {
+        "install": {
+          "kind": "tarball_release",
+          "latestUrlTemplate": "https://github.com/openai/codex/releases/latest/download/codex-{target}.tar.gz",
+          "versionedUrlTemplate": "https://github.com/openai/codex/releases/download/{version}/codex-{target}.tar.gz",
+          "expectedBinaryTemplate": "codex-{target}",
+          "platformMap": {
+            "macos_arm64": "aarch64-apple-darwin",
+            "macos_x64": "x86_64-apple-darwin",
+            "linux_x64": "x86_64-unknown-linux-musl",
+            "linux_arm64": "aarch64-unknown-linux-musl",
+            "windows_x64": "x86_64-pc-windows-msvc",
+            "windows_arm64": "aarch64-pc-windows-msvc"
+          }
+        }
+      },
+      "agentProcess": {
+        "install": {
+          "kind": "managed_npm_package",
+          "package": "@proliferateai/codex-acp@0.11.8",
+          "packageSubdir": null,
+          "sourceBuildBinaryName": null,
+          "executableRelpath": "node_modules/.bin/codex-acp"
+        }
+      },
+      "launch": {
+        "executableName": "codex-acp",
+        "defaultArgs": [
+          "-c",
+          "features.plugins=false",
+          "-c",
+          "features.tool_suggest=false",
+          "-c",
+          "plugins={}",
+          "-c",
+          "marketplaces={}",
+          "-c",
+          "mcp_servers={}"
+        ]
+      },
+      "auth": {
+        "readinessPolicy": "any_required_slot",
+        "slots": [
+          {
+            "id": "openai",
+            "label": "OpenAI",
+            "credentialProviderIds": [
+              "openai"
+            ],
+            "requiredForReadiness": true,
+            "envVars": [
+              "OPENAI_API_KEY",
+              "CODEX_API_KEY"
+            ],
+            "discovery": "codex",
+            "materialization": {
+              "gatewayEnv": {
+                "protocolFacade": "openai",
+                "protectedEnvKeys": [
+                  "CODEX_API_KEY",
+                  "OPENAI_API_KEY",
+                  "CODEX_HOME"
+                ],
+                "supportEnvKeys": []
+              },
+              "syncedFiles": {
+                "protectedEnvKeys": [],
+                "allowedFilePaths": [
+                  ".codex/auth.json"
+                ],
+                "cleanupFilePaths": [
+                  ".codex/auth.json"
+                ]
+              }
+            },
+            "login": {
+              "label": "Log in with Codex",
+              "command": {
+                "program": "codex",
+                "args": [
+                  "login"
+                ]
+              },
+              "reusesUserState": true,
+              "message": null
+            }
+          }
+        ]
+      },
+      "docsUrl": "https://github.com/proliferate-ai/codex-acp"
+    },
+    {
+      "kind": "gemini",
+      "displayName": "Gemini",
+      "description": "Gemini CLI through its ACP surface.",
+      "native": null,
+      "agentProcess": {
+        "install": {
+          "kind": "registry_backed",
+          "registryId": "gemini",
+          "fallback": {
+            "kind": "binary_hint",
+            "candidateBinaries": [
+              "gemini"
+            ],
+            "args": [
+              "--experimental-acp"
+            ]
+          }
+        }
+      },
+      "launch": {
+        "executableName": "gemini",
+        "defaultArgs": []
+      },
+      "auth": {
+        "readinessPolicy": "any_required_slot",
+        "slots": [
+          {
+            "id": "gemini",
+            "label": "Gemini",
+            "credentialProviderIds": [
+              "gemini"
+            ],
+            "requiredForReadiness": true,
+            "envVars": [
+              "GEMINI_API_KEY",
+              "GOOGLE_API_KEY"
+            ],
+            "discovery": "gemini",
+            "materialization": {
+              "gatewayEnv": {
+                "protocolFacade": "genai",
+                "protectedEnvKeys": [
+                  "GEMINI_API_KEY",
+                  "GOOGLE_GEMINI_BASE_URL"
+                ],
+                "supportEnvKeys": []
+              },
+              "syncedFiles": {
+                "protectedEnvKeys": [
+                  "GEMINI_API_KEY",
+                  "GOOGLE_API_KEY",
+                  "GOOGLE_GENAI_USE_VERTEXAI"
+                ],
+                "allowedFilePaths": [
+                  ".gemini/oauth_creds.json",
+                  ".gemini/settings.json"
+                ],
+                "cleanupFilePaths": [
+                  ".gemini/oauth_creds.json",
+                  ".gemini/settings.json"
+                ]
+              }
+            },
+            "login": {
+              "label": "Log in with Gemini",
+              "command": {
+                "program": "gemini",
+                "args": []
+              },
+              "reusesUserState": true,
+              "message": "When Gemini opens, choose Sign in with Google. If it opens into chat, type `/auth`."
+            }
+          }
+        ]
+      },
+      "docsUrl": "https://github.com/google-gemini/gemini-cli"
+    },
+    {
+      "kind": "cursor",
+      "displayName": "Cursor",
+      "description": "Cursor Agent CLI through ACP.",
+      "native": null,
+      "agentProcess": {
+        "install": {
+          "kind": "registry_backed",
+          "registryId": "cursor",
+          "fallback": {
+            "kind": "binary_hint",
+            "candidateBinaries": [
+              "cursor-agent"
+            ],
+            "args": [
+              "acp"
+            ]
+          }
+        }
+      },
+      "launch": {
+        "executableName": "cursor-agent",
+        "defaultArgs": []
+      },
+      "auth": {
+        "readinessPolicy": "any_required_slot",
+        "slots": [
+          {
+            "id": "cursor",
+            "label": "Cursor",
+            "credentialProviderIds": [
+              "cursor"
+            ],
+            "requiredForReadiness": true,
+            "envVars": [
+              "CURSOR_API_KEY"
+            ],
+            "discovery": "cursor",
+            "materialization": {
+              "syncedFiles": {
+                "protectedEnvKeys": [],
+                "allowedFilePaths": [
+                  ".cursor/cli-config.json"
+                ],
+                "cleanupFilePaths": [
+                  ".cursor/cli-config.json"
+                ]
+              }
+            },
+            "login": {
+              "label": "Log in with Cursor",
+              "command": {
+                "program": "cursor-agent",
+                "args": [
+                  "login"
+                ]
+              },
+              "reusesUserState": true,
+              "message": null
+            }
+          }
+        ]
+      },
+      "docsUrl": "https://docs.cursor.com/cli/acp"
+    },
+    {
+      "kind": "opencode",
+      "displayName": "OpenCode",
+      "description": "OpenCode through its ACP surface.",
+      "native": null,
+      "agentProcess": {
+        "install": {
+          "kind": "registry_backed",
+          "registryId": "opencode",
+          "fallback": {
+            "kind": "npm_package",
+            "package": "opencode-ai",
+            "packageSubdir": null,
+            "sourceBuildBinaryName": null,
+            "executableRelpath": "node_modules/.bin/opencode-ai"
+          }
+        }
+      },
+      "launch": {
+        "executableName": "opencode-ai",
+        "defaultArgs": []
+      },
+      "auth": {
+        "readinessPolicy": "provider_managed",
+        "slots": [
+          {
+            "id": "openai",
+            "label": "OpenAI",
+            "credentialProviderIds": [
+              "openai"
+            ],
+            "requiredForReadiness": false,
+            "envVars": [
+              "OPENAI_API_KEY"
+            ],
+            "discovery": "none",
+            "materialization": {
+              "gatewayEnv": {
+                "protocolFacade": "openai",
+                "protectedEnvKeys": [
+                  "OPENAI_API_KEY",
+                  "OPENAI_BASE_URL"
+                ],
+                "supportEnvKeys": []
+              },
+              "syncedFiles": {
+                "protectedEnvKeys": [],
+                "allowedFilePaths": [
+                  ".config/opencode/auth.json"
+                ],
+                "cleanupFilePaths": [
+                  ".config/opencode/auth.json"
+                ]
+              }
+            }
+          },
+          {
+            "id": "anthropic",
+            "label": "Anthropic",
+            "credentialProviderIds": [
+              "anthropic"
+            ],
+            "requiredForReadiness": false,
+            "envVars": [
+              "ANTHROPIC_API_KEY",
+              "ANTHROPIC_AUTH_TOKEN"
+            ],
+            "discovery": "none",
+            "materialization": {
+              "gatewayEnv": {
+                "protocolFacade": "anthropic",
+                "protectedEnvKeys": [
+                  "ANTHROPIC_API_KEY",
+                  "ANTHROPIC_AUTH_TOKEN",
+                  "ANTHROPIC_BASE_URL"
+                ],
+                "supportEnvKeys": []
+              }
+            }
+          },
+          {
+            "id": "gemini",
+            "label": "Gemini",
+            "credentialProviderIds": [
+              "gemini"
+            ],
+            "requiredForReadiness": false,
+            "envVars": [
+              "GEMINI_API_KEY",
+              "GOOGLE_API_KEY"
+            ],
+            "discovery": "none",
+            "materialization": {
+              "gatewayEnv": {
+                "protocolFacade": "genai",
+                "protectedEnvKeys": [
+                  "GEMINI_API_KEY",
+                  "GOOGLE_GEMINI_BASE_URL"
+                ],
+                "supportEnvKeys": []
+              }
+            }
+          }
+        ]
+      },
+      "docsUrl": "https://opencode.ai"
+    }
+  ]
+}

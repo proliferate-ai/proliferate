@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AgentCatalogControlSurfaces(BaseModel):
@@ -105,7 +105,7 @@ class AgentCatalogAgent(BaseModel):
     kind: Literal["claude", "codex", "gemini", "cursor", "opencode"]
     displayName: str
     description: str | None = None
-    process: dict[str, object]
+    process: dict[str, object] = Field(default_factory=dict)
     session: AgentCatalogSession
 
 

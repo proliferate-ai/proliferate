@@ -1,6 +1,7 @@
 import type {
   AgentAuthAgentKind,
   AgentAuthCredential,
+  AgentAuthCredentialProviderId,
   AgentGatewayCapabilities,
   SandboxAgentAuthSelection,
 } from "@proliferate/cloud-sdk";
@@ -23,15 +24,17 @@ import { useAgentAuthLibraryActions } from "@/hooks/settings/workflows/use-agent
 import { SharedPluginsSection } from "@/components/settings/panes/shared-sandbox/SharedPluginsSection";
 import { buildPluginSharedExposurePresentation } from "@/lib/domain/plugins/plugin-package-view-model";
 import {
-  AGENT_AUTH_AGENT_ORDER,
-  agentAuthAgentLabel,
-} from "@/lib/domain/agent-auth/agent-auth-agent-presentation";
+  AGENT_AUTH_SLOT_DEFINITIONS,
+  agentAuthSlotLabel,
+  credentialsForAgentAuthSlot,
+  selectionByAgentAuthSlot,
+  type AgentAuthSlotDefinition,
+} from "@/lib/domain/agent-auth/auth-slots";
 import {
   agentAuthCredentialAvailability,
   agentAuthCredentialKindLabel,
   credentialSelectableReason,
   credentialSummaryDetails,
-  selectionByAgentKind,
 } from "@/lib/domain/agent-auth/agent-auth-credential-presentation";
 
 export function SharedSandboxOverview({
@@ -48,7 +51,7 @@ export function SharedSandboxOverview({
   const exposedPlugins = installedPlugins.filter((record) =>
     buildPluginSharedExposurePresentation(record).hasPublicItems
   );
-  const configuredHarnessCount = countConfiguredHarnesses(
+  const configuredAuthSlotCount = countConfiguredAuthSlots(
     agentAuthLibrary.selections,
     agentAuthLibrary.organizationCredentials,
   );
@@ -56,14 +59,14 @@ export function SharedSandboxOverview({
     agentAuthLibrary.organizationSelectionsLoading
     || agentAuthLibrary.organizationCredentialsLoading
     || connectorsQuery.isLoading;
-  const ready = !readinessLoading && configuredHarnessCount > 0;
+  const ready = !readinessLoading && configuredAuthSlotCount > 0;
 
   return (
     <>
       <SharedRuntimeScopeCard />
 
       <SharedReadinessCard
-        configuredHarnessCount={configuredHarnessCount}
+        configuredAuthSlotCount={configuredAuthSlotCount}
         exposedPluginCount={exposedPlugins.length}
         loading={readinessLoading}
         ready={ready}
@@ -144,14 +147,14 @@ function SharedRuntimeScopeCard() {
 }
 
 function SharedReadinessCard({
-  configuredHarnessCount,
+  configuredAuthSlotCount,
   exposedPluginCount,
   loading,
   ready,
   verifying,
   onVerify,
 }: {
-  configuredHarnessCount: number;
+  configuredAuthSlotCount: number;
   exposedPluginCount: number;
   loading: boolean;
   ready: boolean;
@@ -172,7 +175,7 @@ function SharedReadinessCard({
         <div className="mt-1 text-sm text-muted-foreground">
           {loading
             ? "Loading shared sandbox auth and plugin exposure"
-            : `${configuredHarnessCount} of ${AGENT_AUTH_AGENT_ORDER.length} harnesses configured · ${exposedPluginCount} plugins exposed · Last verified just now`}
+            : `${configuredAuthSlotCount} of ${AGENT_AUTH_SLOT_DEFINITIONS.length} auth slots configured · ${exposedPluginCount} plugins exposed · Last verified just now`}
         </div>
       </div>
       <Button
@@ -202,32 +205,36 @@ function SharedAgentAuthenticationSection({
   selections: SandboxAgentAuthSelection[];
   ensuringProfile: boolean;
   selectingTeamDefault: boolean;
-  onSelectTeamDefault: (agentKind: AgentAuthAgentKind, credentialId: string) => void;
+  onSelectTeamDefault: (
+    agentKind: AgentAuthAgentKind,
+    authSlotId: AgentAuthCredentialProviderId | string,
+    credentialId: string,
+  ) => void;
 }) {
-  const selectionsByAgent = selectionByAgentKind(selections);
+  const selectionsBySlot = selectionByAgentAuthSlot(selections);
   return (
     <section className="space-y-3">
       <div className="space-y-1">
         <h2 className="text-sm font-medium text-foreground">Agent Authentication</h2>
         <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-          One credential per harness. Pick from managed credits, org API keys,
+          One credential per auth slot. Pick from managed credits, org API keys,
           or synced credentials available to this team.
         </p>
       </div>
       <SettingsCard>
         <div className="grid grid-cols-[minmax(8rem,1fr)_minmax(12rem,2fr)_minmax(7rem,0.8fr)_7rem] gap-4 border-b border-border-light bg-foreground/5 px-5 py-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-          <span>Harness</span>
+          <span>Auth slot</span>
           <span>Team credential</span>
           <span>Type</span>
           <span className="text-right">Action</span>
         </div>
-        {AGENT_AUTH_AGENT_ORDER.map((agentKind) => (
+        {AGENT_AUTH_SLOT_DEFINITIONS.map((slot) => (
           <SharedAgentAuthRow
-            key={agentKind}
-            agentKind={agentKind}
+            key={`${slot.agentKind}-${slot.authSlotId}`}
+            slot={slot}
             capabilities={capabilities}
-            credentials={credentials.filter((credential) => credential.agentKind === agentKind)}
-            selection={selectionsByAgent.get(agentKind)}
+            credentials={credentialsForAgentAuthSlot(credentials, slot)}
+            selection={selectionsBySlot.get(`${slot.agentKind}:${slot.authSlotId}`)}
             selecting={selectingTeamDefault || ensuringProfile}
             onSelectTeamDefault={onSelectTeamDefault}
           />
@@ -238,19 +245,23 @@ function SharedAgentAuthenticationSection({
 }
 
 function SharedAgentAuthRow({
-  agentKind,
+  slot,
   credentials,
   capabilities,
   selection,
   selecting,
   onSelectTeamDefault,
 }: {
-  agentKind: AgentAuthAgentKind;
+  slot: AgentAuthSlotDefinition;
   credentials: AgentAuthCredential[];
   capabilities: AgentGatewayCapabilities | null;
   selection: SandboxAgentAuthSelection | undefined;
   selecting: boolean;
-  onSelectTeamDefault: (agentKind: AgentAuthAgentKind, credentialId: string) => void;
+  onSelectTeamDefault: (
+    agentKind: AgentAuthAgentKind,
+    authSlotId: AgentAuthCredentialProviderId | string,
+    credentialId: string,
+  ) => void;
 }) {
   const selectedCredential = selection
     ? credentials.find((credential) => credential.id === selection.credentialId) ?? null
@@ -271,17 +282,17 @@ function SharedAgentAuthRow({
       detail: disabledReason ?? credentialSummaryDetails(credential) ?? agentAuthCredentialKindLabel(credential),
       selected: selectedCredential?.id === credential.id,
       disabled: selecting || disabledReason !== null,
-      onSelect: () => onSelectTeamDefault(agentKind, credential.id),
+      onSelect: () => onSelectTeamDefault(slot.agentKind, slot.authSlotId, credential.id),
     };
   });
   return (
     <div className="grid grid-cols-[minmax(8rem,1fr)_minmax(12rem,2fr)_minmax(7rem,0.8fr)_7rem] items-center gap-4 border-b border-border-light px-5 py-4 last:border-b-0">
       <div className="flex min-w-0 items-center gap-3">
         <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-foreground/5 text-muted-foreground">
-          <ProviderIcon kind={agentKind} className="size-4" />
+          <ProviderIcon kind={slot.agentKind} className="size-4" />
         </span>
         <span className={`truncate text-sm font-medium ${rowTone}`}>
-          {agentAuthAgentLabel(agentKind)}
+          {agentAuthSlotLabel(slot)}
         </span>
       </div>
       <div className="min-w-0">
@@ -317,8 +328,8 @@ function SharedAgentAuthRow({
             className="w-28"
             menuClassName="w-80"
             groups={[{
-              id: agentKind,
-              label: agentAuthAgentLabel(agentKind),
+              id: `${slot.agentKind}-${slot.authSlotId}`,
+              label: agentAuthSlotLabel(slot),
               options: menuOptions,
             }]}
           />
@@ -340,7 +351,12 @@ function sharedCredentialTypeBadgeLabel(credential: AgentAuthCredential): string
     return agentAuthCredentialKindLabel(credential);
   }
   const providerKind = credential.redactedSummary.providerKind;
-  if (providerKind === "proliferate_bedrock_pool") {
+  if (
+    providerKind === "proliferate_bedrock_pool"
+    || providerKind === "proliferate_managed_anthropic"
+    || providerKind === "proliferate_managed_openai"
+    || providerKind === "proliferate_managed_gemini"
+  ) {
     return "Managed";
   }
   if (
@@ -359,13 +375,10 @@ function sharedCredentialTypeBadgeLabel(credential: AgentAuthCredential): string
   return "Gateway";
 }
 
-function countConfiguredHarnesses(
+function countConfiguredAuthSlots(
   selections: SandboxAgentAuthSelection[],
   credentials: AgentAuthCredential[],
 ): number {
   const credentialIds = new Set(credentials.map((credential) => credential.id));
-  return AGENT_AUTH_AGENT_ORDER.filter((agentKind) => {
-    const selection = selections.find((candidate) => candidate.agentKind === agentKind);
-    return selection ? credentialIds.has(selection.credentialId) : false;
-  }).length;
+  return selections.filter((selection) => credentialIds.has(selection.credentialId)).length;
 }

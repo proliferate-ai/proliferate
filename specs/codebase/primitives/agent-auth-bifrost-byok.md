@@ -309,17 +309,19 @@ Fields: `id`, `sandbox_profile_id`, `revision`, `reason`, `force_restart`,
 Row: encrypted system, personal, or organization provider credential.
 
 Fields: `id`, `owner_scope`, `owner_user_id`, `organization_id`,
-`created_by_user_id`, `agent_kind`, `credential_kind`, `display_name`,
-`redacted_summary_json`, `status`, `revision`, `payload_ciphertext`,
-`payload_ciphertext_key_id`, `created_at`, `updated_at`, `revoked_at`.
+`created_by_user_id`, `credential_provider_id`, `credential_kind`,
+`display_name`, `redacted_summary_json`, `status`, `revision`,
+`payload_ciphertext`, `payload_ciphertext_key_id`, `created_at`,
+`updated_at`, `revoked_at`.
 
 #### `agent_auth_credential_share`
 
 Row: personal credential share boundary for organization use.
 
 Fields: `id`, `credential_id`, `owner_user_id`, `organization_id`,
-`share_scope`, `shared_by_user_id`, `status`, `allowed_agent_kind`,
-`created_at`, `revoked_at`, `revoked_by_user_id`.
+`share_scope`, `shared_by_user_id`, `status`,
+`allowed_credential_provider_id`, `created_at`, `revoked_at`,
+`revoked_by_user_id`.
 
 #### `agent_gateway_budget_subject`
 
@@ -1384,12 +1386,11 @@ opencode
 The worker may decrypt the Bifrost virtual key only when applying target state.
 It must not write raw provider credentials for BYOK.
 
-V1 manual E2B acceptance is Claude + Codex only. Gemini and OpenCode require
-additional work before they can be accepted:
+V1 manual E2B acceptance is still focused on Claude + Codex. Gemini and
+OpenCode require additional end-to-end CLI smoke before they are considered
+fully accepted:
 
 - E2B template installs the CLI.
-- server protected-env allowlist accepts `gateway_env` for that agent kind.
-- worker protected-env policy accepts the same keys.
 - AnyHarness launch/config paths can prefer the protected provider config over
   repo/project-local settings.
 - live CLI smoke proves the base URL and virtual-key header style.

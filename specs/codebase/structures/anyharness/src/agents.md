@@ -95,25 +95,31 @@ This is the main handoff from the agents area into the rest of the runtime.
 
 ### Bundled Catalog and Registry
 
-There is one supported AnyHarness runtime catalog input:
+There are two supported AnyHarness runtime agent inputs:
 
 - `catalogs/agents/v1/catalog.json`
   - supported agent families
-  - install and launch metadata
-  - credential-discovery metadata
   - fallback model/control metadata
+  - static session-display metadata
+- `catalogs/agents/v1/registry.json`
+  - supported agent families
+  - install and launch metadata
+  - auth-slot and materialization metadata
+  - credential-discovery metadata
 
-Runtime code projects that bundled catalog into two target-local surfaces:
+Runtime code projects those bundled inputs into target-local surfaces:
 
 - `anyharness/crates/anyharness-lib/src/domains/agents/registry/mod.rs`
   - trusted built-in `AgentDescriptor` values
 - `anyharness/crates/anyharness-lib/src/domains/agents/catalog/**`
-  - schema, validation, bundled loading, and model/descriptor projections
+  - schema, validation, bundled loading, and model/control projections
+- `anyharness/crates/anyharness-lib/src/domains/agents/registry/**`
+  - schema, validation, bundled loading, and descriptor/auth-slot projections
 
 There is no separate runtime `catalog.rs` source and no split model/launch
-catalog path. Cloud product catalogs may be newer than this bundled runtime
-catalog; AnyHarness still validates creation against what the target runtime
-can actually launch.
+catalog path. Cloud product catalogs may be newer than these bundled runtime
+inputs; AnyHarness still validates creation against what the target runtime can
+actually launch.
 
 ### Resolution Flow
 
@@ -401,7 +407,8 @@ free.
 
 ## Important Invariants
 
-- Built-in descriptors are the source of truth for supported agents in v1.
+- Built-in registry descriptors are the source of truth for supported runtime
+  agents in v1.
 - `ResolvedAgentStatus` is derived from installation state, compatibility, and
   credential state together.
 - Credential detection must remain explicit and provider-specific.

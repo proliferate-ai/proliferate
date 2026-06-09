@@ -56,6 +56,7 @@ function OpencodeProviderIcon({ className, ...props }: IconProps) {
 
 const PROVIDER_ICON_MAP: Record<string, ComponentType<IconProps>> = {
   claude: ClaudeProviderIcon,
+  anthropic: ClaudeProviderIcon,
   codex: OpenAIProviderIcon,
   openai: OpenAIProviderIcon,
   cursor: CursorProviderIcon,

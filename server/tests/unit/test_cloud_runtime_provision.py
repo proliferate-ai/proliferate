@@ -207,14 +207,14 @@ class TestLoadProvisionInput:
             owner_user_id=user.id,
             organization_id=None,
             created_by_user_id=user.id,
-            agent_kind="claude",
+            credential_provider_id="anthropic",
             credential_kind="synced_path",
             display_name="Synced claude auth",
             redacted_summary_json='{"authMode":"file"}',
             status="ready",
             payload_ciphertext=encrypt_json(
                 {
-                    "provider": "claude",
+                    "provider": "anthropic",
                     "authMode": "file",
                     "files": {".claude.json": '{"apiKey":"sk-ant-test"}'},
                 }
@@ -226,6 +226,7 @@ class TestLoadProvisionInput:
             sandbox_profile_id=profile.id,
             owner_scope="personal",
             agent_kind="claude",
+            auth_slot_id="anthropic",
             credential_id=credential.id,
             credential_share_id=None,
             materialization_mode="synced_files",

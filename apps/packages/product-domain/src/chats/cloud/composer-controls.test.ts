@@ -438,11 +438,11 @@ describe("buildCloudLaunchComposerControls", () => {
 describe("resolveCloudHarnessAvailability", () => {
   it("normalizes ready synced credentials into launchable harness kinds", () => {
     const readyAgentKinds = readySyncedCloudAgentKinds([
-      { agentKind: "codex", credentialKind: "synced_path", status: "ready" },
-      { agentKind: "claude", credentialKind: "synced_path", status: "ready" },
-      { agentKind: "gemini", credentialKind: "managed_gateway", status: "ready" },
-      { agentKind: "opencode", credentialKind: "synced_path", status: "syncing" },
-      { agentKind: "unknown", credentialKind: "synced_path", status: "ready" },
+      { credentialKind: "synced_path", redactedSummary: { agentKind: "codex" }, status: "ready" },
+      { credentialKind: "synced_path", redactedSummary: { agentKind: "claude" }, status: "ready" },
+      { credentialKind: "managed_gateway", redactedSummary: { agentKind: "gemini" }, status: "ready" },
+      { credentialKind: "synced_path", redactedSummary: { agentKind: "opencode" }, status: "syncing" },
+      { credentialKind: "synced_path", redactedSummary: { agentKind: "unknown" }, status: "ready" },
     ]);
 
     expect(readyAgentKinds).toEqual(["claude", "codex"]);

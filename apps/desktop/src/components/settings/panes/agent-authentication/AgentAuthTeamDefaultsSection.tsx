@@ -2,6 +2,7 @@ import { useState } from "react";
 import type {
   AgentAuthAgentKind,
   AgentAuthCredential,
+  AgentAuthCredentialProviderId,
   AgentGatewayCapabilities,
   SandboxAgentAuthSelection,
   SandboxProfile,
@@ -16,9 +17,12 @@ import { AgentAuthManagedCreditsCard } from "@/components/settings/panes/agent-a
 import { AgentAuthTeamSyncOverview } from "@/components/settings/panes/agent-authentication/AgentAuthTeamSyncOverview";
 import { agentAuthenticationCopy } from "@/copy/settings/agent-authentication-copy";
 import {
-  AGENT_AUTH_AGENT_ORDER,
-  agentAuthAgentLabel,
-} from "@/lib/domain/agent-auth/agent-auth-agent-presentation";
+  AGENT_AUTH_SLOT_DEFINITIONS,
+  agentAuthSlotLabel,
+  credentialsForAgentAuthSlot,
+  selectionByAgentAuthSlot,
+  type AgentAuthSlotDefinition,
+} from "@/lib/domain/agent-auth/auth-slots";
 import {
   agentAuthCredentialAvailability,
   agentAuthCredentialKindLabel,
@@ -27,7 +31,6 @@ import {
   credentialSelectableReason,
   credentialSummaryDetails,
   isProliferateManagedCreditsCredential,
-  selectionByAgentKind,
 } from "@/lib/domain/agent-auth/agent-auth-credential-presentation";
 
 interface AgentAuthTeamDefaultsSectionProps {
@@ -43,7 +46,11 @@ interface AgentAuthTeamDefaultsSectionProps {
   revokingCredentialId: string | null;
   onEnsureOrganizationProfile: () => void;
   onEnsureManagedCredits: () => void;
-  onSelectTeamDefault: (agentKind: AgentAuthAgentKind, credentialId: string) => void;
+  onSelectTeamDefault: (
+    agentKind: AgentAuthAgentKind,
+    authSlotId: AgentAuthCredentialProviderId | string,
+    credentialId: string,
+  ) => void;
   onRevokeCredential: (credential: AgentAuthCredential) => void;
 }
 
@@ -64,7 +71,7 @@ export function AgentAuthTeamDefaultsSection({
   onRevokeCredential,
 }: AgentAuthTeamDefaultsSectionProps) {
   const [credentialToRevoke, setCredentialToRevoke] = useState<AgentAuthCredential | null>(null);
-  const selectionsByAgent = selectionByAgentKind(selections);
+  const selectionsBySlot = selectionByAgentAuthSlot(selections);
   const managedCreditsCredentials = credentials.filter(isProliferateManagedCreditsCredential);
   const syncedCredentials = credentials.filter(
     (credential) => credential.credentialKind === "synced_path",
@@ -110,14 +117,14 @@ export function AgentAuthTeamDefaultsSection({
             </Button>
           </SettingsCardRow>
         ) : (
-          AGENT_AUTH_AGENT_ORDER.map((agentKind) => (
+          AGENT_AUTH_SLOT_DEFINITIONS.map((slot) => (
             <TeamDefaultHarnessRow
-              key={agentKind}
-              agentKind={agentKind}
-              credentials={credentials.filter((credential) => credential.agentKind === agentKind)}
+              key={`${slot.agentKind}-${slot.authSlotId}`}
+              slot={slot}
+              credentials={credentialsForAgentAuthSlot(credentials, slot)}
               capabilities={capabilities}
               organizationProfile={organizationProfile}
-              selection={selectionsByAgent.get(agentKind)}
+              selection={selectionsBySlot.get(`${slot.agentKind}:${slot.authSlotId}`)}
               selecting={selectingTeamDefault}
               onSelectTeamDefault={onSelectTeamDefault}
             />
@@ -161,7 +168,7 @@ export function AgentAuthTeamDefaultsSection({
 }
 
 function TeamDefaultHarnessRow({
-  agentKind,
+  slot,
   credentials,
   capabilities,
   organizationProfile,
@@ -169,13 +176,17 @@ function TeamDefaultHarnessRow({
   selecting,
   onSelectTeamDefault,
 }: {
-  agentKind: AgentAuthAgentKind;
+  slot: AgentAuthSlotDefinition;
   credentials: AgentAuthCredential[];
   capabilities: AgentGatewayCapabilities | null;
   organizationProfile: SandboxProfile;
   selection: SandboxAgentAuthSelection | undefined;
   selecting: boolean;
-  onSelectTeamDefault: (agentKind: AgentAuthAgentKind, credentialId: string) => void;
+  onSelectTeamDefault: (
+    agentKind: AgentAuthAgentKind,
+    authSlotId: AgentAuthCredentialProviderId | string,
+    credentialId: string,
+  ) => void;
 }) {
   const selectedCredential = selection
     ? credentials.find((credential) => credential.id === selection.credentialId) ?? null
@@ -194,7 +205,7 @@ function TeamDefaultHarnessRow({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="text-sm font-medium text-foreground">
-            {agentAuthAgentLabel(agentKind)}
+            {agentAuthSlotLabel(slot)}
           </div>
           <div className="mt-1 text-xs leading-4 text-muted-foreground">
             {selectedCredential
@@ -219,7 +230,7 @@ function TeamDefaultHarnessRow({
       <div className="mt-3 grid gap-2">
         {credentials.length === 0 ? (
           <div className="rounded-md border border-dashed border-border-light px-3 py-2 text-xs leading-4 text-muted-foreground">
-            No usable {agentAuthAgentLabel(agentKind)} credential is visible to this team yet.
+            No usable {agentAuthSlotLabel(slot)} credential is visible to this team yet.
           </div>
         ) : credentials.map((credential) => {
           const availability = agentAuthCredentialAvailability(credential, capabilities);
@@ -234,13 +245,14 @@ function TeamDefaultHarnessRow({
               size="unstyled"
               disabled={selecting || disabledReason !== null}
               aria-pressed={selected}
-              aria-label={`${selected ? "Selected" : "Use"} ${credential.displayName} for ${agentAuthAgentLabel(agentKind)}`}
+              aria-label={`${selected ? "Selected" : "Use"} ${credential.displayName} for ${agentAuthSlotLabel(slot)}`}
               className={`flex min-h-12 w-full items-center justify-between gap-3 rounded-md border px-3 py-2 text-left transition-colors ${
                 selected
                   ? "border-ring bg-accent text-foreground"
                   : "border-border-light bg-surface-elevated text-foreground hover:bg-list-hover"
               }`}
-              onClick={() => onSelectTeamDefault(agentKind, credential.id)}
+              onClick={() =>
+                onSelectTeamDefault(slot.agentKind, slot.authSlotId, credential.id)}
             >
               <span className="min-w-0">
                 <span className="flex flex-wrap items-center gap-2 text-sm font-medium">

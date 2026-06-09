@@ -31,6 +31,9 @@ from proliferate.server.cloud.agent_auth.gateway_policies import (
     _require_credential_ready_for_selection,
 )
 from proliferate.server.cloud.agent_auth.refresh import _mark_target_pending_and_queue_refresh
+from proliferate.server.cloud.agent_auth.registry import (
+    default_auth_slot_id_for_credential_provider,
+)
 from proliferate.server.cloud.agent_auth.router_materializations import (
     _disable_bifrost_runtime_materializations_for_selection,
 )
@@ -57,6 +60,19 @@ _TERMINAL_AGENT_AUTH_REFRESH_COMMAND_STATUSES = frozenset(
 )
 
 
+def _synced_source_agent_kind(redacted_summary_json: str | None) -> str | None:
+    if not redacted_summary_json:
+        return None
+    try:
+        summary = json.loads(redacted_summary_json)
+    except ValueError:
+        return None
+    if not isinstance(summary, dict):
+        return None
+    agent_kind = summary.get("agentKind")
+    return agent_kind if isinstance(agent_kind, str) else None
+
+
 async def list_selections(
     db: AsyncSession,
     *,
@@ -73,6 +89,7 @@ async def select_credential_for_profile(
     actor_user_id: UUID,
     sandbox_profile_id: UUID,
     agent_kind: CloudAgentKind,
+    auth_slot_id: str,
     credential_id: UUID,
     credential_share_id: UUID | None,
     force_restart: bool,
@@ -81,13 +98,19 @@ async def select_credential_for_profile(
     credential = await store.get_credential(db, credential_id)
     if credential is None or credential.revoked_at is not None:
         raise AgentAuthError("Credential not found.", code="credential_not_found", status_code=404)
-    if credential.agent_kind != agent_kind:
-        raise AgentAuthError(
-            "Credential is for a different agent kind.",
-            code="agent_kind_mismatch",
-            status_code=400,
-        )
     await _require_credential_ready_for_selection(db, credential)
+    if not auth_slot_id:
+        inferred_auth_slot_id = default_auth_slot_id_for_credential_provider(
+            agent_kind=agent_kind,
+            credential_provider_id=credential.credential_provider_id,
+        )
+        if inferred_auth_slot_id is None:
+            raise AgentAuthError(
+                "Credential provider is not supported by this agent.",
+                code="credential_provider_not_supported",
+                status_code=400,
+            )
+        auth_slot_id = inferred_auth_slot_id
     share = None
     if credential_share_id is not None:
         share = await store.get_active_credential_share(
@@ -100,6 +123,12 @@ async def select_credential_for_profile(
                 "Credential share is not active.",
                 code="credential_share_required",
                 status_code=403,
+            )
+        if share.allowed_credential_provider_id != credential.credential_provider_id:
+            raise AgentAuthError(
+                "Credential share is for a different credential provider.",
+                code="credential_share_provider_mismatch",
+                status_code=400,
             )
     has_active_share = share is not None
     if (
@@ -128,7 +157,10 @@ async def select_credential_for_profile(
         raise AgentAuthError(verdict.message, code=verdict.code, status_code=verdict.status_code)
     plan = selection_plan_for_credential(
         agent_kind=agent_kind,
+        auth_slot_id=auth_slot_id,
+        credential_provider_id=credential.credential_provider_id,
         credential_kind=credential.credential_kind,
+        synced_source_agent_kind=_synced_source_agent_kind(credential.redacted_summary_json),
     )
     if not isinstance(plan, SelectionPlan):
         raise AgentAuthError(plan.message, code=plan.code, status_code=plan.status_code)
@@ -146,7 +178,7 @@ async def select_credential_for_profile(
         (
             selection
             for selection in await store.list_selections_for_profile(db, profile.id)
-            if selection.agent_kind == agent_kind
+            if selection.agent_kind == agent_kind and selection.auth_slot_id == auth_slot_id
         ),
         None,
     )
@@ -183,6 +215,7 @@ async def select_credential_for_profile(
         sandbox_profile_id=profile.id,
         owner_scope=profile.owner_scope,
         agent_kind=agent_kind,
+        auth_slot_id=auth_slot_id,
         credential_id=credential.id,
         credential_share_id=share.id if share is not None else None,
         materialization_mode=plan.materialization_mode,
@@ -221,6 +254,7 @@ async def select_credential_for_profile(
         metadata_json=json.dumps(
             {
                 "agentKind": agent_kind,
+                "authSlotId": auth_slot_id,
                 "credentialShareId": str(share.id) if share else None,
                 "forceRestart": force_restart,
                 "revision": updated_profile.agent_auth_revision,

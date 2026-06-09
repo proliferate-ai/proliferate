@@ -44,6 +44,7 @@ async def create_runtime_grant(
     organization_id: UUID | None,
     user_id: UUID | None,
     agent_kind: str,
+    auth_slot_id: str,
     protocol_facade: str,
     expires_at: datetime,
 ) -> AgentGatewayRuntimeGrantRecord:
@@ -60,6 +61,7 @@ async def create_runtime_grant(
         organization_id=organization_id,
         user_id=user_id,
         agent_kind=agent_kind,
+        auth_slot_id=auth_slot_id,
         protocol_facade=protocol_facade,
         expires_at=expires_at,
         revoked_at=None,
@@ -92,6 +94,7 @@ async def list_active_runtime_grants_for_route(
     target_id: UUID,
     sandbox_profile_id: UUID,
     agent_kind: str,
+    auth_slot_id: str,
     now: datetime,
 ) -> tuple[AgentGatewayRuntimeGrantRecord, ...]:
     rows = (
@@ -103,6 +106,7 @@ async def list_active_runtime_grants_for_route(
                     AgentGatewayRuntimeGrant.target_id == target_id,
                     AgentGatewayRuntimeGrant.sandbox_profile_id == sandbox_profile_id,
                     AgentGatewayRuntimeGrant.agent_kind == agent_kind,
+                    AgentGatewayRuntimeGrant.auth_slot_id == auth_slot_id,
                     AgentGatewayRuntimeGrant.revoked_at.is_(None),
                     AgentGatewayRuntimeGrant.expires_at > now,
                 )
@@ -172,13 +176,14 @@ async def lock_runtime_grant_route(
     target_id: UUID,
     sandbox_profile_id: UUID,
     agent_kind: str,
+    auth_slot_id: str,
 ) -> None:
     await db.execute(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
         {
             "lock_key": (
                 "agent_gateway_runtime_grant:"
-                f"{policy_id}:{target_id}:{sandbox_profile_id}:{agent_kind}"
+                f"{policy_id}:{target_id}:{sandbox_profile_id}:{agent_kind}:{auth_slot_id}"
             )
         },
     )
