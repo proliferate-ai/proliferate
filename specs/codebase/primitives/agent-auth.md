@@ -624,7 +624,7 @@ Allowlist (initial; can grow):
 
 ```text
 claude   + gateway_env
-  ANTHROPIC_AUTH_TOKEN, ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL,
+  ANTHROPIC_AUTH_TOKEN, ANTHROPIC_BASE_URL,
   ANTHROPIC_CUSTOM_HEADERS, CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST
   AnyHarness injects a runtime-owned CLAUDE_CONFIG_DIR at launch time.
 
@@ -632,19 +632,21 @@ claude   + synced_files
   (none expected; synced files carry auth via .claude/.credentials.json)
 
 codex    + gateway_env
-  CODEX_API_KEY, CODEX_HOME
+  CODEX_API_KEY, OPENAI_API_KEY, CODEX_HOME
 
 codex    + synced_files
-  CODEX_HOME
+  (none)
 
 opencode + gateway_env  (gated by AGENT_GATEWAY_OPENCODE_ENABLED)
-  OPENAI_API_KEY, OPENAI_BASE_URL
+  openai slot: OPENAI_API_KEY, OPENAI_BASE_URL
+  anthropic slot: ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_BASE_URL
+  gemini slot: GEMINI_API_KEY, GOOGLE_GEMINI_BASE_URL
 
 opencode + synced_files
   (none)
 
 gemini   + synced_files
-  GEMINI_API_KEY, GOOGLE_API_KEY  (rare; only if synced file format demands it)
+  GEMINI_API_KEY, GOOGLE_API_KEY, GOOGLE_GENAI_USE_VERTEXAI
 
 gemini   + gateway_env
   GEMINI_API_KEY, GOOGLE_GEMINI_BASE_URL
@@ -1059,8 +1061,8 @@ Tests in §9.
 11. Proactive grant rotation runs (when
     `agent_gateway_reconciler_enabled=true`) and re-enqueues
     `refresh_agent_auth_config` for grants whose `expires_at <= now + 2 days`.
-    With 7-day grants this refreshes at roughly five days old. Old grants
-    drain naturally.
+    With 7-day grants this refreshes at roughly five days old. Refresh
+    materialization rotates the Bifrost virtual key and revokes the old grant.
 12. `GET /v1/cloud/capabilities` returns server-side gateway flags.
     Desktop reads from this endpoint; `apps/desktop/src/config/agent-auth.ts`
     has no hardcoded `AGENT_GATEWAY_BYOK_ENABLED` value.

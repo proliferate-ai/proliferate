@@ -78,8 +78,8 @@ def test_synced_payload_provider_matches_legacy_agent_payloads() -> None:
     )
 
 
-def test_org_profile_allows_personal_synced_credential_without_share() -> None:
-    allowed = can_select_credential_for_profile(
+def test_org_profile_requires_share_for_personal_synced_credential() -> None:
+    unshared = can_select_credential_for_profile(
         profile_owner_scope="organization",
         profile_owner_user_id=None,
         profile_organization_id="org-1",
@@ -89,7 +89,8 @@ def test_org_profile_allows_personal_synced_credential_without_share() -> None:
         credential_kind="synced_path",
         has_active_share=False,
     )
-    assert isinstance(allowed, PolicyAllowed)
+    assert isinstance(unshared, PolicyDenied)
+    assert unshared.code == "credential_not_selectable"
 
     shared = can_select_credential_for_profile(
         profile_owner_scope="organization",

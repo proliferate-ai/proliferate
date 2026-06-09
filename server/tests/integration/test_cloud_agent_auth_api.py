@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 import uuid
 from base64 import b64encode
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CLOUD_WORKER_TOKEN_DOMAIN
@@ -18,6 +19,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_STATUS_ACTIVE,
 )
 from proliferate.db.models.auth import AuthIdentity, OAuthAccount, ProviderGrant, User
+from proliferate.db.models.cloud.agent_auth_gateway import AgentGatewayRuntimeGrant
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.cloud_agent_auth import store
 from proliferate.db.store.cloud_sandboxes import ensure_managed_sandbox_for_target
@@ -30,6 +32,7 @@ from proliferate.integrations.bifrost import (
     BifrostVirtualKeyResult,
 )
 from proliferate.server.cloud.agent_auth import service as agent_auth_service
+from proliferate.server.cloud.agent_auth.runtime_keys import _runtime_grant_token_hash
 from proliferate.server.cloud.worker import auth as worker_auth
 from proliferate.server.cloud.worker.domain.types import WorkerAuthContext
 from proliferate.utils.crypto import encrypt_text
@@ -1341,6 +1344,119 @@ async def test_bifrost_worker_materialization_uses_direct_virtual_key_env(
         assert provider_configs[0]["key_ids"] == [provider_key_ids_by_provider[provider]]
         assert provider_configs[0]["allowed_models"] != ["*"]
         assert provider_configs[0]["budgets"][0]["max_limit"] == 5.0
+
+
+@pytest.mark.asyncio
+async def test_bifrost_runtime_key_issuance_records_and_rotates_runtime_grants(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _enable_anthropic_gateway_byok(monkeypatch)
+    fake_bifrost = _enable_bifrost_gateway(monkeypatch)
+    tokens = await _create_user_and_get_tokens(
+        client,
+        db_session,
+        email="agent-auth-bifrost-runtime-grant@example.com",
+    )
+    actor_user_id = UUID(tokens["user_id"])
+
+    credential_response = await client.post(
+        "/v1/cloud/agent-auth/credentials/gateway",
+        headers=_headers(tokens),
+        json={
+            "ownerScope": "personal",
+            "displayName": "Runtime Grant Anthropic BYOK",
+            "policyKind": "personal_byok",
+            "providerKind": "anthropic_api_key",
+            "payload": {"apiKey": "sk-ant-runtime-grant"},
+        },
+    )
+    assert credential_response.status_code == 200
+    credential = credential_response.json()["credential"]
+
+    profile_response = await client.post(
+        "/v1/cloud/sandbox-profiles/personal",
+        headers=_headers(tokens),
+        json={},
+    )
+    assert profile_response.status_code == 200
+    profile = await store.get_active_personal_sandbox_profile_for_user(db_session, actor_user_id)
+    assert profile is not None and profile.primary_target_id is not None
+    select_response = await client.put(
+        f"/v1/cloud/sandbox-profiles/{profile.id}/agent-auth-selections/claude/anthropic",
+        headers=_headers(tokens),
+        json={"credentialId": credential["id"]},
+    )
+    assert select_response.status_code == 200
+    await ensure_managed_sandbox_for_target(
+        db_session,
+        sandbox_profile_id=profile.id,
+        target_id=profile.primary_target_id,
+        billing_subject_id=profile.billing_subject_id,
+    )
+    selection = (await store.list_selections_for_profile(db_session, profile.id))[0]
+
+    first = await agent_auth_service._issue_bifrost_runtime_virtual_key_for_selection(
+        db_session,
+        auth=WorkerAuthContext(
+            target_id=profile.primary_target_id,
+            worker_id=uuid.uuid4(),
+        ),
+        profile=profile,
+        selection=selection,
+    )
+    first_grant = await store.get_runtime_grant_by_token_hash(
+        db_session,
+        _runtime_grant_token_hash(first.virtual_key),
+    )
+    assert first_grant is not None
+    assert first_grant.selection_id == selection.id
+    assert first_grant.target_id == profile.primary_target_id
+    assert first.expires_at_iso == first_grant.expires_at.isoformat()
+
+    second = await agent_auth_service._issue_bifrost_runtime_virtual_key_for_selection(
+        db_session,
+        auth=WorkerAuthContext(
+            target_id=profile.primary_target_id,
+            worker_id=uuid.uuid4(),
+        ),
+        profile=profile,
+        selection=selection,
+    )
+    assert second.virtual_key == first.virtual_key
+    assert len(fake_bifrost.virtual_keys) == 1
+
+    row = (
+        await db_session.execute(
+            select(AgentGatewayRuntimeGrant).where(AgentGatewayRuntimeGrant.id == first_grant.id)
+        )
+    ).scalar_one()
+    row.expires_at = utcnow() + timedelta(hours=12)
+    await db_session.flush()
+
+    third = await agent_auth_service._issue_bifrost_runtime_virtual_key_for_selection(
+        db_session,
+        auth=WorkerAuthContext(
+            target_id=profile.primary_target_id,
+            worker_id=uuid.uuid4(),
+        ),
+        profile=profile,
+        selection=selection,
+    )
+    old_grant = await store.get_runtime_grant_by_token_hash(
+        db_session,
+        _runtime_grant_token_hash(first.virtual_key),
+    )
+    new_grant = await store.get_runtime_grant_by_token_hash(
+        db_session,
+        _runtime_grant_token_hash(third.virtual_key),
+    )
+    assert third.virtual_key != first.virtual_key
+    assert len(fake_bifrost.virtual_keys) == 2
+    assert fake_bifrost.disabled_virtual_keys == [first.virtual_key_id]
+    assert old_grant is not None and old_grant.revoked_at is not None
+    assert new_grant is not None and new_grant.revoked_at is None
 
 
 @pytest.mark.asyncio

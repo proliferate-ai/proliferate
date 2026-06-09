@@ -112,7 +112,11 @@ def can_select_credential_for_profile(
         and credential_organization_id == profile_organization_id
     ):
         return PolicyAllowed()
-    if credential_owner_scope == "personal" and credential_kind == "synced_path":
+    if (
+        credential_owner_scope == "personal"
+        and credential_kind == "synced_path"
+        and has_active_share
+    ):
         return PolicyAllowed()
     return PolicyDenied(
         code="credential_not_selectable",

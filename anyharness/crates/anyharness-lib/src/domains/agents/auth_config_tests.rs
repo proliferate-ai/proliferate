@@ -435,7 +435,7 @@ fn launch_overlay_fails_closed_for_missing_scoped_selection() {
 }
 
 #[test]
-fn launch_overlay_allows_missing_scoped_selection_for_provider_managed_agent() {
+fn launch_overlay_fails_closed_for_missing_scoped_provider_managed_selection() {
     let service = AgentAuthConfigService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
@@ -449,8 +449,12 @@ fn launch_overlay_allows_missing_scoped_selection_for_provider_managed_agent() {
 
     let missing_record = service
         .launch_overlay("opencode", Some(&scope), Some(1))
-        .expect("provider-managed agent can launch without applied auth config");
-    assert!(missing_record.protected_env.is_empty());
+        .expect_err("scoped provider-managed agent needs applied auth config");
+    let AgentAuthLaunchOverlayError::SelectionRequired(required) = missing_record else {
+        panic!("expected selection required");
+    };
+    assert_eq!(required.agent_kind, "opencode");
+    assert_eq!(required.selection_status, "missing");
 
     service
         .apply_config(AgentAuthConfigInput {
@@ -462,8 +466,12 @@ fn launch_overlay_allows_missing_scoped_selection_for_provider_managed_agent() {
 
     let empty_record = service
         .launch_overlay("opencode", Some(&scope), Some(1))
-        .expect("provider-managed agent can launch without selected auth slot");
-    assert!(empty_record.protected_env.is_empty());
+        .expect_err("scoped provider-managed agent needs selected auth slot");
+    let AgentAuthLaunchOverlayError::SelectionRequired(required) = empty_record else {
+        panic!("expected selection required");
+    };
+    assert_eq!(required.agent_kind, "opencode");
+    assert_eq!(required.selection_status, "missing");
 }
 
 #[test]

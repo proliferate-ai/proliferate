@@ -200,6 +200,18 @@ pub fn build_anyharness_agent_auth_request(
         }
 
         if let Some(synced) = &selection.synced_files {
+            protected_env.extend(synced.env_vars.clone());
+            let _ = &synced.credential_share_id;
+        }
+
+        require_allowed_protected_env(
+            &selection.agent_kind,
+            &auth_slot_id,
+            &selection.materialization_mode,
+            &protected_env,
+        )?;
+
+        if let Some(synced) = &selection.synced_files {
             applied_cleanup_paths.extend(apply_cleanup_actions(
                 allowed_root,
                 &selection.agent_kind,
@@ -214,16 +226,8 @@ pub fn build_anyharness_agent_auth_request(
                 &mut synced_file_paths,
             )?;
             synced_file_count += written;
-            protected_env.extend(synced.env_vars.clone());
-            let _ = &synced.credential_share_id;
         }
 
-        require_allowed_protected_env(
-            &selection.agent_kind,
-            &auth_slot_id,
-            &selection.materialization_mode,
-            &protected_env,
-        )?;
         selections.push(json!({
             "agentKind": selection.agent_kind,
             "authSlotId": auth_slot_id,
@@ -268,7 +272,9 @@ fn resolved_auth_slot_id(agent_kind: &str, auth_slot_id: &str) -> Result<String,
         return Ok(auth_slot_id.to_string());
     }
     default_auth_slot_id(agent_kind).ok_or_else(|| {
-        materialization_error(format!("missing agent auth slot for unsupported agent {agent_kind}"))
+        materialization_error(format!(
+            "missing agent auth slot for unsupported agent {agent_kind}"
+        ))
     })
 }
 
@@ -276,7 +282,10 @@ fn default_auth_slot_id(agent_kind: &str) -> Option<String> {
     let registry = AGENT_AUTH_REGISTRY.get_or_init(|| {
         serde_json::from_str(BUNDLED_AGENT_REGISTRY).expect("bundled agent registry must parse")
     });
-    let agent = registry.agents.iter().find(|agent| agent.kind == agent_kind)?;
+    let agent = registry
+        .agents
+        .iter()
+        .find(|agent| agent.kind == agent_kind)?;
     agent
         .auth
         .slots
