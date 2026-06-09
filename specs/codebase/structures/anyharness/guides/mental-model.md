@@ -41,6 +41,17 @@ at wiring.
 | 7 | Wire | `app/` only, via per-domain constructors |
 | 8 | Observe | one span at each use-case entry |
 
+The jobs compose; they do not embody. Orchestration **causes** effects by
+calling their owners — `store.insert(record)?`, `handle.send(command).await?`
+are orchestration lines, one effect-owner call each. **Performing** an effect
+is the owner's job: effects on owned state belong to the custodian (the store
+executes the SQL, the actor mutates live state when commanded); effects on the
+un-owned world (filesystem, processes, network, protocol IO) belong to
+mechanism files, `adapters/`, and `integrations/`. The violation is never
+that a use case caused an effect — it is an orchestration body that contains
+the mechanics inline: SQL strings, `std::fs` calls, process spawning,
+encryption loops. One function embodying two jobs is the leak.
+
 ## Truths: Static, Dynamic, Derived
 
 The state axis is "who owns the truth and does it change":
