@@ -42,12 +42,7 @@ pub(super) fn no_selection_kinds(selections: &[AgentAuthSelectionConfig]) -> Vec
         .into_iter()
         .filter(|kind| {
             let agent_kind = kind.kind.as_str();
-            if !kind
-                .auth
-                .slots
-                .iter()
-                .any(|slot| slot.required_for_readiness)
-            {
+            if kind.auth.slots.is_empty() {
                 return false;
             }
             !selections.iter().any(|selection| {

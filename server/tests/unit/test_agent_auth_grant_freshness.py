@@ -11,7 +11,7 @@ from proliferate.utils.time import utcnow
 
 
 @pytest.mark.asyncio
-async def test_runtime_grant_freshness_refreshes_stale_revision_with_restart(
+async def test_runtime_grant_freshness_refreshes_stale_revision_without_restart(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     sandbox_profile_id = uuid.uuid4()
@@ -67,6 +67,6 @@ async def test_runtime_grant_freshness_refreshes_stale_revision_with_restart(
             "profile": profile,
             "actor_user_id": None,
             "reason": "runtime_grant_expiring",
-            "force_restart": True,
+            "force_restart": False,
         }
     ]
