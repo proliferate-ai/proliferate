@@ -40,6 +40,11 @@ pub struct ProbeOptions {
     /// Optional cap on how many models to switch through (safety valve for
     /// harnesses with very large dynamic model lists).
     pub max_models: Option<usize>,
+    /// Send one minimal prompt on the session's current model and record the
+    /// outcome. This is the ONLY honest availability test for seeded model
+    /// ids: harness menus list whatever the config names without validating
+    /// it, so listing != launchable. Burns a small number of tokens.
+    pub send_test_prompt: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -48,6 +53,30 @@ pub struct ProbeAttestation {
     pub name: String,
     pub version: String,
     pub title: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProbeNativeCli {
+    pub path: String,
+    pub version: Option<String>,
+}
+
+/// Result of an availability trial: a model id NOT on the advertised menu,
+/// seeded via config preset, accepted iff a real inference turn succeeded.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProbeTrialResult {
+    pub model_id: String,
+    pub accepted: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProbePromptResult {
+    pub ok: bool,
+    /// stop_reason on success, error string on failure.
+    pub detail: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -72,6 +101,17 @@ pub struct ProbeSnapshot {
     /// ("acpModels"), a `model` config option ("modelConfigOption" — e.g.
     /// OpenCode), or "none".
     pub model_source: String,
+    /// The native coding-agent CLI the adapter was pointed at (path +
+    /// `--version` output), when determinable. Session behavior depends on
+    /// this as much as on the adapter version.
+    pub native_cli: Option<ProbeNativeCli>,
+    /// Availability trials run alongside this snapshot (off-menu model ids
+    /// the harness accepted or rejected). Populated by the CLI command.
+    #[serde(default)]
+    pub trials: Vec<ProbeTrialResult>,
+    /// Outcome of the minimal test prompt, when send_test_prompt was set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt_result: Option<ProbePromptResult>,
     pub current_model_id: Option<String>,
     pub current_mode_id: Option<String>,
     /// Raw `modes` block from the new_session response.
@@ -369,12 +409,42 @@ async fn run_enumeration(
         });
     }
 
+    let prompt_result = if options.send_test_prompt {
+        let request = acp::PromptRequest::new(
+            new_session.session_id.clone(),
+            vec![acp::ContentBlock::Text(acp::TextContent::new(
+                "Reply with exactly: OK".to_string(),
+            ))],
+        );
+        Some(
+            match tokio::time::timeout(Duration::from_secs(90), conn.prompt(request)).await {
+                Ok(Ok(response)) => ProbePromptResult {
+                    ok: true,
+                    detail: format!("{:?}", response.stop_reason),
+                },
+                Ok(Err(error)) => ProbePromptResult {
+                    ok: false,
+                    detail: error.to_string(),
+                },
+                Err(_) => ProbePromptResult {
+                    ok: false,
+                    detail: "test prompt timed out after 90s".to_string(),
+                },
+            },
+        )
+    } else {
+        None
+    };
+
     Ok(ProbeSnapshot {
         probed_at: chrono::Utc::now().to_rfc3339(),
         agent_kind: kind.to_string(),
         auth_context: options.auth_context.clone(),
         attestation,
         model_source: model_source.to_string(),
+        native_cli: detect_native_cli(resolved),
+        trials: Vec::new(),
+        prompt_result,
         current_model_id,
         current_mode_id,
         modes,
@@ -447,6 +517,34 @@ async fn await_config_option_update(
             Ok(None) | Err(_) => return None,
         }
     }
+}
+
+/// Best-effort identification of the native CLI the adapter will use:
+/// the CLAUDE_CODE_EXECUTABLE-style env override, else the managed native
+/// artifact. Runs `--version` to record the actual version string.
+fn detect_native_cli(
+    resolved: &crate::domains::agents::model::ResolvedAgent,
+) -> Option<ProbeNativeCli> {
+    let path = std::env::var("CLAUDE_CODE_EXECUTABLE")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(PathBuf::from)
+        .or_else(|| {
+            resolved
+                .native
+                .as_ref()
+                .and_then(|artifact| artifact.path.clone())
+        })?;
+    let version = std::process::Command::new(&path)
+        .arg("--version")
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string());
+    Some(ProbeNativeCli {
+        path: path.to_string_lossy().into_owned(),
+        version,
+    })
 }
 
 fn probe_workspace_dir(kind: &AgentKind) -> anyhow::Result<PathBuf> {

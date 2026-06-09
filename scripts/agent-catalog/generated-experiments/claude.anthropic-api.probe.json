@@ -1,19 +1,37 @@
 {
-  "probedAt": "2026-06-09T23:18:45.962228+00:00",
+  "probedAt": "2026-06-09T23:27:46.502526+00:00",
   "agentKind": "claude",
   "authContext": "anthropic-api",
   "attestation": {
     "name": "@agentclientprotocol/claude-agent-acp",
-    "version": "0.29.0",
+    "version": "0.44.0",
     "title": "Claude Agent"
   },
-  "modelSource": "acpModels",
-  "currentModelId": "sonnet",
+  "modelSource": "modelConfigOption",
+  "nativeCli": {
+    "path": "/Users/pablohansen/.local/bin/claude",
+    "version": "2.1.170 (Claude Code)"
+  },
+  "trials": [
+    {
+      "modelId": "claude-fable-5",
+      "accepted": true
+    },
+    {
+      "modelId": "claude-opus-4-8",
+      "accepted": true
+    },
+    {
+      "modelId": "claude-bogus-model-99",
+      "accepted": false
+    }
+  ],
+  "currentModelId": null,
   "currentModeId": "default",
   "modes": {
     "availableModes": [
       {
-        "description": "Use a model classifier to approve/deny permission prompts.",
+        "description": "Use a model classifier to approve/deny permission prompts",
         "id": "auto",
         "name": "Auto"
       },
@@ -54,7 +72,7 @@
       "name": "Mode",
       "options": [
         {
-          "description": "Use a model classifier to approve/deny permission prompts.",
+          "description": "Use a model classifier to approve/deny permission prompts",
           "name": "Auto",
           "value": "auto"
         },
@@ -88,11 +106,16 @@
     },
     {
       "category": "model",
-      "currentValue": "sonnet",
+      "currentValue": "default",
       "description": "AI model to use",
       "id": "model",
       "name": "Model",
       "options": [
+        {
+          "description": "Use the default model (currently Opus 4.8 (1M context)) · $5/$25 per Mtok",
+          "name": "Default (recommended)",
+          "value": "default"
+        },
         {
           "description": "Sonnet 4.6 · Efficient for routine tasks · $3/$15 per Mtok",
           "name": "Sonnet",
@@ -113,11 +136,15 @@
     },
     {
       "category": "thought_level",
-      "currentValue": "high",
-      "description": "Reasoning depth",
+      "currentValue": "default",
+      "description": "Available effort levels for this model",
       "id": "effort",
       "name": "Effort",
       "options": [
+        {
+          "name": "Default",
+          "value": "default"
+        },
         {
           "name": "Low",
           "value": "low"
@@ -129,12 +156,131 @@
         {
           "name": "High",
           "value": "high"
+        },
+        {
+          "name": "Xhigh",
+          "value": "xhigh"
+        },
+        {
+          "name": "Max",
+          "value": "max"
         }
       ],
       "type": "select"
     }
   ],
   "models": [
+    {
+      "modelId": "default",
+      "name": "Default (recommended)",
+      "description": "Use the default model (currently Opus 4.8 (1M context)) · $5/$25 per Mtok",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "default",
+          "description": "Session permission mode",
+          "id": "mode",
+          "name": "Mode",
+          "options": [
+            {
+              "description": "Use a model classifier to approve/deny permission prompts",
+              "name": "Auto",
+              "value": "auto"
+            },
+            {
+              "description": "Standard behavior, prompts for dangerous operations",
+              "name": "Default",
+              "value": "default"
+            },
+            {
+              "description": "Auto-accept file edit operations",
+              "name": "Accept Edits",
+              "value": "acceptEdits"
+            },
+            {
+              "description": "Planning mode, no actual tool execution",
+              "name": "Plan Mode",
+              "value": "plan"
+            },
+            {
+              "description": "Don't prompt for permissions, deny if not pre-approved",
+              "name": "Don't Ask",
+              "value": "dontAsk"
+            },
+            {
+              "description": "Bypass all permission checks",
+              "name": "Bypass Permissions",
+              "value": "bypassPermissions"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "default",
+          "description": "AI model to use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Use the default model (currently Opus 4.8 (1M context)) · $5/$25 per Mtok",
+              "name": "Default (recommended)",
+              "value": "default"
+            },
+            {
+              "description": "Sonnet 4.6 · Efficient for routine tasks · $3/$15 per Mtok",
+              "name": "Sonnet",
+              "value": "sonnet"
+            },
+            {
+              "description": "Sonnet 4.6 for long sessions · $3/$15 per Mtok",
+              "name": "Sonnet (1M context)",
+              "value": "sonnet[1m]"
+            },
+            {
+              "description": "Haiku 4.5 · Fastest for quick answers · $1/$5 per Mtok",
+              "name": "Haiku",
+              "value": "haiku"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
     {
       "modelId": "sonnet",
       "name": "Sonnet",
@@ -148,7 +294,7 @@
           "name": "Mode",
           "options": [
             {
-              "description": "Use a model classifier to approve/deny permission prompts.",
+              "description": "Use a model classifier to approve/deny permission prompts",
               "name": "Auto",
               "value": "auto"
             },
@@ -188,6 +334,11 @@
           "name": "Model",
           "options": [
             {
+              "description": "Use the default model (currently Opus 4.8 (1M context)) · $5/$25 per Mtok",
+              "name": "Default (recommended)",
+              "value": "default"
+            },
+            {
               "description": "Sonnet 4.6 · Efficient for routine tasks · $3/$15 per Mtok",
               "name": "Sonnet",
               "value": "sonnet"
@@ -207,11 +358,15 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "high",
-          "description": "Reasoning depth",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
           "id": "effort",
           "name": "Effort",
           "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
             {
               "name": "Low",
               "value": "low"
@@ -223,6 +378,10 @@
             {
               "name": "High",
               "value": "high"
+            },
+            {
+              "name": "Max",
+              "value": "max"
             }
           ],
           "type": "select"
@@ -242,7 +401,7 @@
           "name": "Mode",
           "options": [
             {
-              "description": "Use a model classifier to approve/deny permission prompts.",
+              "description": "Use a model classifier to approve/deny permission prompts",
               "name": "Auto",
               "value": "auto"
             },
@@ -282,6 +441,11 @@
           "name": "Model",
           "options": [
             {
+              "description": "Use the default model (currently Opus 4.8 (1M context)) · $5/$25 per Mtok",
+              "name": "Default (recommended)",
+              "value": "default"
+            },
+            {
               "description": "Sonnet 4.6 · Efficient for routine tasks · $3/$15 per Mtok",
               "name": "Sonnet",
               "value": "sonnet"
@@ -301,11 +465,15 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "high",
-          "description": "Reasoning depth",
+          "currentValue": "default",
+          "description": "Available effort levels for this model",
           "id": "effort",
           "name": "Effort",
           "options": [
+            {
+              "name": "Default",
+              "value": "default"
+            },
             {
               "name": "Low",
               "value": "low"
@@ -317,6 +485,10 @@
             {
               "name": "High",
               "value": "high"
+            },
+            {
+              "name": "Max",
+              "value": "max"
             }
           ],
           "type": "select"
@@ -335,11 +507,6 @@
           "id": "mode",
           "name": "Mode",
           "options": [
-            {
-              "description": "Use a model classifier to approve/deny permission prompts.",
-              "name": "Auto",
-              "value": "auto"
-            },
             {
               "description": "Standard behavior, prompts for dangerous operations",
               "name": "Default",
@@ -375,6 +542,11 @@
           "id": "model",
           "name": "Model",
           "options": [
+            {
+              "description": "Use the default model (currently Opus 4.8 (1M context)) · $5/$25 per Mtok",
+              "name": "Default (recommended)",
+              "value": "default"
+            },
             {
               "description": "Sonnet 4.6 · Efficient for routine tasks · $3/$15 per Mtok",
               "name": "Sonnet",

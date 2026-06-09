@@ -34,6 +34,12 @@ pub struct CatalogProbeArgs {
     /// Cap the number of models switched through (safety valve)
     #[arg(long)]
     pub max_models: Option<usize>,
+
+    /// Availability trial: model ids NOT on the advertised menu to test by
+    /// seeding the harness config with them (repeatable). Accepted ids are
+    /// available-but-not-default-visible; rejected ids are unavailable.
+    #[arg(long = "trial-model")]
+    pub trial_models: Vec<String>,
 }
 
 pub async fn run(args: CatalogProbeArgs) -> Result<()> {
@@ -49,16 +55,66 @@ pub async fn run(args: CatalogProbeArgs) -> Result<()> {
     ensure_runtime_home(&runtime_home)?;
 
     let options = ProbeOptions {
-        agent_kind,
+        agent_kind: agent_kind.clone(),
         auth_context: args.auth_context.clone(),
         auth_env,
-        runtime_home,
+        runtime_home: runtime_home.clone(),
         model_switch_timeout: Duration::from_secs(args.model_switch_timeout_secs),
         max_models: args.max_models,
+        send_test_prompt: false,
     };
 
     let local = tokio::task::LocalSet::new();
-    let snapshot = local.run_until(probe_agent(options)).await?;
+    let mut snapshot = local.run_until(probe_agent(options)).await?;
+
+    // Availability trials: one fresh, isolated probe per candidate id with
+    // the harness config seeded to select it. Accepted = the harness lists
+    // or selects the id; the menu-read in `snapshot` is unaffected.
+    for trial_id in &args.trial_models {
+        if agent_kind != AgentKind::Claude {
+            anyhow::bail!("--trial-model is currently supported for claude only");
+        }
+        let mut trial_env = auth_env_for_context(&agent_kind, &args.auth_context)?;
+        let config_dir = trial_env
+            .get("CLAUDE_CONFIG_DIR")
+            .cloned()
+            .ok_or_else(|| anyhow!("claude trial requires an isolated CLAUDE_CONFIG_DIR"))?;
+        std::fs::write(
+            std::path::Path::new(&config_dir).join("settings.json"),
+            serde_json::json!({ "model": trial_id }).to_string(),
+        )?;
+        let trial_options = ProbeOptions {
+            agent_kind: agent_kind.clone(),
+            auth_context: format!("{}+trial:{trial_id}", args.auth_context),
+            auth_env: trial_env,
+            runtime_home: runtime_home.clone(),
+            model_switch_timeout: Duration::from_secs(args.model_switch_timeout_secs),
+            max_models: Some(0),
+            // Menu listing is NOT acceptance — the harness lists whatever the
+            // config names. Only a successful inference turn counts.
+            send_test_prompt: true,
+        };
+        let accepted = match local.run_until(probe_agent(trial_options)).await {
+            Ok(trial_snapshot) => match &trial_snapshot.prompt_result {
+                Some(result) if result.ok => true,
+                Some(result) => {
+                    println!("trial {trial_id}: prompt rejected ({})", result.detail);
+                    false
+                }
+                None => false,
+            },
+            Err(error) => {
+                println!("trial {trial_id}: probe failed ({error}) — recording as rejected");
+                false
+            }
+        };
+        snapshot.trials.push(
+            anyharness_lib::live::sessions::probe::ProbeTrialResult {
+                model_id: trial_id.clone(),
+                accepted,
+            },
+        );
+    }
 
     let out_dir = PathBuf::from(&args.out);
     std::fs::create_dir_all(&out_dir)
