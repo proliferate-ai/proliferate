@@ -12,7 +12,10 @@ from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
 from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as targets_store
-from proliferate.server.cloud.claims.access import require_workspace_interact
+from proliferate.server.cloud.claims.access import (
+    require_workspace_interact,
+    require_workspace_interact_if_active_exposure,
+)
 from proliferate.server.cloud.commands.domain.target import target_requires_cloud_workspace
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
 from proliferate.server.cloud.commands.projected_sessions import (
@@ -35,6 +38,12 @@ async def resolve_command_workspace(
         and body.cloud_workspace_id is not None
         and not _materialize_payload_allows_cloud_workspace_scope(body.payload)
     ):
+        await require_workspace_interact_if_active_exposure(
+            db,
+            actor_user_id=user.id,
+            target_id=target.id,
+            cloud_workspace_id=body.cloud_workspace_id,
+        )
         raise CloudApiError(
             "cloud_command_cloud_workspace_not_allowed",
             "existing_path materialize_workspace commands cannot scope a Cloud workspace.",
