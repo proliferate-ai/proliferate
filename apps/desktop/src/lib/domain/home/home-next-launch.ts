@@ -68,7 +68,13 @@ export interface HomeNextLaunchPreferences {
 export type HomeLaunchTarget =
   | { kind: "cowork" }
   | { kind: "local"; sourceRoot: string; existingWorkspaceId: string | null }
-  | { kind: "worktree"; repoRootId: string; sourceWorkspaceId: string | null; baseBranch: string }
+  | {
+    kind: "worktree";
+    repoRootId: string;
+    sourceWorkspaceId: string | null;
+    baseBranch: string;
+    defaultBranch: string | null;
+  }
   | { kind: "cloud"; gitOwner: string; gitRepoName: string; baseBranch: string };
 
 export function resolveHomeModelAvailabilityState(input: {
@@ -254,6 +260,7 @@ export function resolveHomeLaunchTarget(input: {
   repository: SettingsRepositoryEntry | null;
   repoLaunchKind: HomeNextRepoLaunchKind;
   baseBranch: string | null;
+  defaultBranch: string | null;
   existingLocalWorkspaceId: string | null;
 }): HomeLaunchTarget | null {
   if (input.destination === "cowork") {
@@ -301,6 +308,7 @@ export function resolveHomeLaunchTarget(input: {
     repoRootId: repository.repoRootId,
     sourceWorkspaceId: repository.localWorkspaceId,
     baseBranch: input.baseBranch,
+    defaultBranch: input.defaultBranch,
   };
 }
 

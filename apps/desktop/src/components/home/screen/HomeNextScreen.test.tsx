@@ -294,7 +294,8 @@ describe("HomeNextScreen model availability notices", () => {
       kind: "worktree",
       repoRootId: "repo-root-1",
       sourceWorkspaceId: null,
-      baseBranch: null,
+      baseBranch: "main",
+      defaultBranch: "main",
     };
     render(<HomeNextScreen />);
 

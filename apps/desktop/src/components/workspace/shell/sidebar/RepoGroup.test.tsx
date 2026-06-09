@@ -105,6 +105,7 @@ const scope: NewWorkspaceCommandScope = {
   sourceWorkspaceId: null,
   cloudRepoTarget: null,
   baseBranch: null,
+  defaultBranch: null,
 };
 
 describe("RepoGroup new workspace command scope", () => {

@@ -23,9 +23,10 @@ from proliferate.db.store.cloud_sync.command_records import (
     snapshot_command,
 )
 from proliferate.db.store.cloud_sync.command_scope import (
+    command_allows_cloud_workspace_scope,
     command_requires_managed_workspace,
+    command_requires_managed_workspace_for_target,
     load_active_workspace_exposure,
-    target_is_managed_cloud,
     workspace_matches_command_target,
 )
 
@@ -62,7 +63,6 @@ async def lease_next_command(
     target = await db.get(CloudTarget, target_id)
     if target is None or target.archived_at is not None:
         return None
-    target_is_managed_cloud_value = target_is_managed_cloud(target)
     for _ in range(20):
         query = (
             select(CloudCommand)
@@ -104,13 +104,31 @@ async def lease_next_command(
         if row is None:
             return None
         if (
-            row.kind == CloudCommandKind.materialize_workspace.value
-            and target_is_managed_cloud_value
+            command_requires_managed_workspace_for_target(
+                kind=row.kind,
+                payload_json=row.payload_json,
+                target=target,
+            )
             and row.cloud_workspace_id is None
         ):
             row.status = CloudCommandStatus.rejected.value
             row.error_code = "cloud_workspace_required"
             row.error_message = "Managed materialize_workspace command is missing Cloud workspace."
+            row.rejected_at = now
+            row.updated_at = now
+            await db.flush()
+            if blocked_commands is not None:
+                blocked_commands.append(snapshot_command(row))
+            continue
+        if row.cloud_workspace_id is not None and not command_allows_cloud_workspace_scope(
+            kind=row.kind,
+            payload_json=row.payload_json,
+        ):
+            row.status = CloudCommandStatus.rejected.value
+            row.error_code = "cloud_workspace_not_allowed"
+            row.error_message = (
+                "existing_path materialize_workspace commands cannot scope a Cloud workspace."
+            )
             row.rejected_at = now
             row.updated_at = now
             await db.flush()

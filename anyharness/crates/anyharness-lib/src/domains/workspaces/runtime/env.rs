@@ -48,7 +48,7 @@ impl WorkspaceRuntime {
         if let Some(branch) = workspace
             .current_branch
             .as_ref()
-            .or(workspace.original_branch.as_ref())
+            .filter(|branch| branch.as_str() != "HEAD")
         {
             env.insert("PROLIFERATE_BRANCH".into(), branch.clone());
         }

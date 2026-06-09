@@ -1,5 +1,7 @@
+use std::path::Path;
 use std::time::Duration;
 
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::warn;
@@ -7,6 +9,7 @@ use tracing::warn;
 use crate::error::WorkerError;
 
 use super::{
+    backfill::AnyHarnessWorkspace,
     sessions::{parse_anyharness_response, AnyHarnessCommandResponse},
     AnyHarnessClient,
 };
@@ -34,8 +37,12 @@ pub enum MaterializeWorkspaceRequest {
         new_branch_name: String,
         #[serde(rename = "baseBranch")]
         base_branch: Option<String>,
+        #[serde(rename = "checkoutMode")]
+        checkout_mode: Option<String>,
         #[serde(rename = "setupScript")]
         setup_script: Option<String>,
+        #[serde(rename = "nameConflictPolicy")]
+        name_conflict_policy: Option<String>,
         origin: Option<Value>,
         #[serde(rename = "creatorContext")]
         creator_context: Option<Value>,
@@ -97,7 +104,9 @@ impl MaterializeWorkspaceRequest {
                 target_path,
                 new_branch_name,
                 base_branch,
+                checkout_mode,
                 setup_script,
+                name_conflict_policy,
                 origin,
                 creator_context,
             } => compact_object(json!({
@@ -105,7 +114,9 @@ impl MaterializeWorkspaceRequest {
                 "targetPath": expand_home(target_path),
                 "newBranchName": new_branch_name,
                 "baseBranch": base_branch,
+                "checkoutMode": checkout_mode,
                 "setupScript": setup_script,
+                "nameConflictPolicy": name_conflict_policy,
                 "origin": origin,
                 "creatorContext": creator_context,
             })),
@@ -171,6 +182,8 @@ impl MaterializeWorkspaceRequest {
         let Self::Worktree {
             repo_root_id,
             new_branch_name,
+            base_branch,
+            checkout_mode,
             ..
         } = self
         else {
@@ -182,10 +195,64 @@ impl MaterializeWorkspaceRequest {
         if result.kind != "worktree" || result.repo_root_id != *repo_root_id {
             return false;
         }
+        if checkout_mode.as_deref() == Some("detached_ref") {
+            let is_detached = matches!(result.current_branch.as_deref(), None | Some("HEAD"));
+            if !is_detached {
+                return false;
+            }
+            return match (base_branch.as_deref(), result.original_branch.as_deref()) {
+                (Some(expected), Some(original)) => original == expected,
+                (Some(_), None) => false,
+                _ => true,
+            };
+        }
         match result.current_branch.as_deref() {
             Some(current_branch) => current_branch == new_branch_name,
             None => true,
         }
+    }
+
+    fn recovered_worktree_workspace_is_expected(&self, workspace: &AnyHarnessWorkspace) -> bool {
+        let Self::Worktree {
+            repo_root_id,
+            target_path,
+            new_branch_name,
+            base_branch,
+            checkout_mode,
+            name_conflict_policy,
+            creator_context,
+            ..
+        } = self
+        else {
+            return false;
+        };
+        if workspace.kind != "worktree" || workspace.repo_root_id != *repo_root_id {
+            return false;
+        }
+        if !workspace_path_matches_target(
+            target_path,
+            &workspace.path,
+            name_conflict_policy_allows_suffix(name_conflict_policy.as_deref()),
+        ) {
+            return false;
+        }
+        if let Some(expected_creator_context) = creator_context {
+            if workspace.creator_context.as_ref() != Some(expected_creator_context) {
+                return false;
+            }
+        }
+        if checkout_mode.as_deref() == Some("detached_ref") {
+            let is_detached = matches!(workspace.current_branch.as_deref(), None | Some("HEAD"));
+            if !is_detached {
+                return false;
+            }
+            return match (base_branch.as_deref(), workspace.original_branch.as_deref()) {
+                (Some(expected), Some(original)) => original == expected,
+                (Some(_), None) => false,
+                _ => true,
+            };
+        }
+        workspace.current_branch.as_deref() == Some(new_branch_name.as_str())
     }
 }
 
@@ -201,6 +268,49 @@ fn expand_home(path: &str) -> String {
             .unwrap_or_else(|| path.to_string());
     }
     path.to_string()
+}
+
+fn workspace_path_matches_target(
+    target_path: &str,
+    workspace_path: &str,
+    allow_suffix: bool,
+) -> bool {
+    let target = normalize_materialized_path(target_path);
+    let workspace = normalize_materialized_path(workspace_path);
+    if workspace == target {
+        return true;
+    }
+    if !allow_suffix {
+        return false;
+    }
+
+    let target_path = Path::new(&target);
+    let workspace_path = Path::new(&workspace);
+    if target_path.parent() != workspace_path.parent() {
+        return false;
+    }
+
+    let Some(target_name) = target_path.file_name().and_then(|name| name.to_str()) else {
+        return false;
+    };
+    let Some(workspace_name) = workspace_path.file_name().and_then(|name| name.to_str()) else {
+        return false;
+    };
+    let Some(suffix) = workspace_name
+        .strip_prefix(target_name)
+        .and_then(|rest| rest.strip_prefix('-'))
+    else {
+        return false;
+    };
+    !suffix.is_empty() && suffix.chars().all(|character| character.is_ascii_digit())
+}
+
+fn name_conflict_policy_allows_suffix(policy: Option<&str>) -> bool {
+    matches!(policy, Some("suffix_path" | "suffix_path_and_branch"))
+}
+
+fn normalize_materialized_path(path: &str) -> String {
+    expand_home(path).trim_end_matches('/').to_string()
 }
 
 impl AnyHarnessClient {
@@ -283,7 +393,30 @@ impl AnyHarnessClient {
         if response.is_success() && request.recovered_worktree_is_expected(&response.body) {
             return Ok(Some(response));
         }
+        if let Some(response) = self
+            .recover_materialized_worktree_from_list(request)
+            .await?
+        {
+            return Ok(Some(response));
+        }
         Ok(None)
+    }
+
+    async fn recover_materialized_worktree_from_list(
+        &self,
+        request: &MaterializeWorkspaceRequest,
+    ) -> Result<Option<AnyHarnessCommandResponse>, WorkerError> {
+        let workspaces = self.list_workspaces().await?;
+        let Some(workspace) = workspaces
+            .into_iter()
+            .find(|workspace| request.recovered_worktree_workspace_is_expected(workspace))
+        else {
+            return Ok(None);
+        };
+        Ok(Some(AnyHarnessCommandResponse {
+            status: StatusCode::OK,
+            body: json!({ "workspace": workspace }),
+        }))
     }
 
     async fn apply_display_name_if_requested(
@@ -375,159 +508,5 @@ fn string_field(value: &Value, field: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use serde_json::json;
-
-    use super::MaterializeWorkspaceRequest;
-
-    #[test]
-    fn materialized_result_extracts_existing_path_fields() {
-        let request = MaterializeWorkspaceRequest::ExistingPath {
-            path: "/workspace/proliferate".to_string(),
-            display_name: Some("Proliferate".to_string()),
-            origin: None,
-            creator_context: None,
-        };
-        let result = request
-            .materialized_result(&json!({
-                "repoRoot": { "id": "repo-root-1" },
-                "workspace": {
-                    "id": "workspace-1",
-                    "repoRootId": "repo-root-1",
-                    "path": "/workspace/proliferate",
-                    "kind": "local",
-                    "currentBranch": "main",
-                    "displayName": "Proliferate"
-                }
-            }))
-            .expect("result");
-        assert_eq!(result.mode, "existing_path");
-        assert_eq!(result.anyharness_workspace_id, "workspace-1");
-        assert_eq!(result.repo_root_id, "repo-root-1");
-        assert_eq!(result.display_name.as_deref(), Some("Proliferate"));
-    }
-
-    #[test]
-    fn existing_path_body_does_not_pass_display_name_to_anyharness_create_body() {
-        let request = MaterializeWorkspaceRequest::ExistingPath {
-            path: "/workspace/proliferate".to_string(),
-            display_name: Some("Proliferate".to_string()),
-            origin: Some(json!({ "kind": "api", "entrypoint": "cloud" })),
-            creator_context: Some(json!({ "kind": "human" })),
-        };
-        assert_eq!(
-            request.anyharness_body(),
-            json!({
-                "path": "/workspace/proliferate",
-                "origin": { "kind": "api", "entrypoint": "cloud" },
-                "creatorContext": { "kind": "human" }
-            })
-        );
-    }
-
-    #[test]
-    fn materialize_workspace_bodies_expand_home_paths_for_anyharness() {
-        let home = dirs::home_dir()
-            .expect("home dir")
-            .join("proliferate-workspaces")
-            .to_string_lossy()
-            .into_owned();
-        let request = MaterializeWorkspaceRequest::ExistingPath {
-            path: "~/proliferate-workspaces".to_string(),
-            display_name: None,
-            origin: None,
-            creator_context: None,
-        };
-
-        assert_eq!(request.anyharness_body(), json!({ "path": home }));
-    }
-
-    #[test]
-    fn materialized_result_uses_worktree_repo_root_hint() {
-        let request = MaterializeWorkspaceRequest::Worktree {
-            repo_root_id: "repo-root-1".to_string(),
-            target_path: "/workspace/feature".to_string(),
-            new_branch_name: "feature".to_string(),
-            base_branch: Some("main".to_string()),
-            setup_script: None,
-            origin: None,
-            creator_context: None,
-        };
-        let result = request
-            .materialized_result(&json!({
-                "workspace": {
-                    "id": "workspace-2",
-                    "path": "/workspace/feature",
-                    "kind": "worktree",
-                    "currentBranch": "feature",
-                    "originalBranch": "main"
-                }
-            }))
-            .expect("result");
-        assert_eq!(result.mode, "worktree");
-        assert_eq!(result.repo_root_id, "repo-root-1");
-    }
-
-    #[test]
-    fn worktree_body_uses_anyharness_camel_case_fields() {
-        let request = MaterializeWorkspaceRequest::Worktree {
-            repo_root_id: "repo-root-1".to_string(),
-            target_path: "/workspace/feature".to_string(),
-            new_branch_name: "feature".to_string(),
-            base_branch: Some("main".to_string()),
-            setup_script: Some("pnpm install".to_string()),
-            origin: None,
-            creator_context: None,
-        };
-        assert_eq!(
-            request.anyharness_body(),
-            json!({
-                "repoRootId": "repo-root-1",
-                "targetPath": "/workspace/feature",
-                "newBranchName": "feature",
-                "baseBranch": "main",
-                "setupScript": "pnpm install"
-            })
-        );
-    }
-
-    #[test]
-    fn worktree_recovery_requires_expected_workspace_shape() {
-        let request = MaterializeWorkspaceRequest::Worktree {
-            repo_root_id: "repo-root-1".to_string(),
-            target_path: "/workspace/feature".to_string(),
-            new_branch_name: "feature".to_string(),
-            base_branch: Some("main".to_string()),
-            setup_script: None,
-            origin: None,
-            creator_context: None,
-        };
-        assert!(request.recovered_worktree_is_expected(&json!({
-            "workspace": {
-                "id": "workspace-2",
-                "repoRootId": "repo-root-1",
-                "path": "/workspace/feature",
-                "kind": "worktree",
-                "currentBranch": "feature"
-            }
-        })));
-        assert!(!request.recovered_worktree_is_expected(&json!({
-            "workspace": {
-                "id": "workspace-2",
-                "repoRootId": "repo-root-1",
-                "path": "/workspace/feature",
-                "kind": "worktree",
-                "currentBranch": "other"
-            }
-        })));
-        assert!(!request.recovered_worktree_is_expected(&json!({
-            "workspace": {
-                "id": "workspace-2",
-                "repoRootId": "other-root",
-                "path": "/workspace/feature",
-                "kind": "worktree",
-                "currentBranch": "feature"
-            }
-        })));
-    }
-}
+#[path = "workspaces_tests.rs"]
+mod tests;

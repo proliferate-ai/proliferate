@@ -161,6 +161,8 @@ export type {
   ResolveWorkspaceResponse,
   ResolveWorkspaceFromPathRequest,
   CreateWorkspaceRequest,
+  WorktreeCheckoutMode,
+  WorktreeNameConflictPolicy,
   CreateWorktreeWorkspaceRequest,
   SetupScriptStatus,
   SetupScriptExecution,

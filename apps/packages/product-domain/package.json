@@ -215,6 +215,10 @@
       "types": "./dist/workspaces/inventory.d.ts",
       "import": "./dist/workspaces/inventory.js"
     },
+    "./workspaces/workspace-name-catalog.generated": {
+      "types": "./dist/workspaces/workspace-name-catalog.generated.d.ts",
+      "import": "./dist/workspaces/workspace-name-catalog.generated.js"
+    },
     "./chats/composer/prompt-attachment-rules": {
       "types": "./dist/chats/composer/prompt-attachment-rules.d.ts",
       "import": "./dist/chats/composer/prompt-attachment-rules.js"

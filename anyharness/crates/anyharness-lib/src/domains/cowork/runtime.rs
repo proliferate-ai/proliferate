@@ -37,6 +37,7 @@ use crate::domains::sessions::store::SessionStore;
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::domains::workspaces::model::{WorkspaceRecord, WorkspaceSurface};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
+use crate::domains::workspaces::worktree_names::WorktreeNameConflictPolicy;
 use crate::live::sessions::LiveSessionManager;
 use crate::origin::OriginContext;
 
@@ -516,6 +517,7 @@ impl CoworkRuntime {
             Some(repo_root.default_branch.as_deref().unwrap_or("main")),
             None,
             "cowork",
+            WorktreeNameConflictPolicy::Fail,
             OriginContext::cowork(),
             None,
         )?;
@@ -836,6 +838,7 @@ impl CoworkRuntime {
             Some(&base_branch),
             None,
             "standard",
+            WorktreeNameConflictPolicy::Fail,
             OriginContext::cowork(),
             Some(creator_context),
         )?;

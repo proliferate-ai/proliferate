@@ -121,6 +121,7 @@ describe("chat launch intent view", () => {
             repoRootId: "repo-1",
             sourceWorkspaceId: null,
             baseBranch: "main",
+            defaultBranch: "main",
           },
         },
       }),

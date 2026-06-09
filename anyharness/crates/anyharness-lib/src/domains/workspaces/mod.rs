@@ -24,4 +24,6 @@ pub mod service;
 pub mod setup_runtime;
 pub mod store;
 pub mod types;
+pub mod worktree_checkout;
+pub mod worktree_names;
 pub mod worktree_runtime;

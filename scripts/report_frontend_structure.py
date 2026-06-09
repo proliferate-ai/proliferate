@@ -194,7 +194,12 @@ def should_skip(path: Path) -> bool:
     relative_path = relative(path)
     if "/generated/" in f"/{relative_path}" or "/dist/" in f"/{relative_path}":
         return True
-    if path.name.endswith(".d.ts") or ".test." in path.name or ".spec." in path.name:
+    if (
+        path.name.endswith(".d.ts")
+        or ".generated." in path.name
+        or ".test." in path.name
+        or ".spec." in path.name
+    ):
         return True
     return any(part in {"__tests__", "__mocks__"} for part in path.parts)
 

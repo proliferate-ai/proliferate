@@ -1,93 +1,15 @@
-use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
 
-use uuid::Uuid;
-
-use super::WorkspaceRuntime;
+use super::test_support::{
+    git_stdout, init_repo, make_runtime, run_git, session_record, TempDirGuard,
+};
 use crate::adapters::git::GitService;
-use crate::domains::repo_roots::service::RepoRootService;
 use crate::domains::repo_roots::store::RepoRootStore;
-use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::store::SessionStore;
-use crate::domains::workspaces::deletion::WorkspaceDeleteWorkflow;
 use crate::domains::workspaces::model::WorkspaceKind;
 use crate::domains::workspaces::store::WorkspaceStore;
-use crate::origin::OriginContext;
 use crate::persistence::Db;
-
-struct TempDirGuard {
-    path: PathBuf,
-}
-
-impl TempDirGuard {
-    fn new(prefix: &str) -> Self {
-        let path = env::temp_dir().join(format!("anyharness-{prefix}-{}", Uuid::new_v4()));
-        fs::create_dir_all(&path).expect("create temp dir");
-        Self { path }
-    }
-
-    fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl Drop for TempDirGuard {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.path);
-    }
-}
-
-#[test]
-fn create_worktree_keeps_created_branch_local() {
-    let remote = TempDirGuard::new("runtime-worktree-remote");
-    let source = TempDirGuard::new("runtime-worktree-source");
-    let target = TempDirGuard::new("runtime-worktree-target");
-    let runtime_home = TempDirGuard::new("runtime-worktree-home");
-    let _ = fs::remove_dir_all(target.path());
-
-    run_git(remote.path(), ["init", "--bare", "-b", "main"]);
-    init_repo(source.path());
-    let remote_path = remote.path().display().to_string();
-    run_git(source.path(), ["remote", "add", "origin", &remote_path]);
-    run_git(source.path(), ["push", "-u", "origin", "main"]);
-
-    let db = Db::open_in_memory().expect("open db");
-    let runtime = make_runtime(&db, runtime_home.path());
-    let source_workspace = runtime
-        .create_workspace(&source.path().display().to_string())
-        .expect("create source workspace");
-
-    let result = runtime
-        .create_worktree(
-            &source_workspace.repo_root.id,
-            &target.path().display().to_string(),
-            "feature/local-only",
-            Some("main"),
-            None,
-        )
-        .expect("create worktree");
-
-    let worktree_path = Path::new(&result.workspace.path);
-    let local_head = git_stdout(worktree_path, ["rev-parse", "HEAD"]);
-    let main_head = git_stdout(source.path(), ["rev-parse", "main"]);
-
-    assert_eq!(local_head.trim(), main_head.trim());
-    assert_git_command_fails(
-        remote.path(),
-        ["rev-parse", "--verify", "refs/heads/feature/local-only"],
-    );
-    assert_git_command_fails(
-        worktree_path,
-        [
-            "rev-parse",
-            "--abbrev-ref",
-            "--symbolic-full-name",
-            "@{upstream}",
-        ],
-    );
-}
 
 #[test]
 fn create_mobility_destination_publishes_created_branch_to_origin() {
@@ -498,100 +420,4 @@ fn create_workspace_rejects_existing_active_worktree_path() {
     assert!(error
         .to_string()
         .contains("a workspace record already exists for path"));
-}
-
-fn init_repo(path: &Path) {
-    run_git(path, ["init", "-b", "main"]);
-    run_git(path, ["config", "user.email", "codex@example.com"]);
-    run_git(path, ["config", "user.name", "Codex"]);
-    fs::write(path.join("README.md"), "seed\n").expect("write seed file");
-    run_git(path, ["add", "README.md"]);
-    run_git(path, ["commit", "-m", "Initial commit"]);
-}
-
-fn make_runtime(db: &Db, runtime_home: &Path) -> WorkspaceRuntime {
-    let repo_root_service = RepoRootService::new(RepoRootStore::new(db.clone()));
-    WorkspaceRuntime::new(
-        WorkspaceStore::new(db.clone()),
-        WorkspaceDeleteWorkflow::new(
-            db.clone(),
-            crate::domains::sessions::deletion::SessionDeleteWorkflow::new(db.clone()),
-        ),
-        repo_root_service,
-        runtime_home.to_path_buf(),
-    )
-}
-
-fn session_record(id: &str, workspace_id: &str) -> SessionRecord {
-    SessionRecord {
-        id: id.to_string(),
-        workspace_id: workspace_id.to_string(),
-        agent_kind: "claude".to_string(),
-        native_session_id: None,
-        agent_auth_scope: None,
-        required_agent_auth_revision: None,
-        requested_model_id: None,
-        current_model_id: None,
-        requested_mode_id: None,
-        current_mode_id: None,
-        title: None,
-        thinking_level_id: None,
-        thinking_budget_tokens: None,
-        status: "idle".to_string(),
-        created_at: "2026-01-01T00:00:00Z".to_string(),
-        updated_at: "2026-01-01T00:00:00Z".to_string(),
-        last_prompt_at: None,
-        closed_at: None,
-        dismissed_at: None,
-        mcp_bindings_ciphertext: None,
-        mcp_binding_summaries_json: None,
-        mcp_binding_policy: SessionMcpBindingPolicy::InheritWorkspace,
-        system_prompt_append: None,
-        subagents_enabled: false,
-        action_capabilities_json: None,
-        origin: Some(OriginContext::api_local_runtime()),
-    }
-}
-
-fn run_git<const N: usize>(cwd: &Path, args: [&str; N]) {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(cwd)
-        .output()
-        .expect("spawn git");
-    assert!(
-        output.status.success(),
-        "git {:?} failed: {}",
-        args,
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-fn assert_git_command_fails<const N: usize>(cwd: &Path, args: [&str; N]) {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(cwd)
-        .output()
-        .expect("spawn git");
-    assert!(
-        !output.status.success(),
-        "git {:?} unexpectedly succeeded with stdout: {}",
-        args,
-        String::from_utf8_lossy(&output.stdout)
-    );
-}
-
-fn git_stdout<const N: usize>(cwd: &Path, args: [&str; N]) -> String {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(cwd)
-        .output()
-        .expect("spawn git");
-    assert!(
-        output.status.success(),
-        "git {:?} failed: {}",
-        args,
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8_lossy(&output.stdout).trim().to_string()
 }

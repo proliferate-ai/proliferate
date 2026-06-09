@@ -8,6 +8,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import PolicyDenied
+from proliferate.db.store import cloud_workspaces
 from proliferate.db.store.cloud_claims import claims as claims_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.organizations import get_active_membership
@@ -107,6 +108,32 @@ async def require_workspace_interact(
     )
     if isinstance(verdict, PolicyDenied):
         raise_policy_denied(verdict)
+
+
+async def require_workspace_interact_if_active_exposure(
+    db: AsyncSession,
+    *,
+    actor_user_id: UUID,
+    target_id: UUID,
+    cloud_workspace_id: UUID,
+) -> None:
+    exposure = await exposures_store.get_active_workspace_exposure(
+        db,
+        target_id=target_id,
+        cloud_workspace_id=cloud_workspace_id,
+    )
+    if exposure is None or exposure.archived_at is not None or exposure.status != "active":
+        return
+    workspace = await cloud_workspaces.get_cloud_workspace_by_id(db, cloud_workspace_id)
+    await require_workspace_interact(
+        db,
+        actor_user_id=actor_user_id,
+        owner_scope=exposure.owner_scope,
+        owner_user_id=exposure.owner_user_id,
+        organization_id=exposure.organization_id,
+        workspace_archived=workspace is not None and workspace.archived_at is not None,
+        exposure=exposure,
+    )
 
 
 async def require_workspace_archive(

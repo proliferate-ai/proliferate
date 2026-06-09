@@ -33,6 +33,7 @@ const stateMocks = vi.hoisted(() => {
       gitRepoName: "repo",
     },
     selectedBranchName: "main",
+    defaultBranchName: "main",
     branchOptions: ["main"],
     branchQuery: {
       isLoading: false,

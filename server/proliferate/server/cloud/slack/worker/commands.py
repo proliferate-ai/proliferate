@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from datetime import timedelta
 from uuid import UUID
 
@@ -18,14 +17,23 @@ from proliferate.db import session_ops as db_session
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store import cloud_repo_config as repo_store
 from proliferate.db.store import cloud_sandbox_profiles as profile_store
+from proliferate.db.store import users as users_store
 from proliferate.db.store.cloud_sync import command_records
 from proliferate.db.store.cloud_sync import commands as commands_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as target_store
 from proliferate.db.store.cloud_workspace_creation import (
+    CloudWorkspaceUniqueConflictError,
     create_managed_cloud_workspace_for_profile,
 )
+from proliferate.db.store.cloud_workspaces import (
+    list_active_managed_cloud_workspace_branches_for_profile_repo,
+)
 from proliferate.integrations.sandbox import get_configured_sandbox_provider
+from proliferate.lib.product.workspace_naming import (
+    pick_generated_workspace_name,
+    resolve_generated_branch_name,
+)
 from proliferate.server.automations.worker.cloud_execution.command_models import (
     EnsureRepoCheckoutPayload,
     MaterializeWorkspacePayload,
@@ -48,12 +56,17 @@ from proliferate.server.cloud.commands.wake import (
     kick_off_command_wake_after_commit_if_required,
 )
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.live.service import publish_worker_control_after_commit
+from proliferate.server.cloud.repos.service import (
+    get_repo_branches_for_user as get_github_repo_branches,
+)
 from proliferate.utils.crypto import encrypt_json
 from proliferate.utils.time import utcnow
 
 SYSTEM_SLACK_USER_UUID = UUID("00000000-0000-0000-0000-000000000007")
 SLACK_COMMAND_WAIT_TIMEOUT = timedelta(seconds=240)
+GENERATED_SLACK_WORKSPACE_CREATE_MAX_ATTEMPTS = 5
 
 
 async def create_and_materialize_workspace(
@@ -66,47 +79,104 @@ async def create_and_materialize_workspace(
     agent_kind: object,
     job_id: UUID,
 ) -> tuple[CloudWorkspace, str]:
-    profile = await profile_store.ensure_organization_sandbox_profile(
-        db,
-        organization_id=organization_id,
-        created_by_user_id=created_by_user_id,
-    )
-    target = await target_store.ensure_primary_profile_target(
-        db,
-        sandbox_profile_id=profile.id,
-        created_by_user_id=created_by_user_id,
-    )
-    branch_name = _slack_branch_name(prompt=prompt, job_id=job_id)
-    repo_root_path, worktree_path = _workspace_paths(
-        repo=repo,
-        branch_name=branch_name,
-        workspace_root=target.default_workspace_root,
-    )
-    workspace = await create_managed_cloud_workspace_for_profile(
-        db,
-        sandbox_profile_id=profile.id,
-        target_id=target.id,
-        created_by_user_id=created_by_user_id,
-        display_name=f"Slack: {repo.git_owner}/{repo.git_repo_name}",
-        git_provider="github",
+    del prompt
+    installer = await users_store.get_user_with_oauth_accounts_by_id(db, created_by_user_id)
+    if installer is None:
+        raise CloudApiError(
+            "slack_installer_not_found",
+            "Slack workspace installer was not found.",
+            status_code=404,
+        )
+    repo_branches = await get_github_repo_branches(
+        installer,
         git_owner=repo.git_owner,
         git_repo_name=repo.git_repo_name,
-        git_branch=branch_name,
-        git_base_branch=repo.default_branch,
-        worktree_path=worktree_path,
-        origin_json=json.dumps(
-            {
-                "kind": "system",
-                "entrypoint": "slack",
-                "repoId": str(repo.id),
-                "agentKind": str(agent_kind),
-            },
-            separators=(",", ":"),
-            sort_keys=True,
+        missing_access_message=(
+            "Connect GitHub before creating Slack-triggered cloud workspaces."
         ),
-        template_version=get_configured_sandbox_provider().template_version,
-        repo_env_vars_ciphertext=encrypt_json(repo.env_vars) if repo.env_vars else None,
+        repo_access_required_message=(
+            "Reconnect GitHub and grant repository access before creating "
+            "Slack-triggered cloud workspaces."
+        ),
     )
+    proposed_branch_name = _slack_branch_name(job_id=job_id)
+    extra_taken_branch_names: set[str] = set()
+    for attempt in range(GENERATED_SLACK_WORKSPACE_CREATE_MAX_ATTEMPTS):
+        profile = await profile_store.ensure_organization_sandbox_profile(
+            db,
+            organization_id=organization_id,
+            created_by_user_id=created_by_user_id,
+        )
+        target = await target_store.ensure_primary_profile_target(
+            db,
+            sandbox_profile_id=profile.id,
+            created_by_user_id=created_by_user_id,
+        )
+        taken_branch_names = await list_active_managed_cloud_workspace_branches_for_profile_repo(
+            db,
+            sandbox_profile_id=profile.id,
+            target_id=target.id,
+            git_provider="github",
+            git_owner=repo.git_owner,
+            git_repo_name=repo.git_repo_name,
+        )
+        branch_name = resolve_generated_branch_name(
+            proposed_branch_name,
+            set(repo_branches.branches) | taken_branch_names | extra_taken_branch_names,
+        )
+        repo_root_path, worktree_path = _workspace_paths(
+            repo=repo,
+            branch_name=branch_name,
+            workspace_root=target.default_workspace_root,
+        )
+        try:
+            workspace = await create_managed_cloud_workspace_for_profile(
+                db,
+                sandbox_profile_id=profile.id,
+                target_id=target.id,
+                created_by_user_id=created_by_user_id,
+                display_name=f"Slack: {repo.git_owner}/{repo.git_repo_name}",
+                git_provider="github",
+                git_owner=repo.git_owner,
+                git_repo_name=repo.git_repo_name,
+                git_branch=branch_name,
+                git_base_branch=repo.default_branch,
+                worktree_path=worktree_path,
+                origin_json=json.dumps(
+                    {
+                        "kind": "system",
+                        "entrypoint": "slack",
+                        "repoId": str(repo.id),
+                        "agentKind": str(agent_kind),
+                    },
+                    separators=(",", ":"),
+                    sort_keys=True,
+                ),
+                template_version=get_configured_sandbox_provider().template_version,
+                repo_env_vars_ciphertext=encrypt_json(repo.env_vars) if repo.env_vars else None,
+            )
+            break
+        except CloudWorkspaceUniqueConflictError as error:
+            await db.rollback()
+            extra_taken_branch_names.add(branch_name)
+            if _should_retry_slack_workspace_create(attempt):
+                log_cloud_event(
+                    "generated slack workspace branch collided; retrying",
+                    user_id=created_by_user_id,
+                    organization_id=organization_id,
+                    repo=f"{repo.git_owner}/{repo.git_repo_name}",
+                    branch_name=branch_name,
+                    attempt=attempt + 1,
+                )
+                continue
+            raise CloudApiError(
+                "cloud_branch_already_exists",
+                (
+                    f"A cloud workspace already exists for branch '{branch_name}'. "
+                    "Open the existing workspace or try again."
+                ),
+                status_code=400,
+            ) from error
     workspace.origin = "slack"
     workspace.updated_at = utcnow()
     await db.flush()
@@ -154,7 +224,7 @@ async def create_and_materialize_workspace(
         db,
         organization_id=organization_id,
         target_id=target.id,
-        cloud_workspace_id=workspace.id,
+        cloud_workspace_id=None,
         session_id=None,
         kind=CloudCommandKind.materialize_workspace.value,
         payload=MaterializeWorkspacePayload(
@@ -185,6 +255,7 @@ async def create_and_materialize_workspace(
             target_path=worktree_path,
             new_branch_name=branch_name,
             base_branch=repo.default_branch,
+            name_conflict_policy="suffix_path",
             origin={"kind": "system", "entrypoint": "cloud"},
             creator_context={"kind": "human", "label": "Slack"},
         ).to_json(),
@@ -394,13 +465,14 @@ def snapshot_session_config_updates(snapshot: dict[str, object]) -> list[tuple[s
     return updates
 
 
-def _slack_branch_name(*, prompt: str, job_id: UUID) -> str:
+def _slack_branch_name(*, job_id: UUID) -> str:
     config = default_cloud_executor_config()
-    slug = re.sub(r"[^a-zA-Z0-9._-]+", "-", prompt.lower()).strip("-._")[
-        : config.max_branch_slug_chars
-    ]
-    slug = slug or "slack"
-    return f"{config.branch_prefix}/{slug}-{job_id.hex[:12]}"
+    slug = pick_generated_workspace_name(seed=job_id.hex)
+    return f"{config.branch_prefix}/{slug}"
+
+
+def _should_retry_slack_workspace_create(attempt: int) -> bool:
+    return attempt + 1 < GENERATED_SLACK_WORKSPACE_CREATE_MAX_ATTEMPTS
 
 
 def _workspace_paths(

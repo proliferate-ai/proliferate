@@ -14,6 +14,7 @@ from proliferate.db.store.automation_cloud_workspace_claims import (
 )
 from proliferate.db.store.cloud_workspace_creation import (
     CloudRepoLimitExceededError,
+    CloudWorkspaceUniqueConflictError,
     create_cloud_workspace_for_user,
 )
 from proliferate.db.store.cloud_workspace_runtime import save_workspace
@@ -67,6 +68,8 @@ from proliferate.server.organizations.service import (
     resolve_owner_context,
 )
 from proliferate.utils.time import utcnow
+
+GENERATED_WORKSPACE_CREATE_MAX_ATTEMPTS = 5
 
 CLOUD_HUMAN_ORIGIN_JSON = '{"kind":"human","entrypoint":"cloud"}'
 CLOUD_SYSTEM_ORIGIN_JSON = '{"kind":"system","entrypoint":"cloud"}'
@@ -122,6 +125,7 @@ async def create_cloud_workspace(
     base_branch: str | None,
     branch_name: str,
     display_name: str | None,
+    generated_name: bool = False,
     required_agent_kind: str | None = None,
     source: str = "desktop",
     owner_selection: OwnerSelection | None = None,
@@ -138,39 +142,52 @@ async def create_cloud_workspace(
         except OrganizationServiceError as error:
             _map_owner_context_error(error)
         _raise_org_cloud_not_ready()
-    resolved = await resolve_new_cloud_workspace_create(
-        user,
-        git_provider=git_provider,
-        git_owner=git_owner,
-        git_repo_name=git_repo_name,
-        base_branch=base_branch,
-        branch_name=branch_name,
-        display_name=display_name,
-        required_agent_kind=required_agent_kind,
-    )
-
-    try:
-        origin, origin_json = CREATE_WORKSPACE_ORIGIN_BY_SOURCE.get(
-            source,
-            CREATE_WORKSPACE_ORIGIN_BY_SOURCE["desktop"],
+    for attempt in range(_generated_create_attempts(generated_name)):
+        resolved = await resolve_new_cloud_workspace_create(
+            user,
+            git_provider=git_provider,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            base_branch=base_branch,
+            branch_name=branch_name,
+            display_name=display_name,
+            generated_name=generated_name,
+            required_agent_kind=required_agent_kind,
         )
-        async with db_session.open_async_transaction() as create_db:
-            workspace = await create_cloud_workspace_for_user(
-                create_db,
-                user_id=user.id,
-                display_name=resolved.display_name,
-                git_provider=resolved.git_provider,
-                git_owner=resolved.git_owner,
-                git_repo_name=resolved.git_repo_name,
-                git_branch=resolved.git_branch,
-                git_base_branch=resolved.git_base_branch,
-                origin=origin,
-                origin_json=origin_json,
-                template_version=get_configured_sandbox_provider().template_version,
-                cloud_repo_limit=resolved.cloud_repo_limit,
+        try:
+            origin, origin_json = CREATE_WORKSPACE_ORIGIN_BY_SOURCE.get(
+                source,
+                CREATE_WORKSPACE_ORIGIN_BY_SOURCE["desktop"],
             )
-    except CloudRepoLimitExceededError as error:
-        raise_repo_limit_exceeded(error)
+            async with db_session.open_async_transaction() as create_db:
+                workspace = await create_cloud_workspace_for_user(
+                    create_db,
+                    user_id=user.id,
+                    display_name=resolved.display_name,
+                    git_provider=resolved.git_provider,
+                    git_owner=resolved.git_owner,
+                    git_repo_name=resolved.git_repo_name,
+                    git_branch=resolved.git_branch,
+                    git_base_branch=resolved.git_base_branch,
+                    origin=origin,
+                    origin_json=origin_json,
+                    template_version=get_configured_sandbox_provider().template_version,
+                    cloud_repo_limit=resolved.cloud_repo_limit,
+                )
+            break
+        except CloudRepoLimitExceededError as error:
+            raise_repo_limit_exceeded(error)
+        except CloudWorkspaceUniqueConflictError as error:
+            if _should_retry_generated_create(generated_name, attempt):
+                log_cloud_event(
+                    "generated cloud workspace branch collided; retrying",
+                    user_id=user.id,
+                    repo=f"{git_owner}/{git_repo_name}",
+                    branch_name=resolved.git_branch,
+                    attempt=attempt + 1,
+                )
+                continue
+            raise _cloud_workspace_unique_conflict_error(resolved.git_branch) from error
     log_cloud_event(
         "cloud workspace queued",
         workspace_id=workspace.id,
@@ -194,6 +211,7 @@ async def create_cloud_workspace_for_automation_run(
     branch_name: str,
     worktree_path: str | None = None,
     display_name: str | None,
+    generated_name: bool = False,
     required_agent_kind: str,
 ) -> ProvisioningWorkspaceRecord | None:
     if target_id is None or sandbox_profile_id is None:
@@ -202,42 +220,56 @@ async def create_cloud_workspace_for_automation_run(
             "Cloud automations require a managed cloud target and sandbox profile.",
             status_code=409,
         )
-    resolved = await resolve_new_managed_cloud_workspace_create(
-        user,
-        sandbox_profile_id=sandbox_profile_id,
-        target_id=target_id,
-        git_provider=SUPPORTED_GIT_PROVIDER,
-        git_owner=git_owner,
-        git_repo_name=git_repo_name,
-        base_branch=None,
-        branch_name=branch_name,
-        display_name=display_name,
-        required_agent_kind=required_agent_kind,
-    )
-    try:
-        async with db_session.open_async_transaction() as db:
-            workspace = await create_managed_cloud_workspace_for_claimed_run(
-                db,
-                run_id=run_id,
-                claim_id=claim_id,
-                sandbox_profile_id=sandbox_profile_id,
-                target_id=target_id,
-                user_id=user.id,
-                display_name=resolved.display_name,
-                git_provider=resolved.git_provider,
-                git_owner=resolved.git_owner,
-                git_repo_name=resolved.git_repo_name,
-                git_branch=resolved.git_branch,
-                git_base_branch=resolved.git_base_branch,
-                worktree_path=worktree_path,
-                origin_json=CLOUD_SYSTEM_ORIGIN_JSON,
-                template_version=get_configured_sandbox_provider().template_version,
-                now=utcnow(),
-                transition=CLOUD_WORKSPACE_CREATION_TRANSITION,
-                claim_is_active=claim_is_active,
-            )
-    except CloudRepoLimitExceededError as error:
-        raise_repo_limit_exceeded(error)
+    for attempt in range(_generated_create_attempts(generated_name)):
+        resolved = await resolve_new_managed_cloud_workspace_create(
+            user,
+            sandbox_profile_id=sandbox_profile_id,
+            target_id=target_id,
+            git_provider=SUPPORTED_GIT_PROVIDER,
+            git_owner=git_owner,
+            git_repo_name=git_repo_name,
+            base_branch=None,
+            branch_name=branch_name,
+            display_name=display_name,
+            generated_name=generated_name,
+            required_agent_kind=required_agent_kind,
+        )
+        try:
+            async with db_session.open_async_transaction() as db:
+                workspace = await create_managed_cloud_workspace_for_claimed_run(
+                    db,
+                    run_id=run_id,
+                    claim_id=claim_id,
+                    sandbox_profile_id=sandbox_profile_id,
+                    target_id=target_id,
+                    user_id=user.id,
+                    display_name=resolved.display_name,
+                    git_provider=resolved.git_provider,
+                    git_owner=resolved.git_owner,
+                    git_repo_name=resolved.git_repo_name,
+                    git_branch=resolved.git_branch,
+                    git_base_branch=resolved.git_base_branch,
+                    worktree_path=worktree_path,
+                    origin_json=CLOUD_SYSTEM_ORIGIN_JSON,
+                    template_version=get_configured_sandbox_provider().template_version,
+                    now=utcnow(),
+                    transition=CLOUD_WORKSPACE_CREATION_TRANSITION,
+                    claim_is_active=claim_is_active,
+                )
+            break
+        except CloudRepoLimitExceededError as error:
+            raise_repo_limit_exceeded(error)
+        except CloudWorkspaceUniqueConflictError as error:
+            if _should_retry_generated_create(generated_name, attempt):
+                log_cloud_event(
+                    "generated managed cloud workspace branch collided; retrying",
+                    automation_run_id=run_id,
+                    repo=f"{git_owner}/{git_repo_name}",
+                    branch_name=resolved.git_branch,
+                    attempt=attempt + 1,
+                )
+                continue
+            raise _cloud_workspace_unique_conflict_error(resolved.git_branch) from error
     if workspace is not None:
         log_cloud_event(
             "automation cloud workspace created",
@@ -334,6 +366,8 @@ async def ensure_cloud_workspace_for_existing_branch(
             )
     except CloudRepoLimitExceededError as error:
         raise_repo_limit_exceeded(error)
+    except CloudWorkspaceUniqueConflictError as error:
+        raise _cloud_workspace_unique_conflict_error(cleaned_branch_name) from error
     log_cloud_event(
         "cloud workspace ensured for mobility",
         workspace_id=workspace.id,
@@ -349,6 +383,27 @@ def _cloud_workspace_should_be_replaced_for_mobility_retry(
     return (
         workspace.status == CloudWorkspaceStatus.error.value
         and workspace.anyharness_workspace_id is None
+    )
+
+
+def _generated_create_attempts(generated_name: bool) -> int:
+    return GENERATED_WORKSPACE_CREATE_MAX_ATTEMPTS if generated_name else 1
+
+
+def _should_retry_generated_create(generated_name: bool, attempt: int) -> bool:
+    return generated_name and attempt + 1 < GENERATED_WORKSPACE_CREATE_MAX_ATTEMPTS
+
+
+def _cloud_workspace_unique_conflict_error(
+    branch_name: str,
+) -> CloudApiError:
+    return CloudApiError(
+        "cloud_branch_already_exists",
+        (
+            f"A cloud workspace already exists for branch '{branch_name}'. "
+            "Open the existing workspace or choose a different branch."
+        ),
+        status_code=400,
     )
 
 

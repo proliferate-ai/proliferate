@@ -17,6 +17,7 @@ pub(super) fn build_workspace_record(
     kind: WorkspaceKind,
     surface: WorkspaceSurface,
     current_branch: Option<String>,
+    original_branch: Option<String>,
     origin: OriginContext,
     creator_context: Option<WorkspaceCreatorContext>,
 ) -> WorkspaceRecord {
@@ -27,7 +28,7 @@ pub(super) fn build_workspace_record(
         repo_root_id: repo_root.id.clone(),
         path: path.to_string(),
         surface,
-        original_branch: current_branch.clone(),
+        original_branch,
         current_branch,
         display_name: None,
         origin: Some(origin),
@@ -46,12 +47,11 @@ pub(super) fn build_workspace_record(
 pub(super) fn reconcile_current_branch(
     mut record: WorkspaceRecord,
 ) -> anyhow::Result<WorkspaceRecord> {
-    let next_branch = resolver::resolve_git_context(&record.path)
-        .ok()
-        .and_then(|ctx| ctx.current_branch)
-        .or(record.current_branch.clone());
-
-    record.current_branch = next_branch;
+    if let Ok(ctx) = resolver::resolve_git_context(&record.path) {
+        record.current_branch = ctx.current_branch;
+    } else if record.current_branch.as_deref() == Some("HEAD") {
+        record.current_branch = None;
+    }
     Ok(record)
 }
 pub(super) fn path_basename(path: &str) -> String {

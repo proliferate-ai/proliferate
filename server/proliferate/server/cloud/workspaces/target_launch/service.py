@@ -20,12 +20,17 @@ from proliferate.db.store import billing_subjects as billing_subject_store
 from proliferate.db.store.cloud_repo_config import get_cloud_repo_config
 from proliferate.db.store.cloud_sync import commands as command_store
 from proliferate.db.store.cloud_sync import targets as targets_store
-from proliferate.db.store.cloud_workspace_creation import create_direct_target_cloud_workspace
+from proliferate.db.store.cloud_workspace_creation import (
+    CloudWorkspaceUniqueConflictError,
+    create_direct_target_cloud_workspace,
+)
 from proliferate.db.store.cloud_workspace_runtime import mark_workspace_error_by_id
 from proliferate.db.store.cloud_workspaces import (
     get_cloud_workspace_by_id,
     get_existing_cloud_workspace,
+    list_active_cloud_workspace_branches_for_user_repo,
 )
+from proliferate.lib.product.workspace_naming import resolve_generated_branch_name
 from proliferate.server.automations.worker.cloud_execution.command_models import (
     EnsureRepoCheckoutPayload,
     MaterializeWorkspacePayload,
@@ -47,7 +52,7 @@ from proliferate.server.cloud.commands.client_state import (
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
 from proliferate.server.cloud.commands.service import enqueue_command
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.event_logging import format_exception_message
+from proliferate.server.cloud.event_logging import format_exception_message, log_cloud_event
 from proliferate.server.cloud.live.service import publish_command_status_after_commit
 from proliferate.server.cloud.repos.service import (
     get_linked_github_account,
@@ -61,9 +66,11 @@ from proliferate.server.cloud.workspaces.target_launch.models import (
     WorkspaceTargetLaunchCommandIds,
     WorkspaceTargetLaunchResponse,
 )
+from proliferate.utils.time import utcnow
 
 CLOUD_TARGET_LAUNCH_TEMPLATE_VERSION = "desktop-target-launch-v1"
 TARGET_LAUNCH_COMMAND_WAIT_TIMEOUT = timedelta(seconds=240)
+GENERATED_TARGET_LAUNCH_CREATE_MAX_ATTEMPTS = 5
 
 
 @dataclass(frozen=True)
@@ -77,6 +84,14 @@ class ResolvedDirectTargetWorkspaceCreate:
     active_sandbox_count: int
     selected_agent_kinds: tuple[str, ...]
     cloud_repo_limit: int | None
+
+
+def _target_launch_create_attempts(generated_name: bool) -> int:
+    return GENERATED_TARGET_LAUNCH_CREATE_MAX_ATTEMPTS if generated_name else 1
+
+
+def _should_retry_target_launch_create(generated_name: bool, attempt: int) -> bool:
+    return generated_name and attempt + 1 < GENERATED_TARGET_LAUNCH_CREATE_MAX_ATTEMPTS
 
 
 async def launch_workspace_on_target(
@@ -125,47 +140,73 @@ async def launch_workspace_on_target(
             status_code=409,
         )
 
-    resolved = await _resolve_new_direct_target_workspace_create(
-        db,
-        user=user,
-        body=body,
-    )
-    repo_root_path, worktree_path = _direct_target_workspace_paths(
-        git_owner=resolved.git_owner,
-        git_repo_name=resolved.git_repo_name,
-        branch_name=resolved.git_branch,
-        target_kind=target.kind,
-        workspace_root=target.default_workspace_root,
-    )
-    billing_subject = await billing_subject_store.ensure_personal_billing_subject(db, user.id)
-    workspace = await create_direct_target_cloud_workspace(
-        db,
-        target_id=target.id,
-        user_id=user.id,
-        billing_subject_id=billing_subject.id,
-        created_by_user_id=user.id,
-        display_name=resolved.display_name,
-        git_provider=resolved.git_provider,
-        git_owner=resolved.git_owner,
-        git_repo_name=resolved.git_repo_name,
-        git_branch=resolved.git_branch,
-        git_base_branch=resolved.git_base_branch,
-        worktree_path=worktree_path,
-        origin_json=json.dumps(
-            {
-                "kind": "human",
-                "entrypoint": body.source,
-                "targetId": str(target.id),
-                "agentKind": body.agent_kind,
-            },
-            separators=(",", ":"),
-            sort_keys=True,
-        ),
-        template_version=CLOUD_TARGET_LAUNCH_TEMPLATE_VERSION,
-        origin="manual_mobile" if body.source == "mobile" else "manual_web",
-    )
-    workspace_id = workspace.id
-    await db_session.commit_session(db)
+    generated_branch_conflicts: set[str] = set()
+    for attempt in range(_target_launch_create_attempts(body.generated_name is True)):
+        resolved = await _resolve_new_direct_target_workspace_create(
+            db,
+            user=user,
+            body=body,
+            generated_branch_conflicts=generated_branch_conflicts,
+        )
+        repo_root_path, worktree_path = _direct_target_workspace_paths(
+            git_owner=resolved.git_owner,
+            git_repo_name=resolved.git_repo_name,
+            branch_name=resolved.git_branch,
+            target_kind=target.kind,
+            workspace_root=target.default_workspace_root,
+        )
+        billing_subject = await billing_subject_store.ensure_personal_billing_subject(db, user.id)
+        try:
+            workspace = await create_direct_target_cloud_workspace(
+                db,
+                target_id=target.id,
+                user_id=user.id,
+                billing_subject_id=billing_subject.id,
+                created_by_user_id=user.id,
+                display_name=resolved.display_name,
+                git_provider=resolved.git_provider,
+                git_owner=resolved.git_owner,
+                git_repo_name=resolved.git_repo_name,
+                git_branch=resolved.git_branch,
+                git_base_branch=resolved.git_base_branch,
+                worktree_path=worktree_path,
+                origin_json=json.dumps(
+                    {
+                        "kind": "human",
+                        "entrypoint": body.source,
+                        "targetId": str(target.id),
+                        "agentKind": body.agent_kind,
+                    },
+                    separators=(",", ":"),
+                    sort_keys=True,
+                ),
+                template_version=CLOUD_TARGET_LAUNCH_TEMPLATE_VERSION,
+                origin="manual_mobile" if body.source == "mobile" else "manual_web",
+            )
+            workspace_id = workspace.id
+            await db_session.commit_session(db)
+            break
+        except CloudWorkspaceUniqueConflictError as error:
+            await db.rollback()
+            if _should_retry_target_launch_create(body.generated_name is True, attempt):
+                generated_branch_conflicts.add(resolved.git_branch)
+                log_cloud_event(
+                    "generated target launch workspace branch collided; retrying",
+                    user_id=user.id,
+                    target_id=target.id,
+                    repo=f"{body.git_owner}/{body.git_repo_name}",
+                    branch_name=resolved.git_branch,
+                    attempt=attempt + 1,
+                )
+                continue
+            raise CloudApiError(
+                "cloud_branch_already_exists",
+                (
+                    f"A cloud workspace already exists for branch '{resolved.git_branch}'. "
+                    "Open the existing workspace or choose a different branch."
+                ),
+                status_code=400,
+            ) from error
 
     try:
         checkout = await _enqueue_target_launch_command(
@@ -218,6 +259,7 @@ async def launch_workspace_on_target(
                 target_path=worktree_path,
                 new_branch_name=resolved.git_branch,
                 base_branch=resolved.git_base_branch,
+                name_conflict_policy="suffix_path",
                 origin={"kind": "system", "entrypoint": "cloud"},
                 creator_context={"kind": "human", "label": "Mobile"},
             ).to_json(),
@@ -227,6 +269,10 @@ async def launch_workspace_on_target(
         materialized = parse_materialize_workspace_result(
             await _wait_for_target_launch_command(worktree_command, workspace_id=workspace_id),
         )
+        if materialized.path != worktree_path:
+            workspace.worktree_path = materialized.path
+            workspace.updated_at = utcnow()
+            await db_session.commit_session(db)
 
         start_payload = StartSessionPayload(
             workspace_id=materialized.anyharness_workspace_id,
@@ -329,6 +375,7 @@ async def _resolve_new_direct_target_workspace_create(
     *,
     user: ActorIdentity,
     body: LaunchWorkspaceOnTargetRequest,
+    generated_branch_conflicts: set[str] | None = None,
 ) -> ResolvedDirectTargetWorkspaceCreate:
     if body.git_provider != SUPPORTED_GIT_PROVIDER:
         raise CloudApiError(
@@ -388,12 +435,13 @@ async def _resolve_new_direct_target_workspace_create(
             f"The base branch '{resolved_base_branch}' was not found on GitHub.",
             status_code=400,
         )
-    if cleaned_branch_name in repo_branches.branches:
-        raise CloudApiError(
-            "github_branch_already_exists",
-            f"The branch '{cleaned_branch_name}' already exists on GitHub.",
-            status_code=400,
-        )
+    active_cloud_branches = await list_active_cloud_workspace_branches_for_user_repo(
+        db,
+        user_id=user.id,
+        git_provider=body.git_provider,
+        git_owner=body.git_owner,
+        git_repo_name=body.git_repo_name,
+    )
     existing_cloud_workspace = await get_existing_cloud_workspace(
         db,
         user_id=user.id,
@@ -402,7 +450,20 @@ async def _resolve_new_direct_target_workspace_create(
         git_repo_name=body.git_repo_name,
         git_branch=cleaned_branch_name,
     )
-    if existing_cloud_workspace is not None:
+    if body.generated_name is True:
+        cleaned_branch_name = resolve_generated_branch_name(
+            cleaned_branch_name,
+            set(repo_branches.branches)
+            | active_cloud_branches
+            | (generated_branch_conflicts or set()),
+        )
+    elif cleaned_branch_name in repo_branches.branches:
+        raise CloudApiError(
+            "github_branch_already_exists",
+            f"The branch '{cleaned_branch_name}' already exists on GitHub.",
+            status_code=400,
+        )
+    elif existing_cloud_workspace is not None:
         raise CloudApiError(
             "cloud_branch_already_exists",
             (

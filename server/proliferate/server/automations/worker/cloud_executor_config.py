@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import socket
 import uuid
 from dataclasses import dataclass
@@ -10,6 +9,7 @@ from datetime import timedelta
 
 from proliferate.config import settings
 from proliferate.db.store.automation_run_claim_values import AutomationRunClaimValue
+from proliferate.lib.product.workspace_naming import pick_generated_workspace_name
 
 
 @dataclass(frozen=True)
@@ -97,9 +97,5 @@ def automation_branch_name(
     *,
     config: CloudExecutorConfig,
 ) -> str:
-    slug = re.sub(r"[^a-zA-Z0-9._-]+", "-", claim.title.lower()).strip("-._")
-    if not slug:
-        slug = "run"
-    slug = slug[: config.max_branch_slug_chars].strip("-._") or "run"
-    run_id_suffix = claim.id.hex[:12]
-    return f"{config.branch_prefix}/{slug}-{run_id_suffix}"
+    slug = pick_generated_workspace_name(seed=claim.id.hex)
+    return f"{config.branch_prefix}/{slug}"

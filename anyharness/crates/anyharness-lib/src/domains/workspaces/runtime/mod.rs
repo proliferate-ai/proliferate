@@ -18,7 +18,11 @@ mod repo_metadata;
 mod worktrees;
 
 #[cfg(test)]
+mod test_support;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod worktree_tests;
 
 pub struct WorkspaceRuntime {
     store: WorkspaceStore,

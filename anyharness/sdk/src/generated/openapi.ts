@@ -2328,7 +2328,9 @@ export interface components {
         };
         CreateWorktreeWorkspaceRequest: {
             baseBranch?: string | null;
+            checkoutMode?: null | components["schemas"]["WorktreeCheckoutMode"];
             creatorContext?: null | components["schemas"]["WorkspaceCreatorContext"];
+            nameConflictPolicy?: null | components["schemas"]["WorktreeNameConflictPolicy"];
             newBranchName: string;
             origin?: null | components["schemas"]["OriginContext"];
             repoRootId: string;
@@ -4408,6 +4410,8 @@ export interface components {
         /** @enum {string} */
         WorkspaceSurface: "standard" | "cowork";
         /** @enum {string} */
+        WorktreeCheckoutMode: "new_branch" | "detached_ref";
+        /** @enum {string} */
         WorktreeInventoryAction: "prune_checkout" | "delete_workspace_history" | "retry_purge" | "delete_orphan_checkout";
         WorktreeInventoryResponse: {
             rows: components["schemas"]["WorktreeInventoryRow"][];
@@ -4441,6 +4445,8 @@ export interface components {
             lifecycleState: components["schemas"]["WorkspaceLifecycleState"];
             sessionCount: number;
         };
+        /** @enum {string} */
+        WorktreeNameConflictPolicy: "fail" | "suffix_path" | "suffix_path_and_branch";
         WorktreeRetentionPolicy: {
             /** Format: int32 */
             maxMaterializedWorktreesPerRepo: number;

@@ -132,10 +132,24 @@ retired cleanup for the same worktree path still block creation.
 (`anyharness/crates/anyharness-lib/src/domains/workspaces/runtime/worktrees.rs`):
 
 1. loads the repo root and requires it to resolve to a managed repo path
-2. runs `git worktree add -b ...`
-3. resolves git context for the new path
-4. inserts a new durable worktree workspace record
-5. schedules setup script execution for the new worktree when requested
+2. resolves the worktree path and branch candidate
+3. runs `git worktree add -b ...`
+4. resolves git context for the new path
+5. inserts a new durable worktree workspace record
+6. schedules setup script execution for the new worktree when requested
+
+By default, worktree creation is strict: an existing path or branch is an
+error. Generated-name callers may opt into `nameConflictPolicy`:
+
+- `suffix_path` retries path collisions by suffixing only the worktree path
+  leaf.
+- `suffix_path_and_branch` retries path or branch collisions by suffixing both
+  the worktree path leaf and the branch leaf with the same number.
+
+Explicit user-provided branch/path requests should keep the default strict
+policy. Generated local workspace creation may use `suffix_path_and_branch`;
+Cloud materialization should usually use `suffix_path` because Cloud preflight
+has already reserved the final branch name.
 
 The HTTP worktree creation response returns the new workspace identity. Setup
 script execution is asynchronous in the current API surface; callers should not

@@ -4,7 +4,10 @@ import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-stat
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { buildWorkspaceArrivalEvent } from "@/lib/domain/workspaces/creation/arrival";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import type { PendingWorkspaceEntry } from "@/lib/domain/workspaces/creation/pending-entry";
+import {
+  type PendingWorkspaceEntry,
+  resolvePendingWorktreeRetryInput,
+} from "@/lib/domain/workspaces/creation/pending-entry";
 import { useCreateCloudWorkspace } from "@/hooks/cloud/workflows/use-create-cloud-workspace";
 import { useWorkspaceEntryActions } from "@/hooks/workspaces/workflows/use-workspace-entry-actions";
 import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
@@ -49,7 +52,7 @@ export function usePendingWorkspaceEntryActions() {
         await createLocalWorkspaceAndEnter(entry.request.sourceRoot);
         return;
       case "worktree":
-        await createWorktreeAndEnter(entry.request.input, {
+        await createWorktreeAndEnter(resolvePendingWorktreeRetryInput(entry.request), {
           latencyFlowId: startLatencyFlow({
             flowKind: "worktree_enter",
             source: "retry",

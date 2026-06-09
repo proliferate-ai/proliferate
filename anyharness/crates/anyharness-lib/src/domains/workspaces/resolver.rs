@@ -70,7 +70,9 @@ pub fn resolve_git_context(path: &str) -> anyhow::Result<ResolvedGitContext> {
         branch_started.elapsed().as_millis(),
         current_branch_result.is_ok(),
     );
-    let current_branch = current_branch_result.ok();
+    let current_branch = current_branch_result
+        .ok()
+        .and_then(normalize_current_branch);
 
     let remote_started = Instant::now();
     let remote_url_result = git_config_get(&canon, "remote.origin.url");
@@ -99,6 +101,15 @@ pub fn resolve_git_context(path: &str) -> anyhow::Result<ResolvedGitContext> {
         current_branch,
         remote_url,
     })
+}
+
+fn normalize_current_branch(branch: String) -> Option<String> {
+    let branch = branch.trim();
+    if branch.is_empty() || branch == "HEAD" {
+        None
+    } else {
+        Some(branch.to_string())
+    }
 }
 
 fn log_git_context_step_if_slow(path: &str, step: &str, elapsed_ms: u128, success: bool) {

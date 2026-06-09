@@ -170,7 +170,12 @@ pub(crate) async fn process_command(
         }
     }
     let result = command_result(&command, &mapped, response);
-    report_command_result(cloud, identity, store, &command.command_id, &result).await
+    let reported =
+        report_command_result_with_status(cloud, identity, store, &command.command_id, &result)
+            .await?;
+    report_hydrated_materialization_if_needed(cloud, identity, &mapped, &result, &reported.status)
+        .await;
+    Ok(())
 }
 
 async fn process_refresh_agent_auth_config_command(
@@ -1071,6 +1076,52 @@ async fn report_materialization_state(
     }
 }
 
+async fn report_hydrated_materialization_if_needed(
+    cloud: &CloudClient,
+    identity: &WorkerIdentity,
+    mapped: &AnyHarnessCommand,
+    result: &CommandResultRequest,
+    recorded_status: &str,
+) {
+    if !matches!(mapped, AnyHarnessCommand::MaterializeWorkspace { .. })
+        || !matches!(recorded_status, "accepted" | "accepted_but_queued")
+    {
+        return;
+    }
+    let Some(cloud_workspace_id) = result.cloud_workspace_id.as_deref() else {
+        return;
+    };
+    let Some(anyharness_workspace_id) = result.anyharness_workspace_id.as_deref() else {
+        return;
+    };
+    let worktree_path = materialized_worktree_path(result.result.as_ref());
+    report_materialization_state(
+        cloud,
+        identity,
+        cloud_workspace_id,
+        Some(anyharness_workspace_id),
+        "hydrated",
+        None,
+        None,
+        Vec::new(),
+        worktree_path,
+    )
+    .await;
+}
+
+fn materialized_worktree_path(result: Option<&Value>) -> Option<String> {
+    let value = result?;
+    if value.get("mode").and_then(Value::as_str) != Some("worktree") {
+        return None;
+    }
+    value
+        .get("path")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .map(ToOwned::to_owned)
+}
+
 async fn report_prune_failed_and_command_result(
     cloud: &CloudClient,
     identity: &WorkerIdentity,
@@ -1143,6 +1194,18 @@ async fn report_command_result(
     command_id: &str,
     result: &CommandResultRequest,
 ) -> Result<(), WorkerError> {
+    report_command_result_with_status(cloud, identity, store, command_id, result)
+        .await
+        .map(|_| ())
+}
+
+async fn report_command_result_with_status(
+    cloud: &CloudClient,
+    identity: &WorkerIdentity,
+    store: &WorkerStore,
+    command_id: &str,
+    result: &CommandResultRequest,
+) -> Result<crate::cloud_client::commands::CommandStatusResponse, WorkerError> {
     let pending = PendingCommandResult {
         command_id: command_id.to_string(),
         lease_id: result.lease_id.clone(),
@@ -1154,11 +1217,11 @@ async fn report_command_result(
         result: result.result.clone(),
     };
     store.save_pending_command_result(&pending)?;
-    cloud
+    let reported = cloud
         .report_command_result(&identity.worker_token, command_id, result)
         .await?;
     store.delete_pending_command_result(command_id)?;
-    Ok(())
+    Ok(reported)
 }
 
 async fn dispatch_anyharness(
@@ -1442,7 +1505,7 @@ mod tests {
         control::commands::mapping::AnyHarnessCommand,
     };
 
-    use super::command_result;
+    use super::{command_result, materialized_worktree_path};
 
     #[test]
     fn materialize_workspace_result_extraction_failure_rejects_command() {
@@ -1525,6 +1588,27 @@ mod tests {
                 .and_then(|value| value.get("cloudWorkspaceId"))
                 .and_then(serde_json::Value::as_str),
             Some("cloud-workspace-1")
+        );
+    }
+
+    #[test]
+    fn materialized_worktree_path_reads_worktree_results_only() {
+        assert_eq!(
+            materialized_worktree_path(Some(&json!({
+                "mode": "worktree",
+                "kind": "worktree",
+                "path": "/workspace/otter-2",
+            })))
+            .as_deref(),
+            Some("/workspace/otter-2")
+        );
+        assert_eq!(
+            materialized_worktree_path(Some(&json!({
+                "mode": "existing_path",
+                "kind": "local",
+                "path": "/workspace/repo",
+            }))),
+            None
         );
     }
 

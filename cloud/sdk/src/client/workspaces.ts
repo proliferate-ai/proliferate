@@ -45,6 +45,7 @@ export interface LaunchCloudWorkspaceOnTargetRequest {
   gitRepoName: string;
   baseBranch?: string | null;
   branchName: string;
+  generatedName?: boolean;
   displayName?: string | null;
   prompt: string;
   promptId?: string | null;

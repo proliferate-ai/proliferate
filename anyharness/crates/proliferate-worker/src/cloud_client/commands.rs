@@ -37,6 +37,12 @@ pub struct LeaseCommandResponse {
     pub server_time: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandStatusResponse {
+    pub status: String,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CommandDeliveryRequest {
@@ -148,7 +154,7 @@ impl CloudClient {
         worker_token: &str,
         command_id: &str,
         request: &CommandResultRequest,
-    ) -> Result<(), WorkerError> {
+    ) -> Result<CommandStatusResponse, WorkerError> {
         let response = self
             .http
             .post(format!(
@@ -162,7 +168,7 @@ impl CloudClient {
             .json(request)
             .send()
             .await?;
-        parse_empty_response(response).await
+        parse_json_response(response).await
     }
 
     pub async fn report_materialization(

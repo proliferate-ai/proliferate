@@ -8335,6 +8335,16 @@
               "null"
             ]
           },
+          "checkoutMode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorktreeCheckoutMode"
+              }
+            ]
+          },
           "creatorContext": {
             "oneOf": [
               {
@@ -8342,6 +8352,16 @@
               },
               {
                 "$ref": "#/components/schemas/WorkspaceCreatorContext"
+              }
+            ]
+          },
+          "nameConflictPolicy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorktreeNameConflictPolicy"
               }
             ]
           },
@@ -17528,6 +17548,13 @@
           "cowork"
         ]
       },
+      "WorktreeCheckoutMode": {
+        "type": "string",
+        "enum": [
+          "new_branch",
+          "detached_ref"
+        ]
+      },
       "WorktreeInventoryAction": {
         "type": "string",
         "enum": [
@@ -17706,6 +17733,14 @@
             "minimum": 0
           }
         }
+      },
+      "WorktreeNameConflictPolicy": {
+        "type": "string",
+        "enum": [
+          "fail",
+          "suffix_path",
+          "suffix_path_and_branch"
+        ]
       },
       "WorktreeRetentionPolicy": {
         "type": "object",

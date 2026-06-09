@@ -46,11 +46,37 @@ async function recoverCreatedWorkspaceByBranch(args: {
     { ownerScope: args.request.ownerScope ?? "personal", scope: "my" },
     args.client,
   );
-  return workspaces.find((workspace) =>
-    workspace.repo.owner === args.request.gitOwner
-    && workspace.repo.name === args.request.gitRepoName
-    && workspace.repo.branch === args.request.branchName
-  ) ?? null;
+  return workspaces.find((workspace) => cloudWorkspaceMatchesCreatedBranch(
+    workspace,
+    args.request,
+  )) ?? null;
+}
+
+export function cloudWorkspaceMatchesCreatedBranch(
+  workspace: Pick<CloudWorkspaceDetail, "repo">,
+  request: CreateCloudWorkspaceRequest,
+): boolean {
+  if (
+    workspace.repo.owner !== request.gitOwner
+    || workspace.repo.name !== request.gitRepoName
+  ) {
+    return false;
+  }
+  if (workspace.repo.branch === request.branchName) {
+    return true;
+  }
+  if (!request.generatedName) {
+    return false;
+  }
+  return generatedBranchSuffixPattern(request.branchName).test(workspace.repo.branch);
+}
+
+function generatedBranchSuffixPattern(branchName: string): RegExp {
+  return new RegExp(`^${escapeRegExp(branchName)}-[1-9]\\d*$`);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function isDuplicateBranchError(error: unknown): boolean {

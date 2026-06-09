@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import (
@@ -29,6 +30,10 @@ class CloudRepoLimitExceededError(RuntimeError):
         super().__init__("Cloud repo limit exceeded.")
         self.active_repo_count = active_repo_count
         self.cloud_repo_limit = cloud_repo_limit
+
+
+class CloudWorkspaceUniqueConflictError(RuntimeError):
+    """Raised when a workspace create races an active unique constraint."""
 
 
 def normalized_repo_key(
@@ -144,7 +149,10 @@ async def create_cloud_workspace_record(
         updated_at=now,
     )
     db.add(workspace)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        raise CloudWorkspaceUniqueConflictError("Cloud workspace already exists.") from exc
     await db.refresh(workspace)
     return workspace
 
@@ -232,7 +240,10 @@ async def create_managed_cloud_workspace_for_profile(
         updated_at=now,
     )
     db.add(workspace)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        raise CloudWorkspaceUniqueConflictError("Cloud workspace already exists.") from exc
     db.add(
         CloudWorkspaceExposure(
             target_id=target_id,
@@ -324,7 +335,10 @@ async def create_direct_target_cloud_workspace(
         updated_at=now,
     )
     db.add(workspace)
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError as exc:
+        raise CloudWorkspaceUniqueConflictError("Cloud workspace already exists.") from exc
     db.add(
         CloudWorkspaceExposure(
             target_id=target_id,

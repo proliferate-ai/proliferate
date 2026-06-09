@@ -63,6 +63,57 @@ pub fn create_worktree(
     Ok(())
 }
 
+pub fn create_detached_worktree(
+    source_repo_root: &str,
+    target_path: &str,
+    base_branch: Option<&str>,
+) -> anyhow::Result<()> {
+    let base = base_branch.unwrap_or("HEAD");
+    let started = Instant::now();
+    tracing::info!(
+        source_repo_root = %source_repo_root,
+        target_path = %target_path,
+        base_ref = %base,
+        "[workspace-latency] workspace.worktree.git_add_detached.start"
+    );
+    let output = Command::new("git")
+        .args(["worktree", "add", "--detach", target_path, base])
+        .current_dir(source_repo_root)
+        .output()
+        .map_err(|e| {
+            tracing::warn!(
+                source_repo_root = %source_repo_root,
+                target_path = %target_path,
+                base_ref = %base,
+                elapsed_ms = started.elapsed().as_millis(),
+                error = %e,
+                "[workspace-latency] workspace.worktree.git_add_detached.failed_to_spawn"
+            );
+            anyhow::anyhow!("failed to run git worktree add --detach: {e}")
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        tracing::warn!(
+            source_repo_root = %source_repo_root,
+            target_path = %target_path,
+            base_ref = %base,
+            elapsed_ms = started.elapsed().as_millis(),
+            stderr = %stderr.trim(),
+            "[workspace-latency] workspace.worktree.git_add_detached.failed"
+        );
+        anyhow::bail!("git worktree add --detach failed: {}", stderr.trim());
+    }
+    tracing::info!(
+        source_repo_root = %source_repo_root,
+        target_path = %target_path,
+        base_ref = %base,
+        elapsed_ms = started.elapsed().as_millis(),
+        "[workspace-latency] workspace.worktree.git_add_detached.success"
+    );
+    Ok(())
+}
+
 pub fn create_worktree_at_ref(
     source_repo_root: &str,
     target_path: &str,

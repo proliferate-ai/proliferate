@@ -1,6 +1,10 @@
 use std::time::Instant;
 
-use anyharness_contract::v1::{CreateWorktreeWorkspaceRequest, CreateWorktreeWorkspaceResponse};
+use anyharness_contract::v1::{
+    CreateWorktreeWorkspaceRequest, CreateWorktreeWorkspaceResponse,
+    WorktreeCheckoutMode as ContractWorktreeCheckoutMode,
+    WorktreeNameConflictPolicy as ContractWorktreeNameConflictPolicy,
+};
 use axum::{extract::State, http::HeaderMap, Json};
 
 use super::access::map_access_error;
@@ -9,6 +13,8 @@ use super::workspaces_contract::{request_origin_or_api_default, workspace_to_con
 use super::workspaces_setup::map_workspace_setup_error;
 use crate::app::AppState;
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
+use crate::domains::workspaces::worktree_checkout::WorktreeCheckoutMode;
+use crate::domains::workspaces::worktree_names::WorktreeNameConflictPolicy;
 use crate::domains::workspaces::worktree_runtime::{
     CreateWorktreeWorkflowError, CreateWorktreeWorkflowInput,
 };
@@ -36,6 +42,14 @@ pub async fn create_worktree(
     let repo_root_id = req.repo_root_id;
     let target_path = req.target_path;
     let new_branch_name = req.new_branch_name;
+    let checkout_mode = req
+        .checkout_mode
+        .map(worktree_checkout_mode_from_contract)
+        .unwrap_or_default();
+    let name_conflict_policy = req
+        .name_conflict_policy
+        .map(worktree_name_conflict_policy_from_contract)
+        .unwrap_or_default();
     let base_branch = req.base_branch.clone();
     let setup_script = req.setup_script;
     let origin = request_origin_or_api_default(req.origin, "create_worktree");
@@ -69,8 +83,10 @@ pub async fn create_worktree(
             target_path,
             new_branch_name,
             base_branch: base_branch.clone(),
+            checkout_mode,
             setup_script,
             surface: "standard".to_string(),
+            name_conflict_policy,
             origin,
             creator_context,
         })
@@ -94,6 +110,27 @@ pub async fn create_worktree(
         workspace: workspace_to_contract(&state, result.worktree.workspace).await?,
         setup_script: None,
     }))
+}
+
+fn worktree_checkout_mode_from_contract(
+    value: ContractWorktreeCheckoutMode,
+) -> WorktreeCheckoutMode {
+    match value {
+        ContractWorktreeCheckoutMode::NewBranch => WorktreeCheckoutMode::NewBranch,
+        ContractWorktreeCheckoutMode::DetachedRef => WorktreeCheckoutMode::DetachedRef,
+    }
+}
+
+fn worktree_name_conflict_policy_from_contract(
+    value: ContractWorktreeNameConflictPolicy,
+) -> WorktreeNameConflictPolicy {
+    match value {
+        ContractWorktreeNameConflictPolicy::Fail => WorktreeNameConflictPolicy::Fail,
+        ContractWorktreeNameConflictPolicy::SuffixPath => WorktreeNameConflictPolicy::SuffixPath,
+        ContractWorktreeNameConflictPolicy::SuffixPathAndBranch => {
+            WorktreeNameConflictPolicy::SuffixPathAndBranch
+        }
+    }
 }
 
 fn map_create_worktree_error(error: CreateWorktreeWorkflowError) -> ApiError {

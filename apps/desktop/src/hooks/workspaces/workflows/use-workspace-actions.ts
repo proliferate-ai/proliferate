@@ -140,7 +140,9 @@ export function useWorkspaceActions() {
         targetPath: params.targetPath,
         newBranchName: params.branchName,
         baseBranch: params.baseRef || undefined,
+        checkoutMode: params.checkoutMode,
         setupScript: params.setupScript?.trim() || undefined,
+        nameConflictPolicy: params.nameConflictPolicy,
         origin: DESKTOP_ORIGIN,
       }, latencyFlowId
         ? { headers: getLatencyFlowRequestHeaders(latencyFlowId) }
@@ -215,13 +217,15 @@ export function useWorkspaceActions() {
             .map((workspace) => workspace.path.split("/").filter(Boolean).pop())
             .filter((basename): basename is string => Boolean(basename)),
         );
+      const explicitWorkspaceName = input.workspaceName?.trim();
 
       return resolveWorktreeCreationParams({
         repoRoot,
         sourceWorkspace,
         rawInput: {
           ...input,
-          workspaceName: input.workspaceName?.trim() || generateWorkspaceSlug(existingWorktreeBasenames),
+          workspaceName: explicitWorkspaceName || generateWorkspaceSlug(existingWorktreeBasenames),
+          generatedName: Boolean(input.generatedName || !explicitWorkspaceName),
         },
         homeDir,
         branchPrefixType: userPreferences.branchPrefixType,

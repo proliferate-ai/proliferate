@@ -191,6 +191,187 @@ async def test_launch_workspace_on_target_keeps_workspace_id_after_expire_all(
 
 
 @pytest.mark.asyncio
+async def test_generated_target_launch_retries_after_flattened_worktree_path_conflict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=uuid4())
+    target_id = uuid4()
+    workspace_id = uuid4()
+    workspace = SimpleNamespace(id=workspace_id, worktree_path=None, updated_at=None)
+    resolver_conflicts: list[set[str]] = []
+    created_worktree_paths: list[str] = []
+    materialized_worktree_paths: list[str] = []
+
+    class FakeDb:
+        async def rollback(self) -> None:
+            return None
+
+        def expire_all(self) -> None:
+            return None
+
+    async def _get_visible_target_by_id(_db, *, target_id: object, user_id: object):
+        assert user_id == user.id
+        return SimpleNamespace(
+            id=target_id,
+            owner_scope="personal",
+            owner_user_id=user.id,
+            kind=target_launch_service.CloudTargetKind.desktop_dispatch.value,
+            status=target_launch_service.CloudTargetStatus.online.value,
+            default_workspace_root="/tmp/workspaces",
+        )
+
+    async def _resolve_new_direct_target_workspace_create(
+        _db,
+        *,
+        generated_branch_conflicts: set[str] | None = None,
+        **_kwargs,
+    ):
+        conflicts = set(generated_branch_conflicts or set())
+        resolver_conflicts.append(conflicts)
+        branch = "pablo/otter-2" if "pablo/otter" in conflicts else "pablo/otter"
+        return target_launch_service.ResolvedDirectTargetWorkspaceCreate(
+            git_provider="github",
+            git_owner="acme",
+            git_repo_name="rocket",
+            git_branch=branch,
+            git_base_branch="main",
+            display_name="Otter",
+            active_sandbox_count=0,
+            selected_agent_kinds=("claude",),
+            cloud_repo_limit=None,
+        )
+
+    async def _ensure_personal_billing_subject(_db, _user_id):
+        return SimpleNamespace(id=uuid4())
+
+    async def _create_direct_target_cloud_workspace(_db, **kwargs):
+        created_worktree_paths.append(kwargs["worktree_path"])
+        if kwargs["worktree_path"].endswith("/pablo-otter"):
+            raise target_launch_service.CloudWorkspaceUniqueConflictError()
+        assert kwargs["git_branch"] == "pablo/otter-2"
+        return workspace
+
+    async def _commit_session(_db) -> None:
+        return None
+
+    async def _enqueue_target_launch_command(_db, **kwargs):
+        command = SimpleNamespace(id=uuid4(), kind=kwargs["kind"], payload=kwargs["payload"])
+        if (
+            command.kind == target_launch_service.CloudCommandKind.materialize_workspace.value
+            and command.payload["mode"] == "worktree"
+        ):
+            materialized_worktree_paths.append(command.payload["targetPath"])
+            assert command.payload["newBranchName"] == "pablo/otter-2"
+        return command
+
+    async def _wait_for_target_launch_command(command, *, workspace_id: object):
+        assert workspace_id == workspace.id
+        if command.kind == target_launch_service.CloudCommandKind.materialize_workspace.value:
+            if command.payload["mode"] == "existing_path":
+                return AutomationCommandResult(
+                    command=command,
+                    result={
+                        "anyharnessWorkspaceId": "repo-root-workspace",
+                        "repoRootId": "repo-root",
+                        "path": command.payload["path"],
+                        "kind": "existing_path",
+                    },
+                    body={},
+                )
+            return AutomationCommandResult(
+                command=command,
+                result={
+                    "anyharnessWorkspaceId": "worktree-workspace",
+                    "repoRootId": "repo-root",
+                    "path": command.payload["targetPath"],
+                    "kind": "worktree",
+                },
+                body={},
+            )
+        if command.kind == target_launch_service.CloudCommandKind.start_session.value:
+            return AutomationCommandResult(command=command, result={}, body={"id": "session-1"})
+        return AutomationCommandResult(command=command, result={}, body={})
+
+    async def _get_cloud_workspace_by_id(_db, requested_workspace_id):
+        assert requested_workspace_id == workspace_id
+        return workspace
+
+    async def _build_workspace_detail_for_request(_db, requested_workspace):
+        assert requested_workspace is workspace
+        return WorkspaceDetail.model_construct(id=str(workspace_id))
+
+    monkeypatch.setattr(
+        target_launch_service.targets_store,
+        "get_visible_target_by_id",
+        _get_visible_target_by_id,
+    )
+    monkeypatch.setattr(
+        target_launch_service,
+        "_resolve_new_direct_target_workspace_create",
+        _resolve_new_direct_target_workspace_create,
+    )
+    monkeypatch.setattr(
+        target_launch_service.billing_subject_store,
+        "ensure_personal_billing_subject",
+        _ensure_personal_billing_subject,
+    )
+    monkeypatch.setattr(
+        target_launch_service,
+        "create_direct_target_cloud_workspace",
+        _create_direct_target_cloud_workspace,
+    )
+    monkeypatch.setattr(
+        target_launch_service.db_session.db_engine, "commit_session", _commit_session
+    )
+    monkeypatch.setattr(
+        target_launch_service,
+        "_enqueue_target_launch_command",
+        _enqueue_target_launch_command,
+    )
+    monkeypatch.setattr(
+        target_launch_service,
+        "_wait_for_target_launch_command",
+        _wait_for_target_launch_command,
+    )
+    monkeypatch.setattr(
+        target_launch_service,
+        "get_cloud_workspace_by_id",
+        _get_cloud_workspace_by_id,
+    )
+    monkeypatch.setattr(
+        target_launch_service,
+        "build_workspace_detail_for_request",
+        _build_workspace_detail_for_request,
+    )
+
+    result = await target_launch_service.launch_workspace_on_target(
+        FakeDb(),
+        user,
+        target_launch_models.LaunchWorkspaceOnTargetRequest.model_validate(
+            {
+                "targetId": str(target_id),
+                "gitProvider": "github",
+                "gitOwner": "acme",
+                "gitRepoName": "rocket",
+                "branchName": "pablo/otter",
+                "generatedName": True,
+                "prompt": "hello",
+                "agentKind": "claude",
+                "source": "mobile",
+            }
+        ),
+    )
+
+    assert result.session_id == "session-1"
+    assert resolver_conflicts == [set(), {"pablo/otter"}]
+    assert created_worktree_paths == [
+        "/tmp/workspaces/worktrees/acme/rocket/pablo-otter",
+        "/tmp/workspaces/worktrees/acme/rocket/pablo-otter-2",
+    ]
+    assert materialized_worktree_paths == ["/tmp/workspaces/worktrees/acme/rocket/pablo-otter-2"]
+
+
+@pytest.mark.asyncio
 async def test_target_launch_wait_marks_pending_prompt_failed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

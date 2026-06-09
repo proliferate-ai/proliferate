@@ -12,7 +12,10 @@ from proliferate.db.store import cloud_runtime_environments, cloud_workspaces
 from proliferate.db.store.cloud_sync import events as events_store
 from proliferate.db.store.cloud_sync import exposures as exposures_store
 from proliferate.db.store.cloud_sync import targets as targets_store
-from proliferate.server.cloud.claims.access import require_workspace_interact
+from proliferate.server.cloud.claims.access import (
+    require_workspace_interact,
+    require_workspace_interact_if_active_exposure,
+)
 from proliferate.server.cloud.commands.domain.target import target_requires_cloud_workspace
 from proliferate.server.cloud.commands.models import CreateCloudCommandRequest
 from proliferate.server.cloud.commands.projected_sessions import (
@@ -30,8 +33,26 @@ async def resolve_command_workspace(
     kind: str,
     body: CreateCloudCommandRequest,
 ) -> tuple[str | None, dict[str, object], str | None]:
-    if kind == CloudCommandKind.materialize_workspace.value and target_requires_cloud_workspace(
-        target
+    if (
+        kind == CloudCommandKind.materialize_workspace.value
+        and body.cloud_workspace_id is not None
+        and not _materialize_payload_allows_cloud_workspace_scope(body.payload)
+    ):
+        await require_workspace_interact_if_active_exposure(
+            db,
+            actor_user_id=user.id,
+            target_id=target.id,
+            cloud_workspace_id=body.cloud_workspace_id,
+        )
+        raise CloudApiError(
+            "cloud_command_cloud_workspace_not_allowed",
+            "existing_path materialize_workspace commands cannot scope a Cloud workspace.",
+            status_code=400,
+        )
+    if (
+        kind == CloudCommandKind.materialize_workspace.value
+        and target_requires_cloud_workspace(target)
+        and _materialize_payload_requires_cloud_workspace(body.payload)
     ):
         if body.cloud_workspace_id is None:
             raise CloudApiError(
@@ -534,6 +555,14 @@ def direct_start_session_workspace_id(payload: dict[str, object]) -> str | None:
     if not isinstance(value, str) or not value.strip():
         return None
     return value.strip()
+
+
+def _materialize_payload_requires_cloud_workspace(payload: dict[str, object]) -> bool:
+    return payload.get("mode") != "existing_path"
+
+
+def _materialize_payload_allows_cloud_workspace_scope(payload: dict[str, object]) -> bool:
+    return payload.get("mode") != "existing_path"
 
 
 def command_has_managed_cloud_workspace(

@@ -95,9 +95,11 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
       homeRepositorySelection.selectedRepository,
       homeRepositorySelection.selectedBranchName,
       "home",
+      homeRepositorySelection.defaultBranchName,
     );
   }, [
     homeTargetSelection.destination,
+    homeRepositorySelection.defaultBranchName,
     homeRepositorySelection.selectedBranchName,
     homeRepositorySelection.selectedRepository,
     location.pathname,
@@ -182,6 +184,7 @@ export function useAppNewWorkspaceCommandActions(): AppNewWorkspaceCommandAction
       repoRootId: newWorktreeCommandTarget.repoRootId,
       sourceWorkspaceId: newWorktreeCommandTarget.sourceWorkspaceId,
       baseBranch: newWorktreeCommandTarget.baseBranch ?? undefined,
+      defaultBranch: newWorktreeCommandTarget.defaultBranch,
     }, {
       latencyFlowId,
       repoGroupKeyToExpand: newWorktreeCommandTarget.repoGroupKeyToExpand,

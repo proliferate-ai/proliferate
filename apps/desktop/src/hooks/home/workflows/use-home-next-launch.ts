@@ -220,6 +220,7 @@ export function useHomeNextLaunch() {
           repoRootId: target.repoRootId,
           sourceWorkspaceId: target.sourceWorkspaceId,
           baseBranch: target.baseBranch,
+          defaultBranch: target.defaultBranch,
         }, {
           initialSession,
         });
