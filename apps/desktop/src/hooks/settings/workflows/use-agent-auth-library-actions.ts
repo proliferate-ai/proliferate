@@ -98,6 +98,9 @@ export function useAgentAuthLibraryActions(
     setFocusedAgentKind(initialAgentKind);
     window.requestAnimationFrame(() => {
       const primarySlot = agentAuthPrimarySlotForAgent(initialAgentKind, agentGatewayCapabilities);
+      if (!primarySlot) {
+        return;
+      }
       document
         .getElementById(agentAuthSlotDomId(primarySlot.agentKind, primarySlot.authSlotId))
         ?.scrollIntoView({ behavior: "smooth", block: "center" });

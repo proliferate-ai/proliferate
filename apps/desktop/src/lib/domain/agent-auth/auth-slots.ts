@@ -19,63 +19,6 @@ export interface AgentAuthSlotDefinition {
   primary: boolean;
 }
 
-const BUNDLED_AGENT_AUTH_SLOT_DEFINITIONS: AgentAuthSlotDefinition[] = [
-  {
-    agentKind: "claude",
-    authSlotId: "anthropic",
-    label: "Claude Anthropic",
-    shortLabel: "Anthropic",
-    credentialProviderIds: ["anthropic"],
-    localProvider: "claude",
-    primary: true,
-  },
-  {
-    agentKind: "codex",
-    authSlotId: "openai",
-    label: "Codex OpenAI",
-    shortLabel: "OpenAI",
-    credentialProviderIds: ["openai"],
-    localProvider: "codex",
-    primary: true,
-  },
-  {
-    agentKind: "opencode",
-    authSlotId: "openai",
-    label: "OpenCode OpenAI",
-    shortLabel: "OpenAI",
-    credentialProviderIds: ["openai"],
-    localProvider: null,
-    primary: true,
-  },
-  {
-    agentKind: "opencode",
-    authSlotId: "anthropic",
-    label: "OpenCode Anthropic",
-    shortLabel: "Anthropic",
-    credentialProviderIds: ["anthropic"],
-    localProvider: null,
-    primary: false,
-  },
-  {
-    agentKind: "opencode",
-    authSlotId: "gemini",
-    label: "OpenCode Gemini",
-    shortLabel: "Gemini",
-    credentialProviderIds: ["gemini"],
-    localProvider: null,
-    primary: false,
-  },
-  {
-    agentKind: "gemini",
-    authSlotId: "gemini",
-    label: "Gemini",
-    shortLabel: "Gemini",
-    credentialProviderIds: ["gemini"],
-    localProvider: "gemini",
-    primary: true,
-  },
-];
-
 const CLOUD_AUTH_AGENT_KINDS: readonly AgentAuthAgentKind[] = [
   "claude",
   "codex",
@@ -101,7 +44,7 @@ export function agentAuthSlotDefinitions(
 ): AgentAuthSlotDefinition[] {
   const slots = capabilities?.agentAuthSlots;
   if (!slots || slots.length === 0) {
-    return BUNDLED_AGENT_AUTH_SLOT_DEFINITIONS;
+    return [];
   }
   const projected = slots.flatMap((slot) => {
     if (!isCloudAuthAgentKind(slot.agentKind)) {
@@ -123,17 +66,17 @@ export function agentAuthSlotDefinitions(
       primary: slot.primary,
     }];
   });
-  return projected.length > 0 ? projected : BUNDLED_AGENT_AUTH_SLOT_DEFINITIONS;
+  return projected;
 }
 
 export function agentAuthPrimarySlotForAgent(
   agentKind: AgentAuthAgentKind,
   capabilities?: AgentGatewayCapabilities | null,
-): AgentAuthSlotDefinition {
+): AgentAuthSlotDefinition | null {
   const slots = agentAuthSlotDefinitions(capabilities);
   return slots.find((slot) =>
     slot.agentKind === agentKind && slot.primary
-  ) ?? slots.find((slot) => slot.agentKind === agentKind)!;
+  ) ?? slots.find((slot) => slot.agentKind === agentKind) ?? null;
 }
 
 export function agentAuthSlotLabel(slot: AgentAuthSlotDefinition): string {

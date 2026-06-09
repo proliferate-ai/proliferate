@@ -58,7 +58,6 @@ from proliferate.server.cloud.agent_auth.provider_keys import (
 )
 from proliferate.server.cloud.agent_auth.results import BifrostRuntimeVirtualKeyResult
 from proliferate.server.cloud.agent_auth.router_materializations import (
-    _disable_bifrost_virtual_key_materialization,
     _disable_bifrost_virtual_keys_for_budget,
 )
 from proliferate.server.cloud.agent_auth.synced_files import (
@@ -179,7 +178,6 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
         target_id=auth.target_id,
     )
     now = utcnow()
-    stale_grant_ids: set[UUID] = set()
     if (
         existing is not None
         and existing.status == "active"
@@ -210,20 +208,8 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
                 virtual_key_id=existing.router_object_id,
                 expires_at_iso=existing_grant.expires_at.isoformat(),
             )
-        if existing_grant is not None:
-            stale_grant_ids.add(existing_grant.id)
 
     client = new_bifrost_admin_client()
-    if existing is not None and existing.status == "active" and existing.router_object_id:
-        await _disable_bifrost_virtual_key_materialization(
-            db,
-            client=client,
-            materialization=existing,
-            error_code="bifrost_virtual_key_rotation_failed",
-            raise_on_failure=True,
-        )
-        await store.revoke_runtime_grants_by_ids(db, stale_grant_ids)
-        existing = None
 
     provider_config: dict[str, object] = {
         "provider": provider,
