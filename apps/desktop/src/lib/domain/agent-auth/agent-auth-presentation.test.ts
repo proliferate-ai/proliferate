@@ -57,6 +57,7 @@ function capabilities(
       openaiCompatible: false,
     },
     opencodeGatewayEnabled: false,
+    agentAuthSlots: [],
     ...overrides,
   };
 }

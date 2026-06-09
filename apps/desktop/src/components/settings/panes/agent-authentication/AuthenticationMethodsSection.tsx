@@ -15,7 +15,7 @@ import {
   agentAuthAgentLabel,
 } from "@/lib/domain/agent-auth/agent-auth-agent-presentation";
 import {
-  AGENT_AUTH_SLOT_DEFINITIONS,
+  agentAuthSlotDefinitions,
   agentAuthCredentialProviderLabel,
   agentAuthSlotLabel,
   type AgentAuthSlotDefinition,
@@ -79,6 +79,9 @@ export function AuthenticationMethodsSection({
   const userManagedCredentials = personalCredentials.filter(
     (credential) => !isProliferateManagedCreditsCredential(credential),
   );
+  const localAuthSlots = agentAuthSlotDefinitions(capabilities).filter((slot) =>
+    slot.localProvider !== null
+  );
   return (
     <section className="space-y-3">
       <div className="space-y-1">
@@ -95,8 +98,7 @@ export function AuthenticationMethodsSection({
           <span>Source</span>
           <span>Status</span>
         </div>
-        {AGENT_AUTH_SLOT_DEFINITIONS.filter((slot) => slot.localProvider !== null)
-          .map((slot) => {
+        {localAuthSlots.map((slot) => {
           return (
             <LocalMethodRow
               key={`local-${slot.agentKind}-${slot.authSlotId}`}

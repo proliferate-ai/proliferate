@@ -31,7 +31,7 @@ import {
   credentialSummaryDetails,
 } from "@/lib/domain/agent-auth/agent-auth-credential-presentation";
 import {
-  AGENT_AUTH_SLOT_DEFINITIONS,
+  agentAuthSlotDefinitions,
   agentAuthSlotLabel,
   agentAuthSlotDomId,
   credentialsForAgentAuthSlot,
@@ -172,6 +172,7 @@ function PersonalAuthInUseSection({
 }) {
   const selectionsBySlot = selectionByAgentAuthSlot(personalSelections);
   const credentials = [...credentialsByProvider.values()].flat();
+  const slots = agentAuthSlotDefinitions(capabilities);
   return (
     <section className="space-y-3">
       <div className="flex items-end justify-between gap-3">
@@ -199,7 +200,7 @@ function PersonalAuthInUseSection({
           <span>Local sandbox</span>
           <span>Personal cloud</span>
         </div>
-        {AGENT_AUTH_SLOT_DEFINITIONS.map((slot) => {
+        {slots.map((slot) => {
           const slotCredentials = credentialsForAgentAuthSlot(credentials, slot);
           return (
             <div

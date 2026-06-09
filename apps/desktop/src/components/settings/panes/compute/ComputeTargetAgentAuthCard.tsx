@@ -19,7 +19,7 @@ import {
   agentAuthAgentLabel,
 } from "@/lib/domain/agent-auth/agent-auth-agent-presentation";
 import {
-  AGENT_AUTH_SLOT_DEFINITIONS,
+  agentAuthSlotDefinitions,
   agentAuthSlotLabel,
   credentialsForAgentAuthSlot,
   selectionByAgentAuthSlot,
@@ -58,6 +58,10 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
   const { data: targetStates = [] } = useSandboxAgentAuthTargetStates(profile?.id ?? null);
   const { data: capabilities } = useCloudCapabilities();
   const agentGatewayCapabilities = capabilities?.agentGateway ?? null;
+  const slots = useMemo(
+    () => agentAuthSlotDefinitions(agentGatewayCapabilities),
+    [agentGatewayCapabilities],
+  );
   const visibleCredentials = useMemo(
     () =>
       credentials.filter((credential) =>
@@ -165,7 +169,7 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
         </div>
       ) : (
         <div className="divide-y divide-border/40 rounded-md border border-border/50">
-          {AGENT_AUTH_SLOT_DEFINITIONS.map((slot) => {
+          {slots.map((slot) => {
             const selection = selectionsBySlot.get(`${slot.agentKind}:${slot.authSlotId}`);
             const slotCredentials = credentialsForAgentAuthSlot(visibleCredentials, slot);
             const selectedCredential = selection

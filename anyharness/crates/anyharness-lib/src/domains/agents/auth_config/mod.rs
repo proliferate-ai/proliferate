@@ -8,6 +8,7 @@ use anyharness_contract::v1::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::domains::agents::model::AuthReadinessPolicy;
 use crate::domains::agents::registry::built_in_registry;
 use crate::domains::sessions::mcp_bindings::crypto::{
     decrypt_bytes, encrypt_bytes, SessionDataCipher,
@@ -205,7 +206,9 @@ impl AgentAuthConfigService {
             self.store.find_by_scope(LOCAL_SCOPE_KEY)?
         };
         let Some(record) = record else {
-            if scope.is_some() || required_revision.is_some() {
+            if agent_requires_launch_auth_selection(agent_kind)
+                && (scope.is_some() || required_revision.is_some())
+            {
                 return Err(selection_required_error(
                     scope.cloned(),
                     agent_kind,
@@ -214,8 +217,16 @@ impl AgentAuthConfigService {
             }
             return Ok(AgentAuthLaunchOverlay::default());
         };
+        let config = self.decrypt_record(&record)?;
+        let selections = config
+            .selections
+            .iter()
+            .filter(|selection| selection.agent_kind == agent_kind)
+            .collect::<Vec<_>>();
         if let Some(required_revision) = required_revision {
-            if record.revision < required_revision {
+            if record.revision < required_revision
+                && (agent_requires_launch_auth_selection(agent_kind) || !selections.is_empty())
+            {
                 return Err(selection_required_error(
                     scope.cloned(),
                     agent_kind,
@@ -223,14 +234,10 @@ impl AgentAuthConfigService {
                 ));
             }
         }
-        let config = self.decrypt_record(&record)?;
-        let selections = config
-            .selections
-            .iter()
-            .filter(|selection| selection.agent_kind == agent_kind)
-            .collect::<Vec<_>>();
         if selections.is_empty() {
-            if scope.is_some() || required_revision.is_some() {
+            if agent_requires_launch_auth_selection(agent_kind)
+                && (scope.is_some() || required_revision.is_some())
+            {
                 return Err(selection_required_error(
                     scope.cloned(),
                     agent_kind,
@@ -293,7 +300,10 @@ impl AgentAuthConfigService {
             anyhow::bail!("ANYHARNESS_DATA_KEY is required to read agent auth config");
         };
         let plaintext = decrypt_bytes(cipher, &record.config_ciphertext)?;
-        Ok(serde_json::from_slice(&plaintext)?)
+        let mut config: AgentAuthConfigInput = serde_json::from_slice(&plaintext)?;
+        normalize_legacy_auth_slot_ids(&mut config);
+        validate_config_input(&config)?;
+        Ok(config)
     }
 
     fn write_managed_config_files(&self, request: &AgentAuthConfigInput) -> anyhow::Result<()> {
@@ -324,6 +334,23 @@ impl AgentAuthConfigService {
     fn claude_gateway_config_dir(&self) -> PathBuf {
         self.runtime_home.join("agent-auth").join("claude-gateway")
     }
+}
+
+fn agent_requires_launch_auth_selection(agent_kind: &str) -> bool {
+    built_in_registry()
+        .iter()
+        .find(|descriptor| descriptor.kind.as_str() == agent_kind)
+        .map(|descriptor| match descriptor.auth.readiness_policy {
+            AuthReadinessPolicy::AnyRequiredSlot | AuthReadinessPolicy::AllRequiredSlots => {
+                descriptor
+                    .auth
+                    .slots
+                    .iter()
+                    .any(|slot| slot.required_for_readiness)
+            }
+            AuthReadinessPolicy::ProviderManaged | AuthReadinessPolicy::None => false,
+        })
+        .unwrap_or(true)
 }
 
 fn normalize_legacy_auth_slot_ids(input: &mut AgentAuthConfigInput) {

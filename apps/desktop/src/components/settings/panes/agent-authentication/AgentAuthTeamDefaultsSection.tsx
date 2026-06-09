@@ -17,7 +17,7 @@ import { AgentAuthManagedCreditsCard } from "@/components/settings/panes/agent-a
 import { AgentAuthTeamSyncOverview } from "@/components/settings/panes/agent-authentication/AgentAuthTeamSyncOverview";
 import { agentAuthenticationCopy } from "@/copy/settings/agent-authentication-copy";
 import {
-  AGENT_AUTH_SLOT_DEFINITIONS,
+  agentAuthSlotDefinitions,
   agentAuthSlotLabel,
   credentialsForAgentAuthSlot,
   selectionByAgentAuthSlot,
@@ -72,6 +72,7 @@ export function AgentAuthTeamDefaultsSection({
 }: AgentAuthTeamDefaultsSectionProps) {
   const [credentialToRevoke, setCredentialToRevoke] = useState<AgentAuthCredential | null>(null);
   const selectionsBySlot = selectionByAgentAuthSlot(selections);
+  const slots = agentAuthSlotDefinitions(capabilities);
   const managedCreditsCredentials = credentials.filter(isProliferateManagedCreditsCredential);
   const syncedCredentials = credentials.filter(
     (credential) => credential.credentialKind === "synced_path",
@@ -117,7 +118,7 @@ export function AgentAuthTeamDefaultsSection({
             </Button>
           </SettingsCardRow>
         ) : (
-          AGENT_AUTH_SLOT_DEFINITIONS.map((slot) => (
+          slots.map((slot) => (
             <TeamDefaultHarnessRow
               key={`${slot.agentKind}-${slot.authSlotId}`}
               slot={slot}

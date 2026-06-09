@@ -3510,6 +3510,8 @@ export interface components {
             createdByUserId: string | null;
             /** Credentialproviderid */
             credentialProviderId: string;
+            /** Agentkind */
+            agentKind?: string | null;
             /** Credentialkind */
             credentialKind: string;
             /** Displayname */
@@ -3560,6 +3562,8 @@ export interface components {
             status: string;
             /** Allowedcredentialproviderid */
             allowedCredentialProviderId: string;
+            /** Allowedagentkind */
+            allowedAgentKind?: string | null;
             /** Revokedat */
             revokedAt: string | null;
             /** Revokedbyuserid */
@@ -3578,6 +3582,23 @@ export interface components {
              */
             changed: boolean;
         };
+        /** AgentAuthSlotCapability */
+        AgentAuthSlotCapability: {
+            /** Agentkind */
+            agentKind: string;
+            /** Authslotid */
+            authSlotId: string;
+            /** Label */
+            label: string;
+            /** Shortlabel */
+            shortLabel: string;
+            /** Credentialproviderids */
+            credentialProviderIds: string[];
+            /** Localprovider */
+            localProvider: string | null;
+            /** Primary */
+            primary: boolean;
+        };
         /** AgentCatalogAgent */
         AgentCatalogAgent: {
             /**
@@ -3589,10 +3610,6 @@ export interface components {
             displayName: string;
             /** Description */
             description?: string | null;
-            /** Process */
-            process?: {
-                [key: string]: unknown;
-            };
             session: components["schemas"]["AgentCatalogSession"];
         };
         /** AgentCatalogControl */
@@ -3871,6 +3888,8 @@ export interface components {
             byokProviders: components["schemas"]["AgentGatewayByokProviderCapabilities"];
             /** Opencodegatewayenabled */
             opencodeGatewayEnabled: boolean;
+            /** Agentauthslots */
+            agentAuthSlots: components["schemas"]["AgentAuthSlotCapability"][];
         };
         /** AgentGatewayFreeCreditEntitlementResponse */
         AgentGatewayFreeCreditEntitlementResponse: {
