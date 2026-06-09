@@ -46,6 +46,12 @@ interface ComputeTargetAgentAuthCardProps {
 export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCardProps) {
   const [profile, setProfile] = useState<SandboxProfile | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [autoLoadingProfileTargetId, setAutoLoadingProfileTargetId] = useState<string | null>(
+    null,
+  );
+  const [autoLoadedProfileTargetId, setAutoLoadedProfileTargetId] = useState<string | null>(
+    null,
+  );
   const sharedTarget = target.ownerScope === "organization";
   const admin = useIsAdmin(sharedTarget ? target.organizationId ?? null : null);
   const canManageAgentAuth = !sharedTarget || admin.isAdmin;
@@ -74,7 +80,65 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
   useEffect(() => {
     setProfile(null);
     setFeedback(null);
+    setAutoLoadingProfileTargetId(null);
+    setAutoLoadedProfileTargetId(null);
   }, [target.id]);
+
+  useEffect(() => {
+    if (
+      !target.sandboxProfileId
+      || profile
+      || !canManageAgentAuth
+      || autoLoadingProfileTargetId === target.id
+      || autoLoadedProfileTargetId === target.id
+      || mutations.isEnsuringProfile
+      || (sharedTarget && admin.isLoading)
+      || (target.ownerScope === "organization" && !target.organizationId)
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    setAutoLoadingProfileTargetId(target.id);
+    setFeedback(null);
+    const loadProfile = async () => {
+      try {
+        const nextProfile = target.ownerScope === "organization"
+          ? await mutations.ensureOrganizationProfile({
+              organizationId: target.organizationId!,
+            })
+          : await mutations.ensurePersonalProfile();
+        if (!cancelled) {
+          setProfile(nextProfile);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setFeedback(error instanceof Error ? error.message : "Could not load agent auth profile.");
+        }
+      } finally {
+        if (!cancelled) {
+          setAutoLoadedProfileTargetId(target.id);
+          setAutoLoadingProfileTargetId(null);
+        }
+      }
+    };
+    void loadProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    admin.isLoading,
+    autoLoadedProfileTargetId,
+    autoLoadingProfileTargetId,
+    canManageAgentAuth,
+    mutations,
+    profile,
+    sharedTarget,
+    target.id,
+    target.organizationId,
+    target.ownerScope,
+    target.sandboxProfileId,
+  ]);
 
   async function handleEnsureProfile() {
     if (!canManageAgentAuth) {
@@ -154,7 +218,7 @@ export function ComputeTargetAgentAuthCard({ target }: ComputeTargetAgentAuthCar
             type="button"
             variant="secondary"
             size="sm"
-            loading={mutations.isEnsuringProfile}
+            loading={mutations.isEnsuringProfile || autoLoadingProfileTargetId === target.id}
             disabled={
               !canManageAgentAuth
               || (sharedTarget && admin.isLoading)

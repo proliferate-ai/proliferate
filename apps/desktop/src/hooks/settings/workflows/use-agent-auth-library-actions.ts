@@ -292,9 +292,7 @@ export function useAgentAuthLibraryActions(
         authSlotId,
         selection: {
           credentialId,
-          credentialShareId: selectedCredential?.ownerUserId === currentUserId
-            ? null
-            : selectedCredential?.activeCredentialShareId ?? null,
+          credentialShareId: selectedCredential?.activeCredentialShareId ?? null,
         },
       });
       setFeedback("Team default saved.");

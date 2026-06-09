@@ -141,7 +141,12 @@ def _managed_credit_agent_kind_has_provider(agent_kind: str) -> bool:
 
 def _agent_auth_slots() -> list[AgentAuthSlotCapability]:
     supported = set(SUPPORTED_CLOUD_AGENTS)
-    slots = [slot for slot in registry_auth_slots() if slot.agent_kind in supported]
+    slots = [
+        slot
+        for slot in registry_auth_slots()
+        if slot.agent_kind in supported
+        and (slot.agent_kind != "opencode" or settings.agent_gateway_opencode_enabled)
+    ]
     first_slot_by_agent = {
         slot.agent_kind: slot.auth_slot_id
         for slot in reversed(slots)

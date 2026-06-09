@@ -14,7 +14,7 @@ import {
   type PendingConfigChange,
 } from "@proliferate/product-domain/chats/cloud/composer-controls";
 import {
-  readySyncedCloudAgentKinds,
+  readyCloudAgentKinds,
   resolveCloudHarnessAvailability,
   type CloudAgentAuthCredentialLike,
   type CloudAgentGatewayCapabilitiesLike,
@@ -56,12 +56,15 @@ export function buildMobileChatComposerControlsModel(input: {
     !input.workspace
     || input.workspace.sandboxType === "managed_personal"
     || input.workspace.sandboxType === "managed_shared";
-  const readySyncedAgentKinds = readySyncedCloudAgentKinds(input.agentAuthCredentials);
+  const readyAgentKinds = readyCloudAgentKinds({
+    credentials: input.agentAuthCredentials,
+    agentGateway: input.agentGateway,
+  });
   const workspaceHarnessAvailability = resolveCloudHarnessAvailability({
     catalogAgentKinds,
     allowedAgentKinds: input.workspace?.allowedAgentKinds,
     readyAgentKinds: input.workspace?.readyAgentKinds
-      ?? (workspaceUsesManagedRuntime ? readySyncedAgentKinds : catalogAgentKinds),
+      ?? (workspaceUsesManagedRuntime ? readyAgentKinds : catalogAgentKinds),
     agentGateway: workspaceUsesManagedRuntime ? input.agentGateway : null,
     assumeFallbackAgentKindsLaunchable: !workspaceUsesManagedRuntime,
   });

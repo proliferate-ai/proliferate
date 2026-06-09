@@ -6,7 +6,7 @@ import type {
   CloudWorkspaceDetail,
 } from "@proliferate/cloud-sdk";
 import {
-  readySyncedCloudAgentKinds,
+  readyCloudAgentKinds,
   resolveCloudHarnessAvailability,
 } from "@proliferate/product-domain/chats/cloud/harness-availability";
 
@@ -21,29 +21,36 @@ export function useWebCloudHarnessAvailability(input: {
   const workspaceAllowedAgentKindsKey = workspace?.allowedAgentKinds?.join("\0") ?? "";
   const workspaceUsesManagedRuntime =
     !workspace || workspace.sandboxType === "managed_personal" || workspace.sandboxType === "managed_shared";
-  const readySyncedAgentKinds = useMemo(
-    () => readySyncedCloudAgentKinds(agentAuthCredentials),
-    [agentAuthCredentials],
+  const readyAgentKinds = useMemo(
+    () => readyCloudAgentKinds({
+      credentials: agentAuthCredentials,
+      agentGateway,
+    }),
+    [agentAuthCredentials, agentGateway],
   );
-  const readySyncedAgentKindsKey = readySyncedAgentKinds.join("\0");
+  const readyAgentKindsKey = readyAgentKinds.join("\0");
   const agentGatewayManagedCreditKindsKey = agentGateway?.managedCreditAgentKinds?.join("\0") ?? "";
+  const agentGatewayAuthSlotsKey = agentGateway?.agentAuthSlots
+    .map((slot) => `${slot.agentKind}:${slot.authSlotId}:${slot.credentialProviderIds.join(",")}`)
+    .join("\0") ?? "";
   const catalogAgentKindsKey = agentCatalog?.agents.map((agent) => agent.kind).join("\0") ?? "";
   const workspaceHarnessAvailability = useMemo(() => resolveCloudHarnessAvailability({
     catalogAgentKinds: agentCatalog?.agents.map((agent) => agent.kind),
     allowedAgentKinds: workspace?.allowedAgentKinds,
     readyAgentKinds: workspace?.readyAgentKinds
       ?? (workspaceUsesManagedRuntime
-        ? readySyncedAgentKinds
+        ? readyAgentKinds
         : agentCatalog?.agents.map((agent) => agent.kind)),
     agentGateway: workspaceUsesManagedRuntime ? agentGateway : null,
     assumeFallbackAgentKindsLaunchable: !workspaceUsesManagedRuntime,
   }), [
     agentCatalog,
-    readySyncedAgentKindsKey,
+    readyAgentKindsKey,
     agentGateway?.enabled,
     agentGateway?.managedCreditsOrganizationEnabled,
     agentGateway?.managedCreditsPersonalEnabled,
     agentGateway?.opencodeGatewayEnabled,
+    agentGatewayAuthSlotsKey,
     agentGatewayManagedCreditKindsKey,
     catalogAgentKindsKey,
     workspaceAllowedAgentKindsKey,

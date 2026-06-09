@@ -2,11 +2,12 @@ import {
   enableSandboxProfileCloud,
   ensureFreeManagedCredits,
   ensurePersonalSandboxProfile,
+  getCloudCapabilities,
   getSandboxAgentAuthSelections,
   listAgentAuthCredentials,
   putSandboxAgentAuthSelection,
   type AgentAuthAgentKind,
-  type AgentAuthCredentialProviderId,
+  type AgentGatewayCapabilities,
   type EnsureFreeManagedCreditsResponse,
   type ProliferateCloudClient,
 } from "@proliferate/cloud-sdk";
@@ -67,11 +68,11 @@ async function ensureReadyPersonalSelection(
   client: ProliferateCloudClient,
   agentKind: AgentAuthAgentKind,
 ): Promise<boolean> {
-  const authSlotId = defaultAuthSlotIdForAgent(agentKind);
   const profile = await ensurePersonalSandboxProfile(client);
-  const [selections, credentials] = await Promise.all([
+  const [selections, credentials, capabilities] = await Promise.all([
     getSandboxAgentAuthSelections(profile.id, client),
     listAgentAuthCredentials({}, client),
+    getCloudCapabilities(client),
   ]);
   const selectedCredentials = selections
     .filter((selection) => selection.agentKind === agentKind && selection.status === "active")
@@ -80,30 +81,45 @@ async function ensureReadyPersonalSelection(
       credential: credentials.find((credential) => credential.id === selection.credentialId),
     }));
   if (selectedCredentials.some(({ authSlotId, credential }) =>
-    isReadyLaunchCredential(credential, agentKind, authSlotId)
+    isReadyCredentialForSlot(
+      credential,
+      agentKind,
+      authSlotForAgent(capabilities.agentGateway, agentKind, authSlotId),
+      capabilities.agentGateway.enabled,
+    )
   )) {
     return true;
   }
 
-  const syncedCredential = readySyncedCredential(credentials, agentKind);
-  if (!syncedCredential) {
+  const authSlot = primaryAuthSlotForAgent(capabilities.agentGateway, agentKind);
+  const credential = readyCredentialForSlot(
+    credentials,
+    agentKind,
+    authSlot,
+    capabilities.agentGateway.enabled,
+  );
+  if (!credential) {
     return false;
   }
   await putSandboxAgentAuthSelection(
     profile.id,
     agentKind,
-    authSlotId,
-    { credentialId: syncedCredential.id },
+    authSlot.authSlotId,
+    { credentialId: credential.id },
     client,
   );
   return true;
 }
 
-function readySyncedCredential<T extends ReadySyncedCredentialCandidate>(
+function readyCredentialForSlot<T extends ReadySyncedCredentialCandidate>(
   credentials: readonly T[],
   agentKind: AgentAuthAgentKind,
+  authSlot: LaunchAuthSlot,
+  gatewayEnabled: boolean,
 ): T | null {
-  return credentials.find((credential) => isReadySyncedCredential(credential, agentKind)) ?? null;
+  return credentials.find((credential) =>
+    isReadyCredentialForSlot(credential, agentKind, authSlot, gatewayEnabled)
+  ) ?? null;
 }
 
 interface ReadySyncedCredentialCandidate {
@@ -113,40 +129,75 @@ interface ReadySyncedCredentialCandidate {
   status?: string | null;
 }
 
-function isReadyLaunchCredential<T extends ReadySyncedCredentialCandidate>(
+function isReadyCredentialForSlot<T extends ReadySyncedCredentialCandidate>(
   credential: T | null | undefined,
   agentKind: AgentAuthAgentKind,
-  authSlotId: string,
+  authSlot: LaunchAuthSlot,
+  gatewayEnabled: boolean,
 ): credential is T {
   if (credential?.status !== "ready") {
     return false;
   }
   if (credential.credentialKind === "synced_path") {
-    return credential.redactedSummary?.agentKind === agentKind;
+    return authSlot.primary && credential.redactedSummary?.agentKind === agentKind;
   }
-  return credential.credentialKind === "managed_gateway"
-    && credential.credentialProviderId === authSlotId;
+  return gatewayEnabled
+    && credential.credentialKind === "managed_gateway"
+    && authSlot.credentialProviderIds.includes(credential.credentialProviderId ?? "");
 }
 
-function isReadySyncedCredential<T extends ReadySyncedCredentialCandidate>(
-  credential: T | null | undefined,
-  agentKind: AgentAuthAgentKind,
-): credential is T {
-  return credential?.status === "ready"
-    && credential.credentialKind === "synced_path"
-    && credential.redactedSummary?.agentKind === agentKind;
+interface LaunchAuthSlot {
+  authSlotId: string;
+  credentialProviderIds: readonly string[];
+  primary: boolean;
 }
 
-function defaultAuthSlotIdForAgent(
+function primaryAuthSlotForAgent(
+  gateway: AgentGatewayCapabilities,
   agentKind: AgentAuthAgentKind,
-): AgentAuthCredentialProviderId {
+): LaunchAuthSlot {
+  const slots = gateway.agentAuthSlots.filter((slot) => slot.agentKind === agentKind);
+  const slot = slots.find((candidate) => candidate.primary) ?? slots[0];
+  if (slot) {
+    return {
+      authSlotId: slot.authSlotId,
+      credentialProviderIds: slot.credentialProviderIds,
+      primary: slot.primary,
+    };
+  }
   if (agentKind === "claude") {
-    return "anthropic";
+    return fallbackAuthSlot("anthropic");
   }
   if (agentKind === "gemini") {
-    return "gemini";
+    return fallbackAuthSlot("gemini");
   }
-  return "openai";
+  return fallbackAuthSlot("openai");
+}
+
+function authSlotForAgent(
+  gateway: AgentGatewayCapabilities,
+  agentKind: AgentAuthAgentKind,
+  authSlotId: string,
+): LaunchAuthSlot {
+  const slot = gateway.agentAuthSlots.find((candidate) =>
+    candidate.agentKind === agentKind && candidate.authSlotId === authSlotId
+  );
+  if (slot) {
+    return {
+      authSlotId: slot.authSlotId,
+      credentialProviderIds: slot.credentialProviderIds,
+      primary: slot.primary,
+    };
+  }
+  return fallbackAuthSlot(authSlotId);
+}
+
+function fallbackAuthSlot(authSlotId: string): LaunchAuthSlot {
+  return {
+    authSlotId,
+    credentialProviderIds: [authSlotId],
+    primary: true,
+  };
 }
 
 async function ensureFreeManagedCreditsWithRetry(args: {

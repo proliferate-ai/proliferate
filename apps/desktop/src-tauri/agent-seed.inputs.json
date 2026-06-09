@@ -22,7 +22,7 @@
     },
     "codex": {
       "nativeVersion": "latest",
-      "agentProcessPackage": "@proliferateai/codex-acp@0.11.7"
+      "agentProcessPackage": "@proliferateai/codex-acp@0.11.8"
     }
   }
 }

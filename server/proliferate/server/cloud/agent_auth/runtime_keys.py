@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import secrets
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +22,7 @@ from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZ
 from proliferate.db.store.cloud_agent_auth import store
 from proliferate.db.store.cloud_agent_auth.records import (
     AgentGatewayPolicyRecord,
+    AgentGatewayRuntimeGrantRecord,
     SandboxAgentAuthSelectionRecord,
     SandboxProfileRecord,
 )
@@ -84,6 +88,9 @@ _TERMINAL_AGENT_AUTH_REFRESH_COMMAND_STATUSES = frozenset(
         CloudCommandStatus.failed_delivery.value,
     }
 )
+_GATEWAY_GRANT_REFRESH_WINDOW = timedelta(days=2)
+_RUNTIME_GRANT_TOKEN_DOMAIN = "agent-gateway-runtime-grant"
+_RUNTIME_GRANT_HASH_KEY_ID = "sha256-v1"
 
 
 async def _issue_bifrost_runtime_virtual_key_for_selection(
@@ -157,12 +164,22 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
         auth_slot_id=selection.auth_slot_id,
         policy_id=policy.id,
     )
+    await store.lock_runtime_grant_route(
+        db,
+        policy_id=policy.id,
+        target_id=auth.target_id,
+        sandbox_profile_id=profile.id,
+        agent_kind=selection.agent_kind,
+        auth_slot_id=selection.auth_slot_id,
+    )
     existing = await store.get_runtime_router_materialization(
         db,
         router_kind="bifrost",
         selection_id=selection.id,
         target_id=auth.target_id,
     )
+    now = utcnow()
+    stale_grant_ids: set[UUID] = set()
     if (
         existing is not None
         and existing.status == "active"
@@ -171,17 +188,35 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
         and existing.router_object_id
         and existing.router_object_secret_ciphertext
     ):
-        return BifrostRuntimeVirtualKeyResult(
-            virtual_key=decrypt_text(existing.router_object_secret_ciphertext),
-            virtual_key_id=existing.router_object_id,
-            expires_at_iso=(utcnow() + _GATEWAY_GRANT_TTL).isoformat(),
+        existing_secret = decrypt_text(existing.router_object_secret_ciphertext)
+        existing_grant = await store.get_runtime_grant_by_token_hash(
+            db,
+            _runtime_grant_token_hash(existing_secret),
         )
+        if _runtime_grant_reusable(
+            existing_grant,
+            now=now,
+            policy_id=policy.id,
+            credential_id=credential.id,
+            selection_id=selection.id,
+            target_id=auth.target_id,
+            sandbox_profile_id=profile.id,
+            agent_kind=selection.agent_kind,
+            auth_slot_id=selection.auth_slot_id,
+        ):
+            return BifrostRuntimeVirtualKeyResult(
+                virtual_key=existing_secret,
+                virtual_key_id=existing.router_object_id,
+                expires_at_iso=existing_grant.expires_at.isoformat(),
+            )
+        if existing_grant is not None:
+            stale_grant_ids.add(existing_grant.id)
+
     client = new_bifrost_admin_client()
     if (
         existing is not None
         and existing.status == "active"
         and existing.router_object_id
-        and (existing.sync_fingerprint != fingerprint or existing.sync_status != "synced")
     ):
         await _disable_bifrost_virtual_key_materialization(
             db,
@@ -190,6 +225,7 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
             error_code="bifrost_virtual_key_rotation_failed",
             raise_on_failure=True,
         )
+        await store.revoke_runtime_grants_by_ids(db, stale_grant_ids)
         existing = None
 
     provider_config: dict[str, object] = {
@@ -257,10 +293,62 @@ async def _issue_bifrost_runtime_virtual_key_for_selection(
     )
     if not materialization.router_object_id:
         raise BifrostIntegrationError("Bifrost virtual key materialization is missing an id.")
+    expires_at = utcnow() + _GATEWAY_GRANT_TTL
+    await store.create_runtime_grant(
+        db,
+        token_hash=_runtime_grant_token_hash(secret),
+        hash_key_id=_RUNTIME_GRANT_HASH_KEY_ID,
+        policy_id=policy.id,
+        credential_id=credential.id,
+        selection_id=selection.id,
+        issued_profile_revision=profile.agent_auth_revision,
+        target_id=auth.target_id,
+        sandbox_profile_id=profile.id,
+        organization_id=policy.organization_id,
+        user_id=policy.owner_user_id,
+        agent_kind=selection.agent_kind,
+        auth_slot_id=selection.auth_slot_id,
+        protocol_facade=plan.protocol_facade,
+        expires_at=expires_at,
+    )
     return BifrostRuntimeVirtualKeyResult(
         virtual_key=secret,
         virtual_key_id=materialization.router_object_id,
-        expires_at_iso=(utcnow() + _GATEWAY_GRANT_TTL).isoformat(),
+        expires_at_iso=expires_at.isoformat(),
+    )
+
+
+def _runtime_grant_token_hash(token: str) -> str:
+    return hmac.new(
+        settings.cloud_secret_key.encode("utf-8"),
+        f"{_RUNTIME_GRANT_TOKEN_DOMAIN}:{token}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _runtime_grant_reusable(
+    grant: AgentGatewayRuntimeGrantRecord | None,
+    *,
+    now: datetime,
+    policy_id: UUID,
+    credential_id: UUID,
+    selection_id: UUID,
+    target_id: UUID,
+    sandbox_profile_id: UUID,
+    agent_kind: str,
+    auth_slot_id: str,
+) -> bool:
+    return (
+        grant is not None
+        and grant.revoked_at is None
+        and grant.expires_at > now + _GATEWAY_GRANT_REFRESH_WINDOW
+        and grant.policy_id == policy_id
+        and grant.credential_id == credential_id
+        and grant.selection_id == selection_id
+        and grant.target_id == target_id
+        and grant.sandbox_profile_id == sandbox_profile_id
+        and grant.agent_kind == agent_kind
+        and grant.auth_slot_id == auth_slot_id
     )
 
 

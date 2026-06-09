@@ -97,9 +97,8 @@ fn defaults_missing_auth_slot_id_from_registry_for_legacy_worker_plans() {
     }))
     .expect("legacy plan");
 
-    let (request, _) =
-        build_anyharness_agent_auth_request(None, "profile-1", "target-1", 7, &plan)
-            .expect("request");
+    let (request, _) = build_anyharness_agent_auth_request(None, "profile-1", "target-1", 7, &plan)
+        .expect("request");
 
     assert_eq!(request["selections"][0]["authSlotId"], "anthropic");
 }
@@ -246,4 +245,53 @@ fn rejects_claude_synced_protected_env() {
     let error = build_anyharness_agent_auth_request(None, "profile-1", "target-1", 7, &plan)
         .expect_err("disallowed synced env");
     assert!(error.to_string().contains("ANTHROPIC_API_KEY"));
+}
+
+#[test]
+fn rejects_protected_env_before_synced_file_side_effects() {
+    let root = std::env::current_dir()
+        .expect("cwd")
+        .join("target")
+        .join(format!(
+            "proliferate-worker-agent-auth-protected-env-side-effects-{}",
+            std::process::id()
+        ));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(root.join(".codex")).expect("mkdir");
+    fs::write(root.join(".codex/auth.json"), "{}").expect("write auth");
+    let plan: AgentAuthMaterializationPlan = serde_json::from_value(json!({
+        "applied": true,
+        "targetId": "target-1",
+        "sandboxProfileId": "profile-1",
+        "revision": 7,
+        "selections": [{
+            "agentKind": "codex",
+            "authSlotId": "openai",
+            "materializationMode": "synced_files",
+            "credentialId": "credential-1",
+            "credentialRevision": 3,
+            "credentialShareId": null,
+            "syncedFiles": {
+                "credentialShareId": null,
+                "envVars": { "OPENAI_API_KEY": "not-allowed-for-synced-files" },
+                "files": [{
+                    "relativePath": ".codex/auth.json",
+                    "content": "{\"token\":\"new\"}"
+                }],
+                "cleanup": [{
+                    "relativePath": ".codex/auth.json",
+                    "reason": "credential_revoked"
+                }]
+            }
+        }]
+    }))
+    .expect("plan");
+
+    let error = build_anyharness_agent_auth_request(Some(&root), "profile-1", "target-1", 7, &plan)
+        .expect_err("disallowed synced env");
+    assert!(error.to_string().contains("OPENAI_API_KEY"));
+    assert_eq!(
+        fs::read_to_string(root.join(".codex/auth.json")).expect("auth file"),
+        "{}"
+    );
 }

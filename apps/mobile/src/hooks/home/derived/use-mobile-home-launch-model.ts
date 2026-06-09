@@ -16,7 +16,7 @@ import {
   type CloudLaunchComposerSelection,
 } from "@proliferate/product-domain/chats/cloud/composer-controls";
 import {
-  readySyncedCloudAgentKinds,
+  readyCloudAgentKinds,
   resolveCloudHarnessAvailability,
 } from "@proliferate/product-domain/chats/cloud/harness-availability";
 
@@ -87,27 +87,34 @@ export function useMobileHomeLaunchModel() {
   const selectedRuntime =
     runtimeOptions.find((runtime) => runtime.id === runtimeId) ?? runtimeOptions[0] ?? null;
   const agentGateway = cloudCapabilities.data?.agentGateway;
-  const readySyncedAgentKinds = useMemo(
-    () => readySyncedCloudAgentKinds(agentAuthCredentials.data),
-    [agentAuthCredentials.data],
+  const readyAgentKinds = useMemo(
+    () => readyCloudAgentKinds({
+      credentials: agentAuthCredentials.data,
+      agentGateway,
+    }),
+    [agentAuthCredentials.data, agentGateway],
   );
-  const readySyncedAgentKindsKey = readySyncedAgentKinds.join("\0");
+  const readyAgentKindsKey = readyAgentKinds.join("\0");
   const agentGatewayManagedCreditKindsKey = agentGateway?.managedCreditAgentKinds?.join("\0") ?? "";
+  const agentGatewayAuthSlotsKey = agentGateway?.agentAuthSlots
+    .map((slot) => `${slot.agentKind}:${slot.authSlotId}:${slot.credentialProviderIds.join(",")}`)
+    .join("\0") ?? "";
   const catalogAgentKindsKey = agentCatalog.data?.agents.map((agent) => agent.kind).join("\0") ?? "";
   const harnessAvailability = useMemo(() => resolveCloudHarnessAvailability({
     catalogAgentKinds: agentCatalog.data?.agents.map((agent) => agent.kind),
     readyAgentKinds: selectedRuntime?.kind === "target"
       ? agentCatalog.data?.agents.map((agent) => agent.kind)
-      : readySyncedAgentKinds,
+      : readyAgentKinds,
     agentGateway: selectedRuntime?.kind === "target" ? null : agentGateway,
     assumeFallbackAgentKindsLaunchable: selectedRuntime?.kind === "target",
   }), [
     agentCatalog.data,
-    readySyncedAgentKindsKey,
+    readyAgentKindsKey,
     agentGateway?.enabled,
     agentGateway?.managedCreditsOrganizationEnabled,
     agentGateway?.managedCreditsPersonalEnabled,
     agentGateway?.opencodeGatewayEnabled,
+    agentGatewayAuthSlotsKey,
     agentGatewayManagedCreditKindsKey,
     catalogAgentKindsKey,
     selectedRuntime?.kind,
