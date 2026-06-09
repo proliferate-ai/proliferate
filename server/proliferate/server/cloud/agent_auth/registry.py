@@ -33,8 +33,10 @@ class RegistrySyncedFilesPolicy:
 class RegistryAuthSlot:
     agent_kind: str
     auth_slot_id: str
+    label: str
     credential_provider_ids: tuple[str, ...]
     required_for_readiness: bool
+    discovery: str
     gateway_env: RegistryGatewayEnvPolicy | None
     synced_files: RegistrySyncedFilesPolicy | None
 
@@ -53,10 +55,12 @@ def registry_auth_slots() -> tuple[RegistryAuthSlot, ...]:
                 RegistryAuthSlot(
                     agent_kind=agent_kind,
                     auth_slot_id=str(slot.get("id", "")),
+                    label=str(slot.get("label", "")),
                     credential_provider_ids=tuple(
                         str(item) for item in slot.get("credentialProviderIds", [])
                     ),
                     required_for_readiness=bool(slot.get("requiredForReadiness")),
+                    discovery=str(slot.get("discovery", "none")),
                     gateway_env=(
                         RegistryGatewayEnvPolicy(
                             protocol_facade=str(gateway.get("protocolFacade")),

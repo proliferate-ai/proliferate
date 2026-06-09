@@ -15,7 +15,6 @@ function cloudCatalog(): Parameters<typeof projectCloudAgentCatalogToDesktopLaun
       kind: "opencode",
       displayName: "OpenCode",
       description: "OpenCode through ACP",
-      process: {},
       session: {
         defaultModelId: "opencode/big-pickle",
         defaultModeId: "build",

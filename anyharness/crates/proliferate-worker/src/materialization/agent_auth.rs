@@ -41,6 +41,7 @@ pub struct AgentAuthMaterializationPlan {
 #[serde(rename_all = "camelCase")]
 pub struct AgentAuthSelectionPlan {
     pub agent_kind: String,
+    #[serde(default)]
     pub auth_slot_id: String,
     pub materialization_mode: String,
     pub credential_id: String,
@@ -175,6 +176,7 @@ pub fn build_anyharness_agent_auth_request(
     let mut synced_file_count = 0;
     let mut applied_cleanup_paths = Vec::new();
     for selection in &plan.selections {
+        let auth_slot_id = resolved_auth_slot_id(&selection.agent_kind, &selection.auth_slot_id)?;
         let mut protected_env = BTreeMap::new();
         let mut support_env = BTreeMap::new();
         let mut protected_config = BTreeMap::new();
@@ -201,13 +203,13 @@ pub fn build_anyharness_agent_auth_request(
             applied_cleanup_paths.extend(apply_cleanup_actions(
                 allowed_root,
                 &selection.agent_kind,
-                &selection.auth_slot_id,
+                &auth_slot_id,
                 &synced.cleanup,
             )?);
             let written = write_synced_auth_files(
                 allowed_root,
                 &selection.agent_kind,
-                &selection.auth_slot_id,
+                &auth_slot_id,
                 &synced.files,
                 &mut synced_file_paths,
             )?;
@@ -218,13 +220,13 @@ pub fn build_anyharness_agent_auth_request(
 
         require_allowed_protected_env(
             &selection.agent_kind,
-            &selection.auth_slot_id,
+            &auth_slot_id,
             &selection.materialization_mode,
             &protected_env,
         )?;
         selections.push(json!({
             "agentKind": selection.agent_kind,
-            "authSlotId": selection.auth_slot_id,
+            "authSlotId": auth_slot_id,
             "materializationMode": selection.materialization_mode,
             "credentialId": selection.credential_id,
             "credentialRevision": selection.credential_revision,
@@ -259,6 +261,29 @@ pub fn build_anyharness_agent_auth_request(
             applied_cleanup_paths,
         },
     ))
+}
+
+fn resolved_auth_slot_id(agent_kind: &str, auth_slot_id: &str) -> Result<String, WorkerError> {
+    if !auth_slot_id.trim().is_empty() {
+        return Ok(auth_slot_id.to_string());
+    }
+    default_auth_slot_id(agent_kind).ok_or_else(|| {
+        materialization_error(format!("missing agent auth slot for unsupported agent {agent_kind}"))
+    })
+}
+
+fn default_auth_slot_id(agent_kind: &str) -> Option<String> {
+    let registry = AGENT_AUTH_REGISTRY.get_or_init(|| {
+        serde_json::from_str(BUNDLED_AGENT_REGISTRY).expect("bundled agent registry must parse")
+    });
+    let agent = registry.agents.iter().find(|agent| agent.kind == agent_kind)?;
+    agent
+        .auth
+        .slots
+        .iter()
+        .find(|slot| slot.required_for_readiness)
+        .or_else(|| agent.auth.slots.first())
+        .map(|slot| slot.id.clone())
 }
 
 fn write_synced_auth_files(
@@ -419,6 +444,8 @@ struct AgentAuthRegistryAuth {
 #[serde(rename_all = "camelCase")]
 struct AgentAuthRegistrySlot {
     id: String,
+    #[serde(default)]
+    required_for_readiness: bool,
     #[serde(default)]
     materialization: AgentAuthRegistryMaterialization,
 }

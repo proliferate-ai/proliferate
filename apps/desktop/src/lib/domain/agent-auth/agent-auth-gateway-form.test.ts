@@ -26,6 +26,7 @@ const capabilities = {
     openaiCompatible: true,
   },
   opencodeGatewayEnabled: false,
+  agentAuthSlots: [],
 };
 
 describe("agentAuthGatewayProviderOptionsForCapabilities", () => {

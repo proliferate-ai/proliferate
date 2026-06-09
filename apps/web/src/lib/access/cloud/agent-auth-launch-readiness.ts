@@ -75,8 +75,13 @@ async function ensureReadyPersonalSelection(
   ]);
   const selectedCredentials = selections
     .filter((selection) => selection.agentKind === agentKind && selection.status === "active")
-    .map((selection) => credentials.find((credential) => credential.id === selection.credentialId));
-  if (selectedCredentials.some((credential) => isReadyLaunchCredential(credential, agentKind))) {
+    .map((selection) => ({
+      authSlotId: selection.authSlotId,
+      credential: credentials.find((credential) => credential.id === selection.credentialId),
+    }));
+  if (selectedCredentials.some(({ authSlotId, credential }) =>
+    isReadyLaunchCredential(credential, agentKind, authSlotId)
+  )) {
     return true;
   }
 
@@ -103,6 +108,7 @@ function readySyncedCredential<T extends ReadySyncedCredentialCandidate>(
 
 interface ReadySyncedCredentialCandidate {
   credentialKind?: string | null;
+  credentialProviderId?: string | null;
   redactedSummary?: { agentKind?: unknown } | null;
   status?: string | null;
 }
@@ -110,6 +116,7 @@ interface ReadySyncedCredentialCandidate {
 function isReadyLaunchCredential<T extends ReadySyncedCredentialCandidate>(
   credential: T | null | undefined,
   agentKind: AgentAuthAgentKind,
+  authSlotId: string,
 ): credential is T {
   if (credential?.status !== "ready") {
     return false;
@@ -117,7 +124,8 @@ function isReadyLaunchCredential<T extends ReadySyncedCredentialCandidate>(
   if (credential.credentialKind === "synced_path") {
     return credential.redactedSummary?.agentKind === agentKind;
   }
-  return credential.credentialKind === "managed_gateway";
+  return credential.credentialKind === "managed_gateway"
+    && credential.credentialProviderId === authSlotId;
 }
 
 function isReadySyncedCredential<T extends ReadySyncedCredentialCandidate>(

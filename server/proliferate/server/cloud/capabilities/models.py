@@ -13,6 +13,16 @@ class AgentGatewayByokProviderCapabilities(BaseModel):
     openai_compatible: bool = Field(alias="openaiCompatible")
 
 
+class AgentAuthSlotCapability(BaseModel):
+    agent_kind: str = Field(alias="agentKind")
+    auth_slot_id: str = Field(alias="authSlotId")
+    label: str
+    short_label: str = Field(alias="shortLabel")
+    credential_provider_ids: list[str] = Field(alias="credentialProviderIds")
+    local_provider: str | None = Field(alias="localProvider")
+    primary: bool
+
+
 class AgentGatewayCapabilities(BaseModel):
     enabled: bool
     managed_credits_personal_enabled: bool = Field(alias="managedCreditsPersonalEnabled")
@@ -28,6 +38,7 @@ class AgentGatewayCapabilities(BaseModel):
     byok_organization_disabled_reason: str | None = Field(alias="byokOrganizationDisabledReason")
     byok_providers: AgentGatewayByokProviderCapabilities = Field(alias="byokProviders")
     opencode_gateway_enabled: bool = Field(alias="opencodeGatewayEnabled")
+    agent_auth_slots: list[AgentAuthSlotCapability] = Field(alias="agentAuthSlots")
 
 
 class CloudCapabilitiesResponse(BaseModel):

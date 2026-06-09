@@ -70,6 +70,41 @@ fn builds_secret_bearing_anyharness_request() {
 }
 
 #[test]
+fn defaults_missing_auth_slot_id_from_registry_for_legacy_worker_plans() {
+    let plan: AgentAuthMaterializationPlan = serde_json::from_value(json!({
+        "applied": true,
+        "targetId": "target-1",
+        "sandboxProfileId": "profile-1",
+        "revision": 7,
+        "selections": [{
+            "agentKind": "claude",
+            "materializationMode": "gateway_env",
+            "credentialId": "credential-1",
+            "credentialRevision": 3,
+            "gateway": {
+                "protocolFacade": "anthropic",
+                "baseUrls": { "anthropic": "https://gateway.example/anthropic" },
+                "runtimeGrantToken": "grant-token",
+                "expiresAt": "2026-05-18T00:00:00Z",
+                "protectedEnv": {
+                    "ANTHROPIC_BASE_URL": "https://gateway.example/anthropic"
+                },
+                "supportEnv": {},
+                "protectedConfig": {},
+                "supportConfig": {}
+            }
+        }]
+    }))
+    .expect("legacy plan");
+
+    let (request, _) =
+        build_anyharness_agent_auth_request(None, "profile-1", "target-1", 7, &plan)
+            .expect("request");
+
+    assert_eq!(request["selections"][0]["authSlotId"], "anthropic");
+}
+
+#[test]
 fn allows_codex_gateway_env_aliases() {
     let plan: AgentAuthMaterializationPlan = serde_json::from_value(json!({
         "applied": true,
