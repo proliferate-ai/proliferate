@@ -143,7 +143,7 @@ fn run_result_to_contract(
             .map(|row| WorktreeRetentionRunRow {
                 workspace_id: row.workspace_id,
                 path: row.path,
-                repo_root_id: row.repo_root_id,
+                repo_root_id: Some(row.repo_root_id),
                 outcome: row.outcome,
                 message: row.message,
             })

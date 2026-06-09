@@ -21,7 +21,6 @@ function makeWorkspace(overrides: Partial<Workspace>): Workspace {
     repoRootId: "repo-root-1",
     path: "/tmp/repo",
     surface: "standard",
-    sourceRepoRootPath: "/tmp/repo",
     lifecycleState: "active",
     cleanupState: "none",
     createdAt: "2025-01-01T00:00:00.000Z",
@@ -47,13 +46,12 @@ describe("buildStandardRepoProjection", () => {
     expect(projection.repoRoots.map((repoRoot) => repoRoot.id)).toEqual(["repo-root-1"]);
   });
 
-  it("excludes cowork and legacy structural repo workspaces", () => {
+  it("excludes cowork workspaces", () => {
     const projection = buildStandardRepoProjection({
       repoRoots: [makeRepoRoot()],
       localWorkspaces: [
         makeWorkspace({ id: "local-1" }),
         makeWorkspace({ id: "cowork-1", surface: "cowork" }),
-        makeWorkspace({ id: "repo-1", kind: "repo" as Workspace["kind"] }),
       ],
       cloudWorkspaces: EMPTY_CLOUD_WORKSPACES,
       coworkRootRepoRootId: null,

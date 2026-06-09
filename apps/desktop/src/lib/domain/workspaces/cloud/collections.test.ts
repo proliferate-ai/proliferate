@@ -3,7 +3,6 @@ import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 import {
   buildWorkspaceCollections,
-  cloudWorkspaceGroupKey,
   workspaceFileTreeStateKey,
   upsertCloudWorkspaceCollections,
   upsertLocalWorkspaceCollections,
@@ -17,11 +16,6 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
     repoRootId: overrides.repoRootId ?? "repo-root-1",
     path: overrides.path ?? "/tmp/repo/workspace-1",
     surface: overrides.surface ?? "standard",
-    sourceRepoRootPath: overrides.sourceRepoRootPath ?? "/tmp/repo",
-    sourceWorkspaceId: overrides.sourceWorkspaceId ?? "repo-1",
-    gitProvider: "gitProvider" in overrides ? overrides.gitProvider : "github",
-    gitOwner: "gitOwner" in overrides ? overrides.gitOwner : "proliferate-ai",
-    gitRepoName: "gitRepoName" in overrides ? overrides.gitRepoName : "proliferate",
     originalBranch: "originalBranch" in overrides ? overrides.originalBranch : "main",
     currentBranch: "currentBranch" in overrides ? overrides.currentBranch : "feature/workspace-1",
     executionSummary: overrides.executionSummary,
@@ -363,25 +357,22 @@ describe("workspaceCollectionsNeedActivityRefresh", () => {
 });
 
 describe("workspaceFileTreeStateKey", () => {
-  it("uses the same repo grouping inputs as cloud workspace grouping", () => {
+  it("uses the workspace repo root id as the local tree key", () => {
     const localWorkspace = makeWorkspace({
       id: "workspace-local",
       kind: "worktree",
       path: "/tmp/proliferate-feature",
     });
-    const cloudWorkspace = makeCloudWorkspace();
 
-    expect(workspaceFileTreeStateKey(localWorkspace)).toBe(cloudWorkspaceGroupKey(cloudWorkspace));
+    expect(workspaceFileTreeStateKey(localWorkspace)).toBe("repo-root-1");
   });
 
-  it("falls back to the local repo root when remote metadata is missing", () => {
+  it("falls back to the workspace path when the repo root id is unavailable", () => {
     const workspace = makeWorkspace({
-      gitProvider: null,
-      gitOwner: null,
-      gitRepoName: null,
-      sourceRepoRootPath: "/tmp/local-only",
+      repoRootId: "",
+      path: "/tmp/local-only/workspace",
     });
 
-    expect(workspaceFileTreeStateKey(workspace)).toBe("/tmp/local-only");
+    expect(workspaceFileTreeStateKey(workspace)).toBe("/tmp/local-only/workspace");
   });
 });

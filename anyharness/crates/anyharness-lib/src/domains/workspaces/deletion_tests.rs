@@ -81,8 +81,13 @@ fn seed_workspace_and_repo(db: &Db) {
             [],
         )?;
         conn.execute(
-            "INSERT INTO workspaces (id, kind, path, source_repo_root_path, repo_root_id, created_at, updated_at)
-             VALUES ('workspace-1', 'worktree', '/tmp/workspace-1', '/tmp/repo-root-1', 'repo-root-1', ?1, ?1)",
+            "INSERT INTO workspaces (
+                id, kind, repo_root_id, path, surface, lifecycle_state, cleanup_state,
+                created_at, updated_at
+             ) VALUES (
+                'workspace-1', 'worktree', 'repo-root-1', '/tmp/workspace-1',
+                'standard', 'active', 'none', ?1, ?1
+             )",
             ["2026-03-25T00:00:00Z"],
         )?;
         Ok(())

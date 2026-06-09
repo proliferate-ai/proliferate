@@ -25,7 +25,7 @@ use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::terminals::model::{TerminalRecord, TerminalStatus};
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceRecord};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::domains::workspaces::service::WorkspaceService;
 use crate::domains::workspaces::types::PreparedWorkspaceMobilityDestination;
@@ -213,13 +213,8 @@ impl MobilityService {
             });
         }
 
-        let default_branch = if workspace.kind == "local" {
-            let repo_root_id = workspace.repo_root_id.clone().ok_or_else(|| {
-                MobilityError::Internal(anyhow::anyhow!(
-                    "workspace missing repo_root_id: {}",
-                    workspace.id
-                ))
-            })?;
+        let default_branch = if workspace.kind == WorkspaceKind::Local {
+            let repo_root_id = workspace.repo_root_id.clone();
             match self
                 .workspace_runtime
                 .resolve_repo_root_default_branch(&repo_root_id)
@@ -285,7 +280,7 @@ impl MobilityService {
             }),
         }
 
-        if workspace.kind == "local" {
+        if workspace.kind == WorkspaceKind::Local {
             if let (Some(current_branch), Some(default_branch)) =
                 (branch_name.as_deref(), default_branch.as_deref())
             {
@@ -668,13 +663,8 @@ impl MobilityService {
     ) -> Result<DestroyedWorkspaceSourceSummary, MobilityError> {
         let workspace = self.load_workspace(workspace_id)?;
         let workspace_path = PathBuf::from(&workspace.path);
-        let default_branch = if workspace.kind == "local" {
-            let repo_root_id = workspace.repo_root_id.clone().ok_or_else(|| {
-                MobilityError::Internal(anyhow::anyhow!(
-                    "workspace missing repo_root_id: {}",
-                    workspace.id
-                ))
-            })?;
+        let default_branch = if workspace.kind == WorkspaceKind::Local {
+            let repo_root_id = workspace.repo_root_id.clone();
             Some(
                 self.workspace_runtime
                     .resolve_repo_root_default_branch(&repo_root_id)

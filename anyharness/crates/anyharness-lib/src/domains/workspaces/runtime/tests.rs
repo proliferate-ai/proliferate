@@ -12,7 +12,7 @@ use crate::domains::repo_roots::store::RepoRootStore;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::workspaces::deletion::WorkspaceDeleteWorkflow;
-use crate::domains::workspaces::service::WorkspaceService;
+use crate::domains::workspaces::model::WorkspaceKind;
 use crate::domains::workspaces::store::WorkspaceStore;
 use crate::origin::OriginContext;
 use crate::persistence::Db;
@@ -306,8 +306,8 @@ fn create_workspace_creates_distinct_local_records_for_existing_path() {
         .expect("create duplicate local workspace");
 
     assert_ne!(first.workspace.id, second.workspace.id);
-    assert_eq!(first.workspace.kind, "local");
-    assert_eq!(second.workspace.kind, "local");
+    assert_eq!(first.workspace.kind, WorkspaceKind::Local);
+    assert_eq!(second.workspace.kind, WorkspaceKind::Local);
     assert_eq!(first.workspace.path, second.workspace.path);
     assert_eq!(first.repo_root.id, second.repo_root.id);
 
@@ -510,11 +510,8 @@ fn init_repo(path: &Path) {
 }
 
 fn make_runtime(db: &Db, runtime_home: &Path) -> WorkspaceRuntime {
-    let workspace_service =
-        WorkspaceService::new(WorkspaceStore::new(db.clone()), runtime_home.to_path_buf());
     let repo_root_service = RepoRootService::new(RepoRootStore::new(db.clone()));
     WorkspaceRuntime::new(
-        workspace_service,
         WorkspaceStore::new(db.clone()),
         WorkspaceDeleteWorkflow::new(
             db.clone(),

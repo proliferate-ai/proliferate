@@ -160,12 +160,8 @@ impl AppState {
             vec![Arc::new(CoworkDeleteParticipant)],
         );
         let repo_root_service = Arc::new(RepoRootService::new(RepoRootStore::new(db.clone())));
-        let workspace_service = Arc::new(WorkspaceService::new(
-            WorkspaceStore::new(db.clone()),
-            runtime_home.clone(),
-        ));
+        let workspace_service = Arc::new(WorkspaceService::new(WorkspaceStore::new(db.clone())));
         let workspace_runtime = Arc::new(WorkspaceRuntime::new(
-            (*workspace_service).clone(),
             WorkspaceStore::new(db.clone()),
             workspace_delete_workflow.clone(),
             (*repo_root_service).clone(),

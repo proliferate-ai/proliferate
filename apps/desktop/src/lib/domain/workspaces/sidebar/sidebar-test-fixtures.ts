@@ -26,6 +26,7 @@ export function makeWorkspace(args: {
   creatorContext?: Workspace["creatorContext"];
   executionSummary?: Workspace["executionSummary"];
   updatedAt?: string;
+  path?: string;
 }): Workspace {
   const {
     id,
@@ -40,19 +41,15 @@ export function makeWorkspace(args: {
     creatorContext = null,
     executionSummary = null,
     updatedAt = DEFAULT_UPDATED_AT,
+    path = kind === "local" ? sourceRoot : `${sourceRoot}/${id}`,
   } = args;
 
   return {
     id,
     kind,
     repoRootId: `${repoName}-root`,
-    path: `${sourceRoot}/${id}`,
+    path,
     surface: "standard",
-    sourceRepoRootPath: sourceRoot,
-    sourceWorkspaceId: `${repoName}-root-workspace`,
-    gitProvider: "github",
-    gitOwner: "proliferate-ai",
-    gitRepoName: repoName,
     originalBranch,
     currentBranch,
     displayName,
@@ -73,8 +70,8 @@ export function makeRepoRoot(args: {
   updatedAt?: string;
 } = {}): RepoRoot {
   const {
-    id = "repo-root-1",
     repoName = "proliferate",
+    id = `${repoName}-root`,
     sourceRoot = `/tmp/${repoName}`,
     updatedAt = DEFAULT_UPDATED_AT,
   } = args;
@@ -214,7 +211,7 @@ export function makeLocalLogicalWorkspace(args: {
     owner: "proliferate-ai",
     repoName,
     branchKey: branch ?? localWorkspace.currentBranch ?? "main",
-    displayName: localWorkspace.displayName ?? localWorkspace.gitRepoName ?? repoName,
+    displayName: localWorkspace.displayName ?? repoName,
     localWorkspace,
     cloudWorkspace: null,
     mobilityWorkspace: null,

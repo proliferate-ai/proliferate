@@ -494,19 +494,26 @@ CREATE TABLE workspace_setup_state (
 );
 
 -- table: workspaces
-CREATE TABLE workspaces (
-    id TEXT PRIMARY KEY,
-    kind TEXT NOT NULL,
-    path TEXT NOT NULL,
-    source_repo_root_path TEXT NOT NULL,
-    source_workspace_id TEXT,
-    git_provider TEXT,
-    git_owner TEXT,
-    git_repo_name TEXT,
-    original_branch TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-, current_branch TEXT, display_name TEXT, repo_root_id TEXT, surface TEXT NOT NULL DEFAULT 'standard', origin_json TEXT, lifecycle_state TEXT NOT NULL DEFAULT 'active', cleanup_state TEXT NOT NULL DEFAULT 'none', creator_context_json TEXT, cleanup_error_message TEXT, cleanup_failed_at TEXT, cleanup_attempted_at TEXT, cleanup_operation TEXT);
+CREATE TABLE "workspaces" (
+            id TEXT PRIMARY KEY,
+            kind TEXT NOT NULL CHECK (kind IN ('local', 'worktree')),
+            repo_root_id TEXT NOT NULL REFERENCES repo_roots(id),
+            path TEXT NOT NULL,
+            surface TEXT NOT NULL DEFAULT 'standard' CHECK (surface IN ('standard', 'cowork')),
+            original_branch TEXT,
+            current_branch TEXT,
+            display_name TEXT,
+            origin_json TEXT,
+            creator_context_json TEXT,
+            lifecycle_state TEXT NOT NULL DEFAULT 'active' CHECK (lifecycle_state IN ('active', 'retired')),
+            cleanup_state TEXT NOT NULL DEFAULT 'none' CHECK (cleanup_state IN ('none', 'pending', 'complete', 'failed')),
+            cleanup_operation TEXT CHECK (cleanup_operation IS NULL OR cleanup_operation IN ('retire', 'purge')),
+            cleanup_error_message TEXT,
+            cleanup_failed_at TEXT,
+            cleanup_attempted_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
 
 -- table: worktree_retention_policy
 CREATE TABLE worktree_retention_policy (
@@ -702,4 +709,4 @@ CREATE INDEX idx_workspaces_repo_root_id ON workspaces(repo_root_id);
 
 -- index: idx_workspaces_retention
 CREATE INDEX idx_workspaces_retention
-    ON workspaces(repo_root_id, kind, lifecycle_state, surface);
+            ON workspaces(repo_root_id, kind, lifecycle_state, surface);

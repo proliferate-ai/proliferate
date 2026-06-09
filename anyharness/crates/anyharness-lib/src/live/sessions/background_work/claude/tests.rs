@@ -7,6 +7,7 @@ use tokio::sync::mpsc;
 use super::output::extract_terminal_result_text;
 use super::watch::watch_async_agent;
 use super::{detect_async_agent_registration, BACKGROUND_WORK_FALLBACK_RESULT};
+use crate::app::test_support;
 use crate::domains::sessions::model::{
     SessionBackgroundWorkRecord, SessionBackgroundWorkState, SessionBackgroundWorkTrackerKind,
     SessionRecord,
@@ -287,15 +288,7 @@ async fn registry_rehydrates_pending_background_work_and_completes_it() {
 
 fn seeded_store() -> SessionStore {
     let db = Db::open_in_memory().expect("open db");
-    db.with_conn(|conn| {
-        conn.execute(
-            "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
-                 VALUES (?1, 'repo', '/tmp/workspace', '/tmp/workspace', ?2, ?2)",
-            rusqlite::params!["workspace-1", "2026-04-11T00:00:00Z"],
-        )?;
-        Ok(())
-    })
-    .expect("seed workspace");
+    test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace");
 
     let store = SessionStore::new(db);
     store

@@ -71,7 +71,7 @@ impl ArtifactProtectionService {
     fn protects_workspace(&self, workspace: &WorkspaceRecord) -> bool {
         self.protected_surfaces
             .iter()
-            .any(|surface| surface == &workspace.surface)
+            .any(|surface| surface == workspace.surface.as_str())
     }
 }
 
@@ -123,6 +123,9 @@ mod tests {
     use super::*;
     use crate::domains::artifacts::model::CreateArtifactInput;
     use crate::domains::artifacts::runtime::ArtifactRuntime;
+    use crate::domains::workspaces::model::{
+        WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceSurface,
+    };
     use uuid::Uuid;
 
     #[test]
@@ -156,7 +159,7 @@ mod tests {
             .expect("check sibling prefix"));
 
         let mut standard_workspace = workspace.record().clone();
-        standard_workspace.surface = "standard".to_string();
+        standard_workspace.surface = WorkspaceSurface::Standard;
         assert!(
             !<ArtifactProtectionService as WorkspaceFileProtection>::is_protected_relative_path_or_ancestor(
                 &protection,
@@ -182,22 +185,17 @@ mod tests {
             let now = chrono::Utc::now().to_rfc3339();
             let record = WorkspaceRecord {
                 id: format!("workspace-{}", Uuid::new_v4()),
-                kind: "local".to_string(),
-                repo_root_id: None,
+                kind: WorkspaceKind::Local,
+                repo_root_id: format!("repo-root-{}", Uuid::new_v4()),
                 path: path.to_string_lossy().to_string(),
-                surface: surface.to_string(),
-                source_repo_root_path: path.to_string_lossy().to_string(),
-                source_workspace_id: None,
-                git_provider: None,
-                git_owner: None,
-                git_repo_name: None,
+                surface: WorkspaceSurface::try_from(surface).expect("test workspace surface"),
                 original_branch: None,
                 current_branch: None,
                 display_name: None,
                 origin: None,
                 creator_context: None,
-                lifecycle_state: "ready".to_string(),
-                cleanup_state: "none".to_string(),
+                lifecycle_state: WorkspaceLifecycleState::Active,
+                cleanup_state: WorkspaceCleanupState::None,
                 cleanup_operation: None,
                 cleanup_error_message: None,
                 cleanup_failed_at: None,

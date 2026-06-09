@@ -1,5 +1,4 @@
 import type { Workspace } from "@anyharness/sdk";
-import { isStructuralRepoWorkspace } from "@/lib/domain/workspaces/display/usability";
 
 export type ChatSurfaceState =
   | { kind: "no-workspace" }
@@ -84,13 +83,6 @@ export function resolveLaunchIntentSurfaceOverride(args: {
   };
 }
 
-export function shouldShowStructuralRepoWorkspaceStatus(
-  workspace: Workspace | null,
-  activeSessionId: string | null,
-): boolean {
-  return !!workspace && isStructuralRepoWorkspace(workspace) && !activeSessionId;
-}
-
 export function resolveChatSurfaceState(input: ResolveChatSurfaceStateInput): ChatSurfaceState {
   const scopedActiveSessionId = input.shellRenderScope?.kind === "chat-shell"
     ? null
@@ -126,10 +118,6 @@ export function resolveChatSurfaceState(input: ResolveChatSurfaceStateInput): Ch
 
   if (input.hasPendingWorkspaceEntry) {
     return { kind: "session-empty", sessionId: scopedActiveSessionId };
-  }
-
-  if (shouldShowStructuralRepoWorkspaceStatus(input.selectedLocalWorkspace, scopedActiveSessionId)) {
-    return { kind: "session-empty", sessionId: null };
   }
 
   const shouldShowArrivalStatus = input.isArrivalWorkspace

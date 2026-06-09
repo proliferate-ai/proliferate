@@ -1,8 +1,10 @@
 use anyharness_contract::v1::{
     DetectProjectSetupResponse, GetSetupStatusResponse, RepoRoot, RepoRootKind,
     ResolveWorkspaceResponse, SetupHint, SetupHintCategory, SetupScriptStatus, Workspace,
-    WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
-    WorkspaceSurface,
+    WorkspaceCleanupOperation as ContractWorkspaceCleanupOperation,
+    WorkspaceCleanupState as ContractWorkspaceCleanupState, WorkspaceKind as ContractWorkspaceKind,
+    WorkspaceLifecycleState as ContractWorkspaceLifecycleState,
+    WorkspaceSurface as ContractWorkspaceSurface,
 };
 
 use super::error::ApiError;
@@ -10,6 +12,10 @@ use crate::app::AppState;
 use crate::domains::repo_roots::model::RepoRootRecord;
 use crate::domains::terminals::model::{TerminalCommandRunRecord, TerminalCommandRunStatus};
 use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{
+    WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
+    WorkspaceSurface,
+};
 use crate::domains::workspaces::runtime::WorkspaceResolution;
 use crate::domains::workspaces::types::{
     DetectedHintCategory, DetectedSetupHint, ProjectSetupDetectionResult,
@@ -104,38 +110,20 @@ pub(super) fn workspace_to_contract_with_summary(
     record: WorkspaceRecord,
     execution_summary: anyharness_contract::v1::WorkspaceExecutionSummary,
 ) -> Workspace {
-    let repo_root_id = record
-        .repo_root_id
-        .clone()
-        .unwrap_or_else(|| record.id.clone());
     Workspace {
         id: record.id,
-        kind: match record.kind.as_str() {
-            "worktree" => WorkspaceKind::Worktree,
-            _ => WorkspaceKind::Local,
-        },
-        repo_root_id,
+        kind: workspace_kind_to_contract(record.kind),
+        repo_root_id: record.repo_root_id,
         path: record.path,
-        surface: match record.surface.as_str() {
-            "cowork" => WorkspaceSurface::Cowork,
-            _ => WorkspaceSurface::Standard,
-        },
+        surface: workspace_surface_to_contract(record.surface),
         original_branch: record.original_branch,
         current_branch: record.current_branch,
         display_name: record.display_name,
-        lifecycle_state: match record.lifecycle_state.as_str() {
-            "retired" => WorkspaceLifecycleState::Retired,
-            _ => WorkspaceLifecycleState::Active,
-        },
-        cleanup_state: match record.cleanup_state.as_str() {
-            "pending" => WorkspaceCleanupState::Pending,
-            "complete" => WorkspaceCleanupState::Complete,
-            "failed" => WorkspaceCleanupState::Failed,
-            _ => WorkspaceCleanupState::None,
-        },
-        cleanup_operation: workspace_cleanup_operation_to_contract(
-            record.cleanup_operation.as_deref(),
-        ),
+        lifecycle_state: workspace_lifecycle_to_contract(record.lifecycle_state),
+        cleanup_state: workspace_cleanup_to_contract(record.cleanup_state),
+        cleanup_operation: record
+            .cleanup_operation
+            .map(workspace_cleanup_operation_to_contract),
         cleanup_error_message: record.cleanup_error_message,
         cleanup_failed_at: record.cleanup_failed_at,
         cleanup_attempted_at: record.cleanup_attempted_at,
@@ -153,36 +141,46 @@ pub(super) fn workspace_to_contract_with_summary(
     }
 }
 
-pub(super) fn workspace_kind_to_contract(kind: &str) -> WorkspaceKind {
+pub(super) fn workspace_kind_to_contract(kind: WorkspaceKind) -> ContractWorkspaceKind {
     match kind {
-        "worktree" => WorkspaceKind::Worktree,
-        _ => WorkspaceKind::Local,
+        WorkspaceKind::Local => ContractWorkspaceKind::Local,
+        WorkspaceKind::Worktree => ContractWorkspaceKind::Worktree,
     }
 }
 
-pub(super) fn workspace_lifecycle_to_contract(value: &str) -> WorkspaceLifecycleState {
-    match value {
-        "retired" => WorkspaceLifecycleState::Retired,
-        _ => WorkspaceLifecycleState::Active,
+pub(super) fn workspace_surface_to_contract(surface: WorkspaceSurface) -> ContractWorkspaceSurface {
+    match surface {
+        WorkspaceSurface::Standard => ContractWorkspaceSurface::Standard,
+        WorkspaceSurface::Cowork => ContractWorkspaceSurface::Cowork,
     }
 }
 
-pub(super) fn workspace_cleanup_to_contract(value: &str) -> WorkspaceCleanupState {
+pub(super) fn workspace_lifecycle_to_contract(
+    value: WorkspaceLifecycleState,
+) -> ContractWorkspaceLifecycleState {
     match value {
-        "pending" => WorkspaceCleanupState::Pending,
-        "complete" => WorkspaceCleanupState::Complete,
-        "failed" => WorkspaceCleanupState::Failed,
-        _ => WorkspaceCleanupState::None,
+        WorkspaceLifecycleState::Active => ContractWorkspaceLifecycleState::Active,
+        WorkspaceLifecycleState::Retired => ContractWorkspaceLifecycleState::Retired,
+    }
+}
+
+pub(super) fn workspace_cleanup_to_contract(
+    value: WorkspaceCleanupState,
+) -> ContractWorkspaceCleanupState {
+    match value {
+        WorkspaceCleanupState::None => ContractWorkspaceCleanupState::None,
+        WorkspaceCleanupState::Pending => ContractWorkspaceCleanupState::Pending,
+        WorkspaceCleanupState::Complete => ContractWorkspaceCleanupState::Complete,
+        WorkspaceCleanupState::Failed => ContractWorkspaceCleanupState::Failed,
     }
 }
 
 pub(super) fn workspace_cleanup_operation_to_contract(
-    operation: Option<&str>,
-) -> Option<WorkspaceCleanupOperation> {
+    operation: WorkspaceCleanupOperation,
+) -> ContractWorkspaceCleanupOperation {
     match operation {
-        Some("retire") => Some(WorkspaceCleanupOperation::Retire),
-        Some("purge") => Some(WorkspaceCleanupOperation::Purge),
-        _ => None,
+        WorkspaceCleanupOperation::Retire => ContractWorkspaceCleanupOperation::Retire,
+        WorkspaceCleanupOperation::Purge => ContractWorkspaceCleanupOperation::Purge,
     }
 }
 

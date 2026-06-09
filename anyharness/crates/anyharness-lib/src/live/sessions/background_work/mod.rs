@@ -209,6 +209,7 @@ mod tests {
     use tokio::sync::mpsc;
 
     use super::{BackgroundWorkOptions, BackgroundWorkRegistry};
+    use crate::app::test_support;
     use crate::domains::sessions::model::SessionRecord;
     use crate::domains::sessions::store::SessionStore;
     use crate::live::sessions::event_sink::AcpToolPayload;
@@ -291,15 +292,7 @@ mod tests {
 
     fn seeded_store() -> SessionStore {
         let db = Db::open_in_memory().expect("open db");
-        db.with_conn(|conn| {
-            conn.execute(
-                "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
-                 VALUES (?1, 'repo', '/tmp/workspace', '/tmp/workspace', ?2, ?2)",
-                rusqlite::params!["workspace-1", "2026-04-11T00:00:00Z"],
-            )?;
-            Ok(())
-        })
-        .expect("seed workspace");
+        test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace");
 
         let store = SessionStore::new(db);
         store

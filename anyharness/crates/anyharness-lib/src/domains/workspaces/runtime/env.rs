@@ -4,7 +4,7 @@ use std::path::Path;
 use super::records::path_basename;
 use super::WorkspaceRuntime;
 use crate::domains::workspaces::env::read_materialized_session_env;
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceRecord};
 
 impl WorkspaceRuntime {
     pub fn workspace_env(
@@ -22,18 +22,17 @@ impl WorkspaceRuntime {
         workspace: &WorkspaceRecord,
         base_ref: Option<&str>,
     ) -> anyhow::Result<Vec<(String, String)>> {
-        let repo_root_id = workspace
-            .repo_root_id
-            .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("workspace missing repo_root_id: {}", workspace.id))?;
         let repo_root = self
             .repo_root_service
-            .get_repo_root(repo_root_id)?
-            .ok_or_else(|| anyhow::anyhow!("repo root not found: {repo_root_id}"))?;
+            .get_repo_root(&workspace.repo_root_id)?
+            .ok_or_else(|| anyhow::anyhow!("repo root not found: {}", workspace.repo_root_id))?;
 
         let mut env = BTreeMap::new();
         env.insert("PROLIFERATE_WORKSPACE_ID".into(), workspace.id.clone());
-        env.insert("PROLIFERATE_WORKSPACE_KIND".into(), workspace.kind.clone());
+        env.insert(
+            "PROLIFERATE_WORKSPACE_KIND".into(),
+            workspace.kind.as_str().to_string(),
+        );
         env.insert("PROLIFERATE_WORKSPACE_DIR".into(), workspace.path.clone());
         env.insert("PROLIFERATE_REPO_ROOT_ID".into(), repo_root.id.clone());
         env.insert("PROLIFERATE_REPO_DIR".into(), repo_root.path.clone());
@@ -65,7 +64,7 @@ impl WorkspaceRuntime {
         if let Some(repo) = &repo_root.remote_repo_name {
             env.insert("PROLIFERATE_GIT_REPO".into(), repo.clone());
         }
-        if workspace.kind == "worktree" {
+        if workspace.kind == WorkspaceKind::Worktree {
             env.insert("PROLIFERATE_WORKTREE_DIR".into(), workspace.path.clone());
         }
         env.extend(read_materialized_session_env(Path::new(&workspace.path))?);

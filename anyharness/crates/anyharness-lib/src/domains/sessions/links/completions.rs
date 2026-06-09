@@ -338,15 +338,12 @@ fn parse_outcome(value: &str) -> Result<SessionTurnOutcome, LinkCompletionParseE
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::test_support;
     use crate::persistence::Db;
 
     fn seed_link(db: &Db) {
+        test_support::seed_workspace_with_repo_root(db, "workspace-1", "local", "/tmp/workspace");
         db.with_conn(|conn| {
-            conn.execute(
-                "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
-                 VALUES ('workspace-1', 'repo', '/tmp/workspace', '/tmp/workspace', ?1, ?1)",
-                ["2026-03-25T00:00:00Z"],
-            )?;
             conn.execute(
                 "INSERT INTO sessions (
                     id, workspace_id, agent_kind, native_session_id,

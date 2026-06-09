@@ -109,9 +109,7 @@ export function workspaceDefaultDisplayName(workspace: Workspace): string {
 }
 
 export function workspaceRepoName(workspace: Workspace): string {
-  return workspace.gitRepoName
-    ?? workspace.sourceRepoRootPath?.split("/").pop()
-    ?? workspace.path.split("/").pop()
+  return workspace.path.split("/").filter(Boolean).pop()
     ?? workspace.path;
 }
 

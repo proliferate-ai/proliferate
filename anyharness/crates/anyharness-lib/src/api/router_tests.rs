@@ -78,17 +78,7 @@ fn test_state(require_bearer_auth: bool) -> AppState {
 }
 
 fn seed_workspace(state: &AppState, workspace_id: &str, path: &str) {
-    state
-        .db
-        .with_conn(|conn| {
-            conn.execute(
-                "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
-                 VALUES (?1, 'worktree', ?2, ?2, ?3, ?3)",
-                rusqlite::params![workspace_id, path, "2026-03-25T00:00:00Z"],
-            )?;
-            Ok(())
-        })
-        .expect("seed workspace");
+    test_support::seed_workspace_with_repo_root(&state.db, workspace_id, "worktree", path);
 }
 
 fn install_fake_managed_registry_npm_binary(
@@ -673,7 +663,7 @@ async fn repo_root_file_read_route_rejects_unsafe_paths() {
 }
 
 #[tokio::test]
-async fn terminal_create_tolerates_missing_workspace_repo_root_id() {
+async fn terminal_create_accepts_local_workspace_path() {
     let _lock = test_support::ENV_MUTEX
         .get_or_init(|| Mutex::new(()))
         .lock()
@@ -684,21 +674,12 @@ async fn terminal_create_tolerates_missing_workspace_repo_root_id() {
     let state = test_state(false);
     let workspace_path = repo_root.path().display().to_string();
 
-    state
-        .db
-        .with_conn(|conn| {
-            conn.execute(
-                "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
-                 VALUES (?1, 'repo', ?2, ?2, ?3, ?3)",
-                rusqlite::params![
-                    "workspace-without-repo-root",
-                    workspace_path,
-                    "2026-03-25T00:00:00Z"
-                ],
-            )?;
-            Ok(())
-        })
-        .expect("seed workspace");
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-without-repo-root",
+        "local",
+        &workspace_path,
+    );
 
     let app = build_router(state.clone());
     let response = app
@@ -835,17 +816,12 @@ async fn terminal_title_route_updates_and_validates_title() {
     let state = test_state(false);
     let workspace_path = repo_root.path().display().to_string();
 
-    state
-        .db
-        .with_conn(|conn| {
-            conn.execute(
-                "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
-                 VALUES (?1, 'repo', ?2, ?2, ?3, ?3)",
-                rusqlite::params!["workspace-title", workspace_path, "2026-03-25T00:00:00Z"],
-            )?;
-            Ok(())
-        })
-        .expect("seed workspace");
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-title",
+        "local",
+        &workspace_path,
+    );
 
     let terminal = state
         .terminal_service
@@ -975,17 +951,12 @@ async fn workspace_mobility_preflight_warns_for_active_terminals_without_blockin
     let state = test_state(false);
     let workspace_path = repo_root.path().display().to_string();
 
-    state
-        .db
-        .with_conn(|conn| {
-            conn.execute(
-                "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
-                 VALUES (?1, 'repo', ?2, ?2, ?3, ?3)",
-                rusqlite::params!["workspace-1", workspace_path, "2026-03-25T00:00:00Z"],
-            )?;
-            Ok(())
-        })
-        .expect("seed workspace");
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-1",
+        "worktree",
+        &workspace_path,
+    );
 
     let terminal = state
         .terminal_service
@@ -1058,17 +1029,12 @@ async fn raw_notification_history_route_returns_persisted_notifications() {
         .expect("expected env mutex");
     let _guard = test_support::set_bearer_token_env(None);
     let state = test_state(false);
-    state
-        .db
-        .with_conn(|conn| {
-            conn.execute(
-                "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
-                 VALUES (?1, 'repo', '/tmp/workspace', '/tmp/workspace', ?2, ?2)",
-                rusqlite::params!["workspace-1", "2026-03-25T00:00:00Z"],
-            )?;
-            Ok(())
-        })
-        .expect("seed workspace");
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-1",
+        "local",
+        "/tmp/workspace",
+    );
     let store = SessionStore::new(state.db.clone());
     store
         .insert(&SessionRecord {
@@ -1140,17 +1106,12 @@ async fn restore_route_returns_cold_visible_session_without_live_handle() {
         .expect("expected env mutex");
     let _guard = test_support::set_bearer_token_env(None);
     let state = test_state(false);
-    state
-        .db
-        .with_conn(|conn| {
-            conn.execute(
-                "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
-                 VALUES (?1, 'repo', '/tmp/workspace', '/tmp/workspace', ?2, ?2)",
-                rusqlite::params!["workspace-1", "2026-03-25T00:00:00Z"],
-            )?;
-            Ok(())
-        })
-        .expect("seed workspace");
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-1",
+        "local",
+        "/tmp/workspace",
+    );
     let store = SessionStore::new(state.db.clone());
     store
         .insert(&SessionRecord {

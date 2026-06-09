@@ -1,4 +1,5 @@
 use super::super::service::{SubagentError, SubagentService, MAX_SUBAGENTS_PER_PARENT};
+use crate::domains::workspaces::model::WorkspaceSurface;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::integrations::mcp::product_server::{ProductMcpContextError, ProductMcpRequestContext};
 
@@ -32,7 +33,7 @@ pub fn resolve_context(
     let workspace = workspace_runtime
         .get_workspace(&request.workspace_id)?
         .ok_or_else(|| ProductMcpContextError::not_found("workspace not found"))?;
-    if workspace.surface != "standard" {
+    if workspace.surface != WorkspaceSurface::Standard {
         return Err(ProductMcpContextError::conflict(
             "subagents are only available in standard workspaces",
         ));

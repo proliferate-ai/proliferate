@@ -13,8 +13,6 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
     kind: "worktree",
     repoRootId: "repo-root-1",
     path: "/tmp/repo-feature",
-    sourceRepoRootPath: "/tmp/repo",
-    gitRepoName: "repo",
     currentBranch: "feature",
     originalBranch: "main",
     surface: "standard",
@@ -66,10 +64,12 @@ describe("workspace arrival view model", () => {
         displayName: undefined,
       }),
       configuredSetupScript: "",
+      repoName: "proliferate",
     });
 
     expect(view.title).toBe("gulch");
     expect(view.workspaceName).toBe("gulch");
+    expect(view.subtitle).toBe("Created in proliferate from main");
     if (view.kind === "worktree") {
       expect(view.branchName).toBe("gulch");
     }

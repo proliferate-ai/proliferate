@@ -72,7 +72,10 @@ mod tests {
     };
     use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
     use crate::domains::sessions::workspace_naming::mcp::auth::LEGACY_CAPABILITY_HEADER_NAME;
-    use crate::domains::workspaces::model::WorkspaceRecord;
+    use crate::domains::workspaces::model::{
+        WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+        WorkspaceSurface,
+    };
     use crate::integrations::mcp::product_server::{ProductMcpPromptPolicy, ProductMcpVisibility};
     use crate::origin::OriginContext;
 
@@ -81,22 +84,17 @@ mod tests {
     fn workspace(id: &str) -> WorkspaceRecord {
         WorkspaceRecord {
             id: id.to_string(),
-            kind: "local".to_string(),
-            repo_root_id: None,
+            kind: WorkspaceKind::Local,
+            repo_root_id: format!("repo-root-{id}"),
             path: format!("/tmp/{id}"),
-            surface: "standard".to_string(),
-            source_repo_root_path: format!("/tmp/{id}"),
-            source_workspace_id: None,
-            git_provider: None,
-            git_owner: None,
-            git_repo_name: None,
+            surface: WorkspaceSurface::Standard,
             original_branch: Some("main".to_string()),
             current_branch: Some("main".to_string()),
             display_name: None,
             origin: Some(OriginContext::human_desktop()),
             creator_context: None,
-            lifecycle_state: "active".to_string(),
-            cleanup_state: "none".to_string(),
+            lifecycle_state: WorkspaceLifecycleState::Active,
+            cleanup_state: WorkspaceCleanupState::None,
             cleanup_operation: None,
             cleanup_error_message: None,
             cleanup_failed_at: None,

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { SetupScriptExecution, Workspace } from "@anyharness/sdk";
+import type { RepoRoot, SetupScriptExecution, Workspace } from "@anyharness/sdk";
 import { useSetupStatusQuery } from "@anyharness/sdk-react";
 import { buildWorkspaceArrivalViewModel } from "@/lib/domain/workspaces/creation/arrival";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
@@ -8,6 +8,13 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useIsHotPaintGatePendingForWorkspace } from "@/hooks/workspaces/derived/use-hot-paint-gate";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
+
+function repoNameFromRoot(repoRoot: RepoRoot | null): string | null {
+  return repoRoot?.remoteRepoName?.trim()
+    || repoRoot?.displayName?.trim()
+    || repoRoot?.path.split("/").filter(Boolean).pop()
+    || null;
+}
 
 // Owns the read-only arrival banner state for a newly materialized workspace.
 // Actions for this banner live in workspaces/workflows.
@@ -27,8 +34,17 @@ export function useWorkspaceArrivalState(): {
     () => workspaces.find((candidate) => candidate.id === selectedWorkspaceId) ?? null,
     [selectedWorkspaceId, workspaces],
   );
+  const repoRoot = useMemo(
+    () => workspace
+      ? workspaceCollections?.repoRoots.find((candidate) => candidate.id === workspace.repoRootId)
+        ?? null
+      : null,
+    [workspace, workspaceCollections?.repoRoots],
+  );
+  const sourceRepoRootPath = repoRoot?.path?.trim()
+    || workspace?.path?.trim()
+    || null;
   const configuredSetupScript = useRepoPreferencesStore((state) => {
-    const sourceRepoRootPath = workspace?.sourceRepoRootPath;
     if (!sourceRepoRootPath) {
       return "";
     }
@@ -85,12 +101,13 @@ export function useWorkspaceArrivalState(): {
       workspace,
       configuredSetupScript,
       setupTerminalId: liveSetupStatus?.terminalId ?? null,
+      repoName: repoNameFromRoot(repoRoot),
     });
-  }, [configuredSetupScript, liveSetupStatus, workspace, workspaceArrivalEvent]);
+  }, [configuredSetupScript, liveSetupStatus, repoRoot, workspace, workspaceArrivalEvent]);
 
   return {
     workspacePath: workspace?.path ?? null,
-    sourceRepoRootPath: workspace?.sourceRepoRootPath ?? null,
+    sourceRepoRootPath,
     setupTerminalId: liveSetupStatus?.terminalId ?? null,
     viewModel,
   };

@@ -1,6 +1,8 @@
 import { useMutation } from "@tanstack/react-query";
 import {
   type CreateWorktreeWorkspaceResponse,
+  type RepoRoot,
+  type ResolveWorkspaceResponse,
   type Workspace,
 } from "@anyharness/sdk";
 import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
@@ -53,9 +55,10 @@ export function useWorkspaceActions() {
   const primeWorkspaceCollections = (
     workspace: Workspace,
     source: "local_create" | "worktree_create",
+    repoRoot?: RepoRoot | null,
   ) => {
     const startedAt = startLatencyTimer();
-    const summary = upsertLocalWorkspace(workspace);
+    const summary = upsertLocalWorkspace(workspace, repoRoot);
 
     logLatency("workspace.collections.cache_upsert", {
       source,
@@ -89,7 +92,7 @@ export function useWorkspaceActions() {
     });
   };
 
-  const createLocalWorkspaceMutation = useMutation<Workspace, Error, string>({
+  const createLocalWorkspaceMutation = useMutation<ResolveWorkspaceResponse, Error, string>({
     meta: {
       telemetryHandled: true,
     },
@@ -101,12 +104,11 @@ export function useWorkspaceActions() {
         origin: DESKTOP_ORIGIN,
       };
 
-      const response = await createWorkspace(connection, request);
-      return response.workspace;
+      return createWorkspace(connection, request);
     },
-    onSuccess: (workspace) => {
-      primeWorkspaceCollections(workspace, "local_create");
-      refreshWorkspaceCollections("local_create", workspace.id);
+    onSuccess: (response) => {
+      primeWorkspaceCollections(response.workspace, "local_create", response.repoRoot);
+      refreshWorkspaceCollections("local_create", response.workspace.id);
       trackProductEvent("workspace_created", {
         workspace_kind: "local",
         creation_kind: "local",
@@ -227,8 +229,10 @@ export function useWorkspaceActions() {
         repoConfig: repoPreferences.repoConfigs[repoRoot.path] ?? null,
       });
     },
-    createLocalWorkspace: async (sourceRoot: string) =>
-      createLocalWorkspaceMutation.mutateAsync(sourceRoot),
+    createLocalWorkspace: async (sourceRoot: string) => {
+      const response = await createLocalWorkspaceMutation.mutateAsync(sourceRoot);
+      return response.workspace;
+    },
     isCreatingLocalWorkspace: createLocalWorkspaceMutation.isPending,
     createWorktreeWorkspace: (
       params: WorktreeCreationParams,

@@ -4,7 +4,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AnyHarnessError, type Workspace } from "@anyharness/sdk";
+import { AnyHarnessError, type RepoRoot, type Workspace } from "@anyharness/sdk";
+import {
+  buildWorkspaceCollections,
+  type WorkspaceCollections,
+} from "@/lib/domain/workspaces/cloud/collections";
+import { workspaceCollectionsKey } from "@/hooks/workspaces/cache/query-keys";
 import { useWorkspaceActions } from "./use-workspace-actions";
 
 const mocks = vi.hoisted(() => {
@@ -76,15 +81,25 @@ afterEach(() => {
 describe("useWorkspaceActions local workspace creation", () => {
   it("creates a workspace through the strict create endpoint", async () => {
     const workspace = localWorkspace("workspace-new");
-    mocks.create.mockResolvedValueOnce({ workspace });
+    const repoRoot = localRepoRoot();
+    mocks.create.mockResolvedValueOnce({ repoRoot, workspace });
 
-    const { result } = renderActions();
+    const { result, queryClient } = renderActions();
+    queryClient.setQueryData(
+      workspaceCollectionsKey("http://localhost:7007", false),
+      buildWorkspaceCollections([], [], []),
+    );
     let created: Workspace | null = null;
     await act(async () => {
       created = await result.current.createLocalWorkspace("/Users/pablo/proliferate");
     });
 
     expect(created).toBe(workspace);
+    const collections = queryClient.getQueryData<WorkspaceCollections>(
+      workspaceCollectionsKey("http://localhost:7007", false),
+    );
+    expect(collections?.localWorkspaces.map((entry) => entry.id)).toEqual(["workspace-new"]);
+    expect(collections?.repoRoots.map((entry) => entry.id)).toEqual(["repo-1"]);
     expect(mocks.create).toHaveBeenCalledWith({
       path: "/Users/pablo/proliferate",
       origin: { kind: "human", entrypoint: "desktop" },
@@ -140,7 +155,10 @@ function renderActions() {
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
 
-  return renderHook(() => useWorkspaceActions(), { wrapper });
+  return {
+    queryClient,
+    ...renderHook(() => useWorkspaceActions(), { wrapper }),
+  };
 }
 
 function localWorkspace(id: string): Workspace {
@@ -150,11 +168,6 @@ function localWorkspace(id: string): Workspace {
     repoRootId: "repo-1",
     path: "/Users/pablo/proliferate",
     surface: "standard",
-    sourceRepoRootPath: "/Users/pablo/proliferate",
-    sourceWorkspaceId: id,
-    gitProvider: null,
-    gitOwner: null,
-    gitRepoName: null,
     originalBranch: "main",
     currentBranch: "main",
     displayName: null,
@@ -169,5 +182,21 @@ function localWorkspace(id: string): Workspace {
     executionSummary: null,
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
-  } as Workspace;
+  };
+}
+
+function localRepoRoot(): RepoRoot {
+  return {
+    id: "repo-1",
+    kind: "external",
+    path: "/Users/pablo/proliferate",
+    displayName: "proliferate",
+    defaultBranch: "main",
+    remoteProvider: "github",
+    remoteOwner: "proliferate-ai",
+    remoteRepoName: "proliferate",
+    remoteUrl: null,
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+  };
 }

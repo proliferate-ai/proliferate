@@ -303,9 +303,6 @@ describe("logical workspaces", () => {
         branch: "porcupine",
         sourceRoot: "/tmp/proliferate",
       }),
-      gitProvider: null,
-      gitOwner: null,
-      gitRepoName: null,
     };
     const cloudWorkspace = makeCloudWorkspace({
       id: "cloud-porcupine",
@@ -348,9 +345,6 @@ describe("logical workspaces", () => {
         branch: "porcupine",
         sourceRoot: "/tmp/proliferate",
       }),
-      gitProvider: null,
-      gitOwner: null,
-      gitRepoName: null,
     };
     const cloudWorkspace = makeCloudWorkspace({
       id: "cloud-raven",
@@ -381,6 +375,7 @@ describe("logical workspaces", () => {
   });
 
   it("honors a local mobility owner over a stale selected cloud materialization", () => {
+    const repoRoot = makeRepoRoot();
     const localWorkspace = makeWorkspace({
       id: "local-1",
       branch: "gannet",
@@ -393,7 +388,7 @@ describe("logical workspaces", () => {
 
     const logicalWorkspaces = buildLogicalWorkspaces({
       localWorkspaces: [localWorkspace],
-      repoRoots: [],
+      repoRoots: [repoRoot],
       cloudWorkspaces: [cloudWorkspace],
       cloudMobilityWorkspaces: [
         makeMobilityWorkspace({
@@ -415,6 +410,7 @@ describe("logical workspaces", () => {
   });
 
   it("honors a cloud mobility owner over a stale selected local materialization", () => {
+    const repoRoot = makeRepoRoot();
     const localWorkspace = makeWorkspace({
       id: "local-1",
       branch: "gannet",
@@ -427,7 +423,7 @@ describe("logical workspaces", () => {
 
     const logicalWorkspaces = buildLogicalWorkspaces({
       localWorkspaces: [localWorkspace],
-      repoRoots: [],
+      repoRoots: [repoRoot],
       cloudWorkspaces: [cloudWorkspace],
       cloudMobilityWorkspaces: [
         makeMobilityWorkspace({
@@ -483,6 +479,7 @@ describe("logical workspaces", () => {
   });
 
   it("groups logical, local, and cloud materialization ids for attention timestamps", () => {
+    const repoRoot = makeRepoRoot();
     const localWorkspace = makeWorkspace({
       id: "local-1",
       branch: "gannet",
@@ -493,7 +490,7 @@ describe("logical workspaces", () => {
     });
     const logicalWorkspace = buildLogicalWorkspaces({
       localWorkspaces: [localWorkspace],
-      repoRoots: [],
+      repoRoots: [repoRoot],
       cloudWorkspaces: [cloudWorkspace],
       currentSelectionId: localWorkspace.id,
     })[0]!;
@@ -512,6 +509,7 @@ describe("logical workspaces", () => {
   });
 
   it("expands archived local-slot aliases to the current logical workspace ids", () => {
+    const repoRoot = makeRepoRoot();
     const localWorkspace = makeWorkspace({
       id: "local-newer",
       branch: "main",
@@ -520,7 +518,7 @@ describe("logical workspaces", () => {
     const staleSlotId = buildLocalSlotLogicalWorkspaceId(localWorkspace.id);
     const logicalWorkspaces = buildLogicalWorkspaces({
       localWorkspaces: [localWorkspace],
-      repoRoots: [],
+      repoRoots: [repoRoot],
       cloudWorkspaces: [makeCloudWorkspace({ id: "cloud-main", branch: "main" })],
       currentSelectionId: null,
     });
@@ -568,6 +566,7 @@ describe("logical workspaces", () => {
   });
 
   it("keeps cloud-synced local workspaces on the local materialization", () => {
+    const repoRoot = makeRepoRoot();
     const localWorkspace = makeWorkspace({
       id: "local-main",
       branch: "main",
@@ -581,7 +580,7 @@ describe("logical workspaces", () => {
 
     const logicalWorkspace = buildLogicalWorkspaces({
       localWorkspaces: [localWorkspace],
-      repoRoots: [],
+      repoRoots: [repoRoot],
       cloudWorkspaces: [cloudWorkspace],
       cloudMobilityWorkspaces: [
         makeMobilityWorkspace({

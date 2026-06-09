@@ -31,7 +31,8 @@ describe("useWorkspaceFileContext", () => {
       data: {
         workspaces: [workspace({
           id: "workspace-1",
-          sourceRepoRootPath: "/repo/proliferate",
+          repoRootId: "repo-root-1",
+          path: "/repo/proliferate",
         })],
       },
     });
@@ -45,7 +46,7 @@ describe("useWorkspaceFileContext", () => {
     expect(result.current).toEqual({
       workspaceUiKey: "logical-1",
       materializedWorkspaceId: "workspace-1",
-      treeStateKey: "/repo/proliferate",
+      treeStateKey: "repo-root-1",
     });
   });
 
@@ -78,7 +79,8 @@ describe("useWorkspaceFileContext", () => {
       data: {
         workspaces: [workspace({
           id: "workspace-1",
-          sourceRepoRootPath: "/repo/proliferate",
+          repoRootId: "repo-root-1",
+          path: "/repo/proliferate",
         })],
       },
     });
@@ -94,13 +96,18 @@ describe("useWorkspaceFileContext", () => {
 
 function workspace(input: {
   id: string;
-  sourceRepoRootPath: string;
+  repoRootId: string;
+  path: string;
 }): Workspace {
   return {
     id: input.id,
     kind: "local",
-    path: input.sourceRepoRootPath,
-    sourceRepoRootPath: input.sourceRepoRootPath,
+    repoRootId: input.repoRootId,
+    path: input.path,
+    surface: "standard",
+    lifecycleState: "active",
+    cleanupState: "none",
+    createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
-  } as Workspace;
+  };
 }

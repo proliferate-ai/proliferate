@@ -73,6 +73,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
     workspaceUiKey,
     selectedWorkspaceId,
     selectedWorkspace,
+    selectedRepoRoot,
     selectedCloudWorkspace,
   } = data;
   const {
@@ -100,7 +101,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   );
   const activePublishWorkspaceId = selectedWorkspaceId;
   const publishSourceRootPath = publishDialog.open
-    ? selectedWorkspace?.sourceRepoRootPath?.trim() || null
+    ? selectedRepoRoot?.path?.trim() || selectedWorkspace?.path?.trim() || null
     : null;
   const publishRepoDefaultBranch = useRepoPreferencesStore((state) => (
     publishSourceRootPath
@@ -116,6 +117,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   const runCommand = useRunWorkspaceCommand({
     selectedWorkspaceId,
     selectedWorkspace,
+    selectedRepoRoot,
     selectedCloudWorkspace,
     isRuntimeReady: hasRuntimeReadyWorkspace,
     openTerminalPanel: actions.openTerminalPanel,
@@ -135,7 +137,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
     if (cloudOwner && cloudName) {
       return buildCloudRepoSettingsHref(cloudOwner, cloudName);
     }
-    const localRepoPath = selectedWorkspace?.sourceRepoRootPath?.trim()
+    const localRepoPath = selectedRepoRoot?.path?.trim()
       || selectedWorkspace?.path?.trim()
       || "";
     if (!localRepoPath) {
@@ -145,7 +147,12 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
       section: "repo",
       repo: localRepoPath,
     });
-  }, [selectedCloudWorkspace?.repo?.name, selectedCloudWorkspace?.repo?.owner, selectedWorkspace]);
+  }, [
+    selectedCloudWorkspace?.repo?.name,
+    selectedCloudWorkspace?.repo?.owner,
+    selectedRepoRoot?.path,
+    selectedWorkspace?.path,
+  ]);
   const canOpenRepositorySettings = repoSettingsHref !== null;
   const repositorySettingsDisabledReason = canOpenRepositorySettings
     ? null

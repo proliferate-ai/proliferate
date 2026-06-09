@@ -2,6 +2,7 @@ use crate::api::auth::{require_workspace_scope, AuthContext, AuthError};
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
 use crate::domains::workspaces::access_gate::WorkspaceAccessError;
+use crate::domains::workspaces::model::WorkspaceLifecycleState;
 
 pub fn map_access_error(error: WorkspaceAccessError) -> ApiError {
     match error {
@@ -48,7 +49,7 @@ pub fn assert_workspace_not_retired(state: &AppState, workspace_id: &str) -> Res
         .get_workspace(workspace_id)
         .map_err(|error| ApiError::internal(error.to_string()))?
         .ok_or_else(|| ApiError::not_found("Workspace not found", "WORKSPACE_NOT_FOUND"))?;
-    if workspace.lifecycle_state == "retired" {
+    if workspace.lifecycle_state == WorkspaceLifecycleState::Retired {
         return Err(ApiError::conflict(
             format!("workspace {workspace_id} is retired"),
             "WORKSPACE_RETIRED",

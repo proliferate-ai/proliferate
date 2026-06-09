@@ -105,9 +105,9 @@ export function sidebarEntryGitMetadata(
   }
 
   return {
-    provider: entry.workspace.gitProvider ?? null,
-    owner: entry.workspace.gitOwner ?? null,
-    repoName: entry.workspace.gitRepoName ?? null,
+    provider: null,
+    owner: null,
+    repoName: null,
     branchName: workspaceCurrentBranchName(entry.workspace),
   };
 }
@@ -127,8 +127,6 @@ function sidebarEntryGroupName(entry: SidebarWorkspaceEntry): string {
     return entry.workspace.repo.name;
   }
 
-  return entry.workspace.gitRepoName
-    ?? entry.workspace.sourceRepoRootPath?.split("/").pop()
-    ?? entry.workspace.sourceRepoRootPath
+  return entry.workspace.path.split("/").filter(Boolean).pop()
     ?? entry.workspace.path;
 }

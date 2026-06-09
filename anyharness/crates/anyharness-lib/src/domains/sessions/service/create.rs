@@ -15,6 +15,7 @@ use crate::domains::agents::readiness::resolver::resolve_agent_with_env;
 use crate::domains::agents::registry::built_in_registry;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::workspaces::env::read_materialized_session_env;
+use crate::domains::workspaces::model::WorkspaceSurface;
 use crate::origin::OriginContext;
 
 impl SessionService {
@@ -54,7 +55,7 @@ impl SessionService {
             "[workspace-latency] session.create.workspace_validated"
         );
 
-        if workspace.surface == "cowork" {
+        if workspace.surface == WorkspaceSurface::Cowork {
             if let Some(existing) = self
                 .session_store
                 .list_with_dismissed_by_workspace(workspace_id)

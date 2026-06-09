@@ -1,6 +1,7 @@
 use serde_json::json;
 use tokio::sync::broadcast;
 
+use crate::app::test_support;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::event_sink::AcpChunkPayload;
@@ -13,15 +14,7 @@ pub(super) fn empty_store() -> SessionStore {
 
 pub(super) fn seeded_store() -> SessionStore {
     let db = Db::open_in_memory().expect("open db");
-    db.with_conn(|conn| {
-        conn.execute(
-            "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
-             VALUES (?1, 'repo', '/tmp/workspace', '/tmp/workspace', ?2, ?2)",
-            rusqlite::params!["workspace-1", "2026-04-04T00:00:00Z"],
-        )?;
-        Ok(())
-    })
-    .expect("seed workspace");
+    test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace");
 
     let store = SessionStore::new(db);
     store

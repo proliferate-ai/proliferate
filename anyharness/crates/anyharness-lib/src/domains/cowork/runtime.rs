@@ -35,7 +35,7 @@ use crate::domains::sessions::runtime_event::RuntimeInjectedSessionEvent;
 use crate::domains::sessions::service::SessionService;
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{WorkspaceRecord, WorkspaceSurface};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::sessions::LiveSessionManager;
 use crate::origin::OriginContext;
@@ -220,7 +220,7 @@ impl CoworkSessionHooks {
     }
 
     fn notify_turn_finished(&self, workspace: &WorkspaceRecord, session_id: &str) {
-        if workspace.surface != "cowork" {
+        if workspace.surface != WorkspaceSurface::Cowork {
             return;
         }
 
@@ -704,7 +704,7 @@ impl CoworkRuntime {
         if session.closed_at.is_some() || session.status == "closed" {
             return Err(CoworkCanonicalThreadError::SessionClosed);
         }
-        if workspace.surface != "cowork" {
+        if workspace.surface != WorkspaceSurface::Cowork {
             return Err(CoworkCanonicalThreadError::NotCoworkWorkspace);
         }
         let thread = self
@@ -778,12 +778,9 @@ impl CoworkRuntime {
         &self,
         workspace: &WorkspaceRecord,
     ) -> anyhow::Result<Option<String>> {
-        let Some(repo_root_id) = workspace.repo_root_id.as_deref() else {
-            return Ok(None);
-        };
         Ok(self
             .repo_root_service
-            .get_repo_root(repo_root_id)?
+            .get_repo_root(&workspace.repo_root_id)?
             .and_then(|repo_root| repo_root.default_branch))
     }
 
@@ -798,11 +795,7 @@ impl CoworkRuntime {
         let source_workspace = self
             .delegation_service
             .validate_source_workspace(&input.source_workspace_id)?;
-        let repo_root_id = source_workspace.repo_root_id.clone().ok_or_else(|| {
-            CoworkDelegationError::IneligibleSourceWorkspace(
-                "workspace has no repo root metadata".into(),
-            )
-        })?;
+        let repo_root_id = source_workspace.repo_root_id.clone();
         let repo_root = self
             .repo_root_service
             .get_repo_root(&repo_root_id)?

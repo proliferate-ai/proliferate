@@ -1,6 +1,6 @@
 use rusqlite::{Connection, Transaction};
 
-use super::custom_migrations::CUSTOM_MIGRATIONS;
+use super::custom_migrations::{CUSTOM_FOREIGN_KEY_MIGRATIONS, CUSTOM_MIGRATIONS};
 
 pub(super) const MIGRATIONS: &[(&str, &str)] = &[
     ("0001_initial", include_str!("sql/0001_initial.sql")),
@@ -199,6 +199,10 @@ pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {
         run_named_migration(conn, name, |tx| apply(tx))?;
     }
 
+    for (name, apply) in CUSTOM_FOREIGN_KEY_MIGRATIONS {
+        run_named_foreign_key_migration(conn, name, |tx| apply(tx))?;
+    }
+
     Ok(())
 }
 
@@ -235,6 +239,100 @@ where
     Ok(())
 }
 
+fn run_named_foreign_key_migration<F>(
+    conn: &mut Connection,
+    name: &str,
+    apply: F,
+) -> rusqlite::Result<()>
+where
+    F: FnOnce(&Transaction<'_>) -> rusqlite::Result<()>,
+{
+    let already_applied = migration_applied(conn, name)?;
+
+    if already_applied {
+        return Ok(());
+    }
+
+    for alias in migration_aliases(name) {
+        if migration_applied(conn, alias)? {
+            tracing::info!(
+                migration = name,
+                alias,
+                "marking migration applied through legacy alias"
+            );
+            conn.execute(
+                "INSERT OR IGNORE INTO _migrations (name) VALUES (?1)",
+                [name],
+            )?;
+            return Ok(());
+        }
+    }
+
+    let foreign_keys_enabled = conn.query_row("PRAGMA foreign_keys", [], |row| {
+        row.get::<_, i64>(0).map(|value| value != 0)
+    })?;
+
+    tracing::info!(
+        migration = name,
+        "applying migration with foreign keys disabled"
+    );
+    conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    let migration_result = (|| {
+        let tx = conn.transaction()?;
+        apply(&tx)?;
+        ensure_foreign_key_check_clean(&tx)?;
+        tx.execute("INSERT INTO _migrations (name) VALUES (?1)", [name])?;
+        tx.commit()
+    })();
+    let restore_result = restore_foreign_key_enforcement(conn, foreign_keys_enabled, name);
+
+    migration_result?;
+    restore_result?;
+    Ok(())
+}
+
+fn restore_foreign_key_enforcement(
+    conn: &Connection,
+    was_enabled: bool,
+    migration: &str,
+) -> rusqlite::Result<()> {
+    if !was_enabled {
+        return Ok(());
+    }
+
+    if let Err(error) = conn.execute_batch("PRAGMA foreign_keys = ON;") {
+        tracing::error!(
+            migration,
+            %error,
+            "failed to restore SQLite foreign key enforcement after custom migration; connection must not be reused"
+        );
+        return Err(error);
+    }
+
+    let restored = conn.query_row("PRAGMA foreign_keys", [], |row| {
+        row.get::<_, i64>(0).map(|value| value != 0)
+    })?;
+
+    if !restored {
+        tracing::error!(
+            migration,
+            "SQLite foreign key enforcement remained disabled after custom migration; connection must not be reused"
+        );
+        return Err(rusqlite::Error::InvalidQuery);
+    }
+
+    Ok(())
+}
+
+fn ensure_foreign_key_check_clean(tx: &Transaction<'_>) -> rusqlite::Result<()> {
+    let mut stmt = tx.prepare("PRAGMA foreign_key_check")?;
+    let mut rows = stmt.query([])?;
+    if rows.next()?.is_some() {
+        return Err(rusqlite::Error::InvalidQuery);
+    }
+    Ok(())
+}
+
 fn migration_applied(conn: &Connection, name: &str) -> rusqlite::Result<bool> {
     conn.query_row(
         "SELECT EXISTS(SELECT 1 FROM _migrations WHERE name = ?1)",
@@ -259,7 +357,7 @@ mod tests {
 
     use rusqlite::Connection;
 
-    use super::{run_migrations, run_named_migration};
+    use super::{restore_foreign_key_enforcement, run_migrations, run_named_migration};
 
     #[test]
     fn review_loop_migration_accepts_legacy_0033_alias() {
@@ -311,5 +409,38 @@ mod tests {
             [],
         )
         .expect("insert retryable failed assignment");
+    }
+
+    #[test]
+    fn restore_foreign_key_enforcement_restores_original_on_state() {
+        let conn = Connection::open_in_memory().expect("open in-memory db");
+        conn.execute_batch("PRAGMA foreign_keys = OFF;")
+            .expect("disable foreign keys");
+
+        restore_foreign_key_enforcement(&conn, true, "test_restore").expect("restore foreign keys");
+
+        let enabled: bool = conn
+            .query_row("PRAGMA foreign_keys", [], |row| {
+                row.get::<_, i64>(0).map(|value| value != 0)
+            })
+            .expect("query foreign key state");
+        assert!(enabled);
+    }
+
+    #[test]
+    fn restore_foreign_key_enforcement_preserves_original_off_state() {
+        let conn = Connection::open_in_memory().expect("open in-memory db");
+        conn.execute_batch("PRAGMA foreign_keys = OFF;")
+            .expect("disable foreign keys");
+
+        restore_foreign_key_enforcement(&conn, false, "test_restore")
+            .expect("preserve foreign keys off");
+
+        let enabled: bool = conn
+            .query_row("PRAGMA foreign_keys", [], |row| {
+                row.get::<_, i64>(0).map(|value| value != 0)
+            })
+            .expect("query foreign key state");
+        assert!(!enabled);
     }
 }

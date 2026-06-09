@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Workspace } from "@anyharness/sdk";
+import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { useTerminalsQuery } from "@anyharness/sdk-react";
 import { useCloudRepoConfig } from "@/hooks/access/cloud/use-cloud-repo-config";
 import { useTerminalActions } from "@/hooks/terminals/workflows/use-terminal-actions";
@@ -18,6 +18,7 @@ import { useToastStore } from "@/stores/toast/toast-store";
 interface UseRunWorkspaceCommandArgs {
   selectedWorkspaceId: string | null;
   selectedWorkspace: Workspace | undefined;
+  selectedRepoRoot: RepoRoot | undefined;
   selectedCloudWorkspace: CloudWorkspaceSummary | undefined;
   isRuntimeReady: boolean;
   openTerminalPanel: (terminalId?: string) => boolean;
@@ -26,6 +27,7 @@ interface UseRunWorkspaceCommandArgs {
 export function useRunWorkspaceCommand({
   selectedWorkspaceId,
   selectedWorkspace,
+  selectedRepoRoot,
   selectedCloudWorkspace,
   isRuntimeReady,
   openTerminalPanel,
@@ -44,10 +46,10 @@ export function useRunWorkspaceCommand({
   const isCloudWorkspace = parseCloudWorkspaceSyntheticId(workspaceId) !== null;
   const gitOwner = isCloudWorkspace
     ? selectedCloudWorkspace?.repo?.owner.trim() ?? ""
-    : selectedWorkspace?.gitOwner?.trim() ?? "";
+    : selectedRepoRoot?.remoteOwner?.trim() ?? "";
   const gitRepoName = isCloudWorkspace
     ? selectedCloudWorkspace?.repo?.name.trim() ?? ""
-    : selectedWorkspace?.gitRepoName?.trim() ?? "";
+    : selectedRepoRoot?.remoteRepoName?.trim() ?? "";
   const terminalsQuery = useTerminalsQuery({
     workspaceId,
     enabled: Boolean(workspaceId && isRuntimeReady),
@@ -62,7 +64,7 @@ export function useRunWorkspaceCommand({
       workspaceId,
     );
   }, [terminalsQuery.data, workspaceId]);
-  const localSourceRoot = selectedWorkspace?.sourceRepoRootPath?.trim()
+  const localSourceRoot = selectedRepoRoot?.path?.trim()
     || selectedWorkspace?.path?.trim()
     || "";
   const localRunCommand = useRepoPreferencesStore((state) =>

@@ -1,21 +1,12 @@
-use rusqlite::params;
-
 use super::*;
+use crate::app::test_support;
 use crate::{
     domains::sessions::deletion::SessionDeleteWorkflow, domains::sessions::model::SessionRecord,
     persistence::Db,
 };
 
 fn seed_workspace(db: &Db) {
-    db.with_conn(|conn| {
-        conn.execute(
-            "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
-             VALUES (?1, 'repo', '/tmp/workspace', '/tmp/workspace', ?2, ?2)",
-            params!["workspace-1", "2026-03-25T00:00:00Z"],
-        )?;
-        Ok(())
-    })
-    .expect("seed workspace");
+    test_support::seed_workspace_with_repo_root(db, "workspace-1", "local", "/tmp/workspace");
 }
 
 fn session_record(id: &str) -> SessionRecord {

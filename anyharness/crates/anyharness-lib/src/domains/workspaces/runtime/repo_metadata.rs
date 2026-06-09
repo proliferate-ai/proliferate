@@ -11,12 +11,7 @@ impl WorkspaceRuntime {
         &self,
         repo_root_id: &str,
     ) -> anyhow::Result<Vec<WorkspaceRecord>> {
-        Ok(self
-            .store
-            .list_by_repo_root_id(repo_root_id)?
-            .into_iter()
-            .filter(|record| matches!(record.kind.as_str(), "local" | "worktree"))
-            .collect())
+        self.store.list_by_repo_root_id(repo_root_id)
     }
     pub fn resolve_repo_root_default_branch(&self, repo_root_id: &str) -> anyhow::Result<String> {
         let repo_root = self

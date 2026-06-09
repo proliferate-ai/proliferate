@@ -22,6 +22,7 @@ use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
+use crate::domains::workspaces::model::WorkspaceSurface;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use std::collections::HashSet;
 
@@ -105,7 +106,7 @@ impl SubagentService {
             .workspace_runtime
             .get_workspace(&parent.workspace_id)?
             .ok_or_else(|| SubagentError::WorkspaceNotFound(parent.workspace_id.clone()))?;
-        if workspace.surface != "standard" {
+        if workspace.surface != WorkspaceSurface::Standard {
             return Err(SubagentError::IneligibleWorkspace);
         }
         if !parent.subagents_enabled {

@@ -9,7 +9,6 @@ function makeWorkspace(overrides: Partial<Workspace>): Workspace {
     repoRootId: "repo-root-1",
     path: "/tmp/repo",
     surface: "standard",
-    sourceRepoRootPath: "/tmp/repo",
     lifecycleState: "active",
     cleanupState: "none",
     createdAt: "2025-01-01T00:00:00.000Z",
@@ -35,14 +34,11 @@ describe("buildSettingsRepositoryEntries", () => {
       makeWorkspace({
         id: "repo-1",
         kind: "local",
-        gitRepoName: "proliferate",
       }),
       makeWorkspace({
         id: "worktree-1",
         kind: "worktree",
         path: "/tmp/proliferate-feature",
-        sourceWorkspaceId: "repo-1",
-        gitRepoName: "proliferate",
       }),
     ], [makeRepoRoot()]);
 
@@ -60,7 +56,6 @@ describe("buildSettingsRepositoryEntries", () => {
       makeWorkspace({
         id: "repo-1",
         kind: "local",
-        gitRepoName: "proliferate",
       }),
     ], [makeRepoRoot()]);
 

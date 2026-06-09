@@ -6,7 +6,7 @@ use super::{WorkspaceResolution, WorkspaceRuntime};
 use crate::adapters::git::GitService;
 use crate::domains::repo_roots::model::{CreateRepoRootInput, RepoRootRecord};
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
-use crate::domains::workspaces::model::ResolvedGitContext;
+use crate::domains::workspaces::model::{ResolvedGitContext, WorkspaceKind, WorkspaceSurface};
 use crate::domains::workspaces::resolver;
 use crate::domains::workspaces::types::ResolveRepoRootError;
 use crate::origin::OriginContext;
@@ -79,7 +79,11 @@ impl WorkspaceRuntime {
         let ctx = resolver::resolve_git_context(path)?;
         let repo_root = self.ensure_repo_root_from_context(&ctx)?;
 
-        let workspace_kind = if ctx.is_worktree { "worktree" } else { "local" };
+        let workspace_kind = if ctx.is_worktree {
+            WorkspaceKind::Worktree
+        } else {
+            WorkspaceKind::Local
+        };
         let workspace_path = ctx.repo_root.clone();
         if let Some(existing) = self
             .store
@@ -92,7 +96,7 @@ impl WorkspaceRuntime {
                 });
             }
 
-            if workspace_kind == "worktree" {
+            if workspace_kind == WorkspaceKind::Worktree {
                 anyhow::bail!("a workspace record already exists for path: {workspace_path}");
             }
         }
@@ -111,7 +115,7 @@ impl WorkspaceRuntime {
             &repo_root,
             &workspace_path,
             workspace_kind,
-            "standard",
+            WorkspaceSurface::Standard,
             ctx.current_branch,
             origin,
             creator_context,
@@ -121,7 +125,7 @@ impl WorkspaceRuntime {
             path = %path,
             repo_root_id = %repo_root.id,
             workspace_id = %record.id,
-            workspace_kind,
+            workspace_kind = workspace_kind.as_str(),
             elapsed_ms = started.elapsed().as_millis(),
             "[workspace-latency] workspace.runtime.resolve.completed"
         );

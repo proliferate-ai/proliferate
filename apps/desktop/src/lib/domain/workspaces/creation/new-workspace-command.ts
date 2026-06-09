@@ -173,6 +173,7 @@ export function buildSelectedWorkspaceNewWorkspaceCommandScope(
     input.selectedWorkspaceId,
     input.workspaces,
     input.cloudWorkspaces,
+    input.repoRoots,
   );
 
   if (!repoContext?.repoWs && !cloudRepoTarget) {
@@ -180,6 +181,9 @@ export function buildSelectedWorkspaceNewWorkspaceCommandScope(
   }
 
   const repoWs = repoContext?.repoWs ?? null;
+  const repoRoot = repoWs?.repoRootId
+    ? input.repoRoots.find((candidate) => candidate.id === repoWs.repoRootId) ?? null
+    : null;
   const repoGroupKeyToExpand = repoWs
     ? sidebarRepoGroupKeyForWorkspace(repoWs, input.repoRoots)
     : cloudRepoTarget
@@ -190,7 +194,7 @@ export function buildSelectedWorkspaceNewWorkspaceCommandScope(
     id: `selected:${input.selectedWorkspaceId ?? "none"}`,
     source: "selected-workspace",
     repoGroupKeyToExpand,
-    localSourceRoot: trimToNull(repoWs?.sourceRepoRootPath),
+    localSourceRoot: trimToNull(repoRoot?.path) ?? trimToNull(repoWs?.path),
     repoRootId: trimToNull(repoWs?.repoRootId),
     sourceWorkspaceId: trimToNull(repoWs?.id),
     cloudRepoTarget,

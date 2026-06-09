@@ -77,6 +77,20 @@ async function fallbackOnNonAbort<T>(
   }
 }
 
+async function preservePreviousOnNonAbort<T>(
+  promise: Promise<T>,
+  previous: T | undefined,
+): Promise<T> {
+  try {
+    return await promise;
+  } catch (error) {
+    if (isAbortError(error) || previous === undefined) {
+      throw error;
+    }
+    return previous;
+  }
+}
+
 export function useWorkspaces(options?: UseWorkspacesOptions) {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const { cloudActive } = useCloudAvailabilityState();
@@ -136,6 +150,7 @@ export function useWorkspaces(options?: UseWorkspacesOptions) {
         runtimeUrl,
         cloudActive,
       });
+      const cachedCollections = cacheState?.data as WorkspaceCollections | undefined;
       const connection = { runtimeUrl };
       try {
         const fetchStartedAt = performance.now();
@@ -151,7 +166,7 @@ export function useWorkspaces(options?: UseWorkspacesOptions) {
             ),
             [],
           ),
-          fallbackOnNonAbort(
+          preservePreviousOnNonAbort(
             listRepoRoots(
               connection,
               requestOptionsWithSignal(
@@ -160,7 +175,7 @@ export function useWorkspaces(options?: UseWorkspacesOptions) {
                 signal,
               ),
             ),
-            [],
+            cachedCollections?.repoRoots,
           ),
           cloudActive
             ? fallbackOnNonAbort(

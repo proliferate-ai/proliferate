@@ -2,30 +2,40 @@ use std::path::PathBuf;
 
 use super::*;
 use crate::domains::terminals::model::{CreateTerminalOptions, TerminalPurpose};
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{
+    WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+    WorkspaceSurface,
+};
 use crate::domains::workspaces::store::WorkspaceStore;
 use crate::persistence::Db;
 
 fn insert_test_workspace(db: &Db, id: &str, path: &str) {
+    let repo_root_id = format!("repo-root-{id}");
+    db.with_conn(|conn| {
+        conn.execute(
+            "INSERT OR IGNORE INTO repo_roots (
+                id, kind, path, display_name, default_branch, remote_provider, remote_owner,
+                remote_repo_name, remote_url, created_at, updated_at
+             ) VALUES (?1, 'external', ?2, NULL, 'main', NULL, NULL, NULL, NULL, ?3, ?3)",
+            [&repo_root_id, path, "2026-01-01T00:00:00Z"],
+        )?;
+        Ok(())
+    })
+    .expect("seed repo root");
     WorkspaceStore::new(db.clone())
         .insert(&WorkspaceRecord {
             id: id.to_string(),
-            kind: "worktree".to_string(),
-            repo_root_id: None,
+            kind: WorkspaceKind::Worktree,
+            repo_root_id,
             path: path.to_string(),
-            surface: "standard".to_string(),
-            source_repo_root_path: path.to_string(),
-            source_workspace_id: None,
-            git_provider: None,
-            git_owner: None,
-            git_repo_name: None,
+            surface: WorkspaceSurface::Standard,
             original_branch: Some("main".to_string()),
             current_branch: Some("main".to_string()),
             display_name: None,
             origin: None,
             creator_context: None,
-            lifecycle_state: "active".to_string(),
-            cleanup_state: "none".to_string(),
+            lifecycle_state: WorkspaceLifecycleState::Active,
+            cleanup_state: WorkspaceCleanupState::None,
             cleanup_operation: None,
             cleanup_error_message: None,
             cleanup_failed_at: None,

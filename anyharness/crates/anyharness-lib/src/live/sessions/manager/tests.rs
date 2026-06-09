@@ -5,11 +5,11 @@ use anyharness_contract::v1::{
     SessionEvent, SessionEventEnvelope, SessionExecutionPhase, SessionInfoUpdatePayload,
     SubagentTurnCompletedPayload, SubagentTurnOutcome,
 };
-use rusqlite::params;
 use tokio::sync::{broadcast, mpsc, watch};
 use tokio::time::{sleep, Duration};
 
 use super::LiveSessionManager;
+use crate::app::test_support;
 use crate::domains::agents::model::{
     AgentKind, ArtifactRole, CredentialState, ResolvedAgent, ResolvedAgentStatus, ResolvedArtifact,
 };
@@ -88,15 +88,7 @@ fn session_record() -> SessionRecord {
 
 fn seeded_session_store() -> SessionStore {
     let db = Db::open_in_memory().expect("open db");
-    db.with_conn(|conn| {
-        conn.execute(
-            "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
-                 VALUES (?1, 'repo', '/tmp/workspace', '/tmp/workspace', ?2, ?2)",
-            params!["workspace-1", "2026-03-25T00:00:00Z"],
-        )?;
-        Ok(())
-    })
-    .expect("seed workspace");
+    test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace");
     let store = SessionStore::new(db);
     store.insert(&session_record()).expect("insert session");
     store

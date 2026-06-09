@@ -216,6 +216,7 @@ mod tests {
     use tokio::time::timeout;
 
     use super::*;
+    use crate::app::test_support;
     use crate::domains::plans::model::PlanRecord;
     use crate::domains::plans::model::{NewPlan, PlanCreateOutcome};
     use crate::domains::plans::service::{PlanEventContext, PlanService};
@@ -231,13 +232,13 @@ mod tests {
         option_mappings: serde_json::Value,
     ) -> (Db, PlanService, PlanRecord) {
         let db = Db::open_in_memory().expect("open db");
+        test_support::seed_workspace_with_repo_root(
+            &db,
+            "workspace-1",
+            "local",
+            "/tmp/workspace-1",
+        );
         db.with_conn(|conn| {
-            conn.execute(
-                "INSERT INTO workspaces (
-                    id, kind, path, source_repo_root_path, created_at, updated_at
-                 ) VALUES ('workspace-1', 'local', '/tmp/workspace-1', '/tmp/workspace-1', 'now', 'now')",
-                [],
-            )?;
             conn.execute(
                 "INSERT INTO sessions (
                     id, workspace_id, agent_kind, status, created_at, updated_at

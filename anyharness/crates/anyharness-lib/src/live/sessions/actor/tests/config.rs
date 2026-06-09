@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::test_support;
 
 fn session_model_options(ids: &[&str]) -> Vec<SessionModelOption> {
     ids.iter()
@@ -13,15 +14,7 @@ fn session_model_options(ids: &[&str]) -> Vec<SessionModelOption> {
 #[test]
 fn load_startup_restore_snapshot_captures_pre_restart_controls_before_overwrite() {
     let db = Db::open_in_memory().expect("open db");
-    db.with_conn(|conn| {
-        conn.execute(
-            "INSERT INTO workspaces (id, kind, path, source_repo_root_path, created_at, updated_at)
-             VALUES (?1, 'repo', '/tmp/workspace', '/tmp/workspace', ?2, ?2)",
-            rusqlite::params!["workspace-1", "2026-03-25T00:00:00Z"],
-        )?;
-        Ok(())
-    })
-    .expect("seed workspace");
+    test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace");
 
     let store = SessionStore::new(db.clone());
     store

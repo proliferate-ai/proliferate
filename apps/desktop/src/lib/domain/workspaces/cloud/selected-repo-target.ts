@@ -1,4 +1,4 @@
-import type { Workspace } from "@anyharness/sdk";
+import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 import { localWorkspaceGroupKey } from "@/lib/domain/workspaces/cloud/collections";
 import { isCloudWorkspaceId, parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
@@ -39,6 +39,7 @@ export function getCloudRepoTargetForSelectedWorkspace(
   selectedWorkspaceId: string | null,
   workspaces: Workspace[],
   cloudWorkspaces: CloudWorkspaceSummary[],
+  repoRoots: RepoRoot[],
 ): CloudWorkspaceRepoTarget | null {
   const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(selectedWorkspaceId);
   if (cloudWorkspaceId) {
@@ -54,12 +55,15 @@ export function getCloudRepoTargetForSelectedWorkspace(
   }
 
   const ctx = getRepoForSelectedWorkspace(selectedWorkspaceId, workspaces);
-  if (!ctx?.repoWs || ctx.repoWs.gitProvider !== "github" || !ctx.repoWs.gitOwner || !ctx.repoWs.gitRepoName) {
+  const repoRoot = ctx?.repoWs?.repoRootId
+    ? repoRoots.find((candidate) => candidate.id === ctx.repoWs?.repoRootId) ?? null
+    : null;
+  if (repoRoot?.remoteProvider !== "github" || !repoRoot.remoteOwner || !repoRoot.remoteRepoName) {
     return null;
   }
 
   return {
-    gitOwner: ctx.repoWs.gitOwner,
-    gitRepoName: ctx.repoWs.gitRepoName,
+    gitOwner: repoRoot.remoteOwner,
+    gitRepoName: repoRoot.remoteRepoName,
   };
 }

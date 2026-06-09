@@ -16,16 +16,9 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
     id: overrides.id ?? "workspace-1",
     kind: overrides.kind ?? "worktree",
-    repoRootId: "repoRootId" in overrides ? overrides.repoRootId : "repo-root-1",
+    repoRootId: overrides.repoRootId ?? "repo-root-1",
     path: overrides.path ?? "/tmp/proliferate/workspace-1",
     surface: overrides.surface ?? "standard",
-    sourceRepoRootPath: "sourceRepoRootPath" in overrides
-      ? overrides.sourceRepoRootPath
-      : "/tmp/proliferate",
-    sourceWorkspaceId: overrides.sourceWorkspaceId ?? "workspace-local",
-    gitProvider: "gitProvider" in overrides ? overrides.gitProvider : "github",
-    gitOwner: "gitOwner" in overrides ? overrides.gitOwner : "proliferate-ai",
-    gitRepoName: "gitRepoName" in overrides ? overrides.gitRepoName : "proliferate",
     originalBranch: overrides.originalBranch ?? "main",
     currentBranch: overrides.currentBranch ?? "feature/workspace-1",
     displayName: overrides.displayName,
@@ -84,7 +77,6 @@ describe("sidebarRepoGroupKeyForWorkspace", () => {
   it("returns the repo-root path for a GitHub-backed workspace with a matching repoRootId", () => {
     const workspace = makeWorkspace({
       repoRootId: "repo-root-1",
-      sourceRepoRootPath: "/tmp/stale-source",
     });
     const repoRoots = [makeRepoRoot()];
 
@@ -93,26 +85,22 @@ describe("sidebarRepoGroupKeyForWorkspace", () => {
     );
   });
 
-  it("falls back to the workspace source root when a GitHub repo root is missing", () => {
+  it("falls back to the workspace path when a GitHub repo root is missing", () => {
     const workspace = makeWorkspace({
       repoRootId: "missing-root",
-      sourceRepoRootPath: "/tmp/proliferate",
+      path: "/tmp/proliferate",
     });
 
     expect(sidebarRepoGroupKeyForWorkspace(workspace, [])).toBe("/tmp/proliferate");
   });
 
-  it("returns the source root for a path-only local workspace", () => {
+  it("returns the workspace path for a local workspace with a missing repo root", () => {
     const workspace = makeWorkspace({
-      repoRootId: undefined,
-      sourceRepoRootPath: "/tmp/local-only",
-      gitProvider: null,
-      gitOwner: null,
-      gitRepoName: null,
+      repoRootId: "missing-root",
       path: "/tmp/local-only/session",
     });
 
-    expect(sidebarRepoGroupKeyForWorkspace(workspace, [])).toBe("/tmp/local-only");
+    expect(sidebarRepoGroupKeyForWorkspace(workspace, [])).toBe("/tmp/local-only/session");
   });
 
   it("returns the parent repo-root path for a worktree workspace", () => {
@@ -121,7 +109,6 @@ describe("sidebarRepoGroupKeyForWorkspace", () => {
       kind: "worktree",
       repoRootId: "repo-root-1",
       path: "/Users/pablo/.proliferate/worktrees/proliferate/feature-2",
-      sourceRepoRootPath: "/tmp/stale-source",
     });
 
     expect(sidebarRepoGroupKeyForWorkspace(workspace, [makeRepoRoot()])).toBe(
@@ -129,13 +116,9 @@ describe("sidebarRepoGroupKeyForWorkspace", () => {
     );
   });
 
-  it("uses the workspace path when no repo root or source root is available", () => {
+  it("uses the workspace path when the repo root record is unavailable", () => {
     const workspace = makeWorkspace({
-      repoRootId: undefined,
-      sourceRepoRootPath: undefined,
-      gitProvider: null,
-      gitOwner: null,
-      gitRepoName: null,
+      repoRootId: "missing-root",
       path: "/tmp/standalone",
     });
 

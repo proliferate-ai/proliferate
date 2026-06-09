@@ -65,6 +65,7 @@ mod tests {
     use tokio::sync::{broadcast, mpsc};
 
     use super::*;
+    use crate::app::test_support;
     use crate::domains::plans::model::{NewPlan, PlanCreateOutcome};
     use crate::domains::plans::service::{PlanEventContext, PlanService};
     use crate::domains::plans::store::PlanStore;
@@ -155,13 +156,8 @@ mod tests {
     }
 
     fn seed_workspace_and_session(db: &Db) {
+        test_support::seed_workspace_with_repo_root(db, "workspace-1", "local", "/tmp/workspace-1");
         db.with_conn(|conn| {
-            conn.execute(
-                "INSERT INTO workspaces (
-                    id, kind, path, source_repo_root_path, created_at, updated_at
-                 ) VALUES ('workspace-1', 'local', '/tmp/workspace-1', '/tmp/workspace-1', 'now', 'now')",
-                [],
-            )?;
             conn.execute(
                 "INSERT INTO sessions (
                     id, workspace_id, agent_kind, status, created_at, updated_at

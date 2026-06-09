@@ -7,10 +7,6 @@ export interface StandardRepoProjection {
   cloudWorkspaces: CloudWorkspaceSummary[];
 }
 
-function isLegacyStructuralRepoWorkspace(workspace: Workspace): boolean {
-  return (workspace as { kind: string }).kind === "repo";
-}
-
 export function buildStandardRepoProjection(args: {
   repoRoots: RepoRoot[];
   localWorkspaces: Workspace[];
@@ -22,7 +18,7 @@ export function buildStandardRepoProjection(args: {
   return {
     repoRoots: args.repoRoots.filter((repoRoot) => repoRoot.id !== coworkRootRepoRootId),
     localWorkspaces: args.localWorkspaces.filter((workspace) =>
-      workspace.surface !== "cowork" && !isLegacyStructuralRepoWorkspace(workspace)
+      workspace.surface !== "cowork"
     ),
     cloudWorkspaces: args.cloudWorkspaces,
   };

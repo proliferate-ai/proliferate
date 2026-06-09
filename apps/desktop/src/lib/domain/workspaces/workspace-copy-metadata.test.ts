@@ -35,10 +35,15 @@ describe("workspaceCopyMetadataForLogicalWorkspace", () => {
       localWorkspace: {
         id: "workspace-1",
         kind: "worktree",
+        repoRootId: "repo-root",
         path: "/Users/pablo/.proliferate/worktrees/proliferate/feature",
-        sourceRepoRootPath: "/Users/pablo/proliferate",
+        surface: "standard",
         originalBranch: "main",
         currentBranch: "pablo/feature",
+        lifecycleState: "active",
+        cleanupState: "none",
+        createdAt: "2026-05-22T00:00:00Z",
+        updatedAt: "2026-05-22T00:00:00Z",
       } as unknown as LogicalWorkspace["localWorkspace"],
     }));
 

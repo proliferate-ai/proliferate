@@ -163,7 +163,6 @@ export function buildLocalAutomationWorktreePlan(args: {
   const workspaceName = `automation-${slug}-${runSuffix}`;
   const repoName =
     args.candidate.repoRoot.remoteRepoName?.trim()
-    || args.candidate.representativeWorkspace?.gitRepoName
     || args.candidate.repoRoot.path.split("/").filter(Boolean).pop()
     || "repo";
   const baseRef =
@@ -201,9 +200,9 @@ export function workspaceMatchesAutomationPlan(args: {
     return false;
   }
   const workspaceIdentity = canonicalAutomationRepoIdentity(
-    args.repoRoot?.remoteProvider ?? args.workspace.gitProvider,
-    args.repoRoot?.remoteOwner ?? args.workspace.gitOwner,
-    args.repoRoot?.remoteRepoName ?? args.workspace.gitRepoName,
+    args.repoRoot?.remoteProvider,
+    args.repoRoot?.remoteOwner,
+    args.repoRoot?.remoteRepoName,
   );
   const claimIdentity = canonicalAutomationRepoIdentity(
     args.claim.gitProviderSnapshot,

@@ -6,7 +6,10 @@ use serde_json::json;
 use super::calls::{call_artifact_tool, ensure_tool_available};
 use super::context::CoworkMcpContext;
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{
+    WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+    WorkspaceSurface,
+};
 use crate::origin::OriginContext;
 
 struct TempDirGuard {
@@ -33,22 +36,17 @@ impl Drop for TempDirGuard {
 fn workspace(path: &Path) -> WorkspaceRecord {
     WorkspaceRecord {
         id: "workspace-1".to_string(),
-        kind: "local".to_string(),
-        repo_root_id: None,
+        kind: WorkspaceKind::Local,
+        repo_root_id: "repo-root-1".to_string(),
         path: path.display().to_string(),
-        surface: "cowork".to_string(),
-        source_repo_root_path: path.display().to_string(),
-        source_workspace_id: None,
-        git_provider: None,
-        git_owner: None,
-        git_repo_name: None,
+        surface: WorkspaceSurface::Cowork,
         original_branch: Some("main".to_string()),
         current_branch: Some("main".to_string()),
         display_name: None,
         origin: Some(OriginContext::cowork()),
         creator_context: None,
-        lifecycle_state: "active".to_string(),
-        cleanup_state: "none".to_string(),
+        lifecycle_state: WorkspaceLifecycleState::Active,
+        cleanup_state: WorkspaceCleanupState::None,
         cleanup_operation: None,
         cleanup_error_message: None,
         cleanup_failed_at: None,

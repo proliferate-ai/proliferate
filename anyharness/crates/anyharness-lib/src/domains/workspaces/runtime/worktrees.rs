@@ -6,6 +6,7 @@ use super::records::build_workspace_record;
 use super::WorkspaceRuntime;
 use crate::adapters::git::GitService;
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
+use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceSurface};
 use crate::domains::workspaces::types::CreateWorktreeResult;
 use crate::origin::OriginContext;
 
@@ -83,7 +84,10 @@ impl WorkspaceRuntime {
         }
         if let Some(retired) = self
             .store
-            .find_retired_incomplete_cleanup_by_path_and_kind(&canonical_path, "worktree")?
+            .find_retired_incomplete_cleanup_by_path_and_kind(
+                &canonical_path,
+                WorkspaceKind::Worktree,
+            )?
         {
             anyhow::bail!(
                 "workspace path still has pending cleanup from retired workspace {}: {}",
@@ -114,8 +118,8 @@ impl WorkspaceRuntime {
         let record = build_workspace_record(
             &source,
             &canonical_path,
-            "worktree",
-            surface,
+            WorkspaceKind::Worktree,
+            WorkspaceSurface::try_from(surface)?,
             // `git worktree add -b <name>` either creates this branch or
             // fails; avoid an extra post-create branch probe on the hot path.
             Some(new_branch_name.to_string()),

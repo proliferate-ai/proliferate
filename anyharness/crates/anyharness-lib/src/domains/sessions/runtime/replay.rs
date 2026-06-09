@@ -5,6 +5,7 @@ use crate::domains::sessions::replay::{
     derive_source_agent_kind, export_recording, list_recordings, load_recording, validate_speed,
     ReplayError,
 };
+use crate::domains::workspaces::model::WorkspaceSurface;
 use crate::live::sessions::LiveSessionCommandError;
 use crate::origin::OriginContext;
 
@@ -56,7 +57,7 @@ impl SessionRuntime {
             .get_workspace(workspace_id)
             .map_err(ReplayError::Internal)?
             .ok_or_else(|| ReplayError::WorkspaceNotFound(workspace_id.to_string()))?;
-        if workspace.surface == "cowork"
+        if workspace.surface == WorkspaceSurface::Cowork
             && self
                 .session_service
                 .list_sessions(Some(workspace_id), true)

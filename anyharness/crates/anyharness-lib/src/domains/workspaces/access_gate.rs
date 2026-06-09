@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use super::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
 use super::access_store::WorkspaceAccessStore;
+use super::model::WorkspaceLifecycleState;
 use super::store::WorkspaceStore;
 use crate::domains::sessions::store::SessionStore;
 use crate::live::terminals::TerminalService;
@@ -105,7 +106,7 @@ impl WorkspaceAccessGate {
             .find_by_id(workspace_id)
             .map_err(|error| WorkspaceAccessError::WorkspaceNotFound(error.to_string()))?
             .ok_or_else(|| WorkspaceAccessError::WorkspaceNotFound(workspace_id.to_string()))?;
-        if workspace.lifecycle_state == "retired" {
+        if workspace.lifecycle_state == WorkspaceLifecycleState::Retired {
             return Err(WorkspaceAccessError::WorkspaceRetired(
                 workspace_id.to_string(),
             ));
@@ -200,7 +201,7 @@ impl WorkspaceAccessGate {
             .find_by_id(&session.workspace_id)
             .map_err(|error| WorkspaceAccessError::WorkspaceNotFound(error.to_string()))?
             .ok_or_else(|| WorkspaceAccessError::WorkspaceNotFound(session.workspace_id.clone()))?;
-        if workspace.lifecycle_state == "retired" {
+        if workspace.lifecycle_state == WorkspaceLifecycleState::Retired {
             return Err(WorkspaceAccessError::WorkspaceRetired(session.workspace_id));
         }
         match state.mode {
@@ -222,7 +223,10 @@ mod tests {
     use crate::domains::terminals::store::TerminalStore;
     use crate::domains::workspaces::access_model::{WorkspaceAccessMode, WorkspaceAccessRecord};
     use crate::domains::workspaces::access_store::WorkspaceAccessStore;
-    use crate::domains::workspaces::model::WorkspaceRecord;
+    use crate::domains::workspaces::model::{
+        WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
+        WorkspaceSurface,
+    };
     use crate::domains::workspaces::store::WorkspaceStore;
     use crate::live::terminals::TerminalService;
     use crate::persistence::Db;
@@ -230,22 +234,17 @@ mod tests {
     fn workspace_record(id: &str, repo_root_id: &str, path: &str) -> WorkspaceRecord {
         WorkspaceRecord {
             id: id.to_string(),
-            kind: "worktree".to_string(),
-            repo_root_id: Some(repo_root_id.to_string()),
+            kind: WorkspaceKind::Worktree,
+            repo_root_id: repo_root_id.to_string(),
             path: path.to_string(),
-            surface: "standard".to_string(),
-            source_repo_root_path: "/tmp/repo".to_string(),
-            source_workspace_id: Some(repo_root_id.to_string()),
-            git_provider: None,
-            git_owner: None,
-            git_repo_name: None,
+            surface: WorkspaceSurface::Standard,
             original_branch: Some("main".to_string()),
             current_branch: Some("main".to_string()),
             display_name: None,
             origin: None,
             creator_context: None,
-            lifecycle_state: "active".to_string(),
-            cleanup_state: "none".to_string(),
+            lifecycle_state: WorkspaceLifecycleState::Active,
+            cleanup_state: WorkspaceCleanupState::None,
             cleanup_operation: None,
             cleanup_error_message: None,
             cleanup_failed_at: None,
@@ -266,6 +265,20 @@ mod tests {
 
     fn build_gate() -> (WorkspaceAccessGate, WorkspaceStore, WorkspaceAccessStore) {
         let db = Db::open_in_memory().expect("open db");
+        db.with_conn(|conn| {
+            conn.execute(
+                "INSERT INTO repo_roots (
+                    id, kind, path, display_name, default_branch, remote_provider, remote_owner,
+                    remote_repo_name, remote_url, created_at, updated_at
+                 ) VALUES (
+                    'repo-root-1', 'external', '/tmp/repo-root-1', NULL, 'main', NULL, NULL,
+                    NULL, NULL, '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z'
+                 )",
+                [],
+            )?;
+            Ok(())
+        })
+        .expect("seed repo root");
         let workspace_store = WorkspaceStore::new(db.clone());
         let session_store = SessionStore::new(db.clone());
         let access_store = WorkspaceAccessStore::new(db.clone());

@@ -11,7 +11,12 @@ use crate::domains::sessions::service::SessionService;
 use crate::domains::terminals::model::TerminalStatus;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::managed_root::is_managed_worktree_path;
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{
+    WorkspaceCleanupOperation as DomainWorkspaceCleanupOperation,
+    WorkspaceCleanupState as DomainWorkspaceCleanupState, WorkspaceKind as DomainWorkspaceKind,
+    WorkspaceLifecycleState as DomainWorkspaceLifecycleState, WorkspaceRecord,
+    WorkspaceSurface as DomainWorkspaceSurface,
+};
 use crate::domains::workspaces::operation_gate::{WorkspaceOperationGate, WorkspaceOperationKind};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::terminals::TerminalService;
@@ -99,8 +104,9 @@ impl RetirePreflightChecker {
         let mut head_matches_base = false;
         let mut merged_into_base = false;
 
-        if workspace.kind != "worktree"
-            || (mode == RetirePreflightMode::Purge && workspace.surface != "standard")
+        if workspace.kind != DomainWorkspaceKind::Worktree
+            || (mode == RetirePreflightMode::Purge
+                && workspace.surface != DomainWorkspaceSurface::Standard)
         {
             let message = if mode == RetirePreflightMode::Purge {
                 "Purge is only available for standard worktree workspaces."
@@ -112,13 +118,16 @@ impl RetirePreflightChecker {
                 message,
             ));
         }
-        if mode != RetirePreflightMode::Purge && workspace.kind == "worktree" && materialized {
+        if mode != RetirePreflightMode::Purge
+            && workspace.kind == DomainWorkspaceKind::Worktree
+            && materialized
+        {
             self.add_managed_root_blocker(&workspace, &mut blockers)?;
         }
 
         match mode {
             RetirePreflightMode::ActiveRetire => {
-                if workspace.lifecycle_state != "active" {
+                if workspace.lifecycle_state != DomainWorkspaceLifecycleState::Active {
                     blockers.push(retire_blocker(
                         WorkspaceRetireBlockerCode::WorkspaceAccessBlocked,
                         "Workspace is not active.",
@@ -132,19 +141,22 @@ impl RetirePreflightChecker {
                 }
             }
             RetirePreflightMode::RetiredCleanupRetry => {
-                if workspace.lifecycle_state != "retired" {
+                if workspace.lifecycle_state != DomainWorkspaceLifecycleState::Retired {
                     blockers.push(retire_blocker(
                         WorkspaceRetireBlockerCode::WorkspaceAccessBlocked,
                         "Cleanup retry requires a retired workspace.",
                     ));
                 }
-                if !matches!(workspace.cleanup_state.as_str(), "pending" | "failed") {
+                if !matches!(
+                    workspace.cleanup_state,
+                    DomainWorkspaceCleanupState::Pending | DomainWorkspaceCleanupState::Failed
+                ) {
                     blockers.push(retire_blocker(
                         WorkspaceRetireBlockerCode::WorkspaceAccessBlocked,
                         "Cleanup retry requires pending or failed cleanup state.",
                     ));
                 }
-                if workspace.cleanup_operation.as_deref() == Some("purge") {
+                if workspace.cleanup_operation == Some(DomainWorkspaceCleanupOperation::Purge) {
                     blockers.push(retire_blocker(
                         WorkspaceRetireBlockerCode::WorkspaceAccessBlocked,
                         "Workspace is in purge cleanup state.",
@@ -152,7 +164,7 @@ impl RetirePreflightChecker {
                 }
             }
             RetirePreflightMode::Purge => {
-                if workspace.lifecycle_state == "active" {
+                if workspace.lifecycle_state == DomainWorkspaceLifecycleState::Active {
                     if let Err(error) = self
                         .workspace_access_gate
                         .assert_can_mutate_for_workspace(&workspace.id)
@@ -175,7 +187,7 @@ impl RetirePreflightChecker {
             blockers.push(active_path_owner_retire_blocker(&active));
         }
 
-        if workspace.kind == "worktree" && materialized {
+        if workspace.kind == DomainWorkspaceKind::Worktree && materialized {
             let workspace_id_for_task = workspace.id.clone();
             let workspace_path = workspace.path.clone();
             let status = tokio::task::spawn_blocking(move || {
@@ -275,7 +287,8 @@ impl RetirePreflightChecker {
         }
 
         if mode == RetirePreflightMode::ActiveRetire
-            || (mode == RetirePreflightMode::Purge && workspace.lifecycle_state == "active")
+            || (mode == RetirePreflightMode::Purge
+                && workspace.lifecycle_state == DomainWorkspaceLifecycleState::Active)
         {
             self.add_live_execution_blockers(&workspace.id, &mut blockers)
                 .await?;
@@ -284,10 +297,14 @@ impl RetirePreflightChecker {
             .await?;
 
         let can_retire = blockers.is_empty()
-            && workspace.kind == "worktree"
+            && workspace.kind == DomainWorkspaceKind::Worktree
             && match mode {
-                RetirePreflightMode::ActiveRetire => workspace.lifecycle_state == "active",
-                RetirePreflightMode::RetiredCleanupRetry => workspace.lifecycle_state == "retired",
+                RetirePreflightMode::ActiveRetire => {
+                    workspace.lifecycle_state == DomainWorkspaceLifecycleState::Active
+                }
+                RetirePreflightMode::RetiredCleanupRetry => {
+                    workspace.lifecycle_state == DomainWorkspaceLifecycleState::Retired
+                }
                 RetirePreflightMode::Purge => false,
             };
         let can_purge = blockers.is_empty() && workspace_can_purge(&workspace);
@@ -310,12 +327,12 @@ impl RetirePreflightChecker {
         );
 
         Ok(RetirePreflightResult {
-            workspace_kind: workspace_kind_to_contract(&workspace.kind),
-            lifecycle_state: workspace_lifecycle_to_contract(&workspace.lifecycle_state),
-            cleanup_state: workspace_cleanup_to_contract(&workspace.cleanup_state),
-            cleanup_operation: workspace_cleanup_operation_to_contract(
-                workspace.cleanup_operation.as_deref(),
-            ),
+            workspace_kind: workspace_kind_to_contract(workspace.kind),
+            lifecycle_state: workspace_lifecycle_to_contract(workspace.lifecycle_state),
+            cleanup_state: workspace_cleanup_to_contract(workspace.cleanup_state),
+            cleanup_operation: workspace
+                .cleanup_operation
+                .map(workspace_cleanup_operation_to_contract),
             can_retire,
             can_purge,
             materialized,
@@ -465,15 +482,15 @@ impl RetirePreflightChecker {
 }
 
 pub fn workspace_can_purge(workspace: &WorkspaceRecord) -> bool {
-    workspace.kind == "worktree"
-        && workspace.surface == "standard"
+    workspace.kind == DomainWorkspaceKind::Worktree
+        && workspace.surface == DomainWorkspaceSurface::Standard
         && purge_lifecycle_allows(workspace)
 }
 
 fn purge_lifecycle_allows(workspace: &WorkspaceRecord) -> bool {
-    workspace.lifecycle_state == "active"
-        || workspace.cleanup_operation.as_deref() == Some("purge")
-        || workspace.cleanup_state == "complete"
+    workspace.lifecycle_state == DomainWorkspaceLifecycleState::Active
+        || workspace.cleanup_operation == Some(DomainWorkspaceCleanupOperation::Purge)
+        || workspace.cleanup_state == DomainWorkspaceCleanupState::Complete
 }
 
 pub fn retire_blocker(code: WorkspaceRetireBlockerCode, message: &str) -> WorkspaceRetireBlocker {
@@ -561,36 +578,37 @@ fn git_operation_to_contract(
     }
 }
 
-fn workspace_kind_to_contract(kind: &str) -> WorkspaceKind {
+fn workspace_kind_to_contract(kind: DomainWorkspaceKind) -> WorkspaceKind {
     match kind {
-        "worktree" => WorkspaceKind::Worktree,
-        _ => WorkspaceKind::Local,
+        DomainWorkspaceKind::Worktree => WorkspaceKind::Worktree,
+        DomainWorkspaceKind::Local => WorkspaceKind::Local,
     }
 }
 
-fn workspace_lifecycle_to_contract(value: &str) -> WorkspaceLifecycleState {
+fn workspace_lifecycle_to_contract(
+    value: DomainWorkspaceLifecycleState,
+) -> WorkspaceLifecycleState {
     match value {
-        "retired" => WorkspaceLifecycleState::Retired,
-        _ => WorkspaceLifecycleState::Active,
+        DomainWorkspaceLifecycleState::Retired => WorkspaceLifecycleState::Retired,
+        DomainWorkspaceLifecycleState::Active => WorkspaceLifecycleState::Active,
     }
 }
 
-fn workspace_cleanup_to_contract(value: &str) -> WorkspaceCleanupState {
+fn workspace_cleanup_to_contract(value: DomainWorkspaceCleanupState) -> WorkspaceCleanupState {
     match value {
-        "pending" => WorkspaceCleanupState::Pending,
-        "complete" => WorkspaceCleanupState::Complete,
-        "failed" => WorkspaceCleanupState::Failed,
-        _ => WorkspaceCleanupState::None,
+        DomainWorkspaceCleanupState::Pending => WorkspaceCleanupState::Pending,
+        DomainWorkspaceCleanupState::Complete => WorkspaceCleanupState::Complete,
+        DomainWorkspaceCleanupState::Failed => WorkspaceCleanupState::Failed,
+        DomainWorkspaceCleanupState::None => WorkspaceCleanupState::None,
     }
 }
 
 fn workspace_cleanup_operation_to_contract(
-    operation: Option<&str>,
-) -> Option<WorkspaceCleanupOperation> {
+    operation: DomainWorkspaceCleanupOperation,
+) -> WorkspaceCleanupOperation {
     match operation {
-        Some("retire") => Some(WorkspaceCleanupOperation::Retire),
-        Some("purge") => Some(WorkspaceCleanupOperation::Purge),
-        _ => None,
+        DomainWorkspaceCleanupOperation::Retire => WorkspaceCleanupOperation::Retire,
+        DomainWorkspaceCleanupOperation::Purge => WorkspaceCleanupOperation::Purge,
     }
 }
 

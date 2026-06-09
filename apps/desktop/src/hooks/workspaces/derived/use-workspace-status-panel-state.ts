@@ -138,12 +138,18 @@ export function useWorkspaceStatusPanelState(): WorkspaceStatusPanelState | null
   const selectedWorkspace = workspaceCollections?.workspaces.find(
     (workspace) => workspace.id === selectedWorkspaceId,
   ) ?? null;
+  const selectedRepoRoot = selectedWorkspace
+    ? workspaceCollections?.repoRoots.find((repoRoot) => repoRoot.id === selectedWorkspace.repoRootId)
+      ?? null
+    : null;
+  const selectedSourceRepoRootPath = selectedRepoRoot?.path?.trim()
+    || selectedWorkspace?.path?.trim()
+    || null;
   const configuredSetupScript = useRepoPreferencesStore((state) => {
-    const sourceRepoRootPath = selectedWorkspace?.sourceRepoRootPath;
-    if (!sourceRepoRootPath) {
+    if (!selectedSourceRepoRootPath) {
       return "";
     }
-    return state.repoConfigs[sourceRepoRootPath]?.setupScript?.trim() ?? "";
+    return state.repoConfigs[selectedSourceRepoRootPath]?.setupScript?.trim() ?? "";
   });
 
   // Query setup status for the selected workspace. Used to show persistent

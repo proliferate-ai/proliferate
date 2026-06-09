@@ -4,6 +4,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { RepoRoot, Workspace } from "@anyharness/sdk";
+import { buildWorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
+import { buildLogicalWorkspaces } from "@/lib/domain/workspaces/cloud/logical-workspaces";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { workspaceCollectionsKey } from "./query-keys";
 import { useWorkspaces } from "./use-workspaces";
@@ -76,14 +79,56 @@ describe("useWorkspaces", () => {
     expect(result.current.data?.localWorkspaces).toEqual([]);
     expect(result.current.data?.repoRoots).toEqual([]);
   });
+
+  it("errors when repo roots fail without a previous cache", async () => {
+    const error = new Error("repo roots unavailable");
+    mocks.workspacesList.mockResolvedValueOnce([]);
+    mocks.repoRootsList.mockRejectedValueOnce(error);
+    const { result, queryClient } = renderUseWorkspaces();
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+
+    expect(result.current.error).toBe(error);
+    expect(queryClient.getQueryData(
+      workspaceCollectionsKey("http://runtime.test", false),
+    )).toBeUndefined();
+  });
+
+  it("preserves previous repo roots when repo root refresh fails", async () => {
+    const queryClient = createQueryClient();
+    const workspace = makeWorkspace();
+    const repoRoot = makeRepoRoot();
+    queryClient.setQueryData(
+      workspaceCollectionsKey("http://runtime.test", false),
+      buildWorkspaceCollections([workspace], [repoRoot], []),
+    );
+    mocks.workspacesList.mockResolvedValueOnce([workspace]);
+    mocks.repoRootsList.mockRejectedValueOnce(new Error("repo roots unavailable"));
+    const { result } = renderUseWorkspaces(queryClient);
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(result.current.data?.repoRoots.map((entry) => entry.id)).toEqual(["repo-root-1"]);
+    const logicalWorkspaces = buildLogicalWorkspaces({
+      localWorkspaces: result.current.data?.localWorkspaces ?? [],
+      repoRoots: result.current.data?.repoRoots ?? [],
+      cloudWorkspaces: [],
+    });
+    expect(logicalWorkspaces.map((entry) => entry.sourceRoot)).toEqual([
+      "/Users/pablo/proliferate",
+    ]);
+  });
 });
 
-function renderUseWorkspaces() {
-  const queryClient = new QueryClient({
+function createQueryClient() {
+  return new QueryClient({
     defaultOptions: {
       queries: { retry: false },
     },
   });
+}
+
+function renderUseWorkspaces(queryClient = createQueryClient()) {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
@@ -91,5 +136,35 @@ function renderUseWorkspaces() {
   return {
     queryClient,
     ...renderHook(() => useWorkspaces(), { wrapper }),
+  };
+}
+
+function makeWorkspace(): Workspace {
+  return {
+    id: "workspace-1",
+    kind: "local",
+    repoRootId: "repo-root-1",
+    path: "/Users/pablo/proliferate",
+    surface: "standard",
+    lifecycleState: "active",
+    cleanupState: "none",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+}
+
+function makeRepoRoot(): RepoRoot {
+  return {
+    id: "repo-root-1",
+    kind: "external",
+    path: "/Users/pablo/proliferate",
+    displayName: "proliferate",
+    defaultBranch: "main",
+    remoteProvider: "github",
+    remoteOwner: "proliferate-ai",
+    remoteRepoName: "proliferate",
+    remoteUrl: null,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
   };
 }

@@ -6,7 +6,9 @@ use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::workspaces::checkout_gate::{CheckoutDeletionGate, CheckoutPathLockKey};
 use crate::domains::workspaces::deletion::WorkspaceDeleteWorkflow;
-use crate::domains::workspaces::model::WorkspaceRecord;
+use crate::domains::workspaces::model::{
+    WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceLifecycleState, WorkspaceRecord,
+};
 use crate::domains::workspaces::operation_gate::WorkspaceOperationGate;
 use crate::domains::workspaces::retire_preflight::{RetirePreflightChecker, RetirePreflightMode};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
@@ -101,13 +103,13 @@ impl WorkspacePurgeService {
         };
 
         let attempted_at = chrono::Utc::now().to_rfc3339();
-        let pending = if workspace.lifecycle_state == "active" {
+        let pending = if workspace.lifecycle_state == WorkspaceLifecycleState::Active {
             self.workspace_runtime
                 .set_lifecycle_cleanup_state(
                     workspace_id,
-                    "retired",
-                    "pending",
-                    Some("purge"),
+                    WorkspaceLifecycleState::Retired,
+                    WorkspaceCleanupState::Pending,
+                    Some(WorkspaceCleanupOperation::Purge),
                     None,
                     None,
                     Some(&attempted_at),
@@ -198,9 +200,9 @@ impl WorkspacePurgeService {
         let failed_at = chrono::Utc::now().to_rfc3339();
         match self.workspace_runtime.set_lifecycle_cleanup_state(
             workspace_id,
-            "retired",
-            "failed",
-            Some("purge"),
+            WorkspaceLifecycleState::Retired,
+            WorkspaceCleanupState::Failed,
+            Some(WorkspaceCleanupOperation::Purge),
             Some(&message),
             Some(&failed_at),
             Some(attempted_at),
@@ -232,9 +234,12 @@ impl WorkspacePurgeService {
 }
 
 fn is_retryable_purge(workspace: &WorkspaceRecord) -> bool {
-    workspace.lifecycle_state == "retired"
-        && matches!(workspace.cleanup_state.as_str(), "pending" | "failed")
-        && workspace.cleanup_operation.as_deref() == Some("purge")
+    workspace.lifecycle_state == WorkspaceLifecycleState::Retired
+        && matches!(
+            workspace.cleanup_state,
+            WorkspaceCleanupState::Pending | WorkspaceCleanupState::Failed
+        )
+        && workspace.cleanup_operation == Some(WorkspaceCleanupOperation::Purge)
 }
 
 fn display_preflight_message(
