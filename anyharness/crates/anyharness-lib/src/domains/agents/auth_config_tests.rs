@@ -173,6 +173,12 @@ fn codex_launch_overlay_sets_managed_codex_home() {
         })
         .expect("apply");
 
+    assert!(!root
+        .join("agent-auth")
+        .join("codex")
+        .join("config.toml")
+        .exists());
+
     let overlay = service
         .launch_overlay("codex", None, None)
         .expect("overlay");

@@ -92,7 +92,7 @@ def _worker_delivery_payload(
             sanitized,
             target_id=str(command.target_id),
         )
-        _strip_cloud_launch_preflight_fields(sanitized)
+        _strip_cloud_launch_preflight_fields(sanitized, strip_sandbox_profile_id=False)
         return sanitized
     if command.kind == CloudCommandKind.send_prompt.value:
         sanitized = dict(payload)
@@ -134,8 +134,13 @@ def _ensure_expected_runtime_config_revision(
     }
 
 
-def _strip_cloud_launch_preflight_fields(payload: dict[str, object]) -> None:
-    payload.pop("sandboxProfileId", None)
+def _strip_cloud_launch_preflight_fields(
+    payload: dict[str, object],
+    *,
+    strip_sandbox_profile_id: bool = True,
+) -> None:
+    if strip_sandbox_profile_id:
+        payload.pop("sandboxProfileId", None)
     payload.pop("requiredRuntimeConfigRevisionId", None)
     payload.pop("requiredRuntimeConfigSequence", None)
     payload.pop("requiredRuntimeConfigContentHash", None)
