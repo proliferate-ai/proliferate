@@ -5,8 +5,9 @@ import type {
   AgentGatewayCapabilities,
   SandboxAgentAuthSelection,
 } from "@proliferate/cloud-sdk";
-import type { AgentAuthProvider } from "@/lib/access/tauri/credentials";
 import { agentAuthAgentLabel } from "./agent-auth-agent-presentation";
+
+export type AgentAuthLocalProvider = "claude" | "codex" | "gemini";
 
 export interface AgentAuthSlotDefinition {
   agentKind: AgentAuthAgentKind;
@@ -14,7 +15,7 @@ export interface AgentAuthSlotDefinition {
   label: string;
   shortLabel: string;
   credentialProviderIds: readonly AgentAuthCredentialProviderId[];
-  localProvider: AgentAuthProvider | null;
+  localProvider: AgentAuthLocalProvider | null;
   primary: boolean;
 }
 
@@ -89,7 +90,7 @@ const CREDENTIAL_PROVIDER_IDS: readonly AgentAuthCredentialProviderId[] = [
   "cursor",
 ];
 
-const LOCAL_AGENT_AUTH_PROVIDERS: readonly AgentAuthProvider[] = [
+const LOCAL_AGENT_AUTH_PROVIDERS: readonly AgentAuthLocalProvider[] = [
   "claude",
   "codex",
   "gemini",
@@ -234,6 +235,8 @@ function isCredentialProviderId(value: string): value is AgentAuthCredentialProv
   return CREDENTIAL_PROVIDER_IDS.includes(value as AgentAuthCredentialProviderId);
 }
 
-function isLocalAgentAuthProvider(value: string | null | undefined): value is AgentAuthProvider {
-  return LOCAL_AGENT_AUTH_PROVIDERS.includes(value as AgentAuthProvider);
+function isLocalAgentAuthProvider(
+  value: string | null | undefined,
+): value is AgentAuthLocalProvider {
+  return LOCAL_AGENT_AUTH_PROVIDERS.includes(value as AgentAuthLocalProvider);
 }

@@ -354,5 +354,9 @@ fn normalize_legacy_auth_slot_ids(input: &mut AgentAuthConfigInput) {
 mod auth_config_claude_tests;
 
 #[cfg(test)]
+#[path = "../auth_config_scope_tests.rs"]
+mod auth_config_scope_tests;
+
+#[cfg(test)]
 #[path = "../auth_config_tests.rs"]
 mod auth_config_tests;
