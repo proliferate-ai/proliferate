@@ -102,19 +102,39 @@ api/http/
   *_contract.rs
 ```
 
-Handler files should read in this order:
+Every handler is the same five-line stanza, and nothing else:
 
-```text
-extract request
-authenticate/authorize at transport boundary
-map contract input to internal input
-call one owning service/runtime/live handle
-map internal result to contract response
-map errors
+```rust
+assert_<scope>_auth(&auth, ...)?;                 // 1. authorize: ONE named assertion
+let input = <usecase>_input(req)?;                // 2. translate in (dep-less seam fn)
+let view  = state.<domain>.<usecase>(input).await?; // 3. call ONE use case; errors ride `?`
+Ok(Json(<resource>_response(view)))               // 4. translate out (dep-less seam fn)
 ```
 
+Litmus rules (greppable):
+
+- no `if`/`match`/loop beyond the `?`s
+- no second domain/service call, no fetches, no business validation
+- no `tracing::` calls (the middleware span owns the request)
+- no `.map_err` (a `From` impl in `<resource>_errors.rs` makes errors flow)
+- no inline auth matches — named assertions from `access.rs` only
+- no imports from `domains/**` beyond the called surface and its input/view
+  types
+
+Authorization here answers "who is asking". Business preconditions ("is this
+workspace mutable right now") belong inside the domain use case — a flow
+checking both is correct; the edge checking preconditions is not.
+
+Proportionality: the `*_input()` constructor is earned at >3 fields or when
+defaults/grouping logic exists; below that, passing `&req.name` as a plain
+argument IS the translation. GET handlers collapse steps 2–3 (`Path(id)` is
+the input). The outbound `*_response()` constructor always exists — that is
+where wire stability lives.
+
 If a handler contains product sequencing, move that sequence to the owning
-domain `runtime.rs` or `service.rs`.
+domain `runtime.rs` or `service.rs`. Migration exception:
+`workspaces_lifecycle.rs` implements the retire/cleanup state machine inline
+(three copies with retention); target is a workspaces lifecycle service.
 
 ### `sse/**`
 
@@ -170,13 +190,30 @@ api/http/<resource>.rs
 
 api/http/<resource>_contract.rs
   internal <-> contract mappers when the mapping is large
+
+api/http/<resource>_errors.rs
+  one From<DomainError> for ApiError impl per domain error type
 ```
+
+Seam-file law: mappers are **sync, dep-less, and decisionless** — no
+`&AppState`, no store reads, no live lookups, no clock, no business branches.
+A mapper that needs to fetch means the use case returned too little; fix the
+use case's return type (a view model composed by the runtime), never the
+mapper. Each type pair has exactly one mapper.
 
 Do not pass contract request/response types deep into domains or live runtime
 code.
 
 Exception: normalized session event payloads may be contract types below
 `api/` when they are explicitly the durable event-log payload.
+
+Migration exceptions: `sessions_contract.rs::session_to_contract` delegates to
+an async fetching mapper on the session runtime (store reads + live lookups
+per record, called in a loop on list paths); `api/http/agents.rs` carries a
+second error mechanism (`ProblemResponse`) alongside `ApiError`; `cowork.rs`
+and `mobility.rs` carry duplicate copies of mappers owned elsewhere. Targets:
+runtime-composed `SessionView` + dep-less mapper; one `ApiError` mechanism;
+one mapper per type pair.
 
 ## AppState Use
 

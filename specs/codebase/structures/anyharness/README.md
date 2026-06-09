@@ -205,6 +205,10 @@ may own, and which patterns are allowed.
 
 Guides:
 
+- [guides/mental-model.md](guides/mental-model.md) for the lens that makes the
+  other guides cohere: the eight jobs, the use-case pipeline
+  (resolve -> decide -> execute), the mapping and error doctrines, the
+  parameter test, proportionality, and the placement algorithm.
 - [guides/system-architecture.md](guides/system-architecture.md) for the full
   AnyHarness source organization model: `api`, `app`, `domains`, `live`,
   `adapters`, `integrations`, `persistence`, and `observability`.
