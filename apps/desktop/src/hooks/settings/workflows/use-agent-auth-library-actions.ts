@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   AgentAuthAgentKind,
   AgentAuthCredential,
+  AgentAuthCredentialProviderId,
 } from "@proliferate/cloud-sdk";
 import {
   useAgentAuthCredentials,
@@ -14,7 +15,11 @@ import {
   type AgentAuthProvider,
 } from "@/hooks/access/tauri/use-credentials-actions";
 import { useAuthStore } from "@/stores/auth/auth-store";
-import { groupAgentAuthCredentialsByAgent } from "@/lib/domain/agent-auth/credential-collections";
+import { groupAgentAuthCredentialsByProvider } from "@/lib/domain/agent-auth/credential-collections";
+import {
+  agentAuthPrimarySlotForAgent,
+  agentAuthSlotDomId,
+} from "@/lib/domain/agent-auth/auth-slots";
 import { useAgentAuthLocalSources } from "./agent-auth-library/use-agent-auth-local-sources";
 import { useAgentAuthLibraryOrganizationSelection } from "./agent-auth-library/use-agent-auth-library-organization-selection";
 import { useAgentAuthLibraryProfiles } from "./agent-auth-library/use-agent-auth-library-profiles";
@@ -81,8 +86,8 @@ export function useAgentAuthLibraryActions(
   );
   const selections = useSandboxAgentAuthSelections(organizationProfile?.id ?? null);
   const personalSelections = useSandboxAgentAuthSelections(personalProfile?.id ?? null);
-  const personalCredentialsByAgent = useMemo(
-    () => groupAgentAuthCredentialsByAgent(personalCredentials.data ?? []),
+  const personalCredentialsByProvider = useMemo(
+    () => groupAgentAuthCredentialsByProvider(personalCredentials.data ?? []),
     [personalCredentials.data],
   );
 
@@ -92,8 +97,9 @@ export function useAgentAuthLibraryActions(
     }
     setFocusedAgentKind(initialAgentKind);
     window.requestAnimationFrame(() => {
+      const primarySlot = agentAuthPrimarySlotForAgent(initialAgentKind);
       document
-        .getElementById(`agent-auth-${initialAgentKind}`)
+        .getElementById(agentAuthSlotDomId(primarySlot.agentKind, primarySlot.authSlotId))
         ?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
   }, [initialAgentKind]);
@@ -212,6 +218,7 @@ export function useAgentAuthLibraryActions(
 
   async function handleSelectPersonalDefault(
     agentKind: AgentAuthAgentKind,
+    authSlotId: AgentAuthCredentialProviderId | string,
     credentialId: string,
   ) {
     if (!credentialId) {
@@ -223,6 +230,7 @@ export function useAgentAuthLibraryActions(
       await mutations.selectCredential({
         sandboxProfileId: profile.id,
         agentKind,
+        authSlotId,
         selection: {
           credentialId,
           credentialShareId: null,
@@ -266,6 +274,7 @@ export function useAgentAuthLibraryActions(
 
   async function handleSelectTeamDefault(
     agentKind: AgentAuthAgentKind,
+    authSlotId: AgentAuthCredentialProviderId | string,
     credentialId: string,
   ) {
     if (!credentialId) {
@@ -275,11 +284,12 @@ export function useAgentAuthLibraryActions(
     try {
       const profile = await ensureOrganizationProfileLoaded();
       const selectedCredential = (organizationCredentials.data ?? []).find(
-        (credential) => credential.id === credentialId && credential.agentKind === agentKind,
+        (credential) => credential.id === credentialId,
       );
       await mutations.selectCredential({
         sandboxProfileId: profile.id,
         agentKind,
+        authSlotId,
         selection: {
           credentialId,
           credentialShareId: selectedCredential?.ownerUserId === currentUserId
@@ -302,7 +312,7 @@ export function useAgentAuthLibraryActions(
     feedback,
     localSourceError,
     localSourcesByProvider,
-    personalCredentialsByAgent,
+    personalCredentialsByProvider,
     organizationCredentials: organizationCredentials.data ?? [],
     organizationCredentialsLoading: organizationCredentials.isLoading,
     organizationSelectionsLoading: organizationProfileLoading

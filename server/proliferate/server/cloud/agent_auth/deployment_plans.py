@@ -70,9 +70,49 @@ def _deployment_fingerprint(
 
 def _gateway_deployments_for_credential(
     *,
-    agent_kind: str,
+    agent_kind: str | None = None,
+    credential_provider_id: str | None = None,
     provider_kind: str,
 ) -> tuple[GatewayModelDeploymentRequest, ...]:
+    if agent_kind is None and credential_provider_id is not None:
+        if credential_provider_id == "anthropic":
+            claude = _gateway_deployments_for_credential(
+                agent_kind="claude",
+                credential_provider_id=credential_provider_id,
+                provider_kind=provider_kind,
+            )
+            opencode = _gateway_deployments_for_credential(
+                agent_kind="opencode",
+                credential_provider_id=credential_provider_id,
+                provider_kind=provider_kind,
+            )
+            return claude + opencode
+        elif credential_provider_id == "openai":
+            codex = _gateway_deployments_for_credential(
+                agent_kind="codex",
+                credential_provider_id=credential_provider_id,
+                provider_kind=provider_kind,
+            )
+            opencode = _gateway_deployments_for_credential(
+                agent_kind="opencode",
+                credential_provider_id=credential_provider_id,
+                provider_kind=provider_kind,
+            )
+            return codex + opencode
+        elif credential_provider_id == "gemini":
+            gemini = _gateway_deployments_for_credential(
+                agent_kind="gemini",
+                credential_provider_id=credential_provider_id,
+                provider_kind=provider_kind,
+            )
+            opencode = _gateway_deployments_for_credential(
+                agent_kind="opencode",
+                credential_provider_id=credential_provider_id,
+                provider_kind=provider_kind,
+            )
+            return gemini + opencode
+    if agent_kind is None:
+        return ()
     if provider_kind in {
         "proliferate_bedrock_pool",
         "proliferate_managed_anthropic",
@@ -112,6 +152,29 @@ def _gateway_deployments_for_credential(
                 providerModel="gpt-5.5",
             ),
         )
+    if agent_kind == "opencode" and provider_kind in {
+        "anthropic_api_key",
+        "bedrock_assume_role",
+        "proliferate_bedrock_pool",
+    }:
+        provider_model = (
+            "us.anthropic.claude-sonnet-4-6"
+            if provider_kind in {"bedrock_assume_role", "proliferate_bedrock_pool"}
+            else "claude-sonnet-4-6"
+        )
+        return (
+            GatewayModelDeploymentRequest(
+                publicModelName="opencode/claude-sonnet-4-6",
+                providerModel=provider_model,
+            ),
+        )
+    if agent_kind == "opencode" and provider_kind == "gemini_api_key":
+        return (
+            GatewayModelDeploymentRequest(
+                publicModelName="opencode/gemini-2.5-pro",
+                providerModel="gemini-2.5-pro",
+            ),
+        )
     if agent_kind == "gemini" and provider_kind == "gemini_api_key":
         return (
             GatewayModelDeploymentRequest(
@@ -130,10 +193,12 @@ def _bifrost_virtual_key_fingerprint(
     models: Sequence[str],
     budget_limit: str | None,
     agent_kind: str,
+    auth_slot_id: str,
     policy_id: UUID,
 ) -> str:
     payload = {
         "agentKind": agent_kind,
+        "authSlotId": auth_slot_id,
         "budgetLimit": budget_limit,
         "models": sorted(models),
         "policyId": str(policy_id),
@@ -177,6 +242,28 @@ def _bifrost_deployments_for_managed_credits(
             GatewayModelDeploymentRequest(
                 publicModelName="opencode/big-pickle",
                 providerModel="gpt-5.5",
+            ),
+        )
+    if agent_kind == "opencode" and provider_kind in {
+        "proliferate_bedrock_pool",
+        "proliferate_managed_anthropic",
+    }:
+        provider_model = (
+            "us.anthropic.claude-sonnet-4-6"
+            if provider_kind == "proliferate_bedrock_pool"
+            else "claude-sonnet-4-6"
+        )
+        return (
+            GatewayModelDeploymentRequest(
+                publicModelName="opencode/claude-sonnet-4-6",
+                providerModel=provider_model,
+            ),
+        )
+    if agent_kind == "opencode" and provider_kind == "proliferate_managed_gemini":
+        return (
+            GatewayModelDeploymentRequest(
+                publicModelName="opencode/gemini-2.5-pro",
+                providerModel="gemini-2.5-pro",
             ),
         )
     if agent_kind == "gemini" and provider_kind == "proliferate_managed_gemini":

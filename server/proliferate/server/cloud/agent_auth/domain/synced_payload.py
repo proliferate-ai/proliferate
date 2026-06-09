@@ -127,11 +127,50 @@ def redacted_synced_payload_summary(
     return summary
 
 
+def synced_payload_provider_matches(
+    *,
+    payload_provider: object,
+    credential_provider_id: str,
+    redacted_summary_json: str | None,
+) -> bool:
+    if payload_provider == credential_provider_id:
+        return True
+    if not isinstance(payload_provider, str):
+        return False
+
+    legacy_provider_id = _legacy_agent_provider_id(payload_provider)
+    if legacy_provider_id == credential_provider_id:
+        return True
+
+    if not redacted_summary_json:
+        return False
+    try:
+        redacted_summary = json.loads(redacted_summary_json)
+    except ValueError:
+        return False
+    if not isinstance(redacted_summary, dict):
+        return False
+    source_agent_kind = redacted_summary.get("agentKind")
+    if not isinstance(source_agent_kind, str) or source_agent_kind != payload_provider:
+        return False
+    return _legacy_agent_provider_id(source_agent_kind) == credential_provider_id
+
+
 def _provider_spec(provider: CloudAgentKind) -> SyncedCredentialProviderSpec:
     spec = _CREDENTIAL_SPECS.get(provider)
     if spec is None:
         _invalid_payload(f"Native auth sync is not supported for agent '{provider}'.")
     return spec
+
+
+def _legacy_agent_provider_id(agent_kind: str) -> str | None:
+    if agent_kind == "claude":
+        return "anthropic"
+    if agent_kind in {"codex", "opencode"}:
+        return "openai"
+    if agent_kind == "gemini":
+        return "gemini"
+    return None
 
 
 def _normalize_env_payload(

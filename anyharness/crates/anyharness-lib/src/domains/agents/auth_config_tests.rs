@@ -38,6 +38,7 @@ fn applies_status_without_secret_values() {
             revision: 3,
             selections: vec![AgentAuthSelectionConfig {
                 agent_kind: "claude".to_string(),
+                auth_slot_id: "anthropic".to_string(),
                 materialization_mode: "gateway_env".to_string(),
                 credential_id: "credential-1".to_string(),
                 credential_revision: 2,
@@ -67,6 +68,63 @@ fn applies_status_without_secret_values() {
 }
 
 #[test]
+fn apply_config_infers_legacy_single_slot_auth_selection() {
+    let service = AgentAuthConfigService::new(
+        AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
+        Some(cipher()),
+        std::env::temp_dir(),
+    );
+    let input: AgentAuthConfigInput = serde_json::from_value(json!({
+        "externalAuthScope": null,
+        "revision": 1,
+        "selections": [{
+            "agentKind": "claude",
+            "materializationMode": "gateway_env",
+            "credentialId": "credential-1",
+            "credentialRevision": 1,
+            "protectedEnv": {
+                "ANTHROPIC_BASE_URL": "https://gateway.example"
+            }
+        }]
+    }))
+    .expect("legacy payload");
+
+    service.apply_config(input).expect("apply");
+
+    let status = service.status().expect("status");
+    assert_eq!(status.selections[0].agent_kind, "claude");
+    assert_eq!(status.selections[0].auth_slot_id, "anthropic");
+}
+
+#[test]
+fn apply_config_requires_auth_slot_for_multi_slot_agent() {
+    let service = AgentAuthConfigService::new(
+        AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
+        Some(cipher()),
+        std::env::temp_dir(),
+    );
+    let input: AgentAuthConfigInput = serde_json::from_value(json!({
+        "externalAuthScope": null,
+        "revision": 1,
+        "selections": [{
+            "agentKind": "opencode",
+            "materializationMode": "gateway_env",
+            "credentialId": "credential-1",
+            "credentialRevision": 1,
+            "protectedEnv": {
+                "OPENAI_API_KEY": "secret"
+            }
+        }]
+    }))
+    .expect("legacy payload");
+
+    let error = service
+        .apply_config(input)
+        .expect_err("authSlotId required");
+    assert!(error.to_string().contains("authSlotId"));
+}
+
+#[test]
 fn codex_launch_overlay_sets_managed_codex_home() {
     let root = std::env::temp_dir().join(format!(
         "anyharness-agent-auth-codex-{}",
@@ -84,6 +142,7 @@ fn codex_launch_overlay_sets_managed_codex_home() {
             revision: 1,
             selections: vec![AgentAuthSelectionConfig {
                 agent_kind: "codex".to_string(),
+                auth_slot_id: "openai".to_string(),
                 materialization_mode: "gateway_env".to_string(),
                 credential_id: "credential-1".to_string(),
                 credential_revision: 1,
@@ -190,6 +249,7 @@ fn launch_overlay_uses_requested_scope() {
                 revision,
                 selections: vec![AgentAuthSelectionConfig {
                     agent_kind: "claude".to_string(),
+                    auth_slot_id: "anthropic".to_string(),
                     materialization_mode: "gateway_env".to_string(),
                     credential_id: "credential-1".to_string(),
                     credential_revision: revision,
@@ -285,6 +345,7 @@ fn launch_overlay_separates_same_profile_by_target_scope() {
                 revision: 1,
                 selections: vec![AgentAuthSelectionConfig {
                     agent_kind: "claude".to_string(),
+                    auth_slot_id: "anthropic".to_string(),
                     materialization_mode: "gateway_env".to_string(),
                     credential_id: "credential-1".to_string(),
                     credential_revision: 1,
@@ -391,6 +452,7 @@ fn launch_overlay_fails_closed_for_invalid_scoped_selection() {
             revision: 1,
             selections: vec![AgentAuthSelectionConfig {
                 agent_kind: "claude".to_string(),
+                auth_slot_id: "anthropic".to_string(),
                 materialization_mode: "synced_files".to_string(),
                 credential_id: "credential-1".to_string(),
                 credential_revision: 1,
@@ -428,6 +490,7 @@ fn apply_config_rejects_disallowed_protected_env_key() {
             revision: 1,
             selections: vec![AgentAuthSelectionConfig {
                 agent_kind: "claude".to_string(),
+                auth_slot_id: "anthropic".to_string(),
                 materialization_mode: "gateway_env".to_string(),
                 credential_id: "credential-1".to_string(),
                 credential_revision: 1,
@@ -449,6 +512,43 @@ fn apply_config_rejects_disallowed_protected_env_key() {
 }
 
 #[test]
+fn apply_config_rejects_cursor_api_key_in_support_env() {
+    let service = AgentAuthConfigService::new(
+        AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
+        Some(cipher()),
+        std::env::temp_dir(),
+    );
+    let error = service
+        .apply_config(AgentAuthConfigInput {
+            external_auth_scope: None,
+            revision: 1,
+            selections: vec![AgentAuthSelectionConfig {
+                agent_kind: "claude".to_string(),
+                auth_slot_id: "anthropic".to_string(),
+                materialization_mode: "gateway_env".to_string(),
+                credential_id: "credential-1".to_string(),
+                credential_revision: 1,
+                status: None,
+                credential_share_id: None,
+                expires_at: None,
+                protected_env: BTreeMap::from([(
+                    "ANTHROPIC_API_KEY".to_string(),
+                    "secret".to_string(),
+                )]),
+                support_env: BTreeMap::from([(
+                    "CURSOR_API_KEY".to_string(),
+                    "wrong-surface".to_string(),
+                )]),
+                protected_config: BTreeMap::new(),
+                support_config: BTreeMap::new(),
+                synced_file_paths: Vec::new(),
+            }],
+        })
+        .expect_err("protected key in support env");
+    assert!(error.to_string().contains("CURSOR_API_KEY"));
+}
+
+#[test]
 fn apply_config_rejects_claude_synced_protected_env() {
     let service = AgentAuthConfigService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
@@ -461,6 +561,7 @@ fn apply_config_rejects_claude_synced_protected_env() {
             revision: 1,
             selections: vec![AgentAuthSelectionConfig {
                 agent_kind: "claude".to_string(),
+                auth_slot_id: "anthropic".to_string(),
                 materialization_mode: "synced_files".to_string(),
                 credential_id: "credential-1".to_string(),
                 credential_revision: 1,
@@ -482,6 +583,37 @@ fn apply_config_rejects_claude_synced_protected_env() {
 }
 
 #[test]
+fn apply_config_rejects_disallowed_synced_file_path() {
+    let service = AgentAuthConfigService::new(
+        AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
+        Some(cipher()),
+        std::env::temp_dir(),
+    );
+    let error = service
+        .apply_config(AgentAuthConfigInput {
+            external_auth_scope: None,
+            revision: 1,
+            selections: vec![AgentAuthSelectionConfig {
+                agent_kind: "codex".to_string(),
+                auth_slot_id: "openai".to_string(),
+                materialization_mode: "synced_files".to_string(),
+                credential_id: "credential-1".to_string(),
+                credential_revision: 1,
+                status: None,
+                credential_share_id: None,
+                expires_at: None,
+                protected_env: BTreeMap::new(),
+                support_env: BTreeMap::new(),
+                protected_config: BTreeMap::new(),
+                support_config: BTreeMap::new(),
+                synced_file_paths: vec![".ssh/id_rsa".to_string()],
+            }],
+        })
+        .expect_err("disallowed synced file path");
+    assert!(error.to_string().contains(".ssh/id_rsa"));
+}
+
+#[test]
 fn launch_overlay_rejects_expired_selection() {
     let service = AgentAuthConfigService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
@@ -494,6 +626,7 @@ fn launch_overlay_rejects_expired_selection() {
             revision: 1,
             selections: vec![AgentAuthSelectionConfig {
                 agent_kind: "claude".to_string(),
+                auth_slot_id: "anthropic".to_string(),
                 materialization_mode: "gateway_env".to_string(),
                 credential_id: "credential-1".to_string(),
                 credential_revision: 1,

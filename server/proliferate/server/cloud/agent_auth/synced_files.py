@@ -6,23 +6,21 @@ from datetime import timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.constants.cloud import (
-    CLAUDE_ALLOWED_AUTH_FILES,
-    CODEX_ALLOWED_AUTH_FILES,
-    GEMINI_ALLOWED_AUTH_FILES,
-    CloudAgentKind,
-    CloudCommandStatus,
-)
+from proliferate.constants.cloud import CloudAgentKind, CloudCommandStatus
 from proliferate.constants.organizations import ORGANIZATION_ROLE_ADMIN, ORGANIZATION_ROLE_OWNER
 from proliferate.db.store.cloud_agent_auth.records import (
     AgentAuthCredentialRecord,
     SandboxAgentAuthSelectionRecord,
+)
+from proliferate.server.cloud.agent_auth.domain.synced_payload import (
+    synced_payload_provider_matches,
 )
 from proliferate.server.cloud.agent_auth.errors import AgentAuthError
 from proliferate.server.cloud.agent_auth.models import (
     WorkerAgentAuthSyncedFilesConfig,
 )
 from proliferate.server.cloud.agent_auth.protected_env import reject_unallowed_protected_env
+from proliferate.server.cloud.agent_auth.registry import cleanup_file_paths_for_slot
 from proliferate.utils.crypto import decrypt_json
 
 _ORG_ADMIN_ROLES = {ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN}
@@ -34,7 +32,6 @@ _CLEANUP_SELECTION_ERROR_CODES = {
     "credential_share_revoked",
 }
 _MANAGED_CODEX_HOME = "/home/user/.proliferate/anyharness/agent-auth/codex"
-_OPENCODE_ALLOWED_AUTH_FILES: frozenset[str] = frozenset({".config/opencode/auth.json"})
 _TERMINAL_AGENT_AUTH_REFRESH_COMMAND_STATUSES = frozenset(
     {
         CloudCommandStatus.accepted.value,
@@ -47,27 +44,21 @@ _TERMINAL_AGENT_AUTH_REFRESH_COMMAND_STATUSES = frozenset(
 )
 
 
-def _native_auth_file_paths(agent_kind: str) -> tuple[str, ...]:
-    if agent_kind == "claude":
-        return tuple(sorted(CLAUDE_ALLOWED_AUTH_FILES))
-    if agent_kind == "codex":
-        return tuple(sorted(CODEX_ALLOWED_AUTH_FILES))
-    if agent_kind == "gemini":
-        return tuple(sorted(GEMINI_ALLOWED_AUTH_FILES))
-    if agent_kind == "opencode":
-        return tuple(sorted(_OPENCODE_ALLOWED_AUTH_FILES))
-    return ()
+def _native_auth_file_paths(agent_kind: str, auth_slot_id: str) -> tuple[str, ...]:
+    return tuple(sorted(cleanup_file_paths_for_slot(agent_kind, auth_slot_id)))
 
 
 def _reject_unallowed_selection_protected_env(
     *,
     agent_kind: str,
+    auth_slot_id: str,
     materialization_mode: str,
     protected_env: dict[str, str],
 ) -> None:
     try:
         reject_unallowed_protected_env(
             agent_kind=agent_kind,
+            auth_slot_id=auth_slot_id,
             materialization_mode=materialization_mode,
             keys=set(protected_env),
         )
@@ -105,6 +96,7 @@ async def _worker_synced_files_config(
         )
     _reject_unallowed_selection_protected_env(
         agent_kind=selection.agent_kind,
+        auth_slot_id=selection.auth_slot_id,
         materialization_mode=selection.materialization_mode,
         protected_env=env_vars,
     )
@@ -124,7 +116,14 @@ def _decrypt_synced_payload(credential: AgentAuthCredentialRecord) -> dict[str, 
             status_code=409,
         )
     payload = decrypt_json(credential.payload_ciphertext)
-    if not isinstance(payload, dict) or payload.get("provider") != credential.agent_kind:
+    if (
+        not isinstance(payload, dict)
+        or not synced_payload_provider_matches(
+            payload_provider=payload.get("provider"),
+            credential_provider_id=credential.credential_provider_id,
+            redacted_summary_json=credential.redacted_summary_json,
+        )
+    ):
         raise AgentAuthError(
             "Synced credential payload is invalid.",
             code="synced_credential_payload_invalid",

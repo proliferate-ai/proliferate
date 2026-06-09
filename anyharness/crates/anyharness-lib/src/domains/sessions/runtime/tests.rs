@@ -32,6 +32,7 @@ fn resolved_agent(kind: AgentKind, native_path: Option<&str>) -> ResolvedAgent {
         descriptor,
         status: ResolvedAgentStatus::Ready,
         credential_state: CredentialState::Ready,
+        auth_slots: Vec::new(),
         native: native_path.map(|path| ResolvedArtifact {
             role: ArtifactRole::NativeCli,
             installed: true,

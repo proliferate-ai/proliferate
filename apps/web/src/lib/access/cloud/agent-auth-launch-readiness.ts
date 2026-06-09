@@ -6,6 +6,7 @@ import {
   listAgentAuthCredentials,
   putSandboxAgentAuthSelection,
   type AgentAuthAgentKind,
+  type AgentAuthCredentialProviderId,
   type EnsureFreeManagedCreditsResponse,
   type ProliferateCloudClient,
 } from "@proliferate/cloud-sdk";
@@ -26,7 +27,7 @@ export async function ensurePersonalAgentAuthLaunchReady(args: {
   allowUnavailableFreeCredits?: boolean;
   onStatus?: (status: string) => void;
 }): Promise<PersonalAgentAuthLaunchReadiness> {
-  if (args.agentKind && await ensureReadyPersonalSyncedSelectionWithRetry(args.client, args.agentKind)) {
+  if (args.agentKind && await ensureReadyPersonalSelectionWithRetry(args.client, args.agentKind)) {
     args.onStatus?.("Using selected cloud agent credential.");
     await ensurePersonalCloudTargetReady(args.client);
     return { source: "selected_credential" };
@@ -55,65 +56,89 @@ async function ensurePersonalCloudTargetReady(
   });
 }
 
-async function ensureReadyPersonalSyncedSelectionWithRetry(
+async function ensureReadyPersonalSelectionWithRetry(
   client: ProliferateCloudClient,
   agentKind: AgentAuthAgentKind,
 ): Promise<boolean> {
-  return withRecoverableRetry(() => ensureReadyPersonalSyncedSelection(client, agentKind));
+  return withRecoverableRetry(() => ensureReadyPersonalSelection(client, agentKind));
 }
 
-async function ensureReadyPersonalSyncedSelection(
+async function ensureReadyPersonalSelection(
   client: ProliferateCloudClient,
   agentKind: AgentAuthAgentKind,
 ): Promise<boolean> {
+  const authSlotId = defaultAuthSlotIdForAgent(agentKind);
   const profile = await ensurePersonalSandboxProfile(client);
   const [selections, credentials] = await Promise.all([
     getSandboxAgentAuthSelections(profile.id, client),
-    listAgentAuthCredentials({ agentKind }, client),
+    listAgentAuthCredentials({}, client),
   ]);
-  const selection = selections.find((candidate) =>
-    candidate.agentKind === agentKind && candidate.status === "active"
-  );
-  if (!selection) {
-    const syncedCredential = readySyncedCredential(credentials);
-    if (!syncedCredential) {
-      return false;
-    }
-    await putSandboxAgentAuthSelection(
-      profile.id,
-      agentKind,
-      { credentialId: syncedCredential.id },
-      client,
-    );
+  const selectedCredentials = selections
+    .filter((selection) => selection.agentKind === agentKind && selection.status === "active")
+    .map((selection) => credentials.find((credential) => credential.id === selection.credentialId));
+  if (selectedCredentials.some((credential) => isReadyLaunchCredential(credential, agentKind))) {
     return true;
   }
-  const credential = credentials.find((candidate) => candidate.id === selection.credentialId);
-  if (isReadySyncedCredential(credential)) {
-    return true;
-  }
-  const syncedCredential = readySyncedCredential(credentials);
+
+  const syncedCredential = readySyncedCredential(credentials, agentKind);
   if (!syncedCredential) {
     return false;
   }
   await putSandboxAgentAuthSelection(
     profile.id,
     agentKind,
+    authSlotId,
     { credentialId: syncedCredential.id },
     client,
   );
   return true;
 }
 
-function readySyncedCredential<T extends { credentialKind?: string | null; status?: string | null }>(
+function readySyncedCredential<T extends ReadySyncedCredentialCandidate>(
   credentials: readonly T[],
+  agentKind: AgentAuthAgentKind,
 ): T | null {
-  return credentials.find(isReadySyncedCredential) ?? null;
+  return credentials.find((credential) => isReadySyncedCredential(credential, agentKind)) ?? null;
 }
 
-function isReadySyncedCredential<T extends { credentialKind?: string | null; status?: string | null }>(
+interface ReadySyncedCredentialCandidate {
+  credentialKind?: string | null;
+  redactedSummary?: { agentKind?: unknown } | null;
+  status?: string | null;
+}
+
+function isReadyLaunchCredential<T extends ReadySyncedCredentialCandidate>(
   credential: T | null | undefined,
+  agentKind: AgentAuthAgentKind,
 ): credential is T {
-  return credential?.status === "ready" && credential.credentialKind === "synced_path";
+  if (credential?.status !== "ready") {
+    return false;
+  }
+  if (credential.credentialKind === "synced_path") {
+    return credential.redactedSummary?.agentKind === agentKind;
+  }
+  return credential.credentialKind === "managed_gateway";
+}
+
+function isReadySyncedCredential<T extends ReadySyncedCredentialCandidate>(
+  credential: T | null | undefined,
+  agentKind: AgentAuthAgentKind,
+): credential is T {
+  return credential?.status === "ready"
+    && credential.credentialKind === "synced_path"
+    && credential.redactedSummary?.agentKind === agentKind;
+}
+
+function defaultAuthSlotIdForAgent(
+  agentKind: AgentAuthAgentKind,
+): AgentAuthCredentialProviderId {
+  if (agentKind === "claude") {
+    return "anthropic";
+  }
+  if (agentKind === "gemini") {
+    return "gemini";
+  }
+  return "openai";
 }
 
 async function ensureFreeManagedCreditsWithRetry(args: {

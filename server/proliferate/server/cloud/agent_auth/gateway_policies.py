@@ -181,7 +181,7 @@ async def _reconcile_gateway_policy(
         provider_kind=provider_credential.provider_kind,
         provider_payload=provider_payload,
         model_deployments=_gateway_deployments_for_credential(
-            agent_kind=credential.agent_kind,
+            credential_provider_id=credential.credential_provider_id,
             provider_kind=provider_credential.provider_kind,
         ),
         existing_policy=policy,

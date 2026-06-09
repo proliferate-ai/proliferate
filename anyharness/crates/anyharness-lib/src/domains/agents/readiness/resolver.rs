@@ -8,7 +8,7 @@ use super::artifacts::{
 use super::compatibility::detect_runtime_compatibility_issue;
 use super::overrides::resolve_agent_process_override;
 use super::status::compute_readiness;
-use crate::domains::agents::credentials::{detect_credentials, detect_credentials_with_env};
+use crate::domains::agents::credentials::{detect_auth_slots, detect_auth_slots_with_env};
 use crate::domains::agents::model::*;
 
 #[cfg(test)]
@@ -71,10 +71,10 @@ pub fn resolve_agent_with_env(
         agent_process.message = Some(message.clone());
     }
 
-    let credential_state = if additional_env.is_empty() {
-        detect_credentials(&descriptor.auth, &home_dir)
+    let (credential_state, auth_slots) = if additional_env.is_empty() {
+        detect_auth_slots(&descriptor.auth, &home_dir)
     } else {
-        detect_credentials_with_env(&descriptor.auth, &home_dir, additional_env)
+        detect_auth_slots_with_env(&descriptor.auth, &home_dir, additional_env)
     };
 
     let status = compute_readiness(
@@ -89,6 +89,7 @@ pub fn resolve_agent_with_env(
         descriptor: descriptor.clone(),
         status,
         credential_state,
+        auth_slots,
         native,
         agent_process,
         spawn,
@@ -98,6 +99,7 @@ pub fn resolve_agent_with_env(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domains::agents::credentials::detect_credentials_with_env;
     use crate::domains::agents::registry::built_in_registry;
     use crate::integrations::agent_cli::executable::make_executable;
 
@@ -478,9 +480,9 @@ mod tests {
             PathBuf::from("/tmp/codex-acp"),
             "override",
         );
-        let auth = AuthSpec {
-            env_vars: vec!["OPENAI_API_KEY".into()],
-            login: Some(LoginSpec {
+        let auth = AuthSpec::test_single_required_slot(
+            vec!["OPENAI_API_KEY".into()],
+            Some(LoginSpec {
                 label: "Log in".into(),
                 command: CommandSpec {
                     program: "codex".into(),
@@ -489,8 +491,8 @@ mod tests {
                 reuses_user_state: true,
                 message: None,
             }),
-            discovery: CredentialDiscoveryKind::Codex,
-        };
+            CredentialDiscoveryKind::Codex,
+        );
 
         let status = compute_readiness(
             &native,
@@ -514,9 +516,9 @@ mod tests {
             PathBuf::from("/tmp/claude-agent-acp"),
             "override",
         );
-        let auth = AuthSpec {
-            env_vars: vec!["ANTHROPIC_API_KEY".into()],
-            login: Some(LoginSpec {
+        let auth = AuthSpec::test_single_required_slot(
+            vec!["ANTHROPIC_API_KEY".into()],
+            Some(LoginSpec {
                 label: "Log in".into(),
                 command: CommandSpec {
                     program: "claude".into(),
@@ -525,8 +527,8 @@ mod tests {
                 reuses_user_state: true,
                 message: None,
             }),
-            discovery: CredentialDiscoveryKind::Claude,
-        };
+            CredentialDiscoveryKind::Claude,
+        );
 
         let status = compute_readiness(
             &native,

@@ -29,8 +29,11 @@ export interface CloudHarnessAvailability {
 }
 
 export interface CloudAgentAuthCredentialLike {
-  agentKind?: string | null;
+  credentialProviderId?: string | null;
   credentialKind?: string | null;
+  redactedSummary?: {
+    agentKind?: unknown;
+  } | null;
   status?: string | null;
 }
 
@@ -45,7 +48,11 @@ export function readySyncedCloudAgentKinds(
       .filter((credential) =>
         credential.status === "ready" && credential.credentialKind === "synced_path"
       )
-      .map((credential) => credential.agentKind ?? ""),
+      .map((credential) =>
+        typeof credential.redactedSummary?.agentKind === "string"
+          ? credential.redactedSummary.agentKind
+          : ""
+      ),
   );
 }
 

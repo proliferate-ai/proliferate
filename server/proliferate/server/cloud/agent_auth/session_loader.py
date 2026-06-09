@@ -16,6 +16,9 @@ from proliferate.server.cloud.agent_auth.domain.status import (
     CredentialStatusRecord,
     build_credential_statuses,
 )
+from proliferate.server.cloud.agent_auth.domain.synced_payload import (
+    synced_payload_provider_matches,
+)
 from proliferate.server.cloud.agent_auth.errors import AgentAuthError
 from proliferate.utils.crypto import decrypt_json
 
@@ -61,7 +64,7 @@ def _synced_credential_record(
         )
     return AgentAuthSyncedCredentialRecord(
         id=credential.id,
-        provider=credential.agent_kind,
+        provider=credential.credential_provider_id,
         auth_mode=auth_mode,
         payload_ciphertext=credential.payload_ciphertext or "",
         payload_format=f"agent-auth-json-v1:revision:{credential.revision}",
@@ -79,7 +82,14 @@ def _decrypt_synced_payload(credential: AgentAuthCredentialRecord) -> dict[str, 
             status_code=409,
         )
     payload = decrypt_json(credential.payload_ciphertext)
-    if not isinstance(payload, dict) or payload.get("provider") != credential.agent_kind:
+    if (
+        not isinstance(payload, dict)
+        or not synced_payload_provider_matches(
+            payload_provider=payload.get("provider"),
+            credential_provider_id=credential.credential_provider_id,
+            redacted_summary_json=credential.redacted_summary_json,
+        )
+    ):
         raise AgentAuthError(
             "Synced credential payload is invalid.",
             code="synced_credential_payload_invalid",

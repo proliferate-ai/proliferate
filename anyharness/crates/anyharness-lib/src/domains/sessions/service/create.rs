@@ -110,7 +110,7 @@ impl SessionService {
                 agent_kind = %agent_kind,
                 status = ?resolved.status,
                 credential_state = ?resolved.credential_state,
-                descriptor_auth_env_vars = ?descriptor.auth.env_vars,
+                descriptor_auth_env_vars = ?descriptor.auth.expected_env_vars(),
                 auth_support_env_keys = ?auth_support_env_keys,
                 auth_protected_env_keys = ?auth_protected_env_keys,
                 "Agent auth launch overlay did not satisfy agent readiness"

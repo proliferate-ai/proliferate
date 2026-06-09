@@ -7,6 +7,11 @@ from typing import Literal
 
 from proliferate.auth.authorization import PolicyAllowed, PolicyDenied, PolicyVerdict
 from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS
+from proliferate.server.cloud.agent_auth.registry import (
+    materialization_mode_for_slot,
+    protocol_facade_for_slot,
+    slot_allows_credential_provider,
+)
 
 
 @dataclass(frozen=True)
@@ -22,27 +27,46 @@ def is_supported_agent_kind(agent_kind: str) -> bool:
 def selection_plan_for_credential(
     *,
     agent_kind: str,
+    auth_slot_id: str,
+    credential_provider_id: str,
     credential_kind: str,
+    synced_source_agent_kind: str | None = None,
 ) -> SelectionPlan | PolicyDenied:
-    if credential_kind == "synced_path":
-        return SelectionPlan(materialization_mode="synced_files", protocol_facade=None)
-    if credential_kind != "managed_gateway":
+    if not slot_allows_credential_provider(
+        agent_kind=agent_kind,
+        auth_slot_id=auth_slot_id,
+        credential_provider_id=credential_provider_id,
+    ):
         return PolicyDenied(
-            code="unsupported_credential_kind",
-            message="Unsupported credential kind.",
+            code="credential_provider_mismatch",
+            message="Credential provider is not compatible with this auth slot.",
             status_code=400,
         )
-    if agent_kind == "claude":
-        return SelectionPlan(materialization_mode="gateway_env", protocol_facade="anthropic")
-    if agent_kind in {"codex", "opencode"}:
-        return SelectionPlan(materialization_mode="gateway_env", protocol_facade="openai")
-    if agent_kind == "gemini":
-        return SelectionPlan(materialization_mode="gateway_env", protocol_facade="genai")
-    return PolicyDenied(
-        code="gateway_not_supported_for_agent",
-        message="Gateway auth is not supported for this agent.",
-        status_code=400,
+    mode = materialization_mode_for_slot(
+        agent_kind=agent_kind,
+        auth_slot_id=auth_slot_id,
+        credential_kind=credential_kind,
     )
+    if mode is None:
+        return PolicyDenied(
+            code="unsupported_credential_kind",
+            message="Credential kind is not supported for this auth slot.",
+            status_code=400,
+        )
+    if (
+        credential_kind == "synced_path"
+        and synced_source_agent_kind is not None
+        and synced_source_agent_kind != agent_kind
+    ):
+        return PolicyDenied(
+            code="synced_credential_agent_mismatch",
+            message="Synced native auth is only compatible with its source agent.",
+            status_code=400,
+        )
+    protocol_facade = (
+        protocol_facade_for_slot(agent_kind, auth_slot_id) if mode == "gateway_env" else None
+    )
+    return SelectionPlan(materialization_mode=mode, protocol_facade=protocol_facade)
 
 
 def can_select_credential_for_profile(

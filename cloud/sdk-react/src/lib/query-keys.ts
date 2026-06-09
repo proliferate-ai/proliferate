@@ -52,9 +52,16 @@ export function cloudConfiguredSkillsKey() {
 
 export function agentAuthCredentialsKey(
   organizationId: string | null = null,
+  credentialProviderId: string | null = null,
   agentKind: string | null = null,
 ) {
-  return [...agentAuthRootKey(), "credentials", organizationId, agentKind] as const;
+  return [
+    ...agentAuthRootKey(),
+    "credentials",
+    organizationId,
+    credentialProviderId,
+    agentKind,
+  ] as const;
 }
 
 export function sandboxProfileKey(sandboxProfileId: string | null) {

@@ -1,10 +1,9 @@
 import type {
   AgentAuthCredential,
   AgentGatewayCapabilities,
-  SandboxAgentAuthSelection,
   SandboxAgentAuthTargetState,
 } from "@proliferate/cloud-sdk";
-import { agentAuthAgentLabel } from "./agent-auth-agent-presentation";
+import { agentAuthCredentialProviderLabel } from "./auth-slots";
 import { gatewayByokCredentialEnabled } from "./agent-auth-gateway-capabilities";
 
 export type AgentAuthBadgeTone = "neutral" | "success" | "warning" | "destructive";
@@ -24,7 +23,7 @@ export interface AgentAuthCredentialAvailability {
 export function agentAuthCredentialKindLabel(credential: AgentAuthCredential): string {
   if (credential.credentialKind === "managed_gateway") {
     const providerKind = credential.redactedSummary.providerKind;
-    if (providerKind === "proliferate_bedrock_pool") {
+    if (isProliferateManagedGatewayProviderKind(providerKind)) {
       return "Proliferate managed credits";
     }
     if (providerKind === "bedrock_assume_role") {
@@ -45,7 +44,7 @@ export function agentAuthCredentialKindLabel(credential: AgentAuthCredential): s
     return "Gateway credential";
   }
   if (credential.credentialKind === "synced_path") {
-    return `Synced ${agentAuthAgentLabel(credential.agentKind)} auth`;
+    return `Synced ${agentAuthCredentialProviderLabel(credential.credentialProviderId)} auth`;
   }
   return credential.credentialKind;
 }
@@ -231,7 +230,14 @@ export function isProliferateManagedCreditsCredential(
   credential: AgentAuthCredential,
 ): boolean {
   return credential.credentialKind === "managed_gateway"
-    && credential.redactedSummary.providerKind === "proliferate_bedrock_pool";
+    && isProliferateManagedGatewayProviderKind(credential.redactedSummary.providerKind);
+}
+
+function isProliferateManagedGatewayProviderKind(providerKind: unknown): boolean {
+  return providerKind === "proliferate_bedrock_pool"
+    || providerKind === "proliferate_managed_anthropic"
+    || providerKind === "proliferate_managed_openai"
+    || providerKind === "proliferate_managed_gemini";
 }
 
 export function credentialSummaryDetails(credential: AgentAuthCredential): string {
@@ -259,12 +265,6 @@ export function credentialSelectableReason(
     return `Credential is ${agentAuthCredentialStatusLabel(credential.status)}.`;
   }
   return null;
-}
-
-export function selectionByAgentKind(
-  selections: SandboxAgentAuthSelection[],
-): Map<string, SandboxAgentAuthSelection> {
-  return new Map(selections.map((selection) => [selection.agentKind, selection]));
 }
 
 export function targetStateSummary(

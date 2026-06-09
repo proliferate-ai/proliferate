@@ -18,12 +18,20 @@ from typing import Final, Literal
 # ---------------------------------------------------------------------------
 
 CloudAgentKind = Literal["claude", "codex", "opencode", "gemini"]
+AgentCredentialProviderId = Literal["anthropic", "openai", "gemini", "cursor"]
 
 SUPPORTED_CLOUD_AGENTS: tuple[CloudAgentKind, ...] = (
     "claude",
     "codex",
     "opencode",
     "gemini",
+)
+
+SUPPORTED_AGENT_CREDENTIAL_PROVIDERS: tuple[AgentCredentialProviderId, ...] = (
+    "anthropic",
+    "openai",
+    "gemini",
+    "cursor",
 )
 
 # Native credential sync does not support every catalog agent kind yet.

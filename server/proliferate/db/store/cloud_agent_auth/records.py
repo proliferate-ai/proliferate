@@ -35,7 +35,7 @@ class AgentAuthCredentialRecord:
     owner_user_id: UUID | None
     organization_id: UUID | None
     created_by_user_id: UUID | None
-    agent_kind: str
+    credential_provider_id: str
     credential_kind: str
     display_name: str
     redacted_summary_json: str
@@ -57,7 +57,7 @@ class AgentAuthCredentialShareRecord:
     share_scope: str
     shared_by_user_id: UUID
     status: str
-    allowed_agent_kind: str
+    allowed_credential_provider_id: str
     created_at: datetime
     revoked_at: datetime | None
     revoked_by_user_id: UUID | None
@@ -153,6 +153,7 @@ class SandboxAgentAuthSelectionRecord:
     sandbox_profile_id: UUID
     owner_scope: str
     agent_kind: str
+    auth_slot_id: str
     credential_id: UUID
     credential_share_id: UUID | None
     materialization_mode: str
@@ -246,6 +247,7 @@ class AgentGatewayRuntimeGrantRecord:
     organization_id: UUID | None
     user_id: UUID | None
     agent_kind: str
+    auth_slot_id: str
     protocol_facade: str
     expires_at: datetime
     revoked_at: datetime | None

@@ -30,6 +30,7 @@ fn builds_secret_bearing_anyharness_request() {
         "revision": 7,
         "selections": [{
             "agentKind": "claude",
+            "authSlotId": "anthropic",
             "materializationMode": "gateway_env",
             "credentialId": "credential-1",
             "credentialRevision": 3,
@@ -77,6 +78,7 @@ fn allows_codex_gateway_env_aliases() {
         "revision": 7,
         "selections": [{
             "agentKind": "codex",
+            "authSlotId": "openai",
             "materializationMode": "gateway_env",
             "credentialId": "credential-1",
             "credentialRevision": 3,
@@ -154,6 +156,7 @@ fn applies_synced_auth_cleanup_and_reports_paths() {
         "revision": 7,
         "selections": [{
             "agentKind": "codex",
+            "authSlotId": "openai",
             "materializationMode": "synced_files",
             "credentialId": "credential-1",
             "credentialRevision": 3,
@@ -190,6 +193,7 @@ fn rejects_claude_synced_protected_env() {
         "revision": 7,
         "selections": [{
             "agentKind": "claude",
+            "authSlotId": "anthropic",
             "materializationMode": "synced_files",
             "credentialId": "credential-1",
             "credentialRevision": 3,

@@ -280,15 +280,107 @@ pub struct LoginSpec {
     pub message: Option<String>,
 }
 
+/// How credential state contributes to overall launch readiness.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthReadinessPolicy {
+    /// At least one required slot must be locally satisfied.
+    AnyRequiredSlot,
+    /// Every required slot must be locally satisfied.
+    AllRequiredSlots,
+    /// The harness can launch without local credentials and will resolve provider auth itself.
+    ProviderManaged,
+    /// This harness has no local auth requirement.
+    None,
+}
+
+/// Gateway env materialization policy for one auth slot.
+#[derive(Debug, Clone)]
+pub struct GatewayEnvMaterializationSpec {
+    pub protocol_facade: String,
+    pub protected_env_keys: Vec<String>,
+    pub support_env_keys: Vec<String>,
+}
+
+/// Synced-file materialization policy for one auth slot.
+#[derive(Debug, Clone)]
+pub struct SyncedFilesMaterializationSpec {
+    pub protected_env_keys: Vec<String>,
+    pub allowed_file_paths: Vec<String>,
+    pub cleanup_file_paths: Vec<String>,
+}
+
+/// Cloud/local credential materialization policy for one auth slot.
+#[derive(Debug, Clone, Default)]
+pub struct AuthMaterializationSpec {
+    pub gateway_env: Option<GatewayEnvMaterializationSpec>,
+    pub synced_files: Option<SyncedFilesMaterializationSpec>,
+}
+
+/// A provider-addressable credential slot for one harness.
+#[derive(Debug, Clone)]
+pub struct AuthSlotSpec {
+    pub id: String,
+    pub label: String,
+    pub credential_provider_ids: Vec<String>,
+    pub required_for_readiness: bool,
+    pub env_vars: Vec<String>,
+    pub login: Option<LoginSpec>,
+    pub discovery: CredentialDiscoveryKind,
+    pub materialization: AuthMaterializationSpec,
+}
+
 /// Authentication/credential hints for an agent.
 #[derive(Debug, Clone)]
 pub struct AuthSpec {
-    /// Environment variable names that provide API key credentials (any-of semantics).
-    pub env_vars: Vec<String>,
-    /// Optional native CLI login flow metadata.
-    pub login: Option<LoginSpec>,
-    /// Which provider-specific credential file discovery to attempt.
-    pub discovery: CredentialDiscoveryKind,
+    pub readiness_policy: AuthReadinessPolicy,
+    pub slots: Vec<AuthSlotSpec>,
+}
+
+impl AuthSpec {
+    pub fn expected_env_vars(&self) -> Vec<String> {
+        let mut vars = Vec::new();
+        for slot in &self.slots {
+            for env_var in &slot.env_vars {
+                if !vars.contains(env_var) {
+                    vars.push(env_var.clone());
+                }
+            }
+        }
+        vars
+    }
+
+    pub fn primary_login(&self) -> Option<&LoginSpec> {
+        self.slots.iter().find_map(|slot| slot.login.as_ref())
+    }
+
+    pub fn supports_login(&self) -> bool {
+        self.primary_login().is_some()
+    }
+
+    pub fn slot(&self, auth_slot_id: &str) -> Option<&AuthSlotSpec> {
+        self.slots.iter().find(|slot| slot.id == auth_slot_id)
+    }
+
+    #[cfg(test)]
+    pub fn test_single_required_slot(
+        env_vars: Vec<String>,
+        login: Option<LoginSpec>,
+        discovery: CredentialDiscoveryKind,
+    ) -> Self {
+        Self {
+            readiness_policy: AuthReadinessPolicy::AnyRequiredSlot,
+            slots: vec![AuthSlotSpec {
+                id: "default".into(),
+                label: "Default".into(),
+                credential_provider_ids: vec!["default".into()],
+                required_for_readiness: true,
+                env_vars,
+                login,
+                discovery,
+                materialization: AuthMaterializationSpec::default(),
+            }],
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -466,7 +558,15 @@ pub struct ResolvedAgent {
     pub descriptor: AgentDescriptor,
     pub status: ResolvedAgentStatus,
     pub credential_state: CredentialState,
+    pub auth_slots: Vec<ResolvedAuthSlot>,
     pub native: Option<ResolvedArtifact>,
     pub agent_process: ResolvedArtifact,
     pub spawn: Option<SpawnSpec>,
+}
+
+/// Machine-local resolved credential state for one auth slot.
+#[derive(Debug, Clone)]
+pub struct ResolvedAuthSlot {
+    pub spec: AuthSlotSpec,
+    pub credential_state: CredentialState,
 }

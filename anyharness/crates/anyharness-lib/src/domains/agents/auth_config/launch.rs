@@ -27,8 +27,9 @@ pub(super) fn reject_expired_selection(selection: &AgentAuthSelectionConfig) -> 
         .with_timezone(&Utc);
     if expires_at <= Utc::now() {
         anyhow::bail!(
-            "agent auth selection for {} expired at {}",
+            "agent auth selection for {}/{} expired at {}",
             selection.agent_kind,
+            selection.auth_slot_id,
             expires_at.to_rfc3339()
         );
     }

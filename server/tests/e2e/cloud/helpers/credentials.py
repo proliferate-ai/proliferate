@@ -73,6 +73,14 @@ def build_sync_payload(config: CloudTestConfig, provider: str) -> dict[str, Any]
     raise CloudE2ETestError(f"Unsupported provider {provider!r}")
 
 
+def credential_provider_id_for_sync_provider(provider: str) -> str:
+    if provider == "claude":
+        return "anthropic"
+    if provider == "codex":
+        return "openai"
+    return provider
+
+
 async def sync_agent_auth_credential(
     client: httpx.AsyncClient,
     auth: AuthSession,
@@ -124,7 +132,7 @@ async def delete_agent_auth_credential(
         (
             credential.get("id")
             for credential in credentials_response.json()
-            if credential.get("agentKind") == provider
+            if credential.get("credentialProviderId") == credential_provider_id_for_sync_provider(provider)
             and credential.get("credentialKind") == "synced_path"
             and credential.get("status") != "revoked"
         ),
@@ -168,7 +176,7 @@ def _status_for_synced_credential(
         (
             item
             for item in credentials
-            if item.get("agentKind") == provider
+            if item.get("credentialProviderId") == credential_provider_id_for_sync_provider(provider)
             and item.get("credentialKind") == "synced_path"
             and item.get("status") == "ready"
         ),

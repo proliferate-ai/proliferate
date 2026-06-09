@@ -19,12 +19,11 @@ It does not answer:
 - how to speak provider-specific CLI, ACP registry, or MCP protocols
 - how a session actor processes turns
 
-AnyHarness uses one supported catalog input and does not support split
-model/launch catalog paths. Registry, credentials, readiness resolution,
-reconcile execution, install, seed, and portability code live outside
-`catalog/**`. The `installer.rs` facade delegates to focused child modules for
-native artifacts, agent-process artifacts, npm/source-build mechanics, and
-download helpers.
+AnyHarness uses two bundled, versioned agent inputs and does not support remote
+model/launch catalog paths. `catalog.json` owns model/mode/control metadata;
+`registry.json` owns trusted runtime behavior such as install, launch, auth
+slots, and materialization policy. Credentials, readiness resolution, reconcile
+execution, install, seed, and portability code live outside `catalog/**`.
 
 ## Truth Sources
 
@@ -35,9 +34,10 @@ Cloud product catalog
   Product/UI catalog for optimistic rendering in desktop, web, mobile, and
   automation creation. This can be newer than a target runtime.
 
-AnyHarness agent catalog
-  Target-runtime support manifest. It says what this runtime knows how to
-  install, discover, authenticate, and launch.
+AnyHarness agent catalog + registry
+  Target-runtime support manifests. The catalog says which model/mode/control
+  options are statically known. The registry says what this runtime knows how
+  to install, discover, authenticate, materialize, and launch.
 
 AnyHarness dynamic model registry snapshot
   Target-local, runtime-refreshed model list for provider-agnostic harnesses
@@ -61,26 +61,33 @@ Consequences:
 - AnyHarness catalog endpoints, if exposed, are target capability/readiness
   endpoints, not the primary product UI catalog.
 
-## Single Catalog Input
+## Bundled Agent Inputs
 
-The only supported AnyHarness catalog schema is:
+The supported AnyHarness agent input schemas are:
 
 ```text
 catalogs/agents/v1/catalog.json
 catalogs/agents/v1/schema.json
+catalogs/agents/v1/registry.json
+catalogs/agents/v1/registry.schema.json
 ```
 
-The catalog document describes supported agent families:
+The catalog document describes optimistic/static session choices:
 
 - agent kind and display name
-- install support for native CLI artifacts
-- install support for ACP-facing agent-process artifacts
-- launch executable and default args
-- credential discovery kind and login command
 - fallback session model/control metadata
-- compatibility and status metadata
+- compatibility/status metadata needed to display choices
 
-There must be no split catalog inputs:
+The registry document describes trusted runtime behavior:
+
+- supported agent kind and display name
+- install/update support for native CLI and ACP-facing agent-process artifacts
+- launch executable, default args, and process environment behavior
+- auth slots, credential-provider gates, discovery kind, login command
+- materialization policy for gateway env and synced files
+- compatibility metadata needed to decide whether the target can launch
+
+There must be no remote or legacy split catalog inputs:
 
 ```text
 old model-catalog document type
@@ -93,15 +100,16 @@ split launch catalog directory
 ```
 
 Runtime catalog refresh/fetch/cache behavior is not supported in the migrated
-runtime. The bundled `AgentCatalogDocument` is the only runtime catalog input.
-Dynamic model refresh is a separate `model_registry/**` concern and stores
-target-local snapshots in SQLite; it must not rewrite catalog JSON.
+runtime. The bundled `AgentCatalogDocument` and `AgentRegistryDocument` are the
+only runtime agent inputs. Dynamic model refresh is a separate
+`model_registry/**` concern and stores target-local snapshots in SQLite; it must
+not rewrite catalog or registry JSON.
 
 ## Trust Boundary
 
 Executable behavior is security-sensitive.
 
-The trusted bundled catalog may define:
+The trusted bundled registry may define:
 
 - install methods
 - binary/package URLs
@@ -109,9 +117,12 @@ The trusted bundled catalog may define:
 - launch args
 - credential discovery kind
 - login command
+- auth-slot materialization policy
 
 This boundary should be visible in code. The projection that produces
-`AgentDescriptor` must be sourced from trusted catalog data only.
+`AgentDescriptor` must be sourced from trusted registry data only. Catalog data
+may enrich model/control display options but must not define executable
+behavior.
 
 ## Source Shape
 
@@ -126,8 +137,13 @@ anyharness-lib/src/domains/agents/
     bundled.rs
     validation.rs
     projection/
-      descriptors.rs
       models.rs
+  registry/
+    mod.rs
+    schema.rs
+    bundled.rs
+    validation.rs
+    projection.rs
   readiness/
     mod.rs
     launch_options.rs
@@ -148,15 +164,13 @@ anyharness-lib/src/domains/agents/
     service.rs
   credentials/
     mod.rs
-  installer.rs                # facade outside catalog/**
   installer/
+    mod.rs
     agent_process.rs
     downloads.rs
     native.rs
     npm.rs
   install_lock.rs             # outside catalog/**
-  registry/
-    mod.rs
   reconcile/
     mod.rs
     execution.rs
@@ -174,14 +188,13 @@ types/functions from its children.
 
 ### `catalog/`
 
-Owns the static support manifest.
+Owns the static model/mode/control manifest.
 
 Allowed:
 
 - parse `AgentCatalogDocument`
 - validate schema invariants
 - read bundled catalog JSON
-- project trusted catalog data into `AgentDescriptor`
 - project fallback model metadata
 - expose catalog data to readiness-owned launch-option projection
 
@@ -191,22 +204,36 @@ Banned:
 - checking user credentials
 - executing install/update
 - generating launchers
+- defining launch executables or auth slots
 - starting ACP sessions
 - treating static model metadata as active-session truth
 - parsing old model/launch catalog formats
 
 ### `registry/`
 
-Owns the supported-agent registry exposed to runtime callers.
+Owns the trusted supported-agent runtime registry.
 
 It should answer:
 
 ```text
 Which agent kinds does this runtime know how to support?
+How does this runtime install, authenticate, materialize auth, and launch them?
 ```
 
-It is built from trusted catalog descriptor projection. It should not perform
-readiness checks or installation.
+Allowed:
+
+- parse `AgentRegistryDocument`
+- validate schema invariants against the catalog where needed
+- read bundled registry JSON
+- project trusted registry data into `AgentDescriptor`
+- expose auth-slot policy to credentials/auth-config/materialization code
+
+Banned:
+
+- performing readiness checks
+- executing installation
+- mutating credentials or materialized auth
+- storing dynamic model refresh state
 
 ### `credentials/`
 
@@ -366,7 +393,7 @@ API handler
 
 ```text
 SessionRuntime
-  -> descriptor from registry
+  -> descriptor from trusted registry projection
   -> readiness resolver
   -> reject if not launchable
   -> build spawn spec
@@ -397,7 +424,8 @@ The remaining public target capability endpoints are:
 - install endpoint: mutate target-local managed artifacts
 
 SessionRuntime, cowork, and subagent flows may use internal target-local launch
-options projected from the bundled agents catalog plus readiness filtering.
+options projected from the bundled agents catalog/registry plus readiness
+filtering.
 That internal projection should be named as resolved launch options, not as a
 public catalog response, and should carry only the fields those internal flows
 need.
@@ -426,14 +454,15 @@ The catalog/readiness structure is complete when:
 - split launch catalog files are gone.
 - old split catalog structs/functions/env vars are gone.
 - all launch/model metadata AnyHarness still uses is projected from
-  `AgentCatalogDocument`.
+  `AgentCatalogDocument` or `AgentRegistryDocument`, according to ownership.
 - executable/process/auth descriptor projection is sourced only from trusted
-  catalog data.
+  registry data.
 - install, credential detection, readiness, reconcile, seed, and portability
   behavior live outside `catalog/**`.
 - tests are split by responsibility:
   - catalog validation
-  - descriptor projection
+  - registry validation
+  - registry descriptor projection
   - fallback model projection
   - internal launch-option projection
   - readiness code touched by the migration
