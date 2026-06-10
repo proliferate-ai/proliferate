@@ -34,6 +34,19 @@ export async function revealInFinder(path: string): Promise<void> {
   return invoke("reveal_in_finder", { path });
 }
 
+/**
+ * True when the absolute path exists and is a directory. Returns false on
+ * any failure (missing path, non-Tauri host) so callers can fall back to
+ * file behavior.
+ */
+export async function pathIsDirectory(path: string): Promise<boolean> {
+  try {
+    return await invoke<boolean>("path_is_directory", { path });
+  } catch {
+    return false;
+  }
+}
+
 export async function openInTerminal(path: string): Promise<void> {
   return invoke("open_in_terminal", { path });
 }
