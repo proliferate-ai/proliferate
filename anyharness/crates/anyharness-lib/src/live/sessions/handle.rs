@@ -106,12 +106,6 @@ impl LiveSessionHandle {
         self.event_tx.subscribe()
     }
 
-    pub(in crate::live::sessions) fn try_begin_prompt(&self) -> bool {
-        self.busy
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .is_ok()
-    }
-
     pub fn is_busy(&self) -> bool {
         self.busy.load(Ordering::Acquire)
     }

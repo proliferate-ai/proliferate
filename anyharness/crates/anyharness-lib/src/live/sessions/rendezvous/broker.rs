@@ -331,17 +331,6 @@ impl InteractionRendezvous {
         PendingMcpElicitationWait { rx }
     }
 
-    pub async fn request_permission(
-        &self,
-        session_id: &str,
-        request_id: &str,
-        options: &[acp::schema::PermissionOption],
-    ) -> PermissionOutcome {
-        self.register_permission(session_id, request_id, options)
-            .await
-            .wait()
-            .await
-    }
 
     pub async fn resolve_with_decision(
         &self,
