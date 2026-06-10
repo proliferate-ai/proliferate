@@ -5,8 +5,8 @@ use crate::live::sessions::interactions::mcp_elicitation::{
 use anyharness_contract::v1::{UserInputQuestionOption, UserInputSubmittedAnswer};
 use serde_json::json;
 
-fn option(id: &str, kind: acp::PermissionOptionKind) -> acp::PermissionOption {
-    acp::PermissionOption::new(id.to_string(), id.to_string(), kind)
+fn option(id: &str, kind: acp::schema::PermissionOptionKind) -> acp::schema::PermissionOption {
+    acp::schema::PermissionOption::new(id.to_string(), id.to_string(), kind)
 }
 
 fn question(id: &str, is_other: bool, labels: &[&str]) -> UserInputQuestion {
@@ -68,7 +68,7 @@ async fn registered_permission_can_be_resolved_before_wait_starts() {
     let broker = InteractionBroker::new();
     let session_id = "session-1";
     let request_id = "req-0";
-    let options = vec![option("allow-once", acp::PermissionOptionKind::AllowOnce)];
+    let options = vec![option("allow-once", acp::schema::PermissionOptionKind::AllowOnce)];
 
     let wait = broker
         .register_permission(session_id, request_id, &options)
@@ -99,8 +99,8 @@ async fn decision_resolution_preserves_existing_option_preference() {
             "session-1",
             "req-1",
             vec![
-                option("allow-always", acp::PermissionOptionKind::AllowAlways),
-                option("allow-once", acp::PermissionOptionKind::AllowOnce),
+                option("allow-always", acp::schema::PermissionOptionKind::AllowAlways),
+                option("allow-once", acp::schema::PermissionOptionKind::AllowOnce),
             ],
         )
         .await;
@@ -120,7 +120,7 @@ async fn decision_resolution_preserves_existing_option_preference() {
 async fn pending_requests_are_scoped_by_session() {
     let broker = InteractionBroker::new();
     let request_id = "req-shared";
-    let options = vec![option("allow-once", acp::PermissionOptionKind::AllowOnce)];
+    let options = vec![option("allow-once", acp::schema::PermissionOptionKind::AllowOnce)];
 
     let wait_a = broker
         .register_permission("session-a", request_id, &options)
@@ -257,7 +257,7 @@ async fn user_input_submit_rejects_missing_duplicate_unknown_and_invalid_options
 #[tokio::test]
 async fn cancel_session_cancels_all_interaction_kinds() {
     let broker = InteractionBroker::new();
-    let options = vec![option("allow-once", acp::PermissionOptionKind::AllowOnce)];
+    let options = vec![option("allow-once", acp::schema::PermissionOptionKind::AllowOnce)];
     let permission_wait = broker
         .register_permission("session-1", "perm", &options)
         .await;

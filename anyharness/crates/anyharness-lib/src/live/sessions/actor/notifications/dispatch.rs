@@ -42,7 +42,7 @@ pub(in crate::live::sessions::actor) async fn inject_runtime_event(
 }
 
 pub(in crate::live::sessions::actor) async fn normalize_notification(
-    notif: &acp::SessionNotification,
+    notif: &acp::schema::SessionNotification,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     background_work_registry: &mut BackgroundWorkRegistry,
     session_store: &SessionStore,
@@ -54,13 +54,13 @@ pub(in crate::live::sessions::actor) async fn normalize_notification(
     persisted_config_state: &mut PersistedSessionConfigState,
     startup_state: &mut SessionStartupState,
 ) {
-    use acp::SessionUpdate::*;
+    use acp::schema::SessionUpdate::*;
     match &notif.update {
         AgentMessageChunk(chunk) => {
             let payload = AcpChunkPayload {
                 content: serialize_content_block(&chunk.content),
                 meta: serialize_meta(chunk.meta.as_ref()),
-                message_id: chunk.message_id.clone(),
+                message_id: chunk.message_id.as_ref().map(|id| id.to_string()),
             };
             if maybe_ingest_codex_completed_plan(
                 event_sink,
@@ -95,7 +95,7 @@ pub(in crate::live::sessions::actor) async fn normalize_notification(
             sink.agent_thought_chunk(AcpChunkPayload {
                 content: serialize_content_block(&chunk.content),
                 meta: serialize_meta(chunk.meta.as_ref()),
-                message_id: chunk.message_id.clone(),
+                message_id: chunk.message_id.as_ref().map(|id| id.to_string()),
             });
         }
         ToolCall(tc) => {
@@ -333,7 +333,7 @@ pub(in crate::live::sessions::actor) fn persist_raw_notification(
     session_store: &SessionStore,
     session_id: &str,
     kind: &str,
-    notif: &acp::SessionNotification,
+    notif: &acp::schema::SessionNotification,
 ) -> anyhow::Result<()> {
     let payload_json = serde_json::to_string(notif)?;
     session_store.append_raw_notification(
@@ -345,13 +345,13 @@ pub(in crate::live::sessions::actor) fn persist_raw_notification(
 }
 
 pub(in crate::live::sessions::actor) fn serialize_content_block(
-    content: &acp::ContentBlock,
+    content: &acp::schema::ContentBlock,
 ) -> serde_json::Value {
     serde_json::to_value(content).unwrap_or(serde_json::json!({ "type": "text", "text": "" }))
 }
 
 pub(in crate::live::sessions::actor) fn serialize_meta(
-    meta: Option<&acp::Meta>,
+    meta: Option<&acp::schema::Meta>,
 ) -> Option<serde_json::Value> {
     meta.and_then(|value| serde_json::to_value(value).ok())
 }

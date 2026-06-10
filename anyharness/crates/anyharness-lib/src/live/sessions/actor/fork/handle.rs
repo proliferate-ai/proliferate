@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use agent_client_protocol::{self as acp, Agent};
+use agent_client_protocol as acp;
 use anyharness_contract::v1::{SessionActionCapabilities, SessionExecutionPhase};
 use tokio::sync::oneshot;
 
@@ -13,7 +13,7 @@ use crate::live::sessions::actor::command::{
 use crate::live::sessions::driver::shutdown::close_native_session;
 use crate::live::sessions::handle::LiveSessionHandle;
 pub(in crate::live::sessions::actor) async fn fork_native_session(
-    conn: &acp::ClientSideConnection,
+    conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
     workspace_path: &std::path::PathBuf,
     mcp_servers: &[SessionMcpServer],
@@ -26,12 +26,13 @@ pub(in crate::live::sessions::actor) async fn fork_native_session(
     verify_fork_ready(handle, store, session_id, action_capabilities).await?;
 
     let mut request =
-        acp::ForkSessionRequest::new(native_session_id.to_string(), workspace_path.clone());
+        acp::schema::ForkSessionRequest::new(native_session_id.to_string(), workspace_path.clone());
     if !mcp_servers.is_empty() {
         request = request.mcp_servers(to_acp_servers(mcp_servers));
     }
     let response = conn
-        .fork_session(request)
+        .send_request(request)
+        .block_task()
         .await
         .map_err(|error| ForkSessionCommandError::Failed(error.to_string()))?;
     Ok(ForkSessionCommandResult {
@@ -42,7 +43,7 @@ pub(in crate::live::sessions::actor) async fn fork_native_session(
 
 pub(in crate::live::sessions::actor) async fn handle_idle_fork_lifecycle_command(
     command: SessionCommand,
-    conn: &acp::ClientSideConnection,
+    conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
     workspace_path: &std::path::PathBuf,
     mcp_servers: &[SessionMcpServer],
@@ -116,7 +117,7 @@ pub(in crate::live::sessions::actor) async fn verify_fork_ready(
 }
 
 pub(in crate::live::sessions::actor) async fn close_native_child_session(
-    conn: &acp::ClientSideConnection,
+    conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
     supports_close: bool,
 ) -> anyhow::Result<()> {
@@ -124,7 +125,7 @@ pub(in crate::live::sessions::actor) async fn close_native_child_session(
 }
 
 pub(in crate::live::sessions::actor) async fn handle_close_native_child_session(
-    conn: &acp::ClientSideConnection,
+    conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: String,
     supports_close: bool,
     respond_to: oneshot::Sender<anyhow::Result<()>>,

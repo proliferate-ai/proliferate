@@ -118,10 +118,10 @@ async fn actor_exit_test_context(
             .insert_pending_for_test(
                 "session-1",
                 &request_id,
-                vec![acp::PermissionOption::new(
-                    acp::PermissionOptionId::new("allow"),
+                vec![acp::schema::PermissionOption::new(
+                    acp::schema::PermissionOptionId::new("allow"),
                     "Allow",
-                    acp::PermissionOptionKind::AllowOnce,
+                    acp::schema::PermissionOptionKind::AllowOnce,
                 )],
             )
             .await;

@@ -3,8 +3,8 @@ use anyharness_contract::v1::{
     RawSessionConfigOption, RawSessionConfigValue, SessionConfigOptionType,
 };
 
-pub(super) fn into_raw_option(option: &acp::SessionConfigOption) -> Option<RawSessionConfigOption> {
-    let acp::SessionConfigKind::Select(select) = &option.kind else {
+pub(super) fn into_raw_option(option: &acp::schema::SessionConfigOption) -> Option<RawSessionConfigOption> {
+    let acp::schema::SessionConfigKind::Select(select) = &option.kind else {
         return None;
     };
 
@@ -19,12 +19,12 @@ pub(super) fn into_raw_option(option: &acp::SessionConfigOption) -> Option<RawSe
     })
 }
 
-fn flatten_select_options(options: &acp::SessionConfigSelectOptions) -> Vec<RawSessionConfigValue> {
+fn flatten_select_options(options: &acp::schema::SessionConfigSelectOptions) -> Vec<RawSessionConfigValue> {
     match options {
-        acp::SessionConfigSelectOptions::Ungrouped(options) => {
+        acp::schema::SessionConfigSelectOptions::Ungrouped(options) => {
             options.iter().map(into_raw_value).collect()
         }
-        acp::SessionConfigSelectOptions::Grouped(groups) => groups
+        acp::schema::SessionConfigSelectOptions::Grouped(groups) => groups
             .iter()
             .flat_map(|group| group.options.iter().map(into_raw_value))
             .collect(),
@@ -32,7 +32,7 @@ fn flatten_select_options(options: &acp::SessionConfigSelectOptions) -> Vec<RawS
     }
 }
 
-fn into_raw_value(option: &acp::SessionConfigSelectOption) -> RawSessionConfigValue {
+fn into_raw_value(option: &acp::schema::SessionConfigSelectOption) -> RawSessionConfigValue {
     RawSessionConfigValue {
         value: option.value.to_string(),
         name: option.name.clone(),
@@ -40,12 +40,12 @@ fn into_raw_value(option: &acp::SessionConfigSelectOption) -> RawSessionConfigVa
     }
 }
 
-fn category_to_string(category: &acp::SessionConfigOptionCategory) -> String {
+fn category_to_string(category: &acp::schema::SessionConfigOptionCategory) -> String {
     match category {
-        acp::SessionConfigOptionCategory::Mode => "mode".to_string(),
-        acp::SessionConfigOptionCategory::Model => "model".to_string(),
-        acp::SessionConfigOptionCategory::ThoughtLevel => "thought_level".to_string(),
-        acp::SessionConfigOptionCategory::Other(other) => other.clone(),
+        acp::schema::SessionConfigOptionCategory::Mode => "mode".to_string(),
+        acp::schema::SessionConfigOptionCategory::Model => "model".to_string(),
+        acp::schema::SessionConfigOptionCategory::ThoughtLevel => "thought_level".to_string(),
+        acp::schema::SessionConfigOptionCategory::Other(other) => other.clone(),
         _ => "unknown".to_string(),
     }
 }

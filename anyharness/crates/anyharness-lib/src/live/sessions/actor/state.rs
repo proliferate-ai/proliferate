@@ -79,7 +79,7 @@ pub(in crate::live::sessions) struct SessionStartupState {
     pub(in crate::live::sessions) current_mode_id: Option<String>,
     pub(in crate::live::sessions) legacy_mode_state:
         Option<crate::domains::sessions::live_config::LegacyModeState>,
-    pub(in crate::live::sessions) config_options: Vec<acp::SessionConfigOption>,
+    pub(in crate::live::sessions) config_options: Vec<acp::schema::SessionConfigOption>,
     pub(in crate::live::sessions) current_model_id: Option<String>,
     pub(in crate::live::sessions) available_models: Vec<SessionModelOption>,
     pub(in crate::live::sessions) prompt_capabilities: anyharness_contract::v1::PromptCapabilities,

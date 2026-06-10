@@ -84,9 +84,9 @@ async fn handle_notification_persists_raw_acp_notifications() {
     };
     let mut background_work_registry = test_background_work_registry(&store);
 
-    let notif = acp::SessionNotification::new(
+    let notif = acp::schema::SessionNotification::new(
         "native-1",
-        acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new("hello".into())),
+        acp::schema::SessionUpdate::AgentMessageChunk(acp::schema::ContentChunk::new("hello".into())),
     );
 
     handle_notification(
@@ -126,25 +126,25 @@ fn resume_replay_filter_suppresses_after_user_echo_until_quiet_gap() {
     );
     let base = Instant::now();
 
-    let user_echo = acp::SessionNotification::new(
+    let user_echo = acp::schema::SessionNotification::new(
         "native-1",
-        acp::SessionUpdate::UserMessageChunk(acp::ContentChunk::new("older prompt".into())),
+        acp::schema::SessionUpdate::UserMessageChunk(acp::schema::ContentChunk::new("older prompt".into())),
     );
-    let replay_assistant = acp::SessionNotification::new(
+    let replay_assistant = acp::schema::SessionNotification::new(
         "native-1",
-        acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new("older answer".into())),
+        acp::schema::SessionUpdate::AgentMessageChunk(acp::schema::ContentChunk::new("older answer".into())),
     );
-    let replay_config = acp::SessionNotification::new(
+    let replay_config = acp::schema::SessionNotification::new(
         "native-1",
-        acp::SessionUpdate::ConfigOptionUpdate(acp::ConfigOptionUpdate::new(vec![])),
+        acp::schema::SessionUpdate::ConfigOptionUpdate(acp::schema::ConfigOptionUpdate::new(vec![])),
     );
-    let available_commands = acp::SessionNotification::new(
+    let available_commands = acp::schema::SessionNotification::new(
         "native-1",
-        acp::SessionUpdate::AvailableCommandsUpdate(acp::AvailableCommandsUpdate::new(vec![])),
+        acp::schema::SessionUpdate::AvailableCommandsUpdate(acp::schema::AvailableCommandsUpdate::new(vec![])),
     );
-    let fresh_assistant = acp::SessionNotification::new(
+    let fresh_assistant = acp::schema::SessionNotification::new(
         "native-1",
-        acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new("fresh answer".into())),
+        acp::schema::SessionUpdate::AgentMessageChunk(acp::schema::ContentChunk::new("fresh answer".into())),
     );
 
     assert!(filter.should_suppress(&user_echo, base));
@@ -169,13 +169,13 @@ fn resume_replay_filter_disable_allows_current_prompt_after_loaded_session() {
     let base = Instant::now();
     filter.disable();
 
-    let user_echo = acp::SessionNotification::new(
+    let user_echo = acp::schema::SessionNotification::new(
         "native-1",
-        acp::SessionUpdate::UserMessageChunk(acp::ContentChunk::new("current prompt".into())),
+        acp::schema::SessionUpdate::UserMessageChunk(acp::schema::ContentChunk::new("current prompt".into())),
     );
-    let assistant = acp::SessionNotification::new(
+    let assistant = acp::schema::SessionNotification::new(
         "native-1",
-        acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new("fresh answer".into())),
+        acp::schema::SessionUpdate::AgentMessageChunk(acp::schema::ContentChunk::new("fresh answer".into())),
     );
 
     assert!(!filter.should_suppress(&user_echo, base));
@@ -190,9 +190,9 @@ fn resume_replay_filter_ignores_non_resume_agent_chunks() {
         "idle",
     );
     let base = Instant::now();
-    let assistant = acp::SessionNotification::new(
+    let assistant = acp::schema::SessionNotification::new(
         "native-1",
-        acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new("fresh answer".into())),
+        acp::schema::SessionUpdate::AgentMessageChunk(acp::schema::ContentChunk::new("fresh answer".into())),
     );
 
     assert!(!filter.should_suppress(&assistant, base));
@@ -206,9 +206,9 @@ fn resume_replay_filter_stays_disabled_for_zero_turn_fresh_native_resumes() {
         "idle",
     );
     let base = Instant::now();
-    let user_echo = acp::SessionNotification::new(
+    let user_echo = acp::schema::SessionNotification::new(
         "native-1",
-        acp::SessionUpdate::UserMessageChunk(acp::ContentChunk::new("current prompt".into())),
+        acp::schema::SessionUpdate::UserMessageChunk(acp::schema::ContentChunk::new("current prompt".into())),
     );
 
     assert!(!filter.should_suppress(&user_echo, base));
@@ -281,9 +281,9 @@ async fn replay_filter_keeps_raw_notifications_but_skips_normalized_transcript_e
     );
     let mut background_work_registry = test_background_work_registry(&store);
 
-    let replay_user = acp::SessionNotification::new(
+    let replay_user = acp::schema::SessionNotification::new(
         "native-1",
-        acp::SessionUpdate::UserMessageChunk(acp::ContentChunk::new("older prompt".into())),
+        acp::schema::SessionUpdate::UserMessageChunk(acp::schema::ContentChunk::new("older prompt".into())),
     );
     handle_notification_with_resume_replay_filter(
         &replay_user,
@@ -310,9 +310,9 @@ async fn replay_filter_keeps_raw_notifications_but_skips_normalized_transcript_e
     );
     assert!(store.list_events("session-1").expect("events").is_empty());
 
-    let replay_config = acp::SessionNotification::new(
+    let replay_config = acp::schema::SessionNotification::new(
         "native-1",
-        acp::SessionUpdate::ConfigOptionUpdate(acp::ConfigOptionUpdate::new(vec![])),
+        acp::schema::SessionUpdate::ConfigOptionUpdate(acp::schema::ConfigOptionUpdate::new(vec![])),
     );
     handle_notification_with_resume_replay_filter(
         &replay_config,
@@ -342,9 +342,9 @@ async fn replay_filter_keeps_raw_notifications_but_skips_normalized_transcript_e
         .expect("events after config replay")
         .is_empty());
 
-    let available_commands = acp::SessionNotification::new(
+    let available_commands = acp::schema::SessionNotification::new(
         "native-1",
-        acp::SessionUpdate::AvailableCommandsUpdate(acp::AvailableCommandsUpdate::new(vec![])),
+        acp::schema::SessionUpdate::AvailableCommandsUpdate(acp::schema::AvailableCommandsUpdate::new(vec![])),
     );
     handle_notification_with_resume_replay_filter(
         &available_commands,

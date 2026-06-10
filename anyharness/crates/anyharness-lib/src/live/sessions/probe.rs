@@ -10,9 +10,9 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use agent_client_protocol::{self as acp, Agent};
+use agent_client_protocol::{self as acp};
 use serde::Serialize;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use crate::domains::agents::model::AgentKind;
@@ -129,32 +129,6 @@ pub struct ProbeSnapshot {
     pub warnings: Vec<String>,
 }
 
-struct ProbeClient {
-    notification_tx: mpsc::UnboundedSender<acp::SessionNotification>,
-}
-
-#[async_trait::async_trait(?Send)]
-impl acp::Client for ProbeClient {
-    async fn request_permission(
-        &self,
-        _args: acp::RequestPermissionRequest,
-    ) -> acp::Result<acp::RequestPermissionResponse> {
-        Err(acp::Error::internal_error().data("catalog probe does not grant permissions"))
-    }
-
-    async fn session_notification(
-        &self,
-        notification: acp::SessionNotification,
-    ) -> acp::Result<(), acp::Error> {
-        let _ = self.notification_tx.send(notification);
-        Ok(())
-    }
-
-    async fn ext_method(&self, _args: acp::ExtRequest) -> acp::Result<acp::ExtResponse> {
-        Err(acp::Error::method_not_found())
-    }
-}
-
 /// Must be called from within a tokio `LocalSet` (the ACP connection uses
 /// `spawn_local`).
 pub async fn probe_agent(options: ProbeOptions) -> anyhow::Result<ProbeSnapshot> {
@@ -218,21 +192,43 @@ pub async fn probe_agent(options: ProbeOptions) -> anyhow::Result<ProbeSnapshot>
     let mut child = spawned.child;
 
     let (notification_tx, mut notification_rx) =
-        mpsc::unbounded_channel::<acp::SessionNotification>();
-    let client = ProbeClient { notification_tx };
-    let (conn, io_task) = acp::ClientSideConnection::new(
-        client,
-        spawned.stdin.compat_write(),
-        spawned.stdout.compat(),
-        |fut| {
-            tokio::task::spawn_local(fut);
-        },
-    );
+        mpsc::unbounded_channel::<acp::schema::SessionNotification>();
+
+    let (cx_tx, cx_rx) = oneshot::channel::<acp::ConnectionTo<acp::Agent>>();
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+
+    let transport = acp::ByteStreams::new(spawned.stdin.compat_write(), spawned.stdout.compat());
+
+    let connect_future = acp::Client
+        .builder()
+        .on_receive_notification(
+            async move |notif: acp::schema::SessionNotification, _cx| {
+                let _ = notification_tx.send(notif);
+                Ok(())
+            },
+            acp::on_receive_notification!(),
+        )
+        .on_receive_request(
+            async move |_req: acp::schema::RequestPermissionRequest,
+                        responder: acp::Responder<acp::schema::RequestPermissionResponse>,
+                        _cx| {
+                responder.respond_with_result(Err(acp::Error::internal_error()
+                    .data("catalog probe does not grant permissions")))
+            },
+            acp::on_receive_request!(),
+        )
+        .connect_with(transport, move |cx: acp::ConnectionTo<acp::Agent>| async move {
+            let _ = cx_tx.send(cx);
+            let _ = shutdown_rx.await;
+            Ok(())
+        });
+
     tokio::task::spawn_local(async move {
-        if let Err(error) = io_task.await {
-            tracing::debug!(error = %error, "probe ACP IO task ended");
+        if let Err(error) = connect_future.await {
+            tracing::debug!(%error, "probe ACP IO task ended");
         }
     });
+    let conn = cx_rx.await?;
 
     let result = run_enumeration(
         &conn,
@@ -246,6 +242,7 @@ pub async fn probe_agent(options: ProbeOptions) -> anyhow::Result<ProbeSnapshot>
     )
     .await;
 
+    drop(shutdown_tx);
     let _ = child.start_kill();
     let _ = tokio::time::timeout(Duration::from_secs(5), child.wait()).await;
     let _ = std::fs::remove_dir_all(&workspace);
@@ -259,12 +256,12 @@ fn resolved_kind(options: &ProbeOptions) -> String {
 
 #[allow(clippy::too_many_arguments)]
 async fn run_enumeration(
-    conn: &acp::ClientSideConnection,
+    conn: &acp::ConnectionTo<acp::Agent>,
     kind: &str,
     resolved: &crate::domains::agents::model::ResolvedAgent,
     workspace: &PathBuf,
     options: &ProbeOptions,
-    notification_rx: &mut mpsc::UnboundedReceiver<acp::SessionNotification>,
+    notification_rx: &mut mpsc::UnboundedReceiver<acp::schema::SessionNotification>,
     ready_tx: &std::sync::mpsc::Sender<anyhow::Result<String>>,
     warnings: &mut Vec<String>,
 ) -> anyhow::Result<ProbeSnapshot> {
@@ -365,11 +362,12 @@ async fn run_enumeration(
             // Model exposed as a config option: switch through it; the
             // response carries the updated option set directly.
             match conn
-                .set_session_config_option(acp::SetSessionConfigOptionRequest::new(
+                .send_request(acp::schema::SetSessionConfigOptionRequest::new(
                     native_session_id.clone(),
                     config_id.clone(),
                     model_id.as_str(),
                 ))
+                .block_task()
                 .await
             {
                 Ok(response) => Some(elided(serde_json::to_value(&response.config_options)?)),
@@ -381,34 +379,14 @@ async fn run_enumeration(
                 }
             }
         } else {
-            match conn
-                .set_session_model(acp::SetSessionModelRequest::new(
-                    native_session_id.clone(),
-                    model_id.clone(),
-                ))
-                .await
-            {
-                Ok(_) => {
-                    match await_config_option_update(notification_rx, options.model_switch_timeout)
-                        .await
-                    {
-                        Some(config_options) => {
-                            Some(elided(serde_json::to_value(&config_options)?))
-                        }
-                        None => {
-                            warnings.push(format!(
-                                "no ConfigOptionUpdate within {:?} after switching to {model_id}",
-                                options.model_switch_timeout
-                            ));
-                            None
-                        }
-                    }
-                }
-                Err(error) => {
-                    warnings.push(format!("set_session_model({model_id}) failed: {error}"));
-                    None
-                }
-            }
+            // ACP 0.14 removed set_session_model; harnesses that expose models
+            // via the ACP models block can no longer be switched for per-model
+            // config enumeration.
+            warnings.push(format!(
+                "cannot switch to {model_id}: set_session_model removed in ACP 0.14 \
+                 (model not exposed as a config option)"
+            ));
+            None
         };
         models.push(ProbeModelEntry {
             model_id,
@@ -419,14 +397,19 @@ async fn run_enumeration(
     }
 
     let prompt_result = if options.send_test_prompt {
-        let request = acp::PromptRequest::new(
+        let request = acp::schema::PromptRequest::new(
             new_session.session_id.clone(),
-            vec![acp::ContentBlock::Text(acp::TextContent::new(
-                "Reply with exactly: OK".to_string(),
-            ))],
+            vec![acp::schema::ContentBlock::Text(
+                acp::schema::TextContent::new("Reply with exactly: OK"),
+            )],
         );
         Some(
-            match tokio::time::timeout(Duration::from_secs(90), conn.prompt(request)).await {
+            match tokio::time::timeout(
+                Duration::from_secs(90),
+                conn.send_request(request).block_task(),
+            )
+            .await
+            {
                 Ok(Ok(response)) => ProbePromptResult {
                     ok: true,
                     detail: format!("{:?}", response.stop_reason),
@@ -463,7 +446,9 @@ async fn run_enumeration(
     })
 }
 
-fn drain_pending(notification_rx: &mut mpsc::UnboundedReceiver<acp::SessionNotification>) {
+fn drain_pending(
+    notification_rx: &mut mpsc::UnboundedReceiver<acp::schema::SessionNotification>,
+) {
     while notification_rx.try_recv().is_ok() {}
 }
 
@@ -491,21 +476,21 @@ fn elided(mut config_options: serde_json::Value) -> serde_json::Value {
 /// Extract (config_id, [(model_id, name, description)]) from a `model`
 /// config option, when the harness reports models that way.
 fn model_entries_from_config_options(
-    config_options: &[acp::SessionConfigOption],
+    config_options: &[acp::schema::SessionConfigOption],
 ) -> Option<(String, Vec<(String, String, Option<String>)>)> {
     let option = config_options.iter().find(|option| {
         matches!(
             option.category,
-            Some(acp::SessionConfigOptionCategory::Model)
+            Some(acp::schema::SessionConfigOptionCategory::Model)
         ) || option.id.to_string() == "model"
     })?;
     #[allow(unreachable_patterns)]
     let select = match &option.kind {
-        acp::SessionConfigKind::Select(select) => select,
+        acp::schema::SessionConfigKind::Select(select) => select,
         _ => return None,
     };
     let entries: Vec<(String, String, Option<String>)> = match &select.options {
-        acp::SessionConfigSelectOptions::Ungrouped(values) => values
+        acp::schema::SessionConfigSelectOptions::Ungrouped(values) => values
             .iter()
             .map(|value| {
                 (
@@ -515,7 +500,7 @@ fn model_entries_from_config_options(
                 )
             })
             .collect(),
-        acp::SessionConfigSelectOptions::Grouped(groups) => groups
+        acp::schema::SessionConfigSelectOptions::Grouped(groups) => groups
             .iter()
             .flat_map(|group| group.options.iter())
             .map(|value| {
@@ -529,24 +514,6 @@ fn model_entries_from_config_options(
         _ => return None,
     };
     Some((option.id.to_string(), entries))
-}
-
-async fn await_config_option_update(
-    notification_rx: &mut mpsc::UnboundedReceiver<acp::SessionNotification>,
-    timeout: Duration,
-) -> Option<Vec<acp::SessionConfigOption>> {
-    let deadline = tokio::time::Instant::now() + timeout;
-    loop {
-        let remaining = deadline.checked_duration_since(tokio::time::Instant::now())?;
-        match tokio::time::timeout(remaining, notification_rx.recv()).await {
-            Ok(Some(notification)) => {
-                if let acp::SessionUpdate::ConfigOptionUpdate(update) = notification.update {
-                    return Some(update.config_options);
-                }
-            }
-            Ok(None) | Err(_) => return None,
-        }
-    }
 }
 
 /// Best-effort identification of the native CLI the adapter will use:

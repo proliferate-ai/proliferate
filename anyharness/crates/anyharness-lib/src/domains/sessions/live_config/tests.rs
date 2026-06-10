@@ -261,16 +261,16 @@ fn normalize_controls_detects_mode_from_approval_label_without_mode_category() {
 
 #[test]
 fn build_live_config_snapshot_keeps_raw_options_exact_when_mode_is_synthesized() {
-    let mut model = acp::SessionConfigOption::select(
+    let mut model = acp::schema::SessionConfigOption::select(
         "provider_model",
         "Model",
         "default",
         vec![
-            acp::SessionConfigSelectOption::new("default", "Default"),
-            acp::SessionConfigSelectOption::new("sonnet", "Sonnet"),
+            acp::schema::SessionConfigSelectOption::new("default", "Default"),
+            acp::schema::SessionConfigSelectOption::new("sonnet", "Sonnet"),
         ],
     );
-    model.category = Some(acp::SessionConfigOptionCategory::Model);
+    model.category = Some(acp::schema::SessionConfigOptionCategory::Model);
 
     let snapshot = build_live_config_snapshot(
         "gemini",

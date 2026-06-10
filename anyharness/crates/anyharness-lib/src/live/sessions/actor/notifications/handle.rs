@@ -18,7 +18,7 @@ use crate::live::sessions::driver::runtime_client;
 use crate::live::sessions::event_sink::SessionEventSink;
 #[cfg(test)]
 pub(in crate::live::sessions::actor) async fn handle_notification(
-    notif: &acp::SessionNotification,
+    notif: &acp::schema::SessionNotification,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     background_work_registry: &mut BackgroundWorkRegistry,
     session_store: &SessionStore,
@@ -49,7 +49,7 @@ pub(in crate::live::sessions::actor) async fn handle_notification(
 }
 
 pub(in crate::live::sessions::actor) async fn handle_notification_with_resume_replay_filter(
-    notif: &acp::SessionNotification,
+    notif: &acp::schema::SessionNotification,
     replay_filter: &mut ResumeReplayFilter,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     background_work_registry: &mut BackgroundWorkRegistry,

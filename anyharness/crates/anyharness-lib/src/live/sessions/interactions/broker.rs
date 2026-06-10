@@ -223,12 +223,12 @@ pub(super) enum StoredPermissionOptionKind {
 }
 
 impl StoredPermissionOptionKind {
-    fn from_acp(kind: acp::PermissionOptionKind) -> Self {
+    fn from_acp(kind: acp::schema::PermissionOptionKind) -> Self {
         match kind {
-            acp::PermissionOptionKind::AllowOnce => Self::AllowOnce,
-            acp::PermissionOptionKind::AllowAlways => Self::AllowAlways,
-            acp::PermissionOptionKind::RejectOnce => Self::RejectOnce,
-            acp::PermissionOptionKind::RejectAlways => Self::RejectAlways,
+            acp::schema::PermissionOptionKind::AllowOnce => Self::AllowOnce,
+            acp::schema::PermissionOptionKind::AllowAlways => Self::AllowAlways,
+            acp::schema::PermissionOptionKind::RejectOnce => Self::RejectOnce,
+            acp::schema::PermissionOptionKind::RejectAlways => Self::RejectAlways,
             _ => Self::Unknown,
         }
     }
@@ -252,7 +252,7 @@ impl InteractionBroker {
         &self,
         session_id: &str,
         request_id: &str,
-        options: &[acp::PermissionOption],
+        options: &[acp::schema::PermissionOption],
     ) -> PendingPermissionWait {
         let (tx, rx) = oneshot::channel();
 
@@ -335,7 +335,7 @@ impl InteractionBroker {
         &self,
         session_id: &str,
         request_id: &str,
-        options: &[acp::PermissionOption],
+        options: &[acp::schema::PermissionOption],
     ) -> PermissionOutcome {
         self.register_permission(session_id, request_id, options)
             .await
@@ -571,7 +571,7 @@ impl InteractionBroker {
         &self,
         session_id: &str,
         request_id: &str,
-        options: Vec<acp::PermissionOption>,
+        options: Vec<acp::schema::PermissionOption>,
     ) {
         let (tx, _rx) = oneshot::channel();
         self.pending.lock().await.insert(

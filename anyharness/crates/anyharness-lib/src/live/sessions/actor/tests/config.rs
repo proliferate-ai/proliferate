@@ -230,16 +230,16 @@ fn persisted_control_values_orders_standard_controls_before_extras() {
 
 #[test]
 fn pending_config_rank_keeps_collaboration_mode_in_standard_order() {
-    let mut collaboration_mode = acp::SessionConfigOption::select(
+    let mut collaboration_mode = acp::schema::SessionConfigOption::select(
         "collaboration_mode",
         "Mode",
         "plan",
         vec![
-            acp::SessionConfigSelectOption::new("default", "Default"),
-            acp::SessionConfigSelectOption::new("plan", "Plan"),
+            acp::schema::SessionConfigSelectOption::new("default", "Default"),
+            acp::schema::SessionConfigSelectOption::new("plan", "Plan"),
         ],
     );
-    collaboration_mode.category = Some(acp::SessionConfigOptionCategory::Other(
+    collaboration_mode.category = Some(acp::schema::SessionConfigOptionCategory::Other(
         "collaboration_mode".into(),
     ));
 
@@ -276,34 +276,21 @@ fn pending_config_rank_treats_synthetic_acp_model_control_as_model() {
 }
 
 #[test]
-fn direct_model_setter_only_applies_exact_live_ids_or_legacy_empty_lists() {
-    let mut startup_state = SessionStartupState {
+fn direct_model_setter_is_permanently_disabled() {
+    // set_session_model was removed from ACP in 0.14; the setter stub always
+    // returns NotApplied. should_apply_model_via_direct_setter must always return
+    // false so callers reject model requests rather than silently accepting them.
+    let startup_state = SessionStartupState {
         current_mode_id: None,
         legacy_mode_state: None,
         config_options: Vec::new(),
         current_model_id: None,
-        available_models: session_model_options(&["default", "sonnet", "sonnet[1m]", "haiku"]),
+        available_models: Vec::new(),
         prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
     };
 
-    assert!(should_apply_model_via_direct_setter(
-        &startup_state,
-        "sonnet"
-    ));
-    assert!(!should_apply_model_via_direct_setter(
-        &startup_state,
-        "opus"
-    ));
-    assert!(!should_apply_model_via_direct_setter(
-        &startup_state,
-        "claude-opus-4-6"
-    ));
-
-    startup_state.available_models.clear();
-    assert!(should_apply_model_via_direct_setter(
-        &startup_state,
-        "legacy-agent-model"
-    ));
+    assert!(!should_apply_model_via_direct_setter(&startup_state, "sonnet"));
+    assert!(!should_apply_model_via_direct_setter(&startup_state, "opus"));
 }
 
 #[test]
@@ -332,16 +319,16 @@ fn model_config_request_without_raw_option_rejects_values_outside_acp_models() {
 
 #[test]
 fn generic_model_request_can_resolve_model_option_by_purpose() {
-    let mut option = acp::SessionConfigOption::select(
+    let mut option = acp::schema::SessionConfigOption::select(
         "provider_model",
         "Model",
         "sonnet",
         vec![
-            acp::SessionConfigSelectOption::new("sonnet", "Sonnet"),
-            acp::SessionConfigSelectOption::new("haiku", "Haiku"),
+            acp::schema::SessionConfigSelectOption::new("sonnet", "Sonnet"),
+            acp::schema::SessionConfigSelectOption::new("haiku", "Haiku"),
         ],
     );
-    option.category = Some(acp::SessionConfigOptionCategory::Model);
+    option.category = Some(acp::schema::SessionConfigOptionCategory::Model);
 
     let options = [option];
     let resolved = find_select_option_for_request(&options, "model");
@@ -352,16 +339,16 @@ fn generic_model_request_can_resolve_model_option_by_purpose() {
 
 #[test]
 fn select_option_values_flattens_grouped_options() {
-    let option = acp::SessionConfigOption::select(
+    let option = acp::schema::SessionConfigOption::select(
         "model",
         "Model",
         "sonnet",
-        vec![acp::SessionConfigSelectGroup::new(
+        vec![acp::schema::SessionConfigSelectGroup::new(
             "claude",
             "Claude",
             vec![
-                acp::SessionConfigSelectOption::new("sonnet", "Sonnet"),
-                acp::SessionConfigSelectOption::new("opus[1m]", "Opus"),
+                acp::schema::SessionConfigSelectOption::new("sonnet", "Sonnet"),
+                acp::schema::SessionConfigSelectOption::new("opus[1m]", "Opus"),
             ],
         )],
     );
@@ -373,16 +360,16 @@ fn select_option_values_flattens_grouped_options() {
 fn model_config_request_rejects_values_outside_live_select_options() {
     let db = Db::open_in_memory().expect("open db");
     let store = SessionStore::new(db);
-    let mut option = acp::SessionConfigOption::select(
+    let mut option = acp::schema::SessionConfigOption::select(
         "model",
         "Model",
         "sonnet",
         vec![
-            acp::SessionConfigSelectOption::new("sonnet", "Sonnet"),
-            acp::SessionConfigSelectOption::new("haiku", "Haiku"),
+            acp::schema::SessionConfigSelectOption::new("sonnet", "Sonnet"),
+            acp::schema::SessionConfigSelectOption::new("haiku", "Haiku"),
         ],
     );
-    option.category = Some(acp::SessionConfigOptionCategory::Model);
+    option.category = Some(acp::schema::SessionConfigOptionCategory::Model);
     let startup_state = SessionStartupState {
         current_mode_id: None,
         legacy_mode_state: None,
@@ -405,16 +392,16 @@ fn model_config_request_rejects_values_outside_live_select_options() {
 
 #[test]
 fn select_option_current_value_must_match_requested_value() {
-    let mut option = acp::SessionConfigOption::select(
+    let mut option = acp::schema::SessionConfigOption::select(
         "provider_model",
         "Model",
         "sonnet[1m]",
         vec![
-            acp::SessionConfigSelectOption::new("sonnet", "Sonnet"),
-            acp::SessionConfigSelectOption::new("sonnet[1m]", "Sonnet 1M"),
+            acp::schema::SessionConfigSelectOption::new("sonnet", "Sonnet"),
+            acp::schema::SessionConfigSelectOption::new("sonnet[1m]", "Sonnet 1M"),
         ],
     );
-    option.category = Some(acp::SessionConfigOptionCategory::Model);
+    option.category = Some(acp::schema::SessionConfigOptionCategory::Model);
 
     assert!(select_option_current_value_matches(
         &[option.clone()],
@@ -430,16 +417,16 @@ fn select_option_current_value_must_match_requested_value() {
 
 #[test]
 fn generic_mode_request_can_resolve_mode_option_by_purpose() {
-    let mut option = acp::SessionConfigOption::select(
+    let mut option = acp::schema::SessionConfigOption::select(
         "approval_mode",
         "Mode",
         "ask",
         vec![
-            acp::SessionConfigSelectOption::new("ask", "Ask"),
-            acp::SessionConfigSelectOption::new("code", "Code"),
+            acp::schema::SessionConfigSelectOption::new("ask", "Ask"),
+            acp::schema::SessionConfigSelectOption::new("code", "Code"),
         ],
     );
-    option.category = Some(acp::SessionConfigOptionCategory::Mode);
+    option.category = Some(acp::schema::SessionConfigOptionCategory::Mode);
 
     let options = [option];
     let resolved = find_select_option_for_request(&options, "mode");
@@ -450,16 +437,16 @@ fn generic_mode_request_can_resolve_mode_option_by_purpose() {
 
 #[test]
 fn fast_mode_option_is_not_treated_as_mode_request() {
-    let mut option = acp::SessionConfigOption::select(
+    let mut option = acp::schema::SessionConfigOption::select(
         "fast_mode",
         "Fast Mode",
         "off",
         vec![
-            acp::SessionConfigSelectOption::new("off", "Off"),
-            acp::SessionConfigSelectOption::new("on", "On"),
+            acp::schema::SessionConfigSelectOption::new("off", "Off"),
+            acp::schema::SessionConfigSelectOption::new("on", "On"),
         ],
     );
-    option.category = Some(acp::SessionConfigOptionCategory::Other("fast_mode".into()));
+    option.category = Some(acp::schema::SessionConfigOptionCategory::Other("fast_mode".into()));
 
     let options = [option];
     let resolved = find_select_option_for_request(&options, "fast_mode");
@@ -472,16 +459,16 @@ fn fast_mode_option_is_not_treated_as_mode_request() {
 
 #[test]
 fn collaboration_mode_option_is_not_treated_as_mode_request() {
-    let mut option = acp::SessionConfigOption::select(
+    let mut option = acp::schema::SessionConfigOption::select(
         "collaboration_mode",
         "Collaboration Mode",
         "plan",
         vec![
-            acp::SessionConfigSelectOption::new("default", "Default"),
-            acp::SessionConfigSelectOption::new("plan", "Plan"),
+            acp::schema::SessionConfigSelectOption::new("default", "Default"),
+            acp::schema::SessionConfigSelectOption::new("plan", "Plan"),
         ],
     );
-    option.category = Some(acp::SessionConfigOptionCategory::Other(
+    option.category = Some(acp::schema::SessionConfigOptionCategory::Other(
         "collaboration_mode".into(),
     ));
 

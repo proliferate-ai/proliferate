@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use agent_client_protocol::{self as acp, Agent};
+use agent_client_protocol as acp;
 use anyharness_contract::v1::{ConfigApplyState, SessionLiveConfigSnapshot};
 use tokio::sync::Mutex;
 
@@ -21,7 +21,7 @@ use crate::live::sessions::actor::config::types::{
 use crate::live::sessions::actor::state::SessionStartupState;
 use crate::live::sessions::event_sink::SessionEventSink;
 pub(in crate::live::sessions::actor) async fn try_apply_model_preference(
-    conn: &acp::ClientSideConnection,
+    conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
     desired_model_id: &str,
     startup_state: &mut SessionStartupState,
@@ -55,7 +55,7 @@ pub(in crate::live::sessions::actor) async fn try_apply_model_preference(
 }
 
 pub(in crate::live::sessions::actor) async fn try_apply_config_option(
-    conn: &acp::ClientSideConnection,
+    conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
     startup_state: &mut SessionStartupState,
     purpose: ConfigPurpose,
@@ -96,7 +96,7 @@ pub(in crate::live::sessions::actor) async fn try_apply_config_option(
 }
 
 pub(in crate::live::sessions::actor) async fn apply_select_config_option(
-    conn: &acp::ClientSideConnection,
+    conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
     startup_state: &mut SessionStartupState,
     config_id: &str,
@@ -116,11 +116,12 @@ pub(in crate::live::sessions::actor) async fn apply_select_config_option(
     }
 
     let response = conn
-        .set_session_config_option(acp::SetSessionConfigOptionRequest::new(
+        .send_request(acp::schema::SetSessionConfigOptionRequest::new(
             native_session_id.to_string(),
             config_id.to_string(),
             desired_value,
         ))
+        .block_task()
         .await?;
 
     startup_state.config_options = response.config_options;
@@ -134,7 +135,7 @@ pub(in crate::live::sessions::actor) async fn apply_select_config_option(
 }
 
 pub(in crate::live::sessions::actor) async fn apply_specific_config_option(
-    conn: &acp::ClientSideConnection,
+    conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
     source_agent_kind: &str,
     session_id: &str,
@@ -255,7 +256,7 @@ pub(in crate::live::sessions::actor) async fn apply_specific_config_option(
 }
 
 pub(in crate::live::sessions::actor) async fn restore_persisted_live_config_if_needed(
-    conn: &acp::ClientSideConnection,
+    conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
     source_agent_kind: &str,
     session_id: &str,
@@ -306,7 +307,7 @@ pub(in crate::live::sessions::actor) async fn restore_persisted_live_config_if_n
 }
 
 pub(in crate::live::sessions::actor) async fn apply_config_option_if_possible(
-    conn: &acp::ClientSideConnection,
+    conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
     startup_state: &mut SessionStartupState,
     config_id: &str,
@@ -372,59 +373,40 @@ pub(in crate::live::sessions::actor) async fn apply_config_option_if_possible(
     }
 
     let response = conn
-        .set_session_config_option(acp::SetSessionConfigOptionRequest::new(
+        .send_request(acp::schema::SetSessionConfigOptionRequest::new(
             native_session_id.to_string(),
             config_id.to_string(),
             desired_value,
         ))
+        .block_task()
         .await?;
     startup_state.config_options = response.config_options;
     Ok(ConfigApplyOutcome::AppliedAuthoritative)
 }
 
 pub(in crate::live::sessions::actor) async fn apply_model_via_direct_setter(
-    conn: &acp::ClientSideConnection,
-    native_session_id: &str,
-    startup_state: &mut SessionStartupState,
-    desired_model_id: &str,
+    _conn: &acp::ConnectionTo<acp::Agent>,
+    _native_session_id: &str,
+    _startup_state: &mut SessionStartupState,
+    _desired_model_id: &str,
 ) -> anyhow::Result<ConfigApplyOutcome> {
-    if startup_state.current_model_id.as_deref() == Some(desired_model_id) {
-        return Ok(ConfigApplyOutcome::NoChange);
-    }
-
-    if !should_apply_model_via_direct_setter(startup_state, desired_model_id) {
-        return Ok(ConfigApplyOutcome::NotApplied);
-    }
-
-    conn.set_session_model(acp::SetSessionModelRequest::new(
-        native_session_id.to_string(),
-        desired_model_id.to_string(),
-    ))
-    .await?;
-
-    startup_state.current_model_id = Some(desired_model_id.to_string());
-    set_select_option_current_value_for_purpose(
-        &mut startup_state.config_options,
-        ConfigPurpose::Model,
-        desired_model_id,
-    );
-
-    Ok(ConfigApplyOutcome::AppliedRequested)
+    // set_session_model was removed from ACP in 0.14; model selection is now
+    // config-option-only via set_session_config_option.
+    Ok(ConfigApplyOutcome::NotApplied)
 }
 
 pub(in crate::live::sessions::actor) fn should_apply_model_via_direct_setter(
-    startup_state: &SessionStartupState,
-    desired_model_id: &str,
+    _startup_state: &SessionStartupState,
+    _desired_model_id: &str,
 ) -> bool {
-    startup_state.available_models.is_empty()
-        || startup_state
-            .available_models
-            .iter()
-            .any(|model| model.id == desired_model_id)
+    // set_session_model was removed in ACP 0.14; available_models is always empty
+    // and the setter stub returns NotApplied. Always return false so callers reject
+    // model requests that have no config-option target rather than silently accepting.
+    false
 }
 
 pub(in crate::live::sessions::actor) async fn apply_mode_via_direct_setter_legacy(
-    conn: &acp::ClientSideConnection,
+    conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
     startup_state: &mut SessionStartupState,
     desired_mode_id: &str,
@@ -437,10 +419,11 @@ pub(in crate::live::sessions::actor) async fn apply_mode_via_direct_setter_legac
         return Ok(ConfigApplyOutcome::NotApplied);
     }
 
-    conn.set_session_mode(acp::SetSessionModeRequest::new(
+    conn.send_request(acp::schema::SetSessionModeRequest::new(
         native_session_id.to_string(),
         desired_mode_id.to_string(),
     ))
+    .block_task()
     .await?;
 
     startup_state.set_current_mode_id(desired_mode_id.to_string());
@@ -454,7 +437,7 @@ pub(in crate::live::sessions::actor) async fn apply_mode_via_direct_setter_legac
 }
 
 pub(in crate::live::sessions::actor) fn set_select_option_current_value_for_purpose(
-    config_options: &mut [acp::SessionConfigOption],
+    config_options: &mut [acp::schema::SessionConfigOption],
     purpose: ConfigPurpose,
     desired_value: &str,
 ) -> bool {
@@ -465,7 +448,7 @@ pub(in crate::live::sessions::actor) fn set_select_option_current_value_for_purp
         return false;
     };
 
-    let acp::SessionConfigKind::Select(select) = &mut option.kind else {
+    let acp::schema::SessionConfigKind::Select(select) = &mut option.kind else {
         return false;
     };
 
@@ -474,7 +457,7 @@ pub(in crate::live::sessions::actor) fn set_select_option_current_value_for_purp
 }
 
 pub(in crate::live::sessions::actor) fn select_option_current_value_matches(
-    config_options: &[acp::SessionConfigOption],
+    config_options: &[acp::schema::SessionConfigOption],
     config_id: &str,
     desired_value: &str,
 ) -> bool {

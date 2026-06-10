@@ -53,7 +53,7 @@ const NORMALIZED_ORDER: &[NormalizedControlKind] = &[
 
 pub fn build_live_config_snapshot(
     _agent_kind: &str,
-    config_options: &[acp::SessionConfigOption],
+    config_options: &[acp::schema::SessionConfigOption],
     current_model_id: Option<&str>,
     available_models: &[SessionModelOption],
     legacy_mode_state: Option<&LegacyModeState>,

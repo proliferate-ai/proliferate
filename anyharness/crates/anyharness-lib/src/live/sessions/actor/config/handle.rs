@@ -21,7 +21,7 @@ use crate::live::sessions::actor::config::types::{
 use crate::live::sessions::actor::state::SessionStartupState;
 use crate::live::sessions::event_sink::SessionEventSink;
 pub(in crate::live::sessions::actor) async fn apply_requested_session_preferences(
-    conn: &acp::ClientSideConnection,
+    conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
     session: &SessionRecord,
     startup_state: &mut SessionStartupState,
@@ -98,7 +98,7 @@ fn live_model_ids(startup_state: &SessionStartupState) -> Vec<String> {
 }
 
 pub(in crate::live::sessions::actor) async fn handle_idle_config_command(
-    conn: &acp::ClientSideConnection,
+    conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
     source_agent_kind: &str,
     session_id: &str,

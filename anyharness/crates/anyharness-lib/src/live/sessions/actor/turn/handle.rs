@@ -20,10 +20,10 @@ use crate::live::sessions::handle::LiveSessionHandle;
 
 pub(in crate::live::sessions::actor) struct IdlePromptContext<'a> {
     pub config: &'a SessionActorConfig,
-    pub conn: &'a acp::ClientSideConnection,
+    pub conn: &'a acp::ConnectionTo<acp::Agent>,
     pub native_session_id: &'a str,
     pub command_rx: &'a mut mpsc::Receiver<SessionCommand>,
-    pub notification_rx: &'a mut mpsc::UnboundedReceiver<acp::SessionNotification>,
+    pub notification_rx: &'a mut mpsc::UnboundedReceiver<acp::schema::SessionNotification>,
     pub background_work_rx: &'a mut mpsc::UnboundedReceiver<BackgroundWorkUpdate>,
     pub background_work_registry: &'a mut BackgroundWorkRegistry,
     pub event_sink: &'a Arc<Mutex<SessionEventSink>>,

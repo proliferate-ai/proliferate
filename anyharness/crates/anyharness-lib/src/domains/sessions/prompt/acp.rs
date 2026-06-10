@@ -13,12 +13,12 @@ impl PromptPayload {
         store: &SessionStore,
         attachment_storage: &PromptAttachmentStorage,
         session_id: &str,
-    ) -> Result<Vec<acp::ContentBlock>, PromptValidationError> {
+    ) -> Result<Vec<acp::schema::ContentBlock>, PromptValidationError> {
         let mut blocks = Vec::with_capacity(self.blocks.len());
         for block in &self.blocks {
             match block {
                 StoredPromptBlock::Text { text } => {
-                    blocks.push(acp::ContentBlock::Text(acp::TextContent::new(text.clone())));
+                    blocks.push(acp::schema::ContentBlock::Text(acp::schema::TextContent::new(text.clone())));
                 }
                 StoredPromptBlock::Image {
                     attachment_id,
@@ -50,9 +50,9 @@ impl PromptPayload {
                         ))
                     })?;
                     let image =
-                        acp::ImageContent::new(BASE64_STANDARD.encode(content), mime_type.clone())
+                        acp::schema::ImageContent::new(BASE64_STANDARD.encode(content), mime_type.clone())
                             .uri(uri.clone());
-                    blocks.push(acp::ContentBlock::Image(image));
+                    blocks.push(acp::schema::ContentBlock::Image(image));
                 }
                 StoredPromptBlock::Resource {
                     attachment_id: Some(attachment_id),
@@ -89,10 +89,10 @@ impl PromptPayload {
                             "embedded resources must be UTF-8 text",
                         )
                     })?;
-                    let resource = acp::TextResourceContents::new(text, uri.clone())
+                    let resource = acp::schema::TextResourceContents::new(text, uri.clone())
                         .mime_type(mime_type.clone());
-                    blocks.push(acp::ContentBlock::Resource(acp::EmbeddedResource::new(
-                        acp::EmbeddedResourceResource::TextResourceContents(resource),
+                    blocks.push(acp::schema::ContentBlock::Resource(acp::schema::EmbeddedResource::new(
+                        acp::schema::EmbeddedResourceResource::TextResourceContents(resource),
                     )));
                 }
                 StoredPromptBlock::Resource {
@@ -113,12 +113,12 @@ impl PromptPayload {
                     size,
                 } => {
                     let size = size.and_then(|value| i64::try_from(value).ok());
-                    let link = acp::ResourceLink::new(name.clone(), uri.clone())
+                    let link = acp::schema::ResourceLink::new(name.clone(), uri.clone())
                         .mime_type(mime_type.clone())
                         .title(title.clone())
                         .description(description.clone())
                         .size(size);
-                    blocks.push(acp::ContentBlock::ResourceLink(link));
+                    blocks.push(acp::schema::ContentBlock::ResourceLink(link));
                 }
                 StoredPromptBlock::PlanReference {
                     plan_id,
@@ -131,13 +131,13 @@ impl PromptPayload {
                     let markdown = render_plan_reference_markdown(title, body_markdown);
                     if *as_resource {
                         let uri = format!("plan://{plan_id}?snapshot={snapshot_hash}");
-                        let resource = acp::TextResourceContents::new(markdown, uri)
+                        let resource = acp::schema::TextResourceContents::new(markdown, uri)
                             .mime_type(Some("text/markdown".to_string()));
-                        blocks.push(acp::ContentBlock::Resource(acp::EmbeddedResource::new(
-                            acp::EmbeddedResourceResource::TextResourceContents(resource),
+                        blocks.push(acp::schema::ContentBlock::Resource(acp::schema::EmbeddedResource::new(
+                            acp::schema::EmbeddedResourceResource::TextResourceContents(resource),
                         )));
                     } else {
-                        blocks.push(acp::ContentBlock::Text(acp::TextContent::new(markdown)));
+                        blocks.push(acp::schema::ContentBlock::Text(acp::schema::TextContent::new(markdown)));
                     }
                 }
             }

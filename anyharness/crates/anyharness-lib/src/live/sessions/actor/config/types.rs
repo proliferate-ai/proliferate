@@ -50,7 +50,7 @@ pub(in crate::live::sessions::actor) enum ConfigApplyOutcome {
 
 pub(in crate::live::sessions::actor) fn tracked_config_purpose(
     config_id: &str,
-    option: Option<&acp::SessionConfigOption>,
+    option: Option<&acp::schema::SessionConfigOption>,
 ) -> Option<ConfigPurpose> {
     if is_model_config_request(config_id, option) {
         Some(ConfigPurpose::Model)

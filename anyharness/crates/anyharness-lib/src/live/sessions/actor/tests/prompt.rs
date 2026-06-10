@@ -27,9 +27,9 @@ fn empty_turn_error_ignores_cancelled_turns() {
 #[test]
 fn empty_turn_error_ignores_turns_with_agent_content() {
     let mut diagnostics = PromptDiagnostics::new(None);
-    let notif = acp::SessionNotification::new(
+    let notif = acp::schema::SessionNotification::new(
         "native-1",
-        acp::SessionUpdate::AgentMessageChunk(acp::ContentChunk::new("hello".into())),
+        acp::schema::SessionUpdate::AgentMessageChunk(acp::schema::ContentChunk::new("hello".into())),
     );
     diagnostics.observe_notification(&notif);
 
@@ -43,9 +43,9 @@ fn empty_turn_error_ignores_turns_with_agent_content() {
 #[test]
 fn prompt_diagnostics_records_only_marked_transient_status_text() {
     let mut diagnostics = PromptDiagnostics::new(None);
-    let unmarked = acp::SessionNotification::new(
+    let unmarked = acp::schema::SessionNotification::new(
         "native-1",
-        acp::SessionUpdate::AgentThoughtChunk(acp::ContentChunk::new(
+        acp::schema::SessionUpdate::AgentThoughtChunk(acp::schema::ContentChunk::new(
             "ordinary private thought".into(),
         )),
     );
@@ -63,10 +63,10 @@ fn prompt_diagnostics_records_only_marked_transient_status_text() {
     .as_object()
     .expect("object meta")
     .clone();
-    let marked = acp::SessionNotification::new(
+    let marked = acp::schema::SessionNotification::new(
         "native-1",
-        acp::SessionUpdate::AgentThoughtChunk(
-            acp::ContentChunk::new("Retrying Claude API request 1/10...".into()).meta(meta),
+        acp::schema::SessionUpdate::AgentThoughtChunk(
+            acp::schema::ContentChunk::new("Retrying Claude API request 1/10...".into()).meta(meta),
         ),
     );
     diagnostics.observe_notification(&marked);
@@ -108,19 +108,19 @@ fn codex_prompt_inlines_first_prompt_append_only_before_first_turn() {
 
 #[test]
 fn prepend_system_prompt_append_adds_hidden_instruction_block() {
-    let mut blocks = vec![acp::ContentBlock::Text(acp::TextContent::new(
+    let mut blocks = vec![acp::schema::ContentBlock::Text(acp::schema::TextContent::new(
         "Build a product".to_string(),
     ))];
 
     prepend_system_prompt_append_to_acp_blocks(&mut blocks, "Name the workspace first.");
 
     assert_eq!(blocks.len(), 2);
-    let acp::ContentBlock::Text(first) = &blocks[0] else {
+    let acp::schema::ContentBlock::Text(first) = &blocks[0] else {
         panic!("first block should be text");
     };
     assert!(first.text.contains("System instruction from AnyHarness"));
     assert!(first.text.contains("Name the workspace first."));
-    let acp::ContentBlock::Text(second) = &blocks[1] else {
+    let acp::schema::ContentBlock::Text(second) = &blocks[1] else {
         panic!("second block should be text");
     };
     assert_eq!(second.text, "Build a product");

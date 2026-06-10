@@ -2,30 +2,30 @@ use agent_client_protocol as acp;
 
 use super::model::SessionMcpServer;
 
-pub fn to_acp_servers(bindings: &[SessionMcpServer]) -> Vec<acp::McpServer> {
+pub fn to_acp_servers(bindings: &[SessionMcpServer]) -> Vec<acp::schema::McpServer> {
     bindings
         .iter()
         .map(|binding| match binding {
-            SessionMcpServer::Http(server) => acp::McpServer::Http(
-                acp::McpServerHttp::new(server.server_name.clone(), server.url.clone()).headers(
+            SessionMcpServer::Http(server) => acp::schema::McpServer::Http(
+                acp::schema::McpServerHttp::new(server.server_name.clone(), server.url.clone()).headers(
                     server
                         .headers
                         .iter()
                         .map(|header| {
-                            acp::HttpHeader::new(header.name.clone(), header.value.clone())
+                            acp::schema::HttpHeader::new(header.name.clone(), header.value.clone())
                         })
                         .collect(),
                 ),
             ),
-            SessionMcpServer::Stdio(server) => acp::McpServer::Stdio(
-                acp::McpServerStdio::new(server.server_name.clone(), server.command.clone())
+            SessionMcpServer::Stdio(server) => acp::schema::McpServer::Stdio(
+                acp::schema::McpServerStdio::new(server.server_name.clone(), server.command.clone())
                     .args(server.args.clone())
                     .env(
                         server
                             .env
                             .iter()
                             .map(|env_var| {
-                                acp::EnvVariable::new(env_var.name.clone(), env_var.value.clone())
+                                acp::schema::EnvVariable::new(env_var.name.clone(), env_var.value.clone())
                             })
                             .collect(),
                     ),
@@ -58,6 +58,6 @@ mod tests {
         let mapped = to_acp_servers(&bindings);
 
         assert_eq!(mapped.len(), 1);
-        assert!(matches!(mapped[0], acp::McpServer::Stdio(_)));
+        assert!(matches!(mapped[0], acp::schema::McpServer::Stdio(_)));
     }
 }

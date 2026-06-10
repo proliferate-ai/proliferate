@@ -130,7 +130,7 @@ fn converts_plan_reference_to_resource_or_text() {
         .expect("to acp");
     assert!(matches!(
         resource_blocks.as_slice(),
-        [acp::ContentBlock::Resource(_)]
+        [acp::schema::ContentBlock::Resource(_)]
     ));
 
     let text_payload = prepare_prompt(
@@ -147,7 +147,7 @@ fn converts_plan_reference_to_resource_or_text() {
         .expect("to acp");
     assert!(matches!(
         text_blocks.as_slice(),
-        [acp::ContentBlock::Text(_)]
+        [acp::schema::ContentBlock::Text(_)]
     ));
 }
 
