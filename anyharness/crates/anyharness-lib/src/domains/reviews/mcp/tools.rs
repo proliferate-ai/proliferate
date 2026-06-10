@@ -57,7 +57,7 @@ pub fn parent_tool_list(can_signal_revision: bool) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "reviewId": { "type": "string" },
+                    "reviewId": { "type": "string", "description": "Stable review target id." },
                     "revisedPlanId": { "type": "string" }
                 }
             }),
@@ -69,7 +69,7 @@ pub fn parent_tool_list(can_signal_revision: bool) -> Vec<Value> {
         json!({
             "type": "object",
             "properties": {
-                "reviewId": { "type": "string" }
+                "reviewId": { "type": "string", "description": "Stable review target id." }
             }
         }),
     ));
