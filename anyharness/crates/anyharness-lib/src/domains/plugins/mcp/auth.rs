@@ -19,9 +19,7 @@ impl SkillsMcpAuth {
                 runtime_home,
                 SECRET_FILE_NAME,
                 McpCapabilityTokenSignature::HmacSha256,
-                McpCapabilityTokenSignature::HmacSha256,
                 super::definition::DEFINITION.id,
-                "x-proliferate-skills-session-token",
             ),
         }
     }

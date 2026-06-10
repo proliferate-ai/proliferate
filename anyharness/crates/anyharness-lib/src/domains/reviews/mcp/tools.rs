@@ -19,8 +19,6 @@ pub struct MarkReviewRevisionReadyArgs {
     #[serde(default)]
     pub review_id: Option<String>,
     #[serde(default)]
-    pub review_run_id: Option<String>,
-    #[serde(default)]
     pub revised_plan_id: Option<String>,
 }
 
@@ -29,8 +27,6 @@ pub struct MarkReviewRevisionReadyArgs {
 pub struct GetReviewStatusArgs {
     #[serde(default)]
     pub review_id: Option<String>,
-    #[serde(default)]
-    pub review_run_id: Option<String>,
 }
 
 pub fn reviewer_tool_list() -> Vec<Value> {
@@ -57,12 +53,11 @@ pub fn parent_tool_list(can_signal_revision: bool) -> Vec<Value> {
     if can_signal_revision {
         tools.push(tool_definition(
             "mark_review_revision_ready",
-            "Signal that the reviewed plan or implementation has been revised and is ready for the next review round. reviewId is required unless using the deprecated reviewRunId alias.",
+            "Signal that the reviewed plan or implementation has been revised and is ready for the next review round.",
             json!({
                 "type": "object",
                 "properties": {
-                    "reviewId": { "type": "string", "description": "Preferred stable review target. Provide either reviewId or deprecated reviewRunId." },
-                    "reviewRunId": { "type": "string", "description": "Deprecated alias for reviewId." },
+                    "reviewId": { "type": "string", "description": "Stable review target id." },
                     "revisedPlanId": { "type": "string" }
                 }
             }),
@@ -70,12 +65,11 @@ pub fn parent_tool_list(can_signal_revision: bool) -> Vec<Value> {
     }
     tools.push(tool_definition(
         "get_review_status",
-        "Get active review status for this parent session. Optionally filter by reviewId; reviewRunId is a deprecated alias.",
+        "Get active review status for this parent session. Optionally filter by reviewId.",
         json!({
             "type": "object",
             "properties": {
-                "reviewId": { "type": "string" },
-                "reviewRunId": { "type": "string", "description": "Deprecated alias for reviewId." }
+                "reviewId": { "type": "string", "description": "Stable review target id." }
             }
         }),
     ));

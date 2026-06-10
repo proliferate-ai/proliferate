@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use super::super::service::SubagentService;
 use super::calls_helpers::{
     default_model_for_agent, initial_config_string, launch_agents_to_json, mode_options_to_json,
-    prompt_outcome_label, resolve_preferred_string, summaries_to_json,
+    prompt_outcome_label, summaries_to_json,
 };
 use super::context::SubagentMcpContext;
 use super::tools::{
@@ -52,7 +52,7 @@ pub async fn call_tool(
                 .read_subagent_events(
                     &ctx.parent_session_id,
                     args.subagent_id.as_deref(),
-                    args.child_session_id.as_deref(),
+                    None,
                     args.since_seq,
                     args.limit,
                 )
@@ -71,7 +71,7 @@ pub async fn call_tool(
             let link = service.resolve_target_including_closed(
                 &ctx.parent_session_id,
                 args.subagent_id.as_deref(),
-                args.child_session_id.as_deref(),
+                None,
             )?;
             service
                 .read_latest_turns(
@@ -104,7 +104,7 @@ pub async fn call_tool(
             let link = service.resolve_target_including_closed(
                 &ctx.parent_session_id,
                 args.subagent_id.as_deref(),
-                args.child_session_id.as_deref(),
+                None,
             )?;
             service
                 .search_transcript(
@@ -236,32 +236,15 @@ async fn create_subagent(
     if prompt.trim().is_empty() {
         anyhow::bail!("prompt is required");
     }
-    let harness_id = resolve_preferred_string(
-        args.harness_id.as_deref(),
-        args.agent_kind.as_deref(),
-        "harnessId",
-        "agentKind",
-    )?;
-    let agent_kind = harness_id.unwrap_or_else(|| parent.agent_kind.clone());
-    let config_model_id =
-        initial_config_string(args.initial_config.as_ref(), &["modelId", "model"]);
-    let config_mode_id = initial_config_string(args.initial_config.as_ref(), &["modeId", "mode"]);
-    let model_id = resolve_preferred_string(
-        config_model_id.as_deref(),
-        args.model_id.as_deref(),
-        "initialConfig.modelId",
-        "modelId",
-    )?
-    .or(parent.current_model_id.clone())
-    .or(parent.requested_model_id.clone());
-    let mode_id = resolve_preferred_string(
-        config_mode_id.as_deref(),
-        args.mode_id.as_deref(),
-        "initialConfig.modeId",
-        "modeId",
-    )?
-    .or(parent.current_mode_id.clone())
-    .or(parent.requested_mode_id.clone());
+    let agent_kind = args
+        .harness_id
+        .unwrap_or_else(|| parent.agent_kind.clone());
+    let model_id = initial_config_string(args.initial_config.as_ref(), &["modelId", "model"])
+        .or(parent.current_model_id.clone())
+        .or(parent.requested_model_id.clone());
+    let mode_id = initial_config_string(args.initial_config.as_ref(), &["modeId", "mode"])
+        .or(parent.current_mode_id.clone())
+        .or(parent.requested_mode_id.clone());
     let label = args
         .label
         .map(|value| value.trim().to_string())
@@ -399,14 +382,14 @@ async fn send_subagent_message(
     let link = service.authorize_target(
         parent_session_id,
         args.subagent_id.as_deref(),
-        args.child_session_id.as_deref(),
+        None,
     )?;
     let wake_scheduled = if args.wake_on_completion {
         service
             .schedule_wake_for_target(
                 parent_session_id,
                 args.subagent_id.as_deref(),
-                args.child_session_id.as_deref(),
+                None,
             )?
             .1
     } else {
@@ -456,7 +439,7 @@ fn schedule_subagent_wake(
     let (link, inserted) = service.schedule_wake_for_target(
         parent_session_id,
         args.subagent_id.as_deref(),
-        args.child_session_id.as_deref(),
+        None,
     )?;
     Ok(json!({
         "subagentId": link.public_id,
@@ -478,7 +461,7 @@ async fn get_subagent_status(
     let link = service.resolve_target_including_closed(
         parent_session_id,
         args.subagent_id.as_deref(),
-        args.child_session_id.as_deref(),
+        None,
     )?;
     let session = service
         .session_store()
@@ -507,7 +490,7 @@ async fn close_subagent(
     let link = service.resolve_target_including_closed(
         parent_session_id,
         args.subagent_id.as_deref(),
-        args.child_session_id.as_deref(),
+        None,
     )?;
     let already_closed = link.closed_at.is_some();
     let now = chrono::Utc::now().to_rfc3339();
@@ -525,7 +508,7 @@ async fn close_subagent(
     let refreshed = service.resolve_target_including_closed(
         parent_session_id,
         args.subagent_id.as_deref(),
-        args.child_session_id.as_deref(),
+        None,
     )?;
     Ok(json!({
         "subagentId": refreshed.public_id,

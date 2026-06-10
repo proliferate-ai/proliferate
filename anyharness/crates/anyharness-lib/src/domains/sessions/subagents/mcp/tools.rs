@@ -23,12 +23,6 @@ pub struct CreateSubagentArgs {
     #[serde(default)]
     pub initial_config: Option<Value>,
     #[serde(default)]
-    pub agent_kind: Option<String>,
-    #[serde(default)]
-    pub model_id: Option<String>,
-    #[serde(default)]
-    pub mode_id: Option<String>,
-    #[serde(default)]
     pub wake_on_completion: bool,
 }
 
@@ -37,8 +31,6 @@ pub struct CreateSubagentArgs {
 pub struct ChildSessionArgs {
     #[serde(default)]
     pub subagent_id: Option<String>,
-    #[serde(default)]
-    pub child_session_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -46,8 +38,6 @@ pub struct ChildSessionArgs {
 pub struct SendSubagentMessageArgs {
     #[serde(default)]
     pub subagent_id: Option<String>,
-    #[serde(default)]
-    pub child_session_id: Option<String>,
     pub prompt: String,
     #[serde(default)]
     pub wake_on_completion: bool,
@@ -58,8 +48,6 @@ pub struct SendSubagentMessageArgs {
 pub struct ReadSubagentEventsArgs {
     #[serde(default)]
     pub subagent_id: Option<String>,
-    #[serde(default)]
-    pub child_session_id: Option<String>,
     #[serde(default)]
     pub since_seq: Option<i64>,
     #[serde(default)]
@@ -72,8 +60,6 @@ pub struct ReadSubagentLatestTurnsArgs {
     #[serde(default)]
     pub subagent_id: Option<String>,
     #[serde(default)]
-    pub child_session_id: Option<String>,
-    #[serde(default)]
     pub limit: Option<usize>,
 }
 
@@ -82,8 +68,6 @@ pub struct ReadSubagentLatestTurnsArgs {
 pub struct SearchSubagentTranscriptArgs {
     #[serde(default)]
     pub subagent_id: Option<String>,
-    #[serde(default)]
-    pub child_session_id: Option<String>,
     pub query: String,
     #[serde(default)]
     pub limit: Option<usize>,
@@ -122,10 +106,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
                                 "modeId": { "type": "string" }
                             }
                         },
-                        "wakeOnCompletion": { "type": "boolean" },
-                        "agentKind": { "type": "string", "description": "Deprecated alias for harnessId." },
-                        "modelId": { "type": "string", "description": "Deprecated alias for initialConfig.modelId." },
-                        "modeId": { "type": "string", "description": "Deprecated alias for initialConfig.modeId." }
+                        "wakeOnCompletion": { "type": "boolean" }
                     },
                     "required": ["prompt"]
                 }),
@@ -141,8 +122,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string", "description": "Preferred stable subagent target. Provide either subagentId or deprecated childSessionId." },
-                    "childSessionId": { "type": "string", "description": "Deprecated legacy target." },
+                    "subagentId": { "type": "string", "description": "Stable subagent target id." },
                     "prompt": { "type": "string" },
                     "wakeOnCompletion": { "type": "boolean" }
                 },
@@ -155,8 +135,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string", "description": "Preferred stable subagent target. Provide either subagentId or deprecated childSessionId." },
-                    "childSessionId": { "type": "string", "description": "Deprecated legacy target." }
+                    "subagentId": { "type": "string", "description": "Stable subagent target id." }
                 }
             }),
         ),
@@ -166,8 +145,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string", "description": "Preferred stable subagent target. Provide either subagentId or deprecated childSessionId." },
-                    "childSessionId": { "type": "string", "description": "Deprecated legacy target." }
+                    "subagentId": { "type": "string", "description": "Stable subagent target id." }
                 }
             }),
         ),
@@ -177,8 +155,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string", "description": "Preferred stable subagent target. Provide either subagentId or deprecated childSessionId." },
-                    "childSessionId": { "type": "string", "description": "Deprecated legacy target." },
+                    "subagentId": { "type": "string", "description": "Stable subagent target id." },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 10 }
                 }
             }),
@@ -189,8 +166,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string", "description": "Preferred stable subagent target. Provide either subagentId or deprecated childSessionId." },
-                    "childSessionId": { "type": "string", "description": "Deprecated legacy target." },
+                    "subagentId": { "type": "string", "description": "Stable subagent target id." },
                     "query": { "type": "string" },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 25 }
                 },
@@ -203,8 +179,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string", "description": "Preferred stable subagent target. Provide either subagentId or deprecated childSessionId." },
-                    "childSessionId": { "type": "string", "description": "Deprecated legacy target." },
+                    "subagentId": { "type": "string", "description": "Stable subagent target id." },
                     "sinceSeq": { "type": "integer" },
                     "limit": {
                         "type": "integer",
@@ -220,8 +195,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string", "description": "Preferred stable subagent target. Provide either subagentId or deprecated childSessionId." },
-                    "childSessionId": { "type": "string", "description": "Deprecated legacy target." }
+                    "subagentId": { "type": "string", "description": "Stable subagent target id." }
                 }
             }),
         ),

@@ -6,7 +6,6 @@ use crate::integrations::mcp::product_server::{
 };
 
 const SECRET_FILE_NAME: &str = "subagent-mcp-token.key";
-pub const LEGACY_CAPABILITY_HEADER_NAME: &str = "x-subagent-session-token";
 
 #[derive(Clone)]
 pub struct SubagentMcpAuth {
@@ -16,16 +15,11 @@ pub struct SubagentMcpAuth {
 impl SubagentMcpAuth {
     pub fn new(runtime_home: PathBuf) -> Self {
         Self {
-            // Fresh generic-header tokens use the shared product HMAC envelope.
-            // The legacy header still validates old SHA256-dot workspace/session
-            // tokens for already-running sessions.
             inner: ProductMcpAuth::new(
                 runtime_home,
                 SECRET_FILE_NAME,
                 McpCapabilityTokenSignature::HmacSha256,
-                McpCapabilityTokenSignature::LegacySha256Dot,
                 super::definition::DEFINITION.id,
-                LEGACY_CAPABILITY_HEADER_NAME,
             ),
         }
     }

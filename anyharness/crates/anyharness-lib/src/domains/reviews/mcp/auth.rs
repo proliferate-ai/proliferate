@@ -6,7 +6,6 @@ use crate::integrations::mcp::product_server::{
 };
 
 const SECRET_FILE_NAME: &str = "review-mcp-token.key";
-pub const LEGACY_CAPABILITY_HEADER_NAME: &str = "x-review-session-token";
 
 #[derive(Clone)]
 pub struct ReviewMcpAuth {
@@ -20,9 +19,7 @@ impl ReviewMcpAuth {
                 runtime_home,
                 SECRET_FILE_NAME,
                 McpCapabilityTokenSignature::HmacSha256,
-                McpCapabilityTokenSignature::HmacSha256,
                 super::definition::DEFINITION.id,
-                LEGACY_CAPABILITY_HEADER_NAME,
             ),
         }
     }

@@ -14,7 +14,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::Value;
 
-use self::auth::{CoworkMcpAuth, LEGACY_CAPABILITY_HEADER_NAME};
+use self::auth::CoworkMcpAuth;
 use self::context::CoworkMcpContext;
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
 use crate::domains::cowork::runtime::CoworkRuntime;
@@ -50,10 +50,6 @@ impl ProductMcpServer for CoworkProductMcpServer {
 
     fn definition(&self) -> &'static ProductMcpDefinition {
         &definition::DEFINITION
-    }
-
-    fn legacy_header_names(&self) -> &'static [&'static str] {
-        &[LEGACY_CAPABILITY_HEADER_NAME]
     }
 
     fn validate_capability_token(

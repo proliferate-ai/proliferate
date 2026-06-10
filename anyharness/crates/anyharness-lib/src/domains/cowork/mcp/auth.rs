@@ -6,7 +6,6 @@ use crate::integrations::mcp::product_server::{
 };
 
 pub(crate) const SECRET_FILE_NAME: &str = "cowork-mcp-token.key";
-pub const LEGACY_CAPABILITY_HEADER_NAME: &str = "x-cowork-session-token";
 
 #[derive(Clone)]
 pub struct CoworkMcpAuth {
@@ -16,16 +15,11 @@ pub struct CoworkMcpAuth {
 impl CoworkMcpAuth {
     pub fn new(runtime_home: PathBuf) -> Self {
         Self {
-            // Fresh generic-header tokens use the shared product HMAC envelope.
-            // The legacy cowork route still validates old SHA256-dot
-            // workspace/session tokens for already-running sessions.
             inner: ProductMcpAuth::new(
                 runtime_home,
                 SECRET_FILE_NAME,
                 McpCapabilityTokenSignature::HmacSha256,
-                McpCapabilityTokenSignature::LegacySha256Dot,
                 super::definition::DEFINITION.id,
-                LEGACY_CAPABILITY_HEADER_NAME,
             ),
         }
     }
@@ -50,7 +44,6 @@ impl CoworkMcpAuth {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::integrations::mcp::capability_token::McpCapabilityTokenIssuer;
 
     fn runtime_home(test_name: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!(
@@ -62,7 +55,7 @@ mod tests {
     }
 
     #[test]
-    fn validates_product_and_legacy_tokens_without_cross_accepting_scopes() {
+    fn validates_product_token_and_rejects_wrong_scope() {
         let home = runtime_home("scope");
         let auth = CoworkMcpAuth::new(home.clone());
         let request = ProductMcpRequestContext::new("workspace-1", "session-1", "cowork");
@@ -80,46 +73,16 @@ mod tests {
             .expect("validate product token"),
             ProductMcpTokenValidation::Valid,
         );
-        assert_eq!(
-            auth.validate_capability_header(
-                ProductMcpAuthHeader::Legacy {
-                    name: LEGACY_CAPABILITY_HEADER_NAME,
-                    value: &product_token,
-                },
-                &request,
-            )
-            .expect("reject product token in legacy header"),
-            ProductMcpTokenValidation::Invalid,
-        );
 
-        let legacy_issuer = McpCapabilityTokenIssuer::new(
-            home.clone(),
-            SECRET_FILE_NAME,
-            McpCapabilityTokenSignature::LegacySha256Dot,
-            60,
-        );
-        let legacy_token = legacy_issuer
-            .mint_workspace_session_token("workspace-1", "session-1")
-            .expect("mint legacy token");
-        assert_eq!(
-            auth.validate_capability_header(
-                ProductMcpAuthHeader::Legacy {
-                    name: LEGACY_CAPABILITY_HEADER_NAME,
-                    value: &legacy_token,
-                },
-                &request,
-            )
-            .expect("validate legacy token"),
-            ProductMcpTokenValidation::Valid,
-        );
+        let wrong_scope = ProductMcpRequestContext::new("workspace-1", "session-1", "subagents");
         assert_eq!(
             auth.validate_capability_header(
                 ProductMcpAuthHeader::Product {
-                    value: &legacy_token,
+                    value: &product_token,
                 },
-                &request,
+                &wrong_scope,
             )
-            .expect("reject legacy token in product header"),
+            .expect("reject wrong scope"),
             ProductMcpTokenValidation::Invalid,
         );
 

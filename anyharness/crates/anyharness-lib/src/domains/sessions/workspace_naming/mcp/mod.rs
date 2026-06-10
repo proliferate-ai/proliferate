@@ -9,7 +9,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::Value;
 
-use self::auth::{WorkspaceNamingMcpAuth, LEGACY_CAPABILITY_HEADER_NAME};
+use self::auth::WorkspaceNamingMcpAuth;
 use self::context::WorkspaceNamingMcpContext;
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
@@ -49,10 +49,6 @@ impl ProductMcpServer for WorkspaceNamingProductMcpServer {
 
     fn definition(&self) -> &'static ProductMcpDefinition {
         &definition::DEFINITION
-    }
-
-    fn legacy_header_names(&self) -> &'static [&'static str] {
-        &[LEGACY_CAPABILITY_HEADER_NAME]
     }
 
     fn validate_capability_token(
