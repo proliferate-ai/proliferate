@@ -19,8 +19,11 @@ Three rules generate the entire structure. Everything else is a consequence.
    category. Slop is one function doing two jobs.
 2. **A path tells you what is allowed before you open the file.** The root of
    any module — domain or concern — reads as a table of contents.
-3. **Dependency direction is one-way**, and composition is licensed: exactly
-   one layer per use case is allowed to see across concerns.
+3. **Dependency direction is one-way, and exactly one layer per use case may
+   see across concerns.** For durable-only use cases that layer is the
+   domain's `service.rs`; for live or multi-domain use cases it is the
+   domain's `runtime.rs` (its facade). Everything below the composing layer
+   is single-concern by construction — which is what makes it readable alone.
 
 The corollary that decides most placements: anything **pure** is reachable by
 `use`; anything **live** (stores, gates, handles, ciphers, clocks) must be
@@ -33,9 +36,9 @@ at wiring.
 | # | Job | Home |
 | --- | --- | --- |
 | 1 | Declare shapes | `contract` crate (wire), `model.rs` (domain), `store/rows` (db), `live/<area>/model.rs` (live) |
-| 2 | Translate shapes | edge seam files only — see Mapping below |
+| 2 | Translate shapes | only at the four doorsteps — see Mapping below |
 | 3 | Decide | `*_policy.rs` and pure helper fns — sync, no IO, no clock |
-| 4 | Orchestrate | `runtime.rs` (cross-concern) and `service.rs` (within-concern) use cases |
+| 4 | Orchestrate | `runtime.rs` (the facade: cross-concern) and `service.rs` (within-concern) use cases |
 | 5 | Perform effects | mechanism files (one each), `adapters/`, `integrations/` |
 | 6 | Hold state | `store/` (durable), live actors/managers (live) |
 | 7 | Wire | `app/` only, via per-domain constructors |
@@ -235,6 +238,32 @@ Four questions give every file exactly one home:
 3. **Which role within the concern?** (service / policy / mechanism / store —
    the eight jobs)
 4. **Earned or inline?** (the proportionality table)
+
+## Building A New Use Case
+
+The end-to-end order for a new feature. Skip any step the proportionality
+table says is unearned; never skip the four invariants (auth assertion, no
+contract types past the edge, errors via `From`, rows inside the store).
+
+1. **Wire shape**: request/response types in `anyharness-contract/src/v1/`.
+2. **Owner**: durable-only -> the domain's `service`; live or multi-domain ->
+   its `runtime`. A new nameable concern -> a new concern folder.
+3. **Domain vocabulary**: input/record/view types in `model.rs`.
+4. **The use case**: the pipeline fn (resolve -> decide -> execute) with its
+   private Context, and `<usecase>_policy.rs` for the rules.
+5. **State**: store fns for new rows — tier-1 surface, tier-2 row fns
+   (see persistence.md).
+6. **Errors**: new enum or new variants, `#[from]` for absorbed layers, one
+   `From` impl in `api/http/<resource>_errors.rs`.
+7. **Edge**: the handler stanza plus seam constructors in
+   `<resource>_contract.rs` (see api.md).
+8. **Span**: `#[tracing::instrument]` on the use-case entry.
+9. **Wiring**: extend the domain's constructor in `app/` if new deps appeared.
+10. **Tests**: policy tests with hand-built Contexts (no DB), store tests,
+    one handler test through the stanza.
+
+Reviewing existing code is the same list run in reverse: anything that
+deviates is either a named migration exception or a finding.
 
 ## Smells (Greppable)
 

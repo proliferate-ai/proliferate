@@ -126,6 +126,12 @@ Litmus rules (greppable):
 - no imports from `domains/**` beyond the called surface and its input/view
   types
 
+One sanctioned addition to the stanza: a route-scoped workspace operation
+gate (see Operation Gates below) may precede step 3 when it wraps exactly one
+call — it counts as transport admission, not a second domain call. If the
+lease must span a multi-step workflow, the workflow and the lease both belong
+in the domain runtime.
+
 Authorization here answers "who is asking". Business preconditions ("is this
 workspace mutable right now") belong inside the domain use case — a flow
 checking both is correct; the edge checking preconditions is not.
