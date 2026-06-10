@@ -9,8 +9,8 @@
 
 anyharness/crates/anyharness-contract/src/v1/events.rs 949 existing AnyHarness contract oversized file
 anyharness/crates/anyharness-contract/src/v1/sessions.rs 802 existing AnyHarness contract oversized file
-anyharness/crates/anyharness-lib/src/api/openapi.rs 859 existing AnyHarness oversized file
-anyharness/crates/anyharness-lib/src/api/router_tests.rs 1179 existing AnyHarness oversized test file
+anyharness/crates/anyharness-lib/src/api/openapi.rs 862 existing AnyHarness oversized file
+anyharness/crates/anyharness-lib/src/api/router_tests.rs 1247 existing AnyHarness oversized test file
 anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1897 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/mobility/service.rs 1524 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/plans/service.rs 628 existing AnyHarness oversized file
