@@ -14,7 +14,7 @@ use crate::domains::sessions::model::{
 };
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
-use crate::live::sessions::event_sink::AcpToolPayload;
+use crate::live::sessions::sink::AcpToolPayload;
 use crate::persistence::Db;
 
 #[test]

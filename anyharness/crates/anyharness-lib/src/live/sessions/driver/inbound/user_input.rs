@@ -7,7 +7,7 @@ use anyharness_contract::v1::{
 use serde::{Deserialize, Serialize};
 
 use super::{raw_ext_response, RuntimeClient};
-use crate::live::sessions::interactions::broker::UserInputOutcome;
+use crate::live::sessions::rendezvous::broker::UserInputOutcome;
 
 impl RuntimeClient {
     pub(super) async fn codex_request_user_input(

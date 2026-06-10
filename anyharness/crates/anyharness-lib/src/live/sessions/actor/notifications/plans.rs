@@ -6,7 +6,7 @@ use crate::domains::plans::model::NewPlan;
 use crate::domains::plans::service::{PlanCreateError, PlanService};
 use crate::domains::reviews::service::ReviewService;
 use crate::live::sessions::actor::notifications::types::ProposedPlanChunkMeta;
-use crate::live::sessions::event_sink::{
+use crate::live::sessions::sink::{
     AcpChunkPayload, AcpToolPayload, CompletedAssistantMessage, SessionEventSink,
 };
 

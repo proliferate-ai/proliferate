@@ -3,8 +3,8 @@ use std::sync::{Arc, RwLock as StdRwLock};
 
 use tokio::sync::{watch, RwLock};
 
-use super::interactions::broker::{
-    InteractionBroker, ResolveInteractionError as BrokerResolveInteractionError,
+use super::rendezvous::broker::{
+    InteractionRendezvous, ResolveInteractionError as BrokerResolveInteractionError,
 };
 use crate::domains::plans::service::PlanService;
 use crate::domains::reviews::service::ReviewService;
@@ -22,7 +22,7 @@ type StartupReadinessState = Option<Result<String, String>>;
 pub struct LiveSessionManager {
     live_sessions: Arc<RwLock<HashMap<String, Arc<LiveSessionHandle>>>>,
     pending_startups: Arc<RwLock<HashMap<String, watch::Receiver<StartupReadinessState>>>>,
-    interaction_broker: Arc<InteractionBroker>,
+    interaction_broker: Arc<InteractionRendezvous>,
     plan_service: Arc<PlanService>,
     review_service: Arc<StdRwLock<Option<Arc<ReviewService>>>>,
 }
@@ -56,7 +56,7 @@ impl From<BrokerResolveInteractionError> for RevealMcpElicitationUrlError {
 
 impl LiveSessionManager {
     pub fn new(plan_service: Arc<PlanService>) -> Self {
-        let interaction_broker = Arc::new(InteractionBroker::new());
+        let interaction_broker = Arc::new(InteractionRendezvous::new());
         Self {
             live_sessions: Arc::new(RwLock::new(HashMap::new())),
             pending_startups: Arc::new(RwLock::new(HashMap::new())),

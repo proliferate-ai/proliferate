@@ -12,7 +12,7 @@ use crate::domains::sessions::prompt::PromptPayload;
 use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
-use crate::live::sessions::interactions::broker::PermissionDecision;
+use crate::live::sessions::rendezvous::broker::PermissionDecision;
 use crate::observability::latency::LatencyRequestContext;
 #[derive(Debug)]
 pub enum PromptAcceptError {
@@ -49,7 +49,7 @@ pub enum ForkSessionCommandError {
 }
 
 #[derive(Clone, PartialEq)]
-pub enum InteractionResolution {
+pub enum Resolution {
     Selected {
         option_id: String,
     },
@@ -65,7 +65,7 @@ pub enum InteractionResolution {
     Dismissed,
 }
 
-impl fmt::Debug for InteractionResolution {
+impl fmt::Debug for Resolution {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Selected { option_id } => f
@@ -149,7 +149,7 @@ pub(in crate::live::sessions) enum SessionCommand {
     },
     ResolveInteraction {
         request_id: String,
-        resolution: InteractionResolution,
+        resolution: Resolution,
         respond_to: oneshot::Sender<Result<(), ResolveInteractionCommandError>>,
     },
     ApplyPlanDecision {

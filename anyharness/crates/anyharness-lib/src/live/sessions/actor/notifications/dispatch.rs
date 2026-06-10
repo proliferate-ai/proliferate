@@ -24,7 +24,7 @@ use crate::live::sessions::actor::notifications::plans::{
 };
 use crate::live::sessions::actor::state::SessionStartupState;
 use crate::live::sessions::background_work::BackgroundWorkRegistry;
-use crate::live::sessions::event_sink::{AcpChunkPayload, AcpToolPayload, SessionEventSink};
+use crate::live::sessions::sink::{AcpChunkPayload, AcpToolPayload, SessionEventSink};
 use crate::live::sessions::handle::LiveSessionHandle;
 pub(in crate::live::sessions::actor) async fn inject_runtime_event(
     event_sink: &Arc<Mutex<SessionEventSink>>,

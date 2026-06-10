@@ -15,7 +15,7 @@ use crate::live::sessions::actor::turn::active::{
     handle_active_prompt, ActivePromptContext, ActivePromptRequest,
 };
 use crate::live::sessions::background_work::{BackgroundWorkRegistry, BackgroundWorkUpdate};
-use crate::live::sessions::event_sink::SessionEventSink;
+use crate::live::sessions::sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
 
 pub(in crate::live::sessions::actor) struct IdlePromptContext<'a> {

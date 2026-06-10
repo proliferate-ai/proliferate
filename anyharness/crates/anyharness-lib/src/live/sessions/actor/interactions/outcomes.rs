@@ -1,24 +1,24 @@
 use anyharness_contract::v1::{InteractionKind, InteractionOutcome};
 
 use crate::live::sessions::actor::command::ResolveInteractionCommandError;
-use crate::live::sessions::interactions::broker::{
-    InteractionBrokerOutcome, PermissionOutcome, ResolveInteractionError, UserInputOutcome,
+use crate::live::sessions::rendezvous::broker::{
+    InteractionRendezvousOutcome, PermissionOutcome, ResolveInteractionError, UserInputOutcome,
 };
-use crate::live::sessions::interactions::mcp_elicitation::McpElicitationOutcome;
+use crate::live::sessions::rendezvous::mcp_elicitation::McpElicitationOutcome;
 
 pub(in crate::live::sessions::actor) fn broker_outcome_to_interaction_event(
-    outcome: InteractionBrokerOutcome,
+    outcome: InteractionRendezvousOutcome,
 ) -> (InteractionKind, InteractionOutcome) {
     match outcome {
-        InteractionBrokerOutcome::Permission(outcome) => (
+        InteractionRendezvousOutcome::Permission(outcome) => (
             InteractionKind::Permission,
             permission_outcome_to_interaction_outcome(outcome),
         ),
-        InteractionBrokerOutcome::UserInput(outcome) => (
+        InteractionRendezvousOutcome::UserInput(outcome) => (
             InteractionKind::UserInput,
             user_input_outcome_to_interaction_outcome(outcome),
         ),
-        InteractionBrokerOutcome::McpElicitation(outcome) => (
+        InteractionRendezvousOutcome::McpElicitation(outcome) => (
             InteractionKind::McpElicitation,
             mcp_elicitation_outcome_to_interaction_outcome(outcome),
         ),

@@ -4,7 +4,7 @@ use tokio::sync::broadcast;
 use crate::app::test_support;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::store::SessionStore;
-use crate::live::sessions::event_sink::AcpChunkPayload;
+use crate::live::sessions::sink::AcpChunkPayload;
 use crate::persistence::Db;
 use anyharness_contract::v1::SessionEventEnvelope;
 
