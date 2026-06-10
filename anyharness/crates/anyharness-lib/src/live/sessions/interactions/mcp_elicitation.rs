@@ -268,10 +268,13 @@ mod tests {
     fn standard_select_request() -> CreateElicitationRequest {
         let schema = ElicitationSchema::new().property(
             "account_id_secret",
-            StringPropertySchema::new().title("Account").one_of(vec![
-                EnumOption::new("acct_123", "Work"),
-                EnumOption::new("acct_456", "Personal"),
-            ]),
+            StringPropertySchema::new()
+                .title("Account")
+                .default_value("acct_123")
+                .one_of(vec![
+                    EnumOption::new("acct_123", "Work"),
+                    EnumOption::new("acct_456", "Personal"),
+                ]),
             true,
         );
         CreateElicitationRequest::new(
@@ -288,6 +291,7 @@ mod tests {
         let public_json = serde_json::to_string(&normalized.payload).unwrap();
         assert!(!public_json.contains("account_id_secret"));
         assert!(!public_json.contains("acct_123"));
+        assert!(!public_json.contains("default"));
         assert!(public_json.contains("Work"));
     }
 
@@ -371,6 +375,7 @@ mod tests {
 
         let debug = format!("{:?}", normalized.pending);
         assert!(!debug.contains("secret-token"));
+        assert!(!debug.contains("elic_test"));
     }
 
     #[test]
