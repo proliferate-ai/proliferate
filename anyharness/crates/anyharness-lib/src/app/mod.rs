@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::adapters::git::WorkspaceFileSearchCache;
 use crate::adapters::processes::ProcessService;
 use crate::api::auth::AuthManager;
-use crate::domains::agents::auth::{AgentAuthConfigService, AgentAuthConfigStore};
+use crate::domains::agents::auth::{AgentAuthService, AgentAuthConfigStore};
 use crate::domains::agents::model_registry::service::DynamicModelRegistryService;
 use crate::domains::agents::model_registry::store::DynamicModelRegistryStore;
 use crate::domains::agents::installer::reconcile::execution::AgentReconcileService;
@@ -96,7 +96,7 @@ pub struct AppState {
     pub auth_manager: AuthManager,
     pub agent_seed_store: AgentSeedStore,
     pub agent_runtime: Arc<AgentRuntime>,
-    pub agent_auth_config_service: Arc<AgentAuthConfigService>,
+    pub agent_auth_service: Arc<AgentAuthService>,
     pub agent_reconcile_service: Arc<AgentReconcileService>,
     pub dynamic_model_registry_service: Arc<DynamicModelRegistryService>,
     pub runtime_config_service: Arc<RuntimeConfigService>,
@@ -173,7 +173,7 @@ impl AppState {
             agent_reconcile_service.clone(),
             agent_seed_store.clone(),
         ));
-        let agent_auth_config_service = Arc::new(AgentAuthConfigService::new(
+        let agent_auth_service = Arc::new(AgentAuthService::new(
             AgentAuthConfigStore::new(db.clone()),
             session_data_cipher.clone(),
             runtime_home.clone(),
@@ -216,7 +216,7 @@ impl AppState {
             session_delete_workflow.clone(),
             WorkspaceStore::new(db.clone()),
             DynamicModelRegistryStore::new(db.clone()),
-            agent_auth_config_service.clone(),
+            agent_auth_service.clone(),
             runtime_home.clone(),
         ));
         let plan_service = Arc::new(PlanService::new(PlanStore::new(db.clone())));
@@ -330,7 +330,7 @@ impl AppState {
             workspace_access_gate.clone(),
             plan_service.clone(),
             plan_service.clone(),
-            agent_auth_config_service.clone(),
+            agent_auth_service.clone(),
         ));
         let retire_preflight_checker = Arc::new(RetirePreflightChecker::new(
             workspace_runtime.clone(),
@@ -432,7 +432,7 @@ impl AppState {
             auth_manager,
             agent_seed_store,
             agent_runtime,
-            agent_auth_config_service,
+            agent_auth_service,
             agent_reconcile_service,
             dynamic_model_registry_service,
             runtime_config_service,

@@ -88,7 +88,7 @@ impl SessionService {
         let workspace_env = read_materialized_session_env(Path::new(&workspace.path))
             .map_err(CreateSessionError::Internal)?;
         let agent_auth_overlay = self
-            .agent_auth_config_service
+            .agent_auth_service
             .launch_overlay(
                 agent_kind,
                 agent_auth_scope.as_ref(),

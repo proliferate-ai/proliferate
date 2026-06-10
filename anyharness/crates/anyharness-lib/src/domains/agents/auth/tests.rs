@@ -6,7 +6,7 @@ use serde_json::json;
 use crate::domains::sessions::mcp_bindings::crypto::SessionDataCipher;
 use crate::persistence::Db;
 
-use super::{AgentAuthConfigInput, AgentAuthConfigService, AgentAuthConfigStore};
+use super::{AgentAuthConfigInput, AgentAuthService, AgentAuthConfigStore};
 
 fn cipher() -> SessionDataCipher {
     SessionDataCipher::from_env_value("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
@@ -20,7 +20,7 @@ fn applies_status_without_secret_values() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         root,
@@ -67,7 +67,7 @@ fn applies_status_without_secret_values() {
 
 #[test]
 fn apply_config_infers_legacy_single_slot_auth_selection() {
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         std::env::temp_dir(),
@@ -96,7 +96,7 @@ fn apply_config_infers_legacy_single_slot_auth_selection() {
 
 #[test]
 fn apply_config_requires_auth_slot_for_multi_slot_agent() {
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         std::env::temp_dir(),
@@ -129,7 +129,7 @@ fn codex_launch_overlay_sets_managed_codex_home() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         root.clone(),
@@ -228,7 +228,7 @@ fn launch_overlay_uses_requested_scope() {
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&root);
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         root,
@@ -291,7 +291,7 @@ fn launch_overlay_uses_requested_scope() {
 
 #[test]
 fn apply_config_stale_response_reports_current_revision() {
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         std::env::temp_dir(),
@@ -324,7 +324,7 @@ fn apply_config_stale_response_reports_current_revision() {
 
 #[test]
 fn apply_config_rejects_disallowed_protected_env_key() {
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         std::env::temp_dir(),
@@ -358,7 +358,7 @@ fn apply_config_rejects_disallowed_protected_env_key() {
 
 #[test]
 fn apply_config_rejects_cursor_api_key_in_support_env() {
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         std::env::temp_dir(),
@@ -395,7 +395,7 @@ fn apply_config_rejects_cursor_api_key_in_support_env() {
 
 #[test]
 fn apply_config_rejects_claude_synced_protected_env() {
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         std::env::temp_dir(),
@@ -429,7 +429,7 @@ fn apply_config_rejects_claude_synced_protected_env() {
 
 #[test]
 fn apply_config_rejects_disallowed_synced_file_path() {
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         std::env::temp_dir(),
@@ -460,7 +460,7 @@ fn apply_config_rejects_disallowed_synced_file_path() {
 
 #[test]
 fn launch_overlay_rejects_expired_selection() {
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         std::env::temp_dir(),

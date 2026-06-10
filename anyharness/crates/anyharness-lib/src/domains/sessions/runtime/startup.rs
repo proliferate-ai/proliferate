@@ -361,7 +361,7 @@ impl SessionRuntime {
             .workspace_env(&workspace)
             .map_err(StartSessionError::Internal)?;
         let agent_auth_overlay = self
-            .agent_auth_config_service
+            .agent_auth_service
             .launch_overlay(
                 &record.agent_kind,
                 record.agent_auth_scope.as_ref(),
