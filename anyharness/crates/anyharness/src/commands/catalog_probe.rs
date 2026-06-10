@@ -207,6 +207,20 @@ fn auth_env_for_context(
             env.insert("ANTHROPIC_API_KEY".to_string(), secrets.require("ANTHROPIC_API_KEY")?);
             Ok(env)
         }
+        // Claude against AWS Bedrock: same binary, server side is Bedrock's
+        // model namespace (us./global. inference profiles), so menus, defaults
+        // and model ids are a distinct surface from anthropic-api. Auth is a
+        // Bedrock API key (bearer token) — no SigV4 ceremony.
+        (AgentKind::Claude, "bedrock") => {
+            let mut env = isolation_env(auth_context, &[("CLAUDE_CONFIG_DIR", "claude-config")], isolation_dirs)?;
+            env.insert(
+                "AWS_BEARER_TOKEN_BEDROCK".to_string(),
+                secrets.require("AWS_BEARER_TOKEN_BEDROCK")?,
+            );
+            env.insert("CLAUDE_CODE_USE_BEDROCK".to_string(), "1".to_string());
+            env.insert("AWS_REGION".to_string(), probe_aws_region());
+            Ok(env)
+        }
         // Claude under subscription OAuth: requires a credentials file
         // produced by `claude setup-token` (or copied from a logged-in
         // ~/.claude/.credentials.json). We copy it into an isolated config
@@ -247,6 +261,13 @@ fn auth_env_for_context(
             env.insert("OPENAI_API_KEY".to_string(), secrets.require("OPENAI_API_KEY")?);
             Ok(env)
         }
+        // OpenCode Zen: opencode's own subscription gateway (provider id
+        // "opencode"), keyed by OPENCODE_API_KEY.
+        (AgentKind::OpenCode, "opencode-zen") => {
+            let mut env = opencode_isolation_env(auth_context, isolation_dirs)?;
+            env.insert("OPENCODE_API_KEY".to_string(), secrets.require("OPENCODE_API_KEY")?);
+            Ok(env)
+        }
         (AgentKind::OpenCode, "gemini-api") => {
             let key = secrets.require("GEMINI_API_KEY")?;
             let mut env = opencode_isolation_env(auth_context, isolation_dirs)?;
@@ -284,6 +305,33 @@ fn auth_env_for_context(
             let codex_home = env.get("CODEX_HOME").expect("codex isolation dir");
             std::fs::copy(&source, std::path::Path::new(codex_home).join("auth.json"))
                 .with_context(|| format!("failed to copy {source}"))?;
+            Ok(env)
+        }
+        // Codex against AWS Bedrock: codex has no native Bedrock support and
+        // only speaks the Responses API (wire_api "chat" was removed), so we
+        // point a custom model_provider at Bedrock's OpenAI-compatible
+        // "mantle" surface, which serves /v1/responses for OpenAI models.
+        // Mantle model ids are their own namespace (openai.gpt-oss-120b — no
+        // Bedrock -1:0 suffix); its Anthropic models do not support
+        // /v1/responses and are unreachable from codex.
+        (AgentKind::Codex, "bedrock") => {
+            let token = secrets.require("AWS_BEARER_TOKEN_BEDROCK")?;
+            let mut env = isolation_env(auth_context, &[("CODEX_HOME", "codex-home")], isolation_dirs)?;
+            let codex_home = env.get("CODEX_HOME").expect("codex isolation dir");
+            let config = format!(
+                r#"model = "openai.gpt-oss-120b"
+model_provider = "bedrock"
+
+[model_providers.bedrock]
+name = "Amazon Bedrock"
+base_url = "https://bedrock-mantle.{region}.api.aws/v1"
+env_key = "AWS_BEARER_TOKEN_BEDROCK"
+wire_api = "responses"
+"#,
+                region = probe_aws_region(),
+            );
+            std::fs::write(std::path::Path::new(codex_home).join("config.toml"), config)?;
+            env.insert("AWS_BEARER_TOKEN_BEDROCK".to_string(), token);
             Ok(env)
         }
         // Gemini stores state under $HOME/.gemini — isolate HOME and seed the
@@ -339,7 +387,22 @@ const CREDENTIAL_ENV_VARS: &[&str] = &[
     "GOOGLE_GENERATIVE_AI_API_KEY",
     "GOOGLE_API_KEY",
     "CURSOR_API_KEY",
+    "OPENCODE_API_KEY",
+    "AWS_BEARER_TOKEN_BEDROCK",
+    // Ambient SigV4 credentials must not reach spawned agents either: some
+    // harnesses (e.g. opencode's amazon-bedrock provider) auto-detect them
+    // and would silently enable Bedrock in non-bedrock contexts.
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+    "AWS_PROFILE",
 ];
+
+/// Region for bedrock auth contexts; model availability is region-dependent
+/// so the snapshot records it via the context env.
+fn probe_aws_region() -> String {
+    std::env::var("PROBE_AWS_REGION").unwrap_or_else(|_| "us-east-1".to_string())
+}
 
 struct ProbeSecrets {
     values: BTreeMap<String, String>,

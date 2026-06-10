@@ -1,10 +1,10 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "2026-06-10.6",
+  "catalogVersion": "2026-06-10.7",
   "probedAgainst": {
     "registryVersion": null
   },
-  "generatedAt": "2026-06-10T02:19:36.860Z",
+  "generatedAt": "2026-06-10T04:20:35.597Z",
   "agents": [
     {
       "kind": "claude",
@@ -25,6 +25,10 @@
         {
           "id": "anthropic-oauth",
           "authSlotId": "anthropic-oauth"
+        },
+        {
+          "id": "bedrock",
+          "authSlotId": "bedrock"
         }
       ],
       "session": {
@@ -153,7 +157,8 @@
             "availability": {
               "anyOf": [
                 "anthropic-api",
-                "anthropic-oauth"
+                "anthropic-oauth",
+                "bedrock"
               ]
             },
             "defaultVisible": true,
@@ -174,7 +179,8 @@
             "provenance": {
               "observedIn": [
                 "claude.anthropic-api",
-                "claude.anthropic-oauth"
+                "claude.anthropic-oauth",
+                "claude.bedrock"
               ],
               "observedInAllContexts": true,
               "viaTrialOnly": false
@@ -218,7 +224,7 @@
                 "claude.anthropic-api",
                 "claude.anthropic-oauth"
               ],
-              "observedInAllContexts": true,
+              "observedInAllContexts": false,
               "viaTrialOnly": true
             }
           },
@@ -267,7 +273,7 @@
                 "claude.anthropic-api",
                 "claude.anthropic-oauth"
               ],
-              "observedInAllContexts": true,
+              "observedInAllContexts": false,
               "viaTrialOnly": true
             }
           },
@@ -318,15 +324,453 @@
               "observedInAllContexts": false,
               "viaTrialOnly": false
             }
+          },
+          {
+            "id": "us.anthropic.claude-sonnet-4-6",
+            "displayName": "Sonnet 4.6",
+            "description": "Sonnet 4.6 · Efficient for routine tasks",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "high"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "us.anthropic.claude-sonnet-4-6[1m]",
+            "displayName": "Sonnet 4.6 (1M context)",
+            "description": "Sonnet 4.6 for long sessions",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "high"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "us.anthropic.claude-fable-5",
+            "displayName": "Fable 5",
+            "description": "Fable 5 · Most capable for your hardest and longest-running tasks",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "high"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "us.anthropic.claude-opus-4-1-20250805-v1:0",
+            "displayName": "Opus 4.1",
+            "description": "Opus 4.1 · Legacy",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "us.anthropic.claude-opus-4-8",
+            "displayName": "Opus 4.8",
+            "description": "Opus 4.8 · Best for everyday, complex tasks",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "high"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "us.anthropic.claude-opus-4-8[1m]",
+            "displayName": "Opus 4.8 (1M context)",
+            "description": "Opus 4.8 for long sessions",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "high"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "us.anthropic.claude-opus-4-7",
+            "displayName": "Opus 4.7",
+            "description": "Opus 4.7 · Legacy",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "high"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "us.anthropic.claude-opus-4-7[1m]",
+            "displayName": "Opus 4.7 (1M context)",
+            "description": "Opus 4.7 for long sessions",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "high"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "us.anthropic.claude-opus-4-6-v1",
+            "displayName": "Opus 4.6",
+            "description": "Opus 4.6 · Legacy",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "high"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "us.anthropic.claude-opus-4-6-v1[1m]",
+            "displayName": "Opus 4.6 (1M context)",
+            "description": "Opus 4.6 for long sessions",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "high"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "global.anthropic.claude-fable-5",
+            "displayName": "Fable 5",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": false,
+            "controls": {
+              "mode": {
+                "values": [
+                  "auto",
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "high"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "claude.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": true
+            }
           }
         ],
         "observedDefaults": {
           "anthropic-api": "sonnet",
-          "anthropic-oauth": "opus"
+          "anthropic-oauth": "opus",
+          "bedrock": "us.anthropic.claude-sonnet-4-6"
         }
       },
       "provenance": {
-        "probedAt": "2026-06-10T00:17:00.562127+00:00",
+        "probedAt": "2026-06-10T04:16:44.787695+00:00",
         "attestation": {
           "name": "@agentclientprotocol/claude-agent-acp",
           "version": "0.29.0",
@@ -340,6 +784,10 @@
           {
             "id": "claude.anthropic-oauth",
             "snapshotPath": "generated/claude.anthropic-oauth.probe.json"
+          },
+          {
+            "id": "claude.bedrock",
+            "snapshotPath": "generated/claude.bedrock.probe.json"
           }
         ]
       }
@@ -356,6 +804,10 @@
         }
       },
       "authContexts": [
+        {
+          "id": "bedrock",
+          "authSlotId": "bedrock"
+        },
         {
           "id": "openai-api",
           "authSlotId": "openai-api"
@@ -410,6 +862,227 @@
         ],
         "models": [
           {
+            "id": "openai.gpt-5.4-cmb/xhigh",
+            "displayName": "gpt-5.4 (xhigh)",
+            "description": "Strong model for everyday coding. Extra high reasoning depth for complex problems",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "plan",
+                  "default"
+                ],
+                "observedValue": "default"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "xhigh"
+              },
+              "fast_mode": {
+                "values": [
+                  "off",
+                  "on"
+                ],
+                "observedValue": "off"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "codex.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "openai.gpt-5.4-cmb",
+            "displayName": "gpt-5.4",
+            "description": "Strong model for everyday coding.",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "plan",
+                  "default"
+                ],
+                "observedValue": "default"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "low"
+              },
+              "fast_mode": {
+                "values": [
+                  "off",
+                  "on"
+                ],
+                "observedValue": "off"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "codex.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false,
+              "variantIds": [
+                "openai.gpt-5.4-cmb/low",
+                "openai.gpt-5.4-cmb/medium",
+                "openai.gpt-5.4-cmb/high"
+              ]
+            }
+          },
+          {
+            "id": "openai.gpt-oss-120b",
+            "displayName": "GPT OSS 120B on Bedrock",
+            "description": "GPT OSS 120B on Bedrock Fast responses with lighter reasoning",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "plan",
+                  "default"
+                ],
+                "observedValue": "default"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "low"
+              },
+              "fast_mode": {
+                "values": [
+                  "off",
+                  "on"
+                ],
+                "observedValue": "off"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "codex.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false,
+              "variantIds": [
+                "openai.gpt-oss-120b/low",
+                "openai.gpt-oss-120b/medium",
+                "openai.gpt-oss-120b/high"
+              ]
+            }
+          },
+          {
+            "id": "openai.gpt-oss-20b",
+            "displayName": "GPT OSS 20B on Bedrock",
+            "description": "GPT OSS 20B on Bedrock Fast responses with lighter reasoning",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "plan",
+                  "default"
+                ],
+                "observedValue": "default"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "low"
+              },
+              "fast_mode": {
+                "values": [
+                  "off",
+                  "on"
+                ],
+                "observedValue": "off"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "codex.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false,
+              "variantIds": [
+                "openai.gpt-oss-20b/low",
+                "openai.gpt-oss-20b/medium",
+                "openai.gpt-oss-20b/high"
+              ]
+            }
+          },
+          {
             "id": "gpt-5.5",
             "displayName": "GPT-5.5",
             "description": "Frontier model for complex coding, research, and real-world work.",
@@ -459,7 +1132,7 @@
                 "codex.openai-api",
                 "codex.openai-oauth"
               ],
-              "observedInAllContexts": true,
+              "observedInAllContexts": false,
               "viaTrialOnly": false,
               "variantIds": [
                 "gpt-5.5/low",
@@ -519,7 +1192,7 @@
                 "codex.openai-api",
                 "codex.openai-oauth"
               ],
-              "observedInAllContexts": true,
+              "observedInAllContexts": false,
               "viaTrialOnly": false,
               "variantIds": [
                 "gpt-5.4/low",
@@ -579,7 +1252,7 @@
                 "codex.openai-api",
                 "codex.openai-oauth"
               ],
-              "observedInAllContexts": true,
+              "observedInAllContexts": false,
               "viaTrialOnly": false,
               "variantIds": [
                 "gpt-5.4-mini/low",
@@ -639,7 +1312,7 @@
                 "codex.openai-api",
                 "codex.openai-oauth"
               ],
-              "observedInAllContexts": true,
+              "observedInAllContexts": false,
               "viaTrialOnly": false,
               "variantIds": [
                 "gpt-5.3-codex/low",
@@ -699,7 +1372,7 @@
                 "codex.openai-api",
                 "codex.openai-oauth"
               ],
-              "observedInAllContexts": true,
+              "observedInAllContexts": false,
               "viaTrialOnly": false,
               "variantIds": [
                 "gpt-5.2/low",
@@ -769,18 +1442,23 @@
           }
         ],
         "observedDefaults": {
+          "bedrock": "openai.gpt-oss-120b/medium",
           "openai-api": "gpt-5.5/medium",
           "openai-oauth": "gpt-5.3-codex/medium"
         }
       },
       "provenance": {
-        "probedAt": "2026-06-10T00:17:36.868072+00:00",
+        "probedAt": "2026-06-10T04:16:48.242571+00:00",
         "attestation": {
           "name": "codex-acp",
           "version": "0.11.8",
           "title": "Codex"
         },
         "runs": [
+          {
+            "id": "codex.bedrock",
+            "snapshotPath": "generated/codex.bedrock.probe.json"
+          },
           {
             "id": "codex.openai-api",
             "snapshotPath": "generated/codex.openai-api.probe.json"
@@ -1989,11 +2667,11 @@
           }
         ],
         "observedDefaults": {
-          "cursor-login": "claude-opus-4-8[thinking=true,context=300k,effort=high,fast=false]"
+          "cursor-login": "kimi-k2.5[]"
         }
       },
       "provenance": {
-        "probedAt": "2026-06-10T00:26:29.701457+00:00",
+        "probedAt": "2026-06-10T04:19:51.541700+00:00",
         "attestation": null,
         "runs": [
           {
@@ -2236,7 +2914,7 @@
         }
       },
       "provenance": {
-        "probedAt": "2026-06-10T00:19:20.487005+00:00",
+        "probedAt": "2026-06-10T04:17:09.648698+00:00",
         "attestation": {
           "name": "gemini-cli",
           "version": "0.45.3",
@@ -2277,6 +2955,10 @@
         {
           "id": "openai-api",
           "authSlotId": "openai-api"
+        },
+        {
+          "id": "opencode-zen",
+          "authSlotId": "opencode-zen"
         }
       ],
       "session": {
@@ -2290,6 +2972,13 @@
             }
           },
           {
+            "key": "mode",
+            "values": [
+              "build",
+              "plan"
+            ]
+          },
+          {
             "key": "effort",
             "values": [
               "high",
@@ -2300,50 +2989,9 @@
               "minimal",
               "none"
             ]
-          },
-          {
-            "key": "mode",
-            "values": [
-              "build",
-              "plan"
-            ]
           }
         ],
         "models": [
-          {
-            "id": "anthropic/claude-fable-5",
-            "displayName": "Anthropic/Claude Fable 5",
-            "availability": {
-              "anyOf": [
-                "anthropic-api"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "effort": {
-                "values": [
-                  "high",
-                  "max"
-                ],
-                "observedValue": "high"
-              },
-              "mode": {
-                "values": [
-                  "build",
-                  "plan"
-                ],
-                "observedValue": "build"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "opencode.anthropic-api"
-              ],
-              "observedInAllContexts": false,
-              "viaTrialOnly": false
-            }
-          },
           {
             "id": "anthropic/claude-3-5-haiku-latest",
             "displayName": "Anthropic/Claude Haiku 3.5 (latest)",
@@ -3048,7 +3696,8 @@
                 "anthropic-api",
                 "baseline",
                 "gemini-api",
-                "openai-api"
+                "openai-api",
+                "opencode-zen"
               ]
             },
             "defaultVisible": true,
@@ -3067,7 +3716,8 @@
                 "opencode.anthropic-api",
                 "opencode.baseline",
                 "opencode.gemini-api",
-                "opencode.openai-api"
+                "opencode.openai-api",
+                "opencode.opencode-zen"
               ],
               "observedInAllContexts": true,
               "viaTrialOnly": false
@@ -3081,7 +3731,8 @@
                 "anthropic-api",
                 "baseline",
                 "gemini-api",
-                "openai-api"
+                "openai-api",
+                "opencode-zen"
               ]
             },
             "defaultVisible": true,
@@ -3109,7 +3760,8 @@
                 "opencode.anthropic-api",
                 "opencode.baseline",
                 "opencode.gemini-api",
-                "opencode.openai-api"
+                "opencode.openai-api",
+                "opencode.opencode-zen"
               ],
               "observedInAllContexts": true,
               "viaTrialOnly": false
@@ -3123,7 +3775,8 @@
                 "anthropic-api",
                 "baseline",
                 "gemini-api",
-                "openai-api"
+                "openai-api",
+                "opencode-zen"
               ]
             },
             "defaultVisible": true,
@@ -3150,7 +3803,43 @@
                 "opencode.anthropic-api",
                 "opencode.baseline",
                 "opencode.gemini-api",
-                "opencode.openai-api"
+                "opencode.openai-api",
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": true,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/minimax-m3-free",
+            "displayName": "OpenCode Zen/MiniMax M3 Free",
+            "availability": {
+              "anyOf": [
+                "anthropic-api",
+                "baseline",
+                "gemini-api",
+                "openai-api",
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.anthropic-api",
+                "opencode.baseline",
+                "opencode.gemini-api",
+                "opencode.openai-api",
+                "opencode.opencode-zen"
               ],
               "observedInAllContexts": true,
               "viaTrialOnly": false
@@ -3164,7 +3853,8 @@
                 "anthropic-api",
                 "baseline",
                 "gemini-api",
-                "openai-api"
+                "openai-api",
+                "opencode-zen"
               ]
             },
             "defaultVisible": true,
@@ -3191,75 +3881,10 @@
                 "opencode.anthropic-api",
                 "opencode.baseline",
                 "opencode.gemini-api",
-                "opencode.openai-api"
+                "opencode.openai-api",
+                "opencode.opencode-zen"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "opencode/north-mini-code-free",
-            "displayName": "OpenCode Zen/North Mini Code Free",
-            "availability": {
-              "anyOf": [
-                "anthropic-api"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high"
-                ],
-                "observedValue": "low"
-              },
-              "mode": {
-                "values": [
-                  "build",
-                  "plan"
-                ],
-                "observedValue": "build"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "opencode.anthropic-api"
-              ],
-              "observedInAllContexts": false,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "opencode/minimax-m3-free",
-            "displayName": "OpenCode Zen/MiniMax M3 Free",
-            "availability": {
-              "anyOf": [
-                "baseline",
-                "gemini-api",
-                "openai-api"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "build",
-                  "plan"
-                ],
-                "observedValue": "build"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "opencode.baseline",
-                "opencode.gemini-api",
-                "opencode.openai-api"
-              ],
-              "observedInAllContexts": false,
               "viaTrialOnly": false
             }
           },
@@ -5571,17 +6196,1747 @@
               "observedInAllContexts": false,
               "viaTrialOnly": false
             }
+          },
+          {
+            "id": "opencode-go/deepseek-v4-flash",
+            "displayName": "OpenCode Go/DeepSeek V4 Flash",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode-go/deepseek-v4-pro",
+            "displayName": "OpenCode Go/DeepSeek V4 Pro",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode-go/glm-5",
+            "displayName": "OpenCode Go/GLM-5",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode-go/glm-5.1",
+            "displayName": "OpenCode Go/GLM-5.1",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode-go/kimi-k2.5",
+            "displayName": "OpenCode Go/Kimi K2.5",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode-go/kimi-k2.6",
+            "displayName": "OpenCode Go/Kimi K2.6",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode-go/mimo-v2.5",
+            "displayName": "OpenCode Go/MiMo V2.5",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode-go/mimo-v2.5-pro",
+            "displayName": "OpenCode Go/MiMo V2.5 Pro",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode-go/minimax-m2.5",
+            "displayName": "OpenCode Go/MiniMax M2.5",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode-go/minimax-m2.7",
+            "displayName": "OpenCode Go/MiniMax M2.7",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode-go/minimax-m3",
+            "displayName": "OpenCode Go/MiniMax M3 3",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode-go/qwen3.6-plus",
+            "displayName": "OpenCode Go/Qwen3.6 Plus",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode-go/qwen3.7-max",
+            "displayName": "OpenCode Go/Qwen3.7 Max",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode-go/qwen3.7-plus",
+            "displayName": "OpenCode Go/Qwen3.7 Plus",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/claude-haiku-4-5",
+            "displayName": "OpenCode Zen/Claude Haiku 4.5",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/claude-opus-4-1",
+            "displayName": "OpenCode Zen/Claude Opus 4.1",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/claude-opus-4-5",
+            "displayName": "OpenCode Zen/Claude Opus 4.5",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/claude-opus-4-6",
+            "displayName": "OpenCode Zen/Claude Opus 4.6",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/claude-opus-4-7",
+            "displayName": "OpenCode Zen/Claude Opus 4.7",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/claude-opus-4-8",
+            "displayName": "OpenCode Zen/Claude Opus 4.8",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/claude-sonnet-4",
+            "displayName": "OpenCode Zen/Claude Sonnet 4",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/claude-sonnet-4-5",
+            "displayName": "OpenCode Zen/Claude Sonnet 4.5",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/claude-sonnet-4-6",
+            "displayName": "OpenCode Zen/Claude Sonnet 4.6",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/deepseek-v4-flash",
+            "displayName": "OpenCode Zen/DeepSeek V4 Flash",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gemini-3-flash",
+            "displayName": "OpenCode Zen/Gemini 3 Flash",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "minimal",
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "minimal"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gemini-3.1-pro",
+            "displayName": "OpenCode Zen/Gemini 3.1 Pro Preview",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gemini-3.5-flash",
+            "displayName": "OpenCode Zen/Gemini 3.5 Flash",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "minimal",
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "minimal"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/glm-5",
+            "displayName": "OpenCode Zen/GLM-5",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/glm-5.1",
+            "displayName": "OpenCode Zen/GLM-5.1",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gpt-5",
+            "displayName": "OpenCode Zen/GPT-5",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "minimal",
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "minimal"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gpt-5-codex",
+            "displayName": "OpenCode Zen/GPT-5 Codex",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gpt-5-nano",
+            "displayName": "OpenCode Zen/GPT-5 Nano",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "minimal",
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "minimal"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gpt-5.1",
+            "displayName": "OpenCode Zen/GPT-5.1",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "none",
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "none"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gpt-5.1-codex",
+            "displayName": "OpenCode Zen/GPT-5.1 Codex",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gpt-5.1-codex-max",
+            "displayName": "OpenCode Zen/GPT-5.1 Codex Max",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gpt-5.1-codex-mini",
+            "displayName": "OpenCode Zen/GPT-5.1 Codex Mini",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gpt-5.2",
+            "displayName": "OpenCode Zen/GPT-5.2",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "none",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "none"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gpt-5.2-codex",
+            "displayName": "OpenCode Zen/GPT-5.2 Codex",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "low"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gpt-5.3-codex",
+            "displayName": "OpenCode Zen/GPT-5.3 Codex",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "none",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "none"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gpt-5.3-codex-spark",
+            "displayName": "OpenCode Zen/GPT-5.3 Codex Spark",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "none",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "none"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gpt-5.4",
+            "displayName": "OpenCode Zen/GPT-5.4",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "none",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "none"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gpt-5.4-mini",
+            "displayName": "OpenCode Zen/GPT-5.4 Mini",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "none",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "none"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gpt-5.4-nano",
+            "displayName": "OpenCode Zen/GPT-5.4 Nano",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "none",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "none"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gpt-5.4-pro",
+            "displayName": "OpenCode Zen/GPT-5.4 Pro",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "medium"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gpt-5.5",
+            "displayName": "OpenCode Zen/GPT-5.5",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "none",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "none"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/gpt-5.5-pro",
+            "displayName": "OpenCode Zen/GPT-5.5 Pro",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "medium"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/grok-build-0.1",
+            "displayName": "OpenCode Zen/Grok Build 0.1",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/kimi-k2.5",
+            "displayName": "OpenCode Zen/Kimi K2.5",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/kimi-k2.6",
+            "displayName": "OpenCode Zen/Kimi K2.6",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/minimax-m2.5",
+            "displayName": "OpenCode Zen/MiniMax M2.5",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/minimax-m2.7",
+            "displayName": "OpenCode Zen/MiniMax M2.7",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/qwen3.5-plus",
+            "displayName": "OpenCode Zen/Qwen3.5 Plus",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "opencode/qwen3.6-plus",
+            "displayName": "OpenCode Zen/Qwen3.6 Plus",
+            "availability": {
+              "anyOf": [
+                "opencode-zen"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "opencode.opencode-zen"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
           }
         ],
         "observedDefaults": {
           "anthropic-api": "opencode/big-pickle",
           "baseline": "opencode/big-pickle",
           "gemini-api": "opencode/big-pickle",
-          "openai-api": "opencode/big-pickle"
+          "openai-api": "opencode/big-pickle",
+          "opencode-zen": "opencode/big-pickle"
         }
       },
       "provenance": {
-        "probedAt": "2026-06-10T00:17:38.139709+00:00",
+        "probedAt": "2026-06-10T04:20:28.761181+00:00",
         "attestation": {
           "name": "OpenCode",
           "version": "1.16.2",
@@ -5603,6 +7958,10 @@
           {
             "id": "opencode.openai-api",
             "snapshotPath": "generated/opencode.openai-api.probe.json"
+          },
+          {
+            "id": "opencode.opencode-zen",
+            "snapshotPath": "generated/opencode.opencode-zen.probe.json"
           }
         ]
       }
