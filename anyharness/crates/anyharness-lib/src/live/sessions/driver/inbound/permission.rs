@@ -5,7 +5,7 @@ use anyharness_contract::v1::{
     PermissionInteractionPayload,
 };
 
-use super::RuntimeClient;
+use super::InboundDoor;
 use crate::acp::permission_context::permission_context_from_meta;
 use crate::acp::permission_payload::{bound_raw_json, permission_options};
 use crate::live::sessions::model::{
@@ -13,7 +13,7 @@ use crate::live::sessions::model::{
 };
 use crate::live::sessions::rendezvous::broker::PermissionOutcome;
 
-impl RuntimeClient {
+impl InboundDoor {
     pub async fn handle_request_permission(
         &self,
         args: acp::schema::RequestPermissionRequest,

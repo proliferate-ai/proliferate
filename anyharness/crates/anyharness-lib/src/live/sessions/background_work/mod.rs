@@ -119,6 +119,24 @@ impl BackgroundWorkRegistry {
         }
     }
 
+    /// Marks a background tool call terminal in the durable store. The
+    /// registry is the sole owner of durable background-work transitions
+    /// (registration, activity, terminal); the sink only renders the
+    /// transcript AFTER this persisted. Returns whether this call performed
+    /// the pending → terminal transition.
+    pub fn mark_terminal(
+        &self,
+        update: &BackgroundWorkUpdate,
+        completed_at: &str,
+    ) -> anyhow::Result<bool> {
+        self.store.mark_background_work_terminal(
+            &self.session_id,
+            &update.tool_call_id,
+            update.state,
+            completed_at,
+        )
+    }
+
     pub fn shutdown(&mut self) {
         for (_, handle) in self.trackers.drain() {
             handle.abort();

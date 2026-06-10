@@ -2,18 +2,17 @@ use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::background_work::BackgroundWorkUpdate;
 
 impl SessionActor {
-    /// Marks a background tool call terminal in the durable store and, if it
-    /// transitioned, resolves it in the transcript.
+    /// Routes one background-work update: the registry (sole owner of durable
+    /// background-work state) marks the tool call terminal, and only if it
+    /// transitioned does the sink render the resolution in the transcript.
     pub(in crate::live::sessions::actor) async fn handle_background(
         &self,
         update: BackgroundWorkUpdate,
     ) {
-        let marked_terminal = match self.caps.background.mark_background_work_terminal(
-            &self.session_id,
-            &update.tool_call_id,
-            update.state,
-            &chrono::Utc::now().to_rfc3339(),
-        ) {
+        let marked_terminal = match self
+            .background_work_registry
+            .mark_terminal(&update, &chrono::Utc::now().to_rfc3339())
+        {
             Ok(marked_terminal) => marked_terminal,
             Err(error) => {
                 tracing::warn!(

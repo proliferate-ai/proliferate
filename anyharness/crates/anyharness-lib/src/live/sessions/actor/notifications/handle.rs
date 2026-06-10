@@ -6,15 +6,15 @@ use tokio::sync::Mutex;
 
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
 use crate::live::sessions::actor::notifications::dispatch::{
-    normalize_notification, persist_raw_notification,
+    apply_actor_update, persist_raw_notification,
 };
 use crate::live::sessions::actor::notifications::observations::dispatch_observations;
-use crate::live::sessions::model::ActorCapabilities;
 use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilter;
 use crate::live::sessions::actor::state::{SessionActor, SessionStartupState};
 use crate::live::sessions::background_work::BackgroundWorkRegistry;
 use crate::live::sessions::driver::inbound;
-use crate::live::sessions::sink::SessionEventSink;
+use crate::live::sessions::model::ActorCapabilities;
+use crate::live::sessions::sink::{SessionEventSink, SinkObservation};
 
 impl SessionActor {
     /// Routes one inbound ACP notification through raw persistence, the
@@ -108,24 +108,39 @@ pub(in crate::live::sessions::actor) async fn handle_notification_with_resume_re
         return;
     }
 
-    let observations = normalize_notification(
-        notif,
-        event_sink,
-        background_work_registry,
-        caps.state.as_ref(),
-        session_id,
-        source_agent_kind,
-        persisted_config_state,
-        startup_state,
-    )
-    .await;
+    // The sink ingests the notification (meaning-blind transcript emission)
+    // and hands back what the actor still owns: registry observation of tool
+    // traffic, the durable config/mode/title arms, and observer dispatch.
+    let outcome = event_sink.lock().await.ingest(notif);
+
+    for observation in &outcome.observations {
+        if let SinkObservation::ToolCall { turn_id, payload } = observation {
+            background_work_registry
+                .observe_tool_payload(turn_id.clone(), payload)
+                .await;
+        }
+    }
+
+    if let Some(update) = outcome.needs_actor {
+        apply_actor_update(
+            update,
+            event_sink,
+            caps.state.as_ref(),
+            session_id,
+            source_agent_kind,
+            persisted_config_state,
+            startup_state,
+        )
+        .await;
+    }
+
     dispatch_observations(
         event_sink,
         &caps.observers,
         session_id,
         workspace_id,
         source_agent_kind,
-        observations,
+        outcome.observations,
     )
     .await;
 }

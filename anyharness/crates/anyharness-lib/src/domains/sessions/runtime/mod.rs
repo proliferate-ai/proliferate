@@ -22,7 +22,6 @@ use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::sessions::LiveSessionManager;
 
 mod config;
-pub(crate) mod contract;
 mod creation;
 mod fork;
 mod interactions;
@@ -33,6 +32,7 @@ mod pending_prompts;
 mod prompt;
 mod replay;
 mod startup;
+pub(crate) mod view;
 #[cfg(test)]
 mod tests;
 

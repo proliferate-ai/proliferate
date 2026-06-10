@@ -74,6 +74,39 @@ impl SessionStore {
         })
     }
 
+    /// Batched form of [`Self::list_pending_prompts`] for list endpoints:
+    /// one query for the whole page, grouped by session, each group in the
+    /// same `seq ASC` order as the single-session query.
+    pub fn list_pending_prompts_for_sessions(
+        &self,
+        session_ids: &[String],
+    ) -> anyhow::Result<std::collections::HashMap<String, Vec<PendingPromptRecord>>> {
+        if session_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+        self.db.with_conn(|conn| {
+            let placeholders = vec!["?"; session_ids.len()].join(", ");
+            let mut stmt = conn.prepare(&format!(
+                "SELECT * FROM session_pending_prompts
+                 WHERE session_id IN ({placeholders})
+                 ORDER BY session_id ASC, seq ASC"
+            ))?;
+            let rows = stmt.query_map(
+                rusqlite::params_from_iter(session_ids.iter()),
+                map_pending_prompt,
+            )?;
+            let mut grouped = std::collections::HashMap::<String, Vec<PendingPromptRecord>>::new();
+            for row in rows {
+                let record = row?;
+                grouped
+                    .entry(record.session_id.clone())
+                    .or_default()
+                    .push(record);
+            }
+            Ok(grouped)
+        })
+    }
+
     pub fn peek_head_pending_prompt(
         &self,
         session_id: &str,

@@ -10,7 +10,9 @@ use serde::Deserialize;
 
 use super::access::{assert_session_auth_scope, assert_workspace_auth_scope};
 use super::error::ApiError;
-use super::sessions_contract::{request_origin_or_api_default, session_to_contract};
+use super::sessions_contract::{
+    request_origin_or_api_default, session_to_contract, session_view_to_contract,
+};
 use super::sessions_errors::map_create_session_error;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
@@ -166,11 +168,14 @@ pub async fn list_sessions(
         session_count = records.len(),
         "session.http.list.completed"
     );
-    let mut sessions = Vec::with_capacity(records.len());
-    for record in &records {
-        sessions.push(session_to_contract(&state, record).await?);
-    }
-    Ok(Json(sessions))
+    let views = state
+        .session_runtime
+        .session_views(&records)
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+    Ok(Json(
+        views.into_iter().map(session_view_to_contract).collect(),
+    ))
 }
 
 #[utoipa::path(
