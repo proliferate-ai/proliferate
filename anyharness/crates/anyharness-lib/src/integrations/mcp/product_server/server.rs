@@ -2,16 +2,111 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 
 use super::definition::ProductMcpDefinition;
-use super::errors::{
-    ProductMcpContextError, ProductMcpDispatchError, JSON_RPC_INVALID_PARAMS,
-    JSON_RPC_INVALID_REQUEST, JSON_RPC_METHOD_NOT_FOUND, JSON_RPC_PARSE_ERROR,
-};
-use super::request::{ProductMcpAuthHeader, ProductMcpRequestContext, ProductMcpTokenValidation};
-use super::response::initialize_response;
 use crate::integrations::mcp::json_rpc::{
     jsonrpc_error, jsonrpc_result, CallToolParams, InitializeParams, JsonRpcRequest,
 };
 use crate::integrations::mcp::tools::jsonrpc_tool_result;
+
+// ── Error codes ─────────────────────────────────────────────────────────────
+
+pub const JSON_RPC_PARSE_ERROR: i64 = -32700;
+pub const JSON_RPC_INVALID_REQUEST: i64 = -32600;
+pub const JSON_RPC_METHOD_NOT_FOUND: i64 = -32601;
+pub const JSON_RPC_INVALID_PARAMS: i64 = -32602;
+
+#[derive(Debug, thiserror::Error)]
+pub enum ProductMcpContextError {
+    #[error("{0}")]
+    NotFound(String),
+    #[error("{0}")]
+    Conflict(String),
+    #[error(transparent)]
+    Internal(#[from] anyhow::Error),
+}
+
+impl ProductMcpContextError {
+    pub fn not_found(message: impl Into<String>) -> Self {
+        Self::NotFound(message.into())
+    }
+
+    pub fn conflict(message: impl Into<String>) -> Self {
+        Self::Conflict(message.into())
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ProductMcpDispatchError {
+    #[error(transparent)]
+    Context(#[from] ProductMcpContextError),
+    #[error(transparent)]
+    Request(#[from] anyhow::Error),
+}
+
+// ── Request context ──────────────────────────────────────────────────────────
+
+pub const PRODUCT_MCP_TOKEN_HEADER_NAME: &str = "x-anyharness-product-mcp-token";
+
+#[derive(Debug, Clone)]
+pub struct ProductMcpRequestContext {
+    pub workspace_id: String,
+    pub session_id: String,
+    pub product_mcp_id: String,
+}
+
+impl ProductMcpRequestContext {
+    pub fn new(
+        workspace_id: impl Into<String>,
+        session_id: impl Into<String>,
+        product_mcp_id: impl Into<String>,
+    ) -> Self {
+        Self {
+            workspace_id: workspace_id.into(),
+            session_id: session_id.into(),
+            product_mcp_id: product_mcp_id.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ProductMcpAuthHeader<'a> {
+    Product { value: &'a str },
+    Legacy { name: &'static str, value: &'a str },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProductMcpTokenValidation {
+    Valid,
+    Invalid,
+}
+
+impl ProductMcpTokenValidation {
+    pub fn is_valid(self) -> bool {
+        matches!(self, Self::Valid)
+    }
+}
+
+// ── Initialize response ──────────────────────────────────────────────────────
+
+pub fn initialize_response(
+    id: Option<Value>,
+    protocol_version: Option<String>,
+    definition: &ProductMcpDefinition,
+) -> Value {
+    jsonrpc_result(
+        id,
+        json!({
+            "protocolVersion": protocol_version.unwrap_or_else(|| "2025-11-25".to_string()),
+            "capabilities": { "tools": {} },
+            "serverInfo": {
+                "name": definition.server_info_name,
+                "version": env!("CARGO_PKG_VERSION"),
+            },
+            "instructions": definition.instructions,
+        }),
+    )
+}
+
+// ── Server trait + dispatcher ─────────────────────────────────────────────────
 
 #[async_trait]
 pub trait ProductMcpServer: Send + Sync {

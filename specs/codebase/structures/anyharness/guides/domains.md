@@ -435,8 +435,6 @@ Session launch assembly does not belong in product domains either:
 ```text
 domains/sessions/mcp_bindings/assembly.rs
 domains/sessions/mcp_bindings/product_catalog.rs
-domains/sessions/mcp_bindings/selection.rs
-domains/sessions/mcp_bindings/injection.rs
 domains/sessions/mcp_bindings/product_registry.rs
 ```
 
@@ -453,14 +451,7 @@ domains/sessions/mcp_bindings/product_registry.rs
   serving-side registry: incoming route slug -> product MCP handler
 
 domains/sessions/mcp_bindings/product_catalog.rs
-  launch-side facade: asks selection + injection for product MCP launch extras
-
-domains/sessions/mcp_bindings/selection.rs
-  policy: which product MCPs should this session get?
-
-domains/sessions/mcp_bindings/injection.rs
-  materialization: what HTTP MCP server config/token/prompt extras are handed
-  to the agent?
+  launch-side facade: select and materialize product MCP launch extras for this session
 
 domains/sessions/mcp_bindings/assembly.rs
   whole-session composer: user MCPs + product MCPs + session extensions +
@@ -480,9 +471,9 @@ forking transport or protocol machinery:
 1. Add domains/<feature>/mcp/{definition,auth,context,tools,calls}.rs.
 2. Implement ProductMcpServer in domains/<feature>/mcp/mod.rs.
 3. Register the server in app's ProductMcpEndpointRegistry wiring.
-4. Add launch selection policy in domains/sessions/mcp_bindings/selection.rs.
-5. Add launch materialization in domains/sessions/mcp_bindings/injection.rs.
-6. Add tests for auth, selection, injection, tools/list, tools/call, and
+4. Add selection predicate and HTTP materialization in
+   domains/sessions/mcp_bindings/product_catalog.rs.
+5. Add tests for auth, selection, injection, tools/list, tools/call, and
    endpoint dispatch.
 ```
 

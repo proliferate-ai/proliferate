@@ -107,12 +107,10 @@ anyharness-lib/src/domains/cowork/mcp/auth.rs
 Current injection and prompt text:
 
 ```text
-anyharness-lib/src/domains/sessions/mcp_bindings/selection.rs
+anyharness-lib/src/domains/sessions/mcp_bindings/product_catalog.rs
   cowork MCP selection for cowork-surface sessions
   cowork artifact system prompt append
   cowork binding summary
-
-anyharness-lib/src/domains/sessions/mcp_bindings/injection.rs
   cowork HTTP MCP server config
   cowork product capability-token minting
 ```
