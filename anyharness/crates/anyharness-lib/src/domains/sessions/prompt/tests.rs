@@ -4,6 +4,7 @@ use agent_client_protocol as acp;
 use anyharness_contract::v1::{ContentPart, PromptCapabilities, PromptInputBlock};
 
 use super::prepare::prepare_prompt;
+use super::render::{render, TurnPromptExtras};
 use super::*;
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::model::PromptAttachmentState;
@@ -125,9 +126,12 @@ fn converts_plan_reference_to_resource_or_text() {
     )
     .expect("prepare resource")
     .payload;
-    let resource_blocks = resource_payload
-        .to_acp_blocks(&store, test_attachment_storage(), "session-1")
-        .expect("to acp");
+    let resource_blocks = render(
+        &resource_payload,
+        &ResolvedParts::default(),
+        &TurnPromptExtras::default(),
+    )
+    .expect("render");
     assert!(matches!(
         resource_blocks.as_slice(),
         [acp::schema::ContentBlock::Resource(_)]
@@ -142,9 +146,12 @@ fn converts_plan_reference_to_resource_or_text() {
     )
     .expect("prepare text")
     .payload;
-    let text_blocks = text_payload
-        .to_acp_blocks(&store, test_attachment_storage(), "session-1")
-        .expect("to acp");
+    let text_blocks = render(
+        &text_payload,
+        &ResolvedParts::default(),
+        &TurnPromptExtras::default(),
+    )
+    .expect("render");
     assert!(matches!(
         text_blocks.as_slice(),
         [acp::schema::ContentBlock::Text(_)]

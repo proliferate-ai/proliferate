@@ -46,7 +46,7 @@ use crate::domains::sessions::model::{
     SessionBackgroundWorkRecord, SessionBackgroundWorkState, SessionEventRecord,
     SessionLiveConfigSnapshotRecord, SessionRecord,
 };
-use crate::domains::sessions::prompt::{PromptPayload, PromptValidationError};
+use crate::domains::sessions::prompt::{PromptPayload, PromptValidationError, ResolvedParts};
 use crate::live::sessions::actor::command::{Resolution, ResolveInteractionCommandError};
 use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
 use crate::live::sessions::sink::SessionEventSink;
@@ -252,16 +252,18 @@ pub trait SessionStateDurable: Send + Sync {
     fn repair_unclosed_turns(&self, session_id: &str) -> anyhow::Result<u32>;
 }
 
-/// Prompt-attachment resolution and hygiene as the actor's turn machinery
-/// needs it. v1 doorstep: `resolve_prompt_blocks` wraps the load+render path;
-/// PR-2b refines it into load + pure render.
+/// Prompt-attachment loading and hygiene as the actor's turn machinery needs
+/// it. `load` is the IO half of the prompt pipeline; the pure render half is
+/// `domains::sessions::prompt::render::render`, which the actor calls itself.
 pub trait AttachmentSource: Send + Sync {
-    /// Resolve a stored prompt payload into the ACP content blocks to send.
-    fn resolve_prompt_blocks(
+    /// Load every attachment the payload references: store rows plus stored
+    /// bytes (including the legacy-content fallback). No ACP shapes here —
+    /// rendering them is pure and stays out of the capability.
+    fn load(
         &self,
         session_id: &str,
         payload: &PromptPayload,
-    ) -> Result<Vec<acp::schema::ContentBlock>, PromptValidationError>;
+    ) -> Result<ResolvedParts, PromptValidationError>;
     fn mark_prompt_attachments_state(
         &self,
         session_id: &str,

@@ -5,7 +5,6 @@
 //! storage); `app/` wires the implementations in. Every method is pure
 //! delegation — signatures mirror the store originals 1:1, no behavior.
 
-use agent_client_protocol as acp;
 use anyharness_contract::v1::{SessionEvent, SessionEventEnvelope};
 
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
@@ -14,7 +13,9 @@ use crate::domains::sessions::model::{
     SessionBackgroundWorkRecord, SessionBackgroundWorkState, SessionEventRecord,
     SessionLiveConfigSnapshotRecord,
 };
-use crate::domains::sessions::prompt::{PromptPayload, PromptValidationError};
+use crate::domains::sessions::prompt::{
+    load_prompt_attachments, PromptPayload, PromptValidationError, ResolvedParts,
+};
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::model::{
     AttachmentSource, BackgroundWorkDurable, EventPersist, QueueDurable, SessionStateDurable,
@@ -252,12 +253,12 @@ impl SessionAttachmentSource {
 }
 
 impl AttachmentSource for SessionAttachmentSource {
-    fn resolve_prompt_blocks(
+    fn load(
         &self,
         session_id: &str,
         payload: &PromptPayload,
-    ) -> Result<Vec<acp::schema::ContentBlock>, PromptValidationError> {
-        payload.to_acp_blocks(&self.store, &self.storage, session_id)
+    ) -> Result<ResolvedParts, PromptValidationError> {
+        load_prompt_attachments(&self.store, &self.storage, session_id, payload)
     }
 
     fn mark_prompt_attachments_state(

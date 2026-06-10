@@ -5,6 +5,7 @@ use anyharness_contract::v1::{PendingPromptRemovalReason, PendingPromptRemovedPa
 use tokio::sync::Mutex;
 
 use crate::domains::sessions::model::PromptAttachmentState;
+use crate::domains::sessions::prompt::render::{render, TurnPromptExtras};
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::live::sessions::actor::command::PromptAcceptError;
 use crate::live::sessions::actor::state::SessionActorConfig;
@@ -25,11 +26,52 @@ pub(in crate::live::sessions::actor) async fn begin_prompt_turn(
     prompt_id: Option<String>,
     queue_seq: Option<i64>,
 ) -> Result<StartedPromptTurn, PromptAcceptError> {
-    let mut acp_blocks = match config
-        .caps
-        .attachments
-        .resolve_prompt_blocks(session_id, payload)
-    {
+    // Resolve: load every referenced attachment (store rows + stored bytes,
+    // legacy-content fallback included) through the attachments capability.
+    let parts = match config.caps.attachments.load(session_id, payload) {
+        Ok(parts) => parts,
+        Err(error) => {
+            tracing::warn!(
+                session_id = %session_id,
+                code = error.code,
+                detail = %error.detail,
+                "failed to build ACP prompt blocks",
+            );
+            return Err(PromptAcceptError::EnqueueFailed(error.detail));
+        }
+    };
+
+    // Decide the codex first-prompt append. The durable turn-history gate
+    // stays exactly here: it needs the events capability, so the decision
+    // happens before the pure render and rides in as an extra.
+    let mut first_prompt_system_prompt_append = None;
+    match config.caps.events.has_turn_started_event(session_id) {
+        Ok(has_turn_started) => {
+            first_prompt_system_prompt_append = first_prompt_system_prompt_append_for_codex_prompt(
+                source_agent_kind,
+                config.launch.prompts.first_prompt.as_deref(),
+                has_turn_started,
+            )
+            .map(str::to_string);
+        }
+        Err(error) => {
+            tracing::warn!(
+                session_id = %session_id,
+                error = %error,
+                "failed to determine whether prompt should inline system prompt append"
+            );
+        }
+    }
+
+    // Render: pure payload + loaded parts -> ACP blocks; the first-prompt
+    // append folds in here instead of mutating the blocks afterwards.
+    let acp_blocks = match render(
+        payload,
+        &parts,
+        &TurnPromptExtras {
+            first_prompt_system_prompt_append,
+        },
+    ) {
         Ok(blocks) => blocks,
         Err(error) => {
             tracing::warn!(
@@ -42,25 +84,9 @@ pub(in crate::live::sessions::actor) async fn begin_prompt_turn(
         }
     };
 
-    match config.caps.events.has_turn_started_event(session_id) {
-        Ok(has_turn_started) => {
-            if let Some(append) = first_prompt_system_prompt_append_for_codex_prompt(
-                source_agent_kind,
-                config.launch.prompts.first_prompt.as_deref(),
-                has_turn_started,
-            ) {
-                prepend_system_prompt_append_to_acp_blocks(&mut acp_blocks, append);
-            }
-        }
-        Err(error) => {
-            tracing::warn!(
-                session_id = %session_id,
-                error = %error,
-                "failed to determine whether prompt should inline system prompt append"
-            );
-        }
-    }
-
+    // Effects: begin_turn durably persists the replacement turn events first;
+    // attachment hygiene and the queue-row removal follow in the same order
+    // as before, all under one sink lock hold.
     let turn_id;
     {
         let mut sink = event_sink.lock().await;
@@ -105,16 +131,4 @@ pub(in crate::live::sessions::actor) async fn begin_prompt_turn(
         acp_blocks,
         turn_id,
     })
-}
-
-pub(in crate::live::sessions::actor) fn prepend_system_prompt_append_to_acp_blocks(
-    blocks: &mut Vec<acp::schema::ContentBlock>,
-    append: &str,
-) {
-    blocks.insert(
-        0,
-        acp::schema::ContentBlock::Text(acp::schema::TextContent::new(format!(
-            "System instruction from AnyHarness, not user content:\n{append}"
-        ))),
-    );
 }
