@@ -24,7 +24,7 @@ use super::shutdown::types::ActorExitDisposition;
 use super::state::SessionStartupState;
 use super::turn::diagnostics::PromptDiagnostics;
 use super::turn::finish::should_emit_empty_turn_error;
-use super::turn::handle::first_prompt_system_prompt_append_for_codex_prompt;
+use super::turn::start::first_prompt_system_prompt_append_for_codex_prompt;
 use crate::app::test_support;
 use crate::domains::agents::model::AgentKind;
 use crate::domains::sessions::live_config::{
