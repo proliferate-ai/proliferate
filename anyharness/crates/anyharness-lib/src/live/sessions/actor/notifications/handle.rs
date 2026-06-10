@@ -11,10 +11,34 @@ use crate::live::sessions::actor::notifications::dispatch::{
 use crate::live::sessions::actor::notifications::observations::dispatch_observations;
 use crate::live::sessions::model::ActorCapabilities;
 use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilter;
-use crate::live::sessions::actor::state::SessionStartupState;
+use crate::live::sessions::actor::state::{SessionActor, SessionStartupState};
 use crate::live::sessions::background_work::BackgroundWorkRegistry;
 use crate::live::sessions::driver::inbound;
 use crate::live::sessions::sink::SessionEventSink;
+
+impl SessionActor {
+    /// Routes one inbound ACP notification through raw persistence, the
+    /// resume-replay filter, transcript normalization, and observer dispatch.
+    pub(in crate::live::sessions::actor) async fn handle_notification(
+        &mut self,
+        notif: &acp::schema::SessionNotification,
+    ) {
+        handle_notification_with_resume_replay_filter(
+            notif,
+            &mut self.resume_replay_filter,
+            &self.event_sink,
+            &mut self.background_work_registry,
+            &self.caps,
+            &self.session_id,
+            &self.workspace_id,
+            &self.agent_kind,
+            &mut self.persisted_config_state,
+            &mut self.startup_state,
+        )
+        .await;
+    }
+}
+
 #[cfg(test)]
 pub(in crate::live::sessions::actor) async fn handle_notification(
     notif: &acp::schema::SessionNotification,

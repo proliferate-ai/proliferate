@@ -1,15 +1,23 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use agent_client_protocol as acp;
-use anyharness_contract::v1::SessionEventEnvelope;
-use tokio::sync::broadcast;
+use anyharness_contract::v1::{SessionActionCapabilities, SessionEventEnvelope};
+use tokio::sync::{broadcast, oneshot, Mutex};
 
 use crate::domains::sessions::live_config::SessionModelOption;
+use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::live::sessions::actor::config::selection::find_select_option_by_purpose;
-use crate::live::sessions::actor::config::types::ConfigPurpose;
+use crate::live::sessions::actor::config::types::{ConfigPurpose, PersistedSessionConfigState};
+use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilter;
+use crate::live::sessions::background_work::BackgroundWorkRegistry;
 use crate::live::sessions::driver::types::NativeSessionStartupState;
-use crate::live::sessions::model::{ActorCapabilities, SessionHooks, SessionLaunch};
+use crate::live::sessions::handle::LiveSessionHandle;
+use crate::live::sessions::model::{
+    ActorCapabilities, SessionHooks, SessionLaunch, SystemPromptAppends,
+};
 use crate::live::sessions::rendezvous::broker::InteractionRendezvous;
+use crate::live::sessions::sink::SessionEventSink;
 
 pub struct SessionActorConfig {
     /// Everything describing THIS launch (session row, agent, env, startup).
@@ -20,6 +28,45 @@ pub struct SessionActorConfig {
     pub hooks: SessionHooks,
     pub interaction_broker: Arc<InteractionRendezvous>,
     pub event_tx: broadcast::Sender<SessionEventEnvelope>,
+}
+
+/// The session actor: one running agent process, its ACP connection, and all
+/// loop-owned conversation state. Constructed by [`SessionActor::start`]
+/// (startup.rs) and driven by [`SessionActor::run`] (run.rs). The three
+/// receivers (commands, notifications, background work) deliberately stay OUT
+/// of the struct — they are threaded through `run`/`run_idle`/`run_turn` as
+/// parameters so the inner selects can borrow them alongside `&mut self`.
+pub(in crate::live::sessions::actor) struct SessionActor {
+    // ── identity (from launch, immutable) ──
+    pub(in crate::live::sessions::actor) session_id: String,
+    pub(in crate::live::sessions::actor) workspace_id: String,
+    pub(in crate::live::sessions::actor) agent_kind: String,
+    pub(in crate::live::sessions::actor) workspace_path: PathBuf,
+    pub(in crate::live::sessions::actor) mcp_servers: Vec<SessionMcpServer>,
+    pub(in crate::live::sessions::actor) prompts: SystemPromptAppends,
+
+    // ── conversation state (loop-owned) ──
+    // KEEP Arc<Mutex<…>>: the inbound door (driver/inbound) shares this sink.
+    pub(in crate::live::sessions::actor) event_sink: Arc<Mutex<SessionEventSink>>,
+    pub(in crate::live::sessions::actor) background_work_registry: BackgroundWorkRegistry,
+    pub(in crate::live::sessions::actor) resume_replay_filter: ResumeReplayFilter,
+    pub(in crate::live::sessions::actor) persisted_config_state: PersistedSessionConfigState,
+    pub(in crate::live::sessions::actor) startup_state: SessionStartupState,
+    pub(in crate::live::sessions::actor) native_session_id: String,
+    pub(in crate::live::sessions::actor) action_capabilities: SessionActionCapabilities,
+    pub(in crate::live::sessions::actor) supports_native_close: bool,
+
+    // ── wiring (set at spawn/startup, never reassigned) ──
+    pub(in crate::live::sessions::actor) conn: acp::ConnectionTo<acp::Agent>,
+    pub(in crate::live::sessions::actor) caps: ActorCapabilities,
+    pub(in crate::live::sessions::actor) hooks: SessionHooks,
+    pub(in crate::live::sessions::actor) interaction_broker: Arc<InteractionRendezvous>,
+    pub(in crate::live::sessions::actor) handle: Arc<LiveSessionHandle>,
+    /// Dropping this shuts down the ACP connection task.
+    #[allow(dead_code)]
+    pub(in crate::live::sessions::actor) _acp_shutdown: oneshot::Sender<()>,
+    /// The agent process guard; dropped last when the actor exits.
+    pub(in crate::live::sessions::actor) child: tokio::process::Child,
 }
 
 #[derive(Debug, Clone)]

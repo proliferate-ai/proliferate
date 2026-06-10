@@ -1,10 +1,10 @@
 mod background_work;
 pub(in crate::live::sessions) mod command;
 mod config;
-mod event_loop;
 mod fork;
 mod interactions;
 mod notifications;
+mod run;
 mod shutdown;
 pub mod spawn;
 mod startup;
