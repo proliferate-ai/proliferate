@@ -7,7 +7,7 @@
   </picture>
 </p>
 
-<h3>The Local and Cloud Agent IDE</h3>
+<h3>The Open Source Local and Cloud Agent IDE</h3>
 
 <p>
   <a href="https://github.com/proliferate-ai/proliferate/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/proliferate-ai/proliferate?style=flat&amp;logo=github&amp;label=stars" /></a>
@@ -20,8 +20,8 @@
 
 <br />
 
-Run Claude Code, Codex, Gemini, and every other agent in parallel — in one workspace.<br />
-Local when you want control. Cloud when work needs to keep going. Shared when your team joins in.
+Run Claude Code, Codex, Gemini, and any other coding agent in parallel, in one workspace.<br />
+Move running sessions between your machine and the cloud. Works solo or across a team.
 
 <br />
 
@@ -40,21 +40,19 @@ Local when you want control. Cloud when work needs to keep going. Shared when yo
 
 </div>
 
-## The Best Agent for Every Job, Without Switching Apps
+## The Open Source Codex for Any Harness
 
-Proliferate runs every coding agent through its real, native harness — side by side, in isolated workspaces, on your machine or in cloud sandboxes.
+Proliferate is a desktop and web app for running coding agents in parallel, locally or in cloud sandboxes. Each agent runs through its own native harness.
 
 - **Run any mix of agents in parallel**, each in its own isolated worktree or sandbox, with native tools, auth, and config intact
-- **Let your agents manage each other** — have Codex hand design work to Claude Code, and reviewer subagents check plans and diffs before you do
-- **Move running work between local and cloud, mid-task**, with every change and message intact
-- **Work as a team** — hand off live sessions, trigger agents from Slack, see everything running in one place
+- **Let your agents manage each other**, like having Codex hand design work to Claude Code
+- **Move running work between local and cloud** mid-task, with every change and message intact
+- **Hand off live sessions to teammates** and trigger agent work from Slack
 - **Set up MCPs and skills once**, shared across every agent
-
-If it has a harness, it runs in Proliferate.
 
 ## Bring Your Agent
 
-Each agent runs through its native harness, so auth, tools, models, permissions, and transcript behavior stay exactly as they are everywhere else — and new harness features show up in Proliferate the day they ship.
+Each agent runs through its native harness, so auth, tools, models, permissions, and transcript behavior stay intact. New harness features show up in Proliferate the day they ship.
 
 <table>
   <tr>
@@ -93,8 +91,8 @@ Each agent runs through its native harness, so auth, tools, models, permissions,
 
 ## Features
 
-- 🤖 **[Native harnesses](https://proliferate.com/docs/concepts/agents-and-harnesses)** — Claude Code, Codex, Gemini CLI, OpenCode, Cursor, Amp, and more, never a lossy wrapper
-- 🌳 **[Worktree workspaces](https://proliferate.com/docs/concepts/workspaces)** — an isolated branch and working directory for every task, so parallel work stays clean
+- 🤖 **[Native harnesses](https://proliferate.com/docs/concepts/agents-and-harnesses)** — Claude Code, Codex, Gemini CLI, OpenCode, Cursor, Amp, and more
+- 🌳 **[Worktree workspaces](https://proliferate.com/docs/concepts/workspaces)** — an isolated branch and working directory for every task
 - 🔍 **[Git & diff review](https://proliferate.com/docs/concepts/review)** — inspect and edit agent changes without leaving the app
 - 🛡️ **[Plan & code review agents](https://proliferate.com/docs/concepts/review)** — reviewer agents check plans, diffs, risks, and branch readiness before you do
 - 🪆 **[Subagents](https://proliferate.com/docs/concepts/subagents)** — agents delegate investigation, implementation, and review to other agents
@@ -112,7 +110,7 @@ Each agent runs through its native harness, so auth, tools, models, permissions,
 - 🔁 **[Workspace mobility](https://proliferate.com/docs/concepts/cloud)** — move a running workspace between your machine and the cloud, mid-task, with changes and history intact
 - 👥 **[Multiplayer cloud chats](https://proliferate.com/docs/concepts/cloud)** — live sessions your team can inspect, claim, and continue
 - 💬 **[Team Slackbot](https://proliferate.com/docs/concepts/organizations)** — turn a Slack message into shared agent work for the whole team
-- 🤝 **[Team automations](https://proliferate.com/docs/concepts/automations)** — shared recurring fixes, checks, and reviews the whole team can run
+- 🤝 **[Team automations](https://proliferate.com/docs/concepts/automations)** — shared recurring fixes and reviews the whole team can run
 - 🛰️ **Remote dispatch** — kick off and steer work on your own machine from the web
 - 🔑 **SSH access** — drop into any cloud sandbox from your terminal
 - 🔐 **Credential gateway** — your keys and subscriptions never touch the sandbox; sandboxes only get short-lived tokens
@@ -120,9 +118,9 @@ Each agent runs through its native harness, so auth, tools, models, permissions,
 - 📱 **[Mobile](https://proliferate.com/docs/concepts/mobile)** — coming soon: dispatch work, approve actions, and follow runs from your phone
 - 🏗️ **Self-hosted Proliferate Cloud** — coming soon: run the full cloud control plane yourself
 
-## Why Open Source
+## Open Source
 
-The best coding agent changes every few weeks, and every agent app is a walled garden owned by a model lab whose business depends on you using its newest, priciest model. The layer where you run and combine agents should be neutral, open, and yours. Proliferate is AGPL-3.0, fully open on the desktop today, with self-hosting for the full cloud on the way — so your agent workflows never get cut off under you.
+Proliferate is AGPL-3.0. The desktop and web apps are fully open today, and self-hosting for the complete cloud control plane is coming soon.
 
 ## Getting Started
 
