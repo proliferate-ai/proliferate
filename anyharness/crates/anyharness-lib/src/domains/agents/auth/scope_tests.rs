@@ -6,7 +6,7 @@ use crate::domains::sessions::mcp_bindings::crypto::SessionDataCipher;
 use crate::persistence::Db;
 
 use super::{
-    AgentAuthConfigInput, AgentAuthConfigService, AgentAuthConfigStore, AgentAuthLaunchOverlayError,
+    AgentAuthConfigInput, AgentAuthService, AgentAuthConfigStore, AgentAuthLaunchOverlayError,
 };
 
 fn cipher() -> SessionDataCipher {
@@ -16,7 +16,7 @@ fn cipher() -> SessionDataCipher {
 
 #[test]
 fn launch_overlay_separates_same_profile_by_target_scope() {
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         std::env::temp_dir(),
@@ -75,7 +75,7 @@ fn launch_overlay_separates_same_profile_by_target_scope() {
 
 #[test]
 fn launch_overlay_fails_when_required_revision_is_not_applied() {
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         std::env::temp_dir(),
@@ -101,7 +101,7 @@ fn launch_overlay_fails_when_required_revision_is_not_applied() {
 
 #[test]
 fn launch_overlay_fails_closed_for_missing_scoped_selection() {
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         std::env::temp_dir(),
@@ -132,7 +132,7 @@ fn launch_overlay_fails_closed_for_missing_scoped_selection() {
 
 #[test]
 fn launch_overlay_fails_closed_for_missing_scoped_provider_managed_selection() {
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         std::env::temp_dir(),
@@ -173,7 +173,7 @@ fn launch_overlay_fails_closed_for_missing_scoped_provider_managed_selection() {
 
 #[test]
 fn launch_overlay_fails_stale_provider_managed_agent_when_optional_selection_exists() {
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         std::env::temp_dir(),
@@ -216,7 +216,7 @@ fn launch_overlay_fails_stale_provider_managed_agent_when_optional_selection_exi
 
 #[test]
 fn launch_overlay_merges_multiple_active_provider_slots_for_scoped_agent() {
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         std::env::temp_dir(),
@@ -293,7 +293,7 @@ fn launch_overlay_merges_multiple_active_provider_slots_for_scoped_agent() {
 
 #[test]
 fn launch_overlay_fails_closed_for_invalid_scoped_selection() {
-    let service = AgentAuthConfigService::new(
+    let service = AgentAuthService::new(
         AgentAuthConfigStore::new(Db::open_in_memory().expect("db")),
         Some(cipher()),
         std::env::temp_dir(),
