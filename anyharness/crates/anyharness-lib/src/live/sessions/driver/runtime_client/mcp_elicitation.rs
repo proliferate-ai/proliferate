@@ -14,8 +14,8 @@ use crate::live::sessions::interactions::mcp_elicitation::{
 impl RuntimeClient {
     pub(super) async fn codex_mcp_elicitation(
         &self,
-        args: acp::ExtRequest,
-    ) -> acp::Result<acp::ExtResponse> {
+        args: acp::schema::ExtRequest,
+    ) -> acp::Result<acp::schema::ExtResponse> {
         let request = serde_json::from_str::<CodexMcpElicitationExtParams>(args.params.get())
             .map_err(|error| acp::Error::invalid_params().data(error.to_string()))?;
         let normalized = normalize_codex_mcp_elicitation(request)
@@ -76,8 +76,8 @@ impl RuntimeClient {
 
     pub(super) async fn claude_mcp_elicitation(
         &self,
-        args: acp::ExtRequest,
-    ) -> acp::Result<acp::ExtResponse> {
+        args: acp::schema::ExtRequest,
+    ) -> acp::Result<acp::schema::ExtResponse> {
         let request = serde_json::from_str::<ClaudeMcpElicitationExtParams>(args.params.get())
             .map_err(|error| acp::Error::invalid_params().data(error.to_string()))?;
         let normalized = normalize_claude_mcp_elicitation(request)

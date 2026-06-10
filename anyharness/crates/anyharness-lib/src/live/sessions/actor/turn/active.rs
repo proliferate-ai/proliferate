@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use agent_client_protocol::{self as acp, Agent};
+use agent_client_protocol as acp;
 use anyharness_contract::v1::SessionExecutionPhase;
 use tokio::sync::{mpsc, oneshot, Mutex};
 
@@ -46,10 +46,10 @@ pub(in crate::live::sessions::actor) struct ActivePromptRequest {
 
 pub(in crate::live::sessions::actor) struct ActivePromptContext<'a> {
     pub config: &'a SessionActorConfig,
-    pub conn: &'a acp::ClientSideConnection,
+    pub conn: &'a acp::ConnectionTo<acp::Agent>,
     pub native_session_id: &'a str,
     pub command_rx: &'a mut mpsc::Receiver<SessionCommand>,
-    pub notification_rx: &'a mut mpsc::UnboundedReceiver<acp::SessionNotification>,
+    pub notification_rx: &'a mut mpsc::UnboundedReceiver<acp::schema::SessionNotification>,
     pub background_work_rx: &'a mut mpsc::UnboundedReceiver<BackgroundWorkUpdate>,
     pub background_work_registry: &'a mut BackgroundWorkRegistry,
     pub event_sink: &'a Arc<Mutex<SessionEventSink>>,
@@ -167,7 +167,7 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
             "[workspace-latency] session.actor.prompt.accepted"
         );
 
-        let req = acp::PromptRequest::new(native_session_id.to_owned(), acp_blocks);
+        let req = acp::schema::PromptRequest::new(native_session_id.to_owned(), acp_blocks);
 
         let mut prompt_result = None;
         let mut prompt_diagnostics = PromptDiagnostics::new(current_prompt_id.clone());
@@ -179,7 +179,7 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
             prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.actor.prompt.dispatch_started"
         );
-        let prompt_fut = conn.prompt(req);
+        let prompt_fut = conn.send_request(req).block_task();
         tokio::pin!(prompt_fut);
         let mut prompt_pending_interval = tokio::time::interval(Duration::from_secs(15));
         prompt_pending_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -262,8 +262,7 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
                             )
                             .await;
                             let _ = conn
-                                .cancel(acp::CancelNotification::new(native_session_id.to_owned()))
-                                .await;
+                                .send_notification(acp::schema::CancelNotification::new(native_session_id.to_owned()));
                         }
                         Some(SessionCommand::Dismiss { respond_to }) => {
                             resolve_pending_interactions(
@@ -275,8 +274,7 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
                             )
                             .await;
                             let _ = conn
-                                .cancel(acp::CancelNotification::new(native_session_id.to_owned()))
-                                .await;
+                                .send_notification(acp::schema::CancelNotification::new(native_session_id.to_owned()));
                             let _ = respond_to.send(Ok(()));
                             exit_after_prompt = Some(ActorExitDisposition::Dismiss);
                         }
@@ -445,7 +443,7 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
 }
 
 async fn drain_replay_notifications_before_prompt(
-    notification_rx: &mut mpsc::UnboundedReceiver<acp::SessionNotification>,
+    notification_rx: &mut mpsc::UnboundedReceiver<acp::schema::SessionNotification>,
     resume_replay_filter: &mut ResumeReplayFilter,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     background_work_registry: &mut BackgroundWorkRegistry,

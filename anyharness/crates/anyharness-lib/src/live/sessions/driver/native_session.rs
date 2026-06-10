@@ -4,18 +4,17 @@ use crate::live::sessions::driver::start::start_new_session;
 use crate::live::sessions::driver::types::{
     NativeSessionStartupDisposition, NativeSessionStartupState,
 };
-use acp::Agent as _;
 use anyharness_contract::v1::SessionActionCapabilities;
 
 pub(in crate::live::sessions) fn build_system_prompt_meta(
     system_prompt_append: Option<&str>,
-) -> Option<acp::Meta> {
+) -> Option<acp::schema::Meta> {
     let append = system_prompt_append?.trim();
     if append.is_empty() {
         return None;
     }
 
-    Some(acp::Meta::from_iter([(
+    Some(acp::schema::Meta::from_iter([(
         "systemPrompt".to_string(),
         serde_json::json!({
             "append": append,
@@ -88,7 +87,7 @@ mod tests {
     }
 }
 
-pub(in crate::live::sessions) fn has_anyharness_targeted_fork_extension(meta: &acp::Meta) -> bool {
+pub(in crate::live::sessions) fn has_anyharness_targeted_fork_extension(meta: &acp::schema::Meta) -> bool {
     let Some(anyharness) = meta.get("anyharness").and_then(|value| value.as_object()) else {
         return false;
     };
@@ -119,7 +118,7 @@ pub(in crate::live::sessions) fn has_anyharness_targeted_fork_extension(meta: &a
 }
 
 pub(in crate::live::sessions) async fn start_native_session(
-    conn: &acp::ClientSideConnection,
+    conn: &acp::ConnectionTo<acp::Agent>,
     workspace_path: &std::path::PathBuf,
     mcp_servers: &[SessionMcpServer],
     system_prompt_append: Option<&str>,
@@ -166,11 +165,12 @@ pub(in crate::live::sessions) async fn start_native_session(
         | SessionStartupStrategy::LoadNativeNoFallback(existing) => {
             let load_started = std::time::Instant::now();
             match conn
-                .load_session(
-                    acp::LoadSessionRequest::new(existing.clone(), workspace_path.clone())
+                .send_request(
+                    acp::schema::LoadSessionRequest::new(existing.clone(), workspace_path.clone())
                         .mcp_servers(to_acp_servers(mcp_servers))
                         .meta(build_system_prompt_meta(system_prompt_append)),
                 )
+                .block_task()
                 .await
             {
                 Ok(resp) => {
@@ -260,7 +260,7 @@ pub(in crate::live::sessions) async fn start_native_session(
             }
 
             let fork_started = std::time::Instant::now();
-            let mut request = acp::ForkSessionRequest::new(
+            let mut request = acp::schema::ForkSessionRequest::new(
                 parent_native_session_id.clone(),
                 workspace_path.clone(),
             )
@@ -270,7 +270,7 @@ pub(in crate::live::sessions) async fn start_native_session(
                 request.mcp_servers.clear();
             }
 
-            match conn.fork_session(request).await {
+            match conn.send_request(request).block_task().await {
                 Ok(resp) => {
                     tracing::info!(
                         session_id = %session_id,

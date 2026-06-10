@@ -42,14 +42,14 @@ pub(in crate::live::sessions::actor) fn should_emit_empty_turn_error(
 }
 
 pub(in crate::live::sessions::actor) fn map_stop_reason(
-    stop_reason: &acp::StopReason,
+    stop_reason: &acp::schema::StopReason,
 ) -> StopReason {
     match stop_reason {
-        acp::StopReason::EndTurn => StopReason::EndTurn,
-        acp::StopReason::MaxTokens => StopReason::MaxTokens,
-        acp::StopReason::MaxTurnRequests => StopReason::MaxTurnRequests,
-        acp::StopReason::Refusal => StopReason::Refusal,
-        acp::StopReason::Cancelled => StopReason::Cancelled,
+        acp::schema::StopReason::EndTurn => StopReason::EndTurn,
+        acp::schema::StopReason::MaxTokens => StopReason::MaxTokens,
+        acp::schema::StopReason::MaxTurnRequests => StopReason::MaxTurnRequests,
+        acp::schema::StopReason::Refusal => StopReason::Refusal,
+        acp::schema::StopReason::Cancelled => StopReason::Cancelled,
         #[allow(unreachable_patterns)]
         _ => StopReason::Cancelled,
     }
@@ -57,9 +57,9 @@ pub(in crate::live::sessions::actor) fn map_stop_reason(
 
 pub(in crate::live::sessions::actor) struct PromptFinishContext<'a> {
     pub config: &'a SessionActorConfig,
-    pub conn: &'a acp::ClientSideConnection,
+    pub conn: &'a acp::ConnectionTo<acp::Agent>,
     pub native_session_id: &'a str,
-    pub notification_rx: &'a mut mpsc::UnboundedReceiver<acp::SessionNotification>,
+    pub notification_rx: &'a mut mpsc::UnboundedReceiver<acp::schema::SessionNotification>,
     pub background_work_rx: &'a mut mpsc::UnboundedReceiver<BackgroundWorkUpdate>,
     pub background_work_registry: &'a mut BackgroundWorkRegistry,
     pub event_sink: &'a Arc<Mutex<SessionEventSink>>,
@@ -75,7 +75,7 @@ pub(in crate::live::sessions::actor) struct PromptFinishContext<'a> {
 
 pub(in crate::live::sessions::actor) async fn finish_prompt_result(
     context: PromptFinishContext<'_>,
-    result: acp::Result<acp::PromptResponse>,
+    result: acp::Result<acp::schema::PromptResponse>,
     latency: Option<&LatencyRequestContext>,
     prompt_diagnostics: &mut PromptDiagnostics,
 ) -> bool {

@@ -58,7 +58,7 @@ impl ResumeReplayFilter {
 
     pub(in crate::live::sessions::actor) fn should_suppress(
         &mut self,
-        notification: &acp::SessionNotification,
+        notification: &acp::schema::SessionNotification,
         now: Instant,
     ) -> bool {
         if let ResumeReplayFilterState::Suppressing { last_transcript_at } = self.state {
@@ -92,9 +92,9 @@ impl ResumeReplayFilter {
 }
 
 pub(in crate::live::sessions::actor) fn classify_resume_replay_notification(
-    update: &acp::SessionUpdate,
+    update: &acp::schema::SessionUpdate,
 ) -> ResumeReplayNotificationClass {
-    use acp::SessionUpdate::*;
+    use acp::schema::SessionUpdate::*;
     match update {
         UserMessageChunk(_) => ResumeReplayNotificationClass::UserEcho,
         AgentMessageChunk(_) | AgentThoughtChunk(_) | ToolCall(_) | ToolCallUpdate(_) | Plan(_) => {

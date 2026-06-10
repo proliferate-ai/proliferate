@@ -54,9 +54,9 @@ pub(in crate::live::sessions::actor) fn pending_config_rank(
 }
 
 pub(in crate::live::sessions::actor) fn into_raw_pending_option(
-    option: &acp::SessionConfigOption,
+    option: &acp::schema::SessionConfigOption,
 ) -> anyharness_contract::v1::RawSessionConfigOption {
-    let acp::SessionConfigKind::Select(select) = &option.kind else {
+    let acp::schema::SessionConfigKind::Select(select) = &option.kind else {
         return anyharness_contract::v1::RawSessionConfigOption {
             id: option.id.to_string(),
             name: option.name.clone(),
@@ -74,7 +74,7 @@ pub(in crate::live::sessions::actor) fn into_raw_pending_option(
     };
 
     let options = match &select.options {
-        acp::SessionConfigSelectOptions::Ungrouped(values) => values
+        acp::schema::SessionConfigSelectOptions::Ungrouped(values) => values
             .iter()
             .map(|value| anyharness_contract::v1::RawSessionConfigValue {
                 value: value.value.to_string(),
@@ -82,7 +82,7 @@ pub(in crate::live::sessions::actor) fn into_raw_pending_option(
                 description: value.description.clone(),
             })
             .collect(),
-        acp::SessionConfigSelectOptions::Grouped(groups) => groups
+        acp::schema::SessionConfigSelectOptions::Grouped(groups) => groups
             .iter()
             .flat_map(|group| {
                 group
@@ -115,19 +115,19 @@ pub(in crate::live::sessions::actor) fn into_raw_pending_option(
 }
 
 pub(in crate::live::sessions::actor) fn find_select_option_for_value<'a>(
-    config_options: &'a [acp::SessionConfigOption],
+    config_options: &'a [acp::schema::SessionConfigOption],
     purpose: ConfigPurpose,
     desired_value: &str,
-) -> Option<&'a acp::SessionConfigOption> {
+) -> Option<&'a acp::schema::SessionConfigOption> {
     config_options.iter().find(|option| {
-        matches!(&option.kind, acp::SessionConfigKind::Select(_))
+        matches!(&option.kind, acp::schema::SessionConfigKind::Select(_))
             && option_matches_purpose(option, purpose)
             && select_option_contains_value(option, desired_value)
     })
 }
 
 pub(in crate::live::sessions::actor) fn option_matches_purpose(
-    option: &acp::SessionConfigOption,
+    option: &acp::schema::SessionConfigOption,
     purpose: ConfigPurpose,
 ) -> bool {
     let raw = into_raw_pending_option(option);
@@ -138,19 +138,19 @@ pub(in crate::live::sessions::actor) fn option_matches_purpose(
 }
 
 pub(in crate::live::sessions) fn find_select_option_by_purpose<'a>(
-    config_options: &'a [acp::SessionConfigOption],
+    config_options: &'a [acp::schema::SessionConfigOption],
     purpose: ConfigPurpose,
-) -> Option<&'a acp::SessionConfigOption> {
+) -> Option<&'a acp::schema::SessionConfigOption> {
     config_options.iter().find(|option| {
-        matches!(&option.kind, acp::SessionConfigKind::Select(_))
+        matches!(&option.kind, acp::schema::SessionConfigKind::Select(_))
             && option_matches_purpose(option, purpose)
     })
 }
 
 pub(in crate::live::sessions::actor) fn find_select_option_for_request<'a>(
-    config_options: &'a [acp::SessionConfigOption],
+    config_options: &'a [acp::schema::SessionConfigOption],
     config_id: &str,
-) -> Option<&'a acp::SessionConfigOption> {
+) -> Option<&'a acp::schema::SessionConfigOption> {
     config_options
         .iter()
         .find(|option| option.id.to_string() == config_id)
@@ -167,7 +167,7 @@ pub(in crate::live::sessions::actor) fn find_select_option_for_request<'a>(
 
 pub(in crate::live::sessions::actor) fn is_model_config_request(
     config_id: &str,
-    option: Option<&acp::SessionConfigOption>,
+    option: Option<&acp::schema::SessionConfigOption>,
 ) -> bool {
     config_id == "model"
         || option
@@ -177,7 +177,7 @@ pub(in crate::live::sessions::actor) fn is_model_config_request(
 
 pub(in crate::live::sessions::actor) fn is_mode_config_request(
     config_id: &str,
-    option: Option<&acp::SessionConfigOption>,
+    option: Option<&acp::schema::SessionConfigOption>,
 ) -> bool {
     config_id == LEGACY_MODE_COMPAT_CONFIG_ID
         || option
@@ -186,24 +186,24 @@ pub(in crate::live::sessions::actor) fn is_mode_config_request(
 }
 
 pub(in crate::live::sessions::actor) fn current_select_value(
-    option: &acp::SessionConfigOption,
+    option: &acp::schema::SessionConfigOption,
 ) -> Option<String> {
     match &option.kind {
-        acp::SessionConfigKind::Select(select) => Some(select.current_value.to_string()),
+        acp::schema::SessionConfigKind::Select(select) => Some(select.current_value.to_string()),
         _ => None,
     }
 }
 
 pub(in crate::live::sessions::actor) fn select_option_contains_value(
-    option: &acp::SessionConfigOption,
+    option: &acp::schema::SessionConfigOption,
     desired_value: &str,
 ) -> bool {
     match &option.kind {
-        acp::SessionConfigKind::Select(select) => match &select.options {
-            acp::SessionConfigSelectOptions::Ungrouped(options) => options
+        acp::schema::SessionConfigKind::Select(select) => match &select.options {
+            acp::schema::SessionConfigSelectOptions::Ungrouped(options) => options
                 .iter()
                 .any(|candidate| candidate.value.to_string() == desired_value),
-            acp::SessionConfigSelectOptions::Grouped(groups) => groups.iter().any(|group| {
+            acp::schema::SessionConfigSelectOptions::Grouped(groups) => groups.iter().any(|group| {
                 group
                     .options
                     .iter()
@@ -216,15 +216,15 @@ pub(in crate::live::sessions::actor) fn select_option_contains_value(
 }
 
 pub(in crate::live::sessions::actor) fn select_option_values(
-    option: &acp::SessionConfigOption,
+    option: &acp::schema::SessionConfigOption,
 ) -> Vec<String> {
     match &option.kind {
-        acp::SessionConfigKind::Select(select) => match &select.options {
-            acp::SessionConfigSelectOptions::Ungrouped(options) => options
+        acp::schema::SessionConfigKind::Select(select) => match &select.options {
+            acp::schema::SessionConfigSelectOptions::Ungrouped(options) => options
                 .iter()
                 .map(|candidate| candidate.value.to_string())
                 .collect(),
-            acp::SessionConfigSelectOptions::Grouped(groups) => groups
+            acp::schema::SessionConfigSelectOptions::Grouped(groups) => groups
                 .iter()
                 .flat_map(|group| group.options.iter())
                 .map(|candidate| candidate.value.to_string())

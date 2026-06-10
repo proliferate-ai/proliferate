@@ -87,7 +87,7 @@ pub(in crate::live::sessions::actor) fn config_request_matches_current_state(
 }
 
 pub(in crate::live::sessions::actor) async fn apply_pending_config_changes_if_idle(
-    conn: &acp::ClientSideConnection,
+    conn: &acp::ConnectionTo<acp::Agent>,
     native_session_id: &str,
     source_agent_kind: &str,
     session_id: &str,

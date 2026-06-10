@@ -14,10 +14,10 @@ use crate::domains::plans::model::PlanRecord;
 use crate::live::sessions::interactions::broker::PermissionOutcome;
 
 impl RuntimeClient {
-    pub(super) async fn handle_request_permission(
+    pub async fn handle_request_permission(
         &self,
-        args: acp::RequestPermissionRequest,
-    ) -> acp::Result<acp::RequestPermissionResponse> {
+        args: acp::schema::RequestPermissionRequest,
+    ) -> acp::Result<acp::schema::RequestPermissionResponse> {
         let request_id = uuid::Uuid::new_v4().to_string();
 
         let title = args
@@ -86,7 +86,7 @@ impl RuntimeClient {
                     predecided.error_message,
                 )
                 .await;
-                return Ok(acp::RequestPermissionResponse::new(predecided.outcome));
+                return Ok(acp::schema::RequestPermissionResponse::new(predecided.outcome));
             }
         }
         let source = InteractionSource {
@@ -141,15 +141,15 @@ impl RuntimeClient {
         let outcome = pending_wait.wait().await;
 
         let acp_outcome = match outcome {
-            PermissionOutcome::Selected { option_id } => acp::RequestPermissionOutcome::Selected(
-                acp::SelectedPermissionOutcome::new(option_id),
+            PermissionOutcome::Selected { option_id } => acp::schema::RequestPermissionOutcome::Selected(
+                acp::schema::SelectedPermissionOutcome::new(option_id),
             ),
             PermissionOutcome::Cancelled | PermissionOutcome::Dismissed => {
-                acp::RequestPermissionOutcome::Cancelled
+                acp::schema::RequestPermissionOutcome::Cancelled
             }
         };
 
-        Ok(acp::RequestPermissionResponse::new(acp_outcome))
+        Ok(acp::schema::RequestPermissionResponse::new(acp_outcome))
     }
 
     async fn publish_plan_native_resolution(
@@ -180,7 +180,7 @@ impl RuntimeClient {
 }
 
 struct PredecidedPlanPermission {
-    outcome: acp::RequestPermissionOutcome,
+    outcome: acp::schema::RequestPermissionOutcome,
     native_state: ProposedPlanNativeResolutionState,
     error_message: Option<String>,
 }
@@ -214,7 +214,7 @@ fn predecided_selected_or_failed(
             error_message: None,
         },
         None => PredecidedPlanPermission {
-            outcome: acp::RequestPermissionOutcome::Cancelled,
+            outcome: acp::schema::RequestPermissionOutcome::Cancelled,
             native_state: ProposedPlanNativeResolutionState::Failed,
             error_message: Some(error_message.to_string()),
         },
@@ -232,15 +232,15 @@ fn predecided_selected_or_cancelled(
             error_message: None,
         },
         None => PredecidedPlanPermission {
-            outcome: acp::RequestPermissionOutcome::Cancelled,
+            outcome: acp::schema::RequestPermissionOutcome::Cancelled,
             native_state: ProposedPlanNativeResolutionState::Finalized,
             error_message: None,
         },
     }
 }
 
-fn selected_permission_outcome(option_id: &str) -> acp::RequestPermissionOutcome {
-    acp::RequestPermissionOutcome::Selected(acp::SelectedPermissionOutcome::new(
+fn selected_permission_outcome(option_id: &str) -> acp::schema::RequestPermissionOutcome {
+    acp::schema::RequestPermissionOutcome::Selected(acp::schema::SelectedPermissionOutcome::new(
         option_id.to_string(),
     ))
 }

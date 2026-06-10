@@ -181,10 +181,10 @@ async fn cleanup_cancels_registered_permission_not_yet_in_summary() {
         .register_permission(
             "session-1",
             "hidden-perm",
-            &[acp::PermissionOption::new(
-                acp::PermissionOptionId::new("allow"),
+            &[acp::schema::PermissionOption::new(
+                acp::schema::PermissionOptionId::new("allow"),
                 "Allow",
-                acp::PermissionOptionKind::AllowOnce,
+                acp::schema::PermissionOptionKind::AllowOnce,
             )],
         )
         .await;

@@ -34,8 +34,11 @@ use crate::observability::latency::latency_trace_fields;
 
 pub(in crate::live::sessions::actor) struct StartedActor {
     pub child: tokio::process::Child,
-    pub conn: acp::ClientSideConnection,
-    pub notification_rx: mpsc::UnboundedReceiver<acp::SessionNotification>,
+    pub conn: acp::ConnectionTo<acp::Agent>,
+    /// Dropping this shuts down the ACP connection task.
+    #[allow(dead_code)]
+    pub _acp_shutdown: oneshot::Sender<()>,
+    pub notification_rx: mpsc::UnboundedReceiver<acp::schema::SessionNotification>,
     pub background_work_rx: mpsc::UnboundedReceiver<BackgroundWorkUpdate>,
     pub background_work_registry: BackgroundWorkRegistry,
     pub event_sink: Arc<Mutex<SessionEventSink>>,
@@ -78,7 +81,7 @@ pub(in crate::live::sessions::actor) async fn start_actor(
     let stdin = spawned.stdin;
     let stdout = spawned.stdout;
 
-    let (notification_tx, notification_rx) = mpsc::unbounded_channel::<acp::SessionNotification>();
+    let (notification_tx, notification_rx) = mpsc::unbounded_channel::<acp::schema::SessionNotification>();
     let store = config.session_store.clone();
 
     let event_sink = Arc::new(Mutex::new(if startup_strategy.resumes_durable_history() {
@@ -109,25 +112,77 @@ pub(in crate::live::sessions::actor) async fn start_actor(
         BackgroundWorkOptions::default(),
     );
 
-    let client = RuntimeClient::new(
+    let client = Arc::new(RuntimeClient::new(
         session_id.clone(),
         notification_tx,
         config.interaction_broker.clone(),
         event_sink.clone(),
         handle.clone(),
         config.plan_service.clone(),
-    );
+    ));
 
-    let (conn, io_task) =
-        acp::ClientSideConnection::new(client, stdin.compat_write(), stdout.compat(), |fut| {
-            tokio::task::spawn_local(fut);
+    // Channel to extract ConnectionTo<Agent> from within the builder closure.
+    let (cx_tx, cx_rx) = oneshot::channel::<acp::ConnectionTo<acp::Agent>>();
+    // Shutdown channel: sender is returned as part of StartedActor and dropped
+    // when the actor shuts down, causing the connect_with closure to exit.
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+
+    let transport = acp::ByteStreams::new(stdin.compat_write(), stdout.compat());
+
+    let client_for_notif = client.clone();
+    let client_for_perm = client.clone();
+    let client_for_ext = client.clone();
+
+    let connect_future = acp::Client
+        .builder()
+        .on_receive_notification(
+            async move |notif: acp::schema::SessionNotification, _cx| {
+                client_for_notif.handle_session_notification(notif).await
+            },
+            acp::on_receive_notification!(),
+        )
+        .on_receive_request(
+            async move |req: acp::schema::RequestPermissionRequest, responder: acp::Responder<acp::schema::RequestPermissionResponse>, _cx| {
+                let result = client_for_perm.handle_request_permission(req).await;
+                responder.respond_with_result(result)
+            },
+            acp::on_receive_request!(),
+        )
+        .on_receive_request(
+            async move |req: acp::AgentRequest, responder: acp::Responder<serde_json::Value>, _cx| {
+                match req {
+                    acp::AgentRequest::ExtMethodRequest(ext_req) => {
+                        let result = client_for_ext.handle_ext_request(ext_req).await;
+                        match result {
+                            Ok(ext_resp) => {
+                                let json = serde_json::to_value(&ext_resp.0)
+                                    .map_err(|e| acp::Error::internal_error().data(e.to_string()))?;
+                                responder.respond(json)
+                            }
+                            Err(e) => Err(e),
+                        }
+                    }
+                    _ => Err(acp::Error::method_not_found()),
+                }
+            },
+            acp::on_receive_request!(),
+        )
+        .connect_with(transport, move |cx: acp::ConnectionTo<acp::Agent>| async move {
+            let _ = cx_tx.send(cx);
+            // Keep the connection alive until the actor shuts down (shutdown_tx dropped).
+            let _ = shutdown_rx.await;
+            Ok(())
         });
 
     tokio::task::spawn_local(async move {
-        if let Err(e) = io_task.await {
-            tracing::warn!(error = %e, "ACP IO task ended");
+        if let Err(e) = connect_future.await {
+            tracing::warn!(error = %e, "ACP connection ended");
         }
     });
+
+    let conn = cx_rx
+        .await
+        .map_err(|_| anyhow::anyhow!("ACP connection closed before sending context"))?;
     let init_response = initialize_connection(
         &conn,
         &source_agent_kind,
@@ -328,6 +383,7 @@ pub(in crate::live::sessions::actor) async fn start_actor(
     Ok(StartedActor {
         child,
         conn,
+        _acp_shutdown: shutdown_tx,
         notification_rx,
         background_work_rx,
         background_work_registry,
@@ -392,7 +448,7 @@ async fn dispatch_startup_drain(
 pub(in crate::live::sessions::actor) fn persist_session_action_capabilities(
     store: &SessionStore,
     session_id: &str,
-    agent_capabilities: &acp::AgentCapabilities,
+    agent_capabilities: &acp::schema::AgentCapabilities,
 ) {
     let capabilities = action_capabilities_from_acp(agent_capabilities);
     let Ok(json) = serialize_action_capabilities(capabilities) else {
@@ -413,7 +469,7 @@ pub(in crate::live::sessions::actor) fn persist_session_action_capabilities(
 }
 
 pub(in crate::live::sessions::actor) fn action_capabilities_from_acp(
-    agent_capabilities: &acp::AgentCapabilities,
+    agent_capabilities: &acp::schema::AgentCapabilities,
 ) -> SessionActionCapabilities {
     let fork_capability = agent_capabilities.session_capabilities.fork.as_ref();
     let fork = agent_capabilities.load_session && fork_capability.is_some();

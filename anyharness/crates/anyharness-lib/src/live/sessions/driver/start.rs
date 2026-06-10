@@ -1,12 +1,11 @@
 use super::*;
 use crate::live::sessions::driver::native_session::build_system_prompt_meta;
 use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
-use acp::Agent as _;
 use std::time::Instant;
 pub(in crate::live::sessions) fn build_client_capabilities(
     source_agent_kind: &str,
     resolved_agent: &ResolvedAgent,
-) -> acp::ClientCapabilities {
+) -> acp::schema::ClientCapabilities {
     let mut meta = serde_json::Map::new();
 
     if source_agent_kind == AgentKind::Codex.as_str() {
@@ -33,7 +32,7 @@ pub(in crate::live::sessions) fn build_client_capabilities(
         );
     }
 
-    acp::ClientCapabilities::new().meta(acp::Meta::from_iter(meta))
+    acp::schema::ClientCapabilities::new().meta(acp::schema::Meta::from_iter(meta))
 }
 
 pub(in crate::live::sessions) fn should_advertise_codex_mcp_elicitation(
@@ -49,21 +48,22 @@ pub(in crate::live::sessions) fn should_attempt_advertised_auth(source_agent_kin
 }
 
 pub(in crate::live::sessions) async fn initialize_connection(
-    conn: &acp::ClientSideConnection,
+    conn: &acp::ConnectionTo<acp::Agent>,
     source_agent_kind: &str,
     resolved_agent: &ResolvedAgent,
     session_id: &str,
     workspace_id: &str,
     ready_tx: &std::sync::mpsc::Sender<anyhow::Result<String>>,
-) -> anyhow::Result<acp::InitializeResponse> {
+) -> anyhow::Result<acp::schema::InitializeResponse> {
     let initialize_started = Instant::now();
     let client_capabilities = build_client_capabilities(source_agent_kind, resolved_agent);
     let init_response = match conn
-        .initialize(
-            acp::InitializeRequest::new(acp::ProtocolVersion::V1)
-                .client_info(acp::Implementation::new("anyharness", "0.1.0"))
+        .send_request(
+            acp::schema::InitializeRequest::new(acp::schema::ProtocolVersion::V1)
+                .client_info(acp::schema::Implementation::new("anyharness", "0.1.0"))
                 .client_capabilities(client_capabilities),
         )
+        .block_task()
         .await
     {
         Ok(resp) => {
@@ -103,8 +103,8 @@ pub(in crate::live::sessions) async fn initialize_connection(
 }
 
 async fn authenticate_if_advertised(
-    conn: &acp::ClientSideConnection,
-    init_response: &acp::InitializeResponse,
+    conn: &acp::ConnectionTo<acp::Agent>,
+    init_response: &acp::schema::InitializeResponse,
     session_id: &str,
     workspace_id: &str,
 ) {
@@ -123,7 +123,8 @@ async fn authenticate_if_advertised(
         "agent advertises auth methods, calling authenticate"
     );
     match conn
-        .authenticate(acp::AuthenticateRequest::new(method_id.clone()))
+        .send_request(acp::schema::AuthenticateRequest::new(method_id.clone()))
+        .block_task()
         .await
     {
         Ok(_) => {
@@ -156,7 +157,7 @@ async fn authenticate_if_advertised(
 }
 
 pub(in crate::live::sessions) async fn start_new_session(
-    conn: &acp::ClientSideConnection,
+    conn: &acp::ConnectionTo<acp::Agent>,
     workspace_path: &std::path::PathBuf,
     mcp_servers: &[SessionMcpServer],
     system_prompt_append: Option<&str>,
@@ -165,8 +166,8 @@ pub(in crate::live::sessions) async fn start_new_session(
     startup_strategy: &str,
     completed_event: &str,
     failed_event: &str,
-) -> anyhow::Result<acp::NewSessionResponse> {
-    let mut request = acp::NewSessionRequest::new(workspace_path.clone());
+) -> anyhow::Result<acp::schema::NewSessionResponse> {
+    let mut request = acp::schema::NewSessionRequest::new(workspace_path.clone());
     if !mcp_servers.is_empty() {
         request = request.mcp_servers(to_acp_servers(mcp_servers));
     }
@@ -193,7 +194,7 @@ pub(in crate::live::sessions) async fn start_new_session(
         system_prompt_append_len,
         "[workspace-latency] session.actor.new_session.start"
     );
-    match conn.new_session(request).await {
+    match conn.send_request(request).block_task().await {
         Ok(resp) => {
             tracing::info!(
                 session_id = %session_id,
@@ -354,7 +355,7 @@ mod tests {
     }
 
     fn capability_bool(
-        capabilities: &acp::ClientCapabilities,
+        capabilities: &acp::schema::ClientCapabilities,
         agent: &str,
         capability: &str,
     ) -> Option<bool> {

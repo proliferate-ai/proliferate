@@ -22,13 +22,13 @@ impl NativeSessionStartupDisposition {
 pub(in crate::live::sessions) struct NativeSessionStartupState {
     pub(in crate::live::sessions) current_mode_id: Option<String>,
     pub(in crate::live::sessions) legacy_mode_state: Option<LegacyModeState>,
-    pub(in crate::live::sessions) config_options: Vec<acp::SessionConfigOption>,
+    pub(in crate::live::sessions) config_options: Vec<acp::schema::SessionConfigOption>,
     pub(in crate::live::sessions) current_model_id: Option<String>,
     pub(in crate::live::sessions) available_models: Vec<SessionModelOption>,
 }
 
 impl NativeSessionStartupState {
-    pub(in crate::live::sessions) fn from_new_session(response: &acp::NewSessionResponse) -> Self {
+    pub(in crate::live::sessions) fn from_new_session(response: &acp::schema::NewSessionResponse) -> Self {
         Self {
             current_mode_id: response
                 .modes
@@ -36,20 +36,13 @@ impl NativeSessionStartupState {
                 .map(|modes| modes.current_mode_id.to_string()),
             legacy_mode_state: response.modes.as_ref().map(into_legacy_mode_state),
             config_options: response.config_options.clone().unwrap_or_default(),
-            current_model_id: response
-                .models
-                .as_ref()
-                .map(|models| models.current_model_id.to_string()),
-            available_models: response
-                .models
-                .as_ref()
-                .map(into_session_model_options)
-                .unwrap_or_default(),
+            current_model_id: None,
+            available_models: vec![],
         }
     }
 
     pub(in crate::live::sessions) fn from_load_session(
-        response: &acp::LoadSessionResponse,
+        response: &acp::schema::LoadSessionResponse,
     ) -> Self {
         Self {
             current_mode_id: response
@@ -58,20 +51,13 @@ impl NativeSessionStartupState {
                 .map(|modes| modes.current_mode_id.to_string()),
             legacy_mode_state: response.modes.as_ref().map(into_legacy_mode_state),
             config_options: response.config_options.clone().unwrap_or_default(),
-            current_model_id: response
-                .models
-                .as_ref()
-                .map(|models| models.current_model_id.to_string()),
-            available_models: response
-                .models
-                .as_ref()
-                .map(into_session_model_options)
-                .unwrap_or_default(),
+            current_model_id: None,
+            available_models: vec![],
         }
     }
 
     pub(in crate::live::sessions) fn from_fork_session(
-        response: &acp::ForkSessionResponse,
+        response: &acp::schema::ForkSessionResponse,
     ) -> Self {
         Self {
             current_mode_id: response
@@ -80,20 +66,13 @@ impl NativeSessionStartupState {
                 .map(|modes| modes.current_mode_id.to_string()),
             legacy_mode_state: response.modes.as_ref().map(into_legacy_mode_state),
             config_options: response.config_options.clone().unwrap_or_default(),
-            current_model_id: response
-                .models
-                .as_ref()
-                .map(|models| models.current_model_id.to_string()),
-            available_models: response
-                .models
-                .as_ref()
-                .map(into_session_model_options)
-                .unwrap_or_default(),
+            current_model_id: None,
+            available_models: vec![],
         }
     }
 }
 
-fn into_legacy_mode_state(modes: &acp::SessionModeState) -> LegacyModeState {
+fn into_legacy_mode_state(modes: &acp::schema::SessionModeState) -> LegacyModeState {
     LegacyModeState {
         current_mode_id: modes.current_mode_id.to_string(),
         available_modes: modes
@@ -106,16 +85,4 @@ fn into_legacy_mode_state(modes: &acp::SessionModeState) -> LegacyModeState {
             })
             .collect(),
     }
-}
-
-fn into_session_model_options(models: &acp::SessionModelState) -> Vec<SessionModelOption> {
-    models
-        .available_models
-        .iter()
-        .map(|model| SessionModelOption {
-            id: model.model_id.to_string(),
-            name: model.name.clone(),
-            description: model.description.clone(),
-        })
-        .collect()
 }

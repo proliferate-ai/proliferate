@@ -61,7 +61,7 @@ fs2 = "0.4"
 toml = "0.8"
 
 # ACP SDK
-agent-client-protocol = { version = "0.10.2", features = ["unstable"] }
+agent-client-protocol = { version = "0.14.0", features = ["unstable"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 futures = "0.3"

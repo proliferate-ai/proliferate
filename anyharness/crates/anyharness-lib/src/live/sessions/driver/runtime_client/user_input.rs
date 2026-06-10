@@ -12,8 +12,8 @@ use crate::live::sessions::interactions::broker::UserInputOutcome;
 impl RuntimeClient {
     pub(super) async fn codex_request_user_input(
         &self,
-        args: acp::ExtRequest,
-    ) -> acp::Result<acp::ExtResponse> {
+        args: acp::schema::ExtRequest,
+    ) -> acp::Result<acp::schema::ExtResponse> {
         let request = serde_json::from_str::<CodexRequestUserInputParams>(args.params.get())
             .map_err(|error| acp::Error::invalid_params().data(error.to_string()))?;
 
@@ -94,8 +94,8 @@ impl RuntimeClient {
 
     pub(super) async fn claude_request_user_input(
         &self,
-        args: acp::ExtRequest,
-    ) -> acp::Result<acp::ExtResponse> {
+        args: acp::schema::ExtRequest,
+    ) -> acp::Result<acp::schema::ExtResponse> {
         let request = serde_json::from_str::<ClaudeRequestUserInputParams>(args.params.get())
             .map_err(|error| acp::Error::invalid_params().data(error.to_string()))?;
 

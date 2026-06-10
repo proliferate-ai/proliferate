@@ -2,7 +2,7 @@ use agent_client_protocol as acp;
 use anyharness_contract::v1::PermissionInteractionContext;
 
 pub(crate) fn permission_context_from_meta(
-    meta: Option<&acp::Meta>,
+    meta: Option<&acp::schema::Meta>,
 ) -> Option<PermissionInteractionContext> {
     let meta = meta?;
     let context = meta
@@ -53,7 +53,7 @@ pub(crate) fn permission_context_from_meta(
 mod tests {
     use super::*;
 
-    fn meta(value: serde_json::Value) -> acp::Meta {
+    fn meta(value: serde_json::Value) -> acp::schema::Meta {
         value.as_object().expect("meta must be an object").clone()
     }
 

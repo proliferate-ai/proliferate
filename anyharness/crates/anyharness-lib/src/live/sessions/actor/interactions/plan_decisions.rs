@@ -342,10 +342,10 @@ mod tests {
             .register_permission(
                 "session-1",
                 "request-1",
-                &[acp::PermissionOption::new(
-                    acp::PermissionOptionId::new("reject-once"),
+                &[acp::schema::PermissionOption::new(
+                    acp::schema::PermissionOptionId::new("reject-once"),
                     "Reject",
-                    acp::PermissionOptionKind::RejectOnce,
+                    acp::schema::PermissionOptionKind::RejectOnce,
                 )],
             )
             .await;

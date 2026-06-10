@@ -14,7 +14,7 @@ use crate::live::sessions::actor::turn::handle::first_prompt_system_prompt_appen
 use crate::live::sessions::event_sink::SessionEventSink;
 
 pub(in crate::live::sessions::actor) struct StartedPromptTurn {
-    pub acp_blocks: Vec<acp::ContentBlock>,
+    pub acp_blocks: Vec<acp::schema::ContentBlock>,
     pub turn_id: String,
 }
 
@@ -108,12 +108,12 @@ pub(in crate::live::sessions::actor) async fn begin_prompt_turn(
 }
 
 pub(in crate::live::sessions::actor) fn prepend_system_prompt_append_to_acp_blocks(
-    blocks: &mut Vec<acp::ContentBlock>,
+    blocks: &mut Vec<acp::schema::ContentBlock>,
     append: &str,
 ) {
     blocks.insert(
         0,
-        acp::ContentBlock::Text(acp::TextContent::new(format!(
+        acp::schema::ContentBlock::Text(acp::schema::TextContent::new(format!(
             "System instruction from AnyHarness, not user content:\n{append}"
         ))),
     );

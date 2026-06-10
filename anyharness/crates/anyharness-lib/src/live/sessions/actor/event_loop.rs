@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use agent_client_protocol::{self as acp, Agent};
+use agent_client_protocol as acp;
 use tokio::sync::mpsc;
 
 use crate::live::sessions::actor::background_work::handle_background_work_update;
@@ -46,6 +46,7 @@ pub(in crate::live::sessions::actor) async fn run_actor(
         action_capabilities,
         supports_native_close,
         mut resume_replay_filter,
+        _acp_shutdown,
     } = start_actor(&config, ready_tx, &handle).await?;
 
     let store = config.session_store.clone();
@@ -154,8 +155,7 @@ pub(in crate::live::sessions::actor) async fn run_actor(
                     }
                     Some(SessionCommand::Cancel) => {
                         let _ = conn
-                            .cancel(acp::CancelNotification::new(native_session_id.clone()))
-                            .await;
+                            .send_notification(acp::schema::CancelNotification::new(native_session_id.clone()));
                     }
                     Some(SessionCommand::Dismiss { respond_to }) => {
                         resolve_pending_interactions(

@@ -42,7 +42,7 @@ impl PromptDiagnostics {
 
     pub(in crate::live::sessions::actor) fn observe_notification(
         &mut self,
-        notif: &acp::SessionNotification,
+        notif: &acp::schema::SessionNotification,
     ) {
         let kind =
             crate::live::sessions::driver::runtime_client::session_update_kind(&notif.update);
@@ -51,14 +51,14 @@ impl PromptDiagnostics {
         self.last_raw_at = Some(now);
 
         match &notif.update {
-            acp::SessionUpdate::AgentMessageChunk(chunk) => {
+            acp::schema::SessionUpdate::AgentMessageChunk(chunk) => {
                 let preview = content_block_preview(&chunk.content);
                 if !preview.trim().is_empty() {
                     self.last_agent_chunk_at = Some(now);
                     self.last_agent_preview = Some(preview);
                 }
             }
-            acp::SessionUpdate::AgentThoughtChunk(chunk) => {
+            acp::schema::SessionUpdate::AgentThoughtChunk(chunk) => {
                 let preview = content_block_preview(&chunk.content);
                 if !preview.trim().is_empty() {
                     self.last_agent_thought_at = Some(now);
@@ -68,13 +68,13 @@ impl PromptDiagnostics {
                     self.last_transient_status = Some(preview);
                 }
             }
-            acp::SessionUpdate::ToolCall(_) | acp::SessionUpdate::ToolCallUpdate(_) => {
+            acp::schema::SessionUpdate::ToolCall(_) | acp::schema::SessionUpdate::ToolCallUpdate(_) => {
                 self.last_tool_event_at = Some(now);
             }
-            acp::SessionUpdate::Plan(_) => {
+            acp::schema::SessionUpdate::Plan(_) => {
                 self.last_plan_at = Some(now);
             }
-            acp::SessionUpdate::UsageUpdate(_) => {
+            acp::schema::SessionUpdate::UsageUpdate(_) => {
                 self.last_usage_at = Some(now);
             }
             _ => {}
@@ -82,7 +82,7 @@ impl PromptDiagnostics {
     }
 }
 
-fn is_transient_status_chunk(chunk: &acp::ContentChunk) -> bool {
+fn is_transient_status_chunk(chunk: &acp::schema::ContentChunk) -> bool {
     chunk
         .meta
         .as_ref()
@@ -92,7 +92,7 @@ fn is_transient_status_chunk(chunk: &acp::ContentChunk) -> bool {
         == Some(TRANSIENT_STATUS_EVENT)
 }
 
-fn content_block_preview(content: &acp::ContentBlock) -> String {
+fn content_block_preview(content: &acp::schema::ContentBlock) -> String {
     let value = serde_json::to_value(content).unwrap_or_else(|_| serde_json::json!({}));
     if let Some(text) = value.get("text").and_then(|text| text.as_str()) {
         return truncate_preview(text, 120);
