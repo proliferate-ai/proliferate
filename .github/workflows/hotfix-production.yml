@@ -22,6 +22,8 @@ on:
         type: choice
         options:
           - patch
+          - minor
+          - major
           - none
       dry_run:
         description: Plan only; do not push commits, tags, releases, or deploys.
