@@ -341,6 +341,9 @@ jobs:
           ALLOW_UNSIGNED: ${{ inputs.allow_unsigned && 'true' || 'false' }}
         run: |
           export VITE_PROLIFERATE_RELEASE="${VITE_PROLIFERATE_RELEASE:-proliferate-desktop@${PROLIFERATE_RELEASE_VERSION}}"
+          # Launch gate: ship with cloud compute hidden (identity/billing stay
+          # enabled). Remove this line to re-enable cloud workspaces in builds.
+          export VITE_PROLIFERATE_DISABLE_CLOUD_COMPUTE=1
           export PROLIFERATE_DESKTOP_SENTRY_RELEASE="${PROLIFERATE_DESKTOP_SENTRY_RELEASE:-proliferate-desktop-native@${PROLIFERATE_RELEASE_VERSION}}"
           export ANYHARNESS_SENTRY_RELEASE="${ANYHARNESS_SENTRY_RELEASE:-anyharness-sidecar@${PROLIFERATE_RELEASE_VERSION}}"
 
