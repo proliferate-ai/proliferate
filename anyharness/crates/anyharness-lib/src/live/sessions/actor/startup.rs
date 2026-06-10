@@ -150,6 +150,13 @@ pub(in crate::live::sessions::actor) async fn start_actor(
             acp::on_receive_request!(),
         )
         .on_receive_request(
+            async move |req: acp::schema::CreateElicitationRequest, responder: acp::Responder<acp::schema::CreateElicitationResponse>, _cx| {
+                let result = client_for_elicitation.standard_mcp_elicitation(req).await;
+                responder.respond_with_result(result)
+            },
+            acp::on_receive_request!(),
+        )
+        .on_receive_request(
             async move |req: acp::AgentRequest, responder: acp::Responder<serde_json::Value>, _cx| {
                 match req {
                     acp::AgentRequest::ExtMethodRequest(ext_req) => {
@@ -165,13 +172,6 @@ pub(in crate::live::sessions::actor) async fn start_actor(
                     }
                     _ => Err(acp::Error::method_not_found()),
                 }
-            },
-            acp::on_receive_request!(),
-        )
-        .on_receive_request(
-            async move |req: acp::schema::CreateElicitationRequest, responder: acp::Responder<acp::schema::CreateElicitationResponse>, _cx| {
-                let result = client_for_elicitation.standard_mcp_elicitation(req).await;
-                responder.respond_with_result(result)
             },
             acp::on_receive_request!(),
         )

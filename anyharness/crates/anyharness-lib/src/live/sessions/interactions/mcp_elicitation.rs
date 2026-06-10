@@ -258,7 +258,146 @@ fn first_non_empty(value: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use agent_client_protocol::schema::{
+        CreateElicitationRequest, ElicitationFormMode, ElicitationId, ElicitationSchema,
+        ElicitationSessionScope, ElicitationUrlMode, EnumOption, StringPropertySchema,
+    };
+    use anyharness_contract::v1::McpElicitationSubmittedValue;
     use serde_json::json;
+
+    fn standard_select_request() -> CreateElicitationRequest {
+        let schema = ElicitationSchema::new().property(
+            "account_id_secret",
+            StringPropertySchema::new().title("Account").one_of(vec![
+                EnumOption::new("acct_123", "Work"),
+                EnumOption::new("acct_456", "Personal"),
+            ]),
+            true,
+        );
+        CreateElicitationRequest::new(
+            ElicitationFormMode::new(ElicitationSessionScope::new("sess_test"), schema),
+            "Pick account",
+        )
+    }
+
+    #[test]
+    fn normalizes_schema_without_persisting_raw_names_or_values() {
+        let normalized =
+            normalize_standard_mcp_elicitation(standard_select_request()).expect("should normalize");
+
+        let public_json = serde_json::to_string(&normalized.payload).unwrap();
+        assert!(!public_json.contains("account_id_secret"));
+        assert!(!public_json.contains("acct_123"));
+        assert!(public_json.contains("Work"));
+    }
+
+    #[test]
+    fn accepted_select_maps_generated_option_to_raw_value() {
+        let normalized =
+            normalize_standard_mcp_elicitation(standard_select_request()).expect("should normalize");
+
+        let outcome = normalized
+            .pending
+            .accept(vec![McpElicitationSubmittedField {
+                field_id: "field_1".to_string(),
+                value: McpElicitationSubmittedValue::Option {
+                    option_id: "field_1_option_1".to_string(),
+                },
+            }])
+            .expect("submission should validate");
+
+        let McpElicitationOutcome::Accepted { content, .. } = outcome else {
+            panic!("expected accepted outcome");
+        };
+        assert_eq!(content, Some(json!({ "account_id_secret": "acct_123" })));
+    }
+
+    #[test]
+    fn duplicate_multi_select_option_ids_are_rejected() {
+        let normalized = normalize_form(
+            "google".to_string(),
+            "Pick accounts".to_string(),
+            json!({
+                "type": "object",
+                "properties": {
+                    "accounts": {
+                        "type": "array",
+                        "title": "Accounts",
+                        "items": {
+                            "oneOf": [
+                                {"const": "acct_123", "title": "Work"},
+                                {"const": "acct_456", "title": "Personal"}
+                            ]
+                        },
+                        "minItems": 2
+                    }
+                },
+                "required": ["accounts"]
+            }),
+        )
+        .expect("schema should normalize");
+
+        let error = normalized
+            .pending
+            .accept(vec![McpElicitationSubmittedField {
+                field_id: "field_1".to_string(),
+                value: McpElicitationSubmittedValue::OptionArray {
+                    option_ids: vec![
+                        "field_1_option_1".to_string(),
+                        "field_1_option_1".to_string(),
+                    ],
+                },
+            }])
+            .expect_err("duplicate option ids should be rejected");
+        assert_eq!(error, McpElicitationValidationError::InvalidValue);
+    }
+
+    #[test]
+    fn url_payload_and_debug_do_not_expose_full_url() {
+        let request = CreateElicitationRequest::new(
+            ElicitationUrlMode::new(
+                ElicitationSessionScope::new("sess_test"),
+                ElicitationId::new("elic_test"),
+                "https://accounts.example.com/oauth?token=secret-token",
+            ),
+            "Authorize",
+        );
+        let normalized =
+            normalize_standard_mcp_elicitation(request).expect("url should normalize");
+
+        let public_json = serde_json::to_string(&normalized.payload).unwrap();
+        assert!(public_json.contains("https://accounts.example.com"));
+        assert!(!public_json.contains("secret-token"));
+
+        let debug = format!("{:?}", normalized.pending);
+        assert!(!debug.contains("secret-token"));
+    }
+
+    #[test]
+    fn accepted_outcome_debug_redacts_submitted_values() {
+        let schema = ElicitationSchema::new().string("account", true);
+        let request = CreateElicitationRequest::new(
+            ElicitationFormMode::new(ElicitationSessionScope::new("sess_test"), schema),
+            "Name account",
+        );
+        let normalized =
+            normalize_standard_mcp_elicitation(request).expect("schema should normalize");
+
+        let outcome = normalized
+            .pending
+            .accept(vec![McpElicitationSubmittedField {
+                field_id: "field_1".to_string(),
+                value: McpElicitationSubmittedValue::String {
+                    value: "submitted-secret".to_string(),
+                },
+            }])
+            .expect("submission should validate");
+
+        let debug = format!("{outcome:?}");
+        assert!(!debug.contains("submitted-secret"));
+        assert!(!debug.contains("account"));
+        assert!(debug.contains("field_1"));
+    }
 
     #[test]
     fn normalizes_claude_elicitation_to_shared_payload() {
