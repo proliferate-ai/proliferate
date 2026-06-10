@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -18,6 +19,7 @@ import {
   logHistoryPrefetchDecisionOnce,
   STICKY_BOTTOM_THRESHOLD_PX,
   TRANSCRIPT_TOP_PADDING_PX,
+  TranscriptScrollToBottomButton,
   type HistoryPrefetchDecisionReason,
   type HistoryPrefetchTrigger,
   type HistoryPrependScrollAnchor,
@@ -67,6 +69,7 @@ export function VirtualizedTranscriptRowList({
   const lastOlderHistoryCursorRequestRef = useRef<number | null>(null);
   const lastPrefetchDecisionLogRef = useRef<string | null>(null);
   const lastBlankReportSignatureRef = useRef<string | null>(null);
+  const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
   const renderableRows = useMemo(
     () => buildRenderableRows(rows, isLoadingOlderHistory),
     [isLoadingOlderHistory, rows],
@@ -101,21 +104,31 @@ export function VirtualizedTranscriptRowList({
     if (!viewport) {
       return;
     }
-    if (renderableRows.length > 0) {
-      virtualizer.scrollToIndex(renderableRows.length - 1, { align: "end" });
-      return;
-    }
+    // Pin against the real DOM scroll height instead of
+    // virtualizer.scrollToIndex: index-based scrolling positions by the
+    // virtualizer's *estimated* size for rows that haven't been measured
+    // yet (e.g. the row appended by this very update), so each append lands
+    // the viewport wrong by the estimate error and visibly bounces when the
+    // measurement corrects it a frame later.
     viewport.scrollTop = viewport.scrollHeight;
-  }, [renderableRows.length, virtualizer]);
+  }, []);
 
   const updateStickiness = useCallback((viewport: HTMLDivElement) => {
-    shouldStickToBottomRef.current = shouldStickToVirtualBottom({
+    const stick = shouldStickToVirtualBottom({
       scrollOffset: viewport.scrollTop,
       viewportSize: viewport.clientHeight,
       totalVirtualSize: viewport.scrollHeight,
       thresholdPx: STICKY_BOTTOM_THRESHOLD_PX,
     });
+    shouldStickToBottomRef.current = stick;
+    setIsPinnedToBottom(stick);
   }, []);
+
+  const handleScrollToBottomClick = useCallback(() => {
+    shouldStickToBottomRef.current = true;
+    setIsPinnedToBottom(true);
+    scrollToBottom();
+  }, [scrollToBottom]);
 
   const logPrefetchDecision = useCallback((
     trigger: HistoryPrefetchTrigger,
@@ -208,6 +221,7 @@ export function VirtualizedTranscriptRowList({
 
   useLayoutEffect(() => {
     shouldStickToBottomRef.current = true;
+    setIsPinnedToBottom(true);
     scrollToBottom();
     // This is intentionally keyed to session identity and row availability.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -329,19 +343,26 @@ export function VirtualizedTranscriptRowList({
   });
 
   return (
-    <VirtualTranscriptViewport
-      bottomSpacerHeight={bottomSpacerHeight}
-      columnClassName={columnClassName}
-      gutterClassName={gutterClassName}
-      measureElement={virtualizer.measureElement}
-      onViewportScroll={handleViewportScroll}
-      renderableRows={renderableRows}
-      renderRow={renderRow}
-      scrollRef={scrollRef}
-      selectionRootRef={selectionRootRef}
-      topSpacerHeight={topSpacerHeight}
-      virtualItems={virtualItems}
-      virtualizationMode={virtualizationMode}
-    />
+    <div className="relative h-full">
+      <VirtualTranscriptViewport
+        bottomSpacerHeight={bottomSpacerHeight}
+        columnClassName={columnClassName}
+        gutterClassName={gutterClassName}
+        measureElement={virtualizer.measureElement}
+        onViewportScroll={handleViewportScroll}
+        renderableRows={renderableRows}
+        renderRow={renderRow}
+        scrollRef={scrollRef}
+        selectionRootRef={selectionRootRef}
+        topSpacerHeight={topSpacerHeight}
+        virtualItems={virtualItems}
+        virtualizationMode={virtualizationMode}
+      />
+      <TranscriptScrollToBottomButton
+        visible={!isPinnedToBottom}
+        bottomInsetPx={bottomInsetPx}
+        onClick={handleScrollToBottomClick}
+      />
+    </div>
   );
 }

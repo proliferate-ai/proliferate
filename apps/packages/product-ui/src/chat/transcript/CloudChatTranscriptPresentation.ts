@@ -4,7 +4,7 @@ import {
   Brain,
   CheckCircle2,
   Clock3,
-  Terminal,
+  SquareTerminal,
   User,
   Wrench,
 } from "lucide-react";
@@ -51,7 +51,7 @@ export function iconForRow(row: CloudChatTranscriptRowView) {
     case "thought":
       return Brain;
     case "tool":
-      return row.status === "completed" ? CheckCircle2 : Terminal;
+      return row.status === "completed" ? CheckCircle2 : SquareTerminal;
     case "tool_group":
       return Wrench;
     case "user":

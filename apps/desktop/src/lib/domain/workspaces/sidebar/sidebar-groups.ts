@@ -87,6 +87,7 @@ export function buildSidebarGroupStates(args: {
   lastViewedAt: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
   targetAppearanceById?: Record<string, ComputeTargetAppearance>;
+  suppressActiveNeedsReview?: boolean;
 }): SidebarGroupState[] {
   const visibleWorkspaceTypes = new Set(resolveSidebarWorkspaceTypes(args.workspaceTypes));
   const repoRootsByKey = new Map(
@@ -154,6 +155,7 @@ export function buildSidebarGroupStates(args: {
         lastViewedAt: args.lastViewedAt,
         workspaceLastInteracted: args.workspaceLastInteracted,
         targetAppearanceById: args.targetAppearanceById,
+        suppressActiveNeedsReview: args.suppressActiveNeedsReview,
       });
       const items = pendingItem
         ? [pendingItem, ...workspaceItems]

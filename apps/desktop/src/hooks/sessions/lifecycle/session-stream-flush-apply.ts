@@ -36,10 +36,6 @@ import {
   type PendingSessionConfigChanges,
 } from "@proliferate/product-domain/sessions/pending-config";
 import { buildSessionStreamBatchPatch } from "@/lib/domain/sessions/stream-patch";
-import {
-  pruneEchoedOutboxTombstonesForTranscript,
-  reconcileOutboxFromEnvelopes,
-} from "@proliferate/product-domain/sessions/intents/session-intent-reconciliation";
 import { shouldClearOptimisticPendingPromptForEnvelope } from "@proliferate/product-domain/chats/pending-prompts/pending-prompts";
 import {
   applyBatchedStreamSideEffects,
@@ -177,6 +173,16 @@ export function applySessionStreamFlushBatch(
   });
 
   if (result.appliedEnvelopes.length === 0 && !result.gapEnvelope) {
+    // Duplicate envelopes were applied through another path (e.g. a history
+    // tail rehydrate racing the stream), so the outbox may not have seen
+    // their prompt echoes yet. Reconciliation is idempotent, so replaying
+    // duplicates here is safe and keeps accepted prompts from lingering as
+    // blocking entries.
+    useSessionIntentStore.getState().reconcileFromEnvelopes(
+      input.sessionId,
+      result.duplicateEnvelopes,
+      slotState.transcript,
+    );
     useSessionIngestStore.getState().applyStreamProgress(input.sessionId, {
       lastAppliedSeq: slotState.transcript.lastSeq,
       lastObservedSeq,
@@ -216,25 +222,16 @@ export function applySessionStreamFlushBatch(
       transcript: streamPatch.transcript,
       optimisticPrompt: shouldClearOptimisticPrompt ? null : slotState.optimisticPrompt,
     });
-    useSessionIntentStore.setState((state) => {
-      const reconciled = reconcileOutboxFromEnvelopes(
-        state,
-        input.sessionId,
-        result.appliedEnvelopes,
-      );
-      const next = pruneEchoedOutboxTombstonesForTranscript(
-        reconciled,
-        result.state.transcript,
-      );
-      if (next === state) {
-        return state;
-      }
-      return {
-        ...state,
-        ...next,
-        dispatchVersion: state.dispatchVersion + 1,
-      };
-    });
+    // Duplicates are reconciled too: they may have been applied first by a
+    // racing history rehydrate, in which case this flush is the outbox's only
+    // chance to observe their prompt echoes. Reconciliation is idempotent.
+    useSessionIntentStore.getState().reconcileFromEnvelopes(
+      input.sessionId,
+      [...result.duplicateEnvelopes, ...result.appliedEnvelopes].sort(
+        (left, right) => left.seq - right.seq,
+      ),
+      result.state.transcript,
+    );
     useSessionDirectoryStore.getState().patchEntry(input.sessionId, {
       liveConfig: streamPatch.liveConfig !== undefined
         ? streamPatch.liveConfig

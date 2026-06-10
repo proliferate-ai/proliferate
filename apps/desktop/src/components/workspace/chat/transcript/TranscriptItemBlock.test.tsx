@@ -82,7 +82,7 @@ describe("TranscriptItemBlock", () => {
 
     expect(container.innerHTML).toContain("data-transcript-activity-block");
     expect(container.innerHTML).toContain("data-transcript-activity-shell");
-    expect(container.innerHTML).toContain("py-2");
+    expect(container.innerHTML).toContain("pt-1 pb-2");
     expect(container.textContent).toContain("Tool call");
   });
 
@@ -104,7 +104,7 @@ describe("TranscriptItemBlock", () => {
 
     expect(container.innerHTML).toContain("data-transcript-activity-block");
     expect(container.innerHTML).toContain("data-transcript-activity-shell");
-    expect(container.innerHTML).toContain("py-2");
+    expect(container.innerHTML).toContain("pt-1 pb-2");
     expect(container.textContent).toContain("Thinking");
   });
 
@@ -127,7 +127,7 @@ describe("TranscriptItemBlock", () => {
     );
 
     expect(container.innerHTML).toContain("data-transcript-activity-density=\"compact\"");
-    expect(container.innerHTML).toContain("py-2");
+    expect(container.innerHTML).toContain("pt-1 pb-2");
     expect(container.textContent).toContain("Thinking");
   });
 });

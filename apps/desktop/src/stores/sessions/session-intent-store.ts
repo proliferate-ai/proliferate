@@ -1,4 +1,8 @@
 import { create } from "zustand";
+import type {
+  SessionEventEnvelope,
+  TranscriptState,
+} from "@anyharness/sdk";
 import {
   createDeletePendingPromptIntent,
   createEditPendingPromptIntent,
@@ -13,7 +17,11 @@ import {
   type SessionResolveInteractionIntent,
   type SessionUpdateConfigIntent,
 } from "@proliferate/product-domain/sessions/intents/session-intent-model";
-import { pruneEchoedOutboxTombstones } from "@proliferate/product-domain/sessions/intents/session-intent-reconciliation";
+import {
+  pruneEchoedOutboxTombstones,
+  pruneEchoedOutboxTombstonesForTranscript,
+  reconcileOutboxFromEnvelopes,
+} from "@proliferate/product-domain/sessions/intents/session-intent-reconciliation";
 import {
   bindSessionIntentMaterialization,
   getPromptEntryByPromptId,
@@ -45,6 +53,11 @@ interface SessionIntentStoreState extends SessionIntentStateShape {
   patchIntent: (intentId: string, patch: Partial<SessionIntent>) => void;
   removeIntent: (intentId: string) => void;
   bindMaterializedSession: (clientSessionId: string, materializedSessionId: string) => void;
+  reconcileFromEnvelopes: (
+    clientSessionId: string,
+    envelopes: readonly SessionEventEnvelope[],
+    transcript?: TranscriptState | null,
+  ) => void;
   pruneEchoedTombstones: () => void;
   clearSession: (clientSessionId: string) => void;
   clear: () => void;
@@ -192,6 +205,25 @@ export const useSessionIntentStore = create<SessionIntentStoreState>((set) => ({
       recordSessionIntentStoreAction("bindMaterializedSession", state, next, {
         clientSessionId,
         materializedSessionId,
+      }, debugStartedAtMs);
+      return next;
+    });
+  },
+
+  reconcileFromEnvelopes: (clientSessionId, envelopes, transcript) => {
+    if (envelopes.length === 0) {
+      return;
+    }
+    const debugStartedAtMs = startSessionIntentStoreActionTrace();
+    set((state) => {
+      const reconciled = reconcileOutboxFromEnvelopes(state, clientSessionId, envelopes);
+      const pruned = transcript
+        ? pruneEchoedOutboxTombstonesForTranscript(reconciled, transcript)
+        : reconciled;
+      const next = withDispatchVersion(state, pruned);
+      recordSessionIntentStoreAction("reconcileFromEnvelopes", state, next, {
+        clientSessionId,
+        envelopeCount: envelopes.length,
       }, debugStartedAtMs);
       return next;
     });

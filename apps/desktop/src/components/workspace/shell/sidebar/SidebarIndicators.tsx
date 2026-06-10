@@ -43,7 +43,7 @@ export function SidebarStatusGlyph({
     case "waiting_plan":
       return <Clock className="size-3 text-info" />;
     case "needs_review":
-      return <span aria-hidden="true" className="block size-1.5 rounded-full bg-info" />;
+      return <span aria-hidden="true" className="block size-2 rounded-full bg-info" />;
     case "iterating":
     case "queued_prompt":
       return <Spinner className="size-3.5 text-sidebar-foreground" />;

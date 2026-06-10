@@ -1,5 +1,6 @@
 import type { ReactNode, RefObject } from "react";
-import { Spinner } from "@proliferate/ui/icons";
+import { ChevronDown, Spinner } from "@proliferate/ui/icons";
+import { Button } from "@proliferate/ui/primitives/Button";
 import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 
 export const TRANSCRIPT_TOP_PADDING_PX = 16;
@@ -138,6 +139,41 @@ export function estimateRenderableRowHeight(
   return row?.kind === "history_loader"
     ? ESTIMATED_HISTORY_LOADING_ROW_HEIGHT_PX
     : ESTIMATED_TURN_HEIGHT_PX;
+}
+
+export function TranscriptScrollToBottomButton({
+  visible,
+  bottomInsetPx,
+  onClick,
+}: {
+  visible: boolean;
+  bottomInsetPx: number;
+  onClick: () => void;
+}) {
+  return (
+    <div
+      className="pointer-events-none absolute inset-x-0 z-10 flex justify-center"
+      style={{ bottom: bottomInsetPx + 12 }}
+    >
+      <Button
+        type="button"
+        variant="secondary"
+        size="icon-sm"
+        aria-label="Scroll to bottom"
+        aria-hidden={!visible}
+        tabIndex={visible ? 0 : -1}
+        data-chat-transcript-ignore
+        onClick={onClick}
+        className={`text-muted-foreground shadow-md transition-[opacity,transform,color] duration-200 hover:text-foreground ${
+          visible
+            ? "pointer-events-auto translate-y-0 opacity-100"
+            : "translate-y-1 opacity-0"
+        }`}
+      >
+        <ChevronDown className="size-4" />
+      </Button>
+    </div>
+  );
 }
 
 export function TranscriptHistoryLoadingRow() {

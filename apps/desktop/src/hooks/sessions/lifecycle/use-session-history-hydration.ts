@@ -171,6 +171,7 @@ export function useSessionHistoryHydration() {
         applyHistoryStateToStores(sessionId, currentSlot, {
           events: nextState.state.events,
           transcript: nextState.state.transcript,
+          reconcileEnvelopes: events,
         });
         for (const operationId of historyApplyOperationIds) {
           recordMeasurementMetric({
@@ -244,6 +245,7 @@ export function useSessionHistoryHydration() {
         applyHistoryStateToStores(sessionId, currentSlot, {
           events: replacementEvents,
           transcript: nextState.transcript,
+          reconcileEnvelopes: events,
         });
         for (const operationId of historyApplyOperationIds) {
           recordMeasurementMetric({
@@ -315,6 +317,7 @@ export function useSessionHistoryHydration() {
       applyHistoryStateToStores(sessionId, currentSlot, {
         events: nextState.events,
         transcript: nextState.transcript,
+        reconcileEnvelopes: replacementEvents,
       });
       for (const operationId of historyApplyOperationIds) {
         recordMeasurementMetric({

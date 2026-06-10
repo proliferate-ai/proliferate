@@ -9,7 +9,7 @@ import {
   FolderList,
   Search,
   Settings,
-  Terminal,
+  SquareTerminal,
 } from "@proliferate/ui/icons";
 import {
   type CollapsedActionSummary,
@@ -97,7 +97,7 @@ export function CollapsedActions({
 
 function renderCollapsedActionsIcon(summary: CollapsedActionSummary): ReactNode {
   if (summary.commands > 0) {
-    return <Terminal />;
+    return <SquareTerminal />;
   }
   if (summary.edits > 0) {
     return <FilePen />;

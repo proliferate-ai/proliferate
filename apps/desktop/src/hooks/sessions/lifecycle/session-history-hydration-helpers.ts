@@ -17,6 +17,7 @@ import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-ne
 import { batchSessionStoreWrites } from "@/lib/infra/scheduling/react-batching";
 import { activityFromTranscript } from "@/lib/domain/sessions/directory/directory-activity";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
 import type { SessionRuntimeRecord } from "@/stores/sessions/session-types";
 
@@ -79,6 +80,14 @@ export function applyHistoryStateToStores(
   nextState: {
     events: SessionEventEnvelope[];
     transcript: TranscriptState;
+    /**
+     * Envelopes this apply introduced (fetched tail/page or full replacement).
+     * The outbox reconciles against them so prompt echoes applied through the
+     * history path still tombstone their intents — without this, an intent
+     * whose echo arrives via rehydrate stays `accepted_running` and wrongly
+     * queues every later prompt.
+     */
+    reconcileEnvelopes: readonly SessionEventEnvelope[];
   },
 ): void {
   const status = resolveSessionStatus(currentRecord.status, {
@@ -91,6 +100,11 @@ export function applyHistoryStateToStores(
       events: nextState.events,
       transcript: nextState.transcript,
     });
+    useSessionIntentStore.getState().reconcileFromEnvelopes(
+      sessionId,
+      nextState.reconcileEnvelopes,
+      nextState.transcript,
+    );
     useSessionDirectoryStore.getState().patchEntry(sessionId, {
       status,
       modeId: nextState.transcript.currentModeId ?? currentRecord.modeId,

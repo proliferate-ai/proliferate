@@ -25,6 +25,10 @@
   --color-composer-send-foreground: var(--color-background);
   --color-composer-shadow: var(--shadow-subtle);
   --color-composer-backdrop-filter: none;
+  /* Meta text (message timestamps, code-block language labels) tracks the
+     chat font size — including runtime text-scale changes — but always sits
+     one step below it. */
+  --text-chat-meta: calc(var(--text-chat, 12px) - 2px);
 }
 
 * {

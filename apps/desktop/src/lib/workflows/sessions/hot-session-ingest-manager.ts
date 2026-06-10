@@ -96,6 +96,19 @@ export function reconcileHotSessions(
         continue;
       }
       existing.reason = target.reason;
+      // Self-heal: a prior connect may have declined to open a stream (e.g.
+      // the cold-idle skip) and left this entry registered with nothing in
+      // flight. Without this check the session stays streamless even after
+      // it becomes active again — a prompt sent to it dispatches fine but
+      // its reply never arrives until the user switches sessions.
+      if (!existing.opening && !existing.retryTimer) {
+        const record = deps.state.getSessionRecord(target.clientSessionId);
+        const streamAlive = record?.streamConnectionState === "open"
+          || record?.streamConnectionState === "connecting";
+        if (!streamAlive) {
+          connectHotTarget(streamableTarget, deps, 0, existing.openToken);
+        }
+      }
       continue;
     }
 

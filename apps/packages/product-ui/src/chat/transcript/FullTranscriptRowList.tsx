@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   memo,
   useRef,
+  useState,
   type ReactNode,
 } from "react";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
@@ -19,6 +20,7 @@ import {
   DEFAULT_CHAT_COLUMN_CLASSNAME,
   DEFAULT_CHAT_SURFACE_GUTTER_CLASSNAME,
   TranscriptHistoryLoadingRow,
+  TranscriptScrollToBottomButton,
   type HistoryPrefetchDecisionReason,
   type HistoryPrefetchTrigger,
   type HistoryPrependScrollAnchor,
@@ -60,6 +62,7 @@ export function FullTranscriptRowList({
   const pendingPrependAnchorRef = useRef<HistoryPrependScrollAnchor | null>(null);
   const lastOlderHistoryCursorRequestRef = useRef<number | null>(null);
   const lastPrefetchDecisionLogRef = useRef<string | null>(null);
+  const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
 
   const scrollToBottom = useCallback(() => {
     const viewport = scrollRef.current;
@@ -70,13 +73,21 @@ export function FullTranscriptRowList({
   }, []);
 
   const updateStickiness = useCallback((viewport: HTMLDivElement) => {
-    shouldStickToBottomRef.current = shouldStickToVirtualBottom({
+    const stick = shouldStickToVirtualBottom({
       scrollOffset: viewport.scrollTop,
       viewportSize: viewport.clientHeight,
       totalVirtualSize: viewport.scrollHeight,
       thresholdPx: STICKY_BOTTOM_THRESHOLD_PX,
     });
+    shouldStickToBottomRef.current = stick;
+    setIsPinnedToBottom(stick);
   }, []);
+
+  const handleScrollToBottomClick = useCallback(() => {
+    shouldStickToBottomRef.current = true;
+    setIsPinnedToBottom(true);
+    scrollToBottom();
+  }, [scrollToBottom]);
 
   const logPrefetchDecision = useCallback((
     trigger: HistoryPrefetchTrigger,
@@ -162,6 +173,7 @@ export function FullTranscriptRowList({
 
   useLayoutEffect(() => {
     shouldStickToBottomRef.current = true;
+    setIsPinnedToBottom(true);
     scrollToBottom();
     // This is intentionally keyed to session identity and row availability.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -222,41 +234,48 @@ export function FullTranscriptRowList({
   ]);
 
   return (
-    <AutoHideScrollArea
-      className="h-full"
-      ref={scrollRef}
-      onViewportScroll={handleViewportScroll}
-    >
-      <div
-        className={`${gutterClassName} min-h-full`}
-        data-transcript-virtualization-mode="full"
-        data-transcript-virtualization-setting={virtualizationMode}
-        data-transcript-virtualization-fallback={fallbackReason ?? undefined}
+    <div className="relative h-full">
+      <AutoHideScrollArea
+        className="h-full"
+        ref={scrollRef}
+        onViewportScroll={handleViewportScroll}
       >
         <div
-          ref={selectionRootRef}
-          data-chat-transcript-root="true"
-          tabIndex={-1}
-          className={`${columnClassName} select-none outline-none`}
+          className={`${gutterClassName} min-h-full`}
+          data-transcript-virtualization-mode="full"
+          data-transcript-virtualization-setting={virtualizationMode}
+          data-transcript-virtualization-fallback={fallbackReason ?? undefined}
         >
-          {TRANSCRIPT_TOP_PADDING_PX > 0 && (
-            <div aria-hidden="true" style={{ height: TRANSCRIPT_TOP_PADDING_PX }} />
-          )}
-          {isLoadingOlderHistory && <TranscriptHistoryLoadingRow />}
-          {rows.map((row, rowIndex) => (
-            <MemoizedFullTranscriptRow
-              key={row.key}
-              row={row}
-              rowIndex={rowIndex}
-              renderRow={renderRow}
-            />
-          ))}
-          {bottomInsetPx > 0 && (
-            <div aria-hidden="true" style={{ height: bottomInsetPx }} />
-          )}
+          <div
+            ref={selectionRootRef}
+            data-chat-transcript-root="true"
+            tabIndex={-1}
+            className={`${columnClassName} select-none outline-none`}
+          >
+            {TRANSCRIPT_TOP_PADDING_PX > 0 && (
+              <div aria-hidden="true" style={{ height: TRANSCRIPT_TOP_PADDING_PX }} />
+            )}
+            {isLoadingOlderHistory && <TranscriptHistoryLoadingRow />}
+            {rows.map((row, rowIndex) => (
+              <MemoizedFullTranscriptRow
+                key={row.key}
+                row={row}
+                rowIndex={rowIndex}
+                renderRow={renderRow}
+              />
+            ))}
+            {bottomInsetPx > 0 && (
+              <div aria-hidden="true" style={{ height: bottomInsetPx }} />
+            )}
+          </div>
         </div>
-      </div>
-    </AutoHideScrollArea>
+      </AutoHideScrollArea>
+      <TranscriptScrollToBottomButton
+        visible={!isPinnedToBottom}
+        bottomInsetPx={bottomInsetPx}
+        onClick={handleScrollToBottomClick}
+      />
+    </div>
   );
 }
 

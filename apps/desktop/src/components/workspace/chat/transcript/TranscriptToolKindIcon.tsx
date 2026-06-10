@@ -5,7 +5,7 @@ import {
   FileText,
   FolderList,
   Settings,
-  Terminal,
+  SquareTerminal,
 } from "@proliferate/ui/icons";
 import { ProliferateIcon } from "@proliferate/ui/proliferate-icons";
 import type { ToolDisplayIconKey } from "@proliferate/product-domain/chats/tools/tool-call-display";
@@ -15,7 +15,7 @@ export function ToolKindIcon({ iconKey }: { iconKey: ToolDisplayIconKey }) {
 
   switch (iconKey) {
     case "terminal":
-      return <Terminal className={className} />;
+      return <SquareTerminal className={className} />;
     case "folder-list":
       return <FolderList className={className} />;
     case "file-text":

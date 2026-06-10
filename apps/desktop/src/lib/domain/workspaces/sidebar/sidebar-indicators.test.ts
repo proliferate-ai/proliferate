@@ -555,6 +555,41 @@ describe("sidebar indicators", () => {
     expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("needs_review");
   });
 
+  it("suppresses needs-review for the selected workspace while the window is focused", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "review-local",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+        }),
+        makeLocalLogicalWorkspace({
+          id: "other-local",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+        }),
+      ],
+      selectedLogicalWorkspaceId: "review-local",
+      suppressActiveNeedsReview: true,
+      workspaceLastInteracted: {
+        "review-local-materialization": "2026-04-13T10:10:00.000Z",
+        "other-local-materialization": "2026-04-13T10:10:00.000Z",
+      },
+      lastViewedAt: {
+        "review-local": "2026-04-13T10:00:00.000Z",
+        "other-local": "2026-04-13T10:00:00.000Z",
+      },
+    });
+
+    const selectedItem = groups[0]?.items.find((item) => item.id === "review-local");
+    const otherItem = groups[0]?.items.find((item) => item.id === "other-local");
+    expect(selectedItem?.active).toBe(true);
+    expect(selectedItem?.needsReview).toBe(false);
+    expect(selectedItem?.statusIndicator).toBeNull();
+    expect(otherItem?.needsReview).toBe(true);
+    expect(otherItem?.statusIndicator?.kind).toBe("needs_review");
+  });
+
   it("uses materialization view timestamps to avoid stale needs-review markers", () => {
     const groups = buildGroups({
       logicalWorkspaces: [

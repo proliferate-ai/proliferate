@@ -42,6 +42,7 @@ export function buildSidebarWorkspaceItems(args: {
   lastViewedAt: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
   targetAppearanceById?: Record<string, ComputeTargetAppearance>;
+  suppressActiveNeedsReview?: boolean;
 }): SidebarWorkspaceItemState[] {
   const workspaceItemsWithWorkspace = args.workspaces.map((entry) =>
     buildSidebarWorkspaceItem(entry, args)
@@ -80,6 +81,7 @@ function buildSidebarWorkspaceItem(
     lastViewedAt: Record<string, string>;
     workspaceLastInteracted: Record<string, string>;
     targetAppearanceById?: Record<string, ComputeTargetAppearance>;
+    suppressActiveNeedsReview?: boolean;
   },
 ): SidebarWorkspaceItemWithWorkspace {
   const active = logicalWorkspaceMatchesId(entry, args.selectedLogicalWorkspaceId);
@@ -111,11 +113,15 @@ function buildSidebarWorkspaceItem(
         workspace: preferredCloudWorkspace,
       })
       : entry.displayName;
-  const needsReview = isWorkspaceNeedsReview({
-    isArchived: archived,
-    lastInteracted: activityLastInteracted,
-    lastViewedAt: latestLogicalWorkspaceTimestamp(args.lastViewedAt, entry),
-  });
+  // A workspace the user is actively viewing in a focused window has nothing
+  // pending review, even when the viewed timestamp briefly trails the latest
+  // interaction (e.g. right after a new session bootstraps).
+  const needsReview = !(active && args.suppressActiveNeedsReview)
+    && isWorkspaceNeedsReview({
+      isArchived: archived,
+      lastInteracted: activityLastInteracted,
+      lastViewedAt: latestLogicalWorkspaceTimestamp(args.lastViewedAt, entry),
+    });
   const activity = activeWorkspaceActivity(entry, args.workspaceActivities);
   const copyMetadata = workspaceCopyMetadataForLogicalWorkspace(entry);
   const sshTargetId = variant === "ssh" ? logicalWorkspaceSshTargetId(entry) : null;

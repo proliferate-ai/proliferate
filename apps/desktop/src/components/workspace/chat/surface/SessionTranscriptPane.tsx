@@ -50,18 +50,24 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
   const activeSessionId = transcriptDeferred
     ? null
     : deferredPaneState.activeSessionId;
+  // The transcript renders from the deferred snapshot, so every input the
+  // row model derives rows from must come from the same snapshot. Mixing
+  // immediate outbox/optimistic state with a deferred transcript opens a
+  // window where a prompt's outbox row is already tombstoned while its
+  // transcript echo hasn't rendered yet — the message disappears for a
+  // frame and the transcript visibly jumps.
   const optimisticPrompt = transcriptDeferred
     ? null
-    : immediatePaneState.optimisticPrompt;
+    : deferredPaneState.optimisticPrompt;
   const outboxEntries = transcriptDeferred
     ? []
-    : immediatePaneState.outboxEntries;
+    : deferredPaneState.outboxEntries;
   const transcript = transcriptDeferred
     ? null
     : deferredPaneState.transcript;
   const sessionViewState = transcriptDeferred
     ? "idle"
-    : immediatePaneState.sessionViewState;
+    : deferredPaneState.sessionViewState;
   const oldestLoadedEventSeq = transcriptDeferred
     ? null
     : deferredPaneState.oldestLoadedEventSeq;

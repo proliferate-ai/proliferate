@@ -14,6 +14,10 @@ import type {
   SidebarEmptyState,
   SidebarGroupState,
 } from "@/lib/domain/workspaces/sidebar/sidebar-model";
+import {
+  isDocumentVisibleAndFocused,
+  useDocumentFocusVisibilityNonce,
+} from "@/hooks/ui/document/use-document-focus-visibility";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
 import { useWorkspaceMetadataSync } from "@/hooks/workspaces/lifecycle/use-workspace-metadata-sync";
@@ -82,6 +86,12 @@ export function useWorkspaceSidebarState({
     workspaceTypes: state.workspaceTypes,
   })));
 
+  const focusVisibilityNonce = useDocumentFocusVisibilityNonce();
+  const windowFocused = useMemo(
+    () => isDocumentVisibleAndFocused(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [focusVisibilityNonce],
+  );
   const { logicalWorkspaces, isLoading: workspacesLoading } = useLogicalWorkspaces();
   const { data: workspaceCollections } = useWorkspaces();
   const cleanupAttentionWorkspaces =
@@ -144,6 +154,7 @@ export function useWorkspaceSidebarState({
       lastViewedAt,
       workspaceLastInteracted,
       targetAppearanceById: computeTargets.targetAppearanceById,
+      suppressActiveNeedsReview: windowFocused,
     })), [
     activeSessionTitle,
     archivedSet,
@@ -159,6 +170,7 @@ export function useWorkspaceSidebarState({
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
     showArchived,
+    windowFocused,
     workspaceActivities,
     workspaceLastInteracted,
   ]);
