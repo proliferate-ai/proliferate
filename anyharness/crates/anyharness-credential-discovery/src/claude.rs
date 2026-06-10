@@ -73,6 +73,56 @@ pub fn detect_local_auth_state(home_dir: &Path) -> Result<LocalAuthState, Discov
     Ok(LocalAuthState::Absent)
 }
 
+/// Kind-preserving fact detection: emits EVERY present claude credential
+/// kind (facts, never verdicts — unlike `detect_local_auth_state`, which is
+/// first-match). The kinds reuse exactly the checks above:
+/// `has_claude_api_key` → `claude-config-api-key`, `has_claude_oauth_payload`
+/// → `claude-oauth-creds`, the keychain lookup → `claude-keychain`, and
+/// `has_oauth_account_marker` → `claude-oauth-account`.
+pub(crate) fn discovery_fact_kinds(
+    home_dir: &Path,
+) -> Result<Vec<&'static str>, DiscoveryError> {
+    let mut kinds = Vec::new();
+
+    let api_config_paths = [
+        home_dir.join(CLAUDE_API_CONFIG_PATH),
+        home_dir.join(CLAUDE_CONFIG_PATH),
+    ];
+    for path in api_config_paths {
+        if let Some(data) = read_json_file(&path)? {
+            if has_claude_api_key(&data) {
+                kinds.push(crate::facts::fact_kinds::CLAUDE_CONFIG_API_KEY);
+                break;
+            }
+        }
+    }
+
+    let oauth_paths = [
+        home_dir.join(CLAUDE_CREDENTIALS_PATH),
+        home_dir.join(CLAUDE_OAUTH_CREDENTIALS_PATH),
+    ];
+    for path in oauth_paths {
+        if let Some(data) = read_json_file(&path)? {
+            if has_claude_oauth_payload(&data) {
+                kinds.push(crate::facts::fact_kinds::CLAUDE_OAUTH_CREDS);
+                break;
+            }
+        }
+    }
+
+    if read_keychain_claude_oauth(home_dir)?.is_some() {
+        kinds.push(crate::facts::fact_kinds::CLAUDE_KEYCHAIN);
+    }
+
+    if let Some(data) = read_json_file(&home_dir.join(CLAUDE_CONFIG_PATH))? {
+        if has_oauth_account_marker(&data) {
+            kinds.push(crate::facts::fact_kinds::CLAUDE_OAUTH_ACCOUNT);
+        }
+    }
+
+    Ok(kinds)
+}
+
 pub fn export_portable_auth(home_dir: &Path) -> Result<Option<PortableAuthExport>, DiscoveryError> {
     tracing::debug!(home_dir = %home_dir.display(), "Exporting portable Claude auth");
     let oauth_paths = [
@@ -338,6 +388,50 @@ mod tests {
                 ..
             })
         ));
+
+        let _ = fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn fact_kinds_preserve_every_present_credential_kind() {
+        let home = make_temp_home();
+        fs::create_dir_all(home.join(".claude")).expect("create claude dir");
+        fs::write(
+            home.join(CLAUDE_CREDENTIALS_PATH),
+            r#"{"claudeAiOauth":{"accessToken":"token"}}"#,
+        )
+        .expect("write oauth creds");
+        fs::write(
+            home.join(CLAUDE_CONFIG_PATH),
+            r#"{"primaryApiKey":"sk-ant-123","oauthAccount":{"accountUuid":"acct-123"}}"#,
+        )
+        .expect("write claude config");
+
+        let kinds = discovery_fact_kinds(&home).expect("fact kinds");
+        assert_eq!(
+            kinds,
+            vec![
+                "claude-config-api-key",
+                "claude-oauth-creds",
+                "claude-oauth-account"
+            ]
+        );
+
+        let _ = fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn fact_kinds_empty_when_nothing_present() {
+        let home = make_temp_home();
+        fs::write(
+            home.join(CLAUDE_CONFIG_PATH),
+            r#"{"hasCompletedOnboarding":true}"#,
+        )
+        .expect("write claude config");
+
+        assert!(discovery_fact_kinds(&home)
+            .expect("fact kinds")
+            .is_empty());
 
         let _ = fs::remove_dir_all(home);
     }

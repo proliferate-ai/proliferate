@@ -44,6 +44,29 @@ pub fn detect_local_auth_state(home_dir: &Path) -> Result<LocalAuthState, Discov
     Ok(LocalAuthState::Absent)
 }
 
+/// Kind-preserving fact detection: `gemini-oauth-creds` for the OAuth cache
+/// file, `gemini-keychain` for the keychain entry (both may be present).
+/// `gemini-settings-api-key` is deliberately NOT emitted: the existing
+/// parser never reads API keys from settings.json, so the kind is not
+/// distinguishable today.
+pub(crate) fn discovery_fact_kinds(
+    home_dir: &Path,
+) -> Result<Vec<&'static str>, DiscoveryError> {
+    let mut kinds = Vec::new();
+
+    if let Some(data) = read_json_file(&local_gemini_oauth_path(home_dir))? {
+        if has_google_oauth_credentials(&data) {
+            kinds.push(crate::facts::fact_kinds::GEMINI_OAUTH_CREDS);
+        }
+    }
+
+    if read_keychain_gemini_oauth(home_dir)?.is_some() {
+        kinds.push(crate::facts::fact_kinds::GEMINI_KEYCHAIN);
+    }
+
+    Ok(kinds)
+}
+
 pub fn export_portable_auth(home_dir: &Path) -> Result<Option<PortableAuthExport>, DiscoveryError> {
     let oauth_path = local_gemini_oauth_path(home_dir);
     tracing::debug!(path = %oauth_path.display(), "Exporting portable Gemini auth");
@@ -245,6 +268,23 @@ mod tests {
             state,
             LocalAuthState::Present(LocalAuthSource::File { .. })
         ));
+
+        let _ = fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn fact_kinds_surface_oauth_creds_file() {
+        let home = make_temp_home();
+        fs::write(
+            home.join(GEMINI_OAUTH_FILE_PATH),
+            r#"{"refresh_token":"refresh-token"}"#,
+        )
+        .expect("write oauth creds");
+
+        assert_eq!(
+            discovery_fact_kinds(&home).expect("fact kinds"),
+            vec!["gemini-oauth-creds"]
+        );
 
         let _ = fs::remove_dir_all(home);
     }
