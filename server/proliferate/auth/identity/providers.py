@@ -15,6 +15,8 @@ from jose import JWTError, jwt
 
 from proliferate.auth.identity.routing import auth_route_path_for_base
 from proliferate.auth.identity.types import AuthProviderName, VerifiedProviderIdentity
+from httpx_oauth.exceptions import GetIdEmailError
+
 from proliferate.auth.oauth import github_oauth_client, google_oauth_client
 from proliferate.config import settings
 from proliferate.constants.auth import GITHUB_OAUTH_SCOPES
@@ -121,12 +123,18 @@ async def verify_oauth_callback(
     if provider == "github":
         token = await github_oauth_client.get_access_token(code, provider_callback_url)
         access_token = str(token["access_token"])
-        account_id, account_email = await github_oauth_client.get_id_email(access_token)
-        if account_email is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="GitHub did not return an email address.",
-            )
+        try:
+            account_id, account_email = await github_oauth_client.get_id_email(access_token)
+        except GetIdEmailError:
+            # The /user/emails probe fails when the GitHub app lacks the
+            # "Email addresses" permission or the grant predates it. The
+            # profile endpoint still identifies the account; the email is
+            # recovered below.
+            github_profile = await github_oauth_client.get_profile(access_token)
+            account_id = str(github_profile["id"])
+            raw_email = github_profile.get("email")
+            account_email = raw_email if isinstance(raw_email, str) and raw_email else None
+        account_id = str(account_id)
         display_name: str | None = None
         provider_login: str | None = None
         avatar_url: str | None = None
@@ -137,6 +145,15 @@ async def verify_oauth_callback(
             avatar_url = profile.avatar_url
         except GitHubIntegrationError:
             pass
+        if account_email is None and provider_login:
+            # Private-email accounts: GitHub's stable noreply address keeps
+            # sign-in working; the provider subject is the durable identity.
+            account_email = f"{account_id}+{provider_login}@users.noreply.github.com"
+        if account_email is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="GitHub did not return an email address.",
+            )
         return VerifiedProviderIdentity(
             provider="github",
             provider_subject=account_id,
