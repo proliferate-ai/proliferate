@@ -62,10 +62,8 @@ pub struct AgentLoginStart {
 pub enum AgentRuntimeError {
     #[error("No built-in agent with kind: {0}")]
     NotFound(String),
-    #[error("Agent {0} does not support native login")]
-    LoginNotSupported(String),
-    #[error("Login command for agent {0} was not found")]
-    LoginCommandNotFound(String),
+    #[error(transparent)]
+    Login(#[from] AgentLoginError),
     #[error("Agent login terminal not found: {0}")]
     LoginTerminalNotFound(String),
     #[error("Agent login terminal failed: {0}")]
@@ -74,15 +72,6 @@ pub enum AgentRuntimeError {
     InstallTaskFailed(tokio::task::JoinError),
     #[error(transparent)]
     Install(#[from] InstallError),
-}
-
-impl From<AgentLoginError> for AgentRuntimeError {
-    fn from(error: AgentLoginError) -> Self {
-        match error {
-            AgentLoginError::NotSupported(kind) => Self::LoginNotSupported(kind),
-            AgentLoginError::CommandNotFound(kind) => Self::LoginCommandNotFound(kind),
-        }
-    }
 }
 
 impl AgentRuntime {
@@ -120,11 +109,12 @@ impl AgentRuntime {
         })
     }
 
-    #[tracing::instrument(skip_all, fields(
+    #[tracing::instrument(skip_all, err, fields(
         agent = %kind,
         reinstall = request.reinstall,
         native_version = ?request.native_version,
         agent_process_version = ?request.agent_process_version,
+        runtime_home = %self.runtime_home.display(),
     ))]
     pub async fn install_agent(
         &self,
@@ -168,7 +158,7 @@ impl AgentRuntime {
         let login_spec = descriptor
             .auth
             .primary_login()
-            .ok_or_else(|| AgentRuntimeError::LoginNotSupported(kind.to_string()))?;
+            .ok_or_else(|| AgentRuntimeError::Login(AgentLoginError::NotSupported(kind.to_string())))?;
         let command = AgentLoginCommand {
             program: login_spec.command.program.clone(),
             args: login_spec.command.args.clone(),
@@ -194,7 +184,7 @@ impl AgentRuntime {
         let login_spec = descriptor
             .auth
             .primary_login()
-            .ok_or_else(|| AgentRuntimeError::LoginNotSupported(kind.to_string()))?;
+            .ok_or_else(|| AgentRuntimeError::Login(AgentLoginError::NotSupported(kind.to_string())))?;
         let resolved = login::resolve_login_command(&descriptor, &self.runtime_home)?;
 
         Ok(AgentLoginStart {

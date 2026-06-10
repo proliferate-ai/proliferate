@@ -491,7 +491,7 @@ violations.
 
 Migration exceptions (the rule is the law; this is the debt):
 `domains/runtime_config` persists contract types as rows and uses them as its
-model; `domains/agents/auth_config` uses contract auth structs end-to-end;
+model; `domains/agents/auth` uses contract auth structs end-to-end;
 `domains/sessions/runtime/contract.rs` builds contract responses inside the
 domain via a fetching mapper. Targets: domain twins minted at the API seam and
 a runtime-composed view model with a dep-less mapper.

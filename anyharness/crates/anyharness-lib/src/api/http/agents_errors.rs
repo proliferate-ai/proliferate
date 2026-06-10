@@ -5,6 +5,7 @@
 use axum::http::StatusCode;
 
 use super::error::ApiError;
+use crate::domains::agents::auth::login::AgentLoginError;
 use crate::domains::agents::installer::InstallError;
 use crate::domains::agents::runtime::AgentRuntimeError;
 
@@ -17,13 +18,13 @@ impl From<AgentRuntimeError> for ApiError {
                 Some(format!("No built-in agent with kind: {kind}")),
                 Some("AGENT_NOT_FOUND"),
             ),
-            AgentRuntimeError::LoginNotSupported(kind) => ApiError::new(
+            AgentRuntimeError::Login(AgentLoginError::NotSupported(kind)) => ApiError::new(
                 StatusCode::BAD_REQUEST,
                 "Login not supported",
                 Some(format!("Agent {kind} does not support native login")),
                 Some("LOGIN_NOT_SUPPORTED"),
             ),
-            AgentRuntimeError::LoginCommandNotFound(kind) => ApiError::new(
+            AgentRuntimeError::Login(AgentLoginError::CommandNotFound(kind)) => ApiError::new(
                 StatusCode::CONFLICT,
                 "Login command not found",
                 Some(format!(

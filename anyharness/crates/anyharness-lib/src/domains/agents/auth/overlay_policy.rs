@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use anyharness_contract::v1::{AgentAuthExternalScope, AgentAuthSelectionConfig};
+use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use super::launch::{reject_expired_selection, selection_required_error};
@@ -30,6 +31,7 @@ pub(super) fn plan(
     scope: Option<&AgentAuthExternalScope>,
     required_revision: Option<i64>,
     decrypted: Option<(i64, &AgentAuthConfigInput)>,
+    now: DateTime<Utc>,
 ) -> Result<EnvOverlayPlan, AgentAuthLaunchOverlayError> {
     let scoped_launch = scope.is_some() || required_revision.is_some();
     let Some((revision, config)) = decrypted else {
@@ -73,7 +75,7 @@ pub(super) fn plan(
                 ));
             }
         }
-        reject_expired_selection(selection)
+        reject_expired_selection(selection, now)
             .map_err(|_| selection_required_error(scope.cloned(), agent_kind, "expired"))?;
         merge_selection_env(
             &mut overlay_plan.support_env,

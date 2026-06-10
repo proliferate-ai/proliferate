@@ -973,7 +973,7 @@ anyharness/crates/anyharness-lib/src/api/http/agent_auth_config.rs
   - return AGENT_AUTH_SELECTION_REQUIRED when a required configured
     harness has no active selection in the external scope
 
-anyharness/crates/anyharness-lib/src/domains/agents/auth_config.rs
+anyharness/crates/anyharness-lib/src/domains/agents/auth/service.rs
   - load_selection_for_scope_and_kind(scope, kind) -> Option<Selection>
   - returns missing | expired | invalid | needs_resync reason
 

@@ -140,6 +140,7 @@ anyharness-lib/src/domains/agents/
       models.rs
   registry/
     mod.rs
+    service.rs
     schema.rs
     bundled.rs
     validation.rs
@@ -147,9 +148,8 @@ anyharness-lib/src/domains/agents/
   readiness/
     mod.rs
     launch_options.rs
-    resolver.rs
+    service.rs
     artifacts.rs
-    spawn.rs
     compatibility.rs
     overrides.rs
     paths.rs
@@ -162,20 +162,22 @@ anyharness-lib/src/domains/agents/
     refresh.rs
     resolution.rs
     service.rs
-  credentials/
-    mod.rs
+  auth/
+    credentials.rs            # plus auth-config/login modules (see agent-auth)
   installer/
     mod.rs
+    service.rs
     agent_process.rs
     downloads.rs
+    lock.rs
+    managed_npm.rs
     native.rs
     npm.rs
-  install_lock.rs             # outside catalog/**
-  reconcile/
-    mod.rs
-    execution.rs
-  seed/
-    mod.rs
+    reconcile/
+      mod.rs
+      execution.rs
+    seed/
+      mod.rs
   portability/
     mod.rs
 ```
@@ -235,7 +237,7 @@ Banned:
 - mutating credentials or materialized auth
 - storing dynamic model refresh state
 
-### `credentials/`
+### `auth/credentials.rs`
 
 Owns runtime credential readiness mapping.
 
@@ -304,9 +306,9 @@ Banned:
 - starting a session actor
 
 Low-level vendor mechanics belong under `integrations/agent_cli/**`.
-`install/` uses those mechanics to implement product install/update behavior.
+`installer/` uses those mechanics to implement product install/update behavior.
 
-### `reconcile/`
+### `installer/reconcile/`
 
 Owns batch repair/sync.
 
@@ -315,7 +317,7 @@ runtime match desired local state.
 
 It should not own per-provider install mechanics.
 
-### `seed/`
+### `installer/seed/`
 
 Owns prepackaged desktop/runtime artifacts.
 
@@ -372,7 +374,7 @@ Live session code starts and supervises the ACP process from a resolved
 ```text
 API handler
   -> agents registry
-  -> readiness resolver for each supported descriptor
+  -> readiness service for each supported descriptor
   -> response includes target-local readiness and fallback metadata
 ```
 
@@ -385,7 +387,7 @@ API handler
     -> install native artifact if supported and needed
     -> install agent-process artifact if supported and needed
     -> regenerate launcher if needed
-    -> readiness resolver
+    -> readiness service
   -> response includes fresh readiness
 ```
 
@@ -394,7 +396,7 @@ API handler
 ```text
 SessionRuntime
   -> descriptor from trusted registry projection
-  -> readiness resolver
+  -> readiness service
   -> reject if not launchable
   -> build spawn spec
   -> assemble MCP/session launch extras

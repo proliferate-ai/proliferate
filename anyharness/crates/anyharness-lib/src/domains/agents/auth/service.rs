@@ -10,7 +10,7 @@ use anyharness_contract::v1::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::domains::agents::registry::built_in_registry;
+use crate::domains::agents::registry;
 use crate::domains::sessions::mcp_bindings::crypto::{
     decrypt_bytes, encrypt_bytes, SessionDataCipher,
 };
@@ -207,6 +207,7 @@ impl AgentAuthService {
             scope,
             required_revision,
             decrypted.as_ref().map(|(revision, config)| (*revision, config)),
+            chrono::Utc::now(),
         )?;
         self.materialize(plan)
     }
@@ -276,15 +277,11 @@ impl AgentAuthService {
 }
 
 fn normalize_legacy_auth_slot_ids(input: &mut AgentAuthConfigInput) {
-    let registry = built_in_registry();
     for selection in &mut input.selections {
         if !selection.auth_slot_id.trim().is_empty() {
             continue;
         }
-        let Some(descriptor) = registry
-            .iter()
-            .find(|descriptor| descriptor.kind.as_str() == selection.agent_kind)
-        else {
+        let Some(descriptor) = registry::descriptor(&selection.agent_kind) else {
             continue;
         };
         if descriptor.auth.slots.len() != 1 {

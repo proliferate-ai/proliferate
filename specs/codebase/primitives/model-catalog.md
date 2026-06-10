@@ -81,7 +81,7 @@ anyharness/crates/anyharness-lib/src/domains/agents/
 
   readiness/
     launch_options.rs
-    resolver.rs
+    service.rs
 
 anyharness/crates/anyharness-lib/src/integrations/agent_cli/
   model_discovery.rs
@@ -850,7 +850,7 @@ anyharness/crates/anyharness-lib/src/domains/agents/
     launch_options.rs
       Includes effective model registry in launch-option responses.
 
-    resolver.rs
+    service.rs
       Still owns install/auth/readiness status. It does not run model refresh.
 
 anyharness/crates/anyharness-lib/src/integrations/agent_cli/
