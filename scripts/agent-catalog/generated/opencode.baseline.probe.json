@@ -1,5 +1,5 @@
 {
-  "probedAt": "2026-06-09T22:45:37.753434+00:00",
+  "probedAt": "2026-06-10T04:16:43.697592+00:00",
   "agentKind": "opencode",
   "authContext": "baseline",
   "attestation": {
@@ -8,6 +8,8 @@
     "title": null
   },
   "modelSource": "modelConfigOption",
+  "nativeCli": null,
+  "trials": [],
   "currentModelId": null,
   "currentModeId": null,
   "modes": null,

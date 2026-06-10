@@ -1,7 +1,7 @@
 {
-  "probedAt": "2026-06-10T04:16:43.752536+00:00",
+  "probedAt": "2026-06-10T04:20:28.761181+00:00",
   "agentKind": "opencode",
-  "authContext": "openai-api",
+  "authContext": "opencode-zen",
   "attestation": {
     "name": "OpenCode",
     "version": "1.16.2",
@@ -21,224 +21,220 @@
       "name": "Model",
       "options": [
         {
-          "name": "OpenAI/chatgpt-image-latest",
-          "value": "openai/chatgpt-image-latest"
+          "name": "OpenCode Go/DeepSeek V4 Flash",
+          "value": "opencode-go/deepseek-v4-flash"
         },
         {
-          "name": "OpenAI/GPT-3.5-turbo",
-          "value": "openai/gpt-3.5-turbo"
+          "name": "OpenCode Go/DeepSeek V4 Pro",
+          "value": "opencode-go/deepseek-v4-pro"
         },
         {
-          "name": "OpenAI/GPT-4",
-          "value": "openai/gpt-4"
+          "name": "OpenCode Go/GLM-5",
+          "value": "opencode-go/glm-5"
         },
         {
-          "name": "OpenAI/GPT-4 Turbo",
-          "value": "openai/gpt-4-turbo"
+          "name": "OpenCode Go/GLM-5.1",
+          "value": "opencode-go/glm-5.1"
         },
         {
-          "name": "OpenAI/GPT-4.1",
-          "value": "openai/gpt-4.1"
+          "name": "OpenCode Go/Kimi K2.5",
+          "value": "opencode-go/kimi-k2.5"
         },
         {
-          "name": "OpenAI/GPT-4.1 mini",
-          "value": "openai/gpt-4.1-mini"
+          "name": "OpenCode Go/Kimi K2.6",
+          "value": "opencode-go/kimi-k2.6"
         },
         {
-          "name": "OpenAI/GPT-4.1 nano",
-          "value": "openai/gpt-4.1-nano"
+          "name": "OpenCode Go/MiMo V2.5",
+          "value": "opencode-go/mimo-v2.5"
         },
         {
-          "name": "OpenAI/GPT-4o",
-          "value": "openai/gpt-4o"
+          "name": "OpenCode Go/MiMo V2.5 Pro",
+          "value": "opencode-go/mimo-v2.5-pro"
         },
         {
-          "name": "OpenAI/GPT-4o (2024-05-13)",
-          "value": "openai/gpt-4o-2024-05-13"
+          "name": "OpenCode Go/MiniMax M2.5",
+          "value": "opencode-go/minimax-m2.5"
         },
         {
-          "name": "OpenAI/GPT-4o (2024-08-06)",
-          "value": "openai/gpt-4o-2024-08-06"
+          "name": "OpenCode Go/MiniMax M2.7",
+          "value": "opencode-go/minimax-m2.7"
         },
         {
-          "name": "OpenAI/GPT-4o (2024-11-20)",
-          "value": "openai/gpt-4o-2024-11-20"
+          "name": "OpenCode Go/MiniMax M3",
+          "value": "opencode-go/minimax-m3"
         },
         {
-          "name": "OpenAI/GPT-4o mini",
-          "value": "openai/gpt-4o-mini"
+          "name": "OpenCode Go/Qwen3.6 Plus",
+          "value": "opencode-go/qwen3.6-plus"
         },
         {
-          "name": "OpenAI/GPT-5",
-          "value": "openai/gpt-5"
+          "name": "OpenCode Go/Qwen3.7 Max",
+          "value": "opencode-go/qwen3.7-max"
         },
         {
-          "name": "OpenAI/GPT-5 Mini",
-          "value": "openai/gpt-5-mini"
-        },
-        {
-          "name": "OpenAI/GPT-5 Nano",
-          "value": "openai/gpt-5-nano"
-        },
-        {
-          "name": "OpenAI/GPT-5 Pro",
-          "value": "openai/gpt-5-pro"
-        },
-        {
-          "name": "OpenAI/GPT-5-Codex",
-          "value": "openai/gpt-5-codex"
-        },
-        {
-          "name": "OpenAI/GPT-5.1",
-          "value": "openai/gpt-5.1"
-        },
-        {
-          "name": "OpenAI/GPT-5.1 Chat",
-          "value": "openai/gpt-5.1-chat-latest"
-        },
-        {
-          "name": "OpenAI/GPT-5.1 Codex",
-          "value": "openai/gpt-5.1-codex"
-        },
-        {
-          "name": "OpenAI/GPT-5.1 Codex Max",
-          "value": "openai/gpt-5.1-codex-max"
-        },
-        {
-          "name": "OpenAI/GPT-5.1 Codex mini",
-          "value": "openai/gpt-5.1-codex-mini"
-        },
-        {
-          "name": "OpenAI/GPT-5.2",
-          "value": "openai/gpt-5.2"
-        },
-        {
-          "name": "OpenAI/GPT-5.2 Chat",
-          "value": "openai/gpt-5.2-chat-latest"
-        },
-        {
-          "name": "OpenAI/GPT-5.2 Codex",
-          "value": "openai/gpt-5.2-codex"
-        },
-        {
-          "name": "OpenAI/GPT-5.2 Pro",
-          "value": "openai/gpt-5.2-pro"
-        },
-        {
-          "name": "OpenAI/GPT-5.3 Chat (latest)",
-          "value": "openai/gpt-5.3-chat-latest"
-        },
-        {
-          "name": "OpenAI/GPT-5.3 Codex",
-          "value": "openai/gpt-5.3-codex"
-        },
-        {
-          "name": "OpenAI/GPT-5.3 Codex Spark",
-          "value": "openai/gpt-5.3-codex-spark"
-        },
-        {
-          "name": "OpenAI/GPT-5.4",
-          "value": "openai/gpt-5.4"
-        },
-        {
-          "name": "OpenAI/GPT-5.4 Fast",
-          "value": "openai/gpt-5.4-fast"
-        },
-        {
-          "name": "OpenAI/GPT-5.4 mini",
-          "value": "openai/gpt-5.4-mini"
-        },
-        {
-          "name": "OpenAI/GPT-5.4 mini Fast",
-          "value": "openai/gpt-5.4-mini-fast"
-        },
-        {
-          "name": "OpenAI/GPT-5.4 nano",
-          "value": "openai/gpt-5.4-nano"
-        },
-        {
-          "name": "OpenAI/GPT-5.4 Pro",
-          "value": "openai/gpt-5.4-pro"
-        },
-        {
-          "name": "OpenAI/GPT-5.5",
-          "value": "openai/gpt-5.5"
-        },
-        {
-          "name": "OpenAI/GPT-5.5 Fast",
-          "value": "openai/gpt-5.5-fast"
-        },
-        {
-          "name": "OpenAI/GPT-5.5 Pro",
-          "value": "openai/gpt-5.5-pro"
-        },
-        {
-          "name": "OpenAI/gpt-image-1",
-          "value": "openai/gpt-image-1"
-        },
-        {
-          "name": "OpenAI/gpt-image-1-mini",
-          "value": "openai/gpt-image-1-mini"
-        },
-        {
-          "name": "OpenAI/gpt-image-1.5",
-          "value": "openai/gpt-image-1.5"
-        },
-        {
-          "name": "OpenAI/o1",
-          "value": "openai/o1"
-        },
-        {
-          "name": "OpenAI/o1-pro",
-          "value": "openai/o1-pro"
-        },
-        {
-          "name": "OpenAI/o3",
-          "value": "openai/o3"
-        },
-        {
-          "name": "OpenAI/o3-deep-research",
-          "value": "openai/o3-deep-research"
-        },
-        {
-          "name": "OpenAI/o3-mini",
-          "value": "openai/o3-mini"
-        },
-        {
-          "name": "OpenAI/o3-pro",
-          "value": "openai/o3-pro"
-        },
-        {
-          "name": "OpenAI/o4-mini",
-          "value": "openai/o4-mini"
-        },
-        {
-          "name": "OpenAI/o4-mini-deep-research",
-          "value": "openai/o4-mini-deep-research"
-        },
-        {
-          "name": "OpenAI/text-embedding-3-large",
-          "value": "openai/text-embedding-3-large"
-        },
-        {
-          "name": "OpenAI/text-embedding-3-small",
-          "value": "openai/text-embedding-3-small"
-        },
-        {
-          "name": "OpenAI/text-embedding-ada-002",
-          "value": "openai/text-embedding-ada-002"
+          "name": "OpenCode Go/Qwen3.7 Plus",
+          "value": "opencode-go/qwen3.7-plus"
         },
         {
           "name": "OpenCode Zen/Big Pickle",
           "value": "opencode/big-pickle"
         },
         {
+          "name": "OpenCode Zen/Claude Haiku 4.5",
+          "value": "opencode/claude-haiku-4-5"
+        },
+        {
+          "name": "OpenCode Zen/Claude Opus 4.1",
+          "value": "opencode/claude-opus-4-1"
+        },
+        {
+          "name": "OpenCode Zen/Claude Opus 4.5",
+          "value": "opencode/claude-opus-4-5"
+        },
+        {
+          "name": "OpenCode Zen/Claude Opus 4.6",
+          "value": "opencode/claude-opus-4-6"
+        },
+        {
+          "name": "OpenCode Zen/Claude Opus 4.7",
+          "value": "opencode/claude-opus-4-7"
+        },
+        {
+          "name": "OpenCode Zen/Claude Opus 4.8",
+          "value": "opencode/claude-opus-4-8"
+        },
+        {
+          "name": "OpenCode Zen/Claude Sonnet 4",
+          "value": "opencode/claude-sonnet-4"
+        },
+        {
+          "name": "OpenCode Zen/Claude Sonnet 4.5",
+          "value": "opencode/claude-sonnet-4-5"
+        },
+        {
+          "name": "OpenCode Zen/Claude Sonnet 4.6",
+          "value": "opencode/claude-sonnet-4-6"
+        },
+        {
+          "name": "OpenCode Zen/DeepSeek V4 Flash",
+          "value": "opencode/deepseek-v4-flash"
+        },
+        {
           "name": "OpenCode Zen/DeepSeek V4 Flash Free",
           "value": "opencode/deepseek-v4-flash-free"
         },
         {
+          "name": "OpenCode Zen/Gemini 3 Flash",
+          "value": "opencode/gemini-3-flash"
+        },
+        {
+          "name": "OpenCode Zen/Gemini 3.1 Pro Preview",
+          "value": "opencode/gemini-3.1-pro"
+        },
+        {
+          "name": "OpenCode Zen/Gemini 3.5 Flash",
+          "value": "opencode/gemini-3.5-flash"
+        },
+        {
+          "name": "OpenCode Zen/GLM-5",
+          "value": "opencode/glm-5"
+        },
+        {
+          "name": "OpenCode Zen/GLM-5.1",
+          "value": "opencode/glm-5.1"
+        },
+        {
+          "name": "OpenCode Zen/GPT-5",
+          "value": "opencode/gpt-5"
+        },
+        {
+          "name": "OpenCode Zen/GPT-5 Codex",
+          "value": "opencode/gpt-5-codex"
+        },
+        {
+          "name": "OpenCode Zen/GPT-5 Nano",
+          "value": "opencode/gpt-5-nano"
+        },
+        {
+          "name": "OpenCode Zen/GPT-5.1",
+          "value": "opencode/gpt-5.1"
+        },
+        {
+          "name": "OpenCode Zen/GPT-5.1 Codex",
+          "value": "opencode/gpt-5.1-codex"
+        },
+        {
+          "name": "OpenCode Zen/GPT-5.1 Codex Max",
+          "value": "opencode/gpt-5.1-codex-max"
+        },
+        {
+          "name": "OpenCode Zen/GPT-5.1 Codex Mini",
+          "value": "opencode/gpt-5.1-codex-mini"
+        },
+        {
+          "name": "OpenCode Zen/GPT-5.2",
+          "value": "opencode/gpt-5.2"
+        },
+        {
+          "name": "OpenCode Zen/GPT-5.2 Codex",
+          "value": "opencode/gpt-5.2-codex"
+        },
+        {
+          "name": "OpenCode Zen/GPT-5.3 Codex",
+          "value": "opencode/gpt-5.3-codex"
+        },
+        {
+          "name": "OpenCode Zen/GPT-5.3 Codex Spark",
+          "value": "opencode/gpt-5.3-codex-spark"
+        },
+        {
+          "name": "OpenCode Zen/GPT-5.4",
+          "value": "opencode/gpt-5.4"
+        },
+        {
+          "name": "OpenCode Zen/GPT-5.4 Mini",
+          "value": "opencode/gpt-5.4-mini"
+        },
+        {
+          "name": "OpenCode Zen/GPT-5.4 Nano",
+          "value": "opencode/gpt-5.4-nano"
+        },
+        {
+          "name": "OpenCode Zen/GPT-5.4 Pro",
+          "value": "opencode/gpt-5.4-pro"
+        },
+        {
+          "name": "OpenCode Zen/GPT-5.5",
+          "value": "opencode/gpt-5.5"
+        },
+        {
+          "name": "OpenCode Zen/GPT-5.5 Pro",
+          "value": "opencode/gpt-5.5-pro"
+        },
+        {
+          "name": "OpenCode Zen/Grok Build 0.1",
+          "value": "opencode/grok-build-0.1"
+        },
+        {
+          "name": "OpenCode Zen/Kimi K2.5",
+          "value": "opencode/kimi-k2.5"
+        },
+        {
+          "name": "OpenCode Zen/Kimi K2.6",
+          "value": "opencode/kimi-k2.6"
+        },
+        {
           "name": "OpenCode Zen/MiMo V2.5 Free",
           "value": "opencode/mimo-v2.5-free"
+        },
+        {
+          "name": "OpenCode Zen/MiniMax M2.5",
+          "value": "opencode/minimax-m2.5"
+        },
+        {
+          "name": "OpenCode Zen/MiniMax M2.7",
+          "value": "opencode/minimax-m2.7"
         },
         {
           "name": "OpenCode Zen/MiniMax M3 Free",
@@ -247,6 +243,14 @@
         {
           "name": "OpenCode Zen/Nemotron 3 Ultra Free",
           "value": "opencode/nemotron-3-ultra-free"
+        },
+        {
+          "name": "OpenCode Zen/Qwen3.5 Plus",
+          "value": "opencode/qwen3.5-plus"
+        },
+        {
+          "name": "OpenCode Zen/Qwen3.6 Plus",
+          "value": "opencode/qwen3.6-plus"
         }
       ],
       "type": "select"
@@ -273,433 +277,13 @@
   ],
   "models": [
     {
-      "modelId": "openai/chatgpt-image-latest",
-      "name": "OpenAI/chatgpt-image-latest",
+      "modelId": "opencode-go/deepseek-v4-flash",
+      "name": "OpenCode Go/DeepSeek V4 Flash",
       "description": null,
       "configOptions": [
         {
           "category": "model",
-          "currentValue": "openai/chatgpt-image-latest",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-3.5-turbo",
-      "name": "OpenAI/GPT-3.5-turbo",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-3.5-turbo",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-4",
-      "name": "OpenAI/GPT-4",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-4",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-4-turbo",
-      "name": "OpenAI/GPT-4 Turbo",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-4-turbo",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-4.1",
-      "name": "OpenAI/GPT-4.1",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-4.1",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-4.1-mini",
-      "name": "OpenAI/GPT-4.1 mini",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-4.1-mini",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-4.1-nano",
-      "name": "OpenAI/GPT-4.1 nano",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-4.1-nano",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-4o",
-      "name": "OpenAI/GPT-4o",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-4o",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-4o-2024-05-13",
-      "name": "OpenAI/GPT-4o (2024-05-13)",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-4o-2024-05-13",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-4o-2024-08-06",
-      "name": "OpenAI/GPT-4o (2024-08-06)",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-4o-2024-08-06",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-4o-2024-11-20",
-      "name": "OpenAI/GPT-4o (2024-11-20)",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-4o-2024-11-20",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-4o-mini",
-      "name": "OpenAI/GPT-4o mini",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-4o-mini",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-5",
-      "name": "OpenAI/GPT-5",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-5",
+          "currentValue": "opencode-go/deepseek-v4-flash",
           "id": "model",
           "name": "Model",
           "options": [],
@@ -708,15 +292,11 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "minimal",
+          "currentValue": "low",
           "description": "Available effort levels for this model",
           "id": "effort",
           "name": "Effort",
           "options": [
-            {
-              "name": "Minimal",
-              "value": "minimal"
-            },
             {
               "name": "Low",
               "value": "low"
@@ -728,6 +308,10 @@
             {
               "name": "High",
               "value": "high"
+            },
+            {
+              "name": "Max",
+              "value": "max"
             }
           ],
           "type": "select"
@@ -754,13 +338,13 @@
       ]
     },
     {
-      "modelId": "openai/gpt-5-mini",
-      "name": "OpenAI/GPT-5 Mini",
+      "modelId": "opencode-go/deepseek-v4-pro",
+      "name": "OpenCode Go/DeepSeek V4 Pro",
       "description": null,
       "configOptions": [
         {
           "category": "model",
-          "currentValue": "openai/gpt-5-mini",
+          "currentValue": "opencode-go/deepseek-v4-pro",
           "id": "model",
           "name": "Model",
           "options": [],
@@ -769,15 +353,11 @@
         },
         {
           "category": "thought_level",
-          "currentValue": "minimal",
+          "currentValue": "low",
           "description": "Available effort levels for this model",
           "id": "effort",
           "name": "Effort",
           "options": [
-            {
-              "name": "Minimal",
-              "value": "minimal"
-            },
             {
               "name": "Low",
               "value": "low"
@@ -789,6 +369,10 @@
             {
               "name": "High",
               "value": "high"
+            },
+            {
+              "name": "Max",
+              "value": "max"
             }
           ],
           "type": "select"
@@ -815,13 +399,13 @@
       ]
     },
     {
-      "modelId": "openai/gpt-5-nano",
-      "name": "OpenAI/GPT-5 Nano",
+      "modelId": "opencode-go/glm-5",
+      "name": "OpenCode Go/GLM-5",
       "description": null,
       "configOptions": [
         {
           "category": "model",
-          "currentValue": "openai/gpt-5-nano",
+          "currentValue": "opencode-go/glm-5",
           "id": "model",
           "name": "Model",
           "options": [],
@@ -829,32 +413,6 @@
           "valuesElided": true
         },
         {
-          "category": "thought_level",
-          "currentValue": "minimal",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Minimal",
-              "value": "minimal"
-            },
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            }
-          ],
-          "type": "select"
-        },
-        {
           "category": "mode",
           "currentValue": "build",
           "id": "mode",
@@ -876,13 +434,13 @@
       ]
     },
     {
-      "modelId": "openai/gpt-5-pro",
-      "name": "OpenAI/GPT-5 Pro",
+      "modelId": "opencode-go/glm-5.1",
+      "name": "OpenCode Go/GLM-5.1",
       "description": null,
       "configOptions": [
         {
           "category": "model",
-          "currentValue": "openai/gpt-5-pro",
+          "currentValue": "opencode-go/glm-5.1",
           "id": "model",
           "name": "Model",
           "options": [],
@@ -890,18 +448,39 @@
           "valuesElided": true
         },
         {
-          "category": "thought_level",
-          "currentValue": "high",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
           "options": [
             {
-              "name": "High",
-              "value": "high"
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
             }
           ],
           "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode-go/kimi-k2.5",
+      "name": "OpenCode Go/Kimi K2.5",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode-go/kimi-k2.5",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "mode",
@@ -925,13 +504,48 @@
       ]
     },
     {
-      "modelId": "openai/gpt-5-codex",
-      "name": "OpenAI/GPT-5-Codex",
+      "modelId": "opencode-go/kimi-k2.6",
+      "name": "OpenCode Go/Kimi K2.6",
       "description": null,
       "configOptions": [
         {
           "category": "model",
-          "currentValue": "openai/gpt-5-codex",
+          "currentValue": "opencode-go/kimi-k2.6",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode-go/mimo-v2.5",
+      "name": "OpenCode Go/MiMo V2.5",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode-go/mimo-v2.5",
           "id": "model",
           "name": "Model",
           "options": [],
@@ -982,123 +596,13 @@
       ]
     },
     {
-      "modelId": "openai/gpt-5.1",
-      "name": "OpenAI/GPT-5.1",
+      "modelId": "opencode-go/mimo-v2.5-pro",
+      "name": "OpenCode Go/MiMo V2.5 Pro",
       "description": null,
       "configOptions": [
         {
           "category": "model",
-          "currentValue": "openai/gpt-5.1",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "none",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "None",
-              "value": "none"
-            },
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-5.1-chat-latest",
-      "name": "OpenAI/GPT-5.1 Chat",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-5.1-chat-latest",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "medium",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Medium",
-              "value": "medium"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-5.1-codex",
-      "name": "OpenAI/GPT-5.1 Codex",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-5.1-codex",
+          "currentValue": "opencode-go/mimo-v2.5-pro",
           "id": "model",
           "name": "Model",
           "options": [],
@@ -1149,363 +653,13 @@
       ]
     },
     {
-      "modelId": "openai/gpt-5.1-codex-max",
-      "name": "OpenAI/GPT-5.1 Codex Max",
+      "modelId": "opencode-go/minimax-m2.5",
+      "name": "OpenCode Go/MiniMax M2.5",
       "description": null,
       "configOptions": [
         {
           "category": "model",
-          "currentValue": "openai/gpt-5.1-codex-max",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "low",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Xhigh",
-              "value": "xhigh"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-5.1-codex-mini",
-      "name": "OpenAI/GPT-5.1 Codex mini",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-5.1-codex-mini",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "low",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-5.2",
-      "name": "OpenAI/GPT-5.2",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-5.2",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "none",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "None",
-              "value": "none"
-            },
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Xhigh",
-              "value": "xhigh"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-5.2-chat-latest",
-      "name": "OpenAI/GPT-5.2 Chat",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-5.2-chat-latest",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "medium",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Medium",
-              "value": "medium"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-5.2-codex",
-      "name": "OpenAI/GPT-5.2 Codex",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-5.2-codex",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "low",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Xhigh",
-              "value": "xhigh"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-5.2-pro",
-      "name": "OpenAI/GPT-5.2 Pro",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-5.2-pro",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "medium",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Xhigh",
-              "value": "xhigh"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-5.3-chat-latest",
-      "name": "OpenAI/GPT-5.3 Chat (latest)",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-5.3-chat-latest",
+          "currentValue": "opencode-go/minimax-m2.5",
           "id": "model",
           "name": "Model",
           "options": [],
@@ -1534,712 +688,13 @@
       ]
     },
     {
-      "modelId": "openai/gpt-5.3-codex",
-      "name": "OpenAI/GPT-5.3 Codex",
+      "modelId": "opencode-go/minimax-m2.7",
+      "name": "OpenCode Go/MiniMax M2.7",
       "description": null,
       "configOptions": [
         {
           "category": "model",
-          "currentValue": "openai/gpt-5.3-codex",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "none",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "None",
-              "value": "none"
-            },
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Xhigh",
-              "value": "xhigh"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-5.3-codex-spark",
-      "name": "OpenAI/GPT-5.3 Codex Spark",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-5.3-codex-spark",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "none",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "None",
-              "value": "none"
-            },
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Xhigh",
-              "value": "xhigh"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-5.4",
-      "name": "OpenAI/GPT-5.4",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-5.4",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "none",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "None",
-              "value": "none"
-            },
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Xhigh",
-              "value": "xhigh"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-5.4-fast",
-      "name": "OpenAI/GPT-5.4 Fast",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-5.4-fast",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "none",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "None",
-              "value": "none"
-            },
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Xhigh",
-              "value": "xhigh"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-5.4-mini",
-      "name": "OpenAI/GPT-5.4 mini",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-5.4-mini",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "none",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "None",
-              "value": "none"
-            },
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Xhigh",
-              "value": "xhigh"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-5.4-mini-fast",
-      "name": "OpenAI/GPT-5.4 mini Fast",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-5.4-mini-fast",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "none",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "None",
-              "value": "none"
-            },
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Xhigh",
-              "value": "xhigh"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-5.4-nano",
-      "name": "OpenAI/GPT-5.4 nano",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-5.4-nano",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "none",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "None",
-              "value": "none"
-            },
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Xhigh",
-              "value": "xhigh"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-5.4-pro",
-      "name": "OpenAI/GPT-5.4 Pro",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-5.4-pro",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "medium",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Xhigh",
-              "value": "xhigh"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-5.5",
-      "name": "OpenAI/GPT-5.5",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-5.5",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "none",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "None",
-              "value": "none"
-            },
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Xhigh",
-              "value": "xhigh"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-5.5-fast",
-      "name": "OpenAI/GPT-5.5 Fast",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-5.5-fast",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "none",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "None",
-              "value": "none"
-            },
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Xhigh",
-              "value": "xhigh"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-5.5-pro",
-      "name": "OpenAI/GPT-5.5 Pro",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-5.5-pro",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "medium",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            },
-            {
-              "name": "Xhigh",
-              "value": "xhigh"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/gpt-image-1",
-      "name": "OpenAI/gpt-image-1",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/gpt-image-1",
+          "currentValue": "opencode-go/minimax-m2.7",
           "id": "model",
           "name": "Model",
           "options": [],
@@ -2268,13 +723,13 @@
       ]
     },
     {
-      "modelId": "openai/gpt-image-1-mini",
-      "name": "OpenAI/gpt-image-1-mini",
+      "modelId": "opencode-go/minimax-m3",
+      "name": "OpenCode Go/MiniMax M3",
       "description": null,
       "configOptions": [
         {
           "category": "model",
-          "currentValue": "openai/gpt-image-1-mini",
+          "currentValue": "opencode-go/minimax-m3",
           "id": "model",
           "name": "Model",
           "options": [],
@@ -2303,13 +758,13 @@
       ]
     },
     {
-      "modelId": "openai/gpt-image-1.5",
-      "name": "OpenAI/gpt-image-1.5",
+      "modelId": "opencode-go/qwen3.6-plus",
+      "name": "OpenCode Go/Qwen3.6 Plus",
       "description": null,
       "configOptions": [
         {
           "category": "model",
-          "currentValue": "openai/gpt-image-1.5",
+          "currentValue": "opencode-go/qwen3.6-plus",
           "id": "model",
           "name": "Model",
           "options": [],
@@ -2338,453 +793,13 @@
       ]
     },
     {
-      "modelId": "openai/o1",
-      "name": "OpenAI/o1",
+      "modelId": "opencode-go/qwen3.7-max",
+      "name": "OpenCode Go/Qwen3.7 Max",
       "description": null,
       "configOptions": [
         {
           "category": "model",
-          "currentValue": "openai/o1",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "low",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/o1-pro",
-      "name": "OpenAI/o1-pro",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/o1-pro",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "low",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/o3",
-      "name": "OpenAI/o3",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/o3",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "low",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/o3-deep-research",
-      "name": "OpenAI/o3-deep-research",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/o3-deep-research",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "medium",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Medium",
-              "value": "medium"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/o3-mini",
-      "name": "OpenAI/o3-mini",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/o3-mini",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "low",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/o3-pro",
-      "name": "OpenAI/o3-pro",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/o3-pro",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "low",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/o4-mini",
-      "name": "OpenAI/o4-mini",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/o4-mini",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "low",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Low",
-              "value": "low"
-            },
-            {
-              "name": "Medium",
-              "value": "medium"
-            },
-            {
-              "name": "High",
-              "value": "high"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/o4-mini-deep-research",
-      "name": "OpenAI/o4-mini-deep-research",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/o4-mini-deep-research",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "thought_level",
-          "currentValue": "medium",
-          "description": "Available effort levels for this model",
-          "id": "effort",
-          "name": "Effort",
-          "options": [
-            {
-              "name": "Medium",
-              "value": "medium"
-            }
-          ],
-          "type": "select"
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/text-embedding-3-large",
-      "name": "OpenAI/text-embedding-3-large",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/text-embedding-3-large",
+          "currentValue": "opencode-go/qwen3.7-max",
           "id": "model",
           "name": "Model",
           "options": [],
@@ -2813,48 +828,13 @@
       ]
     },
     {
-      "modelId": "openai/text-embedding-3-small",
-      "name": "OpenAI/text-embedding-3-small",
+      "modelId": "opencode-go/qwen3.7-plus",
+      "name": "OpenCode Go/Qwen3.7 Plus",
       "description": null,
       "configOptions": [
         {
           "category": "model",
-          "currentValue": "openai/text-embedding-3-small",
-          "id": "model",
-          "name": "Model",
-          "options": [],
-          "type": "select",
-          "valuesElided": true
-        },
-        {
-          "category": "mode",
-          "currentValue": "build",
-          "id": "mode",
-          "name": "Session Mode",
-          "options": [
-            {
-              "description": "The default agent. Executes tools based on configured permissions.",
-              "name": "build",
-              "value": "build"
-            },
-            {
-              "description": "Plan mode. Disallows all edit tools.",
-              "name": "plan",
-              "value": "plan"
-            }
-          ],
-          "type": "select"
-        }
-      ]
-    },
-    {
-      "modelId": "openai/text-embedding-ada-002",
-      "name": "OpenAI/text-embedding-ada-002",
-      "description": null,
-      "configOptions": [
-        {
-          "category": "model",
-          "currentValue": "openai/text-embedding-ada-002",
+          "currentValue": "opencode-go/qwen3.7-plus",
           "id": "model",
           "name": "Model",
           "options": [],
@@ -2895,6 +875,588 @@
           "options": [],
           "type": "select",
           "valuesElided": true
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/claude-haiku-4-5",
+      "name": "OpenCode Zen/Claude Haiku 4.5",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/claude-haiku-4-5",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "high",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/claude-opus-4-1",
+      "name": "OpenCode Zen/Claude Opus 4.1",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/claude-opus-4-1",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "high",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/claude-opus-4-5",
+      "name": "OpenCode Zen/Claude Opus 4.5",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/claude-opus-4-5",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/claude-opus-4-6",
+      "name": "OpenCode Zen/Claude Opus 4.6",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/claude-opus-4-6",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/claude-opus-4-7",
+      "name": "OpenCode Zen/Claude Opus 4.7",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/claude-opus-4-7",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/claude-opus-4-8",
+      "name": "OpenCode Zen/Claude Opus 4.8",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/claude-opus-4-8",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/claude-sonnet-4",
+      "name": "OpenCode Zen/Claude Sonnet 4",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/claude-sonnet-4",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "high",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/claude-sonnet-4-5",
+      "name": "OpenCode Zen/Claude Sonnet 4.5",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/claude-sonnet-4-5",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "high",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/claude-sonnet-4-6",
+      "name": "OpenCode Zen/Claude Sonnet 4.6",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/claude-sonnet-4-6",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/deepseek-v4-flash",
+      "name": "OpenCode Zen/DeepSeek V4 Flash",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/deepseek-v4-flash",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Max",
+              "value": "max"
+            }
+          ],
+          "type": "select"
         },
         {
           "category": "mode",
@@ -2979,6 +1541,1405 @@
       ]
     },
     {
+      "modelId": "opencode/gemini-3-flash",
+      "name": "OpenCode Zen/Gemini 3 Flash",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gemini-3-flash",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "minimal",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Minimal",
+              "value": "minimal"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/gemini-3.1-pro",
+      "name": "OpenCode Zen/Gemini 3.1 Pro Preview",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gemini-3.1-pro",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/gemini-3.5-flash",
+      "name": "OpenCode Zen/Gemini 3.5 Flash",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gemini-3.5-flash",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "minimal",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Minimal",
+              "value": "minimal"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/glm-5",
+      "name": "OpenCode Zen/GLM-5",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/glm-5",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/glm-5.1",
+      "name": "OpenCode Zen/GLM-5.1",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/glm-5.1",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/gpt-5",
+      "name": "OpenCode Zen/GPT-5",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gpt-5",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "minimal",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Minimal",
+              "value": "minimal"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/gpt-5-codex",
+      "name": "OpenCode Zen/GPT-5 Codex",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gpt-5-codex",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/gpt-5-nano",
+      "name": "OpenCode Zen/GPT-5 Nano",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gpt-5-nano",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "minimal",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Minimal",
+              "value": "minimal"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/gpt-5.1",
+      "name": "OpenCode Zen/GPT-5.1",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gpt-5.1",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "none",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "None",
+              "value": "none"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/gpt-5.1-codex",
+      "name": "OpenCode Zen/GPT-5.1 Codex",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gpt-5.1-codex",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/gpt-5.1-codex-max",
+      "name": "OpenCode Zen/GPT-5.1 Codex Max",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gpt-5.1-codex-max",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/gpt-5.1-codex-mini",
+      "name": "OpenCode Zen/GPT-5.1 Codex Mini",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gpt-5.1-codex-mini",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/gpt-5.2",
+      "name": "OpenCode Zen/GPT-5.2",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gpt-5.2",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "none",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "None",
+              "value": "none"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/gpt-5.2-codex",
+      "name": "OpenCode Zen/GPT-5.2 Codex",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gpt-5.2-codex",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/gpt-5.3-codex",
+      "name": "OpenCode Zen/GPT-5.3 Codex",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gpt-5.3-codex",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "none",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "None",
+              "value": "none"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/gpt-5.3-codex-spark",
+      "name": "OpenCode Zen/GPT-5.3 Codex Spark",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gpt-5.3-codex-spark",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "none",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "None",
+              "value": "none"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/gpt-5.4",
+      "name": "OpenCode Zen/GPT-5.4",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gpt-5.4",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "none",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "None",
+              "value": "none"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/gpt-5.4-mini",
+      "name": "OpenCode Zen/GPT-5.4 Mini",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gpt-5.4-mini",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "none",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "None",
+              "value": "none"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/gpt-5.4-nano",
+      "name": "OpenCode Zen/GPT-5.4 Nano",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gpt-5.4-nano",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "none",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "None",
+              "value": "none"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/gpt-5.4-pro",
+      "name": "OpenCode Zen/GPT-5.4 Pro",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gpt-5.4-pro",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "medium",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/gpt-5.5",
+      "name": "OpenCode Zen/GPT-5.5",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gpt-5.5",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "none",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "None",
+              "value": "none"
+            },
+            {
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/gpt-5.5-pro",
+      "name": "OpenCode Zen/GPT-5.5 Pro",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/gpt-5.5-pro",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "medium",
+          "description": "Available effort levels for this model",
+          "id": "effort",
+          "name": "Effort",
+          "options": [
+            {
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/grok-build-0.1",
+      "name": "OpenCode Zen/Grok Build 0.1",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/grok-build-0.1",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/kimi-k2.5",
+      "name": "OpenCode Zen/Kimi K2.5",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/kimi-k2.5",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/kimi-k2.6",
+      "name": "OpenCode Zen/Kimi K2.6",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/kimi-k2.6",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
       "modelId": "opencode/mimo-v2.5-free",
       "name": "OpenCode Zen/MiMo V2.5 Free",
       "description": null,
@@ -3013,6 +2974,76 @@
             }
           ],
           "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/minimax-m2.5",
+      "name": "OpenCode Zen/MiniMax M2.5",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/minimax-m2.5",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/minimax-m2.7",
+      "name": "OpenCode Zen/MiniMax M2.7",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/minimax-m2.7",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "mode",
@@ -3105,6 +3136,76 @@
             }
           ],
           "type": "select"
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/qwen3.5-plus",
+      "name": "OpenCode Zen/Qwen3.5 Plus",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/qwen3.5-plus",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
+        },
+        {
+          "category": "mode",
+          "currentValue": "build",
+          "id": "mode",
+          "name": "Session Mode",
+          "options": [
+            {
+              "description": "The default agent. Executes tools based on configured permissions.",
+              "name": "build",
+              "value": "build"
+            },
+            {
+              "description": "Plan mode. Disallows all edit tools.",
+              "name": "plan",
+              "value": "plan"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "opencode/qwen3.6-plus",
+      "name": "OpenCode Zen/Qwen3.6 Plus",
+      "description": null,
+      "configOptions": [
+        {
+          "category": "model",
+          "currentValue": "opencode/qwen3.6-plus",
+          "id": "model",
+          "name": "Model",
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "mode",

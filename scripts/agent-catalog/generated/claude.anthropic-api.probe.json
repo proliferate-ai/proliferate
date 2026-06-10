@@ -1,5 +1,5 @@
 {
-  "probedAt": "2026-06-09T23:58:17.324567+00:00",
+  "probedAt": "2026-06-10T04:16:44.621939+00:00",
   "agentKind": "claude",
   "authContext": "anthropic-api",
   "attestation": {
@@ -66,22 +66,22 @@
           "name": "Model",
           "options": [
             {
-              "description": "Fable 5 \u00b7 Most capable for your hardest and longest-running tasks",
+              "description": "Fable 5 · Most capable for your hardest and longest-running tasks",
               "name": "Fable",
               "value": "claude-fable-5"
             },
             {
-              "description": "Sonnet 4.6 \u00b7 Efficient for routine tasks \u00b7 $3/$15 per Mtok",
+              "description": "Sonnet 4.6 · Efficient for routine tasks · $3/$15 per Mtok",
               "name": "Sonnet",
               "value": "sonnet"
             },
             {
-              "description": "Sonnet 4.6 for long sessions \u00b7 $3/$15 per Mtok",
+              "description": "Sonnet 4.6 for long sessions · $3/$15 per Mtok",
               "name": "Sonnet (1M context)",
               "value": "sonnet[1m]"
             },
             {
-              "description": "Haiku 4.5 \u00b7 Fastest for quick answers \u00b7 $1/$5 per Mtok",
+              "description": "Haiku 4.5 · Fastest for quick answers · $1/$5 per Mtok",
               "name": "Haiku",
               "value": "haiku"
             }
@@ -169,17 +169,17 @@
           "name": "Model",
           "options": [
             {
-              "description": "Sonnet 4.6 \u00b7 Efficient for routine tasks \u00b7 $3/$15 per Mtok",
+              "description": "Sonnet 4.6 · Efficient for routine tasks · $3/$15 per Mtok",
               "name": "Sonnet",
               "value": "sonnet"
             },
             {
-              "description": "Sonnet 4.6 for long sessions \u00b7 $3/$15 per Mtok",
+              "description": "Sonnet 4.6 for long sessions · $3/$15 per Mtok",
               "name": "Sonnet (1M context)",
               "value": "sonnet[1m]"
             },
             {
-              "description": "Haiku 4.5 \u00b7 Fastest for quick answers \u00b7 $1/$5 per Mtok",
+              "description": "Haiku 4.5 · Fastest for quick answers · $1/$5 per Mtok",
               "name": "Haiku",
               "value": "haiku"
             },
@@ -324,17 +324,17 @@
       "name": "Model",
       "options": [
         {
-          "description": "Sonnet 4.6 \u00b7 Efficient for routine tasks \u00b7 $3/$15 per Mtok",
+          "description": "Sonnet 4.6 · Efficient for routine tasks · $3/$15 per Mtok",
           "name": "Sonnet",
           "value": "sonnet"
         },
         {
-          "description": "Sonnet 4.6 for long sessions \u00b7 $3/$15 per Mtok",
+          "description": "Sonnet 4.6 for long sessions · $3/$15 per Mtok",
           "name": "Sonnet (1M context)",
           "value": "sonnet[1m]"
         },
         {
-          "description": "Haiku 4.5 \u00b7 Fastest for quick answers \u00b7 $1/$5 per Mtok",
+          "description": "Haiku 4.5 · Fastest for quick answers · $1/$5 per Mtok",
           "name": "Haiku",
           "value": "haiku"
         }
@@ -368,7 +368,7 @@
     {
       "modelId": "sonnet",
       "name": "Sonnet",
-      "description": "Sonnet 4.6 \u00b7 Efficient for routine tasks \u00b7 $3/$15 per Mtok",
+      "description": "Sonnet 4.6 · Efficient for routine tasks · $3/$15 per Mtok",
       "configOptions": [
         {
           "category": "mode",
@@ -447,7 +447,7 @@
     {
       "modelId": "sonnet[1m]",
       "name": "Sonnet (1M context)",
-      "description": "Sonnet 4.6 for long sessions \u00b7 $3/$15 per Mtok",
+      "description": "Sonnet 4.6 for long sessions · $3/$15 per Mtok",
       "configOptions": [
         {
           "category": "mode",
@@ -526,7 +526,7 @@
     {
       "modelId": "haiku",
       "name": "Haiku",
-      "description": "Haiku 4.5 \u00b7 Fastest for quick answers \u00b7 $1/$5 per Mtok",
+      "description": "Haiku 4.5 · Fastest for quick answers · $1/$5 per Mtok",
       "configOptions": [
         {
           "category": "mode",

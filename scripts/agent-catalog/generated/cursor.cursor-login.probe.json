@@ -1,12 +1,12 @@
 {
-  "probedAt": "2026-06-10T00:26:29.701457+00:00",
+  "probedAt": "2026-06-10T04:19:51.541700+00:00",
   "agentKind": "cursor",
   "authContext": "cursor-login",
   "attestation": null,
   "modelSource": "acpModels",
   "nativeCli": null,
   "trials": [],
-  "currentModelId": "claude-opus-4-8[thinking=true,context=300k,effort=high,fast=false]",
+  "currentModelId": "kimi-k2.5[]",
   "currentModeId": "agent",
   "modes": {
     "availableModes": [
@@ -56,7 +56,7 @@
     },
     {
       "category": "model",
-      "currentValue": "claude-opus-4-8[thinking=true,context=300k,effort=high,fast=false]",
+      "currentValue": "kimi-k2.5[]",
       "description": "Controls which model variant is used for responses",
       "id": "model",
       "name": "Model",

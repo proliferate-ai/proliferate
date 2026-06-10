@@ -1,5 +1,5 @@
 {
-  "probedAt": "2026-06-10T00:17:00.562127+00:00",
+  "probedAt": "2026-06-10T04:16:44.499656+00:00",
   "agentKind": "claude",
   "authContext": "anthropic-oauth",
   "attestation": {
@@ -66,17 +66,17 @@
           "name": "Model",
           "options": [
             {
-              "description": "Fable 5 \u00b7 Most capable for your hardest and longest-running tasks",
+              "description": "Fable 5 · Most capable for your hardest and longest-running tasks",
               "name": "Fable",
               "value": "claude-fable-5"
             },
             {
-              "description": "Opus 4.8 \u00b7 Best for everyday, complex tasks",
+              "description": "Opus 4.8 · Best for everyday, complex tasks",
               "name": "Opus",
               "value": "opus"
             },
             {
-              "description": "Haiku 4.5 \u00b7 Fastest for quick answers",
+              "description": "Haiku 4.5 · Fastest for quick answers",
               "name": "Haiku",
               "value": "haiku"
             }
@@ -164,12 +164,12 @@
           "name": "Model",
           "options": [
             {
-              "description": "Opus 4.8 \u00b7 Best for everyday, complex tasks",
+              "description": "Opus 4.8 · Best for everyday, complex tasks",
               "name": "Opus",
               "value": "opus"
             },
             {
-              "description": "Haiku 4.5 \u00b7 Fastest for quick answers",
+              "description": "Haiku 4.5 · Fastest for quick answers",
               "name": "Haiku",
               "value": "haiku"
             },
@@ -314,12 +314,12 @@
       "name": "Model",
       "options": [
         {
-          "description": "Opus 4.8 \u00b7 Best for everyday, complex tasks",
+          "description": "Opus 4.8 · Best for everyday, complex tasks",
           "name": "Opus",
           "value": "opus"
         },
         {
-          "description": "Haiku 4.5 \u00b7 Fastest for quick answers",
+          "description": "Haiku 4.5 · Fastest for quick answers",
           "name": "Haiku",
           "value": "haiku"
         }
@@ -375,7 +375,7 @@
     {
       "modelId": "opus",
       "name": "Opus",
-      "description": "Opus 4.8 \u00b7 Best for everyday, complex tasks",
+      "description": "Opus 4.8 · Best for everyday, complex tasks",
       "configOptions": [
         {
           "category": "mode",
@@ -476,7 +476,7 @@
     {
       "modelId": "haiku",
       "name": "Haiku",
-      "description": "Haiku 4.5 \u00b7 Fastest for quick answers",
+      "description": "Haiku 4.5 · Fastest for quick answers",
       "configOptions": [
         {
           "category": "mode",
