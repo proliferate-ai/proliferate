@@ -76,11 +76,9 @@
           background:var(--n100); color:var(--n700); margin:1px 3px 1px 0; white-space:nowrap; }
   .trial { font-size:11px; font-weight:500; color:var(--n700); background:var(--n100);
            border:1px solid var(--n200); border-radius:999px; padding:1px 9px; margin-left:8px; cursor:help; }
-  .controls { display:grid; grid-template-columns:max-content 1fr; gap:3px 14px; }
-  .controls .ck { font-size:11px; font-weight:600; color:var(--n500); padding-top:1px; }
-  .controls .cv { font-size:12.5px; color:var(--n700); }
-  .controls .sep { color:var(--n300); padding:0 5px; }
-  .controls .obs { color:var(--b700); font-weight:600; }
+  .controls { display:grid; grid-template-columns:max-content 1fr; gap:2px 12px; }
+  .controls .ck { font-size:12.5px; font-weight:500; color:var(--n900); }
+  .controls .cv { font-size:12.5px; color:var(--n600); }
   .legend { color:var(--n500); font-size:12px; margin-top:26px; max-width:860px; }
   .legend b { color:var(--n700); }
 </style>
@@ -106,7 +104,7 @@
   <b>On menu</b> — the harness advertises this model in its own picker under at least one probed auth context.
   &nbsp;·&nbsp; <b>Hidden</b> — never advertised, but a seeded config plus a completed inference turn proved it
   launchable (“trial-verified”). &nbsp;·&nbsp; <b>Available with</b> — exactly the auth contexts whose probe runs
-  observed the model; nothing is inferred. &nbsp;·&nbsp; Blue value = the setting observed live on the session.
+  observed the model; nothing is inferred.
 </div>
 </div>
 <script>
@@ -117,11 +115,8 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&l
 
 function controlCells(controls) {
   const rows = Object.entries(controls).map(([k, c]) =>
-    '<span class="ck">' + esc(k) + '</span><span class="cv mono">' +
-    c.values.map(v => '<span' + (v === c.observedValue ? ' class="obs"' : '') + '>' + esc(v) + '</span>')
-      .join('<span class="sep">·</span>') +
-    '</span>');
-  return rows.join('') || '<span class="cv" style="color:var(--n500)">none reported</span>';
+    '<span class="ck">' + esc(k) + '</span><span class="cv">' + c.values.map(esc).join(', ') + '</span>');
+  return rows.join('') || '<span class="cv">none reported</span>';
 }
 
 function hay(m) {
