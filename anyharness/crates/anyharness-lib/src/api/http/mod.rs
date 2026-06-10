@@ -1,8 +1,8 @@
 pub mod access;
 pub mod agent_auth_config;
 pub mod agents;
-pub mod agents_contract;
-pub mod agents_errors;
+mod agents_contract;
+mod agents_errors;
 pub mod agents_model_registry;
 pub mod auth;
 pub mod blocking;

@@ -89,7 +89,7 @@ Terminal manager/service
 ProductMcpEndpointRegistry
 ReviewRuntime
 PlanRuntime
-AgentAuthConfigService
+AgentAuthService
 RuntimeConfigService
 ```
 
