@@ -4,18 +4,15 @@ use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
 use std::time::Instant;
 pub(in crate::live::sessions) fn build_client_capabilities(
     source_agent_kind: &str,
-    resolved_agent: &ResolvedAgent,
+    _resolved_agent: &ResolvedAgent,
 ) -> acp::schema::ClientCapabilities {
     let mut meta = serde_json::Map::new();
 
     if source_agent_kind == AgentKind::Codex.as_str() {
-        let mut codex_capabilities = serde_json::Map::from_iter([(
+        let codex_capabilities = serde_json::Map::from_iter([(
             "requestUserInput".to_string(),
             serde_json::Value::Bool(true),
         )]);
-        if should_advertise_codex_mcp_elicitation(source_agent_kind, resolved_agent) {
-            codex_capabilities.insert("mcpElicitation".to_string(), serde_json::Value::Bool(true));
-        }
         meta.insert(
             "codex".to_string(),
             serde_json::Value::Object(codex_capabilities),
@@ -33,14 +30,6 @@ pub(in crate::live::sessions) fn build_client_capabilities(
     }
 
     acp::schema::ClientCapabilities::new().meta(acp::schema::Meta::from_iter(meta))
-}
-
-pub(in crate::live::sessions) fn should_advertise_codex_mcp_elicitation(
-    source_agent_kind: &str,
-    resolved_agent: &ResolvedAgent,
-) -> bool {
-    source_agent_kind == AgentKind::Codex.as_str()
-        && resolved_agent.agent_process.source.as_deref() == Some("override")
 }
 
 pub(in crate::live::sessions) fn should_attempt_advertised_auth(source_agent_kind: &str) -> bool {
@@ -248,45 +237,29 @@ mod tests {
     use crate::domains::agents::registry::built_in_registry;
 
     #[test]
-    fn client_capabilities_preserve_codex_managed_gate() {
-        let capabilities = build_client_capabilities(
-            AgentKind::Codex.as_str(),
-            &resolved_agent_with_source(AgentKind::Codex, "managed"),
-        );
+    fn client_capabilities_codex_only_advertises_request_user_input() {
+        for source in &["managed", "override"] {
+            let capabilities = build_client_capabilities(
+                AgentKind::Codex.as_str(),
+                &resolved_agent_with_source(AgentKind::Codex, source),
+            );
 
-        assert_eq!(
-            capability_bool(&capabilities, "codex", "requestUserInput"),
-            Some(true)
-        );
-        assert_eq!(
-            capability_bool(&capabilities, "codex", "mcpElicitation"),
-            None
-        );
-        assert_eq!(
-            capability_bool(&capabilities, "claude", "mcpElicitation"),
-            None
-        );
-    }
-
-    #[test]
-    fn client_capabilities_preserve_codex_override_gate() {
-        let capabilities = build_client_capabilities(
-            AgentKind::Codex.as_str(),
-            &resolved_agent_with_source(AgentKind::Codex, "override"),
-        );
-
-        assert_eq!(
-            capability_bool(&capabilities, "codex", "requestUserInput"),
-            Some(true)
-        );
-        assert_eq!(
-            capability_bool(&capabilities, "codex", "mcpElicitation"),
-            Some(true)
-        );
-        assert_eq!(
-            capability_bool(&capabilities, "claude", "mcpElicitation"),
-            None
-        );
+            assert_eq!(
+                capability_bool(&capabilities, "codex", "requestUserInput"),
+                Some(true),
+                "source={source}"
+            );
+            assert_eq!(
+                capability_bool(&capabilities, "codex", "mcpElicitation"),
+                None,
+                "source={source}: mcpElicitation must not be advertised (standard elicitation is used instead)"
+            );
+            assert_eq!(
+                capability_bool(&capabilities, "claude", "mcpElicitation"),
+                None,
+                "source={source}"
+            );
+        }
     }
 
     #[test]

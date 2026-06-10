@@ -1,6 +1,7 @@
 use super::*;
-use crate::live::sessions::interactions::mcp_elicitation::{
-    normalize_codex_mcp_elicitation, CodexMcpElicitationExtParams, CodexMcpElicitationExtRequest,
+use crate::live::sessions::interactions::mcp_elicitation::normalize_standard_mcp_elicitation;
+use agent_client_protocol::schema::{
+    CreateElicitationRequest, ElicitationFormMode, ElicitationSchema, ElicitationSessionScope,
 };
 use anyharness_contract::v1::{UserInputQuestionOption, UserInputSubmittedAnswer};
 use serde_json::json;
@@ -39,28 +40,16 @@ fn answer(
 }
 
 fn mcp_elicitation() -> StoredMcpElicitation {
-    normalize_codex_mcp_elicitation(CodexMcpElicitationExtParams {
-        server_name: "google".to_string(),
-        request: CodexMcpElicitationExtRequest::Form {
-            meta: None,
-            message: "Pick account".to_string(),
-            requested_schema: json!({
-                "type": "object",
-                "properties": {
-                    "account": {
-                        "type": "string",
-                        "title": "Account",
-                        "enum": ["acct_123"],
-                        "enumNames": ["Work"]
-                    }
-                },
-                "required": ["account"],
-                "additionalProperties": false
-            }),
-        },
-    })
-    .expect("schema should normalize")
-    .pending
+    let request = CreateElicitationRequest::new(
+        ElicitationFormMode::new(
+            ElicitationSessionScope::new("sess_test"),
+            ElicitationSchema::new().string("account", true),
+        ),
+        "Pick account",
+    );
+    normalize_standard_mcp_elicitation(request)
+        .expect("schema should normalize")
+        .pending
 }
 
 #[tokio::test]
