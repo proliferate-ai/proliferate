@@ -44,10 +44,27 @@ Stores should not:
 - start actors or subprocesses
 - perform multi-domain orchestration
 
-## Transactions
+## The Two-Tier Store Pattern
 
-When a workflow needs multiple store writes to succeed together, keep the
-transaction ownership explicit.
+Stores have two tiers, and the split is what makes transactions composable:
+
+```text
+TIER 1 (public)   store fns speak domain and own the connection:
+                    pub fn insert(&self, record) -> with_conn(...)
+                    pub fn delete_session(&self, id) -> with_tx(...)
+
+TIER 2 (private)  row fns take &Connection so several can compose
+                  inside ONE transaction:
+                    pub(super) fn insert_session_row(conn, record)
+                    pub(super) fn insert_event_row(conn, ...)
+```
+
+The transaction boundary is the use-case boundary: when a use case needs
+atomicity across row families (fork = session + link + event snapshot), one
+tier-1 fn opens one `with_tx` and calls several tier-2 fns inside it.
+Connections never escape upward; row types and SQL never escape the store.
+In-repo exemplar: `domains/sessions/store/**`; cross-domain atomic deletes use
+the participant-trait pattern (`domains/sessions/deletion.rs`).
 
 Rules:
 
@@ -56,6 +73,19 @@ Rules:
 - cross-domain transaction workflows belong in the owning domain runtime or
   service
 - stores should not hide product workflow decisions inside a transaction helper
+
+## Time, Identity, And Errors
+
+- **Domain-meaningful times are passed in** (`created_at`, `closed_at`,
+  `last_prompt_at` are minted by the use case's record phase);
+  **`updated_at` is store-owned bookkeeping**. A store file using both
+  conventions for the same kind of field is a bug farm — pick per the rule
+  above. Identity (`Uuid::new_v4()`) is never minted inside a store.
+- **Expected conditions live in the `Ok` type**: not-found is
+  `Option`, empty is an empty `Vec`. Errors are reserved for infrastructure
+  failure (disk, corruption, lock contention) — and for that, `anyhow` at the
+  store surface is acceptable; services wrap it as their internal variant.
+  Never encode an expected condition as an error string a caller must parse.
 
 ## Store Decomposition
 

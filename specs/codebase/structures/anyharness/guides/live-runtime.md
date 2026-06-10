@@ -733,12 +733,47 @@ serialized loop is truly the correct unit of mutation. Page-level actors often
 make sense for browser automation, while browser/context lifecycle can be
 managed above them.
 
+## The Live Boundary
+
+How product code hands work to a live resource, and what live may know back
+(see [mental-model.md](mental-model.md) for the underlying law):
+
+- **Live receives complete descriptions.** The owning domain runtime resolves
+  all product truths and hands the live layer one launch/command bundle. If a
+  live resource needs a fact it does not have, the fix is adding a field to
+  the bundle — live never fetches product truth.
+- **Domain shapes may cross in; domain services and stores may not.** A
+  `SessionRecord` or `ResolvedAgent` crossing into live is the lingua franca
+  working. A concrete store or service crossing in makes the actor untestable
+  and lets live read or write anything durable.
+- **Durable powers cross as narrow capability traits.** When an actor must
+  persist as it runs (event sinks, attachment writes), live defines the trait
+  in its own vocabulary, the domain implements it, and `app/` wires it. The
+  actor is then testable with a vector behind the trait.
+- **The relay points down.** Manager -> actor -> driver: each level consumes
+  the level above's output and derives only mechanical detail (command lines,
+  env merge order, protocol messages). No level reaches up for more.
+- **The manager owns authoritative idempotency** for "is this already
+  running", checked under its own lock. Callers may keep a fast-path check;
+  the lock-held check is the one that prevents races.
+- Bundle parameters by the parameter test: never-varies -> manager
+  constructor; per-call data -> the launch struct; per-call power -> a
+  capability parameter beside it. Adjacent identically-typed parameters
+  (multiple env maps) are a silent-swap hazard and must be named struct
+  fields.
+
+Migration exceptions: `LiveSessionManager::start_session` takes 15+ positional
+parameters including four adjacent env maps, and receives concrete
+`SessionStore`/`PromptAttachmentStorage` per call; `SessionActorConfig` holds
+concrete domain stores/services. Target: a `SessionLaunch` bundle plus
+capability traits wired at construction.
+
 ## Dependency Rules
 
 Allowed:
 
 ```text
-live -> domains through narrow stores/services/capability ports
+live -> domain shapes (model types) and live-defined capability traits
 live -> integrations for protocol/vendor mechanics
 live -> adapters only when the live resource directly owns a local capability
 live -> observability
@@ -794,3 +829,6 @@ Use this checklist when reviewing live runtime changes:
 - Are snapshots read-only to callers and write-owned by the actor/handle path?
 - Does a new folder represent ownership, or just a prettier `misc` bucket?
 - If the resource is composite, is the unit of serialization explicit?
+- Does anything cross the live boundary besides domain shapes, one launch
+  bundle, and capability traits?
+- Could this actor be tested without a database behind it?

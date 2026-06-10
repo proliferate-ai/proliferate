@@ -118,6 +118,25 @@ If a branch decides how sessions, workspaces, agents, reviews, MCPs, or
 terminal workflows behave, move that branch to the owning domain/runtime/live
 module.
 
+## Per-Domain Wiring
+
+Each domain exposes one constructor entry — a `wire(deps) -> <Domain>` (or a
+deps-struct + build fn) — that owns the construction details only that domain
+knows. `AppState::new` then reads as a table of contents: one line per domain,
+in dependency order. The in-repo template is `app/product_mcp.rs` (named deps
+structs destructured into a single build fn).
+
+Shared-instance law: a service consumed by both a domain's facade and another
+domain (readiness, agent auth, gates) is constructed **once** and the same
+instance is injected into both. Who-holds-what must be readable from the
+`wire()` signatures alone — that visibility is the point of explicit wiring.
+Every service's `&self` field list is its license; `app/` is where licenses
+are granted.
+
+Migration exception: `AppState::new` is currently ~335 lines of inline
+construction for ~12 domains with no per-domain entry points. Target: the
+wiring-family split below, one `wire()` per domain.
+
 ## Session Extensions
 
 Core domains should not import product domains directly.
