@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use super::paths::{artifact_root, has_managed_registry_binary_for_names};
-use crate::domains::agents::managed_npm::managed_npm_install_issue;
+use crate::domains::agents::installer::managed_npm::managed_npm_install_issue;
 use crate::domains::agents::model::*;
 use crate::integrations::agent_cli::executable::{
     find_in_path, find_real_binary_in_path, is_valid_executable,

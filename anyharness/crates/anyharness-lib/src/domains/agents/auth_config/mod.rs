@@ -15,6 +15,7 @@ use crate::domains::sessions::mcp_bindings::crypto::{
 
 mod codex_config;
 mod launch;
+pub mod login_terminal;
 mod scope;
 mod status;
 mod store;
@@ -374,13 +375,10 @@ fn merge_selection_env(
 }
 
 #[cfg(test)]
-#[path = "../auth_config_claude_tests.rs"]
-mod auth_config_claude_tests;
+mod claude_tests;
 
 #[cfg(test)]
-#[path = "../auth_config_scope_tests.rs"]
-mod auth_config_scope_tests;
+mod scope_tests;
 
 #[cfg(test)]
-#[path = "../auth_config_tests.rs"]
-mod auth_config_tests;
+mod tests;

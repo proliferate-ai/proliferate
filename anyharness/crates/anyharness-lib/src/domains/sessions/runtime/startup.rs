@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::domains::agents::model::AgentKind;
-use crate::domains::agents::readiness::resolver::resolve_agent_with_env;
+use crate::domains::agents::readiness::service::resolve_agent_with_env;
 use crate::domains::agents::registry::built_in_registry;
 use crate::domains::sessions::extensions::SessionTurnFinishedContext;
 use crate::domains::sessions::links::model::SessionLinkRelation;

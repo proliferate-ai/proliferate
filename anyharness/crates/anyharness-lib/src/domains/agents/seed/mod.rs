@@ -17,7 +17,7 @@ use anyharness_contract::v1::{
 };
 use uuid::Uuid;
 
-use super::install_lock::AgentInstallLock;
+use super::installer::AgentInstallLock;
 use super::installer::{self, InstalledArtifactResult};
 use super::model::{AgentKind, ArtifactRole, Platform};
 use crate::integrations::agent_cli::executable::is_valid_executable;
