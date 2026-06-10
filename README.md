@@ -40,8 +40,6 @@ Move running sessions between your machine and the cloud. Works solo or across a
 
 </div>
 
-## Build with Any Harness on an IDE You Own
-
 Proliferate is a desktop and web app for running coding agents in parallel, locally or in cloud sandboxes. Each agent runs through its own native harness.
 
 - **Run any mix of agents in parallel**, each in its own isolated worktree or sandbox, with native tools, auth, and config intact
