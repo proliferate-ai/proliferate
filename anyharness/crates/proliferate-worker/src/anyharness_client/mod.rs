@@ -2,6 +2,7 @@ pub mod agent_auth;
 pub mod agents;
 pub mod auth;
 pub mod backfill;
+pub mod catalogs;
 pub mod events;
 pub mod health;
 pub mod sessions;

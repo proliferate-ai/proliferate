@@ -1,6 +1,7 @@
 pub mod agent_auth;
 pub mod auth;
 pub mod backfill;
+pub mod catalogs;
 pub mod commands;
 pub mod control;
 pub mod events;
@@ -55,6 +56,9 @@ pub struct HeartbeatRequest {
     pub worker_version: Option<String>,
     pub anyharness_version: Option<String>,
     pub supervisor_version: Option<String>,
+    /// Agent catalog version last successfully pushed into the runtime
+    /// (fleet observability; the cloud accepts but may ignore it).
+    pub catalog_version: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -76,6 +80,10 @@ pub struct HeartbeatResponse {
     pub status: String,
     pub server_time: String,
     pub desired_versions: DesiredVersions,
+    /// `catalogVersion` of the agent catalog the cloud currently serves;
+    /// absent on servers that predate heartbeat convergence.
+    #[serde(default)]
+    pub catalog_version: Option<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -191,6 +199,40 @@ mod tests {
         let error = serde_json::from_slice::<HeartbeatResponse>(b"{}")
             .expect_err("missing desiredVersions should fail");
         assert!(error.to_string().contains("targetId"));
+    }
+
+    #[test]
+    fn heartbeat_response_catalog_version_is_optional_and_parsed() {
+        let without = br#"{
+            "targetId": "target",
+            "workerId": "worker",
+            "status": "online",
+            "serverTime": "2026-06-10T00:00:00Z",
+            "desiredVersions": {
+                "shouldUpdate": false,
+                "updateChannel": "stable",
+                "updateGeneration": 0
+            }
+        }"#;
+        let response = serde_json::from_slice::<HeartbeatResponse>(without)
+            .expect("pre-convergence servers omit catalogVersion");
+        assert_eq!(response.catalog_version, None);
+
+        let with = br#"{
+            "targetId": "target",
+            "workerId": "worker",
+            "status": "online",
+            "serverTime": "2026-06-10T00:00:00Z",
+            "desiredVersions": {
+                "shouldUpdate": false,
+                "updateChannel": "stable",
+                "updateGeneration": 0
+            },
+            "catalogVersion": "2026-06-10.6"
+        }"#;
+        let response = serde_json::from_slice::<HeartbeatResponse>(with)
+            .expect("catalogVersion-carrying response");
+        assert_eq!(response.catalog_version.as_deref(), Some("2026-06-10.6"));
     }
 
     #[test]
