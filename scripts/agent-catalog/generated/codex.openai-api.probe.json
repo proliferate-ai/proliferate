@@ -1,0 +1,2913 @@
+{
+  "probedAt": "2026-06-10T00:17:31.347128+00:00",
+  "agentKind": "codex",
+  "authContext": "openai-api",
+  "attestation": {
+    "name": "codex-acp",
+    "version": "0.11.8",
+    "title": "Codex"
+  },
+  "modelSource": "acpModels",
+  "nativeCli": {
+    "path": "/Users/pablohansen/.proliferate-local/anyharness/agents/codex/native/codex",
+    "version": "codex-cli 0.139.0"
+  },
+  "trials": [],
+  "currentModelId": "gpt-5.5/medium",
+  "currentModeId": "read-only",
+  "modes": {
+    "availableModes": [
+      {
+        "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+        "id": "read-only",
+        "name": "Read Only"
+      },
+      {
+        "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+        "id": "auto",
+        "name": "Default"
+      },
+      {
+        "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+        "id": "full-access",
+        "name": "Full Access"
+      }
+    ],
+    "currentModeId": "read-only"
+  },
+  "baselineConfigOptions": [
+    {
+      "category": "mode",
+      "currentValue": "read-only",
+      "description": "Choose an approval and sandboxing preset for your session",
+      "id": "mode",
+      "name": "Approval Preset",
+      "options": [
+        {
+          "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+          "name": "Read Only",
+          "value": "read-only"
+        },
+        {
+          "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+          "name": "Default",
+          "value": "auto"
+        },
+        {
+          "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+          "name": "Full Access",
+          "value": "full-access"
+        }
+      ],
+      "type": "select"
+    },
+    {
+      "category": "collaboration_mode",
+      "currentValue": "default",
+      "description": "Choose whether Codex should work in default or planning mode",
+      "id": "collaboration_mode",
+      "name": "Collaboration Mode",
+      "options": [
+        {
+          "description": "Switch to planning mode with Codex plan instructions",
+          "name": "Plan",
+          "value": "plan"
+        },
+        {
+          "description": "Switch to default execution mode with Codex default instructions",
+          "name": "Default",
+          "value": "default"
+        }
+      ],
+      "type": "select"
+    },
+    {
+      "category": "model",
+      "currentValue": "gpt-5.5",
+      "description": "Choose which model Codex should use",
+      "id": "model",
+      "name": "Model",
+      "options": [
+        {
+          "description": "Frontier model for complex coding, research, and real-world work.",
+          "name": "GPT-5.5",
+          "value": "gpt-5.5"
+        },
+        {
+          "description": "Strong model for everyday coding.",
+          "name": "gpt-5.4",
+          "value": "gpt-5.4"
+        },
+        {
+          "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+          "name": "GPT-5.4-Mini",
+          "value": "gpt-5.4-mini"
+        },
+        {
+          "description": "Coding-optimized model.",
+          "name": "gpt-5.3-codex",
+          "value": "gpt-5.3-codex"
+        },
+        {
+          "description": "Optimized for professional work and long-running agents.",
+          "name": "gpt-5.2",
+          "value": "gpt-5.2"
+        }
+      ],
+      "type": "select"
+    },
+    {
+      "category": "thought_level",
+      "currentValue": "medium",
+      "description": "Choose how much reasoning effort the model should use",
+      "id": "reasoning_effort",
+      "name": "Reasoning Effort",
+      "options": [
+        {
+          "description": "Fast responses with lighter reasoning",
+          "name": "Low",
+          "value": "low"
+        },
+        {
+          "description": "Balances speed and reasoning depth for everyday tasks",
+          "name": "Medium",
+          "value": "medium"
+        },
+        {
+          "description": "Greater reasoning depth for complex problems",
+          "name": "High",
+          "value": "high"
+        },
+        {
+          "description": "Extra high reasoning depth for complex problems",
+          "name": "Xhigh",
+          "value": "xhigh"
+        }
+      ],
+      "type": "select"
+    },
+    {
+      "category": "fast_mode",
+      "currentValue": "off",
+      "description": "Choose whether Codex should use fast mode",
+      "id": "fast_mode",
+      "name": "Fast Mode",
+      "options": [
+        {
+          "description": "Use Codex's default service tier",
+          "name": "Off",
+          "value": "off"
+        },
+        {
+          "description": "Request the fast Codex service tier",
+          "name": "On",
+          "value": "on"
+        }
+      ],
+      "type": "select"
+    }
+  ],
+  "models": [
+    {
+      "modelId": "gpt-5.5/low",
+      "name": "GPT-5.5 (low)",
+      "description": "Frontier model for complex coding, research, and real-world work. Fast responses with lighter reasoning",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.5",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Fast responses with lighter reasoning",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Balances speed and reasoning depth for everyday tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Greater reasoning depth for complex problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning depth for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.5/medium",
+      "name": "GPT-5.5 (medium)",
+      "description": "Frontier model for complex coding, research, and real-world work. Balances speed and reasoning depth for everyday tasks",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.5",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "medium",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Fast responses with lighter reasoning",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Balances speed and reasoning depth for everyday tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Greater reasoning depth for complex problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning depth for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.5/high",
+      "name": "GPT-5.5 (high)",
+      "description": "Frontier model for complex coding, research, and real-world work. Greater reasoning depth for complex problems",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.5",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "high",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Fast responses with lighter reasoning",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Balances speed and reasoning depth for everyday tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Greater reasoning depth for complex problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning depth for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.5/xhigh",
+      "name": "GPT-5.5 (xhigh)",
+      "description": "Frontier model for complex coding, research, and real-world work. Extra high reasoning depth for complex problems",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.5",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "xhigh",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Fast responses with lighter reasoning",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Balances speed and reasoning depth for everyday tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Greater reasoning depth for complex problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning depth for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.4/low",
+      "name": "gpt-5.4 (low)",
+      "description": "Strong model for everyday coding. Fast responses with lighter reasoning",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.4",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Fast responses with lighter reasoning",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Balances speed and reasoning depth for everyday tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Greater reasoning depth for complex problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning depth for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.4/medium",
+      "name": "gpt-5.4 (medium)",
+      "description": "Strong model for everyday coding. Balances speed and reasoning depth for everyday tasks",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.4",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "medium",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Fast responses with lighter reasoning",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Balances speed and reasoning depth for everyday tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Greater reasoning depth for complex problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning depth for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.4/high",
+      "name": "gpt-5.4 (high)",
+      "description": "Strong model for everyday coding. Greater reasoning depth for complex problems",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.4",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "high",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Fast responses with lighter reasoning",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Balances speed and reasoning depth for everyday tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Greater reasoning depth for complex problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning depth for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.4/xhigh",
+      "name": "gpt-5.4 (xhigh)",
+      "description": "Strong model for everyday coding. Extra high reasoning depth for complex problems",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.4",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "xhigh",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Fast responses with lighter reasoning",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Balances speed and reasoning depth for everyday tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Greater reasoning depth for complex problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning depth for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.4-mini/low",
+      "name": "GPT-5.4-Mini (low)",
+      "description": "Small, fast, and cost-efficient model for simpler coding tasks. Fast responses with lighter reasoning",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.4-mini",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Fast responses with lighter reasoning",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Balances speed and reasoning depth for everyday tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Greater reasoning depth for complex problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning depth for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.4-mini/medium",
+      "name": "GPT-5.4-Mini (medium)",
+      "description": "Small, fast, and cost-efficient model for simpler coding tasks. Balances speed and reasoning depth for everyday tasks",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.4-mini",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "medium",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Fast responses with lighter reasoning",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Balances speed and reasoning depth for everyday tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Greater reasoning depth for complex problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning depth for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.4-mini/high",
+      "name": "GPT-5.4-Mini (high)",
+      "description": "Small, fast, and cost-efficient model for simpler coding tasks. Greater reasoning depth for complex problems",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.4-mini",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "high",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Fast responses with lighter reasoning",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Balances speed and reasoning depth for everyday tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Greater reasoning depth for complex problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning depth for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.4-mini/xhigh",
+      "name": "GPT-5.4-Mini (xhigh)",
+      "description": "Small, fast, and cost-efficient model for simpler coding tasks. Extra high reasoning depth for complex problems",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.4-mini",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "xhigh",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Fast responses with lighter reasoning",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Balances speed and reasoning depth for everyday tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Greater reasoning depth for complex problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning depth for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.3-codex/low",
+      "name": "gpt-5.3-codex (low)",
+      "description": "Coding-optimized model. Fast responses with lighter reasoning",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.3-codex",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Fast responses with lighter reasoning",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Balances speed and reasoning depth for everyday tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Greater reasoning depth for complex problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning depth for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.3-codex/medium",
+      "name": "gpt-5.3-codex (medium)",
+      "description": "Coding-optimized model. Balances speed and reasoning depth for everyday tasks",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.3-codex",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "medium",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Fast responses with lighter reasoning",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Balances speed and reasoning depth for everyday tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Greater reasoning depth for complex problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning depth for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.3-codex/high",
+      "name": "gpt-5.3-codex (high)",
+      "description": "Coding-optimized model. Greater reasoning depth for complex problems",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.3-codex",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "high",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Fast responses with lighter reasoning",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Balances speed and reasoning depth for everyday tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Greater reasoning depth for complex problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning depth for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.3-codex/xhigh",
+      "name": "gpt-5.3-codex (xhigh)",
+      "description": "Coding-optimized model. Extra high reasoning depth for complex problems",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.3-codex",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "xhigh",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Fast responses with lighter reasoning",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Balances speed and reasoning depth for everyday tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Greater reasoning depth for complex problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning depth for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.2/low",
+      "name": "gpt-5.2 (low)",
+      "description": "Optimized for professional work and long-running agents. Balances speed with some reasoning; useful for straightforward queries and short explanations",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.2",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "low",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Balances speed with some reasoning; useful for straightforward queries and short explanations",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Provides a solid balance of reasoning depth and latency for general-purpose tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Maximizes reasoning depth for complex or ambiguous problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.2/medium",
+      "name": "gpt-5.2 (medium)",
+      "description": "Optimized for professional work and long-running agents. Provides a solid balance of reasoning depth and latency for general-purpose tasks",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.2",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "medium",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Balances speed with some reasoning; useful for straightforward queries and short explanations",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Provides a solid balance of reasoning depth and latency for general-purpose tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Maximizes reasoning depth for complex or ambiguous problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.2/high",
+      "name": "gpt-5.2 (high)",
+      "description": "Optimized for professional work and long-running agents. Maximizes reasoning depth for complex or ambiguous problems",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.2",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "high",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Balances speed with some reasoning; useful for straightforward queries and short explanations",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Provides a solid balance of reasoning depth and latency for general-purpose tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Maximizes reasoning depth for complex or ambiguous problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    },
+    {
+      "modelId": "gpt-5.2/xhigh",
+      "name": "gpt-5.2 (xhigh)",
+      "description": "Optimized for professional work and long-running agents. Extra high reasoning for complex problems",
+      "configOptions": [
+        {
+          "category": "mode",
+          "currentValue": "read-only",
+          "description": "Choose an approval and sandboxing preset for your session",
+          "id": "mode",
+          "name": "Approval Preset",
+          "options": [
+            {
+              "description": "Codex can read files in the current workspace. Approval is required to edit files or access the internet.",
+              "name": "Read Only",
+              "value": "read-only"
+            },
+            {
+              "description": "Codex can read and edit files in the current workspace, and run commands. Approval is required to access the internet or edit other files. (Identical to Agent mode)",
+              "name": "Default",
+              "value": "auto"
+            },
+            {
+              "description": "Codex can edit files outside this workspace and access the internet without asking for approval. Exercise caution when using.",
+              "name": "Full Access",
+              "value": "full-access"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "collaboration_mode",
+          "currentValue": "default",
+          "description": "Choose whether Codex should work in default or planning mode",
+          "id": "collaboration_mode",
+          "name": "Collaboration Mode",
+          "options": [
+            {
+              "description": "Switch to planning mode with Codex plan instructions",
+              "name": "Plan",
+              "value": "plan"
+            },
+            {
+              "description": "Switch to default execution mode with Codex default instructions",
+              "name": "Default",
+              "value": "default"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "model",
+          "currentValue": "gpt-5.2",
+          "description": "Choose which model Codex should use",
+          "id": "model",
+          "name": "Model",
+          "options": [
+            {
+              "description": "Frontier model for complex coding, research, and real-world work.",
+              "name": "GPT-5.5",
+              "value": "gpt-5.5"
+            },
+            {
+              "description": "Strong model for everyday coding.",
+              "name": "gpt-5.4",
+              "value": "gpt-5.4"
+            },
+            {
+              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
+              "name": "GPT-5.4-Mini",
+              "value": "gpt-5.4-mini"
+            },
+            {
+              "description": "Coding-optimized model.",
+              "name": "gpt-5.3-codex",
+              "value": "gpt-5.3-codex"
+            },
+            {
+              "description": "Optimized for professional work and long-running agents.",
+              "name": "gpt-5.2",
+              "value": "gpt-5.2"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "thought_level",
+          "currentValue": "xhigh",
+          "description": "Choose how much reasoning effort the model should use",
+          "id": "reasoning_effort",
+          "name": "Reasoning Effort",
+          "options": [
+            {
+              "description": "Balances speed with some reasoning; useful for straightforward queries and short explanations",
+              "name": "Low",
+              "value": "low"
+            },
+            {
+              "description": "Provides a solid balance of reasoning depth and latency for general-purpose tasks",
+              "name": "Medium",
+              "value": "medium"
+            },
+            {
+              "description": "Maximizes reasoning depth for complex or ambiguous problems",
+              "name": "High",
+              "value": "high"
+            },
+            {
+              "description": "Extra high reasoning for complex problems",
+              "name": "Xhigh",
+              "value": "xhigh"
+            }
+          ],
+          "type": "select"
+        },
+        {
+          "category": "fast_mode",
+          "currentValue": "off",
+          "description": "Choose whether Codex should use fast mode",
+          "id": "fast_mode",
+          "name": "Fast Mode",
+          "options": [
+            {
+              "description": "Use Codex's default service tier",
+              "name": "Off",
+              "value": "off"
+            },
+            {
+              "description": "Request the fast Codex service tier",
+              "name": "On",
+              "value": "on"
+            }
+          ],
+          "type": "select"
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

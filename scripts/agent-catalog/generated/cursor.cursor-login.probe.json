@@ -1,0 +1,392 @@
+{
+  "probedAt": "2026-06-10T00:26:29.701457+00:00",
+  "agentKind": "cursor",
+  "authContext": "cursor-login",
+  "attestation": null,
+  "modelSource": "acpModels",
+  "nativeCli": null,
+  "trials": [],
+  "currentModelId": "claude-opus-4-8[thinking=true,context=300k,effort=high,fast=false]",
+  "currentModeId": "agent",
+  "modes": {
+    "availableModes": [
+      {
+        "description": "Full agent capabilities with tool access",
+        "id": "agent",
+        "name": "Agent"
+      },
+      {
+        "description": "Read-only mode for planning and designing before implementation",
+        "id": "plan",
+        "name": "Plan"
+      },
+      {
+        "description": "Q&A mode - no edits or command execution",
+        "id": "ask",
+        "name": "Ask"
+      }
+    ],
+    "currentModeId": "agent"
+  },
+  "baselineConfigOptions": [
+    {
+      "category": "mode",
+      "currentValue": "agent",
+      "description": "Controls how the agent executes tasks",
+      "id": "mode",
+      "name": "Mode",
+      "options": [
+        {
+          "description": "Full agent capabilities with tool access",
+          "name": "Agent",
+          "value": "agent"
+        },
+        {
+          "description": "Read-only mode for planning and designing before implementation",
+          "name": "Plan",
+          "value": "plan"
+        },
+        {
+          "description": "Q&A mode - no edits or command execution",
+          "name": "Ask",
+          "value": "ask"
+        }
+      ],
+      "type": "select"
+    },
+    {
+      "category": "model",
+      "currentValue": "claude-opus-4-8[thinking=true,context=300k,effort=high,fast=false]",
+      "description": "Controls which model variant is used for responses",
+      "id": "model",
+      "name": "Model",
+      "options": [
+        {
+          "name": "Auto",
+          "value": "default[]"
+        },
+        {
+          "name": "composer-2.5",
+          "value": "composer-2.5[fast=true]"
+        },
+        {
+          "name": "claude-fable-5",
+          "value": "claude-fable-5[thinking=true,context=300k,effort=high]"
+        },
+        {
+          "name": "claude-opus-4-8",
+          "value": "claude-opus-4-8[thinking=true,context=300k,effort=high,fast=false]"
+        },
+        {
+          "name": "gpt-5.5",
+          "value": "gpt-5.5[context=272k,reasoning=medium,fast=false]"
+        },
+        {
+          "name": "claude-sonnet-4-6",
+          "value": "claude-sonnet-4-6[thinking=true,context=200k,effort=medium]"
+        },
+        {
+          "name": "gpt-5.3-codex",
+          "value": "gpt-5.3-codex[reasoning=medium,fast=false]"
+        },
+        {
+          "name": "claude-opus-4-7",
+          "value": "claude-opus-4-7[thinking=true,context=300k,effort=xhigh,fast=false]"
+        },
+        {
+          "name": "grok-build-0.1",
+          "value": "grok-build-0.1[context=200k]"
+        },
+        {
+          "name": "gpt-5.4",
+          "value": "gpt-5.4[context=272k,reasoning=medium,fast=false]"
+        },
+        {
+          "name": "claude-opus-4-6",
+          "value": "claude-opus-4-6[thinking=true,context=200k,effort=high,fast=false]"
+        },
+        {
+          "name": "claude-opus-4-5",
+          "value": "claude-opus-4-5[thinking=true]"
+        },
+        {
+          "name": "gpt-5.2",
+          "value": "gpt-5.2[reasoning=medium,fast=false]"
+        },
+        {
+          "name": "gemini-3.1-pro",
+          "value": "gemini-3.1-pro[]"
+        },
+        {
+          "name": "gpt-5.4-mini",
+          "value": "gpt-5.4-mini[reasoning=medium]"
+        },
+        {
+          "name": "gpt-5.4-nano",
+          "value": "gpt-5.4-nano[reasoning=medium]"
+        },
+        {
+          "name": "claude-haiku-4-5",
+          "value": "claude-haiku-4-5[thinking=true]"
+        },
+        {
+          "name": "grok-4.3",
+          "value": "grok-4.3[context=200k]"
+        },
+        {
+          "name": "claude-sonnet-4-5",
+          "value": "claude-sonnet-4-5[thinking=true,context=200k]"
+        },
+        {
+          "name": "gpt-5.2-codex",
+          "value": "gpt-5.2-codex[reasoning=medium,fast=false]"
+        },
+        {
+          "name": "gpt-5.1-codex-max",
+          "value": "gpt-5.1-codex-max[reasoning=medium,fast=false]"
+        },
+        {
+          "name": "gpt-5.1",
+          "value": "gpt-5.1[reasoning=medium]"
+        },
+        {
+          "name": "gemini-3-flash",
+          "value": "gemini-3-flash[]"
+        },
+        {
+          "name": "gemini-3.5-flash",
+          "value": "gemini-3.5-flash[]"
+        },
+        {
+          "name": "gpt-5.1-codex-mini",
+          "value": "gpt-5.1-codex-mini[reasoning=medium]"
+        },
+        {
+          "name": "claude-sonnet-4",
+          "value": "claude-sonnet-4[thinking=false,context=200k]"
+        },
+        {
+          "name": "gpt-5-mini",
+          "value": "gpt-5-mini[]"
+        },
+        {
+          "name": "gemini-2.5-flash",
+          "value": "gemini-2.5-flash[]"
+        },
+        {
+          "name": "kimi-k2.5",
+          "value": "kimi-k2.5[]"
+        }
+      ],
+      "type": "select"
+    }
+  ],
+  "models": [
+    {
+      "modelId": "default[]",
+      "name": "Auto",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "composer-2.5[fast=true]",
+      "name": "composer-2.5",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "claude-fable-5[thinking=true,context=300k,effort=high]",
+      "name": "claude-fable-5",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "claude-opus-4-8[thinking=true,context=300k,effort=high,fast=false]",
+      "name": "claude-opus-4-8",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "gpt-5.5[context=272k,reasoning=medium,fast=false]",
+      "name": "gpt-5.5",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "claude-sonnet-4-6[thinking=true,context=200k,effort=medium]",
+      "name": "claude-sonnet-4-6",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "gpt-5.3-codex[reasoning=medium,fast=false]",
+      "name": "gpt-5.3-codex",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "claude-opus-4-7[thinking=true,context=300k,effort=xhigh,fast=false]",
+      "name": "claude-opus-4-7",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "grok-build-0.1[context=200k]",
+      "name": "grok-build-0.1",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "gpt-5.4[context=272k,reasoning=medium,fast=false]",
+      "name": "gpt-5.4",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "claude-opus-4-6[thinking=true,context=200k,effort=high,fast=false]",
+      "name": "claude-opus-4-6",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "claude-opus-4-5[thinking=true]",
+      "name": "claude-opus-4-5",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "gpt-5.2[reasoning=medium,fast=false]",
+      "name": "gpt-5.2",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "gemini-3.1-pro[]",
+      "name": "gemini-3.1-pro",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "gpt-5.4-mini[reasoning=medium]",
+      "name": "gpt-5.4-mini",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "gpt-5.4-nano[reasoning=medium]",
+      "name": "gpt-5.4-nano",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "claude-haiku-4-5[thinking=true]",
+      "name": "claude-haiku-4-5",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "grok-4.3[context=200k]",
+      "name": "grok-4.3",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "claude-sonnet-4-5[thinking=true,context=200k]",
+      "name": "claude-sonnet-4-5",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "gpt-5.2-codex[reasoning=medium,fast=false]",
+      "name": "gpt-5.2-codex",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "gpt-5.1-codex-max[reasoning=medium,fast=false]",
+      "name": "gpt-5.1-codex-max",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "gpt-5.1[reasoning=medium]",
+      "name": "gpt-5.1",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "gemini-3-flash[]",
+      "name": "gemini-3-flash",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "gemini-3.5-flash[]",
+      "name": "gemini-3.5-flash",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "gpt-5.1-codex-mini[reasoning=medium]",
+      "name": "gpt-5.1-codex-mini",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "claude-sonnet-4[thinking=false,context=200k]",
+      "name": "claude-sonnet-4",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "gpt-5-mini[]",
+      "name": "gpt-5-mini",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "gemini-2.5-flash[]",
+      "name": "gemini-2.5-flash",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "kimi-k2.5[]",
+      "name": "kimi-k2.5",
+      "description": null,
+      "configOptions": null
+    }
+  ],
+  "warnings": [
+    "agent did not report agent_info at initialize",
+    "no ConfigOptionUpdate within 5s after switching to default[]",
+    "no ConfigOptionUpdate within 5s after switching to composer-2.5[fast=true]",
+    "no ConfigOptionUpdate within 5s after switching to claude-fable-5[thinking=true,context=300k,effort=high]",
+    "no ConfigOptionUpdate within 5s after switching to claude-opus-4-8[thinking=true,context=300k,effort=high,fast=false]",
+    "no ConfigOptionUpdate within 5s after switching to gpt-5.5[context=272k,reasoning=medium,fast=false]",
+    "no ConfigOptionUpdate within 5s after switching to claude-sonnet-4-6[thinking=true,context=200k,effort=medium]",
+    "no ConfigOptionUpdate within 5s after switching to gpt-5.3-codex[reasoning=medium,fast=false]",
+    "no ConfigOptionUpdate within 5s after switching to claude-opus-4-7[thinking=true,context=300k,effort=xhigh,fast=false]",
+    "no ConfigOptionUpdate within 5s after switching to grok-build-0.1[context=200k]",
+    "no ConfigOptionUpdate within 5s after switching to gpt-5.4[context=272k,reasoning=medium,fast=false]",
+    "no ConfigOptionUpdate within 5s after switching to claude-opus-4-6[thinking=true,context=200k,effort=high,fast=false]",
+    "no ConfigOptionUpdate within 5s after switching to claude-opus-4-5[thinking=true]",
+    "no ConfigOptionUpdate within 5s after switching to gpt-5.2[reasoning=medium,fast=false]",
+    "no ConfigOptionUpdate within 5s after switching to gemini-3.1-pro[]",
+    "no ConfigOptionUpdate within 5s after switching to gpt-5.4-mini[reasoning=medium]",
+    "no ConfigOptionUpdate within 5s after switching to gpt-5.4-nano[reasoning=medium]",
+    "no ConfigOptionUpdate within 5s after switching to claude-haiku-4-5[thinking=true]",
+    "no ConfigOptionUpdate within 5s after switching to grok-4.3[context=200k]",
+    "no ConfigOptionUpdate within 5s after switching to claude-sonnet-4-5[thinking=true,context=200k]",
+    "no ConfigOptionUpdate within 5s after switching to gpt-5.2-codex[reasoning=medium,fast=false]",
+    "no ConfigOptionUpdate within 5s after switching to gpt-5.1-codex-max[reasoning=medium,fast=false]",
+    "no ConfigOptionUpdate within 5s after switching to gpt-5.1[reasoning=medium]",
+    "no ConfigOptionUpdate within 5s after switching to gemini-3-flash[]",
+    "no ConfigOptionUpdate within 5s after switching to gemini-3.5-flash[]",
+    "no ConfigOptionUpdate within 5s after switching to gpt-5.1-codex-mini[reasoning=medium]",
+    "no ConfigOptionUpdate within 5s after switching to claude-sonnet-4[thinking=false,context=200k]",
+    "no ConfigOptionUpdate within 5s after switching to gpt-5-mini[]",
+    "no ConfigOptionUpdate within 5s after switching to gemini-2.5-flash[]",
+    "no ConfigOptionUpdate within 5s after switching to kimi-k2.5[]"
+  ]
+}

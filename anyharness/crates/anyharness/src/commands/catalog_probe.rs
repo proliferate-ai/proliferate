@@ -45,7 +45,8 @@ pub struct CatalogProbeArgs {
 pub async fn run(args: CatalogProbeArgs) -> Result<()> {
     let agent_kind = AgentKind::parse(&args.agent)
         .ok_or_else(|| anyhow!("unknown agent kind `{}`", args.agent))?;
-    let auth_env = auth_env_for_context(&agent_kind, &args.auth_context)?;
+    let secrets = ProbeSecrets::capture_and_scrub();
+    let auth_env = auth_env_for_context(&secrets, &agent_kind, &args.auth_context)?;
 
     let runtime_home = args
         .runtime_home
@@ -74,7 +75,7 @@ pub async fn run(args: CatalogProbeArgs) -> Result<()> {
         if agent_kind != AgentKind::Claude {
             anyhow::bail!("--trial-model is currently supported for claude only");
         }
-        let mut trial_env = auth_env_for_context(&agent_kind, &args.auth_context)?;
+        let mut trial_env = auth_env_for_context(&secrets, &agent_kind, &args.auth_context)?;
         let config_dir = trial_env
             .get("CLAUDE_CONFIG_DIR")
             .cloned()
@@ -167,6 +168,7 @@ fn print_summary(snapshot: &ProbeSnapshot, out_path: &std::path::Path) {
 }
 
 fn auth_env_for_context(
+    secrets: &ProbeSecrets,
     agent_kind: &AgentKind,
     auth_context: &str,
 ) -> Result<BTreeMap<String, String>> {
@@ -185,7 +187,7 @@ fn auth_env_for_context(
                     settings_json,
                 )?;
             }
-            env.insert("ANTHROPIC_API_KEY".to_string(), require_env("ANTHROPIC_API_KEY")?);
+            env.insert("ANTHROPIC_API_KEY".to_string(), secrets.require("ANTHROPIC_API_KEY")?);
             Ok(env)
         }
         // Claude under subscription OAuth: requires a credentials file
@@ -193,19 +195,24 @@ fn auth_env_for_context(
         // ~/.claude/.credentials.json). We copy it into an isolated config
         // dir so nothing else from the machine leaks in.
         (AgentKind::Claude, "anthropic-oauth") => {
-            let credentials_path = std::env::var("PROBE_CLAUDE_OAUTH_CREDENTIALS").map_err(|_| {
-                anyhow!(
-                    "auth context anthropic-oauth requires PROBE_CLAUDE_OAUTH_CREDENTIALS=\
-                     /path/to/.credentials.json (produce one with `claude setup-token`)"
+            let mut env = isolation_env(auth_context, &[("CLAUDE_CONFIG_DIR", "claude-config")])?;
+            if let Ok(token) = secrets.require("CLAUDE_CODE_OAUTH_TOKEN") {
+                // Long-lived token from `claude setup-token`.
+                env.insert("CLAUDE_CODE_OAUTH_TOKEN".to_string(), token);
+            } else if let Ok(credentials_path) = std::env::var("PROBE_CLAUDE_OAUTH_CREDENTIALS") {
+                let config_dir = env.get("CLAUDE_CONFIG_DIR").expect("claude isolation dir");
+                std::fs::copy(
+                    &credentials_path,
+                    std::path::Path::new(config_dir).join(".credentials.json"),
                 )
-            })?;
-            let env = isolation_env(auth_context, &[("CLAUDE_CONFIG_DIR", "claude-config")])?;
-            let config_dir = env.get("CLAUDE_CONFIG_DIR").expect("claude isolation dir");
-            std::fs::copy(
-                &credentials_path,
-                std::path::Path::new(config_dir).join(".credentials.json"),
-            )
-            .with_context(|| format!("failed to copy {credentials_path}"))?;
+                .with_context(|| format!("failed to copy {credentials_path}"))?;
+            } else {
+                bail!(
+                    "auth context anthropic-oauth requires CLAUDE_CODE_OAUTH_TOKEN \
+                     (from `claude setup-token`) or PROBE_CLAUDE_OAUTH_CREDENTIALS=\
+                     /path/to/.credentials.json"
+                );
+            }
             Ok(env)
         }
         // OpenCode resolves credentials from env vars AND its own config/auth
@@ -215,18 +222,26 @@ fn auth_env_for_context(
         (AgentKind::OpenCode, "baseline") => opencode_isolation_env(auth_context),
         (AgentKind::OpenCode, "anthropic-api") => {
             let mut env = opencode_isolation_env(auth_context)?;
-            env.insert("ANTHROPIC_API_KEY".to_string(), require_env("ANTHROPIC_API_KEY")?);
+            env.insert("ANTHROPIC_API_KEY".to_string(), secrets.require("ANTHROPIC_API_KEY")?);
             Ok(env)
         }
         (AgentKind::OpenCode, "openai-api") => {
             let mut env = opencode_isolation_env(auth_context)?;
-            env.insert("OPENAI_API_KEY".to_string(), require_env("OPENAI_API_KEY")?);
+            env.insert("OPENAI_API_KEY".to_string(), secrets.require("OPENAI_API_KEY")?);
+            Ok(env)
+        }
+        (AgentKind::OpenCode, "gemini-api") => {
+            let key = secrets.require("GEMINI_API_KEY")?;
+            let mut env = opencode_isolation_env(auth_context)?;
+            // opencode's google provider scans either var; set both.
+            env.insert("GEMINI_API_KEY".to_string(), key.clone());
+            env.insert("GOOGLE_GENERATIVE_AI_API_KEY".to_string(), key);
             Ok(env)
         }
         // Codex reads credentials from CODEX_HOME/auth.json; we materialize an
         // isolated CODEX_HOME the same way production launch_env does.
         (AgentKind::Codex, "openai-api") => {
-            let key = require_env("OPENAI_API_KEY")?;
+            let key = secrets.require("OPENAI_API_KEY")?;
             let mut env = isolation_env(auth_context, &[("CODEX_HOME", "codex-home")])?;
             let codex_home = env.get("CODEX_HOME").expect("codex isolation dir");
             std::fs::write(
@@ -236,6 +251,57 @@ fn auth_env_for_context(
             env.insert("OPENAI_API_KEY".to_string(), key);
             Ok(env)
         }
+        // ChatGPT-subscription auth: copy a logged-in auth.json (from
+        // `codex login`) into an isolated CODEX_HOME.
+        (AgentKind::Codex, "openai-oauth") => {
+            let source = std::env::var("PROBE_CODEX_OAUTH_AUTH_JSON").unwrap_or_else(|_| {
+                format!(
+                    "{}/.codex/auth.json",
+                    std::env::var("HOME").unwrap_or_default()
+                )
+            });
+            if !std::path::Path::new(&source).exists() {
+                bail!("openai-oauth requires a logged-in codex auth.json (run `codex login`); not found at {source}");
+            }
+            let env = isolation_env(auth_context, &[("CODEX_HOME", "codex-home")])?;
+            let codex_home = env.get("CODEX_HOME").expect("codex isolation dir");
+            std::fs::copy(&source, std::path::Path::new(codex_home).join("auth.json"))
+                .with_context(|| format!("failed to copy {source}"))?;
+            Ok(env)
+        }
+        // Gemini stores state under $HOME/.gemini — isolate HOME and seed the
+        // auth-type selection so ACP mode starts non-interactively.
+        (AgentKind::Gemini, "gemini-api") => {
+            let key = secrets.require("GEMINI_API_KEY")?;
+            let mut env = isolation_env(auth_context, &[("HOME", "home")])?;
+            seed_gemini_settings(env.get("HOME").expect("home"), "gemini-api-key", None)?;
+            env.insert("GEMINI_API_KEY".to_string(), key);
+            Ok(env)
+        }
+        (AgentKind::Gemini, "google-oauth") => {
+            let source = std::env::var("PROBE_GEMINI_OAUTH_CREDS").unwrap_or_else(|_| {
+                format!(
+                    "{}/.gemini/oauth_creds.json",
+                    std::env::var("HOME").unwrap_or_default()
+                )
+            });
+            if !std::path::Path::new(&source).exists() {
+                bail!("google-oauth requires gemini oauth creds (run `gemini` and log in); not found at {source}");
+            }
+            let env = isolation_env(auth_context, &[("HOME", "home")])?;
+            seed_gemini_settings(env.get("HOME").expect("home"), "oauth-personal", Some(&source))?;
+            Ok(env)
+        }
+        // cursor-agent's ACP session services ignore CURSOR_API_KEY and
+        // require a machine login (auth in macOS Keychain "Cursor Safe
+        // Storage" — not isolatable by HOME). Probe runs under the real
+        // machine login; acceptable because cursor is single-provider so
+        // there is no cross-provider auth attribution to pollute.
+        (AgentKind::Cursor, "cursor-login") => Ok(BTreeMap::new()),
+        (AgentKind::Cursor, "cursor-api") => bail!(
+            "cursor-agent ignores CURSOR_API_KEY for ACP sessions; run `cursor-agent login` \
+             on this machine and use --auth-context cursor-login instead"
+        ),
         _ => bail!(
             "unsupported (agent, auth-context) combination: ({}, {auth_context})",
             agent_kind.as_str()
@@ -243,8 +309,43 @@ fn auth_env_for_context(
     }
 }
 
-fn require_env(key: &str) -> Result<String> {
-    std::env::var(key).map_err(|_| anyhow!("this auth context requires {key} in the environment"))
+/// Credential env vars the probe knows about. Captured once at startup, then
+/// REMOVED from the process environment so spawned agents can only ever see
+/// the credentials their auth context explicitly injects — otherwise a shell
+/// with several provider keys exported (e.g. `source secrets.env`) silently
+/// enables every provider in every run and corrupts auth attribution.
+const CREDENTIAL_ENV_VARS: &[&str] = &[
+    "ANTHROPIC_API_KEY",
+    "CLAUDE_CODE_OAUTH_TOKEN",
+    "OPENAI_API_KEY",
+    "GEMINI_API_KEY",
+    "GOOGLE_GENERATIVE_AI_API_KEY",
+    "GOOGLE_API_KEY",
+    "CURSOR_API_KEY",
+];
+
+struct ProbeSecrets {
+    values: BTreeMap<String, String>,
+}
+
+impl ProbeSecrets {
+    fn capture_and_scrub() -> Self {
+        let mut values = BTreeMap::new();
+        for key in CREDENTIAL_ENV_VARS {
+            if let Ok(value) = std::env::var(key) {
+                values.insert((*key).to_string(), value);
+            }
+            std::env::remove_var(key);
+        }
+        Self { values }
+    }
+
+    fn require(&self, key: &str) -> Result<String> {
+        self.values
+            .get(key)
+            .cloned()
+            .ok_or_else(|| anyhow!("this auth context requires {key} in the environment"))
+    }
 }
 
 /// Extract the display name the harness assigned to a (seeded) model id from
@@ -274,6 +375,22 @@ fn opencode_isolation_env(auth_context: &str) -> Result<BTreeMap<String, String>
             ("XDG_STATE_HOME", "state"),
         ],
     )
+}
+
+/// Seed an isolated gemini HOME: settings.json selecting the auth type, and
+/// optionally a copied oauth_creds.json.
+fn seed_gemini_settings(home: &str, auth_type: &str, oauth_creds: Option<&str>) -> Result<()> {
+    let gemini_dir = std::path::Path::new(home).join(".gemini");
+    std::fs::create_dir_all(&gemini_dir)?;
+    std::fs::write(
+        gemini_dir.join("settings.json"),
+        serde_json::json!({ "security": { "auth": { "selectedType": auth_type } } }).to_string(),
+    )?;
+    if let Some(source) = oauth_creds {
+        std::fs::copy(source, gemini_dir.join("oauth_creds.json"))
+            .with_context(|| format!("failed to copy {source}"))?;
+    }
+    Ok(())
 }
 
 fn isolation_env(auth_context: &str, vars: &[(&str, &str)]) -> Result<BTreeMap<String, String>> {
