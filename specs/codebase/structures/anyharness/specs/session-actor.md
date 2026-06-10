@@ -1,13 +1,14 @@
 # Session Actor
 
-Status: authoritative for the split live session actor.
+Status: authoritative for the split live session actor. The migration this
+spec drove is complete; the shapes below are the current code.
 
 This spec is specific to the actor portion of the AnyHarness session engine. It
 assumes the broader architecture in
 [guides/system-architecture.md](../guides/system-architecture.md) and the
 session engine overview in [session-engine.md](session-engine.md).
 
-Current implementation:
+Implementation:
 
 ```text
 anyharness-lib/src/live/sessions/actor/
@@ -15,37 +16,25 @@ anyharness-lib/src/live/sessions/driver/
 anyharness-lib/src/live/sessions/handle.rs
 ```
 
-Target owner:
+## Scope
+
+The actor is not a giant `session_actor.rs` file with support modules around
+it. The split holds as:
 
 ```text
-anyharness-lib/src/live/sessions/actor/
-```
-
-## Full Cleanup Scope
-
-This is not a helper-extraction task. A completed actor migration means the
-actor implementation is no longer a giant `session_actor.rs` file with support
-modules around it.
-
-Done means:
-
-```text
-live/sessions/actor/ owns the actor command protocol, state, event loop, turn,
+live/sessions/actor/ owns the actor command protocol, state, run loop, turn,
 config, notification, interaction-command, fork policy, background-work update,
-and shutdown behavior.
+and shutdown behavior — as &mut-self methods on `struct SessionActor`.
 
-live/sessions/driver/ owns ACP process/native-session startup and shutdown
-mechanics currently embedded in actor startup paths.
+live/sessions/driver/ owns ACP process/connection/native-session startup and
+shutdown mechanics.
 
 live/sessions/handle.rs owns the public command/subscription port into one
 actor.
-
-acp/session_actor.rs is deleted. No top-level actor behavior remains there.
 ```
 
-Do not stop after moving types, small helpers, or diagnostics out of the old
-file. The top-level actor loop must be readable from
-`live/sessions/actor/event_loop.rs`.
+The old `acp/session_actor.rs` is gone. The top-level actor loop is readable
+from `live/sessions/actor/run.rs`.
 
 ## Purpose
 
@@ -72,8 +61,8 @@ domains/sessions/runtime
   -> live/sessions/handle
     -> live/sessions/actor
       -> live/sessions/driver
-      -> live/sessions/event_sink
-      -> live/sessions/interactions
+      -> live/sessions/sink
+      -> live/sessions/rendezvous
       -> live/sessions/background_work
 ```
 
@@ -107,27 +96,36 @@ live/sessions/handle
   public command/subscription port used by SessionRuntime and stream code
 
 live/sessions/driver
-  ACP process/session lifecycle: spawn, initialize, authenticate, load/new/fork,
-  stderr, graceful close
+  ACP process/connection/session lifecycle: spawn (process.rs), establish and
+  register handlers (connection.rs), initialize (session_lifecycle.rs),
+  load/new/fork (native_session.rs), stderr, graceful close; the InboundDoor
+  (driver/inbound/) receives agent-initiated requests and notifications
 
-live/sessions/acp_client
-  low-level ACP request/notification adapter
+live/sessions/sink
+  normalized event sequencing, persistence, and broadcast fanout; ingest.rs is
+  the one ingestion entry for ACP notifications
 
-live/sessions/event_sink
-  normalized event sequencing, persistence, and broadcast fanout
-
-live/sessions/interactions
+live/sessions/rendezvous
   pending permission, user-input, and MCP elicitation rendezvous
+  (InteractionRendezvous)
 
 live/sessions/background_work
   long-running tool/background work tracking
 
-domains/sessions/store
-  narrow durable operations the actor needs, such as raw notification append,
-  pending prompt queue mutation, and config queue mutation
+live/sessions/model.rs capability traits
+  the narrow durable operations the actor needs (EventPersist, QueueDurable,
+  BackgroundWorkDurable, SessionStateDurable, AttachmentSource), implemented
+  by domains/sessions/live_ports.rs and wired in app/sessions.rs as
+  ActorCapabilities — the actor never sees a concrete store
+
+live/sessions/model.rs product-hook ports
+  SessionEventObserver, PermissionAdvisor, SessionDomainOp — how plans and
+  reviews react without the actor importing their services
 
 domains/sessions/prompt
-  product prompt payload preparation before the actor receives a command
+  product prompt payload preparation before the actor receives a command;
+  prompt/render.rs is the pure ACP-block rendering the actor calls with
+  pre-loaded ResolvedParts
 
 domains/sessions/mcp_bindings
   product/user MCP launch assembly before actor startup
@@ -169,7 +167,7 @@ domain state or provider state.
 
 Actor commands are the only way product code mutates a live session.
 
-Target command categories:
+Command categories:
 
 ```text
 Prompt
@@ -180,6 +178,11 @@ SetConfigOption
 
 ResolveInteraction
   complete a pending permission/user-input/MCP elicitation
+
+RunDomainOp
+  execute a boxed SessionDomainOp (e.g. the plan approve/reject decision)
+  serialized through the mailbox; phases run under the sink lock, the boxed
+  Any reply downcasts at the submitter
 
 Fork
   allowed only when actor state and provider capability permit
@@ -283,7 +286,7 @@ Snapshot          -> return current snapshot
 This split should be explicit in code. Do not hide busy/idle behavior behind a
 single large command match.
 
-## Target Folder Shape
+## Folder Shape
 
 Top-level actor files:
 
@@ -292,10 +295,11 @@ live/sessions/actor/
   mod.rs
   command.rs
   state.rs
-  event_loop.rs
+  run.rs
   spawn.rs
   startup.rs
   background_work.rs
+  tests/
 ```
 
 Responsibilities:
@@ -308,20 +312,31 @@ command.rs
   command/result types accepted by the actor handle
 
 state.rs
-  actor-owned live state and phase types
+  `struct SessionActor` — identity from the launch, loop-owned conversation
+  state, wiring set at startup — plus SessionActorConfig (launch + caps +
+  hooks + broker + event channel) and phase types
 
-event_loop.rs
-  top-level select loop and dispatch only
+run.rs
+  top-level select loop and dispatch only: &mut-self methods
+  (run / run_idle / run_turn); every arm is one method call
 
 spawn.rs
   actor thread creation, readiness waiting, and handle construction
 
 startup.rs
-  ACP process/session startup orchestration after the actor thread is running
+  the SessionActor constructor: spawns the agent process
+  (driver/process.rs), establishes the connection (driver/connection.rs),
+  initializes it (driver/session_lifecycle.rs), starts the native session,
+  and runs the startup config-restore sequence
 
 background_work.rs
   actor-side background work update handling
 ```
+
+The three receivers (commands, notifications, background work) deliberately
+stay OUT of the struct: they are threaded through `run`/`run_idle`/`run_turn`
+as parameters so the inner selects can borrow them alongside `&mut self`.
+There are no per-flow context structs — handlers are methods on the actor.
 
 No actor-owned file should become the new god module. If one concern file grows
 past the repo-shape hard limit, split it by the concern grammar below before
@@ -368,7 +383,7 @@ diagnostics.rs # tracing/debug timeout logic
 
 ## Turn Folder
 
-Target:
+Shape:
 
 ```text
 actor/turn/
@@ -409,7 +424,7 @@ building remains in `domains/sessions/prompt`.
 
 ## Config Folder
 
-Target:
+Shape:
 
 ```text
 actor/config/
@@ -446,16 +461,15 @@ Config selection that is product-facing or launch-facing belongs in
 
 ## Notifications Folder
 
-Target:
+Shape:
 
 ```text
 actor/notifications/
   mod.rs
-  types.rs
   handle.rs
   dispatch.rs
   replay_filter.rs
-  plans.rs
+  observations.rs
 ```
 
 Responsibilities:
@@ -465,34 +479,39 @@ handle.rs
   ACP notification entrypoint
 
 dispatch.rs
-  route by notification kind: assistant, reasoning, tool, config, session info,
-  usage, permission/input/MCP request, lifecycle
+  persist the raw notification, hand it to sink.ingest, apply any returned
+  ActorBoundUpdate (config/mode/session-info arms only the actor may finish),
+  then run the observer pass over the collected observations
 
 replay_filter.rs
   suppress provider replay/startup notifications that should not become new
   product events
 
-plans.rs
-  actor-side plan extraction hooks only while this remains coupled to live
-  notification handling
+observations.rs
+  the observer dispatch pass: one sink lock hold, registration order,
+  feed-forward of earlier observers' envelopes (see live/sessions/model.rs)
 ```
 
-Notification handlers should persist the raw ACP notification before normalized
-event handling when the current invariant requires it.
+There is no actor-side plan code: plan sniffing lives in
+`domains/plans/session_observer.rs` (a `SessionEventObserver` wired in
+`app/sessions.rs`).
 
-Tool calls are not a separate actor subsystem unless they need one. They enter
-as ACP notifications, route through notification dispatch, and are normalized
-by `event_sink/tools.rs`.
+Notification handlers persist the raw ACP notification before normalized
+event handling.
+
+Tool calls are not a separate actor subsystem. They enter as ACP
+notifications, route through notification dispatch, and are normalized by
+`sink/tools.rs`.
 
 ## Interactions Folder
 
-Target:
+Shape:
 
 ```text
 actor/interactions/
   mod.rs
-  types.rs
   handle.rs
+  outcomes.rs
   cleanup.rs
 ```
 
@@ -502,23 +521,31 @@ Responsibilities:
 handle.rs
   ResolveInteraction command entrypoint
 
+outcomes.rs
+  resolution outcome handling
+
 cleanup.rs
   cancel/dismiss/shutdown cleanup for pending waits
 ```
 
+There are no plan files here. Plan approve/reject is
+`domains/plans/decision_op.rs`, a `SessionDomainOp` submitted via
+`SessionCommand::RunDomainOp` (through `handle.run_domain_op`), not a bespoke
+actor arm.
+
 The pending request broker itself belongs outside the actor:
 
 ```text
-live/sessions/interactions/
+live/sessions/rendezvous/
 ```
 
-Reason: `AcpClient` creates pending requests, API/runtime resolves them through
-commands, and the actor cleans them up. The broker is a collaborator, not an
-actor-internal module.
+Reason: the driver's `InboundDoor` creates pending requests, API/runtime
+resolves them through commands, and the actor cleans them up. The broker
+(`InteractionRendezvous`) is a collaborator, not an actor-internal module.
 
 ## Shutdown Folder
 
-Target:
+Shape:
 
 ```text
 actor/shutdown/
@@ -550,15 +577,17 @@ decide product retention/cleanup policy.
 
 ACP process startup does not belong inside `actor/` concern folders.
 
-Target:
+Shape:
 
 ```text
 live/sessions/driver/
   mod.rs
   types.rs
-  start.rs
   process.rs
+  connection.rs
+  session_lifecycle.rs
   native_session.rs
+  inbound/
   stderr.rs
   shutdown.rs
 ```
@@ -566,14 +595,25 @@ live/sessions/driver/
 Responsibilities:
 
 ```text
-start.rs
-  create an initialized ACP connection for this session launch
-
 process.rs
   spawn and wire the provider process/stdin/stdout/stderr
 
+connection.rs
+  establish the ACP client connection over the agent's stdio: register the
+  inbound handlers (via the InboundDoor), spawn the connect future on the
+  per-session LocalSet, return the ConnectionTo handle
+
+session_lifecycle.rs
+  initialize the established connection
+
 native_session.rs
   new/load/fork native ACP session decisions and calls
+
+inbound/
+  the InboundDoor: agent-initiated notifications and requests (permission,
+  user_input, mcp_elicitation) routed to the actor channel and the
+  rendezvous broker; the permission path consults the PermissionAdvisor
+  before parking
 
 stderr.rs
   stderr sanitization/classification
@@ -582,14 +622,12 @@ shutdown.rs
   provider/process close behavior that is not actor state-machine policy
 ```
 
-The actor calls driver code during startup and shutdown, but driver code
-owns the process/protocol resource mechanics.
-
-For a full actor cleanup, driver extraction is in scope when the code is
-currently embedded in `session_actor.rs`. The actor may keep policy decisions
-such as "start a new native session vs load an existing native session" only
-when that decision depends on actor phase or ordering. The process/protocol
-mechanics belong in `live/sessions/driver/`.
+The actor's constructor (`actor/startup.rs`) builds the actor by calling
+driver code in order — process spawn, `connection.rs`,
+`session_lifecycle.rs`, native session start — but driver code owns the
+process/protocol resource mechanics. The actor keeps policy decisions such as
+"start a new native session vs load an existing native session" only when
+that decision depends on actor phase or ordering.
 
 Reusable ACP protocol or provider mechanics should move lower:
 
@@ -603,12 +641,13 @@ integrations/agent_cli/
 The actor decides when something happened. The event sink decides how it becomes
 durable and streamable.
 
-Target:
+Shape:
 
 ```text
-live/sessions/event_sink/
+live/sessions/sink/
   mod.rs
   state.rs
+  ingest.rs
   publish.rs
   turns.rs
   assistant.rs
@@ -621,8 +660,15 @@ live/sessions/event_sink/
   background_work.rs
   lifecycle.rs
   runtime_events.rs
+  metadata.rs
   normalization/
+  tests/
 ```
+
+`ingest.rs` is the one ingestion entry: it takes one ACP notification, owns
+its transcript consequence, collects `SinkObservation`s for the observer pass,
+and returns `ActorBoundUpdate` for the arms it cannot finish (the sink is
+meaning-blind: no durable session-row state, no product reactors).
 
 Actor may call methods such as:
 
@@ -660,7 +706,7 @@ format API responses
 
 ## Required Invariants
 
-Actor rewrite must preserve these:
+These hold today; changes must preserve them:
 
 ```text
 one actor owns one live ACP native session
@@ -671,50 +717,23 @@ config applies immediately only when idle; otherwise it queues
 interaction cleanup runs on cancel, dismiss, close, and error
 shutdown emits terminal session state exactly once
 event sequence order is stable for SSE replay + live broadcast
+event-emitting hooks run synchronously under the sink lock (observer pass,
+  advisor, domain-op phases); the sink advances next_seq only by envelopes
+  returned/published back to it
 actor never decides product MCP selection
+actor never imports product-domain services — product reactions arrive as
+  observers, the advisor, and domain ops via ActorCapabilities
 actor never validates raw HTTP request shapes
 ```
 
-## Migration Plan
+## Shape Checklist
 
-This rewrite should be behavior-preserving and may be implemented in slices,
-but the final PR state must be the full target shape above. Partial helper
-extraction is not an acceptable endpoint.
-
-Recommended order:
+A change to the actor is in shape when all of these stay true:
 
 ```text
-1. Extract command/state/event-loop shell.
-2. Extract turn start/active/finish/queue code.
-3. Extract config apply/queue/persist code.
-4. Extract notification dispatch/replay filtering.
-5. Extract interaction resolution/cleanup commands.
-6. Extract shutdown finalization.
-7. Move process startup mechanics to live/sessions/driver.
-8. Rename remaining RuntimeClient types only after behavior-preserving
-   driver/client splits are stable.
-```
-
-Each slice should:
-
-```text
-preserve public command/result behavior
-preserve event ordering
-preserve existing tests or add focused characterization tests
-delete the old code path
-avoid unrelated topology moves
-```
-
-Do not combine actor behavior changes with broad `domains/` or `live/`
-renames. The actor is the core loop; keep the migration reviewable.
-
-## Acceptance Criteria
-
-A full actor migration is accepted only when all of these are true:
-
-```text
-1. Opening live/sessions/actor/event_loop.rs shows the session engine event loop
-   without reading prompt/config/notification/shutdown implementation details.
+1. live/sessions/actor/run.rs shows the session engine loop without
+   prompt/config/notification/shutdown implementation details — every select
+   arm is one &mut-self method call.
 
 2. Idle and busy command behavior are explicit and separated.
 
@@ -724,9 +743,11 @@ A full actor migration is accepted only when all of these are true:
 4. Config apply-vs-queue behavior lives under actor/config/.
 
 5. ACP notification dispatch lives under actor/notifications/ and delegates
-   normalization to event_sink.
+   normalization to sink.ingest; the observer pass runs from
+   actor/notifications/observations.rs.
 
-6. Actor-side interaction resolution and cleanup live under actor/interactions/.
+6. Actor-side interaction resolution and cleanup live under actor/interactions/;
+   product decisions arrive as SessionDomainOps, never bespoke actor arms.
 
 7. Fork readiness, fork command handling, and native child-session close policy
    live under actor/fork/.
@@ -736,18 +757,19 @@ A full actor migration is accepted only when all of these are true:
 
 9. Cancel/close/dismiss/error finalization lives under actor/shutdown/.
 
-10. ACP process/native-session startup mechanics no longer live in actor
-   concern files; they live under live/sessions/driver/.
+10. ACP process/connection/native-session startup mechanics live under
+    live/sessions/driver/, called by actor/startup.rs in order.
 
-11. Product prompt preparation remains in domains/sessions/prompt.
+11. Product prompt preparation remains in domains/sessions/prompt; rendering
+    is the pure domains/sessions/prompt/render.rs over AttachmentSource-loaded
+    parts.
 
 12. Product MCP selection/injection remains in domains/sessions/mcp_bindings.
 
 13. Event normalization, sequence assignment, persistence, and broadcast remain
-    in `live/sessions/event_sink/**`.
+    in `live/sessions/sink/**`.
 
-14. The old acp/session_actor.rs implementation is gone.
-
-15. Existing session behavior and event ordering are preserved by tests or
-    focused characterization coverage.
+14. The actor reaches durable state only through the capability traits in
+    ActorCapabilities; it is testable with vectors behind the traits
+    (see actor/tests/).
 ```

@@ -458,9 +458,9 @@ live/<system>/
   handle.rs
   actor/              # optional, private serialized coordinator
   driver/             # optional, private external backing mechanism
-  event_sink/         # optional, sequenced event write path
+  sink/               # optional, sequenced event write path
   output_sink/        # optional terminal-style stream write path
-  interactions/       # optional pending live rendezvous
+  rendezvous/         # optional pending live rendezvous
   background_work/    # optional provider/runtime long-running work
   snapshot/           # optional read projection
   replay/             # optional replay/subscription mechanics
@@ -482,10 +482,10 @@ driver/
   external mechanism that makes the live resource real: ACP client,
   subprocess, PTY, browser driver, remote provider, or protocol client
 
-event_sink/ or output_sink/
+sink/ or output_sink/
   normalized, sequenced write path into durable/broadcast/live streams
 
-interactions/
+rendezvous/
   pending request-id to waiter/resolution state for live callbacks
 
 background_work/
@@ -503,8 +503,8 @@ mod.rs
 
 Only create a `live/<system>/` folder when there is a real long-lived runtime
 object: a manager, actor, handle, PTY, sidecar, watcher, stream registry, or
-pending interaction broker. A domain workflow that merely starts a session does
-not earn a `live/` folder.
+pending interaction rendezvous. A domain workflow that merely starts a session
+does not earn a `live/` folder.
 
 Not every live resource needs every role. The minimum shape is whatever keeps
 the live identity legible. A one-shot command runner may only need a handle
@@ -540,7 +540,7 @@ handle  = one live instance public port
 actor   = private serialized coordinator for one live instance
 driver  = private external backing mechanism
 sink    = sequenced event/output write path
-interactions = pending live rendezvous
+rendezvous = pending live interaction rendezvous
 snapshot = read projection published by the actor/handle
 ```
 
@@ -554,13 +554,14 @@ Target shape:
 ```text
 live/sessions/
   mod.rs
-  manager.rs
+  model.rs            # the live vocabulary (SessionLaunch, SessionHooks, …)
+  manager/
   handle.rs
 
   actor/
   driver/
-  event_sink/
-  interactions/
+  sink/
+  rendezvous/
   background_work/
   snapshot/
   replay/
@@ -569,7 +570,7 @@ live/sessions/
 Ownership:
 
 ```text
-manager.rs
+manager/
   live session registry and startup de-dupe
 
 handle.rs
@@ -580,14 +581,16 @@ actor/
   notification dispatch, shutdown decisions
 
 driver/
-  ACP process/session lifecycle: spawn, stdio, initialize, authenticate,
-  new/load/fork native session, stderr
+  ACP process/connection lifecycle: spawn, stdio, initialize, authenticate,
+  new/load/fork native session, stderr; the InboundDoor (driver/inbound/)
+  receives agent-initiated traffic
 
-event_sink/
+sink/
   event normalization, sequence assignment, persistence, broadcast
+  (one ingestion entry: sink.ingest)
 
-interactions/
-  permission/user-input/MCP pending request broker
+rendezvous/
+  permission/user-input/MCP pending request rendezvous
 
 background_work/
   long-running tool/background task tracking
@@ -597,8 +600,8 @@ The current tree uses `live/sessions/driver/**` for the driver role.
 
 The actor coordinates these collaborators, but it should not own all their
 implementation code. Actor handlers are thin: they decide ordering, validate
-the live phase, update actor-owned state, and delegate to driver/event sink/
-interaction/background-work helpers.
+the live phase, update actor-owned state, and delegate to driver/sink/
+rendezvous/background-work helpers.
 
 Use this boundary:
 
@@ -647,7 +650,7 @@ live/sessions/actor/
   mod.rs
   command.rs
   state.rs
-  event_loop.rs
+  run.rs
 
   turn/
     mod.rs
@@ -674,7 +677,7 @@ live/sessions/actor/
     handle.rs
     dispatch.rs
     replay_filter.rs
-    plans.rs
+    observations.rs
 
   shutdown/
     mod.rs
@@ -701,7 +704,7 @@ actor/ must not inline event normalization/persistence
 actor/ must not decide durable product policy
 actor/ must not expose its command enum outside the live resource
 driver/ must not import api/app or product stores/services
-event_sink/ must be the only sequenced event writer for that resource
+sink/ must be the only sequenced event writer for that resource
 ```
 
 ## Adapters
