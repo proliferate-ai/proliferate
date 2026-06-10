@@ -27,10 +27,10 @@ apps/desktop/src-tauri/src/commands/ssh_tunnel.rs 729 existing desktop native ov
 apps/desktop/src/components/workspace/shell/right-panel/RightPanel.test.tsx 733 existing desktop component oversized test file
 apps/desktop/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 662 existing desktop oversized test file
 apps/desktop/src/lib/workflows/mcp/connector-persistence.test.ts 704 existing desktop oversized test file
-server/proliferate/server/cloud/commands/domain/payload.py 530 existing cloud command payload validator with workspace materialization policies
+server/proliferate/server/cloud/commands/domain/payload.py 549 existing cloud command payload validator with workspace materialization policies
 server/proliferate/server/cloud/agent_auth/models.py 535 existing cloud agent auth API schema module pending request/response split
 server/proliferate/server/cloud/agent_auth/runtime_keys.py 671 existing cloud agent auth runtime key service pending gateway/router split
-server/proliferate/constants/cloud.py 608 existing cloud constants module with command and target config enums
+server/proliferate/constants/cloud.py 610 existing cloud constants module with command and target config enums
 server/tests/integration/schema_migration_assertions.py 885 existing server oversized test helper
 server/tests/integration/test_auth_flow.py 2057 existing server oversized integration test
 server/tests/integration/test_billing_accounting.py 872 existing server oversized integration test
