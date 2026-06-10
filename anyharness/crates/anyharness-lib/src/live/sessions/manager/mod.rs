@@ -7,7 +7,7 @@ use super::rendezvous::broker::{
     InteractionRendezvous, ResolveInteractionError as BrokerResolveInteractionError,
 };
 use crate::live::sessions::handle::LiveSessionHandle;
-use crate::live::sessions::model::{PermissionAdvisor, SessionEventObserver};
+use crate::live::sessions::model::ActorCapabilities;
 
 mod replay;
 mod runtime_events;
@@ -22,9 +22,9 @@ pub struct LiveSessionManager {
     live_sessions: Arc<RwLock<HashMap<String, Arc<LiveSessionHandle>>>>,
     pending_startups: Arc<RwLock<HashMap<String, watch::Receiver<StartupReadinessState>>>>,
     interaction_broker: Arc<InteractionRendezvous>,
-    /// Product reactors; registration order = dispatch order.
-    observers: Vec<Arc<dyn SessionEventObserver>>,
-    permission_advisor: Option<Arc<dyn PermissionAdvisor>>,
+    /// The never-varies capability set every actor runs against; wired once
+    /// at construction.
+    caps: ActorCapabilities,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,17 +55,13 @@ impl From<BrokerResolveInteractionError> for RevealMcpElicitationUrlError {
 }
 
 impl LiveSessionManager {
-    pub fn new(
-        observers: Vec<Arc<dyn SessionEventObserver>>,
-        permission_advisor: Option<Arc<dyn PermissionAdvisor>>,
-    ) -> Self {
+    pub fn new(caps: ActorCapabilities) -> Self {
         let interaction_broker = Arc::new(InteractionRendezvous::new());
         Self {
             live_sessions: Arc::new(RwLock::new(HashMap::new())),
             pending_startups: Arc::new(RwLock::new(HashMap::new())),
             interaction_broker,
-            observers,
-            permission_advisor,
+            caps,
         }
     }
 
@@ -105,8 +101,7 @@ impl Clone for LiveSessionManager {
             live_sessions: self.live_sessions.clone(),
             pending_startups: self.pending_startups.clone(),
             interaction_broker: self.interaction_broker.clone(),
-            observers: self.observers.clone(),
-            permission_advisor: self.permission_advisor.clone(),
+            caps: self.caps.clone(),
         }
     }
 }

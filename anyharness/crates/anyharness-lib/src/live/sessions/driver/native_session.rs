@@ -1,5 +1,5 @@
 use super::*;
-use crate::live::sessions::actor::state::SessionStartupStrategy;
+use crate::live::sessions::model::SessionStartupStrategy;
 use crate::live::sessions::driver::start::start_new_session;
 use crate::live::sessions::driver::types::{
     NativeSessionStartupDisposition, NativeSessionStartupState,

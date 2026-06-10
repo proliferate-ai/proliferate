@@ -136,7 +136,7 @@ async fn actor_exit_test_context(
         "claude".to_string(),
         PathBuf::from("/tmp/workspace"),
         event_tx,
-        store.clone(),
+        Arc::new(store.clone()),
     )));
 
     (store, event_sink, interaction_broker, handle)
@@ -170,7 +170,7 @@ fn test_background_work_registry(store: &SessionStore) -> BackgroundWorkRegistry
     BackgroundWorkRegistry::new(
         "session-1".to_string(),
         "claude".to_string(),
-        store.clone(),
+        Arc::new(store.clone()),
         updates_tx,
         BackgroundWorkOptions::default(),
     )

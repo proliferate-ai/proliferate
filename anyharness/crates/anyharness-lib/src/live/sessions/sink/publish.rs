@@ -3,7 +3,7 @@ use tokio::sync::broadcast;
 use super::SessionEventSink;
 use crate::domains::sessions::model::SessionEventRecord;
 use crate::domains::sessions::runtime_event::RuntimeEventInjectionError;
-use crate::domains::sessions::store::SessionStore;
+use crate::live::sessions::model::EventPersist;
 use crate::observability::transcript_phase::record_transcript_phase_event;
 use anyharness_contract::v1::{SessionEvent, SessionEventEnvelope};
 
@@ -18,7 +18,7 @@ impl SessionEventSink {
             &self.session_id,
             &mut self.next_seq,
             &self.event_tx,
-            &self.store,
+            self.store.as_ref(),
             event,
             turn_id,
             item_id,
@@ -31,7 +31,7 @@ pub(crate) fn publish_session_event(
     session_id: &str,
     next_seq: &mut i64,
     event_tx: &broadcast::Sender<SessionEventEnvelope>,
-    store: &SessionStore,
+    store: &dyn EventPersist,
     event: SessionEvent,
     turn_id: Option<String>,
     item_id: Option<String>,
@@ -80,7 +80,7 @@ pub(super) fn publish_session_event_strict(
     session_id: &str,
     next_seq: &mut i64,
     event_tx: &broadcast::Sender<SessionEventEnvelope>,
-    store: &SessionStore,
+    store: &dyn EventPersist,
     event: SessionEvent,
     turn_id: Option<String>,
     item_id: Option<String>,

@@ -10,7 +10,7 @@ use tokio::sync::{broadcast, mpsc};
 
 use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::runtime_event::RuntimeEventInjectionError;
-use crate::domains::sessions::store::SessionStore;
+use crate::live::sessions::model::{EventPersist, SessionStateDurable};
 use crate::live::sessions::actor::command::{
     ForkSessionCommandError, PromptAcceptError, QueueMutationError, ResolveInteractionCommandError,
     SessionCommand, SetConfigOptionCommandError,
@@ -26,7 +26,8 @@ pub struct ReplayActorConfig {
     pub events: Vec<SessionEventEnvelope>,
     pub speed: f32,
     pub event_tx: broadcast::Sender<SessionEventEnvelope>,
-    pub session_store: SessionStore,
+    pub state: std::sync::Arc<dyn SessionStateDurable>,
+    pub event_persist: std::sync::Arc<dyn EventPersist>,
     pub last_seq: i64,
     pub on_exit: Option<Box<dyn FnOnce(bool) + Send + 'static>>,
 }
@@ -105,7 +106,8 @@ async fn run_replay_actor(
     native_session_id: String,
 ) -> anyhow::Result<()> {
     let session_id = config.session.id.clone();
-    let store = config.session_store.clone();
+    let store = config.state.clone();
+    let event_persist = config.event_persist.clone();
     let mut next_seq = config.last_seq + 1;
     let mut first_turn_started = false;
     let mut previous_recorded_timestamp: Option<chrono::DateTime<chrono::FixedOffset>> = None;
@@ -165,7 +167,7 @@ async fn run_replay_actor(
             &session_id,
             &mut next_seq,
             &config.event_tx,
-            &store,
+            event_persist.as_ref(),
             event.clone(),
             recorded.turn_id,
             recorded.item_id,
@@ -234,7 +236,7 @@ async fn run_replay_actor(
             &session_id,
             &mut next_seq,
             &config.event_tx,
-            &store,
+            event_persist.as_ref(),
             SessionEvent::SessionEnded(SessionEndedEvent {
                 reason: SessionEndReason::Closed,
             }),

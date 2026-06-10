@@ -28,9 +28,9 @@ pub(in crate::live::sessions::actor) async fn run_actor(
     ready_tx: std::sync::mpsc::Sender<anyhow::Result<String>>,
     handle: Arc<LiveSessionHandle>,
 ) -> anyhow::Result<()> {
-    let session_id = config.session.id.clone();
-    let source_agent_kind = config.session.agent_kind.clone();
-    let workspace_id = config.session.workspace_id.clone();
+    let session_id = config.launch.session.id.clone();
+    let source_agent_kind = config.launch.session.agent_kind.clone();
+    let workspace_id = config.launch.session.workspace_id.clone();
 
     let StartedActor {
         child,
@@ -47,9 +47,6 @@ pub(in crate::live::sessions::actor) async fn run_actor(
         mut resume_replay_filter,
         _acp_shutdown,
     } = start_actor(&config, ready_tx, &handle).await?;
-
-    let store = config.session_store.clone();
-    let attachment_storage = config.attachment_storage.clone();
 
     let mut exit_reason = ActorExitDisposition::Close;
     loop {
@@ -71,8 +68,6 @@ pub(in crate::live::sessions::actor) async fn run_actor(
                                 startup_state: &mut startup_state,
                                 resume_replay_filter: &mut resume_replay_filter,
                                 handle: &handle,
-                                store: &store,
-                                attachment_storage: &attachment_storage,
                             },
                             ActivePromptRequest {
                                 payload,
@@ -89,10 +84,10 @@ pub(in crate::live::sessions::actor) async fn run_actor(
                         }
                     }
                     Some(SessionCommand::EditPendingPrompt { seq, payload, respond_to }) => {
-                        let _ = respond_to.send(handle_edit_pending_prompt(&store, &attachment_storage, &event_sink, &session_id, seq, payload).await);
+                        let _ = respond_to.send(handle_edit_pending_prompt(config.caps.queue.as_ref(), config.caps.attachments.as_ref(), &event_sink, &session_id, seq, payload).await);
                     }
                     Some(SessionCommand::DeletePendingPrompt { seq, respond_to }) => {
-                        let _ = respond_to.send(handle_delete_pending_prompt(&store, &attachment_storage, &event_sink, &session_id, seq).await);
+                        let _ = respond_to.send(handle_delete_pending_prompt(config.caps.queue.as_ref(), config.caps.attachments.as_ref(), &event_sink, &session_id, seq).await);
                     }
                     Some(SessionCommand::ResolveInteraction { request_id, resolution, respond_to }) => {
                         let result = handle_resolve_interaction(
@@ -133,7 +128,7 @@ pub(in crate::live::sessions::actor) async fn run_actor(
                             &native_session_id,
                             &source_agent_kind,
                             &session_id,
-                            &store,
+                            config.caps.state.as_ref(),
                             &event_sink,
                             &mut persisted_config_state,
                             &mut startup_state,
@@ -190,10 +185,10 @@ pub(in crate::live::sessions::actor) async fn run_actor(
                             command,
                             &conn,
                             &native_session_id,
-                            &config.workspace_path,
-                            &config.mcp_servers,
+                            &config.launch.workspace_path,
+                            &config.launch.mcp_servers,
                             &handle,
-                            &store,
+                            config.caps.queue.as_ref(),
                             &session_id,
                             action_capabilities,
                             supports_native_close,
@@ -210,11 +205,10 @@ pub(in crate::live::sessions::actor) async fn run_actor(
                         &mut resume_replay_filter,
                         &event_sink,
                         &mut background_work_registry,
-                        &store,
+                        &config.caps,
                         &session_id,
                         &workspace_id,
                         &source_agent_kind,
-                        &config.observers,
                         &mut persisted_config_state,
                         &mut startup_state,
                     ).await;
@@ -222,7 +216,7 @@ pub(in crate::live::sessions::actor) async fn run_actor(
             }
             background_update = background_work_rx.recv() => {
                 if let Some(update) = background_update {
-                    handle_background_work_update(&event_sink, &store, &session_id, update).await;
+                    handle_background_work_update(&event_sink, config.caps.background.as_ref(), &session_id, update).await;
                 }
             }
         }
@@ -232,7 +226,7 @@ pub(in crate::live::sessions::actor) async fn run_actor(
         &handle,
         &event_sink,
         &config.interaction_broker,
-        &store,
+        config.caps.state.as_ref(),
         &session_id,
         exit_reason,
     )

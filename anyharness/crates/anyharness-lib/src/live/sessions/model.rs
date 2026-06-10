@@ -32,15 +32,282 @@
 //! it.
 
 use std::any::Any;
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use agent_client_protocol as acp;
-use anyharness_contract::v1::SessionEventEnvelope;
+use anyharness_contract::v1::{SessionEvent, SessionEventEnvelope};
 
+use crate::domains::agents::model::ResolvedAgent;
+use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
+use crate::domains::sessions::model::{
+    PendingConfigChangeRecord, PendingPromptRecord, PromptAttachmentRecord, PromptAttachmentState,
+    SessionBackgroundWorkRecord, SessionBackgroundWorkState, SessionEventRecord,
+    SessionLiveConfigSnapshotRecord, SessionRecord,
+};
+use crate::domains::sessions::prompt::{PromptPayload, PromptValidationError};
 use crate::live::sessions::actor::command::{Resolution, ResolveInteractionCommandError};
+use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
 use crate::live::sessions::sink::SessionEventSink;
+use crate::observability::latency::LatencyRequestContext;
 // Re-exported: the normalized-payload vocabulary observers consume. The sink
 // module itself stays private to live; these shapes are part of the doorstep.
 pub use crate::live::sessions::sink::{AcpChunkPayload, AcpToolPayload, CompletedAssistantMessage};
+
+/// How the actor should establish the native agent session at startup.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SessionStartupStrategy {
+    Fresh,
+    ResumeSeqFreshNative,
+    LoadNative(String),
+    LoadNativeNoFallback(String),
+    ForkFromNative { parent_native_session_id: String },
+}
+
+impl SessionStartupStrategy {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Fresh => "fresh",
+            Self::ResumeSeqFreshNative => "resume_seq_fresh_native",
+            Self::LoadNative(_) => "load_native",
+            Self::LoadNativeNoFallback(_) => "load_native_no_fallback",
+            Self::ForkFromNative { .. } => "fork_from_native",
+        }
+    }
+
+    pub fn resumes_durable_history(&self) -> bool {
+        !matches!(self, Self::Fresh)
+    }
+
+    pub(in crate::live::sessions) fn allows_missing_load_fallback(&self) -> bool {
+        matches!(self, Self::LoadNative(_))
+    }
+}
+
+/// The named environment layers a session launch carries. Keeping the layers
+/// named (rather than four adjacent maps) removes the positional swap hazard.
+#[derive(Debug, Clone, Default)]
+pub struct LaunchEnv {
+    pub workspace: BTreeMap<String, String>,
+    pub session: BTreeMap<String, String>,
+    pub auth_support: BTreeMap<String, String>,
+    /// Secrets — never logged.
+    pub auth_protected: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SystemPromptAppends {
+    pub every_prompt: Option<String>,
+    pub first_prompt: Option<String>,
+}
+
+/// Everything that describes ONE session launch: the durable session row, the
+/// resolved agent binary, where and with what environment to run it, and how
+/// to establish the native session.
+pub struct SessionLaunch {
+    pub session: SessionRecord,
+    pub agent: ResolvedAgent,
+    pub workspace_path: PathBuf,
+    pub env: LaunchEnv,
+    pub mcp_servers: Vec<SessionMcpServer>,
+    pub startup: SessionStartupStrategy,
+    pub prompts: SystemPromptAppends,
+    /// Last persisted event seq. Owned by the manager: it re-reads this under
+    /// the start/inject critical section before spawning the actor; caller
+    /// values are overwritten.
+    pub last_seq: i64,
+}
+
+/// Durable event-ledger persistence as the live actor needs it.
+///
+/// Signatures mirror `SessionStore` 1:1 so the domain impl is pure delegation.
+pub trait EventPersist: Send + Sync {
+    fn append_event(&self, event: &SessionEventRecord) -> anyhow::Result<()>;
+    fn append_event_and_touch_session(&self, event: &SessionEventRecord) -> anyhow::Result<()>;
+    /// Offline injection path: seq assigned from the database under one tx.
+    ///
+    /// # Invariants
+    ///
+    /// Callers must hold the ACP start/inject critical section and must have
+    /// confirmed that no live actor owns event sequencing for this session.
+    fn append_event_with_next_seq(
+        &self,
+        session_id: &str,
+        event: SessionEvent,
+        touch_session_activity: bool,
+    ) -> anyhow::Result<SessionEventEnvelope>;
+    fn next_event_seq(&self, session_id: &str) -> anyhow::Result<i64>;
+    fn last_event_seq(&self, session_id: &str) -> anyhow::Result<i64>;
+    fn has_turn_started_event(&self, session_id: &str) -> anyhow::Result<bool>;
+    fn append_raw_notification(
+        &self,
+        session_id: &str,
+        notification_kind: &str,
+        timestamp: &str,
+        payload_json: &str,
+    ) -> anyhow::Result<()>;
+}
+
+/// Durable pending-prompt queue rows.
+pub trait QueueDurable: Send + Sync {
+    fn insert_pending_prompt_payload(
+        &self,
+        session_id: &str,
+        payload: &PromptPayload,
+        prompt_id: Option<&str>,
+    ) -> anyhow::Result<PendingPromptRecord>;
+    fn peek_head_pending_prompt(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Option<PendingPromptRecord>>;
+    fn find_pending_prompt(
+        &self,
+        session_id: &str,
+        seq: i64,
+    ) -> anyhow::Result<Option<PendingPromptRecord>>;
+    fn update_pending_prompt_payload(
+        &self,
+        session_id: &str,
+        seq: i64,
+        payload: &PromptPayload,
+    ) -> anyhow::Result<bool>;
+    fn delete_pending_prompt(&self, session_id: &str, seq: i64) -> anyhow::Result<bool>;
+    fn delete_pending_prompt_record(
+        &self,
+        session_id: &str,
+        seq: i64,
+    ) -> anyhow::Result<Option<PendingPromptRecord>>;
+}
+
+/// Durable background-work tracker rows.
+pub trait BackgroundWorkDurable: Send + Sync {
+    fn upsert_or_refresh_pending_background_work(
+        &self,
+        record: &SessionBackgroundWorkRecord,
+    ) -> anyhow::Result<bool>;
+    fn list_pending_background_work(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Vec<SessionBackgroundWorkRecord>>;
+    fn touch_background_work_activity(
+        &self,
+        session_id: &str,
+        tool_call_id: &str,
+        last_activity_at: &str,
+    ) -> anyhow::Result<()>;
+    fn mark_background_work_terminal(
+        &self,
+        session_id: &str,
+        tool_call_id: &str,
+        state: SessionBackgroundWorkState,
+        completed_at: &str,
+    ) -> anyhow::Result<bool>;
+}
+
+/// Durable session-row state: status/title/activity, config snapshots and the
+/// pending-config queue, capabilities, turn repair.
+pub trait SessionStateDurable: Send + Sync {
+    fn update_status(&self, id: &str, status: &str, now: &str) -> anyhow::Result<()>;
+    fn update_title(&self, id: &str, title: &str, now: &str) -> anyhow::Result<()>;
+    fn update_last_prompt_at(&self, id: &str, now: &str) -> anyhow::Result<()>;
+    fn update_requested_configuration(
+        &self,
+        id: &str,
+        requested_model_id: Option<&str>,
+        requested_mode_id: Option<&str>,
+        now: &str,
+    ) -> anyhow::Result<()>;
+    fn update_current_configuration(
+        &self,
+        id: &str,
+        current_model_id: Option<&str>,
+        current_mode_id: Option<&str>,
+        now: &str,
+    ) -> anyhow::Result<()>;
+    fn update_action_capabilities_json(
+        &self,
+        id: &str,
+        action_capabilities_json: Option<String>,
+        now: &str,
+    ) -> anyhow::Result<()>;
+    fn upsert_live_config_snapshot(
+        &self,
+        record: &SessionLiveConfigSnapshotRecord,
+    ) -> anyhow::Result<()>;
+    fn find_live_config_snapshot(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Option<SessionLiveConfigSnapshotRecord>>;
+    fn upsert_pending_config_change(
+        &self,
+        record: &PendingConfigChangeRecord,
+    ) -> anyhow::Result<()>;
+    fn list_pending_config_changes(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Vec<PendingConfigChangeRecord>>;
+    fn delete_pending_config_change(&self, session_id: &str, config_id: &str)
+        -> anyhow::Result<()>;
+    fn repair_unclosed_turns(&self, session_id: &str) -> anyhow::Result<u32>;
+}
+
+/// Prompt-attachment resolution and hygiene as the actor's turn machinery
+/// needs it. v1 doorstep: `resolve_prompt_blocks` wraps the load+render path;
+/// PR-2b refines it into load + pure render.
+pub trait AttachmentSource: Send + Sync {
+    /// Resolve a stored prompt payload into the ACP content blocks to send.
+    fn resolve_prompt_blocks(
+        &self,
+        session_id: &str,
+        payload: &PromptPayload,
+    ) -> Result<Vec<acp::schema::ContentBlock>, PromptValidationError>;
+    fn mark_prompt_attachments_state(
+        &self,
+        session_id: &str,
+        attachment_ids: &[String],
+        state: PromptAttachmentState,
+    ) -> anyhow::Result<()>;
+    fn find_prompt_attachment(
+        &self,
+        session_id: &str,
+        attachment_id: &str,
+    ) -> anyhow::Result<Option<PromptAttachmentRecord>>;
+    fn delete_prompt_attachments(
+        &self,
+        session_id: &str,
+        attachment_ids: &[&str],
+    ) -> anyhow::Result<()>;
+    /// Delete the stored attachment file for a (pending) record.
+    fn delete_record(&self, record: &PromptAttachmentRecord) -> anyhow::Result<()>;
+}
+
+/// The never-varies capability set the actor runs against; wired once at
+/// manager construction and shared by every session the manager starts.
+#[derive(Clone)]
+pub struct ActorCapabilities {
+    pub events: Arc<dyn EventPersist>,
+    pub queue: Arc<dyn QueueDurable>,
+    pub background: Arc<dyn BackgroundWorkDurable>,
+    pub state: Arc<dyn SessionStateDurable>,
+    pub attachments: Arc<dyn AttachmentSource>,
+    /// Product reactors, registration order = dispatch order (plans before
+    /// reviews). See the dispatch contract on [`SessionEventObserver`].
+    pub observers: Vec<Arc<dyn SessionEventObserver>>,
+    /// Consulted by the inbound permission door before parking.
+    pub permission_advisor: Option<Arc<dyn PermissionAdvisor>>,
+}
+
+/// Per-call powers: hooks and context that vary per session start.
+#[derive(Default)]
+pub struct SessionHooks {
+    pub on_turn_finish: Option<Arc<dyn Fn(SessionTurnFinishResult) + Send + Sync>>,
+    /// Called after the actor loop exits (normal or error). The bool indicates
+    /// whether the actor exited with an error (true = errored).
+    pub on_exit: Option<Box<dyn FnOnce(bool) + Send>>,
+    /// Dies in PR-3b (latency → spans); carried here meanwhile.
+    pub latency: Option<LatencyRequestContext>,
+}
 
 /// Where in the session's event stream an observation (or op phase) is
 /// happening. A snapshot taken under the sink lock at this point in the

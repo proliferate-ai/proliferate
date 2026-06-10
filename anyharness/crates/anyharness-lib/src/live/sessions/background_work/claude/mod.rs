@@ -1,9 +1,11 @@
+use std::sync::Arc;
+
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use super::{BackgroundWorkOptions, BackgroundWorkUpdate};
 use crate::domains::sessions::model::SessionBackgroundWorkRecord;
-use crate::domains::sessions::store::SessionStore;
+use crate::live::sessions::model::BackgroundWorkDurable;
 use crate::live::sessions::sink::AcpToolPayload;
 
 mod output;
@@ -27,7 +29,7 @@ pub fn detect_async_agent_registration(
 
 pub fn spawn_async_agent_tracker(
     record: SessionBackgroundWorkRecord,
-    store: SessionStore,
+    store: Arc<dyn BackgroundWorkDurable>,
     updates_tx: mpsc::UnboundedSender<BackgroundWorkUpdate>,
     options: BackgroundWorkOptions,
 ) -> JoinHandle<()> {

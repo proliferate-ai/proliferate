@@ -33,7 +33,6 @@ use crate::domains::sessions::runtime::{
 };
 use crate::domains::sessions::runtime_event::RuntimeInjectedSessionEvent;
 use crate::domains::sessions::service::SessionService;
-use crate::domains::sessions::store::SessionStore;
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
 use crate::domains::workspaces::model::{WorkspaceRecord, WorkspaceSurface};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
@@ -202,7 +201,6 @@ struct CodingWorkspaceNamePlan {
 pub struct CoworkSessionHooks {
     delegation_service: CoworkDelegationService,
     acp_manager: LiveSessionManager,
-    session_store: SessionStore,
     autosave_locks: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
 }
 
@@ -210,12 +208,10 @@ impl CoworkSessionHooks {
     pub fn new(
         delegation_service: CoworkDelegationService,
         acp_manager: LiveSessionManager,
-        session_store: SessionStore,
     ) -> Self {
         Self {
             delegation_service,
             acp_manager,
-            session_store,
             autosave_locks: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -271,11 +267,8 @@ impl SessionExtension for CoworkSessionHooks {
         self.notify_turn_finished(&ctx.workspace, &ctx.session_id);
         let service = self.delegation_service.clone();
         let acp_manager = self.acp_manager.clone();
-        let session_store = self.session_store.clone();
         tokio::spawn(async move {
-            if let Err(error) =
-                deliver_cowork_coding_completion(service, acp_manager, session_store, ctx).await
-            {
+            if let Err(error) = deliver_cowork_coding_completion(service, acp_manager, ctx).await {
                 tracing::warn!(error = %error, "failed to process cowork coding completion");
             }
         });
@@ -285,7 +278,6 @@ impl SessionExtension for CoworkSessionHooks {
 async fn deliver_cowork_coding_completion(
     service: CoworkDelegationService,
     acp_manager: LiveSessionManager,
-    session_store: SessionStore,
     ctx: SessionTurnFinishedContext,
 ) -> anyhow::Result<()> {
     if ctx.turn_id.trim().is_empty() {
@@ -345,7 +337,6 @@ async fn deliver_cowork_coding_completion(
     match acp_manager
         .emit_runtime_event(
             &link.parent_session_id,
-            session_store.clone(),
             RuntimeInjectedSessionEvent::SessionLinkTurnCompleted(payload),
         )
         .await

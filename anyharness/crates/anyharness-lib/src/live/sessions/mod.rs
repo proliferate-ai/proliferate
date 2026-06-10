@@ -10,7 +10,8 @@ pub mod probe;
 mod replay;
 
 pub use actor::spawn::ActorReadyResult;
-pub use actor::state::SessionStartupStrategy;
+pub use actor::turn::types::SessionTurnFinishResult;
+pub use model::SessionStartupStrategy;
 pub use handle::{
     ForkSessionCommandError, ForkSessionCommandResult, Resolution,
     LiveSessionCommandError, LiveSessionExecutionSnapshot, LiveSessionHandle, PromptAcceptError,

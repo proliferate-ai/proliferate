@@ -4,10 +4,8 @@ use agent_client_protocol as acp;
 use anyharness_contract::v1::{PendingPromptRemovalReason, PendingPromptRemovedPayload};
 use tokio::sync::Mutex;
 
-use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::model::PromptAttachmentState;
 use crate::domains::sessions::prompt::PromptPayload;
-use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::command::PromptAcceptError;
 use crate::live::sessions::actor::state::SessionActorConfig;
 use crate::live::sessions::actor::turn::handle::first_prompt_system_prompt_append_for_codex_prompt;
@@ -20,8 +18,6 @@ pub(in crate::live::sessions::actor) struct StartedPromptTurn {
 
 pub(in crate::live::sessions::actor) async fn begin_prompt_turn(
     config: &SessionActorConfig,
-    store: &SessionStore,
-    attachment_storage: &PromptAttachmentStorage,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     session_id: &str,
     source_agent_kind: &str,
@@ -29,7 +25,11 @@ pub(in crate::live::sessions::actor) async fn begin_prompt_turn(
     prompt_id: Option<String>,
     queue_seq: Option<i64>,
 ) -> Result<StartedPromptTurn, PromptAcceptError> {
-    let mut acp_blocks = match payload.to_acp_blocks(store, attachment_storage, session_id) {
+    let mut acp_blocks = match config
+        .caps
+        .attachments
+        .resolve_prompt_blocks(session_id, payload)
+    {
         Ok(blocks) => blocks,
         Err(error) => {
             tracing::warn!(
@@ -42,11 +42,11 @@ pub(in crate::live::sessions::actor) async fn begin_prompt_turn(
         }
     };
 
-    match store.has_turn_started_event(session_id) {
+    match config.caps.events.has_turn_started_event(session_id) {
         Ok(has_turn_started) => {
             if let Some(append) = first_prompt_system_prompt_append_for_codex_prompt(
                 source_agent_kind,
-                config.first_prompt_system_prompt_append.as_deref(),
+                config.launch.prompts.first_prompt.as_deref(),
                 has_turn_started,
             ) {
                 prepend_system_prompt_append_to_acp_blocks(&mut acp_blocks, append);
@@ -71,7 +71,7 @@ pub(in crate::live::sessions::actor) async fn begin_prompt_turn(
             content_parts,
             payload.public_provenance(),
         );
-        if let Err(error) = store.mark_prompt_attachments_state(
+        if let Err(error) = config.caps.attachments.mark_prompt_attachments_state(
             session_id,
             &payload.attachment_ids(),
             PromptAttachmentState::Transcript,
@@ -85,7 +85,7 @@ pub(in crate::live::sessions::actor) async fn begin_prompt_turn(
         // Invariant: delete a drained queue row and emit Removed only after
         // begin_turn has durably persisted the replacement turn events.
         if let Some(seq) = queue_seq {
-            if let Err(error) = store.delete_pending_prompt(session_id, seq) {
+            if let Err(error) = config.caps.queue.delete_pending_prompt(session_id, seq) {
                 tracing::warn!(
                     session_id = %session_id,
                     seq,

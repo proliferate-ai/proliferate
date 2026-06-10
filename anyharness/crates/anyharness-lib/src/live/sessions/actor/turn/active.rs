@@ -5,9 +5,7 @@ use agent_client_protocol as acp;
 use anyharness_contract::v1::SessionExecutionPhase;
 use tokio::sync::{mpsc, oneshot, Mutex};
 
-use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::prompt::PromptPayload;
-use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::background_work::handle_background_work_update;
 use crate::live::sessions::actor::command::{
     ForkSessionCommandError, Resolution, PromptAcceptError, PromptAcceptance,
@@ -56,8 +54,6 @@ pub(in crate::live::sessions::actor) struct ActivePromptContext<'a> {
     pub startup_state: &'a mut SessionStartupState,
     pub resume_replay_filter: &'a mut ResumeReplayFilter,
     pub handle: &'a Arc<LiveSessionHandle>,
-    pub store: &'a SessionStore,
-    pub attachment_storage: &'a PromptAttachmentStorage,
 }
 
 pub(in crate::live::sessions::actor) async fn handle_active_prompt(
@@ -77,13 +73,11 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
         startup_state,
         resume_replay_filter,
         handle,
-        store,
-        attachment_storage,
     } = context;
 
-    let session_id = config.session.id.as_str();
-    let workspace_id = config.session.workspace_id.as_str();
-    let source_agent_kind = config.session.agent_kind.as_str();
+    let session_id = config.launch.session.id.as_str();
+    let workspace_id = config.launch.session.workspace_id.as_str();
+    let source_agent_kind = config.launch.session.agent_kind.as_str();
 
     // Invariant 2: the actor is the sole writer of `busy`.
     handle.set_busy(true);
@@ -101,7 +95,6 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
             resume_replay_filter,
             event_sink,
             background_work_registry,
-            store,
             session_id,
             workspace_id,
             source_agent_kind,
@@ -126,8 +119,6 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
             turn_id,
         } = match begin_prompt_turn(
             config,
-            store,
-            attachment_storage,
             event_sink,
             session_id,
             source_agent_kind,
@@ -155,8 +146,8 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
         handle
             .set_execution_phase(SessionExecutionPhase::Running)
             .await;
-        let _ = store.update_status(session_id, "running", &now);
-        let _ = store.update_last_prompt_at(session_id, &now);
+        let _ = config.caps.state.update_status(session_id, "running", &now);
+        let _ = config.caps.state.update_last_prompt_at(session_id, &now);
         tracing::info!(
             session_id = %session_id,
             flow_id = latency_fields.flow_id,
@@ -233,11 +224,10 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
                             resume_replay_filter,
                             event_sink,
                             background_work_registry,
-                            store,
+                            &config.caps,
                             session_id,
                             workspace_id,
                             source_agent_kind,
-                            &config.observers,
                             persisted_config_state,
                             startup_state,
                         ).await;
@@ -245,7 +235,13 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
                 }
                 background_update = background_work_rx.recv() => {
                     if let Some(update) = background_update {
-                        handle_background_work_update(event_sink, store, session_id, update).await;
+                        handle_background_work_update(
+                            event_sink,
+                            config.caps.background.as_ref(),
+                            session_id,
+                            update,
+                        )
+                        .await;
                     }
                 }
                 cmd = command_rx.recv() => {
@@ -316,7 +312,7 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
                         }
                         Some(SessionCommand::SetConfigOption { config_id, value, respond_to }) => {
                             let result = handle_busy_config_command(
-                                store,
+                                config.caps.state.as_ref(),
                                 event_sink,
                                 session_id,
                                 persisted_config_state,
@@ -341,7 +337,7 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
                         }
                         Some(SessionCommand::Prompt { payload: queued_payload, prompt_id: queued_prompt_id, latency: _, from_queue_seq, respond_to }) => {
                             let result = handle_busy_prompt_queue(
-                                store,
+                                config.caps.queue.as_ref(),
                                 event_sink,
                                 session_id,
                                 queued_payload,
@@ -354,8 +350,8 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
                         Some(SessionCommand::EditPendingPrompt { seq, payload, respond_to }) => {
                             let _ = respond_to.send(
                                 handle_edit_pending_prompt(
-                                    store,
-                                    attachment_storage,
+                                    config.caps.queue.as_ref(),
+                                    config.caps.attachments.as_ref(),
                                     event_sink,
                                     session_id,
                                     seq,
@@ -367,8 +363,8 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
                         Some(SessionCommand::DeletePendingPrompt { seq, respond_to }) => {
                             let _ = respond_to.send(
                                 handle_delete_pending_prompt(
-                                    store,
-                                    attachment_storage,
+                                    config.caps.queue.as_ref(),
+                                    config.caps.attachments.as_ref(),
                                     event_sink,
                                     session_id,
                                     seq,
@@ -399,7 +395,6 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
                 startup_state,
                 resume_replay_filter,
                 handle,
-                store,
                 session_id,
                 workspace_id,
                 source_agent_kind,
@@ -423,7 +418,7 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
         // Invariant 2/3: peek the head of the queue BEFORE releasing `busy`.
         // If present, re-enter the prompt body with the new payload; begin_turn's
         // event emission is what durably hands off the queue row.
-        match next_pending_prompt_for_drain(store, session_id) {
+        match next_pending_prompt_for_drain(config.caps.queue.as_ref(), session_id) {
             Some((next_payload, next_prompt_id, next_seq)) => {
                 current_payload = next_payload;
                 current_prompt_id = next_prompt_id;
@@ -444,7 +439,6 @@ async fn drain_replay_notifications_before_prompt(
     resume_replay_filter: &mut ResumeReplayFilter,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     background_work_registry: &mut BackgroundWorkRegistry,
-    store: &SessionStore,
     session_id: &str,
     workspace_id: &str,
     source_agent_kind: &str,
@@ -458,11 +452,10 @@ async fn drain_replay_notifications_before_prompt(
             resume_replay_filter,
             event_sink,
             background_work_registry,
-            store,
+            &config.caps,
             session_id,
             workspace_id,
             source_agent_kind,
-            &config.observers,
             persisted_config_state,
             startup_state,
         )
