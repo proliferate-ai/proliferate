@@ -1,7 +1,8 @@
 import type { PromptOutboxEntry } from "./session-intent-model";
 
 export function canRetryPromptOutboxEntry(entry: PromptOutboxEntry): boolean {
-  return entry.deliveryState === "failed_before_dispatch";
+  return entry.deliveryState === "failed_before_dispatch"
+    || entry.deliveryState === "unknown_after_dispatch";
 }
 
 export function canDismissPromptOutboxEntry(entry: PromptOutboxEntry): boolean {

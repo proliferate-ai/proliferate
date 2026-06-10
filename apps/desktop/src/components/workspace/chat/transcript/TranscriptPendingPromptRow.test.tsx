@@ -72,6 +72,32 @@ describe("TranscriptPendingPromptRow", () => {
     expect(actions.retryPrompt).toHaveBeenCalledWith("prompt-1");
   });
 
+  it("shows the delivery error and retry for unconfirmed dispatches", () => {
+    const actions = {
+      retryPrompt: vi.fn(),
+      dismissPrompt: vi.fn(),
+    };
+    render(
+      <TranscriptPendingPromptRow
+        activeSessionId="session-1"
+        rowIndex={0}
+        prompt={createOptimisticPendingPrompt("Did this land?", "prompt-1", NOW)}
+        outboxEntry={unknownAfterDispatchOutboxEntry("Internal error")}
+        optimisticTrailingStatus={null}
+        outboxActions={actions}
+      />,
+    );
+
+    const status = screen.getByText("Waiting for confirmation…");
+    expect(status.textContent).toContain("Internal error");
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+
+    expect(actions.retryPrompt).toHaveBeenCalledWith("prompt-1");
+    expect(actions.dismissPrompt).toHaveBeenCalledWith("prompt-1");
+  });
+
   it("renders transcript waits as quiet transcript text", () => {
     const { container } = render(
       <TranscriptPendingPromptRow
@@ -107,6 +133,23 @@ function failedOutboxEntry(errorMessage: string): PromptOutboxEntry {
     }),
     status: "failed",
     deliveryState: "failed_before_dispatch",
+    errorMessage,
+    updatedAt: NOW,
+  };
+}
+
+function unknownAfterDispatchOutboxEntry(errorMessage: string): PromptOutboxEntry {
+  return {
+    ...createPromptOutboxEntry({
+      clientPromptId: "prompt-1",
+      clientSessionId: "session-1",
+      text: "Queued prompt text",
+      blocks: [{ type: "text", text: "Queued prompt text" }],
+      now: NOW,
+    }),
+    status: "dispatching",
+    deliveryState: "unknown_after_dispatch",
+    dispatchedAt: NOW,
     errorMessage,
     updatedAt: NOW,
   };
