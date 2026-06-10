@@ -77,11 +77,11 @@ pub fn spawn_session_actor(
 pub fn spawn_session_actor_pending(
     mut config: SessionActorConfig,
 ) -> anyhow::Result<PendingSessionActor> {
-    let session_id = config.session.id.clone();
-    let workspace_id = config.session.workspace_id.clone();
-    let agent_kind = config.session.agent_kind.clone();
-    let startup_strategy = config.startup_strategy.as_str().to_string();
-    let actor_latency = config.latency.clone();
+    let session_id = config.launch.session.id.clone();
+    let workspace_id = config.launch.session.workspace_id.clone();
+    let agent_kind = config.launch.session.agent_kind.clone();
+    let startup_strategy = config.launch.startup.as_str().to_string();
+    let actor_latency = config.hooks.latency.clone();
     let actor_latency_fields = latency_trace_fields(actor_latency.as_ref());
     let started = Instant::now();
     tracing::info!(
@@ -114,7 +114,7 @@ pub fn spawn_session_actor_pending(
 
     let (ready_tx, ready_rx) = std::sync::mpsc::channel::<anyhow::Result<String>>();
 
-    let on_exit = config.on_exit.take();
+    let on_exit = config.hooks.on_exit.take();
 
     std::thread::Builder::new()
         .name(format!(

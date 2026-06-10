@@ -4,76 +4,22 @@ use agent_client_protocol as acp;
 use anyharness_contract::v1::SessionEventEnvelope;
 use tokio::sync::broadcast;
 
-use crate::domains::agents::model::ResolvedAgent;
-use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::live_config::SessionModelOption;
-use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
-use crate::domains::sessions::model::SessionRecord;
-use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::config::selection::find_select_option_by_purpose;
 use crate::live::sessions::actor::config::types::ConfigPurpose;
-use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
 use crate::live::sessions::driver::types::NativeSessionStartupState;
-use crate::live::sessions::model::{PermissionAdvisor, SessionEventObserver};
+use crate::live::sessions::model::{ActorCapabilities, SessionHooks, SessionLaunch};
 use crate::live::sessions::rendezvous::broker::InteractionRendezvous;
-use crate::observability::latency::LatencyRequestContext;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SessionStartupStrategy {
-    Fresh,
-    ResumeSeqFreshNative,
-    LoadNative(String),
-    LoadNativeNoFallback(String),
-    ForkFromNative { parent_native_session_id: String },
-}
-
-impl SessionStartupStrategy {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Fresh => "fresh",
-            Self::ResumeSeqFreshNative => "resume_seq_fresh_native",
-            Self::LoadNative(_) => "load_native",
-            Self::LoadNativeNoFallback(_) => "load_native_no_fallback",
-            Self::ForkFromNative { .. } => "fork_from_native",
-        }
-    }
-
-    pub fn resumes_durable_history(&self) -> bool {
-        !matches!(self, Self::Fresh)
-    }
-
-    pub(in crate::live::sessions) fn allows_missing_load_fallback(&self) -> bool {
-        matches!(self, Self::LoadNative(_))
-    }
-}
 
 pub struct SessionActorConfig {
-    pub session: SessionRecord,
-    pub agent: ResolvedAgent,
-    pub workspace_path: std::path::PathBuf,
-    pub workspace_env: std::collections::BTreeMap<String, String>,
-    pub session_launch_env: std::collections::BTreeMap<String, String>,
-    pub agent_auth_env: std::collections::BTreeMap<String, String>,
-    pub protected_agent_auth_env: std::collections::BTreeMap<String, String>,
+    /// Everything describing THIS launch (session row, agent, env, startup).
+    pub launch: SessionLaunch,
+    /// The never-varies durable capabilities + product reactors.
+    pub caps: ActorCapabilities,
+    /// Per-call powers (turn-finish callback, exit callback, latency context).
+    pub hooks: SessionHooks,
     pub interaction_broker: Arc<InteractionRendezvous>,
-    /// Product reactors, registration order = dispatch order (plans before
-    /// reviews). See the dispatch contract in `live/sessions/model.rs`.
-    pub observers: Vec<Arc<dyn SessionEventObserver>>,
-    /// Consulted by the inbound permission door before parking.
-    pub permission_advisor: Option<Arc<dyn PermissionAdvisor>>,
     pub event_tx: broadcast::Sender<SessionEventEnvelope>,
-    pub session_store: SessionStore,
-    pub attachment_storage: PromptAttachmentStorage,
-    pub mcp_servers: Vec<SessionMcpServer>,
-    pub startup_strategy: SessionStartupStrategy,
-    pub last_seq: i64,
-    pub system_prompt_append: Option<String>,
-    pub first_prompt_system_prompt_append: Option<String>,
-    pub on_turn_finish: Option<Arc<dyn Fn(SessionTurnFinishResult) + Send + Sync + 'static>>,
-    pub latency: Option<LatencyRequestContext>,
-    /// Called after the actor loop exits (normal or error). The bool indicates
-    /// whether the actor exited with an error (true = errored).
-    pub on_exit: Option<Box<dyn FnOnce(bool) + Send + 'static>>,
 }
 
 #[derive(Debug, Clone)]

@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use serde_json::json;
 use tokio::sync::broadcast;
@@ -26,7 +27,7 @@ fn assistant_chunking_emits_one_item_lifecycle_with_monotonic_seq() {
         "claude".to_string(),
         PathBuf::from("/tmp/workspace"),
         tx,
-        store.clone(),
+        Arc::new(store.clone()),
     );
 
     sink.begin_turn("hello".to_string(), None, Vec::new(), None);
@@ -82,7 +83,7 @@ fn injected_runtime_event_persists_strictly_and_keeps_sequence() {
         PathBuf::from("/tmp/workspace"),
         5,
         tx,
-        store.clone(),
+        Arc::new(store.clone()),
     );
 
     let envelope = sink
@@ -110,7 +111,7 @@ fn injected_runtime_event_errors_when_persistence_fails() {
         "claude".to_string(),
         PathBuf::from("/tmp/workspace"),
         tx,
-        store,
+        Arc::new(store),
     );
 
     let error = sink
@@ -140,7 +141,7 @@ fn assistant_completion_marker_closes_matching_open_message() {
         "codex".to_string(),
         PathBuf::from("/tmp/workspace"),
         tx,
-        store.clone(),
+        Arc::new(store.clone()),
     );
 
     sink.begin_turn("hello".to_string(), None, Vec::new(), None);
@@ -210,7 +211,7 @@ fn assistant_completion_marker_ignores_mismatched_message_id() {
         "codex".to_string(),
         PathBuf::from("/tmp/workspace"),
         tx,
-        store,
+        Arc::new(store),
     );
 
     sink.begin_turn("hello".to_string(), None, Vec::new(), None);
@@ -249,7 +250,7 @@ fn transient_status_marker_sets_transient_reasoning_and_replaces_text() {
         "codex".to_string(),
         PathBuf::from("/tmp/workspace"),
         tx,
-        store,
+        Arc::new(store),
     );
 
     sink.begin_turn("hello".to_string(), None, Vec::new(), None);
@@ -305,7 +306,7 @@ fn regular_thought_chunks_remain_non_transient_and_append() {
         "codex".to_string(),
         PathBuf::from("/tmp/workspace"),
         tx,
-        store,
+        Arc::new(store),
     );
 
     sink.begin_turn("hello".to_string(), None, Vec::new(), None);
@@ -343,7 +344,7 @@ fn plan_updates_reuse_the_same_plan_item_until_turn_end() {
         "claude".to_string(),
         PathBuf::from("/tmp/workspace"),
         tx,
-        store.clone(),
+        Arc::new(store.clone()),
     );
 
     sink.begin_turn("plan this".to_string(), None, Vec::new(), None);
@@ -389,7 +390,7 @@ fn background_resolution_reuses_existing_tool_item_id() {
         "claude".to_string(),
         PathBuf::from("/tmp/workspace"),
         tx,
-        store.clone(),
+        Arc::new(store.clone()),
     );
 
     sink.begin_turn("delegate".to_string(), None, Vec::new(), None);
@@ -485,7 +486,7 @@ fn async_launch_completion_preserves_background_metadata_on_completed_item() {
         "claude".to_string(),
         PathBuf::from("/tmp/workspace"),
         tx,
-        store,
+        Arc::new(store),
     );
 
     sink.begin_turn("delegate".to_string(), None, Vec::new(), None);

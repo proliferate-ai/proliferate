@@ -6,7 +6,6 @@ use tokio::sync::{mpsc, Mutex};
 
 use crate::acp::provider_errors::{classify_provider_rate_limit_error, PROVIDER_RATE_LIMIT_CODE};
 use crate::domains::sessions::extensions::SessionTurnOutcome;
-use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::background_work::handle_background_work_update;
 use crate::live::sessions::actor::config::queue::apply_pending_config_changes_if_idle;
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
@@ -67,7 +66,6 @@ pub(in crate::live::sessions::actor) struct PromptFinishContext<'a> {
     pub startup_state: &'a mut SessionStartupState,
     pub resume_replay_filter: &'a mut ResumeReplayFilter,
     pub handle: &'a Arc<LiveSessionHandle>,
-    pub store: &'a SessionStore,
     pub session_id: &'a str,
     pub workspace_id: &'a str,
     pub source_agent_kind: &'a str,
@@ -91,7 +89,6 @@ pub(in crate::live::sessions::actor) async fn finish_prompt_result(
         startup_state,
         resume_replay_filter,
         handle,
-        store,
         session_id,
         workspace_id,
         source_agent_kind,
@@ -107,18 +104,23 @@ pub(in crate::live::sessions::actor) async fn finish_prompt_result(
                     resume_replay_filter,
                     event_sink,
                     background_work_registry,
-                    store,
+                    &config.caps,
                     session_id,
                     workspace_id,
                     source_agent_kind,
-                    &config.observers,
                     persisted_config_state,
                     startup_state,
                 )
                 .await;
             }
             while let Ok(update) = background_work_rx.try_recv() {
-                handle_background_work_update(event_sink, store, session_id, update).await;
+                handle_background_work_update(
+                    event_sink,
+                    config.caps.background.as_ref(),
+                    session_id,
+                    update,
+                )
+                .await;
             }
             let sink_snapshot_before_turn_end = {
                 let sink = event_sink.lock().await;
@@ -200,7 +202,7 @@ pub(in crate::live::sessions::actor) async fn finish_prompt_result(
             handle
                 .set_execution_phase(SessionExecutionPhase::Idle)
                 .await;
-            let _ = store.update_status(session_id, "idle", &now);
+            let _ = config.caps.state.update_status(session_id, "idle", &now);
             tracing::info!(
                 session_id = %session_id,
                 flow_id = latency_fields.flow_id,
@@ -211,7 +213,7 @@ pub(in crate::live::sessions::actor) async fn finish_prompt_result(
                 updated_at = %now,
                 "session.actor.prompt.status_idle_written"
             );
-            if let Some(callback) = config.on_turn_finish.as_ref() {
+            if let Some(callback) = config.hooks.on_turn_finish.as_ref() {
                 callback(SessionTurnFinishResult {
                     session_id: session_id.to_owned(),
                     turn_id: sink_snapshot_before_turn_end
@@ -229,7 +231,7 @@ pub(in crate::live::sessions::actor) async fn finish_prompt_result(
                 native_session_id,
                 source_agent_kind,
                 session_id,
-                store,
+                config.caps.state.as_ref(),
                 event_sink,
                 persisted_config_state,
                 startup_state,
@@ -280,8 +282,8 @@ pub(in crate::live::sessions::actor) async fn finish_prompt_result(
             handle
                 .set_execution_phase(SessionExecutionPhase::Errored)
                 .await;
-            let _ = store.update_status(session_id, "errored", &now);
-            if let Some(callback) = config.on_turn_finish.as_ref() {
+            let _ = config.caps.state.update_status(session_id, "errored", &now);
+            if let Some(callback) = config.hooks.on_turn_finish.as_ref() {
                 callback(SessionTurnFinishResult {
                     session_id: session_id.to_owned(),
                     turn_id: sink_snapshot_on_error

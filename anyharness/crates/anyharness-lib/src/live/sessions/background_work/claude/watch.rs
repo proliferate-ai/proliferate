@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::mpsc;
@@ -6,11 +7,11 @@ use tokio::task::JoinHandle;
 use super::output::{inspect_output_file, parse_timestamp, resolve_output_path};
 use super::{BackgroundWorkOptions, BackgroundWorkUpdate, BACKGROUND_WORK_FALLBACK_RESULT};
 use crate::domains::sessions::model::{SessionBackgroundWorkRecord, SessionBackgroundWorkState};
-use crate::domains::sessions::store::SessionStore;
+use crate::live::sessions::model::BackgroundWorkDurable;
 
 pub(super) fn spawn_async_agent_tracker(
     record: SessionBackgroundWorkRecord,
-    store: SessionStore,
+    store: Arc<dyn BackgroundWorkDurable>,
     updates_tx: mpsc::UnboundedSender<BackgroundWorkUpdate>,
     options: BackgroundWorkOptions,
 ) -> JoinHandle<()> {
@@ -21,7 +22,7 @@ pub(super) fn spawn_async_agent_tracker(
 
 pub(super) async fn watch_async_agent(
     record: SessionBackgroundWorkRecord,
-    store: SessionStore,
+    store: Arc<dyn BackgroundWorkDurable>,
     updates_tx: mpsc::UnboundedSender<BackgroundWorkUpdate>,
     options: BackgroundWorkOptions,
 ) {

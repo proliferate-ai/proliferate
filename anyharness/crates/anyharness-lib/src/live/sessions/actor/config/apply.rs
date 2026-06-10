@@ -4,7 +4,6 @@ use agent_client_protocol as acp;
 use anyharness_contract::v1::{ConfigApplyState, SessionLiveConfigSnapshot};
 use tokio::sync::Mutex;
 
-use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::command::SetConfigOptionCommandError;
 use crate::live::sessions::actor::config::persist::{
     emit_live_config_update, persist_requested_config_value_if_changed, persisted_control_values,
@@ -19,6 +18,7 @@ use crate::live::sessions::actor::config::types::{
     tracked_config_purpose, ConfigApplyOutcome, ConfigPurpose, PersistedSessionConfigState,
 };
 use crate::live::sessions::actor::state::SessionStartupState;
+use crate::live::sessions::model::SessionStateDurable;
 use crate::live::sessions::sink::SessionEventSink;
 pub(in crate::live::sessions::actor) async fn try_apply_model_preference(
     conn: &acp::ConnectionTo<acp::Agent>,
@@ -139,7 +139,7 @@ pub(in crate::live::sessions::actor) async fn apply_specific_config_option(
     native_session_id: &str,
     source_agent_kind: &str,
     session_id: &str,
-    store: &SessionStore,
+    store: &dyn SessionStateDurable,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     persisted_config_state: &mut PersistedSessionConfigState,
     startup_state: &mut SessionStartupState,
@@ -260,7 +260,7 @@ pub(in crate::live::sessions::actor) async fn restore_persisted_live_config_if_n
     native_session_id: &str,
     source_agent_kind: &str,
     session_id: &str,
-    store: &SessionStore,
+    store: &dyn SessionStateDurable,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     persisted_config_state: &mut PersistedSessionConfigState,
     startup_state: &mut SessionStartupState,

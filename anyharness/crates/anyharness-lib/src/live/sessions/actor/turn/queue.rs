@@ -6,17 +6,16 @@ use anyharness_contract::v1::{
 };
 use tokio::sync::Mutex;
 
-use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::model::{PromptAttachmentRecord, PromptAttachmentState};
 use crate::domains::sessions::prompt::PromptPayload;
-use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::command::{
     PromptAcceptError, PromptAcceptance, QueueMutationError,
 };
+use crate::live::sessions::model::{AttachmentSource, QueueDurable};
 use crate::live::sessions::sink::SessionEventSink;
 
 pub(in crate::live::sessions::actor) async fn handle_busy_prompt_queue(
-    store: &SessionStore,
+    store: &dyn QueueDurable,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     session_id: &str,
     payload: PromptPayload,
@@ -56,7 +55,7 @@ pub(in crate::live::sessions::actor) async fn handle_busy_prompt_queue(
 }
 
 pub(in crate::live::sessions::actor) async fn emit_prequeued_pending_prompt_added(
-    store: &SessionStore,
+    store: &dyn QueueDurable,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     session_id: &str,
     seq: i64,
@@ -86,7 +85,7 @@ pub(in crate::live::sessions::actor) async fn emit_prequeued_pending_prompt_adde
 }
 
 pub(in crate::live::sessions::actor) fn next_pending_prompt_for_drain(
-    store: &SessionStore,
+    store: &dyn QueueDurable,
     session_id: &str,
 ) -> Option<(PromptPayload, Option<String>, i64)> {
     match store.peek_head_pending_prompt(session_id) {
@@ -104,8 +103,8 @@ pub(in crate::live::sessions::actor) fn next_pending_prompt_for_drain(
 }
 
 pub(in crate::live::sessions::actor) async fn handle_edit_pending_prompt(
-    store: &SessionStore,
-    attachment_storage: &PromptAttachmentStorage,
+    store: &dyn QueueDurable,
+    attachments: &dyn AttachmentSource,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     session_id: &str,
     seq: i64,
@@ -124,8 +123,8 @@ pub(in crate::live::sessions::actor) async fn handle_edit_pending_prompt(
                 .filter(|old_id| !new_attachment_ids.contains(old_id))
                 .map(String::as_str)
                 .collect::<Vec<_>>();
-            let removed_records = pending_attachment_records(store, session_id, &removed);
-            if let Err(error) = store.delete_prompt_attachments(session_id, &removed) {
+            let removed_records = pending_attachment_records(attachments, session_id, &removed);
+            if let Err(error) = attachments.delete_prompt_attachments(session_id, &removed) {
                 tracing::warn!(
                     session_id = %session_id,
                     seq,
@@ -133,7 +132,7 @@ pub(in crate::live::sessions::actor) async fn handle_edit_pending_prompt(
                     "failed to delete removed pending prompt attachments",
                 );
             }
-            delete_pending_attachment_files(attachment_storage, &removed_records);
+            delete_pending_attachment_files(attachments, &removed_records);
             let mut sink = event_sink.lock().await;
             let content_parts = payload.content_parts();
             sink.pending_prompt_updated(PendingPromptUpdatedPayload {
@@ -162,8 +161,8 @@ pub(in crate::live::sessions::actor) async fn handle_edit_pending_prompt(
 }
 
 pub(in crate::live::sessions::actor) async fn handle_delete_pending_prompt(
-    store: &SessionStore,
-    attachment_storage: &PromptAttachmentStorage,
+    store: &dyn QueueDurable,
+    attachments: &dyn AttachmentSource,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     session_id: &str,
     seq: i64,
@@ -175,8 +174,9 @@ pub(in crate::live::sessions::actor) async fn handle_delete_pending_prompt(
                 .iter()
                 .map(String::as_str)
                 .collect::<Vec<_>>();
-            let removed_records = pending_attachment_records(store, session_id, &attachment_refs);
-            if let Err(error) = store.delete_prompt_attachments(session_id, &attachment_refs) {
+            let removed_records =
+                pending_attachment_records(attachments, session_id, &attachment_refs);
+            if let Err(error) = attachments.delete_prompt_attachments(session_id, &attachment_refs) {
                 tracing::warn!(
                     session_id = %session_id,
                     seq,
@@ -184,7 +184,7 @@ pub(in crate::live::sessions::actor) async fn handle_delete_pending_prompt(
                     "failed to delete pending prompt attachments",
                 );
             }
-            delete_pending_attachment_files(attachment_storage, &removed_records);
+            delete_pending_attachment_files(attachments, &removed_records);
             let mut sink = event_sink.lock().await;
             sink.pending_prompt_removed(PendingPromptRemovedPayload {
                 seq,
@@ -207,14 +207,14 @@ pub(in crate::live::sessions::actor) async fn handle_delete_pending_prompt(
 }
 
 pub(in crate::live::sessions::actor) fn pending_attachment_records(
-    store: &SessionStore,
+    attachments: &dyn AttachmentSource,
     session_id: &str,
     attachment_ids: &[&str],
 ) -> Vec<PromptAttachmentRecord> {
     attachment_ids
         .iter()
         .filter_map(|attachment_id| {
-            store
+            attachments
                 .find_prompt_attachment(session_id, attachment_id)
                 .ok()
                 .flatten()
@@ -224,11 +224,11 @@ pub(in crate::live::sessions::actor) fn pending_attachment_records(
 }
 
 pub(in crate::live::sessions::actor) fn delete_pending_attachment_files(
-    attachment_storage: &PromptAttachmentStorage,
+    attachments: &dyn AttachmentSource,
     records: &[PromptAttachmentRecord],
 ) {
     for record in records {
-        if let Err(error) = attachment_storage.delete_record(record) {
+        if let Err(error) = attachments.delete_record(record) {
             tracing::warn!(
                 session_id = %record.session_id,
                 attachment_id = %record.attachment_id,

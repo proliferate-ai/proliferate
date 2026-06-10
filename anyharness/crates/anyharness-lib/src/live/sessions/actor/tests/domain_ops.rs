@@ -143,7 +143,7 @@ async fn live_plan_context(
         PathBuf::from("/tmp/workspace-1"),
         last_event_seq,
         event_tx,
-        session_store,
+        Arc::new(session_store),
     )));
     (event_sink, broker, handle, wait)
 }

@@ -256,6 +256,8 @@ impl AppState {
             plan_service.clone(),
         ));
         let acp_manager = sessions::wire_live_sessions(&sessions::LiveSessionsWiringDeps {
+            db: db.clone(),
+            runtime_home: runtime_home.clone(),
             plan_service: plan_service.clone(),
             review_service: review_service.clone(),
         });
@@ -270,7 +272,6 @@ impl AppState {
         let cowork_session_hooks = Arc::new(CoworkSessionHooks::new(
             cowork_delegation_service.clone(),
             acp_manager.clone(),
-            SessionStore::new(db.clone()),
         ));
         let subagent_service = Arc::new(SubagentService::new(
             SessionStore::new(db.clone()),
@@ -285,7 +286,6 @@ impl AppState {
         let subagent_session_hooks = Arc::new(SubagentSessionHooks::new(
             subagent_service.clone(),
             acp_manager.clone(),
-            SessionStore::new(db.clone()),
         ));
         let review_mcp_auth = Arc::new(ReviewMcpAuth::new(runtime_home.clone()));
         let review_session_hooks = Arc::new(ReviewSessionHooks::new(

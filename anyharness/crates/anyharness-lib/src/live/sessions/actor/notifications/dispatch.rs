@@ -10,7 +10,6 @@ use tokio::sync::Mutex;
 use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
-use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::config::apply::set_select_option_current_value_for_purpose;
 use crate::live::sessions::actor::config::persist::{
     emit_live_config_update, persist_current_config_state_from_startup,
@@ -19,6 +18,7 @@ use crate::live::sessions::actor::config::types::{ConfigPurpose, PersistedSessio
 use crate::live::sessions::actor::notifications::observations::CollectedObservation;
 use crate::live::sessions::actor::state::SessionStartupState;
 use crate::live::sessions::background_work::BackgroundWorkRegistry;
+use crate::live::sessions::model::{EventPersist, SessionStateDurable};
 use crate::live::sessions::sink::{AcpChunkPayload, AcpToolPayload, SessionEventSink};
 use crate::live::sessions::handle::LiveSessionHandle;
 pub(in crate::live::sessions::actor) async fn inject_runtime_event(
@@ -43,7 +43,7 @@ pub(in crate::live::sessions::actor) async fn normalize_notification(
     notif: &acp::schema::SessionNotification,
     event_sink: &Arc<Mutex<SessionEventSink>>,
     background_work_registry: &mut BackgroundWorkRegistry,
-    session_store: &SessionStore,
+    session_store: &dyn SessionStateDurable,
     session_id: &str,
     source_agent_kind: &str,
     persisted_config_state: &mut PersistedSessionConfigState,
@@ -305,13 +305,13 @@ fn is_non_transcript_chunk(meta: Option<&serde_json::Value>) -> bool {
 }
 
 pub(in crate::live::sessions::actor) fn persist_raw_notification(
-    session_store: &SessionStore,
+    events: &dyn EventPersist,
     session_id: &str,
     kind: &str,
     notif: &acp::schema::SessionNotification,
 ) -> anyhow::Result<()> {
     let payload_json = serde_json::to_string(notif)?;
-    session_store.append_raw_notification(
+    events.append_raw_notification(
         session_id,
         kind,
         &chrono::Utc::now().to_rfc3339(),

@@ -4,10 +4,9 @@ use super::LiveSessionManager;
 use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionError, RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
-use crate::domains::sessions::store::SessionStore;
+use crate::live::sessions::model::EventPersist;
 
 impl LiveSessionManager {
-    #[cfg_attr(not(test), allow(dead_code))]
     /// Inject a runtime-owned event into a session.
     ///
     /// If the live actor dies between handle lookup and command delivery, this
@@ -18,7 +17,6 @@ impl LiveSessionManager {
     pub(crate) async fn emit_runtime_event(
         &self,
         session_id: &str,
-        session_store: SessionStore,
         event: RuntimeInjectedSessionEvent,
     ) -> RuntimeEventInjectionResult {
         loop {
@@ -27,7 +25,11 @@ impl LiveSessionManager {
                 if let Some(handle) = sessions.get(session_id) {
                     handle.clone()
                 } else {
-                    return append_offline_runtime_event(session_id, &session_store, event);
+                    return append_offline_runtime_event(
+                        session_id,
+                        self.caps.events.as_ref(),
+                        event,
+                    );
                 }
             };
 
@@ -39,10 +41,18 @@ impl LiveSessionManager {
                     match sessions.get(session_id) {
                         Some(current) if Arc::ptr_eq(current, &handle) => {
                             sessions.remove(session_id);
-                            return append_offline_runtime_event(session_id, &session_store, event);
+                            return append_offline_runtime_event(
+                                session_id,
+                                self.caps.events.as_ref(),
+                                event,
+                            );
                         }
                         None => {
-                            return append_offline_runtime_event(session_id, &session_store, event);
+                            return append_offline_runtime_event(
+                                session_id,
+                                self.caps.events.as_ref(),
+                                event,
+                            );
                         }
                         Some(_) => continue,
                     }
@@ -55,11 +65,11 @@ impl LiveSessionManager {
 
 fn append_offline_runtime_event(
     session_id: &str,
-    session_store: &SessionStore,
+    events: &dyn EventPersist,
     event: RuntimeInjectedSessionEvent,
 ) -> RuntimeEventInjectionResult {
     let touch_session_activity = event.updates_session_activity_at();
-    session_store
+    events
         .append_event_with_next_seq(
             session_id,
             event.into_session_event(),

@@ -106,7 +106,7 @@ async fn watch_async_agent_emits_completed_result_text() {
 
     watch_async_agent(
         record,
-        store,
+        std::sync::Arc::new(store),
         updates_tx,
         BackgroundWorkOptions {
             poll_interval: Duration::from_millis(5),
@@ -142,7 +142,7 @@ async fn watch_async_agent_uses_neutral_fallback_when_terminal_message_has_no_te
 
     watch_async_agent(
         record,
-        store,
+        std::sync::Arc::new(store),
         updates_tx,
         BackgroundWorkOptions {
             poll_interval: Duration::from_millis(5),
@@ -197,7 +197,7 @@ async fn watch_async_agent_ignores_tool_use_until_end_turn() {
 
     watch_async_agent(
         record,
-        store,
+        std::sync::Arc::new(store),
         updates_tx,
         BackgroundWorkOptions {
             poll_interval: Duration::from_millis(5),
@@ -226,7 +226,7 @@ async fn watch_async_agent_expires_when_the_output_file_stops_updating() {
 
     watch_async_agent(
         record,
-        store,
+        std::sync::Arc::new(store),
         updates_tx,
         BackgroundWorkOptions {
             poll_interval: Duration::from_millis(5),
@@ -266,7 +266,7 @@ async fn registry_rehydrates_pending_background_work_and_completes_it() {
             let mut registry = BackgroundWorkRegistry::new(
                 "session-1".to_string(),
                 "claude".to_string(),
-                store,
+                std::sync::Arc::new(store),
                 updates_tx,
                 BackgroundWorkOptions {
                     poll_interval: Duration::from_millis(5),

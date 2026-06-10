@@ -8,7 +8,6 @@ use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use crate::domains::sessions::model::serialize_action_capabilities;
 use crate::domains::sessions::prompt::capabilities::capabilities_from_acp;
-use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::command::SessionCommand;
 use crate::live::sessions::actor::config::apply::restore_persisted_live_config_if_needed;
 use crate::live::sessions::actor::config::handle::apply_requested_session_preferences;
@@ -28,6 +27,7 @@ use crate::live::sessions::driver::process::spawn_agent_process;
 use crate::live::sessions::driver::inbound::RuntimeClient;
 use crate::live::sessions::driver::start::initialize_connection;
 use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
+use crate::live::sessions::model::{QueueDurable, SessionStateDurable};
 use crate::live::sessions::sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::observability::latency::latency_trace_fields;
@@ -55,22 +55,22 @@ pub(in crate::live::sessions::actor) async fn start_actor(
     ready_tx: std::sync::mpsc::Sender<anyhow::Result<String>>,
     handle: &Arc<LiveSessionHandle>,
 ) -> anyhow::Result<StartedActor> {
-    let session_id = config.session.id.clone();
-    let source_agent_kind = config.session.agent_kind.clone();
-    let workspace_id = config.session.workspace_id.clone();
-    let startup_strategy = config.startup_strategy.clone();
+    let session_id = config.launch.session.id.clone();
+    let source_agent_kind = config.launch.session.agent_kind.clone();
+    let workspace_id = config.launch.session.workspace_id.clone();
+    let startup_strategy = config.launch.startup.clone();
     let startup_strategy_label = startup_strategy.as_str();
-    let actor_latency = config.latency.clone();
+    let actor_latency = config.hooks.latency.clone();
     let actor_latency_fields = latency_trace_fields(actor_latency.as_ref());
     let startup_started = Instant::now();
 
     let spawned = spawn_agent_process(
-        &config.agent,
-        &config.workspace_path,
-        &config.workspace_env,
-        &config.session_launch_env,
-        &config.agent_auth_env,
-        &config.protected_agent_auth_env,
+        &config.launch.agent,
+        &config.launch.workspace_path,
+        &config.launch.env.workspace,
+        &config.launch.env.session,
+        &config.launch.env.auth_support,
+        &config.launch.env.auth_protected,
         &session_id,
         &workspace_id,
         &source_agent_kind,
@@ -82,24 +82,23 @@ pub(in crate::live::sessions::actor) async fn start_actor(
     let stdout = spawned.stdout;
 
     let (notification_tx, notification_rx) = mpsc::unbounded_channel::<acp::schema::SessionNotification>();
-    let store = config.session_store.clone();
 
     let event_sink = Arc::new(Mutex::new(if startup_strategy.resumes_durable_history() {
         SessionEventSink::resume_from_seq(
             session_id.clone(),
             source_agent_kind.clone(),
-            config.workspace_path.clone(),
-            config.last_seq,
+            config.launch.workspace_path.clone(),
+            config.launch.last_seq,
             config.event_tx.clone(),
-            config.session_store.clone(),
+            config.caps.events.clone(),
         )
     } else {
         SessionEventSink::new(
             session_id.clone(),
             source_agent_kind.clone(),
-            config.workspace_path.clone(),
+            config.launch.workspace_path.clone(),
             config.event_tx.clone(),
-            config.session_store.clone(),
+            config.caps.events.clone(),
         )
     }));
     let (background_work_tx, background_work_rx) =
@@ -107,7 +106,7 @@ pub(in crate::live::sessions::actor) async fn start_actor(
     let mut background_work_registry = BackgroundWorkRegistry::new(
         session_id.clone(),
         source_agent_kind.clone(),
-        config.session_store.clone(),
+        config.caps.background.clone(),
         background_work_tx,
         BackgroundWorkOptions::default(),
     );
@@ -118,9 +117,9 @@ pub(in crate::live::sessions::actor) async fn start_actor(
         config.interaction_broker.clone(),
         event_sink.clone(),
         handle.clone(),
-        config.session.workspace_id.clone(),
-        config.session.agent_kind.clone(),
-        config.permission_advisor.clone(),
+        config.launch.session.workspace_id.clone(),
+        config.launch.session.agent_kind.clone(),
+        config.caps.permission_advisor.clone(),
     ));
 
     // Channel to extract ConnectionTo<Agent> from within the builder closure.
@@ -196,14 +195,18 @@ pub(in crate::live::sessions::actor) async fn start_actor(
     let init_response = initialize_connection(
         &conn,
         &source_agent_kind,
-        &config.agent,
+        &config.launch.agent,
         &session_id,
         &workspace_id,
         &ready_tx,
     )
     .await?;
 
-    persist_session_action_capabilities(&store, &session_id, &init_response.agent_capabilities);
+    persist_session_action_capabilities(
+        config.caps.state.as_ref(),
+        &session_id,
+        &init_response.agent_capabilities,
+    );
     let action_capabilities = action_capabilities_from_acp(&init_response.agent_capabilities);
     let supports_native_close = init_response
         .agent_capabilities
@@ -213,9 +216,9 @@ pub(in crate::live::sessions::actor) async fn start_actor(
 
     let (native_session_id, native_startup_state, startup_disposition) = start_native_session(
         &conn,
-        &config.workspace_path,
-        &config.mcp_servers,
-        config.system_prompt_append.as_deref(),
+        &config.launch.workspace_path,
+        &config.launch.mcp_servers,
+        config.launch.prompts.every_prompt.as_deref(),
         &startup_strategy,
         action_capabilities,
         &session_id,
@@ -235,9 +238,10 @@ pub(in crate::live::sessions::actor) async fn start_actor(
         "ACP session established"
     );
 
-    let mut persisted_config_state = PersistedSessionConfigState::from_session(&config.session);
+    let mut persisted_config_state =
+        PersistedSessionConfigState::from_session(&config.launch.session);
     let startup_restore_snapshot = load_startup_restore_snapshot(
-        &store,
+        config.caps.state.as_ref(),
         &session_id,
         &source_agent_kind,
         startup_strategy.resumes_durable_history(),
@@ -255,7 +259,7 @@ pub(in crate::live::sessions::actor) async fn start_actor(
     if let Err(error) = emit_live_config_update(
         &source_agent_kind,
         &session_id,
-        &store,
+        config.caps.state.as_ref(),
         &event_sink,
         &mut persisted_config_state,
         &mut startup_state,
@@ -284,7 +288,7 @@ pub(in crate::live::sessions::actor) async fn start_actor(
     if let Err(error) = apply_requested_session_preferences(
         &conn,
         &native_session_id,
-        &config.session,
+        &config.launch.session,
         &mut startup_state,
     )
     .await
@@ -311,7 +315,7 @@ pub(in crate::live::sessions::actor) async fn start_actor(
         &native_session_id,
         &source_agent_kind,
         &session_id,
-        &store,
+        config.caps.state.as_ref(),
         &event_sink,
         &mut persisted_config_state,
         &mut startup_state,
@@ -339,7 +343,7 @@ pub(in crate::live::sessions::actor) async fn start_actor(
     if let Err(error) = emit_live_config_update(
         &source_agent_kind,
         &session_id,
-        &store,
+        config.caps.state.as_ref(),
         &event_sink,
         &mut persisted_config_state,
         &mut startup_state,
@@ -385,10 +389,10 @@ pub(in crate::live::sessions::actor) async fn start_actor(
     let resume_replay_filter = ResumeReplayFilter::new(
         &source_agent_kind,
         startup_disposition,
-        &config.session.status,
+        &config.launch.session.status,
     );
 
-    dispatch_startup_drain(&store, &session_id, handle).await;
+    dispatch_startup_drain(config.caps.queue.as_ref(), &session_id, handle).await;
 
     Ok(StartedActor {
         child,
@@ -408,7 +412,7 @@ pub(in crate::live::sessions::actor) async fn start_actor(
 }
 
 async fn dispatch_startup_drain(
-    store: &SessionStore,
+    store: &dyn QueueDurable,
     session_id: &str,
     handle: &Arc<LiveSessionHandle>,
 ) {
@@ -456,7 +460,7 @@ async fn dispatch_startup_drain(
     }
 }
 pub(in crate::live::sessions::actor) fn persist_session_action_capabilities(
-    store: &SessionStore,
+    store: &dyn SessionStateDurable,
     session_id: &str,
     agent_capabilities: &acp::schema::AgentCapabilities,
 ) {

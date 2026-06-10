@@ -17,6 +17,7 @@ use crate::domains::sessions::mcp_bindings::summaries::{
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::handle::LiveSessionHandle;
+use crate::live::sessions::model::{LaunchEnv, SessionHooks, SessionLaunch, SystemPromptAppends};
 use crate::live::sessions::SessionStartupStrategy;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 
@@ -390,8 +391,6 @@ impl SessionRuntime {
             record.requested_model_id.as_deref(),
         )
         .map_err(StartSessionError::Internal)?;
-        let session_store = self.session_service.store().clone();
-        let attachment_storage = self.session_service.attachment_storage().clone();
         let mcp_launch = assemble_session_mcp_launch(
             self.session_data_cipher.as_ref(),
             &self.session_extensions,
@@ -408,41 +407,49 @@ impl SessionRuntime {
                 .map_err(StartSessionError::Internal)?;
         }
         let acp_start_started = Instant::now();
+        let launch = SessionLaunch {
+            session: record.clone(),
+            agent: resolved_agent,
+            workspace_path,
+            env: LaunchEnv {
+                workspace: workspace_env,
+                session: session_launch_env,
+                auth_support: agent_auth_overlay.support_env,
+                auth_protected: agent_auth_overlay.protected_env,
+            },
+            mcp_servers: mcp_launch.mcp_servers,
+            startup: startup_strategy,
+            prompts: SystemPromptAppends {
+                every_prompt: mcp_launch.system_prompt_append,
+                first_prompt: mcp_launch.first_prompt_system_prompt_append,
+            },
+            // Overwritten by the manager under the start/inject critical section.
+            last_seq: 0,
+        };
+        let hooks = SessionHooks {
+            on_turn_finish: Some(Arc::new({
+                let extensions = self.session_extensions.clone();
+                let workspace = workspace.clone();
+                move |result| {
+                    for extension in &extensions {
+                        extension.on_turn_finished(SessionTurnFinishedContext {
+                            workspace: workspace.clone(),
+                            session_id: result.session_id.clone(),
+                            turn_id: result.turn_id.clone(),
+                            outcome: result.outcome,
+                            stop_reason: result.stop_reason.clone(),
+                            last_event_seq: result.last_event_seq,
+                            error_details: result.error_details.clone(),
+                        });
+                    }
+                }
+            })),
+            on_exit: None,
+            latency: latency.cloned(),
+        };
         let (handle, ready) = self
             .acp_manager
-            .start_session(
-                record.clone(),
-                resolved_agent,
-                workspace_path,
-                workspace_env,
-                session_launch_env,
-                agent_auth_overlay.support_env,
-                agent_auth_overlay.protected_env,
-                session_store,
-                attachment_storage,
-                mcp_launch.mcp_servers,
-                startup_strategy,
-                mcp_launch.system_prompt_append,
-                mcp_launch.first_prompt_system_prompt_append,
-                Some(Arc::new({
-                    let extensions = self.session_extensions.clone();
-                    let workspace = workspace.clone();
-                    move |result| {
-                        for extension in &extensions {
-                            extension.on_turn_finished(SessionTurnFinishedContext {
-                                workspace: workspace.clone(),
-                                session_id: result.session_id.clone(),
-                                turn_id: result.turn_id.clone(),
-                                outcome: result.outcome,
-                                stop_reason: result.stop_reason.clone(),
-                                last_event_seq: result.last_event_seq,
-                                error_details: result.error_details.clone(),
-                            });
-                        }
-                    }
-                })),
-                latency.cloned(),
-            )
+            .start_session(launch, hooks)
             .await
             .map_err(StartSessionError::AcpStart)?;
         tracing::info!(

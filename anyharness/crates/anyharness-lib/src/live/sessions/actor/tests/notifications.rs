@@ -45,7 +45,7 @@ async fn handle_notification_persists_raw_acp_notifications() {
         "claude".to_string(),
         PathBuf::from("/tmp/workspace"),
         event_tx,
-        store.clone(),
+        Arc::new(store.clone()),
     )));
     let mut startup_state = SessionStartupState {
         current_mode_id: None,
@@ -61,6 +61,7 @@ async fn handle_notification_persists_raw_acp_notifications() {
         requested_mode_id: None,
         current_mode_id: None,
     };
+    let caps = test_support::actor_capabilities_for_store(&store);
     let mut background_work_registry = test_background_work_registry(&store);
 
     let notif = acp::schema::SessionNotification::new(
@@ -72,11 +73,10 @@ async fn handle_notification_persists_raw_acp_notifications() {
         &notif,
         &event_sink,
         &mut background_work_registry,
-        &store,
+        &caps,
         "session-1",
         "workspace-1",
         "claude",
-        &[],
         &mut persisted_config_state,
         &mut startup_state,
     )
@@ -236,7 +236,7 @@ async fn replay_filter_keeps_raw_notifications_but_skips_normalized_transcript_e
         "claude".to_string(),
         PathBuf::from("/tmp/workspace"),
         event_tx,
-        store.clone(),
+        Arc::new(store.clone()),
     )));
     let mut startup_state = SessionStartupState {
         current_mode_id: None,
@@ -257,6 +257,7 @@ async fn replay_filter_keeps_raw_notifications_but_skips_normalized_transcript_e
         NativeSessionStartupDisposition::LoadedExisting,
         "idle",
     );
+    let caps = test_support::actor_capabilities_for_store(&store);
     let mut background_work_registry = test_background_work_registry(&store);
 
     let replay_user = acp::schema::SessionNotification::new(
@@ -268,11 +269,10 @@ async fn replay_filter_keeps_raw_notifications_but_skips_normalized_transcript_e
         &mut replay_filter,
         &event_sink,
         &mut background_work_registry,
-        &store,
+        &caps,
         "session-1",
         "workspace-1",
         "claude",
-        &[],
         &mut persisted_config_state,
         &mut startup_state,
     )
@@ -296,11 +296,10 @@ async fn replay_filter_keeps_raw_notifications_but_skips_normalized_transcript_e
         &mut replay_filter,
         &event_sink,
         &mut background_work_registry,
-        &store,
+        &caps,
         "session-1",
         "workspace-1",
         "claude",
-        &[],
         &mut persisted_config_state,
         &mut startup_state,
     )
@@ -327,11 +326,10 @@ async fn replay_filter_keeps_raw_notifications_but_skips_normalized_transcript_e
         &mut replay_filter,
         &event_sink,
         &mut background_work_registry,
-        &store,
+        &caps,
         "session-1",
         "workspace-1",
         "claude",
-        &[],
         &mut persisted_config_state,
         &mut startup_state,
     )

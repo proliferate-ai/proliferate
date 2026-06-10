@@ -1,8 +1,33 @@
 use std::ffi::OsString;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
+use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
+use crate::domains::sessions::live_ports::SessionAttachmentSource;
 use crate::domains::sessions::mcp_bindings::crypto::DATA_KEY_ENV_VAR;
+use crate::domains::sessions::store::SessionStore;
+use crate::live::sessions::model::ActorCapabilities;
 use crate::persistence::Db;
+
+/// Store-backed [`ActorCapabilities`] for tests: the same wiring as
+/// `app/sessions.rs` (one `SessionStore` behind the four store traits plus a
+/// real `SessionAttachmentSource`), with no observers and no advisor.
+pub(crate) fn actor_capabilities_for_store(store: &SessionStore) -> ActorCapabilities {
+    let attachment_storage = PromptAttachmentStorage::new(
+        std::env::temp_dir().join(format!("anyharness-test-{}", uuid::Uuid::new_v4())),
+    );
+    ActorCapabilities {
+        events: Arc::new(store.clone()),
+        queue: Arc::new(store.clone()),
+        background: Arc::new(store.clone()),
+        state: Arc::new(store.clone()),
+        attachments: Arc::new(SessionAttachmentSource::new(
+            store.clone(),
+            attachment_storage,
+        )),
+        observers: Vec::new(),
+        permission_advisor: None,
+    }
+}
 
 pub(crate) static ENV_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
 
