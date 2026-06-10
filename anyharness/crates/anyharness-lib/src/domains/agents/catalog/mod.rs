@@ -1,4 +1,8 @@
 pub mod bundled;
+pub mod loader;
 pub mod projection;
 pub mod schema;
+pub mod schema_v2;
 pub mod validation;
+pub mod validation_v2;
+pub mod validation_v2_pairing;
