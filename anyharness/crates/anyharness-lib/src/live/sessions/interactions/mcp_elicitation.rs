@@ -372,6 +372,7 @@ mod tests {
         let public_json = serde_json::to_string(&normalized.payload).unwrap();
         assert!(public_json.contains("https://accounts.example.com"));
         assert!(!public_json.contains("secret-token"));
+        assert!(!public_json.contains("elic_test"));
 
         let debug = format!("{:?}", normalized.pending);
         assert!(!debug.contains("secret-token"));
