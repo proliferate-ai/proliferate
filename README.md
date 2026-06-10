@@ -35,8 +35,7 @@ Move running sessions between your machine and the cloud. Works solo or across a
   <a href="https://discord.gg/wCEgUnEuF">Discord</a>
 </p>
 
-<!-- LAUNCH BLOCKER: full-width product screenshot or demo GIF goes here. -->
-<!-- <img width="full" alt="Proliferate" src="./specs/developing/assets/readme/hero.png" /> -->
+<img width="full" alt="Proliferate" src="./specs/developing/assets/readme/hero.png" />
 
 </div>
 
