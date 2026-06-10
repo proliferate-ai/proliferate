@@ -49,6 +49,9 @@ class WorkerHeartbeatRequest(BaseModel):
     worker_version: str | None = Field(default=None, alias="workerVersion")
     anyharness_version: str | None = Field(default=None, alias="anyharnessVersion")
     supervisor_version: str | None = Field(default=None, alias="supervisorVersion")
+    # Agent catalog version the worker last pushed into its runtime
+    # (observability only; accepted but not yet persisted).
+    catalog_version: str | None = Field(default=None, alias="catalogVersion")
 
 
 class WorkerDesiredVersionsResponse(BaseModel):
@@ -75,6 +78,9 @@ class WorkerHeartbeatResponse(BaseModel):
     desired_versions: WorkerDesiredVersionsResponse = Field(
         serialization_alias="desiredVersions",
     )
+    # `catalogVersion` of the agent catalog document this server serves;
+    # workers converge their runtime on any DIFFERENT version.
+    catalog_version: str | None = Field(default=None, serialization_alias="catalogVersion")
 
 
 class WorkerUpdateStatusRequest(BaseModel):

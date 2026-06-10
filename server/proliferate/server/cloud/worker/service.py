@@ -27,6 +27,7 @@ from proliferate.db.store.cloud_sync import worker_auth as worker_auth_store
 from proliferate.db.store.cloud_sync import worker_control as worker_control_store
 from proliferate.db.store.cloud_sync import worker_exposures as worker_exposures_store
 from proliferate.db.store.users import get_user_with_oauth_accounts_by_id
+from proliferate.server.catalogs.service import served_agent_catalog_version
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.events.models import (
     WorkerEventBatchRequest,
@@ -376,6 +377,7 @@ async def record_heartbeat(
         status=status_value,
         server_time=now.isoformat(),
         desired_versions=desired_versions,
+        catalog_version=served_agent_catalog_version(),
     )
 
 
