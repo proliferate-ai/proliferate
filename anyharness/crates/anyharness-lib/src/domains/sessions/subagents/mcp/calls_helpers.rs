@@ -94,22 +94,6 @@ pub(super) fn initial_config_string(config: Option<&Value>, keys: &[&str]) -> Op
     })
 }
 
-pub(super) fn resolve_preferred_string(
-    preferred: Option<&str>,
-    legacy: Option<&str>,
-    preferred_name: &str,
-    legacy_name: &str,
-) -> anyhow::Result<Option<String>> {
-    let preferred = preferred.map(str::trim).filter(|value| !value.is_empty());
-    let legacy = legacy.map(str::trim).filter(|value| !value.is_empty());
-    if let (Some(left), Some(right)) = (preferred, legacy) {
-        if left != right {
-            anyhow::bail!("{preferred_name} conflicts with deprecated {legacy_name}");
-        }
-    }
-    Ok(preferred.or(legacy).map(ToString::to_string))
-}
-
 pub(super) fn prompt_outcome_label(outcome: &SendPromptOutcome) -> &'static str {
     match outcome {
         SendPromptOutcome::Running { .. } => "running",

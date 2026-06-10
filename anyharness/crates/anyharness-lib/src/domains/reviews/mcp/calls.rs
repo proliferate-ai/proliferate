@@ -51,7 +51,11 @@ pub async fn call_tool(
             "mark_review_revision_ready",
         ) => {
             let args: MarkReviewRevisionReadyArgs = deserialize_args(arguments)?;
-            let review_id = resolve_review_id(args.review_id, args.review_run_id)?;
+            let review_id = args
+                .review_id
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| anyhow::anyhow!("reviewId is required"))?;
             runtime
                 .mark_revision_ready_from_parent_tool(
                     &ctx.session_id,
@@ -66,7 +70,10 @@ pub async fn call_tool(
         }
         (ReviewMcpRole::Parent { .. }, "get_review_status") => {
             let args: GetReviewStatusArgs = deserialize_args(arguments)?;
-            let review_id = optional_review_id(args.review_id, args.review_run_id)?;
+            let review_id = args
+                .review_id
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty());
             runtime
                 .service()
                 .list_session_reviews(&ctx.session_id)
@@ -86,32 +93,6 @@ pub async fn call_tool(
         }
         (_, tool_name) => Err(anyhow::anyhow!("unknown tool for review role: {tool_name}")),
     }
-}
-
-fn optional_review_id(
-    review_id: Option<String>,
-    review_run_id: Option<String>,
-) -> anyhow::Result<Option<String>> {
-    let review_id = review_id
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty());
-    let review_run_id = review_run_id
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty());
-    if let (Some(current), Some(legacy)) = (review_id.as_deref(), review_run_id.as_deref()) {
-        if current != legacy {
-            anyhow::bail!("reviewId conflicts with deprecated reviewRunId");
-        }
-    }
-    Ok(review_id.or(review_run_id))
-}
-
-fn resolve_review_id(
-    review_id: Option<String>,
-    review_run_id: Option<String>,
-) -> anyhow::Result<String> {
-    optional_review_id(review_id, review_run_id)?
-        .ok_or_else(|| anyhow::anyhow!("reviewId is required"))
 }
 
 fn review_status_json(review: anyharness_contract::v1::ReviewRunDetail) -> Value {

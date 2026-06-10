@@ -27,7 +27,6 @@ use crate::{
     domains::terminals::model::{CreateTerminalOptions, TerminalPurpose},
     domains::{
         agents::seed::AgentSeedStore,
-        cowork::mcp::auth::{LEGACY_CAPABILITY_HEADER_NAME, SECRET_FILE_NAME},
         sessions::{model::SessionRecord, store::SessionStore},
         workspaces::{
             access_model::{WorkspaceAccessMode, WorkspaceAccessRecord},
@@ -35,7 +34,6 @@ use crate::{
         },
     },
     integrations::agent_cli::executable::make_executable,
-    integrations::mcp::capability_token::{McpCapabilityTokenIssuer, McpCapabilityTokenSignature},
     persistence::Db,
 };
 
@@ -392,81 +390,6 @@ async fn scoped_direct_attach_jwt_filters_workspaces_and_honors_revocation() {
         .await
         .expect("expected response");
     assert_eq!(revoked_response.status(), StatusCode::UNAUTHORIZED);
-}
-
-#[tokio::test]
-async fn legacy_cowork_mcp_route_uses_product_mcp_auth_errors() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
-    let _guard = test_support::set_bearer_token_env(None);
-    let app = build_router(test_state(false));
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/v1/workspaces/workspace-1/cowork/sessions/session-1/mcp")
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(
-                    json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize" }).to_string(),
-                ))
-                .expect("expected request"),
-        )
-        .await
-        .expect("expected response");
-
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    let body = to_bytes(response.into_body(), usize::MAX)
-        .await
-        .expect("read response body");
-    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
-    assert_eq!(payload["code"], "COWORK_MCP_UNAUTHORIZED");
-}
-
-#[tokio::test]
-async fn legacy_cowork_mcp_route_accepts_legacy_capability_token() {
-    let _lock = test_support::ENV_MUTEX
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("expected env mutex");
-    let _guard = test_support::set_bearer_token_env(None);
-    let state = test_state(false);
-    let legacy_token = McpCapabilityTokenIssuer::new(
-        state.runtime_home.clone(),
-        SECRET_FILE_NAME,
-        McpCapabilityTokenSignature::LegacySha256Dot,
-        60,
-    )
-    .mint_workspace_session_token("workspace-1", "session-1")
-    .expect("expected legacy token");
-    let app = build_router(state);
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/v1/workspaces/workspace-1/cowork/sessions/session-1/mcp")
-                .header(header::CONTENT_TYPE, "application/json")
-                .header(LEGACY_CAPABILITY_HEADER_NAME, legacy_token)
-                .body(Body::from(
-                    json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize" }).to_string(),
-                ))
-                .expect("expected request"),
-        )
-        .await
-        .expect("expected response");
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = to_bytes(response.into_body(), usize::MAX)
-        .await
-        .expect("read response body");
-    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
-    assert_eq!(
-        payload["result"]["serverInfo"]["name"],
-        "proliferate-cowork"
-    );
 }
 
 #[tokio::test]

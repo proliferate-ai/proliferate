@@ -70,7 +70,6 @@ impl ProductMcpRequestContext {
 #[derive(Debug, Clone, Copy)]
 pub enum ProductMcpAuthHeader<'a> {
     Product { value: &'a str },
-    Legacy { name: &'static str, value: &'a str },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -113,10 +112,6 @@ pub trait ProductMcpServer: Send + Sync {
     type Context: Send + Sync;
 
     fn definition(&self) -> &'static ProductMcpDefinition;
-
-    fn legacy_header_names(&self) -> &'static [&'static str] {
-        &[]
-    }
 
     fn validate_capability_token(
         &self,

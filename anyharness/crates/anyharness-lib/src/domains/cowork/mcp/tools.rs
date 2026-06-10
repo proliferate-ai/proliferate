@@ -83,8 +83,6 @@ pub(super) struct CreateCodingWorkspaceArgs {
 pub(super) struct CodingWorkspaceArgs {
     #[serde(default)]
     pub cowork_workspace_id: Option<String>,
-    #[serde(default)]
-    pub workspace_id: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -92,8 +90,6 @@ pub(super) struct CodingWorkspaceArgs {
 pub(super) struct CreateCodingSessionArgs {
     #[serde(default)]
     pub cowork_workspace_id: Option<String>,
-    #[serde(default)]
-    pub workspace_id: Option<String>,
     pub prompt: String,
     #[serde(default)]
     pub label: Option<String>,
@@ -101,12 +97,6 @@ pub(super) struct CreateCodingSessionArgs {
     pub harness_id: Option<String>,
     #[serde(default)]
     pub initial_config: Option<Value>,
-    #[serde(default)]
-    pub agent_kind: Option<String>,
-    #[serde(default)]
-    pub model_id: Option<String>,
-    #[serde(default)]
-    pub mode_id: Option<String>,
     #[serde(default)]
     pub wake_on_completion: bool,
 }
@@ -116,8 +106,6 @@ pub(super) struct CreateCodingSessionArgs {
 pub(super) struct CodingSessionArgs {
     #[serde(default)]
     pub cowork_agent_id: Option<String>,
-    #[serde(default)]
-    pub coding_session_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -125,8 +113,6 @@ pub(super) struct CodingSessionArgs {
 pub(super) struct SendCodingMessageArgs {
     #[serde(default)]
     pub cowork_agent_id: Option<String>,
-    #[serde(default)]
-    pub coding_session_id: Option<String>,
     pub prompt: String,
     #[serde(default)]
     pub wake_on_completion: bool,
@@ -137,8 +123,6 @@ pub(super) struct SendCodingMessageArgs {
 pub(super) struct ReadCodingEventsArgs {
     #[serde(default)]
     pub cowork_agent_id: Option<String>,
-    #[serde(default)]
-    pub coding_session_id: Option<String>,
     #[serde(default)]
     pub since_seq: Option<i64>,
     #[serde(default)]
@@ -151,8 +135,6 @@ pub(super) struct ReadCodingLatestTurnsArgs {
     #[serde(default)]
     pub cowork_agent_id: Option<String>,
     #[serde(default)]
-    pub coding_session_id: Option<String>,
-    #[serde(default)]
     pub limit: Option<usize>,
 }
 
@@ -161,8 +143,6 @@ pub(super) struct ReadCodingLatestTurnsArgs {
 pub(super) struct SearchCodingTranscriptArgs {
     #[serde(default)]
     pub cowork_agent_id: Option<String>,
-    #[serde(default)]
-    pub coding_session_id: Option<String>,
     pub query: String,
     #[serde(default)]
     pub limit: Option<usize>,
@@ -298,8 +278,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkWorkspaceId": { "type": "string", "description": "Preferred stable cowork workspace target. Provide either coworkWorkspaceId or deprecated workspaceId." },
-                    "workspaceId": { "type": "string", "description": "Deprecated legacy target." }
+                    "coworkWorkspaceId": { "type": "string" }
                 }
             }),
         ),
@@ -309,8 +288,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkWorkspaceId": { "type": "string", "description": "Preferred stable cowork workspace target. Provide either coworkWorkspaceId or deprecated workspaceId." },
-                    "workspaceId": { "type": "string", "description": "Deprecated legacy target." },
+                    "coworkWorkspaceId": { "type": "string" },
                     "prompt": { "type": "string" },
                     "label": { "type": "string" },
                     "harnessId": { "type": "string" },
@@ -322,9 +300,6 @@ fn delegation_tool_definitions() -> Vec<Value> {
                             "modeId": { "type": "string" }
                         }
                     },
-                    "agentKind": { "type": "string", "description": "Deprecated alias for harnessId." },
-                    "modelId": { "type": "string", "description": "Deprecated alias for initialConfig.modelId." },
-                    "modeId": { "type": "string", "description": "Deprecated alias for initialConfig.modeId." },
                     "wakeOnCompletion": { "type": "boolean" }
                 },
                 "required": ["prompt"]
@@ -336,8 +311,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string", "description": "Preferred stable cowork agent target. Provide either coworkAgentId or deprecated codingSessionId." },
-                    "codingSessionId": { "type": "string", "description": "Deprecated legacy target." },
+                    "coworkAgentId": { "type": "string" },
                     "prompt": { "type": "string" },
                     "wakeOnCompletion": { "type": "boolean" }
                 },
@@ -350,8 +324,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string", "description": "Preferred stable cowork agent target. Provide either coworkAgentId or deprecated codingSessionId." },
-                    "codingSessionId": { "type": "string", "description": "Deprecated legacy target." }
+                    "coworkAgentId": { "type": "string" }
                 }
             }),
         ),
@@ -361,8 +334,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string", "description": "Preferred stable cowork agent target. Provide either coworkAgentId or deprecated codingSessionId." },
-                    "codingSessionId": { "type": "string", "description": "Deprecated legacy target." }
+                    "coworkAgentId": { "type": "string" }
                 }
             }),
         ),
@@ -372,8 +344,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string", "description": "Preferred stable cowork agent target. Provide either coworkAgentId or deprecated codingSessionId." },
-                    "codingSessionId": { "type": "string", "description": "Deprecated legacy target." },
+                    "coworkAgentId": { "type": "string" },
                     "sinceSeq": { "type": "integer" },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
                 }
@@ -385,8 +356,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string", "description": "Preferred stable cowork agent target. Provide either coworkAgentId or deprecated codingSessionId." },
-                    "codingSessionId": { "type": "string", "description": "Deprecated legacy target." },
+                    "coworkAgentId": { "type": "string" },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 10 }
                 }
             }),
@@ -397,8 +367,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string", "description": "Preferred stable cowork agent target. Provide either coworkAgentId or deprecated codingSessionId." },
-                    "codingSessionId": { "type": "string", "description": "Deprecated legacy target." },
+                    "coworkAgentId": { "type": "string" },
                     "query": { "type": "string" },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 25 }
                 },
@@ -411,8 +380,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string", "description": "Preferred stable cowork agent target. Provide either coworkAgentId or deprecated codingSessionId." },
-                    "codingSessionId": { "type": "string", "description": "Deprecated legacy target." }
+                    "coworkAgentId": { "type": "string" }
                 }
             }),
         ),

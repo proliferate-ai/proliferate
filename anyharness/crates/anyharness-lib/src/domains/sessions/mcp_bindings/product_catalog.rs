@@ -168,7 +168,6 @@ mod tests {
     use std::sync::Arc;
 
     use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
-    use crate::domains::sessions::workspace_naming::mcp::auth::LEGACY_CAPABILITY_HEADER_NAME;
     use crate::domains::workspaces::model::{
         WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState, WorkspaceRecord,
         WorkspaceSurface,
@@ -381,9 +380,5 @@ mod tests {
             .headers
             .iter()
             .any(|header| header.name == PRODUCT_MCP_TOKEN_HEADER_NAME));
-        assert!(!server
-            .headers
-            .iter()
-            .any(|header| header.name == LEGACY_CAPABILITY_HEADER_NAME));
     }
 }

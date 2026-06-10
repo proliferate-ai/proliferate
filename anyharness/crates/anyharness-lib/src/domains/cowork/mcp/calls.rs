@@ -3,8 +3,7 @@ use serde_json::{json, Value};
 use super::calls_helpers::{
     coding_session_workspace_id, cowork_agent_search_response_json,
     cowork_agent_turns_response_json, initial_config_string, launch_agents_to_json,
-    mode_options_to_json, non_empty, prompt_outcome_label, recommended_modes_by_agent_kind_json,
-    resolve_preferred_string,
+    mode_options_to_json, prompt_outcome_label, recommended_modes_by_agent_kind_json,
 };
 use super::context::CoworkMcpContext;
 use super::tools::{
@@ -284,11 +283,10 @@ fn get_coding_session_launch_options(
     let parent = cowork_runtime
         .session_record(parent_session_id)?
         .ok_or_else(|| anyhow::anyhow!("parent session not found"))?;
-    let workspace_id_arg = non_empty(args.workspace_id);
     let managed = cowork_runtime.resolve_managed_coding_workspace(
         parent_session_id,
         args.cowork_workspace_id.as_deref(),
-        workspace_id_arg.as_deref(),
+        None,
     )?;
     let live_config = cowork_runtime.live_config_snapshot(parent_session_id)?;
     let live_mode_control = live_config
@@ -344,31 +342,13 @@ async fn create_coding_session(
     let managed = cowork_runtime.resolve_managed_coding_workspace(
         parent_session_id,
         args.cowork_workspace_id.as_deref(),
-        args.workspace_id.as_deref(),
+        None,
     )?;
     let workspace_id = managed.workspace_id.clone();
     let cowork_workspace_id = managed.public_id.clone();
-    let harness_id = resolve_preferred_string(
-        args.harness_id.as_deref(),
-        args.agent_kind.as_deref(),
-        "harnessId",
-        "agentKind",
-    )?;
-    let config_model_id =
-        initial_config_string(args.initial_config.as_ref(), &["modelId", "model"]);
-    let config_mode_id = initial_config_string(args.initial_config.as_ref(), &["modeId", "mode"]);
-    let model_id = resolve_preferred_string(
-        config_model_id.as_deref(),
-        args.model_id.as_deref(),
-        "initialConfig.modelId",
-        "modelId",
-    )?;
-    let mode_id = resolve_preferred_string(
-        config_mode_id.as_deref(),
-        args.mode_id.as_deref(),
-        "initialConfig.modeId",
-        "modeId",
-    )?;
+    let harness_id = args.harness_id;
+    let model_id = initial_config_string(args.initial_config.as_ref(), &["modelId", "model"]);
+    let mode_id = initial_config_string(args.initial_config.as_ref(), &["modeId", "mode"]);
     let result = cowork_runtime
         .create_coding_session(
             parent_session_id,
@@ -428,7 +408,7 @@ async fn send_coding_message(
     let link = cowork_runtime.resolve_coding_session_target(
         parent_session_id,
         args.cowork_agent_id.as_deref(),
-        args.coding_session_id.as_deref(),
+        None,
     )?;
     let workspace_id = coding_session_workspace_id(cowork_runtime, &link.child_session_id)?;
     let outcome = cowork_runtime
@@ -466,7 +446,7 @@ fn schedule_coding_wake(
     let (link, created) = cowork_runtime.schedule_coding_wake_for_target(
         parent_session_id,
         args.cowork_agent_id.as_deref(),
-        args.coding_session_id.as_deref(),
+        None,
     )?;
     let workspace_id = coding_session_workspace_id(cowork_runtime, &link.child_session_id)?;
     Ok(json!({
@@ -490,7 +470,7 @@ async fn get_coding_status(
         .coding_status_for_target(
             parent_session_id,
             args.cowork_agent_id.as_deref(),
-            args.coding_session_id.as_deref(),
+            None,
         )
         .await?;
     Ok(json!({
@@ -525,7 +505,7 @@ fn read_coding_events(
     let slice = cowork_runtime.read_coding_events_for_target(
         parent_session_id,
         args.cowork_agent_id.as_deref(),
-        args.coding_session_id.as_deref(),
+        None,
         args.since_seq,
         args.limit,
     )?;
@@ -545,7 +525,7 @@ fn read_cowork_agent_latest_turns(
     let (link, turns) = cowork_runtime.read_coding_latest_turns_for_target(
         parent_session_id,
         args.cowork_agent_id.as_deref(),
-        args.coding_session_id.as_deref(),
+        None,
         args.limit,
     )?;
     Ok(cowork_agent_turns_response_json(&link, turns))
@@ -559,7 +539,7 @@ fn search_cowork_agent_transcript(
     let (link, matches) = cowork_runtime.search_coding_transcript_for_target(
         parent_session_id,
         args.cowork_agent_id.as_deref(),
-        args.coding_session_id.as_deref(),
+        None,
         &args.query,
         args.limit,
     )?;
@@ -577,7 +557,7 @@ async fn close_cowork_agent(
         .close_coding_session_for_target(
             parent_session_id,
             args.cowork_agent_id.as_deref(),
-            args.coding_session_id.as_deref(),
+            None,
         )
         .await?;
     Ok(json!({
