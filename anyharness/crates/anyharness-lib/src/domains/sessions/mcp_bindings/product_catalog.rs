@@ -14,6 +14,9 @@ use crate::integrations::mcp::product_server::{
 };
 
 // ── Selection ────────────────────────────────────────────────────────────────
+// Selection graduates back to its own policy file the day it gains its first
+// real rule (plan gating, workspace-kind exclusion, per-org policy). Today it
+// is a trivial loop over registration selectors and stays inline.
 
 pub struct SelectedProductMcp<'a> {
     pub registration: &'a ProductMcpLaunchRegistration,

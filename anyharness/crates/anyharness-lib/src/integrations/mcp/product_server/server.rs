@@ -1,3 +1,12 @@
+use async_trait::async_trait;
+use serde_json::{json, Value};
+
+use super::definition::ProductMcpDefinition;
+use crate::integrations::mcp::json_rpc::{
+    jsonrpc_error, jsonrpc_result, CallToolParams, InitializeParams, JsonRpcRequest,
+};
+use crate::integrations::mcp::tools::jsonrpc_tool_result;
+
 // ── Error codes ─────────────────────────────────────────────────────────────
 
 pub const JSON_RPC_PARSE_ERROR: i64 = -32700;
@@ -78,14 +87,6 @@ impl ProductMcpTokenValidation {
 
 // ── Initialize response ──────────────────────────────────────────────────────
 
-use serde_json::{json, Value};
-
-use super::definition::ProductMcpDefinition;
-use crate::integrations::mcp::json_rpc::{
-    jsonrpc_error, jsonrpc_result, CallToolParams, InitializeParams, JsonRpcRequest,
-};
-use crate::integrations::mcp::tools::jsonrpc_tool_result;
-
 pub fn initialize_response(
     id: Option<Value>,
     protocol_version: Option<String>,
@@ -106,8 +107,6 @@ pub fn initialize_response(
 }
 
 // ── Server trait + dispatcher ─────────────────────────────────────────────────
-
-use async_trait::async_trait;
 
 #[async_trait]
 pub trait ProductMcpServer: Send + Sync {

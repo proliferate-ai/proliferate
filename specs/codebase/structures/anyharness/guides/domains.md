@@ -451,7 +451,7 @@ domains/sessions/mcp_bindings/product_registry.rs
   serving-side registry: incoming route slug -> product MCP handler
 
 domains/sessions/mcp_bindings/product_catalog.rs
-  launch-side facade: select and materialise product MCP launch extras for this session
+  launch-side facade: select and materialize product MCP launch extras for this session
 
 domains/sessions/mcp_bindings/assembly.rs
   whole-session composer: user MCPs + product MCPs + session extensions +
@@ -471,7 +471,7 @@ forking transport or protocol machinery:
 1. Add domains/<feature>/mcp/{definition,auth,context,tools,calls}.rs.
 2. Implement ProductMcpServer in domains/<feature>/mcp/mod.rs.
 3. Register the server in app's ProductMcpEndpointRegistry wiring.
-4. Add selection predicate and HTTP materialisation in
+4. Add selection predicate and HTTP materialization in
    domains/sessions/mcp_bindings/product_catalog.rs.
 5. Add tests for auth, selection, injection, tools/list, tools/call, and
    endpoint dispatch.

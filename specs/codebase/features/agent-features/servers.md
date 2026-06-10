@@ -416,7 +416,7 @@ assembly.rs
   one launch boundary that produces final MCP servers and prompt additions
 
 product_catalog.rs
-  launch-side facade: select and materialise product MCP launch extras for this session
+  launch-side facade: select and materialize product MCP launch extras for this session
 
 product_registry.rs
   code-defined product MCP definitions and server lookup
@@ -733,7 +733,7 @@ Required steps:
 5. Add domains/<domain>/mcp/tools.rs.
 6. Add domains/<domain>/mcp/calls.rs.
 7. Register the product MCP in domains/sessions/mcp_bindings/product_registry.rs.
-8. Add selection predicate and HTTP materialisation in
+8. Add selection predicate and HTTP materialization in
    domains/sessions/mcp_bindings/product_catalog.rs.
 9. Add endpoint routing through the generic product MCP endpoint.
 10. Add UI exposure decision: internal-only or user-selectable.

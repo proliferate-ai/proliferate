@@ -305,7 +305,7 @@ domains/<feature>/mcp
   product tool behavior
 
 domains/sessions/mcp_bindings/product_catalog.rs
-  launch-side facade: select and materialise product MCP launch extras for this session
+  launch-side facade: select and materialize product MCP launch extras for this session
 ```
 
 ## Smells
