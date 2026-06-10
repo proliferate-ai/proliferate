@@ -218,10 +218,18 @@ for (const [kind, runs] of byAgent) {
     if (current) observedDefaults[run.data.authContext] = current;
   }
 
+  const nativeVersions = new Set(runs.map((r) => r.data.nativeCli?.version).filter(Boolean));
+  if (nativeVersions.size > 1) {
+    throw new Error(`${kind}: runs used different native CLI versions: ${[...nativeVersions].join(", ")}`);
+  }
+  const nativeVersion = [...nativeVersions][0];
   agents.push({
     kind,
     displayName: AGENT_DISPLAY_NAMES[kind] ?? kind,
-    harness: { agentProcess: { version: attestation?.version ?? "unknown" } },
+    harness: {
+      agentProcess: { version: attestation?.version ?? "unknown" },
+      ...(nativeVersion ? { native: { version: nativeVersion } } : {}),
+    },
     authContexts: runs.map((run) => ({
       id: run.data.authContext,
       ...(run.data.authContext === "baseline"
@@ -237,10 +245,25 @@ for (const [kind, runs] of byAgent) {
   });
 }
 
+// Pair the catalog with the registry it was probed against (catalog owns
+// WHICH versions; registry owns HOW — see catalog-v2 spec).
+const registryPath = join(here, "..", "..", "catalogs", "agents", "v1", "registry.json");
+let registryVersion = null; // registry.json lands with PR #607; pairing activates then
+try { registryVersion = JSON.parse(readFileSync(registryPath, "utf8")).registryVersion; } catch {}
+
+// Monotonic catalogVersion: bump the same-day revision counter.
 const today = new Date().toISOString().slice(0, 10);
+let revision = 1;
+try {
+  const previous = JSON.parse(readFileSync(outPath, "utf8")).catalogVersion;
+  const [prevDay, prevRev] = previous.split(".");
+  if (prevDay === today) revision = Number(prevRev) + 1;
+} catch { /* no previous draft */ }
+
 const catalog = {
   schemaVersion: 2,
-  catalogVersion: `${today}.1`,
+  catalogVersion: `${today}.${revision}`,
+  probedAgainst: { registryVersion },
   generatedAt: new Date().toISOString(),
   agents: agents.sort((a, b) => a.kind.localeCompare(b.kind)),
 };

@@ -1,7 +1,10 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "2026-06-10.1",
-  "generatedAt": "2026-06-10T00:52:47.614Z",
+  "catalogVersion": "2026-06-10.2",
+  "probedAgainst": {
+    "registryVersion": null
+  },
+  "generatedAt": "2026-06-10T00:56:55.374Z",
   "agents": [
     {
       "kind": "claude",
@@ -9,6 +12,9 @@
       "harness": {
         "agentProcess": {
           "version": "0.29.0"
+        },
+        "native": {
+          "version": "2.1.170 (Claude Code)"
         }
       },
       "authContexts": [
@@ -344,6 +350,9 @@
       "harness": {
         "agentProcess": {
           "version": "0.11.8"
+        },
+        "native": {
+          "version": "codex-cli 0.139.0"
         }
       },
       "authContexts": [
