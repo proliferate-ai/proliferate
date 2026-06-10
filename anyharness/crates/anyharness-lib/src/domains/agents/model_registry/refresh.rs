@@ -7,7 +7,7 @@ use crate::domains::agents::model::{
     ModelCatalogStatus, ResolvedAgentStatus,
 };
 use crate::domains::agents::readiness::paths::{artifact_root, managed_registry_binary_for_names};
-use crate::domains::agents::readiness::resolver::resolve_agent;
+use crate::domains::agents::readiness::service::resolve_agent;
 use crate::integrations::agent_cli::executable::{
     find_real_binary_in_path, is_known_agent_wrapper,
 };

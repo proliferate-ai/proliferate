@@ -1,7 +1,23 @@
-use super::test_support::PathEnvGuard;
-use super::*;
+use std::collections::HashMap;
 use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
 use url::Url;
+use uuid::Uuid;
+
+use super::agent_process::{
+    install_agent_process_fallback, is_agent_process_installable,
+    should_skip_existing_agent_process_install,
+};
+use super::managed_npm::{apply_npm_version_override, npm_package_name, npm_package_version};
+use super::native::install_native_artifact;
+use super::npm::{install_managed_npm_package, run_command_capture, TempDirGuard};
+use super::test_support::PathEnvGuard;
+use super::{InstallError, InstallOptions};
+use crate::domains::agents::model::*;
+use crate::domains::agents::readiness::paths::artifact_root;
+use crate::integrations::agent_cli::executable::make_executable;
 
 #[test]
 fn direct_managed_npm_agent_processes_are_installable() {

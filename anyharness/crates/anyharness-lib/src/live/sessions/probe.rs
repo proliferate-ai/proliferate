@@ -16,7 +16,7 @@ use tokio::sync::mpsc;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use crate::domains::agents::model::AgentKind;
-use crate::domains::agents::readiness::resolver::resolve_agent;
+use crate::domains::agents::readiness::service::resolve_agent;
 use crate::domains::agents::registry::built_in_registry;
 
 use super::driver::process::spawn_agent_process;

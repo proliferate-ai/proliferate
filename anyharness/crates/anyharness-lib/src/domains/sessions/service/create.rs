@@ -11,7 +11,7 @@ use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::model_registry::resolution::{
     resolve_launch_model_id, ModelResolutionError,
 };
-use crate::domains::agents::readiness::resolver::resolve_agent_with_env;
+use crate::domains::agents::readiness::service::resolve_agent_with_env;
 use crate::domains::agents::registry::built_in_registry;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::workspaces::env::read_materialized_session_env;

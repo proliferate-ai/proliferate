@@ -86,7 +86,7 @@ pub(super) fn is_npm_non_registry_spec(package: &str) -> bool {
         || package.starts_with("https://")
 }
 
-pub(super) fn managed_npm_install_issue(package: &str, managed_dir: &Path) -> Option<String> {
+pub(crate) fn managed_npm_install_issue(package: &str, managed_dir: &Path) -> Option<String> {
     if is_npm_non_registry_spec(package) {
         if non_registry_install_matches(package, managed_dir) {
             return None;

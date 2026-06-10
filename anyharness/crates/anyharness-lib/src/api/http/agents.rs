@@ -13,7 +13,7 @@ use axum::{
 
 use crate::app::AppState;
 use crate::domains::agents::installer::{InstallError, InstalledArtifactResult};
-use crate::domains::agents::login_terminal::{
+use crate::domains::agents::auth_config::login_terminal::{
     close_agent_login_terminal as close_agent_login_terminal_session,
     get_agent_login_terminal as get_agent_login_terminal_session,
     start_agent_login_terminal_session,

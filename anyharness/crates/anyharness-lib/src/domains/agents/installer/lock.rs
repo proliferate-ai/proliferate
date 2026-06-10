@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use fs2::FileExt;
 
-use super::model::AgentKind;
+use crate::domains::agents::model::AgentKind;
 
 pub struct AgentInstallLock {
     _file: File,

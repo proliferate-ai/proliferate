@@ -4,7 +4,7 @@ use crate::domains::agents::catalog::projection::models::bundled_model_registrie
 use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::model_registry::resolution::launch_registry_for_scope;
 use crate::domains::agents::model_registry::store::DynamicModelRegistryStore;
-use crate::domains::agents::readiness::resolver::resolve_agent;
+use crate::domains::agents::readiness::service::resolve_agent;
 use crate::domains::agents::registry::built_in_registry;
 
 #[derive(Debug, Clone)]
