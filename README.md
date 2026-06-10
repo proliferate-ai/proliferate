@@ -55,7 +55,7 @@ Each agent runs through its native harness, so auth, tools, models, permissions,
   <tr>
     <td align="center" width="120">
       <img src="./apps/desktop/public/provider-icons/claude.svg" width="40" height="40" alt="Claude" /><br />
-      <strong>Claude Code</strong>
+      <strong>Claude</strong>
     </td>
     <td align="center" width="120">
       <picture>
