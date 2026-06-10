@@ -17,7 +17,7 @@ use crate::domains::agents::model_registry::model::{
     DynamicModelRegistrySnapshot, DynamicModelRegistrySource, DynamicModelRegistryStatus,
     RefreshModelRegistryOptions,
 };
-use crate::domains::agents::registry::built_in_registry;
+use crate::domains::agents::registry;
 
 type ProblemResponse = (StatusCode, Json<ProblemDetails>);
 
@@ -200,10 +200,7 @@ pub async fn refresh_agent_model_registry(
 }
 
 fn ensure_agent_exists(kind: &str) -> Result<(), ProblemResponse> {
-    if built_in_registry()
-        .iter()
-        .any(|descriptor| descriptor.kind.as_str() == kind)
-    {
+    if registry::descriptor(kind).is_some() {
         Ok(())
     } else {
         Err(agent_not_found(kind))
