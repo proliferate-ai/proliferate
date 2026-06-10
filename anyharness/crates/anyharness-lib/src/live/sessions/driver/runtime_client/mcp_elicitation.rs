@@ -6,19 +6,17 @@ use anyharness_contract::v1::{
 
 use super::{raw_ext_response, RuntimeClient};
 use crate::live::sessions::interactions::mcp_elicitation::{
-    claude_ext_response_from_outcome, codex_ext_response_from_outcome,
-    normalize_claude_mcp_elicitation, normalize_codex_mcp_elicitation,
-    ClaudeMcpElicitationExtParams, CodexMcpElicitationExtParams,
+    claude_ext_response_from_outcome, normalize_claude_mcp_elicitation,
+    normalize_standard_mcp_elicitation, standard_elicitation_response_from_outcome,
+    ClaudeMcpElicitationExtParams,
 };
 
 impl RuntimeClient {
-    pub(super) async fn codex_mcp_elicitation(
+    pub(crate) async fn standard_mcp_elicitation(
         &self,
-        args: acp::schema::ExtRequest,
-    ) -> acp::Result<acp::schema::ExtResponse> {
-        let request = serde_json::from_str::<CodexMcpElicitationExtParams>(args.params.get())
-            .map_err(|error| acp::Error::invalid_params().data(error.to_string()))?;
-        let normalized = normalize_codex_mcp_elicitation(request)
+        request: acp::schema::CreateElicitationRequest,
+    ) -> acp::Result<acp::schema::CreateElicitationResponse> {
+        let normalized = normalize_standard_mcp_elicitation(request)
             .map_err(|error| acp::Error::invalid_params().data(format!("{error:?}")))?;
 
         let request_id = uuid::Uuid::new_v4().to_string();
@@ -71,7 +69,9 @@ impl RuntimeClient {
             pending_wait
         };
 
-        raw_ext_response(codex_ext_response_from_outcome(pending_wait.wait().await))
+        Ok(standard_elicitation_response_from_outcome(
+            pending_wait.wait().await,
+        ))
     }
 
     pub(super) async fn claude_mcp_elicitation(

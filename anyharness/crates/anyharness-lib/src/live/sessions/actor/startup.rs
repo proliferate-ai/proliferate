@@ -132,6 +132,7 @@ pub(in crate::live::sessions::actor) async fn start_actor(
     let client_for_notif = client.clone();
     let client_for_perm = client.clone();
     let client_for_ext = client.clone();
+    let client_for_elicitation = client.clone();
 
     let connect_future = acp::Client
         .builder()
@@ -164,6 +165,13 @@ pub(in crate::live::sessions::actor) async fn start_actor(
                     }
                     _ => Err(acp::Error::method_not_found()),
                 }
+            },
+            acp::on_receive_request!(),
+        )
+        .on_receive_request(
+            async move |req: acp::schema::CreateElicitationRequest, responder: acp::Responder<acp::schema::CreateElicitationResponse>, _cx| {
+                let result = client_for_elicitation.standard_mcp_elicitation(req).await;
+                responder.respond_with_result(result)
             },
             acp::on_receive_request!(),
         )

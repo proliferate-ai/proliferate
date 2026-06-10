@@ -1,37 +1,11 @@
+use std::collections::BTreeMap;
 use std::fmt;
 
+use agent_client_protocol as acp;
 use serde::Serialize;
 use serde_json::Value;
 
 use super::McpElicitationOutcome;
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CodexMcpElicitationExtResponse {
-    pub outcome: CodexMcpElicitationExtOutcome,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub content: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "_meta")]
-    pub meta: Option<Value>,
-}
-
-impl fmt::Debug for CodexMcpElicitationExtResponse {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CodexMcpElicitationExtResponse")
-            .field("outcome", &self.outcome)
-            .field("content_present", &self.content.is_some())
-            .field("meta_present", &self.meta.is_some())
-            .finish()
-    }
-}
-
-#[derive(Debug, Clone, Copy, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CodexMcpElicitationExtOutcome {
-    Accepted,
-    Declined,
-    Cancelled,
-}
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -58,26 +32,54 @@ pub enum ClaudeMcpElicitationExtAction {
     Cancel,
 }
 
-pub fn codex_ext_response_from_outcome(
+pub fn standard_elicitation_response_from_outcome(
     outcome: McpElicitationOutcome,
-) -> CodexMcpElicitationExtResponse {
+) -> acp::schema::CreateElicitationResponse {
+    use acp::schema::{
+        ElicitationAcceptAction, ElicitationAction, ElicitationContentValue,
+    };
+
     match outcome {
-        McpElicitationOutcome::Accepted { content, .. } => CodexMcpElicitationExtResponse {
-            outcome: CodexMcpElicitationExtOutcome::Accepted,
-            content,
-            meta: None,
-        },
-        McpElicitationOutcome::Declined => CodexMcpElicitationExtResponse {
-            outcome: CodexMcpElicitationExtOutcome::Declined,
-            content: None,
-            meta: None,
-        },
+        McpElicitationOutcome::Accepted { content, .. } => {
+            let acp_content = content.and_then(|value| {
+                value.as_object().map(|obj| {
+                    obj.iter()
+                        .filter_map(|(k, v)| {
+                            let elicitation_value = match v {
+                                Value::String(s) => {
+                                    Some(ElicitationContentValue::String(s.clone()))
+                                }
+                                Value::Number(n) => {
+                                    if let Some(i) = n.as_i64() {
+                                        Some(ElicitationContentValue::Integer(i))
+                                    } else {
+                                        n.as_f64().map(ElicitationContentValue::Number)
+                                    }
+                                }
+                                Value::Bool(b) => Some(ElicitationContentValue::Boolean(*b)),
+                                Value::Array(arr) => {
+                                    let strings: Vec<String> = arr
+                                        .iter()
+                                        .filter_map(|v| v.as_str().map(str::to_string))
+                                        .collect();
+                                    Some(ElicitationContentValue::StringArray(strings))
+                                }
+                                _ => None,
+                            };
+                            elicitation_value.map(|v| (k.clone(), v))
+                        })
+                        .collect::<BTreeMap<_, _>>()
+                })
+            });
+            acp::schema::CreateElicitationResponse::new(ElicitationAction::Accept(
+                ElicitationAcceptAction::new().content(acp_content),
+            ))
+        }
+        McpElicitationOutcome::Declined => {
+            acp::schema::CreateElicitationResponse::new(ElicitationAction::Decline)
+        }
         McpElicitationOutcome::Cancelled | McpElicitationOutcome::Dismissed => {
-            CodexMcpElicitationExtResponse {
-                outcome: CodexMcpElicitationExtOutcome::Cancelled,
-                content: None,
-                meta: None,
-            }
+            acp::schema::CreateElicitationResponse::new(ElicitationAction::Cancel)
         }
     }
 }

@@ -15,7 +15,6 @@ mod permission;
 mod user_input;
 
 const CODEX_REQUEST_USER_INPUT_METHOD: &str = "experimental/codex/requestUserInput";
-const CODEX_MCP_ELICITATION_METHOD: &str = "experimental/codex/mcpElicitation";
 const CLAUDE_REQUEST_USER_INPUT_METHOD: &str = "experimental/claude/requestUserInput";
 const CLAUDE_MCP_ELICITATION_METHOD: &str = "experimental/claude/mcpElicitation";
 
@@ -66,7 +65,6 @@ impl RuntimeClient {
     ) -> acp::Result<acp::schema::ExtResponse> {
         match args.method.as_ref() {
             CODEX_REQUEST_USER_INPUT_METHOD => self.codex_request_user_input(args).await,
-            CODEX_MCP_ELICITATION_METHOD => self.codex_mcp_elicitation(args).await,
             CLAUDE_REQUEST_USER_INPUT_METHOD => self.claude_request_user_input(args).await,
             CLAUDE_MCP_ELICITATION_METHOD => self.claude_mcp_elicitation(args).await,
             _ => Err(acp::Error::method_not_found()),
