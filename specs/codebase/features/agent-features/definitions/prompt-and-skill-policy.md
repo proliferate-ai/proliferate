@@ -40,6 +40,11 @@ Use for:
 - platform identity
 - safety and repository rules
 - global tool-use invariants
+- global response-formatting invariants (file references as markdown links;
+  owned by `domains/sessions/response_formatting.rs`, injected for every
+  session in `domains/sessions/mcp_bindings/assembly.rs` on both the
+  `systemPrompt.append` meta channel and the first-prompt channel so Codex,
+  which ignores session meta, still receives it)
 - session role invariants that apply to every session of that launch
 
 Do not use for:
@@ -201,8 +206,9 @@ Product prompts:
 ```text
 anyharness/crates/anyharness-lib/src/domains/sessions/subagents/hooks.rs
 anyharness/crates/anyharness-lib/src/domains/sessions/subagents/mcp/definition.rs
-anyharness/crates/anyharness-lib/src/domains/reviews/runtime_helpers.rs
-anyharness/crates/anyharness-lib/src/domains/reviews/service_detail.rs
+anyharness/crates/anyharness-lib/src/domains/reviews/runtime/launch.rs
+anyharness/crates/anyharness-lib/src/domains/reviews/service/detail.rs
+anyharness/crates/anyharness-lib/src/domains/sessions/response_formatting.rs
 anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs
 anyharness/crates/anyharness-lib/src/domains/cowork/mcp/definition.rs
 ```
@@ -219,8 +225,8 @@ anyharness/crates/anyharness-lib/src/persistence/sql/0030_subagent_links_and_com
 Review and plan artifacts:
 
 ```text
-anyharness/crates/anyharness-lib/src/domains/reviews/runtime_artifacts.rs
-anyharness/crates/anyharness-lib/src/domains/reviews/store_feedback.rs
+anyharness/crates/anyharness-lib/src/domains/reviews/runtime/artifacts.rs
+anyharness/crates/anyharness-lib/src/domains/reviews/store/feedback.rs
 anyharness/crates/anyharness-lib/src/domains/plans/document.rs
 anyharness/crates/anyharness-lib/src/domains/plans/runtime.rs
 ```

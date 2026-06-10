@@ -10,6 +10,7 @@ use super::summaries::serialize_binding_summaries;
 use crate::domains::sessions::extensions::{
     SessionExtension, SessionLaunchContext, SessionLaunchExtras,
 };
+use crate::domains::sessions::response_formatting;
 use crate::domains::sessions::model::SessionRecord;
 use crate::domains::workspaces::model::WorkspaceRecord;
 
@@ -58,6 +59,16 @@ pub fn assemble_session_mcp_launch(
     launch_extras
         .mcp_binding_summaries
         .append(&mut product_extras.mcp_binding_summaries);
+    // Both channels on purpose: most harnesses consume the systemPrompt.append
+    // session meta, but Codex ignores it and only receives the first-prompt
+    // channel (inlined into the first user prompt). Non-Codex harnesses never
+    // read the first-prompt channel, so nothing is delivered twice.
+    launch_extras
+        .system_prompt_append
+        .append(&mut response_formatting::system_prompt_append());
+    launch_extras
+        .first_prompt_system_prompt_append
+        .append(&mut response_formatting::system_prompt_append());
     let first_prompt_system_prompt_append =
         join_system_prompt_append(Some(launch_extras.first_prompt_system_prompt_append));
     let system_prompt_append = merge_system_prompt_append(
@@ -326,13 +337,21 @@ mod tests {
             &assembled.mcp_servers[0],
             SessionMcpServer::Http(server) if server.server_name == "product"
         ));
+        let expected_system_prompt = format!(
+            "persisted prompt\n\nproduct prompt\n\n{}",
+            response_formatting::FILE_REFERENCE_INSTRUCTIONS
+        );
         assert_eq!(
             assembled.system_prompt_append.as_deref(),
-            Some("persisted prompt\n\nproduct prompt")
+            Some(expected_system_prompt.as_str())
+        );
+        let expected_first_prompt = format!(
+            "first prompt\n\n{}",
+            response_formatting::FILE_REFERENCE_INSTRUCTIONS
         );
         assert_eq!(
             assembled.first_prompt_system_prompt_append.as_deref(),
-            Some("first prompt")
+            Some(expected_first_prompt.as_str())
         );
         assert!(assembled.mcp_binding_summaries_json.is_some());
     }
@@ -370,6 +389,28 @@ mod tests {
                 .expect("parse summaries");
         assert_eq!(summaries.len(), 1);
         assert_eq!(summaries[0].id, "product-1");
+    }
+
+    #[test]
+    fn assemble_launch_always_appends_file_reference_instructions_to_both_channels() {
+        let assembled = assemble_session_mcp_launch(
+            None,
+            &[],
+            &ProductMcpLaunchCatalog::disabled(),
+            &workspace_record(),
+            &session_record(),
+            None,
+        )
+        .expect("assemble launch");
+
+        assert_eq!(
+            assembled.system_prompt_append.as_deref(),
+            Some(response_formatting::FILE_REFERENCE_INSTRUCTIONS)
+        );
+        assert_eq!(
+            assembled.first_prompt_system_prompt_append.as_deref(),
+            Some(response_formatting::FILE_REFERENCE_INSTRUCTIONS)
+        );
     }
 
     #[test]

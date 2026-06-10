@@ -1,16 +1,27 @@
 import { twMerge } from "tailwind-merge";
-import { MarkdownBody } from "./MarkdownBody";
+import {
+  MarkdownBody,
+  type MarkdownCodeBlockRenderer,
+  type MarkdownInlineCodeRenderer,
+  type MarkdownLinkRenderer,
+} from "./MarkdownBody";
 
 interface PlanMarkdownBodyProps {
   content: string;
   className?: string;
   presentation?: "default" | "proposal";
+  renderLink?: MarkdownLinkRenderer;
+  renderInlineCode?: MarkdownInlineCodeRenderer;
+  renderCodeBlock?: MarkdownCodeBlockRenderer;
 }
 
 export function PlanMarkdownBody({
   content,
   className,
   presentation = "default",
+  renderLink,
+  renderInlineCode,
+  renderCodeBlock,
 }: PlanMarkdownBodyProps) {
   const proposal = presentation === "proposal";
   const renderedContent = proposal ? annotatePlanSectionHeadings(content) : content;
@@ -18,6 +29,9 @@ export function PlanMarkdownBody({
   return (
     <MarkdownBody
       content={renderedContent}
+      renderLink={renderLink}
+      renderInlineCode={renderInlineCode}
+      renderCodeBlock={renderCodeBlock}
       className={twMerge(
         "select-text [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
         proposal ? PROPOSED_PLAN_MARKDOWN_CLASSNAME : "",

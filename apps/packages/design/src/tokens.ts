@@ -71,12 +71,12 @@ export const radius = {
 
 export const typography = {
   fontSans: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-  fontMono: '"Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+  fontMono: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
   size: {
     xs: 8,
     sm: 10,
     base: 11,
-    chat: 12,
+    chat: 13,
     lg: 14,
     xl: 18,
   },
@@ -84,7 +84,7 @@ export const typography = {
     xs: 12,
     sm: 16,
     base: 16,
-    chat: 20,
+    chat: 21,
     lg: 20,
     xl: 28,
   },

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { looksLikePath, splitPathLineSuffix } from "./path-detection";
+import {
+  looksLikeFileReferenceHref,
+  looksLikePath,
+  splitPathLineSuffix,
+} from "./path-detection";
 
 describe("looksLikePath", () => {
   it("accepts relative paths with extensions", () => {
@@ -71,6 +75,22 @@ describe("looksLikePath", () => {
     expect(looksLikePath("")).toBe(false);
     expect(looksLikePath("   ")).toBe(false);
     expect(looksLikePath("a/" + "x".repeat(600))).toBe(false);
+  });
+});
+
+describe("looksLikeFileReferenceHref", () => {
+  it("accepts explicit markdown destinations for bare files", () => {
+    expect(looksLikeFileReferenceHref("README.md")).toBe(true);
+    expect(looksLikeFileReferenceHref("README.md:12")).toBe(true);
+    expect(looksLikeFileReferenceHref("package.json:4:2")).toBe(true);
+    expect(looksLikeFileReferenceHref("Makefile")).toBe(true);
+  });
+
+  it("keeps URL and arbitrary bare-word destinations out of file handling", () => {
+    expect(looksLikeFileReferenceHref("https://example.com/README.md")).toBe(false);
+    expect(looksLikeFileReferenceHref("javascript:1")).toBe(false);
+    expect(looksLikeFileReferenceHref("alpha")).toBe(false);
+    expect(looksLikeFileReferenceHref("foo/bar")).toBe(false);
   });
 });
 

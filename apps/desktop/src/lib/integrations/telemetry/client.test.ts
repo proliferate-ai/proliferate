@@ -187,4 +187,22 @@ describe("desktop telemetry client", () => {
     expect(mocks.identifyDesktopPostHogUserMock).toHaveBeenCalledOnce();
     expect(mocks.identifyDesktopPostHogUserMock).toHaveBeenCalledWith(user);
   });
+
+  it("emits desktop_keychain_access_failed to PostHog", async () => {
+    const client = await loadTelemetryClient();
+
+    expect(
+      client.isVendorPostHogEventAllowed("desktop_keychain_access_failed"),
+    ).toBe(true);
+
+    client.trackProductEvent("desktop_keychain_access_failed", {
+      operation: "get_auth_session",
+      error_message: "keychain access denied",
+    });
+
+    expect(mocks.trackDesktopPostHogEventMock).toHaveBeenCalledWith(
+      "desktop_keychain_access_failed",
+      expect.objectContaining({ operation: "get_auth_session" }),
+    );
+  });
 });

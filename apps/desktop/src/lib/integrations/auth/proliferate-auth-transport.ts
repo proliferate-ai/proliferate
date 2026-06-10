@@ -15,6 +15,16 @@ export class AuthRequestError extends Error {
   }
 }
 
+// True only when the server definitively rejected the credentials. Network
+// failures are normalized to AuthRequestError(503) by normalizeTransportError,
+// so an instanceof check alone would treat offline launches as sign-outs.
+export function isDefinitiveAuthRejection(error: unknown): boolean {
+  return (
+    error instanceof AuthRequestError &&
+    (error.status === 401 || error.status === 403)
+  )
+}
+
 export function buildAuthUrl(path: string): string {
   return buildProliferateApiUrl(path)
 }

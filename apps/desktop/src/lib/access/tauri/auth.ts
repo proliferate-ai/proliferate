@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core"
 
+import type { KeychainTelemetryOperation } from "@/lib/domain/telemetry/events"
+
 export interface StoredAuthSession {
   access_token: string
   refresh_token: string
@@ -21,6 +23,30 @@ export interface StoredPendingAuthSession {
 
 const BROWSER_AUTH_SESSION_KEY = "proliferate.auth.session"
 const BROWSER_PENDING_AUTH_KEY = "proliferate.auth.pending"
+
+const reportedKeychainFailures = new Set<KeychainTelemetryOperation>()
+
+// A rejected invoke means native auth storage is broken (e.g. a keychain item
+// whose ACL no longer trusts this binary) — the silent localStorage fallback
+// then looks like "logged out" with no trace. Report once per operation per
+// app run; the telemetry client is imported lazily because this access-layer
+// module must not pull in the integrations layer at module scope.
+function reportKeychainFailure(
+  operation: KeychainTelemetryOperation,
+  error: unknown,
+): void {
+  if (reportedKeychainFailures.has(operation)) return
+  reportedKeychainFailures.add(operation)
+  const message = error instanceof Error ? error.message : String(error ?? "")
+  void import("@/lib/integrations/telemetry/client")
+    .then(({ trackProductEvent }) => {
+      trackProductEvent("desktop_keychain_access_failed", {
+        operation,
+        error_message: message.slice(0, 300),
+      })
+    })
+    .catch(() => {})
+}
 
 function readBrowserSession(): StoredAuthSession | null {
   try {
@@ -77,7 +103,8 @@ function clearBrowserPendingAuth(): void {
 export async function getStoredAuthSession(): Promise<StoredAuthSession | null> {
   try {
     return await invoke<StoredAuthSession | null>("get_auth_session")
-  } catch {
+  } catch (error) {
+    reportKeychainFailure("get_auth_session", error)
     return readBrowserSession()
   }
 }
@@ -86,7 +113,8 @@ export async function setStoredAuthSession(session: StoredAuthSession): Promise<
   try {
     await invoke("set_auth_session", { session })
     return
-  } catch {
+  } catch (error) {
+    reportKeychainFailure("set_auth_session", error)
     writeBrowserSession(session)
   }
 }
@@ -95,7 +123,8 @@ export async function clearStoredAuthSession(): Promise<void> {
   try {
     await invoke("clear_auth_session")
     return
-  } catch {
+  } catch (error) {
+    reportKeychainFailure("clear_auth_session", error)
     clearBrowserSession()
   }
 }
@@ -103,7 +132,8 @@ export async function clearStoredAuthSession(): Promise<void> {
 export async function getStoredPendingAuthSession(): Promise<StoredPendingAuthSession | null> {
   try {
     return await invoke<StoredPendingAuthSession | null>("get_pending_auth")
-  } catch {
+  } catch (error) {
+    reportKeychainFailure("get_pending_auth", error)
     return readBrowserPendingAuth()
   }
 }
@@ -114,7 +144,8 @@ export async function setStoredPendingAuthSession(
   try {
     await invoke("set_pending_auth", { record })
     return
-  } catch {
+  } catch (error) {
+    reportKeychainFailure("set_pending_auth", error)
     writeBrowserPendingAuth(record)
   }
 }
@@ -123,7 +154,8 @@ export async function clearStoredPendingAuthSession(): Promise<void> {
   try {
     await invoke("clear_pending_auth")
     return
-  } catch {
+  } catch (error) {
+    reportKeychainFailure("clear_pending_auth", error)
     clearBrowserPendingAuth()
   }
 }

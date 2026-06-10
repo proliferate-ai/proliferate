@@ -63,6 +63,13 @@ export type AgentSeedTelemetryFailureKind =
   | "io"
   | "unsupported_target"
   | "verification_failed";
+export type KeychainTelemetryOperation =
+  | "get_auth_session"
+  | "set_auth_session"
+  | "clear_auth_session"
+  | "get_pending_auth"
+  | "set_pending_auth"
+  | "clear_pending_auth";
 
 export interface DesktopProductEventMap {
   app_update_available: { version: string };
@@ -184,6 +191,10 @@ export interface DesktopProductEventMap {
     result: "synced";
   };
   connectors_pane_viewed: undefined;
+  desktop_keychain_access_failed: {
+    operation: KeychainTelemetryOperation;
+    error_message: string;
+  };
   runtime_connection_state_changed: {
     connection_state: RuntimeConnectionTelemetryState;
     has_error: boolean;

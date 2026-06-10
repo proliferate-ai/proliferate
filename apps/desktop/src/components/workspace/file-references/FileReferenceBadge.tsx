@@ -13,6 +13,7 @@ import {
 } from "@/components/workspace/file-references/FileReferenceMenu";
 import { useFileReferenceActions } from "@/hooks/workspaces/workflows/files/use-file-reference-actions";
 import { useFileReferenceNativeContextMenu } from "@/hooks/workspaces/ui/files/use-file-reference-native-context-menu";
+import type { ResolvedFileReference } from "@/lib/domain/files/path-references";
 
 type FileReferenceBadgeVariant = "inline" | "chip";
 
@@ -39,13 +40,14 @@ export function FileReferenceBadge({
   const { onContextMenuCapture } = useFileReferenceNativeContextMenu(actions);
   const resolvedBasename = basename ?? extractBasename(actions.reference.workspacePath ?? actions.reference.path);
   const iconPath = actions.reference.workspacePath ?? actions.reference.path;
-  const displayLabel = label ?? (variant === "chip" ? resolvedBasename : rawPath);
+  const displayLabel = label
+    ?? (variant === "chip" ? resolvedBasename : inlineReferenceLabel(actions.reference));
   const useExternalInlineIcon =
     variant === "inline"
     && !actions.reference.workspacePath
     && Boolean(actions.reference.absolutePath);
   const iconShellClassName = variant === "inline"
-    ? "relative mr-px inline-block h-[1lh] w-3.5 shrink-0 align-bottom"
+    ? "relative mr-[3px] inline-block h-[1lh] w-3.5 shrink-0 align-bottom"
     : "inline-flex shrink-0 items-center justify-center";
 
   const handleClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
@@ -70,11 +72,9 @@ export function FileReferenceBadge({
         {useExternalInlineIcon ? (
           <span
             aria-hidden="true"
-            className="absolute left-0 top-1/2 size-3.5 -translate-y-1/2 opacity-95 file-reference-icon inline-block pointer-events-none select-none [&>svg]:block [&>svg]:size-full"
+            className="absolute left-0 top-1/2 size-3.5 -translate-y-1/2 inline-block pointer-events-none select-none [&>svg]:block [&>svg]:size-full"
           >
-            <InlinePathMentionIcon
-              data-external-path-reference-icon
-            />
+            <InlinePathMentionIcon />
           </span>
         ) : (
           <FileTreeEntryIcon
@@ -84,7 +84,7 @@ export function FileReferenceBadge({
             className={variant === "inline"
               ? "absolute left-0 top-1/2 size-3.5 -translate-y-1/2 opacity-95"
               : "size-2.5 opacity-90"}
-            toneClassName="file-reference-icon"
+            toneClassName={variant === "inline" ? "text-current" : "file-reference-icon"}
           />
         )}
       </span>
@@ -123,9 +123,17 @@ function resolveBadgeClassName(
   }
 
   return [
-    "group/inline-mention m-0 inline appearance-none whitespace-normal break-words border-0 bg-transparent p-0 text-left align-baseline font-[inherit] leading-[inherit] text-link-foreground shadow-none hover:bg-transparent hover:text-link-foreground hover:underline hover:decoration-current hover:decoration-dashed hover:decoration-[0.5px] hover:underline-offset-2 focus-visible:outline-none focus-visible:underline",
+    "group/inline-mention m-0 inline appearance-none whitespace-normal break-words border-0 bg-transparent px-0.5 py-0 text-left align-baseline font-[inherit] font-medium leading-[inherit] text-[color:color-mix(in_srgb,var(--color-link-foreground)_80%,var(--color-foreground)_20%)] shadow-none hover:bg-transparent hover:underline hover:decoration-current hover:decoration-dashed hover:decoration-[0.5px] hover:underline-offset-2 focus-visible:outline-none focus-visible:underline",
     className,
   ].filter(Boolean).join(" ");
+}
+
+function inlineReferenceLabel(reference: ResolvedFileReference): string {
+  const path = reference.workspacePath ?? reference.path;
+  if (reference.line === null) {
+    return path;
+  }
+  return `${path} (line ${reference.line})`;
 }
 
 function extractBasename(path: string): string {

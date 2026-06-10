@@ -10,6 +10,7 @@ pub mod model;
 pub mod plan_references;
 pub mod prompt;
 pub mod replay;
+pub mod response_formatting;
 pub mod runtime;
 pub mod runtime_event;
 pub mod service;

@@ -1,6 +1,11 @@
 import { useMemo } from "react";
 import type { TranscriptItem } from "@anyharness/sdk";
 import { ProposedPlanCard } from "@/components/workspace/chat/transcript/ProposedPlanCard";
+import {
+  renderTranscriptCodeBlock,
+  renderTranscriptInlineCode,
+  renderTranscriptLink,
+} from "@/components/workspace/chat/transcript/transcript-markdown";
 import { useProposedPlanActions } from "@/hooks/plans/workflows/use-proposed-plan-actions";
 import {
   planAttachmentId,
@@ -64,6 +69,9 @@ export function ConnectedProposedPlanItem({
           isRejecting={isRejectingPlan}
           isImplementingHere={isImplementingPlan}
           isStartingReview={isStartingReview}
+          renderLink={renderTranscriptLink}
+          renderInlineCode={renderTranscriptInlineCode}
+          renderCodeBlock={renderTranscriptCodeBlock}
         />
       </div>
     </div>

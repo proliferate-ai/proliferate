@@ -65,7 +65,7 @@ fn review_markdown_instructions(kind: ReviewKind) -> &'static str {
             "Format critiqueMarkdown as concise Markdown for a plan review. Use these sections: ## Verdict, ## Findings, ## Risks, and ## Verification. Use bullet lists for actionable items. If approving, state that no blocking issues were found and list what you checked."
         }
         ReviewKind::Code => {
-            "Format critiqueMarkdown as concise Markdown for a code review. Use these sections: ## Verdict, ## Findings, and ## Tests. Order findings by severity, include affected file paths in backticks when possible, and use bullet lists. If approving, state that no blocking issues were found and list what you checked."
+            "Format critiqueMarkdown as concise Markdown for a code review. Use these sections: ## Verdict, ## Findings, and ## Tests. Order findings by severity, link affected files as markdown links with workspace-relative destinations like [models.rs](src/models.rs:42) when possible, and use bullet lists. If approving, state that no blocking issues were found and list what you checked."
         }
     }
 }
@@ -102,7 +102,7 @@ mod tests {
         assert!(prompt.contains("## Findings"));
         assert!(prompt.contains("## Tests"));
         assert!(prompt.contains("Order findings by severity"));
-        assert!(prompt.contains("file paths in backticks"));
+        assert!(prompt.contains("markdown links with workspace-relative destinations"));
     }
 
     fn review_run(kind: ReviewKind) -> ReviewRunRecord {

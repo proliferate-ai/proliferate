@@ -21,7 +21,11 @@ import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
 import { recordMeasurementMetric } from "@/lib/infra/measurement/debug-measurement";
 import type { MeasurementOperationId } from "@/lib/infra/measurement/debug-measurement-catalog-types";
 import { isAnyHarnessTimingEnabled } from "@/lib/infra/measurement/debug-measurement-env";
-import { isSessionExpiring, refreshDesktopUserSession } from "@/lib/integrations/auth/proliferate-auth";
+import {
+  isDefinitiveAuthRejection,
+  isSessionExpiring,
+  refreshDesktopUserSession,
+} from "@/lib/integrations/auth/proliferate-auth";
 
 export type * from "@proliferate/cloud-sdk/types";
 export {
@@ -41,8 +45,12 @@ async function loadValidSession(): Promise<StoredAuthSession | null> {
     const refreshed = await refreshDesktopUserSession(candidate.refresh_token);
     await setStoredAuthSession(refreshed);
     return refreshed;
-  } catch {
-    await clearStoredAuthSession();
+  } catch (error) {
+    // Only a definitive server rejection invalidates the stored session; a
+    // network blip during refresh must not sign the user out.
+    if (isDefinitiveAuthRejection(error)) {
+      await clearStoredAuthSession();
+    }
     return null;
   }
 }
@@ -76,12 +84,19 @@ const authMiddleware: Middleware = {
         const retryHeaders = new Headers(request.headers);
         retryHeaders.set("authorization", `Bearer ${refreshed.access_token}`);
         return fetch(new Request(request, { headers: retryHeaders }));
-      } catch {
-        await clearStoredAuthSession();
+      } catch (error) {
+        if (isDefinitiveAuthRejection(error)) {
+          await clearStoredAuthSession();
+          throw new ProliferateClientError(
+            "Session expired. Please sign in again.",
+            401,
+            "unauthorized",
+          );
+        }
         throw new ProliferateClientError(
-          "Session expired. Please sign in again.",
-          401,
-          "unauthorized",
+          "Could not refresh your session due to a network problem. Please retry.",
+          503,
+          "auth_refresh_unavailable",
         );
       }
     }
@@ -145,12 +160,19 @@ async function fetchDesktopCloudStream(
       headers: retryHeaders,
       signal: input.signal,
     }));
-  } catch {
-    await clearStoredAuthSession();
+  } catch (error) {
+    if (isDefinitiveAuthRejection(error)) {
+      await clearStoredAuthSession();
+      throw new ProliferateClientError(
+        "Session expired. Please sign in again.",
+        401,
+        "unauthorized",
+      );
+    }
     throw new ProliferateClientError(
-      "Session expired. Please sign in again.",
-      401,
-      "unauthorized",
+      "Could not refresh your session due to a network problem. Please retry.",
+      503,
+      "auth_refresh_unavailable",
     );
   }
 }

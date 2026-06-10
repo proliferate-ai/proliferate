@@ -10,28 +10,40 @@ const PRELOAD_LANGS: BundledLanguage[] = [
   "xml", "diff",
 ];
 
+// Palettes mirror the Codex reference highlight.js themes
+// (reference/codex/styles.css): a restrained five-accent set on a plain
+// foreground. Dark is the ChatGPT code palette; light is Atom One Light.
+// Operators, punctuation, and HTML tag names intentionally stay at the
+// default foreground, matching the reference.
 const PROLIFERATE_DARK_THEME = {
   name: "proliferate-dark",
   type: "dark" as const,
   settings: [
-    { settings: { foreground: "#FBFBFB", background: "#181818" } },
-    { scope: ["comment", "punctuation.definition.comment"], settings: { foreground: "#79797F" } },
-    { scope: ["string", "string.quoted", "markup.inline.raw", "markup.raw.inline"], settings: { foreground: "#5ECC71" } },
-    { scope: ["constant.numeric", "constant.language"], settings: { foreground: "#08C0EF" } },
-    { scope: ["keyword", "keyword.control", "keyword.operator.expression", "keyword.operator.new"], settings: { foreground: "#FF678D" } },
-    { scope: ["storage.type", "storage.modifier"], settings: { foreground: "#9D6AFB" } },
-    { scope: ["entity.name.type", "support.type", "support.class"], settings: { foreground: "#D568EA" } },
-    { scope: ["entity.name.function", "support.function", "meta.function-call entity.name.function"], settings: { foreground: "#D568EA" } },
-    { scope: ["variable", "variable.other", "variable.other.readwrite", "variable.other.property", "variable.parameter"], settings: { foreground: "#FFD452" } },
-    { scope: ["keyword.operator", "keyword.operator.assignment"], settings: { foreground: "#68CDF2" } },
-    { scope: ["entity.name.tag"], settings: { foreground: "#FF6762" } },
-    { scope: ["entity.other.attribute-name"], settings: { foreground: "#D568EA" } },
-    { scope: ["punctuation", "meta.brace"], settings: { foreground: "#ADADB1" } },
-    { scope: ["markup.heading"], settings: { foreground: "#FF678D", fontStyle: "bold" } },
+    { settings: { foreground: "#FFFFFF", background: "#181818" } },
+    { scope: ["comment", "punctuation.definition.comment"], settings: { foreground: "#FFFFFF80" } },
+    { scope: ["meta.preprocessor", "punctuation.definition.directive", "keyword.control.directive"], settings: { foreground: "#FFFFFF99" } },
+    { scope: ["keyword", "keyword.control", "keyword.operator.expression", "keyword.operator.new", "storage.type", "storage.modifier", "constant.language"], settings: { foreground: "#2E95D3" } },
+    { scope: ["string", "string.quoted", "string.template", "string.regexp", "punctuation.definition.string", "markup.inline.raw", "markup.raw.inline", "markup.inserted"], settings: { foreground: "#00A67D" } },
+    { scope: ["variable", "variable.other", "variable.other.readwrite", "variable.other.property", "entity.name.type", "support.type", "support.class", "entity.other.attribute-name", "constant.numeric", "support.type.property-name"], settings: { foreground: "#DF3079" } },
+    { scope: ["support.function", "support.function.builtin", "entity.name.class", "entity.name.type.class", "support.type.primitive", "support.type.builtin", "support.type.python", "entity.name.function.macro", "support.macro"], settings: { foreground: "#E9950C" } },
+    // highlight.js (the Codex renderer) leaves function params and TS/JS
+    // local identifiers plain; TextMate grammars tag them all as variable.*.
+    { scope: ["variable.parameter", "source.ts variable.other.readwrite", "source.tsx variable.other.readwrite", "source.js variable.other.readwrite", "source.jsx variable.other.readwrite"], settings: { foreground: "#FFFFFF" } },
+    { scope: ["entity.name.function", "meta.function-call entity.name.function", "constant.other.symbol"], settings: { foreground: "#F22C3D" } },
+    { scope: ["keyword.operator", "punctuation", "meta.brace", "entity.name.tag"], settings: { foreground: "#FFFFFF" } },
+    // Per-language corrections matching the Codex highlight.js output.
+    { scope: ["entity.name.tag.yaml"], settings: { foreground: "#DF3079" } },
+    { scope: ["punctuation.definition.block.sequence.item.yaml"], settings: { foreground: "#F22C3D" } },
+    { scope: ["support.type.property-name.css"], settings: { foreground: "#00A67D" } },
+    { scope: ["keyword.other.unit"], settings: { foreground: "#DF3079" } },
+    { scope: ["punctuation.definition.entity.css"], settings: { foreground: "#DF3079" } },
+    { scope: ["punctuation.support.type.property-name.begin.json", "punctuation.support.type.property-name.end.json"], settings: { foreground: "#DF3079" } },
+    // Codex leaves shell assignments, bare arguments, and command names plain.
+    { scope: ["source.shell variable.other.assignment", "source.shell entity.name.function", "source.shell support.function", "source.shell entity.name.command", "source.shell string.unquoted"], settings: { foreground: "#FFFFFF" } },
+    { scope: ["markup.heading"], settings: { foreground: "#F22C3D", fontStyle: "bold" } },
     { scope: ["markup.bold"], settings: { fontStyle: "bold" } },
     { scope: ["markup.italic"], settings: { fontStyle: "italic" } },
-    { scope: ["markup.inserted"], settings: { foreground: "#5ECC71" } },
-    { scope: ["markup.deleted"], settings: { foreground: "#FF678D" } },
+    { scope: ["markup.deleted"], settings: { foreground: "#F22C3D" } },
   ],
 };
 
@@ -39,24 +51,26 @@ const PROLIFERATE_LIGHT_THEME = {
   name: "proliferate-light",
   type: "light" as const,
   settings: [
-    { settings: { foreground: "#0d0d0d", background: "#ffffff" } },
-    { scope: ["comment", "punctuation.definition.comment"], settings: { foreground: "#949494" } },
-    { scope: ["string", "string.quoted"], settings: { foreground: "#008809" } },
-    { scope: ["constant.numeric", "constant.language"], settings: { foreground: "#bd5800" } },
-    { scope: ["keyword", "keyword.control", "keyword.operator.expression", "keyword.operator.new"], settings: { foreground: "#d53538" } },
-    { scope: ["storage.type", "storage.modifier"], settings: { foreground: "#751ed9" } },
-    { scope: ["entity.name.type", "support.type", "support.class"], settings: { foreground: "#751ed9" } },
-    { scope: ["entity.name.function", "support.function", "meta.function-call entity.name.function"], settings: { foreground: "#751ed9" } },
-    { scope: ["variable", "variable.other", "variable.other.readwrite", "variable.other.property", "variable.parameter"], settings: { foreground: "#bd5800" } },
-    { scope: ["keyword.operator.assignment"], settings: { foreground: "#0071ea" } },
-    { scope: ["entity.name.tag"], settings: { foreground: "#d53538" } },
-    { scope: ["entity.other.attribute-name"], settings: { foreground: "#751ed9" } },
-    { scope: ["punctuation", "meta.brace"], settings: { foreground: "#666666" } },
-    { scope: ["markup.heading"], settings: { foreground: "#d53538", fontStyle: "bold" } },
+    { settings: { foreground: "#383A42", background: "#ffffff" } },
+    { scope: ["comment", "punctuation.definition.comment"], settings: { foreground: "#A0A1A7", fontStyle: "italic" } },
+    { scope: ["keyword", "keyword.control", "keyword.operator.expression", "keyword.operator.new", "storage.type", "storage.modifier"], settings: { foreground: "#A626A4" } },
+    { scope: ["constant.language"], settings: { foreground: "#0184BB" } },
+    { scope: ["string", "string.quoted", "string.template", "string.regexp", "punctuation.definition.string", "markup.inserted"], settings: { foreground: "#50A14F" } },
+    { scope: ["variable", "variable.other", "variable.other.readwrite", "variable.other.property", "entity.name.type", "support.type", "support.class", "entity.other.attribute-name", "constant.numeric", "support.type.property-name"], settings: { foreground: "#986801" } },
+    { scope: ["support.function", "support.function.builtin", "entity.name.class", "entity.name.type.class", "support.type.primitive", "support.type.builtin", "support.type.python", "entity.name.function.macro", "support.macro"], settings: { foreground: "#C18401" } },
+    { scope: ["variable.parameter", "source.ts variable.other.readwrite", "source.tsx variable.other.readwrite", "source.js variable.other.readwrite", "source.jsx variable.other.readwrite"], settings: { foreground: "#383A42" } },
+    { scope: ["entity.name.function", "meta.function-call entity.name.function", "constant.other.symbol"], settings: { foreground: "#4078F2" } },
+    { scope: ["entity.name.tag", "markup.deleted"], settings: { foreground: "#E45649" } },
+    { scope: ["keyword.operator", "punctuation", "meta.brace"], settings: { foreground: "#383A42" } },
+    // Per-language corrections matching the Codex highlight.js output.
+    { scope: ["entity.name.tag.yaml"], settings: { foreground: "#986801" } },
+    { scope: ["support.type.property-name.css"], settings: { foreground: "#50A14F" } },
+    { scope: ["keyword.other.unit"], settings: { foreground: "#986801" } },
+    { scope: ["punctuation.support.type.property-name.begin.json", "punctuation.support.type.property-name.end.json"], settings: { foreground: "#986801" } },
+    { scope: ["source.shell variable.other.assignment", "source.shell entity.name.function", "source.shell support.function", "source.shell entity.name.command", "source.shell string.unquoted"], settings: { foreground: "#383A42" } },
+    { scope: ["markup.heading"], settings: { foreground: "#E45649", fontStyle: "bold" } },
     { scope: ["markup.bold"], settings: { fontStyle: "bold" } },
     { scope: ["markup.italic"], settings: { fontStyle: "italic" } },
-    { scope: ["markup.inserted"], settings: { foreground: "#008809" } },
-    { scope: ["markup.deleted"], settings: { foreground: "#d53538" } },
   ],
 };
 
@@ -131,18 +145,18 @@ export interface HighlightedToken {
 
 const CODEX_MARKDOWN_COLORS = {
   dark: {
-    foreground: "#FBFBFB",
-    muted: "#79797F",
-    string: "#5ECC71",
-    heading: "#FF678D",
-    emphasis: "#FFD452",
+    foreground: "#FFFFFF",
+    muted: "#FFFFFF80",
+    string: "#00A67D",
+    heading: "#F22C3D",
+    emphasis: "#DF3079",
   },
   light: {
-    foreground: "#0d0d0d",
-    muted: "#666666",
-    string: "#008809",
-    heading: "#d53538",
-    emphasis: "#bd5800",
+    foreground: "#383A42",
+    muted: "#A0A1A7",
+    string: "#50A14F",
+    heading: "#E45649",
+    emphasis: "#986801",
   },
 } satisfies Record<HighlightTheme, Record<string, string>>;
 

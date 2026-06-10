@@ -23,6 +23,11 @@ import {
 import type { TranscriptOpenSessionRole } from "@proliferate/product-domain/chats/transcript/transcript-open-target";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { AssistantMessage } from "./AssistantMessage";
+import {
+  renderTranscriptCodeBlock,
+  renderTranscriptInlineCode,
+  renderTranscriptLink,
+} from "./transcript-markdown";
 import { ClaudePlanCard } from "./ClaudePlanCard";
 import { ConnectedProposedPlanItem } from "./ConnectedProposedPlanItem";
 import { SessionErrorItem } from "./SessionErrorItem";
@@ -179,6 +184,9 @@ export function TranscriptItemBlock({
             <AssistantMessage
               content={item.text}
               isStreaming={item.isStreaming}
+              renderLink={renderTranscriptLink}
+              renderInlineCode={renderTranscriptInlineCode}
+              renderCodeBlock={renderTranscriptCodeBlock}
             />
           </div>
         </div>

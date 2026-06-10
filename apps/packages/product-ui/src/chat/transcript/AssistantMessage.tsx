@@ -5,7 +5,21 @@ import {
   useRef,
   useState,
 } from "react";
-import { MarkdownBody } from "./MarkdownBody";
+import {
+  MarkdownBody,
+  type MarkdownCodeBlockRenderer,
+  type MarkdownInlineCodeRenderer,
+  type MarkdownLinkRenderer,
+} from "./MarkdownBody";
+
+export type {
+  MarkdownCodeBlockRenderInput,
+  MarkdownCodeBlockRenderer,
+  MarkdownInlineCodeRenderInput,
+  MarkdownInlineCodeRenderer,
+  MarkdownLinkRenderInput,
+  MarkdownLinkRenderer,
+} from "./MarkdownBody";
 
 const STREAM_FLUSH_MS = 32;
 const MIN_STREAM_STEP = 20;
@@ -14,15 +28,27 @@ const MAX_STREAM_STEP = 120;
 export interface AssistantMessageProps {
   content: string;
   isStreaming?: boolean;
+  renderLink?: MarkdownLinkRenderer;
+  renderInlineCode?: MarkdownInlineCodeRenderer;
+  renderCodeBlock?: MarkdownCodeBlockRenderer;
 }
 
 export function AssistantMessage({
   content,
   isStreaming = false,
+  renderLink,
+  renderInlineCode,
+  renderCodeBlock,
 }: AssistantMessageProps) {
   return (
     <div className="text-chat leading-[var(--text-chat--line-height)] select-text text-foreground">
-      <AssistantMessageContent content={content} isStreaming={isStreaming} />
+      <AssistantMessageContent
+        content={content}
+        isStreaming={isStreaming}
+        renderLink={renderLink}
+        renderInlineCode={renderInlineCode}
+        renderCodeBlock={renderCodeBlock}
+      />
     </div>
   );
 }
@@ -30,9 +56,15 @@ export function AssistantMessage({
 function AssistantMessageContent({
   content,
   isStreaming = false,
+  renderLink,
+  renderInlineCode,
+  renderCodeBlock,
 }: {
   content: string;
   isStreaming?: boolean;
+  renderLink?: MarkdownLinkRenderer;
+  renderInlineCode?: MarkdownInlineCodeRenderer;
+  renderCodeBlock?: MarkdownCodeBlockRenderer;
 }) {
   const [visibleContent, setVisibleContent] = useState(content);
   const visibleContentRef = useRef(content);
@@ -141,11 +173,23 @@ function AssistantMessageContent({
   return (
     <>
       {splitContent.stableContent && (
-        <MarkdownBody content={splitContent.stableContent} className={stableClassName} />
+        <MarkdownBody
+          content={splitContent.stableContent}
+          className={stableClassName}
+          renderLink={renderLink}
+          renderInlineCode={renderInlineCode}
+          renderCodeBlock={renderCodeBlock}
+        />
       )}
       {splitContent.liveContent && (
         <div ref={liveRef}>
-          <MarkdownBody content={splitContent.liveContent} className={liveClassName} />
+          <MarkdownBody
+            content={splitContent.liveContent}
+            className={liveClassName}
+            renderLink={renderLink}
+            renderInlineCode={renderInlineCode}
+            renderCodeBlock={renderCodeBlock}
+          />
         </div>
       )}
     </>
@@ -170,7 +214,7 @@ function splitAssistantContent(content: string): {
     };
   }
 
-  const boundary = content.lastIndexOf("\n\n");
+  const boundary = findStableBoundary(content);
   if (boundary < 0 || boundary + 2 >= content.length) {
     return {
       stableContent: "",
@@ -184,6 +228,20 @@ function splitAssistantContent(content: string): {
     liveContent: content.slice(boundary + 2),
     animateLiveContent: !structuredTail,
   };
+}
+
+// A split boundary inside an open code fence breaks the markdown in both
+// halves (the fence body leaks out as prose). Walk back to the nearest
+// paragraph boundary whose prefix has balanced fences.
+function findStableBoundary(content: string): number {
+  let boundary = content.lastIndexOf("\n\n");
+  while (boundary >= 0) {
+    if (!hasOpenCodeFence(content.slice(0, boundary + 2))) {
+      return boundary;
+    }
+    boundary = content.lastIndexOf("\n\n", boundary - 1);
+  }
+  return -1;
 }
 
 function hasOpenCodeFence(content: string): boolean {

@@ -47,6 +47,9 @@ const DESKTOP_POSTHOG_EVENT_ALLOWLIST = new Set<keyof DesktopProductEventMap>([
   "workspace_created",
   "cloud_workspace_created",
   "support_report_submitted",
+  // Low-volume reliability event (deduped per operation per app run); needed
+  // in PostHog to measure how many installs cannot read keychain sessions.
+  "desktop_keychain_access_failed",
 ]);
 
 export function isVendorPostHogEventAllowed(

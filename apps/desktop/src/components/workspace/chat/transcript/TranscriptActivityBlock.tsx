@@ -36,7 +36,7 @@ export function TranscriptActivityBlock({
       data-transcript-activity-shell
       data-transcript-activity-block
       data-transcript-activity-density={resolvedDensity}
-      className="py-2"
+      className="pt-1 pb-2"
     >
       {children}
     </div>

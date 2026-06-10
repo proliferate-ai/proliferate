@@ -301,32 +301,13 @@ async fn run_enumeration(
 
     let baseline_config_options = serde_json::to_value(&new_session.config_options)?;
     let modes = serde_json::to_value(&new_session.modes)?;
-    let current_model_id = new_session
-        .models
-        .as_ref()
-        .map(|models| models.current_model_id.to_string());
+    let current_model_id: Option<String> = None;
     let current_mode_id = new_session
         .modes
         .as_ref()
         .map(|modes| modes.current_mode_id.to_string());
 
-    let mut available: Vec<(String, String, Option<String>)> = new_session
-        .models
-        .as_ref()
-        .map(|models| {
-            models
-                .available_models
-                .iter()
-                .map(|model| {
-                    (
-                        model.model_id.to_string(),
-                        model.name.clone(),
-                        model.description.clone(),
-                    )
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    let mut available: Vec<(String, String, Option<String>)> = vec![];
     let mut model_source = "acpModels";
     let mut model_config_id: Option<String> = None;
     if available.is_empty() {

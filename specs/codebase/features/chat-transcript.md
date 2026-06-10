@@ -68,6 +68,41 @@ mcp__proliferate_skills__get_skill_resource
 Do not render successful skills MCP results as raw JSON in the normal transcript
 path.
 
+## Markdown File Mentions And Code Blocks
+
+Assistant markdown renders file references as clickable file mentions and code
+blocks as bordered highlighted cards. Ownership is split by package law:
+
+```text
+apps/packages/product-ui/src/chat/transcript/MarkdownBody.tsx
+  presentational markdown renderer; permissive urlTransform (blocks only
+  javascript:/data:/vbscript:); injection props renderLink, renderInlineCode,
+  renderCodeBlock; owns the code-block shell styling
+
+apps/desktop/src/components/workspace/chat/transcript/transcript-markdown.tsx
+  desktop renderers injected at TranscriptItemBlock, ClaudePlanCard, and
+  ConnectedProposedPlanItem: file-like link hrefs and path-like inline code
+  render FilePathLink mentions; fenced code renders shiki-highlighted HTML
+  inside the product-ui shell
+
+apps/desktop/src/lib/domain/files/path-detection.ts
+  pure path heuristics (looksLikePath, looksLikeFileReferenceHref,
+  splitPathLineSuffix); promote to product-domain only when a second app
+  renders mentions
+
+anyharness .../domains/sessions/response_formatting.rs
+  the prompt-side instruction steering models toward markdown file links
+```
+
+Rules:
+
+- Detection happens at render time from raw markdown; do not store parsed file
+  references in transcript items.
+- Mention labels display the workspace-relative path plus a `(line N)` suffix;
+  raw absolute hrefs must not be shown as label text.
+- Web falls back to plain anchors and unhighlighted (identically styled) code
+  blocks; shiki stays out of the web bundle.
+
 ## Delegated-Work Receipts
 
 Subagent creation, parent/child communication, and wake/completion receipts are
@@ -127,7 +162,7 @@ and no auto-scroll bump.
 | --- | --- | --- |
 | `TRAILING_STATUS_MIN_HEIGHT` | `apps/desktop/src/components/workspace/chat/transcript/TranscriptTurnChrome.tsx` | `min-h-[calc(var(--text-chat--line-height)+1.5rem)]` |
 | Assistant copy-button slot | `apps/desktop/src/components/workspace/chat/transcript/AssistantMessage.tsx` | `h-6` (24px) |
-| Chat text line-height | `apps/packages/design/src/tokens.ts` (`typography.lineHeight.chat`) | `20px` |
+| Chat text line-height | `apps/packages/design/src/tokens.ts` (`typography.lineHeight.chat`) | `21px` |
 
 The derivation is:
 

@@ -45,7 +45,7 @@
 
   /* -- Typography -- */
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
   /* -- Border radius -- */
   --radius: 0.5rem;
@@ -65,11 +65,11 @@
   --text-sm--line-height: 1rem;
   --text-base: 0.6875rem;             /* 11px — body, buttons, tabs, sidebar */
   --text-base--line-height: 1rem;
-  --text-chat: 12px;                  /* default chat/message text */
+  --text-chat: 13px;                  /* default chat/message text (Codex parity) */
   /* NOTE: --text-chat--line-height is load-bearing for the no-scroll-bump
      streaming handoff in MessageList.tsx. TRAILING_STATUS_MIN_HEIGHT derives
      from this token, so keep the two in sync structurally. */
-  --text-chat--line-height: 20px;     /* font size + 8px */
+  --text-chat--line-height: 21px;     /* font size + 8px */
   --text-lg: 0.875rem;                /* 14px — emphasis, section labels */
   --text-lg--line-height: 1.25rem;
   --text-xl: 1.125rem;                /* 18px — unchanged */

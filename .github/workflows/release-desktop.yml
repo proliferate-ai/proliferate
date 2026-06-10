@@ -21,6 +21,10 @@ on:
           - all
           - macos
         default: all
+      allow_unsigned:
+        description: "Allow ad-hoc (unsigned) macOS builds when APPLE_SIGNING_IDENTITY is not configured"
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       git_sha:
@@ -43,6 +47,10 @@ on:
         description: "Target OS"
         type: string
         default: all
+      allow_unsigned:
+        description: "Allow ad-hoc (unsigned) macOS builds when APPLE_SIGNING_IDENTITY is not configured"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -330,6 +338,7 @@ jobs:
           _SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           _API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           _API_KEY: ${{ secrets.APPLE_API_KEY }}
+          ALLOW_UNSIGNED: ${{ inputs.allow_unsigned && 'true' || 'false' }}
         run: |
           export VITE_PROLIFERATE_RELEASE="${VITE_PROLIFERATE_RELEASE:-proliferate-desktop@${PROLIFERATE_RELEASE_VERSION}}"
           export PROLIFERATE_DESKTOP_SENTRY_RELEASE="${PROLIFERATE_DESKTOP_SENTRY_RELEASE:-proliferate-desktop-native@${PROLIFERATE_RELEASE_VERSION}}"
@@ -347,8 +356,12 @@ jobs:
               export APPLE_API_ISSUER="$_API_ISSUER"
               export APPLE_API_KEY="$_API_KEY"
               export APPLE_API_KEY_PATH="$HOME/private_keys/AuthKey_${_API_KEY}.p8"
-            else
+            elif [[ "$ALLOW_UNSIGNED" == "true" ]]; then
+              echo "::warning::Building macOS bundles with AD-HOC signing (allow_unsigned=true). Installing this build poisons login-keychain ACLs for its users."
               export APPLE_SIGNING_IDENTITY="-"
+            else
+              echo "::error::APPLE_SIGNING_IDENTITY secret is not configured. Refusing to produce an ad-hoc-signed macOS release; ad-hoc builds break keychain persistence for every user who logs in on them. Dispatch with allow_unsigned=true to deliberately build unsigned."
+              exit 1
             fi
             # Build the DMG in the known-good path first, then build the updater-
             # enabled app bundle separately so the mac updater tarball is emitted.

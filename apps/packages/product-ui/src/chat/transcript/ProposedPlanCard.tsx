@@ -8,6 +8,11 @@ import {
   X,
 } from "@proliferate/ui/icons";
 import { CollapsiblePlanCard } from "./CollapsiblePlanCard";
+import type {
+  MarkdownCodeBlockRenderer,
+  MarkdownInlineCodeRenderer,
+  MarkdownLinkRenderer,
+} from "./MarkdownBody";
 
 export interface ReviewSetupAnchorRect {
   top: number;
@@ -50,6 +55,9 @@ interface ProposedPlanCardProps {
   isRejecting?: boolean;
   isImplementingHere?: boolean;
   isStartingReview?: boolean;
+  renderLink?: MarkdownLinkRenderer;
+  renderInlineCode?: MarkdownInlineCodeRenderer;
+  renderCodeBlock?: MarkdownCodeBlockRenderer;
 }
 
 export function ProposedPlanCard({
@@ -71,6 +79,9 @@ export function ProposedPlanCard({
   isRejecting = false,
   isImplementingHere = false,
   isStartingReview = false,
+  renderLink,
+  renderInlineCode,
+  renderCodeBlock,
 }: ProposedPlanCardProps) {
   const canRetryNativeApproval =
     nativeContinuation
@@ -122,6 +133,9 @@ export function ProposedPlanCard({
       collapseLabel="Collapse plan summary"
       expandLabel="Expand plan summary"
       markdownPresentation="proposal"
+      renderLink={renderLink}
+      renderInlineCode={renderInlineCode}
+      renderCodeBlock={renderCodeBlock}
       footer={hasFooterActions ? (
         <div
           data-chat-transcript-ignore

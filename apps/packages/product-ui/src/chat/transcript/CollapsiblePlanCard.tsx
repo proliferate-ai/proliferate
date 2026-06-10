@@ -2,6 +2,11 @@ import { useState, type ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Check, ChevronDown, Copy } from "@proliferate/ui/icons";
 import { PlanMarkdownBody } from "./PlanMarkdownBody";
+import type {
+  MarkdownCodeBlockRenderer,
+  MarkdownInlineCodeRenderer,
+  MarkdownLinkRenderer,
+} from "./MarkdownBody";
 
 interface CollapsiblePlanCardProps {
   title: string;
@@ -16,6 +21,9 @@ interface CollapsiblePlanCardProps {
   density?: "default" | "compact";
   collapsedPreview?: boolean;
   markdownPresentation?: "default" | "proposal";
+  renderLink?: MarkdownLinkRenderer;
+  renderInlineCode?: MarkdownInlineCodeRenderer;
+  renderCodeBlock?: MarkdownCodeBlockRenderer;
 }
 
 const COLLAPSED_MAX_HEIGHT = "min(20rem,45vh)";
@@ -35,6 +43,9 @@ export function CollapsiblePlanCard({
   density = "default",
   collapsedPreview = true,
   markdownPresentation = "default",
+  renderLink,
+  renderInlineCode,
+  renderCodeBlock,
 }: CollapsiblePlanCardProps) {
   const [expanded, setExpanded] = useState(initialExpanded);
   const [copied, setCopied] = useState(false);
@@ -103,7 +114,13 @@ export function CollapsiblePlanCard({
         </div>
       ) : expanded ? (
         <div className={compact ? "px-3 py-2" : "px-4 py-3"}>
-          <PlanMarkdownBody content={renderedContent} presentation={markdownPresentation} />
+          <PlanMarkdownBody
+            content={renderedContent}
+            presentation={markdownPresentation}
+            renderLink={renderLink}
+            renderInlineCode={renderInlineCode}
+            renderCodeBlock={renderCodeBlock}
+          />
         </div>
       ) : !collapsedPreview ? null : (
         <div className="relative">
@@ -115,7 +132,12 @@ export function CollapsiblePlanCard({
               WebkitMaskImage: COLLAPSED_FADE,
             }}
           >
-            <PlanMarkdownBody content={renderedContent} presentation={markdownPresentation} />
+            <PlanMarkdownBody
+              content={renderedContent}
+              presentation={markdownPresentation}
+              renderLink={renderLink}
+              renderInlineCode={renderInlineCode}
+            />
           </div>
           <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
             <Button

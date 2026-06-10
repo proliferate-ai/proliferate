@@ -16,6 +16,7 @@ import {
   delay,
   fetchAuthResponse,
   isAbortError,
+  isDefinitiveAuthRejection,
   parseAuthError,
 } from "./proliferate-auth-transport"
 import {
@@ -31,6 +32,7 @@ import {
 export type { AuthUser }
 export {
   AuthRequestError,
+  isDefinitiveAuthRejection,
   createPendingGitHubDesktopAuth,
   DESKTOP_AUTH_REDIRECT_URI,
   isPendingDesktopAuthExpired,

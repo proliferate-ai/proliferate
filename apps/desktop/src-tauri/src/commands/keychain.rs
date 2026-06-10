@@ -1,11 +1,13 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{mpsc, OnceLock};
 
 use anyharness_credential_discovery::{export_portable_auth, PortableAuthExport, ProviderId};
 use base64::Engine;
 use getrandom::getrandom;
 use serde::{Deserialize, Serialize};
+
+use crate::app_config::{app_dir_path, native_dev_profile, read_json_file, write_json_file_atomic};
 
 const SERVICE: &str = "com.proliferate.app.env";
 const AUTH_SERVICE: &str = "com.proliferate.app.auth";
@@ -25,21 +27,34 @@ const KNOWN_ENV_VARS: &[&str] = &[
     "AMP_API_KEY",
 ];
 
-fn dev_profile() -> Option<String> {
-    if std::env::var_os("PROLIFERATE_DEV").is_none() {
-        return None;
-    }
-
-    std::env::var("PROLIFERATE_DEV_PROFILE")
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
+// Dev builds are ad-hoc signed, so every rebuild is a different app to the
+// macOS keychain and items they create can never be durably readable. Dev
+// lanes therefore persist auth records as files under the per-profile app dir
+// (PROLIFERATE_DEV_HOME) instead of the keychain.
+fn auth_session_file_path() -> Result<PathBuf, String> {
+    Ok(app_dir_path()?.join("auth-session.json"))
 }
 
-fn profile_scoped_account(base: &str) -> String {
-    match dev_profile() {
-        Some(profile) => format!("{base}:{profile}"),
-        None => base.to_string(),
+fn pending_auth_file_path() -> Result<PathBuf, String> {
+    Ok(app_dir_path()?.join("pending-auth.json"))
+}
+
+fn write_dev_auth_record<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
+    write_json_file_atomic(path, value)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+            .map_err(|error| format!("Failed to set permissions on {}: {error}", path.display()))?;
+    }
+    Ok(())
+}
+
+fn delete_file_if_exists(path: &Path) -> Result<(), String> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("Failed to delete {}: {error}", path.display())),
     }
 }
 
@@ -213,6 +228,27 @@ fn keychain_sender() -> &'static mpsc::Sender<KeychainRequest> {
                         } => {
                             let result = get_or_create_entry(&mut entries, &service, &account)
                                 .and_then(|entry| {
+                                    // Recreate the item on every write so its ACL trusts the
+                                    // current binary. set_password decrypts the existing item
+                                    // first, which fails forever once the item's ACL no longer
+                                    // trusts this app (e.g. it was written by a build with a
+                                    // different code signature). Deleting does not decrypt, so
+                                    // it succeeds even on those items. The runtime service is
+                                    // excluded: it holds the anyharness data key, which must
+                                    // never risk being lost in the delete-add window.
+                                    if service != RUNTIME_SERVICE {
+                                        match entry.delete_credential() {
+                                            Ok(()) | Err(keyring::Error::NoEntry) => {}
+                                            Err(error) => {
+                                                tracing::warn!(
+                                                    service = %service,
+                                                    account = %account,
+                                                    error = %error,
+                                                    "Keychain pre-delete failed; attempting set anyway"
+                                                );
+                                            }
+                                        }
+                                    }
                                     entry.set_password(&value).map_err(|e| e.to_string())
                                 });
                             let _ = response.send(result);
@@ -322,8 +358,10 @@ pub async fn delete_env_var_secret(name: String) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn get_auth_session() -> Result<Option<AuthSessionRecord>, String> {
-    let account = profile_scoped_account(AUTH_SESSION_ACCOUNT);
-    match read_password(AUTH_SERVICE, &account)? {
+    if native_dev_profile() {
+        return read_json_file(&auth_session_file_path()?);
+    }
+    match read_password(AUTH_SERVICE, AUTH_SESSION_ACCOUNT)? {
         Some(raw) => serde_json::from_str(&raw)
             .map(Some)
             .map_err(|e| e.to_string()),
@@ -333,23 +371,27 @@ pub async fn get_auth_session() -> Result<Option<AuthSessionRecord>, String> {
 
 #[tauri::command]
 pub async fn set_auth_session(session: AuthSessionRecord) -> Result<(), String> {
+    if native_dev_profile() {
+        return write_dev_auth_record(&auth_session_file_path()?, &session);
+    }
     let raw = serde_json::to_string(&session).map_err(|e| e.to_string())?;
-    set_password(
-        AUTH_SERVICE,
-        &profile_scoped_account(AUTH_SESSION_ACCOUNT),
-        &raw,
-    )
+    set_password(AUTH_SERVICE, AUTH_SESSION_ACCOUNT, &raw)
 }
 
 #[tauri::command]
 pub async fn clear_auth_session() -> Result<(), String> {
-    delete_password(AUTH_SERVICE, &profile_scoped_account(AUTH_SESSION_ACCOUNT))
+    if native_dev_profile() {
+        return delete_file_if_exists(&auth_session_file_path()?);
+    }
+    delete_password(AUTH_SERVICE, AUTH_SESSION_ACCOUNT)
 }
 
 #[tauri::command]
 pub async fn get_pending_auth() -> Result<Option<PendingAuthRecord>, String> {
-    let account = profile_scoped_account(PENDING_AUTH_ACCOUNT);
-    match read_password(AUTH_SERVICE, &account)? {
+    if native_dev_profile() {
+        return read_json_file(&pending_auth_file_path()?);
+    }
+    match read_password(AUTH_SERVICE, PENDING_AUTH_ACCOUNT)? {
         Some(raw) => serde_json::from_str(&raw)
             .map(Some)
             .map_err(|e| e.to_string()),
@@ -359,17 +401,19 @@ pub async fn get_pending_auth() -> Result<Option<PendingAuthRecord>, String> {
 
 #[tauri::command]
 pub async fn set_pending_auth(record: PendingAuthRecord) -> Result<(), String> {
+    if native_dev_profile() {
+        return write_dev_auth_record(&pending_auth_file_path()?, &record);
+    }
     let raw = serde_json::to_string(&record).map_err(|e| e.to_string())?;
-    set_password(
-        AUTH_SERVICE,
-        &profile_scoped_account(PENDING_AUTH_ACCOUNT),
-        &raw,
-    )
+    set_password(AUTH_SERVICE, PENDING_AUTH_ACCOUNT, &raw)
 }
 
 #[tauri::command]
 pub async fn clear_pending_auth() -> Result<(), String> {
-    delete_password(AUTH_SERVICE, &profile_scoped_account(PENDING_AUTH_ACCOUNT))
+    if native_dev_profile() {
+        return delete_file_if_exists(&pending_auth_file_path()?);
+    }
+    delete_password(AUTH_SERVICE, PENDING_AUTH_ACCOUNT)
 }
 
 #[tauri::command]
@@ -541,4 +585,102 @@ pub fn load_all_secrets_for_sidecar() -> HashMap<String, String> {
         env.insert(ANYHARNESS_DATA_KEY_ENV.to_string(), data_key);
     }
     env
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_path(file_name: &str) -> PathBuf {
+        static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be valid")
+            .as_nanos();
+        let counter = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        std::env::temp_dir()
+            .join(format!("proliferate-keychain-{unique}-{counter}"))
+            .join(file_name)
+    }
+
+    fn cleanup(path: &Path) {
+        std::fs::remove_dir_all(path.parent().expect("temp dir should exist"))
+            .expect("temp dir cleanup should succeed");
+    }
+
+    #[test]
+    fn auth_session_record_round_trips_through_dev_file() {
+        let path = temp_path("auth-session.json");
+        let record = AuthSessionRecord {
+            access_token: "access".to_string(),
+            refresh_token: "refresh".to_string(),
+            expires_at: "2026-06-10T00:00:00Z".to_string(),
+            user_id: "user-1".to_string(),
+            email: "dev@example.com".to_string(),
+            display_name: Some("Dev".to_string()),
+            github_login: None,
+            avatar_url: None,
+        };
+
+        write_dev_auth_record(&path, &record).expect("write should succeed");
+        let parsed: AuthSessionRecord = read_json_file(&path)
+            .expect("read should succeed")
+            .expect("file should exist");
+        assert_eq!(parsed.access_token, record.access_token);
+        assert_eq!(parsed.refresh_token, record.refresh_token);
+        assert_eq!(parsed.expires_at, record.expires_at);
+        assert_eq!(parsed.user_id, record.user_id);
+        assert_eq!(parsed.email, record.email);
+        assert_eq!(parsed.display_name, record.display_name);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&path)
+                .expect("metadata should be readable")
+                .permissions()
+                .mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn pending_auth_record_round_trips_through_dev_file() {
+        let path = temp_path("pending-auth.json");
+        let record = PendingAuthRecord {
+            state: "state".to_string(),
+            code_verifier: "verifier".to_string(),
+            redirect_uri: "proliferate://auth".to_string(),
+            created_at: "2026-06-10T00:00:00Z".to_string(),
+            last_handled_callback_url: None,
+        };
+
+        write_dev_auth_record(&path, &record).expect("write should succeed");
+        let parsed: PendingAuthRecord = read_json_file(&path)
+            .expect("read should succeed")
+            .expect("file should exist");
+        assert_eq!(parsed.state, record.state);
+        assert_eq!(parsed.code_verifier, record.code_verifier);
+        assert_eq!(parsed.redirect_uri, record.redirect_uri);
+        assert_eq!(parsed.last_handled_callback_url, None);
+
+        cleanup(&path);
+    }
+
+    #[test]
+    fn delete_file_if_exists_tolerates_missing_files() {
+        let path = temp_path("auth-session.json");
+        delete_file_if_exists(&path).expect("missing file should be Ok");
+
+        std::fs::create_dir_all(path.parent().expect("temp dir should exist"))
+            .expect("temp dir should be creatable");
+        std::fs::write(&path, b"{}").expect("write should succeed");
+        delete_file_if_exists(&path).expect("existing file should delete");
+        assert!(!path.exists());
+
+        cleanup(&path);
+    }
 }
