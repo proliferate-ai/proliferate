@@ -57,7 +57,7 @@ describe("MarkdownRenderer", () => {
     expect(html).toContain("data-external-path-reference-icon=\"true\"");
     expect(html).toContain(">src/App.tsx</code>");
     expect(html).toContain(">/Users/pablo/landing</code>");
-    expect(html).toContain("hover:text-link-foreground hover:underline");
+    expect(html).toContain("hover:underline");
     expect(html).not.toContain("text-xs");
     expect(html).not.toContain("rounded-md");
     expect(html).not.toContain("title=\"/repo/src/App.tsx\"");

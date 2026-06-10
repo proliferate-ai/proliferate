@@ -5,6 +5,7 @@ import { useWorkspacePath } from "@/providers/WorkspacePathProvider";
 import {
   copyPath as copyPathToClipboard,
   openTarget as execOpenTarget,
+  pathIsDirectory,
   revealInFinder,
 } from "@/lib/access/tauri/shell";
 import { resolveFileReference } from "@/lib/domain/files/path-references";
@@ -94,6 +95,11 @@ export function useFileReferenceActions({
   }, [reference.absolutePath]);
 
   const openPrimary = useCallback(async () => {
+    // Directories open in Finder; the sidebar viewer only renders files.
+    if (reference.absolutePath && await pathIsDirectory(reference.absolutePath)) {
+      await reveal();
+      return;
+    }
     if (reference.workspacePath) {
       await openInSidebar();
       return;

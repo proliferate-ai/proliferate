@@ -1,3 +1,4 @@
+import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useMobilityFooterContext } from "@/hooks/workspaces/derived/mobility/use-mobility-footer-context";
 import { useWorkspaceMobilityFooterFlow } from "@/hooks/workspaces/ui/mobility/use-workspace-mobility-footer-flow";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
@@ -50,6 +51,7 @@ function WorkspaceMobilityFooterFailureStatus({
 export function WorkspaceMobilityFooterRow() {
   const footerContext = useMobilityFooterContext();
   const flow = useWorkspaceMobilityFooterFlow();
+  const { cloudComputeEnabled } = useCloudAvailabilityState();
 
   if (!footerContext) {
     return null;
@@ -137,9 +139,9 @@ export function WorkspaceMobilityFooterRow() {
 
           {locationTrigger}
 
-          <WorkspaceRemoteAccessFooterControl />
+          {cloudComputeEnabled && <WorkspaceRemoteAccessFooterControl />}
 
-          <WorkspaceOpenInWebFooterControl />
+          {cloudComputeEnabled && <WorkspaceOpenInWebFooterControl />}
         </div>
       </div>
       <WorkspaceMobilityGitPrepDialog

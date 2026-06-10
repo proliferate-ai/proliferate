@@ -4,7 +4,7 @@ use std::process::{Command, Stdio};
 use super::{InstallError, InstalledArtifactResult};
 use crate::domains::agents::managed_npm::{
     apply_npm_version_override, installed_npm_package_version, managed_npm_install_issue,
-    npm_package_version,
+    npm_package_version, write_managed_npm_source_marker,
 };
 use crate::domains::agents::model::ArtifactRole;
 use crate::integrations::agent_cli::executable::make_executable;
@@ -146,7 +146,11 @@ fn install_managed_npm_package_from_subdir(
     let source_root = materialize_npm_package_source(package, staging.path())?;
     let package_dir = resolve_npm_package_subdir(&source_root, package_subdir)?;
     let tarball_path = pack_npm_package_dir(&package_dir, staging.path())?;
-    install_npm_package_into_prefix(&tarball_path.to_string_lossy(), managed_dir)
+    install_npm_package_into_prefix(&tarball_path.to_string_lossy(), managed_dir)?;
+    // The managed prefix's npm metadata only references the temporary tarball,
+    // so staleness checks need the original spec recorded alongside it.
+    write_managed_npm_source_marker(package, managed_dir)?;
+    Ok(())
 }
 
 fn install_managed_source_build_binary(

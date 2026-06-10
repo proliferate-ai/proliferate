@@ -236,6 +236,7 @@ pub fn run() {
             shell::pick_folder,
             shell::copy_text,
             shell::list_available_editors,
+            shell::path_is_directory,
             shell::open_in_editor,
             shell::reveal_in_finder,
             shell::open_in_terminal,

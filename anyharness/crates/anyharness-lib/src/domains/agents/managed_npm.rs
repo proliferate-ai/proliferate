@@ -86,6 +86,29 @@ pub(super) fn is_npm_non_registry_spec(package: &str) -> bool {
         || package.starts_with("https://")
 }
 
+/// Records the exact source spec a managed npm artifact was installed from.
+/// Subdir installs go through `npm pack`, so the managed prefix's own npm
+/// metadata only references a temporary tarball and cannot answer "which git
+/// ref is this?" — the marker file is the source of truth for those.
+pub(super) const MANAGED_NPM_SOURCE_MARKER: &str = ".anyharness-npm-source";
+
+pub(super) fn write_managed_npm_source_marker(
+    package: &str,
+    managed_dir: &Path,
+) -> std::io::Result<()> {
+    std::fs::write(managed_dir.join(MANAGED_NPM_SOURCE_MARKER), package)
+}
+
+fn recorded_source_spec(managed_dir: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(managed_dir.join(MANAGED_NPM_SOURCE_MARKER)).ok()?;
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
 pub(super) fn managed_npm_install_issue(package: &str, managed_dir: &Path) -> Option<String> {
     if is_npm_non_registry_spec(package) {
         if non_registry_install_matches(package, managed_dir) {
@@ -114,8 +137,17 @@ pub(super) fn managed_npm_install_issue(package: &str, managed_dir: &Path) -> Op
 }
 
 fn non_registry_install_matches(package: &str, managed_dir: &Path) -> bool {
-    let dependency_specs = root_dependency_specs(managed_dir);
     let normalized_package = normalize_npm_spec(package);
+    if recorded_source_spec(managed_dir).is_some_and(|recorded| {
+        recorded == package
+            || normalize_npm_spec(&recorded)
+                .zip(normalized_package.as_ref())
+                .is_some_and(|(left, right)| left == *right)
+    }) {
+        return true;
+    }
+
+    let dependency_specs = root_dependency_specs(managed_dir);
     if dependency_specs.iter().any(|spec| {
         spec == package
             || normalize_npm_spec(spec)
@@ -232,6 +264,52 @@ mod tests {
         );
 
         assert!(issue.is_none());
+        let _ = std::fs::remove_dir_all(managed_dir);
+    }
+
+    #[test]
+    fn accepts_subdir_install_with_matching_source_marker() {
+        let managed_dir = temp_dir("managed-npm-source-marker-match");
+        std::fs::write(
+            managed_dir.join("package.json"),
+            r#"{"dependencies":{"@proliferate-ai/codex-acp":"file:../../tmp/anyharness-npm-subdir-abc/proliferate-ai-codex-acp-0.16.0.tgz"}}"#,
+        )
+        .expect("write package metadata");
+        write_managed_npm_source_marker(
+            "git+https://github.com/proliferate-ai/codex-acp.git#new-ref",
+            &managed_dir,
+        )
+        .expect("write source marker");
+
+        let issue = managed_npm_install_issue(
+            "git+https://github.com/proliferate-ai/codex-acp.git#new-ref",
+            &managed_dir,
+        );
+
+        assert!(issue.is_none());
+        let _ = std::fs::remove_dir_all(managed_dir);
+    }
+
+    #[test]
+    fn detects_changed_git_ref_against_source_marker() {
+        let managed_dir = temp_dir("managed-npm-source-marker-stale");
+        std::fs::write(
+            managed_dir.join("package.json"),
+            r#"{"dependencies":{"@proliferate-ai/codex-acp":"file:../../tmp/anyharness-npm-subdir-abc/proliferate-ai-codex-acp-0.15.0.tgz"}}"#,
+        )
+        .expect("write package metadata");
+        write_managed_npm_source_marker(
+            "git+https://github.com/proliferate-ai/codex-acp.git#old-ref",
+            &managed_dir,
+        )
+        .expect("write source marker");
+
+        let issue = managed_npm_install_issue(
+            "git+https://github.com/proliferate-ai/codex-acp.git#new-ref",
+            &managed_dir,
+        );
+
+        assert!(issue.is_some());
         let _ = std::fs::remove_dir_all(managed_dir);
     }
 

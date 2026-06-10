@@ -14,6 +14,11 @@ pub fn open_in_editor(path: String, editor: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn path_is_directory(path: String) -> bool {
+    std::fs::metadata(&path).map(|m| m.is_dir()).unwrap_or(false)
+}
+
+#[tauri::command]
 pub fn reveal_in_finder(path: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {

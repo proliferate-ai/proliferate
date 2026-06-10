@@ -54,14 +54,20 @@ export function looksLikeFileReferenceHref(value: string): boolean {
   if (trimmed.length === 0 || trimmed.length > 512) return false;
   if (/\s/.test(trimmed)) return false;
   if (/[*?[\]{}]/.test(trimmed)) return false;
+  // Any scheme (https://, mailto:, vscode:) is not a workspace path.
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return false;
+  if (/^(javascript|mailto|data|tel|vbscript|file|about|blob):/i.test(trimmed)) return false;
   if (trimmed.startsWith("//")) return false;
+  if (trimmed.startsWith("#")) return false;
 
   const destinationPath = stripUrlSuffix(trimmed);
   const { path } = splitPathLineSuffix(destinationPath);
   const basename = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
   if (!basename) return false;
-  return hasFileExtension(basename) || isCommonExtensionlessFile(basename);
+  // The markdown link syntax is already an explicit file-reference signal,
+  // so accept extensionless names (VERSION, LICENSE) and bare directory
+  // names (apps, scripts). Unresolvable references degrade gracefully.
+  return true;
 }
 
 const KNOWN_ROOT_SEGMENTS = new Set([
@@ -119,24 +125,6 @@ function stripUrlSuffix(value: string): string {
   const suffixIndex = value.search(/[?#]/);
   return suffixIndex >= 0 ? value.slice(0, suffixIndex) : value;
 }
-
-function isCommonExtensionlessFile(basename: string): boolean {
-  return COMMON_EXTENSIONLESS_FILES.has(basename.toLowerCase());
-}
-
-const COMMON_EXTENSIONLESS_FILES = new Set([
-  "agents",
-  "authors",
-  "changelog",
-  "codeowners",
-  "copying",
-  "dockerfile",
-  "gemfile",
-  "license",
-  "makefile",
-  "notice",
-  "readme",
-]);
 
 /**
  * Strip an optional `:line` or `:line:col` suffix from a path string.

@@ -86,11 +86,20 @@ describe("looksLikeFileReferenceHref", () => {
     expect(looksLikeFileReferenceHref("Makefile")).toBe(true);
   });
 
-  it("keeps URL and arbitrary bare-word destinations out of file handling", () => {
+  it("accepts extensionless files and directory destinations", () => {
+    expect(looksLikeFileReferenceHref("VERSION")).toBe(true);
+    expect(looksLikeFileReferenceHref("LICENSE")).toBe(true);
+    expect(looksLikeFileReferenceHref("apps")).toBe(true);
+    expect(looksLikeFileReferenceHref("anyharness")).toBe(true);
+    expect(looksLikeFileReferenceHref("scripts/")).toBe(true);
+    expect(looksLikeFileReferenceHref("foo/bar")).toBe(true);
+  });
+
+  it("keeps URLs, schemes, and anchors out of file handling", () => {
     expect(looksLikeFileReferenceHref("https://example.com/README.md")).toBe(false);
     expect(looksLikeFileReferenceHref("javascript:1")).toBe(false);
-    expect(looksLikeFileReferenceHref("alpha")).toBe(false);
-    expect(looksLikeFileReferenceHref("foo/bar")).toBe(false);
+    expect(looksLikeFileReferenceHref("mailto:team@example.com")).toBe(false);
+    expect(looksLikeFileReferenceHref("#section")).toBe(false);
   });
 });
 

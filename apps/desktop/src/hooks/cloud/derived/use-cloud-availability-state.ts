@@ -6,7 +6,7 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 
 export function useCloudAvailabilityState() {
   const authStatus = useAuthStore((state) => state.status);
-  const { cloudEnabled } = useAppCapabilities();
+  const { cloudEnabled, cloudComputeEnabled } = useAppCapabilities();
   const {
     data: githubDesktopAuthAvailable,
     isPending: githubDesktopAuthAvailabilityPending,
@@ -15,7 +15,7 @@ export function useCloudAvailabilityState() {
   const cloudSignInChecking = cloudEnabled && githubDesktopAuthAvailabilityPending;
   const cloudSignInAvailable = cloudEnabled && githubDesktopAuthAvailable?.enabled === true;
   const cloudAuthUnavailable = cloudEnabled && !cloudSignInChecking && !cloudSignInAvailable;
-  const cloudActive = cloudEnabled && authStatus === "authenticated";
+  const cloudActive = cloudComputeEnabled && authStatus === "authenticated";
   const cloudRequiresSignIn = cloudSignInAvailable && authStatus === "anonymous";
 
   useEffect(() => {
@@ -28,6 +28,7 @@ export function useCloudAvailabilityState() {
       cloudSignInChecking,
       cloudSignInAvailable,
       cloudActive,
+      cloudComputeEnabled,
     });
   }, [
     authStatus,
@@ -44,6 +45,7 @@ export function useCloudAvailabilityState() {
     return {
       authStatus,
       cloudEnabled,
+      cloudComputeEnabled,
       cloudUnavailable,
       cloudSignInChecking,
       cloudSignInAvailable,
@@ -54,6 +56,7 @@ export function useCloudAvailabilityState() {
   }, [
     authStatus,
     cloudActive,
+    cloudComputeEnabled,
     cloudAuthUnavailable,
     cloudEnabled,
     cloudRequiresSignIn,
