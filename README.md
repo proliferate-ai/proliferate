@@ -85,14 +85,14 @@ Each agent runs through its native harness, so auth, tools, models, permissions,
 
 ## Features
 
-- 🤖 **[Native harnesses](https://proliferate.com/docs/concepts/agents-and-harnesses)** — Claude Code, Codex, Gemini CLI, OpenCode, Cursor, and more
-- 🌳 **[Worktree workspaces](https://proliferate.com/docs/concepts/workspaces)** — an isolated branch and working directory for every task
-- 🔍 **[Git & diff review](https://proliferate.com/docs/concepts/review)** — inspect and edit agent changes without leaving the app
-- 🛡️ **[Plan & code review agents](https://proliferate.com/docs/concepts/review)** — reviewer agents check plans, diffs, risks, and branch readiness before you do
-- 🪆 **[Subagents](https://proliferate.com/docs/concepts/subagents)** — agents delegate investigation, implementation, and review to other agents
-- 🧩 **[Plugins](https://proliferate.com/docs/concepts/plugins)** — MCPs, skills, Computer Use, Browser Use, and custom tools, configured once and shared by every agent
-- ⏰ **[Automations](https://proliferate.com/docs/concepts/automations)** — run any agent on any schedule
-- 🖼️ **[Artifacts](https://proliferate.com/docs/concepts/artifacts)** — docs, UI, demos, and components rendered inline as agents produce them
+- 🤖 **[Native harnesses](https://proliferate.com/docs/concepts/agents-and-harnesses)** - Claude Code, Codex, Gemini CLI, OpenCode, Cursor, and more
+- 🌳 **[Worktree workspaces](https://proliferate.com/docs/concepts/workspaces)** - an isolated branch and working directory for every task
+- 🔍 **[Git & diff review](https://proliferate.com/docs/concepts/review)** - inspect and edit agent changes without leaving the app
+- 🛡️ **[Plan & code review agents](https://proliferate.com/docs/concepts/review)** - reviewer agents check plans, diffs, risks, and branch readiness before you do
+- 🪆 **[Subagents](https://proliferate.com/docs/concepts/subagents)** - agents delegate investigation, implementation, and review to other agents
+- 🧩 **[Plugins](https://proliferate.com/docs/concepts/plugins)** - MCPs, skills, Computer Use, Browser Use, and custom tools, configured once and shared by every agent
+- ⏰ **[Automations](https://proliferate.com/docs/concepts/automations)** - run any agent on any schedule
+- 🖼️ **[Artifacts](https://proliferate.com/docs/concepts/artifacts)** - docs, UI, demos, and components rendered inline as agents produce them
 
 ## Open Source
 
@@ -160,21 +160,21 @@ that want an early self-hosted deployment can reach out through
 
 ## Proliferate Cloud (Beta)
 
-> Proliferate Cloud is in beta and rolling out in waves — request access at
+> Proliferate Cloud is in beta and rolling out in waves - request access at
 > [proliferate.com](https://proliferate.com). Everything local above is fully
 > open and available today.
 
-- ☁️ **Cloud sandboxes** — isolated cloud environments that keep working after you close your laptop
-- 🔁 **Workspace mobility** — move a running workspace between your machine and the cloud, mid-task, with changes and history intact
-- 👥 **Multiplayer cloud chats** — live sessions your team can inspect, claim, and continue
-- 💬 **Team Slackbot** — turn a Slack message into shared agent work for the whole team
-- 🤝 **Team automations** — shared recurring fixes and reviews the whole team can run
-- 🛰️ **Remote dispatch** — kick off and steer work on your own machine from the web
-- 🔑 **SSH access** — drop into any cloud sandbox from your terminal
-- 🔐 **Credential gateway** — your keys and subscriptions never touch the sandbox; sandboxes only get short-lived tokens
-- 🏢 **Organizations** — team seats, shared settings, cloud limits, and governance controls
-- 📱 **Mobile** — coming soon: dispatch work, approve actions, and follow runs from your phone
-- 🏗️ **Self-hosted Proliferate Cloud** — coming soon: run the full cloud control plane yourself
+- ☁️ **Cloud sandboxes** - isolated cloud environments that keep working after you close your laptop
+- 🔁 **Workspace mobility** - move a running workspace between your machine and the cloud, mid-task, with changes and history intact
+- 👥 **Multiplayer cloud chats** - live sessions your team can inspect, claim, and continue
+- 💬 **Team Slackbot** - turn a Slack message into shared agent work for the whole team
+- 🤝 **Team automations** - shared recurring fixes and reviews the whole team can run
+- 🛰️ **Remote dispatch** - kick off and steer work on your own machine from the web
+- 🔑 **SSH access** - drop into any cloud sandbox from your terminal
+- 🔐 **Credential gateway** - your keys and subscriptions never touch the sandbox; sandboxes only get short-lived tokens
+- 🏢 **Organizations** - team seats, shared settings, cloud limits, and governance controls
+- 📱 **Mobile** - coming soon: dispatch work, approve actions, and follow runs from your phone
+- 🏗️ **Self-hosted Proliferate Cloud** - coming soon: run the full cloud control plane yourself
 
 Proliferate Cloud will be fully self-hostable and open source once it's out of beta.
 
