@@ -299,6 +299,9 @@ fn apply_seed_payload(
     let mut repaired = 0_u32;
     let mut skipped = 0_u32;
     let mut wrote = 0_u32;
+    let mut install_manifest_entries: HashMap<String, Vec<installer::manifest::ManifestArtifact>> =
+        HashMap::new();
+    let hydrated_at = chrono::Utc::now().to_rfc3339();
 
     for artifact in &manifest.artifacts {
         let rel_path = validate_relative_path(&artifact.path)?;
@@ -364,6 +367,16 @@ fn apply_seed_payload(
                 )));
             }
             wrote += 1;
+            install_manifest_entries.entry(artifact.kind.clone()).or_default().push(
+                installer::manifest::ManifestArtifact {
+                    role: artifact.role.clone(),
+                    version: Some(manifest.seed_version.clone()),
+                    sha256: Some(artifact.sha256.clone()),
+                    source: "seed".into(),
+                    installed_at: hydrated_at.clone(),
+                    path: dest.display().to_string(),
+                },
+            );
         }
 
         let observed = checksum_path(&dest).ok();
@@ -376,6 +389,16 @@ fn apply_seed_payload(
             seed_checksum: artifact.sha256.clone(),
             last_observed_checksum: observed,
         });
+    }
+
+    for (kind, entries) in install_manifest_entries {
+        if let Err(error) = installer::manifest::record_entries(runtime_home, &kind, entries) {
+            tracing::warn!(
+                agent = %kind,
+                error = %error,
+                "failed to write install manifest for seeded artifacts"
+            );
+        }
     }
 
     let launcher_agents = seed_owned_agent_process_agents(&manifest.seeded_agents, &next_records);
