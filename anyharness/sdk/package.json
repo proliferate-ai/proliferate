@@ -1,6 +1,6 @@
 {
   "name": "@anyharness/sdk",
-  "version": "0.1.52",
+  "version": "0.2.0",
   "description": "TypeScript SDK for the AnyHarness runtime API",
   "type": "module",
   "main": "dist/index.js",
