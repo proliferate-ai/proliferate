@@ -10,7 +10,6 @@ use crate::live::sessions::actor::turn::diagnostics::{age_ms, PromptDiagnostics}
 use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
 use crate::live::sessions::background_work::BackgroundWorkUpdate;
 use crate::live::sessions::sink::SessionEventSinkDebugSnapshot;
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 
 pub(in crate::live::sessions::actor) const EMPTY_TURN_ERROR_CODE: &str = "empty_turn";
 pub(in crate::live::sessions::actor) const EMPTY_TURN_ERROR_MESSAGE: &str = "The agent ended the turn without producing a response. The selected model or provider may need additional configuration or credentials.";
@@ -55,13 +54,10 @@ impl SessionActor {
     pub(in crate::live::sessions::actor) async fn finish_prompt_result(
         &mut self,
         result: acp::Result<acp::schema::PromptResponse>,
-        latency: Option<&LatencyRequestContext>,
         prompt_diagnostics: &mut PromptDiagnostics,
         notification_rx: &mut mpsc::UnboundedReceiver<acp::schema::SessionNotification>,
         background_work_rx: &mut mpsc::UnboundedReceiver<BackgroundWorkUpdate>,
     ) -> bool {
-        let latency_fields = latency_trace_fields(latency);
-
         match result {
             Ok(resp) => {
                 while let Ok(notif) = notification_rx.try_recv() {
@@ -77,9 +73,6 @@ impl SessionActor {
                 };
                 tracing::info!(
                     session_id = %self.session_id,
-                    flow_id = latency_fields.flow_id,
-                    flow_kind = latency_fields.flow_kind,
-                    flow_source = latency_fields.flow_source,
                     prompt_id = ?prompt_diagnostics.prompt_id.as_deref(),
                     turn_id = ?sink_snapshot_before_turn_end.current_turn_id,
                     stop_reason = ?resp.stop_reason,
@@ -106,9 +99,6 @@ impl SessionActor {
                 if emit_empty_turn_error {
                     tracing::warn!(
                         session_id = %self.session_id,
-                        flow_id = latency_fields.flow_id,
-                        flow_kind = latency_fields.flow_kind,
-                        flow_source = latency_fields.flow_source,
                         prompt_id = ?prompt_diagnostics.prompt_id.as_deref(),
                         turn_id = ?sink_snapshot_before_turn_end.current_turn_id,
                         stop_reason = ?resp.stop_reason,
@@ -140,9 +130,6 @@ impl SessionActor {
                 drop(sink);
                 tracing::info!(
                     session_id = %self.session_id,
-                    flow_id = latency_fields.flow_id,
-                    flow_kind = latency_fields.flow_kind,
-                    flow_source = latency_fields.flow_source,
                     prompt_id = ?prompt_diagnostics.prompt_id.as_deref(),
                     turn_id = ?sink_snapshot_before_turn_end.current_turn_id,
                     "session.actor.prompt.turn_ended_emitted"
@@ -154,9 +141,6 @@ impl SessionActor {
                 let _ = self.caps.state.update_status(&self.session_id, "idle", &now);
                 tracing::info!(
                     session_id = %self.session_id,
-                    flow_id = latency_fields.flow_id,
-                    flow_kind = latency_fields.flow_kind,
-                    flow_source = latency_fields.flow_source,
                     prompt_id = ?prompt_diagnostics.prompt_id.as_deref(),
                     turn_id = ?sink_snapshot_before_turn_end.current_turn_id,
                     updated_at = %now,
@@ -198,9 +182,6 @@ impl SessionActor {
                 };
                 tracing::warn!(
                     session_id = %self.session_id,
-                    flow_id = latency_fields.flow_id,
-                    flow_kind = latency_fields.flow_kind,
-                    flow_source = latency_fields.flow_source,
                     prompt_id = ?prompt_diagnostics.prompt_id.as_deref(),
                     turn_id = ?sink_snapshot_on_error.current_turn_id,
                     error = %e,

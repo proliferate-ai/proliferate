@@ -187,7 +187,6 @@ impl PlanRuntime {
                     None,
                     None,
                     origin,
-                    None,
                 )
                 .await
                 .map_err(HandoffPlanError::CreateSession)?;
@@ -211,7 +210,6 @@ impl PlanRuntime {
             .send_prompt(
                 &target_session_id,
                 vec![PromptInputBlock::Text { text: prompt }],
-                None,
                 None,
             )
             .await

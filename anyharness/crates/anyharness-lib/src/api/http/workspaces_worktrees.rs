@@ -18,7 +18,8 @@ use crate::domains::workspaces::worktree_names::WorktreeNameConflictPolicy;
 use crate::domains::workspaces::worktree_runtime::{
     CreateWorktreeWorkflowError, CreateWorktreeWorkflowInput,
 };
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::observability::latency::FlowHeaders;
+use tracing::Instrument;
 
 #[utoipa::path(
     post,
@@ -36,80 +37,75 @@ pub async fn create_worktree(
     headers: HeaderMap,
     Json(req): Json<CreateWorktreeWorkspaceRequest>,
 ) -> Result<Json<CreateWorktreeWorkspaceResponse>, ApiError> {
-    let latency = LatencyRequestContext::from_headers(&headers);
-    let latency_fields = latency_trace_fields(latency.as_ref());
-    let started = Instant::now();
-    let repo_root_id = req.repo_root_id;
-    let target_path = req.target_path;
-    let new_branch_name = req.new_branch_name;
-    let checkout_mode = req
-        .checkout_mode
-        .map(worktree_checkout_mode_from_contract)
-        .unwrap_or_default();
-    let name_conflict_policy = req
-        .name_conflict_policy
-        .map(worktree_name_conflict_policy_from_contract)
-        .unwrap_or_default();
-    let base_branch = req.base_branch.clone();
-    let setup_script = req.setup_script;
-    let origin = request_origin_or_api_default(req.origin, "create_worktree");
-    let creator_context = req
-        .creator_context
-        .map(WorkspaceCreatorContext::from_contract);
-    let has_setup_script = setup_script
-        .as_deref()
-        .map(str::trim)
-        .map(|script| !script.is_empty())
-        .unwrap_or(false);
-    tracing::info!(
-        repo_root_id = %repo_root_id,
-        has_setup_script,
-        flow_id = latency_fields.flow_id,
-        flow_kind = latency_fields.flow_kind,
-        flow_source = latency_fields.flow_source,
-        prompt_id = latency_fields.prompt_id,
-        "[workspace-latency] workspace.http.worktree.request_received"
-    );
+    let span = FlowHeaders::from_headers(&headers).span();
+    async move {
+        let started = Instant::now();
+        let repo_root_id = req.repo_root_id;
+        let target_path = req.target_path;
+        let new_branch_name = req.new_branch_name;
+        let checkout_mode = req
+            .checkout_mode
+            .map(worktree_checkout_mode_from_contract)
+            .unwrap_or_default();
+        let name_conflict_policy = req
+            .name_conflict_policy
+            .map(worktree_name_conflict_policy_from_contract)
+            .unwrap_or_default();
+        let base_branch = req.base_branch.clone();
+        let setup_script = req.setup_script;
+        let origin = request_origin_or_api_default(req.origin, "create_worktree");
+        let creator_context = req
+            .creator_context
+            .map(WorkspaceCreatorContext::from_contract);
+        let has_setup_script = setup_script
+            .as_deref()
+            .map(str::trim)
+            .map(|script| !script.is_empty())
+            .unwrap_or(false);
+        tracing::info!(
+            repo_root_id = %repo_root_id,
+            has_setup_script,
+            "[workspace-latency] workspace.http.worktree.request_received"
+        );
 
-    state
-        .workspace_access_gate
-        .assert_can_mutate_for_repo_root(&repo_root_id)
-        .map_err(map_access_error)?;
+        state
+            .workspace_access_gate
+            .assert_can_mutate_for_repo_root(&repo_root_id)
+            .map_err(map_access_error)?;
 
-    let result = state
-        .workspace_worktree_runtime
-        .create_worktree(CreateWorktreeWorkflowInput {
-            repo_root_id: repo_root_id.clone(),
-            target_path,
-            new_branch_name,
-            base_branch: base_branch.clone(),
-            checkout_mode,
-            setup_script,
-            surface: "standard".to_string(),
-            name_conflict_policy,
-            origin,
-            creator_context,
-        })
-        .await
-        .map_err(map_create_worktree_error)?;
+        let result = state
+            .workspace_worktree_runtime
+            .create_worktree(CreateWorktreeWorkflowInput {
+                repo_root_id: repo_root_id.clone(),
+                target_path,
+                new_branch_name,
+                base_branch: base_branch.clone(),
+                checkout_mode,
+                setup_script,
+                surface: "standard".to_string(),
+                name_conflict_policy,
+                origin,
+                creator_context,
+            })
+            .await
+            .map_err(map_create_worktree_error)?;
 
-    tracing::info!(
-        workspace_id = %result.worktree.workspace.id,
-        repo_root_id = %repo_root_id,
-        has_setup_script,
-        setup_started = result.setup_started,
-        elapsed_ms = started.elapsed().as_millis(),
-        flow_id = latency_fields.flow_id,
-        flow_kind = latency_fields.flow_kind,
-        flow_source = latency_fields.flow_source,
-        prompt_id = latency_fields.prompt_id,
-        "[workspace-latency] workspace.http.worktree.completed"
-    );
+        tracing::info!(
+            workspace_id = %result.worktree.workspace.id,
+            repo_root_id = %repo_root_id,
+            has_setup_script,
+            setup_started = result.setup_started,
+            elapsed_ms = started.elapsed().as_millis(),
+            "[workspace-latency] workspace.http.worktree.completed"
+        );
 
-    Ok(Json(CreateWorktreeWorkspaceResponse {
-        workspace: workspace_to_contract(&state, result.worktree.workspace).await?,
-        setup_script: None,
-    }))
+        Ok(Json(CreateWorktreeWorkspaceResponse {
+            workspace: workspace_to_contract(&state, result.worktree.workspace).await?,
+            setup_script: None,
+        }))
+    }
+    .instrument(span)
+    .await
 }
 
 fn worktree_checkout_mode_from_contract(

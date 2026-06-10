@@ -186,7 +186,6 @@ pub async fn probe_agent(options: ProbeOptions) -> anyhow::Result<ProbeSnapshot>
         PROBE_SESSION_ID,
         PROBE_WORKSPACE_ID,
         options.agent_kind.as_str(),
-        None,
         &ready_tx,
     )?;
     let mut child = spawned.child;

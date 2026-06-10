@@ -12,7 +12,8 @@ use super::access::assert_session_auth_scope;
 use super::error::ApiError;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::observability::latency::FlowHeaders;
+use tracing::Instrument;
 
 #[derive(Debug, Deserialize)]
 pub struct ListSessionEventsQuery {
@@ -49,99 +50,90 @@ pub async fn list_session_events(
     Query(query): Query<ListSessionEventsQuery>,
 ) -> Result<Json<Vec<SessionEventEnvelope>>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
-    let latency = LatencyRequestContext::from_headers(&headers);
-    let latency_fields = latency_trace_fields(latency.as_ref());
-    let started = Instant::now();
-    let after_seq = query.after_seq.map(|seq| seq.max(0));
-    let before_seq = query.before_seq.map(|seq| seq.max(0));
-    let limit = query.limit.map(|limit| limit.clamp(1, 5_000));
-    let turn_limit = query.turn_limit.map(|turn_limit| turn_limit.clamp(1, 200));
-    let oldest_first = query.oldest_first.unwrap_or(false);
-    if is_unsupported_event_history_window(after_seq, before_seq, turn_limit) {
-        return Err(ApiError::bad_request(
-            "after_seq cannot be combined with before_seq or turn_limit",
-            "UNSUPPORTED_EVENT_HISTORY_WINDOW",
-        ));
-    }
-    tracing::debug!(
-        session_id = %session_id,
-        after_seq,
-        before_seq,
-        limit,
-        turn_limit,
-        oldest_first,
-        flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
-        "[workspace-latency] session.http.events.start"
-    );
-    let event_records = state
-        .session_service
-        .list_session_event_records(
-            &session_id,
+    let span = FlowHeaders::from_headers(&headers).span();
+    async move {
+        let started = Instant::now();
+        let after_seq = query.after_seq.map(|seq| seq.max(0));
+        let before_seq = query.before_seq.map(|seq| seq.max(0));
+        let limit = query.limit.map(|limit| limit.clamp(1, 5_000));
+        let turn_limit = query.turn_limit.map(|turn_limit| turn_limit.clamp(1, 200));
+        let oldest_first = query.oldest_first.unwrap_or(false);
+        if is_unsupported_event_history_window(after_seq, before_seq, turn_limit) {
+            return Err(ApiError::bad_request(
+                "after_seq cannot be combined with before_seq or turn_limit",
+                "UNSUPPORTED_EVENT_HISTORY_WINDOW",
+            ));
+        }
+        tracing::debug!(
+            session_id = %session_id,
             after_seq,
             before_seq,
             limit,
             turn_limit,
             oldest_first,
-        )
-        .map_err(|e| ApiError::internal(e.to_string()))?
-        .ok_or_else(|| {
-            ApiError::not_found(
-                format!("Session not found: {session_id}"),
-                "SESSION_NOT_FOUND",
+            "[workspace-latency] session.http.events.start"
+        );
+        let event_records = state
+            .session_service
+            .list_session_event_records(
+                &session_id,
+                after_seq,
+                before_seq,
+                limit,
+                turn_limit,
+                oldest_first,
             )
-        })?;
+            .map_err(|e| ApiError::internal(e.to_string()))?
+            .ok_or_else(|| {
+                ApiError::not_found(
+                    format!("Session not found: {session_id}"),
+                    "SESSION_NOT_FOUND",
+                )
+            })?;
 
-    let envelopes: Vec<SessionEventEnvelope> = event_records
-        .iter()
-        .filter_map(|r| {
-            let event = serde_json::from_str(&r.payload_json).ok()?;
-            Some(SessionEventEnvelope {
-                session_id: r.session_id.clone(),
-                seq: r.seq,
-                timestamp: r.timestamp.clone(),
-                turn_id: r.turn_id.clone(),
-                item_id: r.item_id.clone(),
-                event,
+        let envelopes: Vec<SessionEventEnvelope> = event_records
+            .iter()
+            .filter_map(|r| {
+                let event = serde_json::from_str(&r.payload_json).ok()?;
+                Some(SessionEventEnvelope {
+                    session_id: r.session_id.clone(),
+                    seq: r.seq,
+                    timestamp: r.timestamp.clone(),
+                    turn_id: r.turn_id.clone(),
+                    item_id: r.item_id.clone(),
+                    event,
+                })
             })
-        })
-        .collect();
+            .collect();
 
-    if envelopes.is_empty() {
-        tracing::debug!(
-            session_id = %session_id,
-            event_count = envelopes.len(),
-            after_seq,
-            before_seq,
-            limit,
-            turn_limit,
-            elapsed_ms = started.elapsed().as_millis(),
-            flow_id = latency_fields.flow_id,
-                flow_kind = latency_fields.flow_kind,
-                flow_source = latency_fields.flow_source,
-                prompt_id = latency_fields.prompt_id,
-            "[workspace-latency] session.http.events.completed"
-        );
-    } else {
-        tracing::info!(
-            session_id = %session_id,
-            event_count = envelopes.len(),
-            after_seq,
-            before_seq,
-            limit,
-            turn_limit,
-            elapsed_ms = started.elapsed().as_millis(),
-            flow_id = latency_fields.flow_id,
-                flow_kind = latency_fields.flow_kind,
-                flow_source = latency_fields.flow_source,
-                prompt_id = latency_fields.prompt_id,
-            "[workspace-latency] session.http.events.completed"
-        );
+        if envelopes.is_empty() {
+            tracing::debug!(
+                session_id = %session_id,
+                event_count = envelopes.len(),
+                after_seq,
+                before_seq,
+                limit,
+                turn_limit,
+                elapsed_ms = started.elapsed().as_millis(),
+                "[workspace-latency] session.http.events.completed"
+            );
+        } else {
+            tracing::info!(
+                session_id = %session_id,
+                event_count = envelopes.len(),
+                after_seq,
+                before_seq,
+                limit,
+                turn_limit,
+                elapsed_ms = started.elapsed().as_millis(),
+                "[workspace-latency] session.http.events.completed"
+            );
+        }
+
+        Ok(Json(envelopes))
     }
-
-    Ok(Json(envelopes))
+    .instrument(span)
+    .await
 }
 
 #[utoipa::path(

@@ -8,7 +8,6 @@ use tokio::sync::{mpsc, RwLock};
 use crate::live::sessions::actor::command::SessionCommand;
 use crate::live::sessions::actor::state::{SessionActor, SessionActorConfig};
 use crate::live::sessions::handle::{LiveSessionExecutionSnapshot, LiveSessionHandle};
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 
 pub struct ActorReadyResult {
     pub native_session_id: String,
@@ -21,7 +20,6 @@ pub struct PendingSessionActor {
     workspace_id: String,
     startup_strategy: String,
     started: Instant,
-    latency: Option<LatencyRequestContext>,
 }
 
 impl PendingSessionActor {
@@ -46,17 +44,12 @@ impl PendingSessionActor {
             .expect("native session id lock poisoned")
             .replace(native_session_id.clone());
 
-        let latency_fields = latency_trace_fields(self.latency.as_ref());
         tracing::info!(
             session_id = %self.session_id,
             workspace_id = %self.workspace_id,
             native_session_id = %native_session_id,
             startup_strategy = %self.startup_strategy,
             elapsed_ms = self.started.elapsed().as_millis(),
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.actor.spawn.ready"
         );
 
@@ -80,18 +73,12 @@ pub fn spawn_session_actor_pending(
     let workspace_id = config.launch.session.workspace_id.clone();
     let agent_kind = config.launch.session.agent_kind.clone();
     let startup_strategy = config.launch.startup.as_str().to_string();
-    let actor_latency = config.hooks.latency.clone();
-    let actor_latency_fields = latency_trace_fields(actor_latency.as_ref());
     let started = Instant::now();
     tracing::info!(
         session_id = %session_id,
         workspace_id = %workspace_id,
         agent_kind = %agent_kind,
         startup_strategy,
-        flow_id = actor_latency_fields.flow_id,
-        flow_kind = actor_latency_fields.flow_kind,
-        flow_source = actor_latency_fields.flow_source,
-        prompt_id = actor_latency_fields.prompt_id,
         "[workspace-latency] session.actor.spawn.start"
     );
     let (command_tx, command_rx) = mpsc::channel::<SessionCommand>(32);
@@ -155,6 +142,5 @@ pub fn spawn_session_actor_pending(
         workspace_id,
         startup_strategy,
         started,
-        latency: actor_latency,
     })
 }

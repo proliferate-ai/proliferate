@@ -590,7 +590,7 @@ impl CoworkRuntime {
                 "[workspace-latency] cowork.runtime.create_thread.live_start.start"
             );
             match session_runtime
-                .start_persisted_session(&session_for_start, None)
+                .start_persisted_session(&session_for_start)
                 .await
             {
                 Ok(started) => {
@@ -912,11 +912,7 @@ impl CoworkRuntime {
                 }
             }
         }
-        let started = match self
-            .session_runtime
-            .start_persisted_session(&session, None)
-            .await
-        {
+        let started = match self.session_runtime.start_persisted_session(&session).await {
             Ok(started) => started,
             Err(error) => {
                 if input.wake_on_completion {

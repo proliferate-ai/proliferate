@@ -76,12 +76,11 @@ impl SessionActor {
         background_work_rx: &mut mpsc::UnboundedReceiver<BackgroundWorkUpdate>,
     ) -> Option<ActorExitDisposition> {
         match cmd {
-            SessionCommand::Prompt { payload, prompt_id, latency, from_queue_seq, respond_to } => {
+            SessionCommand::Prompt { payload, prompt_id, from_queue_seq, respond_to } => {
                 self.run_turn(
                     ActivePromptRequest {
                         payload,
                         prompt_id,
-                        latency,
                         from_queue_seq,
                         respond_to,
                     },

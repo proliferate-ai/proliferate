@@ -11,12 +11,12 @@ use crate::domains::sessions::mcp_bindings::summaries::{
     serialize_binding_summaries, SessionMcpSummaryError,
 };
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 use crate::origin::OriginContext;
 
 use super::{CreateAndStartSessionError, SessionRuntime};
 
 impl SessionRuntime {
+    #[tracing::instrument(skip_all, fields(workspace_id = %workspace_id, agent_kind = %agent_kind))]
     pub async fn create_and_start_session(
         &self,
         workspace_id: &str,
@@ -31,13 +31,11 @@ impl SessionRuntime {
         agent_auth_scope: Option<AgentAuthExternalScope>,
         required_agent_auth_revision: Option<i64>,
         origin: OriginContext,
-        latency: Option<&LatencyRequestContext>,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
         self.access_gate
             .assert_can_mutate_for_workspace(workspace_id)
             .map_err(|error| CreateAndStartSessionError::Invalid(error.to_string()))?;
         let started = Instant::now();
-        let latency_fields = latency_trace_fields(latency);
         let system_prompt_append_count = system_prompt_append
             .as_ref()
             .map(|entries| entries.len())
@@ -48,10 +46,6 @@ impl SessionRuntime {
             model_id = ?model_id,
             mode_id = ?mode_id,
             system_prompt_append_count,
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.runtime.create_and_start.start"
         );
         let durable_create_started = Instant::now();
@@ -78,22 +72,14 @@ impl SessionRuntime {
             workspace_id = %workspace_id,
             session_id = %record.id,
             elapsed_ms = durable_create_started.elapsed().as_millis(),
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.runtime.durable_session_created"
         );
-        record = self.start_persisted_session(&record, latency).await?;
+        record = self.start_persisted_session(&record).await?;
         tracing::info!(
             workspace_id = %workspace_id,
             session_id = %record.id,
             native_session_id = %record.native_session_id.as_deref().unwrap_or_default(),
             total_elapsed_ms = started.elapsed().as_millis(),
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.runtime.create_and_start.completed"
         );
 

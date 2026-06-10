@@ -23,7 +23,8 @@ use super::git_task::{run_git_task, GitTaskAccess};
 use crate::adapters::git::types::{CommitError, GitDiffScope as InternalGitDiffScope, PushError};
 use crate::adapters::git::GitService;
 use crate::app::AppState;
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::observability::latency::FlowHeaders;
+use tracing::Instrument;
 
 // ---------------------------------------------------------------------------
 // Status
@@ -44,44 +45,37 @@ pub async fn get_git_status(
     headers: HeaderMap,
     Path(workspace_id): Path<String>,
 ) -> Result<Json<GitStatusSnapshot>, ApiError> {
-    let latency = LatencyRequestContext::from_headers(&headers);
-    let latency_fields = latency_trace_fields(latency.as_ref());
-    let started = Instant::now();
-    tracing::info!(
-        workspace_id = %workspace_id,
-        flow_id = latency_fields.flow_id,
-        flow_kind = latency_fields.flow_kind,
-        flow_source = latency_fields.flow_source,
-        prompt_id = latency_fields.prompt_id,
-        measurement_operation_id = latency_fields.measurement_operation_id,
-        "[anyharness-latency] git.http.status.request_received"
-    );
-    let snapshot = run_git_task(
-        &state,
-        workspace_id.clone(),
-        GitTaskAccess::Read,
-        "git status",
-        |workspace_id, ws_path| {
-            GitService::status(&workspace_id, &ws_path)
-                .map(git_status_to_contract)
-                .map_err(|e| ApiError::bad_request(e.to_string(), "GIT_STATUS_FAILED"))
-        },
-    )
-    .await?;
+    let span = FlowHeaders::from_headers(&headers).span();
+    async move {
+        let started = Instant::now();
+        tracing::info!(
+            workspace_id = %workspace_id,
+            "[anyharness-latency] git.http.status.request_received"
+        );
+        let snapshot = run_git_task(
+            &state,
+            workspace_id.clone(),
+            GitTaskAccess::Read,
+            "git status",
+            |workspace_id, ws_path| {
+                GitService::status(&workspace_id, &ws_path)
+                    .map(git_status_to_contract)
+                    .map_err(|e| ApiError::bad_request(e.to_string(), "GIT_STATUS_FAILED"))
+            },
+        )
+        .await?;
 
-    tracing::info!(
-        workspace_id = %workspace_id,
-        changed_files = snapshot.summary.changed_files,
-        included_files = snapshot.summary.included_files,
-        elapsed_ms = started.elapsed().as_millis(),
-        flow_id = latency_fields.flow_id,
-        flow_kind = latency_fields.flow_kind,
-        flow_source = latency_fields.flow_source,
-        prompt_id = latency_fields.prompt_id,
-        measurement_operation_id = latency_fields.measurement_operation_id,
-        "[anyharness-latency] git.http.status.response_ready"
-    );
-    Ok(Json(snapshot))
+        tracing::info!(
+            workspace_id = %workspace_id,
+            changed_files = snapshot.summary.changed_files,
+            included_files = snapshot.summary.included_files,
+            elapsed_ms = started.elapsed().as_millis(),
+            "[anyharness-latency] git.http.status.response_ready"
+        );
+        Ok(Json(snapshot))
+    }
+    .instrument(span)
+    .await
 }
 
 // ---------------------------------------------------------------------------

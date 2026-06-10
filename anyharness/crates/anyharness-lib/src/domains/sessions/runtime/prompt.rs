@@ -9,19 +9,18 @@ use crate::domains::sessions::prompt::prepare::prepare_prompt;
 use crate::domains::sessions::prompt::provenance::PromptProvenance;
 use crate::domains::sessions::prompt::PromptPrepareContext;
 use crate::live::sessions::{LiveSessionCommandError, PromptAcceptError, PromptAcceptance};
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 
 use super::{
     SendPromptError, SendPromptOutcome, SessionLifecycleError, SessionRuntime, StartSessionError,
 };
 
 impl SessionRuntime {
+    #[tracing::instrument(skip_all, fields(session_id = %session_id))]
     pub async fn send_prompt(
         &self,
         session_id: &str,
         blocks: Vec<PromptInputBlock>,
         prompt_id: Option<String>,
-        latency: Option<&LatencyRequestContext>,
     ) -> Result<SendPromptOutcome, SendPromptError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
@@ -30,14 +29,9 @@ impl SessionRuntime {
             return Err(SendPromptError::EmptyPrompt);
         }
         let started = Instant::now();
-        let latency_fields = latency_trace_fields(latency);
-        let prompt_id = prompt_id.or_else(|| latency_fields.prompt_id.map(|s| s.to_string()));
         let prompt_id_for_trace = prompt_id.clone();
         tracing::info!(
             session_id = %session_id,
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
             prompt_id = prompt_id_for_trace.as_deref(),
             "[workspace-latency] session.runtime.prompt.request_received"
         );
@@ -48,7 +42,7 @@ impl SessionRuntime {
 
         let ensure_started = Instant::now();
         let handle = self
-            .ensure_live_session_handle(&record, None, latency)
+            .ensure_live_session_handle(&record, None)
             .await
             .map_err(map_start_error_to_prompt)?;
         let live_config = self
@@ -78,9 +72,6 @@ impl SessionRuntime {
             session_id = %session_id,
             elapsed_ms = ensure_started.elapsed().as_millis(),
             total_elapsed_ms = started.elapsed().as_millis(),
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
             prompt_id = prompt_id_for_trace.as_deref(),
             "[workspace-latency] session.runtime.prompt.live_handle_ready"
         );
@@ -89,7 +80,7 @@ impl SessionRuntime {
         // The runtime no longer precaptures `busy`; it just forwards the command
         // and awaits the actor's decision (Started vs Queued).
         let acceptance = handle
-            .send_prompt(prepared.payload.clone(), prompt_id, latency.cloned())
+            .send_prompt(prepared.payload.clone(), prompt_id)
             .await
             .map_err(|error| match error {
                 LiveSessionCommandError::ActorUnavailable => {
@@ -110,9 +101,6 @@ impl SessionRuntime {
         tracing::info!(
             session_id = %session_id,
             total_elapsed_ms = started.elapsed().as_millis(),
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
             prompt_id = prompt_id_for_trace.as_deref(),
             "[workspace-latency] session.runtime.prompt.command_sent"
         );
@@ -120,9 +108,6 @@ impl SessionRuntime {
         tracing::info!(
             session_id = %session_id,
             total_elapsed_ms = started.elapsed().as_millis(),
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
             prompt_id = prompt_id_for_trace.as_deref(),
             "[workspace-latency] session.runtime.prompt.actor_accepted"
         );
@@ -157,28 +142,25 @@ impl SessionRuntime {
             .get_session_or_not_found(session_id)
             .map_err(map_lifecycle_error_to_prompt)?;
         let handle = self
-            .ensure_live_session_handle(&record, None, None)
+            .ensure_live_session_handle(&record, None)
             .await
             .map_err(map_start_error_to_prompt)?;
         let payload =
             crate::domains::sessions::prompt::PromptPayload::text(text).with_provenance(provenance);
-        let acceptance =
-            handle
-                .send_prompt(payload, None, None)
-                .await
-                .map_err(|error| match error {
-                    LiveSessionCommandError::ActorUnavailable => {
-                        SendPromptError::Internal(anyhow::anyhow!("session actor channel closed"))
-                    }
-                    LiveSessionCommandError::ResponseDropped => {
-                        SendPromptError::Internal(anyhow::anyhow!("session actor dropped response"))
-                    }
-                    LiveSessionCommandError::Rejected(PromptAcceptError::EnqueueFailed(detail)) => {
-                        SendPromptError::Internal(anyhow::anyhow!(
-                            "failed to enqueue prompt: {detail}"
-                        ))
-                    }
-                })?;
+        let acceptance = handle
+            .send_prompt(payload, None)
+            .await
+            .map_err(|error| match error {
+                LiveSessionCommandError::ActorUnavailable => {
+                    SendPromptError::Internal(anyhow::anyhow!("session actor channel closed"))
+                }
+                LiveSessionCommandError::ResponseDropped => {
+                    SendPromptError::Internal(anyhow::anyhow!("session actor dropped response"))
+                }
+                LiveSessionCommandError::Rejected(PromptAcceptError::EnqueueFailed(detail)) => {
+                    SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
+                }
+            })?;
         let session = self
             .session_service
             .get_session(session_id)
