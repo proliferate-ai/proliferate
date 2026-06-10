@@ -1,10 +1,10 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "2026-06-10.5",
+  "catalogVersion": "2026-06-10.6",
   "probedAgainst": {
     "registryVersion": null
   },
-  "generatedAt": "2026-06-10T02:07:48.988Z",
+  "generatedAt": "2026-06-10T02:19:36.860Z",
   "agents": [
     {
       "kind": "claude",

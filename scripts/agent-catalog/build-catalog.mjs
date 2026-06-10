@@ -123,7 +123,11 @@ function parseVariant(modelId, effortValues) {
     if (pairs.every((pair) => pair.includes("="))) {
       return {
         base: bracket[1],
-        params: Object.fromEntries(pairs.map((pair) => pair.split("="))),
+        // split on the FIRST '=' only — values may themselves contain '='
+        params: Object.fromEntries(pairs.map((pair) => {
+          const eq = pair.indexOf("=");
+          return [pair.slice(0, eq), pair.slice(eq + 1)];
+        })),
         syntax: "bracket-params",
       };
     }
@@ -171,10 +175,13 @@ function normalizeVariantModels(models, effortValues) {
       }
     }
     const first = variants[0].model;
-    const suffixPattern = new RegExp("\\s*\\((" + [...(paramControls.reasoning_effort ?? [])].join("|") + ")\\)$");
+    const effortValues = [...(paramControls.reasoning_effort ?? [])];
+    const suffixPattern = effortValues.length
+      ? new RegExp("\\s*\\((" + effortValues.join("|") + ")\\)$")
+      : null;
     out.push({
       modelId: base,
-      name: (first.name ?? base).replace(suffixPattern, ""),
+      name: suffixPattern ? (first.name ?? base).replace(suffixPattern, "") : (first.name ?? base),
       description: commonDescription(variants.map((v) => v.model.description)),
       configOptions: first.configOptions,
       variantParamControls: Object.fromEntries(
