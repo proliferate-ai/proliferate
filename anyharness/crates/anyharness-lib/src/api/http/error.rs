@@ -94,13 +94,18 @@ impl ApiError {
     }
 
     pub fn internal(detail: impl Into<String>) -> Self {
+        let detail = detail.into();
+        // tower_http only logs the status code on failure; this is the one
+        // place every 500 passes through, so the detail must be logged here
+        // or it survives only in the response body.
+        tracing::error!(detail = %detail, "internal API error");
         Self(
             StatusCode::INTERNAL_SERVER_ERROR,
             ProblemDetails {
                 type_url: "about:blank".into(),
                 title: "Internal error".into(),
                 status: 500,
-                detail: Some(detail.into()),
+                detail: Some(detail),
                 instance: None,
                 code: None,
                 resolution_scope: None,

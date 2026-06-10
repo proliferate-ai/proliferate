@@ -156,7 +156,8 @@ pub(super) fn map_send_prompt_error(error: SendPromptError) -> ApiError {
         SendPromptError::SessionClosed => ApiError::conflict("session is closed", "SESSION_CLOSED"),
         SendPromptError::EmptyPrompt => ApiError::bad_request("empty prompt", "EMPTY_PROMPT"),
         SendPromptError::InvalidPrompt(error) => ApiError::bad_request(error.detail, error.code),
-        SendPromptError::Internal(error) => ApiError::internal(error.to_string()),
+        // {error:#} keeps the anyhow cause chain; to_string() would drop it.
+        SendPromptError::Internal(error) => ApiError::internal(format!("{error:#}")),
     }
 }
 

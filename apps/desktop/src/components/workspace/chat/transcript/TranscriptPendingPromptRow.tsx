@@ -159,7 +159,12 @@ function resolveOutboxPromptTrailingStatus(
     case "failed_before_dispatch":
       return formatOutboxPromptFailureLabel(entry);
     case "unknown_after_dispatch":
-      return <OutboxPromptPlainStatus label="Waiting for confirmation…" />;
+      return (
+        <OutboxPromptPlainStatus
+          label="Waiting for confirmation…"
+          detail={entry.errorMessage}
+        />
+      );
     case "preparing":
     case "dispatching":
     case "waiting_for_session":
@@ -174,10 +179,19 @@ function resolveOutboxPromptTrailingStatus(
   }
 }
 
-function OutboxPromptPlainStatus({ label }: { label: string }) {
+function OutboxPromptPlainStatus({
+  label,
+  detail,
+}: {
+  label: string;
+  detail?: string | null;
+}) {
   return (
     <div className="flex min-h-5 items-end py-1 text-chat font-normal leading-[var(--text-chat--line-height)] text-muted-foreground">
-      <span>{label}</span>
+      <span className="min-w-0 truncate" title={detail ?? undefined}>
+        {label}
+        {detail ? <span className="text-muted-foreground/70"> · {detail}</span> : null}
+      </span>
     </div>
   );
 }
@@ -285,7 +299,16 @@ function renderOutboxPromptControls(
 
   if (entry.deliveryState === "unknown_after_dispatch") {
     return (
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          data-chat-transcript-ignore
+          onClick={() => actions.retryPrompt(entry.clientPromptId)}
+        >
+          Retry
+        </Button>
         <Button
           type="button"
           variant="ghost"
