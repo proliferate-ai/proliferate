@@ -106,7 +106,6 @@ impl SessionRuntime {
             .insert(&record)
             .map_err(ReplayError::Internal)?;
 
-        let session_store = self.session_service.store().clone();
         let (_handle, ready) = self
             .acp_manager
             .start_replay_session(record.clone(), events, speed, 0)

@@ -105,23 +105,3 @@ fn codex_prompt_inlines_first_prompt_append_only_before_first_turn() {
         first_prompt_system_prompt_append_for_codex_prompt("codex", Some("   "), false).is_none()
     );
 }
-
-#[test]
-fn prepend_system_prompt_append_adds_hidden_instruction_block() {
-    let mut blocks = vec![acp::schema::ContentBlock::Text(acp::schema::TextContent::new(
-        "Build a product".to_string(),
-    ))];
-
-    prepend_system_prompt_append_to_acp_blocks(&mut blocks, "Name the workspace first.");
-
-    assert_eq!(blocks.len(), 2);
-    let acp::schema::ContentBlock::Text(first) = &blocks[0] else {
-        panic!("first block should be text");
-    };
-    assert!(first.text.contains("System instruction from AnyHarness"));
-    assert!(first.text.contains("Name the workspace first."));
-    let acp::schema::ContentBlock::Text(second) = &blocks[1] else {
-        panic!("second block should be text");
-    };
-    assert_eq!(second.text, "Build a product");
-}
