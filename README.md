@@ -7,7 +7,7 @@
   </picture>
 </p>
 
-<h3>The Open Source Local and Cloud Agent IDE</h3>
+<h3>The Open Source AI IDE</h3>
 
 <p>
   <a href="https://github.com/proliferate-ai/proliferate/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/proliferate-ai/proliferate?style=flat&amp;logo=github&amp;label=stars" /></a>
@@ -40,7 +40,7 @@ Move running sessions between your machine and the cloud. Works solo or across a
 
 </div>
 
-## The Open Source Codex for Any Harness
+## Build with Any Harness on an IDE You Own
 
 Proliferate is a desktop and web app for running coding agents in parallel, locally or in cloud sandboxes. Each agent runs through its own native harness.
 
