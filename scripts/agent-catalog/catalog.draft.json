@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "catalogVersion": "2026-06-10.1",
-  "generatedAt": "2026-06-10T00:27:03.549Z",
+  "generatedAt": "2026-06-10T00:32:24.086Z",
   "agents": [
     {
       "kind": "claude",
@@ -1735,6 +1735,14 @@
               "switchVia": "setSessionModel",
               "liveConfigId": "model"
             }
+          },
+          {
+            "key": "mode",
+            "values": [
+              "agent",
+              "plan",
+              "ask"
+            ]
           }
         ],
         "models": [
@@ -1747,7 +1755,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -1766,7 +1783,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -1785,7 +1811,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -1804,7 +1839,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -1823,7 +1867,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -1842,7 +1895,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -1861,7 +1923,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -1880,7 +1951,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -1899,7 +1979,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -1918,7 +2007,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -1937,7 +2035,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -1956,7 +2063,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -1975,7 +2091,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -1994,7 +2119,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2013,7 +2147,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2032,7 +2175,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2051,7 +2203,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2070,7 +2231,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2089,7 +2259,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2108,7 +2287,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2127,7 +2315,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2146,7 +2343,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2165,7 +2371,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2184,7 +2399,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2203,7 +2427,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2222,7 +2455,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2241,7 +2483,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2260,7 +2511,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2279,7 +2539,16 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "agent",
+                  "plan",
+                  "ask"
+                ],
+                "observedValue": "agent"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2332,6 +2601,15 @@
               "switchVia": "setSessionModel",
               "liveConfigId": "model"
             }
+          },
+          {
+            "key": "mode",
+            "values": [
+              "default",
+              "autoEdit",
+              "yolo",
+              "plan"
+            ]
           }
         ],
         "models": [
@@ -2346,7 +2624,17 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "autoEdit",
+                  "yolo",
+                  "plan"
+                ],
+                "observedValue": "default"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2367,7 +2655,17 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "autoEdit",
+                  "yolo",
+                  "plan"
+                ],
+                "observedValue": "default"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2388,7 +2686,17 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "autoEdit",
+                  "yolo",
+                  "plan"
+                ],
+                "observedValue": "default"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2409,7 +2717,17 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "autoEdit",
+                  "yolo",
+                  "plan"
+                ],
+                "observedValue": "default"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2430,7 +2748,17 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "autoEdit",
+                  "yolo",
+                  "plan"
+                ],
+                "observedValue": "default"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [
@@ -2451,7 +2779,17 @@
               ]
             },
             "defaultVisible": true,
-            "controls": {},
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "autoEdit",
+                  "yolo",
+                  "plan"
+                ],
+                "observedValue": "default"
+              }
+            },
             "status": "active",
             "provenance": {
               "observedIn": [

@@ -81,6 +81,18 @@ function versionedDisplayName(name, description, modelId) {
     : `${name.slice(0, paren)} ${version}${name.slice(paren)}`;
 }
 
+// Derive a `mode` control from the legacy ACP modes block (harnesses like
+// gemini report modes there and have no config options at all).
+function modesBlockMatrix(modes) {
+  if (!modes?.availableModes?.length) return {};
+  return {
+    mode: {
+      values: modes.availableModes.map((m) => m.id),
+      observedValue: modes.currentModeId,
+    },
+  };
+}
+
 function matrixKey(matrix) {
   return JSON.stringify(
     Object.fromEntries(Object.entries(matrix).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, v.values])),
@@ -115,13 +127,21 @@ for (const [kind, runs] of byAgent) {
   };
   for (const run of runs) {
     const ctx = run.data.authContext;
+    // Harnesses that never re-emit config options on model switch (cursor,
+    // gemini) leave per-model captures null — fall back to the session
+    // baseline options, then to the legacy modes block, so uniform controls
+    // (e.g. cursor's agent/plan/ask modes) still reach the catalog.
+    const fallback = run.data.baselineConfigOptions
+      ? matrixFrom(run.data.baselineConfigOptions)
+      : modesBlockMatrix(run.data.modes);
+    const fallbackMatrix = Object.keys(fallback).length ? fallback : undefined;
     for (const model of run.data.models) {
       note(model.modelId, {
         name: model.name,
         description: model.description,
         onMenu: true,
         observedIn: `${kind}.${ctx}`,
-        matrix: model.configOptions ? matrixFrom(model.configOptions) : undefined,
+        matrix: model.configOptions ? matrixFrom(model.configOptions) : fallbackMatrix,
         matrixKey: ctx,
       });
     }
