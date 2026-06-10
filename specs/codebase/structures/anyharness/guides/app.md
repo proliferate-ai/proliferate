@@ -201,9 +201,7 @@ domains/sessions/mcp_bindings/product_registry.rs
   serving-side registry shape
 
 domains/sessions/mcp_bindings/product_catalog.rs
-domains/sessions/mcp_bindings/selection.rs
-domains/sessions/mcp_bindings/injection.rs
-  launch-side selection and materialization
+  launch-side facade: select and materialise product MCP launch extras for this session
 
 integrations/mcp/product_server
   reusable MCP JSON-RPC server framework

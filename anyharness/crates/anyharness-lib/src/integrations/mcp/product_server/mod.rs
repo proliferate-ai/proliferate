@@ -1,17 +1,15 @@
 pub mod auth;
 pub mod definition;
-pub mod dispatcher;
 pub mod endpoint;
-pub mod errors;
-pub mod request;
-pub mod response;
+pub mod server;
 
 pub use auth::ProductMcpAuth;
 pub use definition::{ProductMcpDefinition, ProductMcpPromptPolicy, ProductMcpVisibility};
-pub use dispatcher::{dispatch_product_mcp_request, ProductMcpServer};
 pub use endpoint::ProductMcpEndpointOperation;
-pub use errors::{ProductMcpContextError, ProductMcpDispatchError};
-pub use request::{
-    ProductMcpAuthHeader, ProductMcpRequestContext, ProductMcpTokenValidation,
-    PRODUCT_MCP_TOKEN_HEADER_NAME,
+pub use server::{
+    dispatch_product_mcp_request, initialize_response, ProductMcpAuthHeader,
+    ProductMcpContextError, ProductMcpDispatchError, ProductMcpRequestContext,
+    ProductMcpServer, ProductMcpTokenValidation, PRODUCT_MCP_TOKEN_HEADER_NAME,
+    JSON_RPC_INVALID_PARAMS, JSON_RPC_INVALID_REQUEST, JSON_RPC_METHOD_NOT_FOUND,
+    JSON_RPC_PARSE_ERROR,
 };

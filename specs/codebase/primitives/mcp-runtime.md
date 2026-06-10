@@ -171,11 +171,9 @@ Every product MCP feature should follow the same two-part pattern.
 First, the session MCP binding layer contributes launch extras:
 
 ```text
-domains/sessions/mcp_bindings/selection.rs
+domains/sessions/mcp_bindings/product_catalog.rs
   -> decides which product MCPs attach to a launched session
   -> returns binding summaries and any product prompt additions
-
-domains/sessions/mcp_bindings/injection.rs
   -> builds concrete HTTP MCP server configs
   -> mints product capability tokens
 ```

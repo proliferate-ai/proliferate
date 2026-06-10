@@ -305,9 +305,7 @@ domains/<feature>/mcp
   product tool behavior
 
 domains/sessions/mcp_bindings/product_catalog.rs
-domains/sessions/mcp_bindings/selection.rs
-domains/sessions/mcp_bindings/injection.rs
-  launch-side selection and materialization
+  launch-side facade: select and materialise product MCP launch extras for this session
 ```
 
 ## Smells

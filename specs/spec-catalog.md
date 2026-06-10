@@ -139,7 +139,7 @@ mcp-skills.md adds: catalog entry → configured item → runtime manifest pipel
 **`specs/codebase/features/agent-features/servers.md`** — repeatable two-part pattern.
 **`specs/codebase/features/agent-features/definitions/`** — concrete definitions: `artifacts.md`, `cowork.md`, `reviews.md`, `subagents.md`, `workspace-naming.md`, `prompt-and-skill-policy.md`.
 
-Every product MCP server: `definition.rs`, `auth.rs`, `context.rs`, `tools.rs`, `calls.rs`. Session binding side: `selection.rs` + `injection.rs` (mints capability token). URL: `/v1/workspaces/{id}/.../{session_id}/mcp`.
+Every product MCP server: `definition.rs`, `auth.rs`, `context.rs`, `tools.rs`, `calls.rs`. Session binding side: `product_catalog.rs` — launch-side facade: select and materialise product MCP launch extras for this session (mints capability token). URL: `/v1/workspaces/{id}/.../{session_id}/mcp`.
 
 ### Agent Auth (spec 02)
 **`specs/codebase/primitives/agent-auth.md`**

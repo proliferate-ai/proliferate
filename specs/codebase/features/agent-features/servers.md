@@ -95,9 +95,8 @@ anyharness-lib/src/domains/sessions/mcp_bindings/
   summaries.rs
   acp.rs
   assembly.rs
+  product_catalog.rs
   product_registry.rs
-  selection.rs
-  injection.rs
 ```
 
 Product MCP implementation:
@@ -416,14 +415,11 @@ acp.rs
 assembly.rs
   one launch boundary that produces final MCP servers and prompt additions
 
+product_catalog.rs
+  launch-side facade: select and materialise product MCP launch extras for this session
+
 product_registry.rs
   code-defined product MCP definitions and server lookup
-
-selection.rs
-  selection policy for product/user/team/session/workspace MCPs
-
-injection.rs
-  SessionMcpHttpServer URL, headers, capability tokens, summaries, prompt text
 ```
 
 `assembly.rs` answers one question:
@@ -737,12 +733,11 @@ Required steps:
 5. Add domains/<domain>/mcp/tools.rs.
 6. Add domains/<domain>/mcp/calls.rs.
 7. Register the product MCP in domains/sessions/mcp_bindings/product_registry.rs.
-8. Add selection policy in domains/sessions/mcp_bindings/selection.rs.
-9. Add injection behavior in domains/sessions/mcp_bindings/injection.rs if the
-   default HTTP injection helper is insufficient.
-10. Add endpoint routing through the generic product MCP endpoint.
-11. Add UI exposure decision: internal-only or user-selectable.
-12. Add tests for definition, auth, context, tools/list, tools/call, selection,
+8. Add selection predicate and HTTP materialisation in
+   domains/sessions/mcp_bindings/product_catalog.rs.
+9. Add endpoint routing through the generic product MCP endpoint.
+10. Add UI exposure decision: internal-only or user-selectable.
+11. Add tests for definition, auth, context, tools/list, tools/call, selection,
     injection, and endpoint dispatch.
 ```
 
@@ -822,10 +817,8 @@ The product MCP structure is complete when:
   feature-local protocol copies.
 - session launch uses one assembly boundary under
   `domains/sessions/mcp_bindings/assembly.rs`.
-- product MCP selection lives under
-  `domains/sessions/mcp_bindings/selection.rs`.
-- product MCP injection/token/header construction lives under
-  `domains/sessions/mcp_bindings/injection.rs` plus product auth wrappers.
+- product MCP selection and injection/token/header construction live under
+  `domains/sessions/mcp_bindings/product_catalog.rs` plus product auth wrappers.
 - the actor receives final concrete MCP server configs and has no product MCP
   policy branches.
 - endpoint routing dispatches by product MCP id through one shared path.
