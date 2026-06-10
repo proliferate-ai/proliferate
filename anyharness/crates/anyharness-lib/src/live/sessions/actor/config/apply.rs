@@ -396,14 +396,13 @@ pub(in crate::live::sessions::actor) async fn apply_model_via_direct_setter(
 }
 
 pub(in crate::live::sessions::actor) fn should_apply_model_via_direct_setter(
-    startup_state: &SessionStartupState,
-    desired_model_id: &str,
+    _startup_state: &SessionStartupState,
+    _desired_model_id: &str,
 ) -> bool {
-    startup_state.available_models.is_empty()
-        || startup_state
-            .available_models
-            .iter()
-            .any(|model| model.id == desired_model_id)
+    // set_session_model was removed in ACP 0.14; available_models is always empty
+    // and the setter stub returns NotApplied. Always return false so callers reject
+    // model requests that have no config-option target rather than silently accepting.
+    false
 }
 
 pub(in crate::live::sessions::actor) async fn apply_mode_via_direct_setter_legacy(

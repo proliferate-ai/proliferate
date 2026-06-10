@@ -276,34 +276,21 @@ fn pending_config_rank_treats_synthetic_acp_model_control_as_model() {
 }
 
 #[test]
-fn direct_model_setter_only_applies_exact_live_ids_or_legacy_empty_lists() {
-    let mut startup_state = SessionStartupState {
+fn direct_model_setter_is_permanently_disabled() {
+    // set_session_model was removed from ACP in 0.14; the setter stub always
+    // returns NotApplied. should_apply_model_via_direct_setter must always return
+    // false so callers reject model requests rather than silently accepting them.
+    let startup_state = SessionStartupState {
         current_mode_id: None,
         legacy_mode_state: None,
         config_options: Vec::new(),
         current_model_id: None,
-        available_models: session_model_options(&["default", "sonnet", "sonnet[1m]", "haiku"]),
+        available_models: Vec::new(),
         prompt_capabilities: anyharness_contract::v1::PromptCapabilities::default(),
     };
 
-    assert!(should_apply_model_via_direct_setter(
-        &startup_state,
-        "sonnet"
-    ));
-    assert!(!should_apply_model_via_direct_setter(
-        &startup_state,
-        "opus"
-    ));
-    assert!(!should_apply_model_via_direct_setter(
-        &startup_state,
-        "claude-opus-4-6"
-    ));
-
-    startup_state.available_models.clear();
-    assert!(should_apply_model_via_direct_setter(
-        &startup_state,
-        "legacy-agent-model"
-    ));
+    assert!(!should_apply_model_via_direct_setter(&startup_state, "sonnet"));
+    assert!(!should_apply_model_via_direct_setter(&startup_state, "opus"));
 }
 
 #[test]
