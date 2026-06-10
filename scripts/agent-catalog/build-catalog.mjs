@@ -97,6 +97,94 @@ function modesBlockMatrix(modes) {
   };
 }
 
+// ── variant-family normalization ────────────────────────────────────────────
+// Some harnesses encode per-model options INSIDE model ids, producing variant
+// rows instead of controls:
+//   codex : gpt-5.5/low … gpt-5.5/xhigh        (slash + effort suffix)
+//   cursor: claude-opus-4-8[thinking=true,…]   (bracket key=value params)
+// Collapse each family to one base row; variant params become per-model
+// control values; the launch layer re-composes variant ids via the recorded
+// syntax. Slash collapse triggers ONLY when the suffix is one of the
+// harness's observed effort values — opencode's provider/model ids never
+// match (its baseline model has no effort control), so they pass through.
+
+function effortValuesFromRun(run) {
+  const options = run.data.baselineConfigOptions ?? [];
+  const effort = options.find((o) => o.category === "thought_level" || /effort/i.test(o.id));
+  return new Set(effort ? selectValues(effort) : []);
+}
+
+function parseVariant(modelId, effortValues) {
+  const bracket = modelId.match(/^(.*?)\[(.*)\]$/);
+  if (bracket) {
+    const pairs = bracket[2] ? bracket[2].split(",") : [];
+    // Only key=value params count as a variant encoding — claude's
+    // sonnet[1m] context tag is part of the model id, not a param list.
+    if (pairs.every((pair) => pair.includes("="))) {
+      return {
+        base: bracket[1],
+        params: Object.fromEntries(pairs.map((pair) => pair.split("="))),
+        syntax: "bracket-params",
+      };
+    }
+  }
+  const slash = modelId.lastIndexOf("/");
+  if (slash > 0) {
+    const suffix = modelId.slice(slash + 1);
+    if (effortValues.has(suffix)) {
+      return { base: modelId.slice(0, slash), params: { reasoning_effort: suffix }, syntax: "slash-effort" };
+    }
+  }
+  return null;
+}
+
+function commonDescription(descriptions) {
+  const list = descriptions.filter(Boolean);
+  if (!list.length) return undefined;
+  if (list.length === 1) return list[0];
+  let prefix = list[0];
+  for (const d of list.slice(1)) {
+    while (prefix && !d.startsWith(prefix)) prefix = prefix.slice(0, -1);
+  }
+  const cut = prefix.lastIndexOf(". ");
+  return cut > 0 ? prefix.slice(0, cut + 1) : list[0];
+}
+
+// → { models: [collapsed or passthrough], syntax: detected variant syntax | null }
+function normalizeVariantModels(models, effortValues) {
+  const families = new Map();
+  const out = [];
+  let syntax = null;
+  for (const model of models) {
+    const variant = parseVariant(model.modelId, effortValues);
+    if (!variant) { out.push(model); continue; }
+    syntax = variant.syntax;
+    if (!families.has(variant.base)) families.set(variant.base, []);
+    families.get(variant.base).push({ ...variant, model });
+  }
+  for (const [base, variants] of families) {
+    // params → per-model control values (union of observed combos)
+    const paramControls = {};
+    for (const { params } of variants) {
+      for (const [key, value] of Object.entries(params)) {
+        (paramControls[key] ??= new Set()).add(value);
+      }
+    }
+    const first = variants[0].model;
+    const suffixPattern = new RegExp("\\s*\\((" + [...(paramControls.reasoning_effort ?? [])].join("|") + ")\\)$");
+    out.push({
+      modelId: base,
+      name: (first.name ?? base).replace(suffixPattern, ""),
+      description: commonDescription(variants.map((v) => v.model.description)),
+      configOptions: first.configOptions,
+      variantParamControls: Object.fromEntries(
+        Object.entries(paramControls).map(([k, v]) => [k, [...v]])),
+      variantIds: variants.map((v) => v.model.modelId),
+    });
+  }
+  return { models: out, syntax };
+}
+
 function matrixKey(matrix) {
   return JSON.stringify(
     Object.fromEntries(Object.entries(matrix).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, v.values])),
@@ -127,8 +215,10 @@ for (const [kind, runs] of byAgent) {
     if (fields.onMenu) entry.onMenu = true;
     entry.observedIn.push(fields.observedIn);
     if (fields.matrix) entry.matrices[fields.matrixKey] = fields.matrix;
+    if (fields.variants) entry.variants = [...new Set([...(entry.variants ?? []), ...fields.variants])];
     return entry;
   };
+  let variantSyntax = null;
   for (const run of runs) {
     const ctx = run.data.authContext;
     // Harnesses that never re-emit config options on model switch (cursor,
@@ -139,14 +229,24 @@ for (const [kind, runs] of byAgent) {
       ? matrixFrom(run.data.baselineConfigOptions)
       : modesBlockMatrix(run.data.modes);
     const fallbackMatrix = Object.keys(fallback).length ? fallback : undefined;
-    for (const model of run.data.models) {
+    const normalized = normalizeVariantModels(run.data.models, effortValuesFromRun(run));
+    if (normalized.syntax) variantSyntax = normalized.syntax;
+    for (const model of normalized.models) {
+      const matrix = model.configOptions ? matrixFrom(model.configOptions) : fallbackMatrix;
+      // variant params become control values; the config-option control of
+      // the same axis (codex reasoning_effort) wins when both exist
+      const merged = { ...(matrix ?? {}) };
+      for (const [key, values] of Object.entries(model.variantParamControls ?? {})) {
+        if (!merged[key]) merged[key] = { values };
+      }
       note(model.modelId, {
         name: model.name,
         description: model.description,
         onMenu: true,
         observedIn: `${kind}.${ctx}`,
-        matrix: model.configOptions ? matrixFrom(model.configOptions) : fallbackMatrix,
+        matrix: Object.keys(merged).length ? merged : undefined,
         matrixKey: ctx,
+        variants: model.variantIds,
       });
     }
     for (const trial of run.data.trials ?? []) {
@@ -188,6 +288,7 @@ for (const [kind, runs] of byAgent) {
         observedIn: [...new Set(entry.observedIn)],
         observedInAllContexts: contexts.length === probedContexts.length,
         viaTrialOnly: !entry.onMenu,
+        ...(entry.variants ? { variantIds: entry.variants } : {}),
       },
     };
   });
@@ -204,7 +305,10 @@ for (const [kind, runs] of byAgent) {
   }
   const switchVia = runs[0].data.modelSource === "modelConfigOption" ? "configOption" : "setSessionModel";
   const controls = [
-    { key: "model", mapping: { createField: "modelId", switchVia, liveConfigId: "model" } },
+    { key: "model", mapping: {
+        createField: "modelId", switchVia, liveConfigId: "model",
+        ...(variantSyntax ? { variantSyntax } : {}),
+    } },
     ...Object.entries(universe).map(([key, values]) => ({ key, values: [...values] })),
   ];
 

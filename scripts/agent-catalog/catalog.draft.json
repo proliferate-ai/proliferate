@@ -1,10 +1,10 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "2026-06-10.3",
+  "catalogVersion": "2026-06-10.5",
   "probedAgainst": {
     "registryVersion": null
   },
-  "generatedAt": "2026-06-10T01:23:57.905Z",
+  "generatedAt": "2026-06-10T02:07:48.988Z",
   "agents": [
     {
       "kind": "claude",
@@ -372,7 +372,8 @@
             "mapping": {
               "createField": "modelId",
               "switchVia": "setSessionModel",
-              "liveConfigId": "model"
+              "liveConfigId": "model",
+              "variantSyntax": "slash-effort"
             }
           },
           {
@@ -409,9 +410,9 @@
         ],
         "models": [
           {
-            "id": "gpt-5.5/low",
-            "displayName": "GPT-5.5 (low)",
-            "description": "Frontier model for complex coding, research, and real-world work. Fast responses with lighter reasoning",
+            "id": "gpt-5.5",
+            "displayName": "GPT-5.5",
+            "description": "Frontier model for complex coding, research, and real-world work.",
             "availability": {
               "anyOf": [
                 "openai-api",
@@ -459,175 +460,19 @@
                 "codex.openai-oauth"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gpt-5.5/medium",
-            "displayName": "GPT-5.5 (medium)",
-            "description": "Frontier model for complex coding, research, and real-world work. Balances speed and reasoning depth for everyday tasks",
-            "availability": {
-              "anyOf": [
-                "openai-api",
-                "openai-oauth"
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gpt-5.5/low",
+                "gpt-5.5/medium",
+                "gpt-5.5/high",
+                "gpt-5.5/xhigh"
               ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "medium"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-api",
-                "codex.openai-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
             }
           },
           {
-            "id": "gpt-5.5/high",
-            "displayName": "GPT-5.5 (high)",
-            "description": "Frontier model for complex coding, research, and real-world work. Greater reasoning depth for complex problems",
-            "availability": {
-              "anyOf": [
-                "openai-api",
-                "openai-oauth"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "high"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-api",
-                "codex.openai-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gpt-5.5/xhigh",
-            "displayName": "GPT-5.5 (xhigh)",
-            "description": "Frontier model for complex coding, research, and real-world work. Extra high reasoning depth for complex problems",
-            "availability": {
-              "anyOf": [
-                "openai-api",
-                "openai-oauth"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "xhigh"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-api",
-                "codex.openai-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gpt-5.4/low",
-            "displayName": "GPT-5.4 (low)",
-            "description": "Strong model for everyday coding. Fast responses with lighter reasoning",
+            "id": "gpt-5.4",
+            "displayName": "GPT-5.4",
+            "description": "Strong model for everyday coding.",
             "availability": {
               "anyOf": [
                 "openai-api",
@@ -675,175 +520,19 @@
                 "codex.openai-oauth"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gpt-5.4/medium",
-            "displayName": "GPT-5.4 (medium)",
-            "description": "Strong model for everyday coding. Balances speed and reasoning depth for everyday tasks",
-            "availability": {
-              "anyOf": [
-                "openai-api",
-                "openai-oauth"
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gpt-5.4/low",
+                "gpt-5.4/medium",
+                "gpt-5.4/high",
+                "gpt-5.4/xhigh"
               ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "medium"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-api",
-                "codex.openai-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
             }
           },
           {
-            "id": "gpt-5.4/high",
-            "displayName": "GPT-5.4 (high)",
-            "description": "Strong model for everyday coding. Greater reasoning depth for complex problems",
-            "availability": {
-              "anyOf": [
-                "openai-api",
-                "openai-oauth"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "high"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-api",
-                "codex.openai-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gpt-5.4/xhigh",
-            "displayName": "GPT-5.4 (xhigh)",
-            "description": "Strong model for everyday coding. Extra high reasoning depth for complex problems",
-            "availability": {
-              "anyOf": [
-                "openai-api",
-                "openai-oauth"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "xhigh"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-api",
-                "codex.openai-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gpt-5.4-mini/low",
-            "displayName": "GPT-5.4-Mini (low)",
-            "description": "Small, fast, and cost-efficient model for simpler coding tasks. Fast responses with lighter reasoning",
+            "id": "gpt-5.4-mini",
+            "displayName": "GPT-5.4-Mini",
+            "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
             "availability": {
               "anyOf": [
                 "openai-api",
@@ -891,175 +580,19 @@
                 "codex.openai-oauth"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gpt-5.4-mini/medium",
-            "displayName": "GPT-5.4-Mini (medium)",
-            "description": "Small, fast, and cost-efficient model for simpler coding tasks. Balances speed and reasoning depth for everyday tasks",
-            "availability": {
-              "anyOf": [
-                "openai-api",
-                "openai-oauth"
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gpt-5.4-mini/low",
+                "gpt-5.4-mini/medium",
+                "gpt-5.4-mini/high",
+                "gpt-5.4-mini/xhigh"
               ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "medium"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-api",
-                "codex.openai-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
             }
           },
           {
-            "id": "gpt-5.4-mini/high",
-            "displayName": "GPT-5.4-Mini (high)",
-            "description": "Small, fast, and cost-efficient model for simpler coding tasks. Greater reasoning depth for complex problems",
-            "availability": {
-              "anyOf": [
-                "openai-api",
-                "openai-oauth"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "high"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-api",
-                "codex.openai-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gpt-5.4-mini/xhigh",
-            "displayName": "GPT-5.4-Mini (xhigh)",
-            "description": "Small, fast, and cost-efficient model for simpler coding tasks. Extra high reasoning depth for complex problems",
-            "availability": {
-              "anyOf": [
-                "openai-api",
-                "openai-oauth"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "xhigh"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-api",
-                "codex.openai-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gpt-5.3-codex/low",
-            "displayName": "gpt-5.3-codex (low)",
-            "description": "Coding-optimized model. Fast responses with lighter reasoning",
+            "id": "gpt-5.3-codex",
+            "displayName": "gpt-5.3-codex",
+            "description": "Coding-optimized model.",
             "availability": {
               "anyOf": [
                 "openai-api",
@@ -1107,175 +640,19 @@
                 "codex.openai-oauth"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gpt-5.3-codex/medium",
-            "displayName": "gpt-5.3-codex (medium)",
-            "description": "Coding-optimized model. Balances speed and reasoning depth for everyday tasks",
-            "availability": {
-              "anyOf": [
-                "openai-api",
-                "openai-oauth"
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gpt-5.3-codex/low",
+                "gpt-5.3-codex/medium",
+                "gpt-5.3-codex/high",
+                "gpt-5.3-codex/xhigh"
               ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "medium"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-api",
-                "codex.openai-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
             }
           },
           {
-            "id": "gpt-5.3-codex/high",
-            "displayName": "gpt-5.3-codex (high)",
-            "description": "Coding-optimized model. Greater reasoning depth for complex problems",
-            "availability": {
-              "anyOf": [
-                "openai-api",
-                "openai-oauth"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "high"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-api",
-                "codex.openai-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gpt-5.3-codex/xhigh",
-            "displayName": "gpt-5.3-codex (xhigh)",
-            "description": "Coding-optimized model. Extra high reasoning depth for complex problems",
-            "availability": {
-              "anyOf": [
-                "openai-api",
-                "openai-oauth"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "xhigh"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-api",
-                "codex.openai-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gpt-5.2/low",
-            "displayName": "gpt-5.2 (low)",
-            "description": "Optimized for professional work and long-running agents. Balances speed with some reasoning; useful for straightforward queries and short explanations",
+            "id": "gpt-5.2",
+            "displayName": "gpt-5.2",
+            "description": "Optimized for professional work and long-running agents.",
             "availability": {
               "anyOf": [
                 "openai-api",
@@ -1323,175 +700,19 @@
                 "codex.openai-oauth"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gpt-5.2/medium",
-            "displayName": "gpt-5.2 (medium)",
-            "description": "Optimized for professional work and long-running agents. Provides a solid balance of reasoning depth and latency for general-purpose tasks",
-            "availability": {
-              "anyOf": [
-                "openai-api",
-                "openai-oauth"
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gpt-5.2/low",
+                "gpt-5.2/medium",
+                "gpt-5.2/high",
+                "gpt-5.2/xhigh"
               ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "medium"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-api",
-                "codex.openai-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
             }
           },
           {
-            "id": "gpt-5.2/high",
-            "displayName": "gpt-5.2 (high)",
-            "description": "Optimized for professional work and long-running agents. Maximizes reasoning depth for complex or ambiguous problems",
-            "availability": {
-              "anyOf": [
-                "openai-api",
-                "openai-oauth"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "high"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-api",
-                "codex.openai-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gpt-5.2/xhigh",
-            "displayName": "gpt-5.2 (xhigh)",
-            "description": "Optimized for professional work and long-running agents. Extra high reasoning for complex problems",
-            "availability": {
-              "anyOf": [
-                "openai-api",
-                "openai-oauth"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "xhigh"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-api",
-                "codex.openai-oauth"
-              ],
-              "observedInAllContexts": true,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gpt-5.3-codex-spark/low",
-            "displayName": "GPT-5.3-Codex-Spark (low)",
-            "description": "Ultra-fast coding model. Fast responses with lighter reasoning",
+            "id": "gpt-5.3-codex-spark",
+            "displayName": "GPT-5.3-Codex-Spark",
+            "description": "Ultra-fast coding model.",
             "availability": {
               "anyOf": [
                 "openai-oauth"
@@ -1537,163 +758,13 @@
                 "codex.openai-oauth"
               ],
               "observedInAllContexts": false,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gpt-5.3-codex-spark/medium",
-            "displayName": "GPT-5.3-Codex-Spark (medium)",
-            "description": "Ultra-fast coding model. Balances speed and reasoning depth for everyday tasks",
-            "availability": {
-              "anyOf": [
-                "openai-oauth"
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gpt-5.3-codex-spark/low",
+                "gpt-5.3-codex-spark/medium",
+                "gpt-5.3-codex-spark/high",
+                "gpt-5.3-codex-spark/xhigh"
               ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "medium"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-oauth"
-              ],
-              "observedInAllContexts": false,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gpt-5.3-codex-spark/high",
-            "displayName": "GPT-5.3-Codex-Spark (high)",
-            "description": "Ultra-fast coding model. Greater reasoning depth for complex problems",
-            "availability": {
-              "anyOf": [
-                "openai-oauth"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "high"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-oauth"
-              ],
-              "observedInAllContexts": false,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gpt-5.3-codex-spark/xhigh",
-            "displayName": "GPT-5.3-Codex-Spark (xhigh)",
-            "description": "Ultra-fast coding model. Extra high reasoning depth for complex problems",
-            "availability": {
-              "anyOf": [
-                "openai-oauth"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
-              },
-              "collaboration_mode": {
-                "values": [
-                  "plan",
-                  "default"
-                ],
-                "observedValue": "default"
-              },
-              "reasoning_effort": {
-                "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
-                ],
-                "observedValue": "xhigh"
-              },
-              "fast_mode": {
-                "values": [
-                  "off",
-                  "on"
-                ],
-                "observedValue": "off"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-oauth"
-              ],
-              "observedInAllContexts": false,
-              "viaTrialOnly": false
             }
           }
         ],
@@ -1742,7 +813,8 @@
             "mapping": {
               "createField": "modelId",
               "switchVia": "setSessionModel",
-              "liveConfigId": "model"
+              "liveConfigId": "model",
+              "variantSyntax": "bracket-params"
             }
           },
           {
@@ -1752,11 +824,47 @@
               "plan",
               "ask"
             ]
+          },
+          {
+            "key": "fast",
+            "values": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "key": "thinking",
+            "values": [
+              "true",
+              "false"
+            ]
+          },
+          {
+            "key": "context",
+            "values": [
+              "300k",
+              "272k",
+              "200k"
+            ]
+          },
+          {
+            "key": "effort",
+            "values": [
+              "high",
+              "medium",
+              "xhigh"
+            ]
+          },
+          {
+            "key": "reasoning",
+            "values": [
+              "medium"
+            ]
           }
         ],
         "models": [
           {
-            "id": "default[]",
+            "id": "default",
             "displayName": "Auto",
             "availability": {
               "anyOf": [
@@ -1780,11 +888,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "default[]"
+              ]
             }
           },
           {
-            "id": "composer-2.5[fast=true]",
+            "id": "composer-2.5",
             "displayName": "composer-2.5",
             "availability": {
               "anyOf": [
@@ -1800,6 +911,11 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "fast": {
+                "values": [
+                  "true"
+                ]
               }
             },
             "status": "active",
@@ -1808,11 +924,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "composer-2.5[fast=true]"
+              ]
             }
           },
           {
-            "id": "claude-fable-5[thinking=true,context=300k,effort=high]",
+            "id": "claude-fable-5",
             "displayName": "claude-fable-5",
             "availability": {
               "anyOf": [
@@ -1828,6 +947,21 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "thinking": {
+                "values": [
+                  "true"
+                ]
+              },
+              "context": {
+                "values": [
+                  "300k"
+                ]
+              },
+              "effort": {
+                "values": [
+                  "high"
+                ]
               }
             },
             "status": "active",
@@ -1836,11 +970,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "claude-fable-5[thinking=true,context=300k,effort=high]"
+              ]
             }
           },
           {
-            "id": "claude-opus-4-8[thinking=true,context=300k,effort=high,fast=false]",
+            "id": "claude-opus-4-8",
             "displayName": "claude-opus-4-8",
             "availability": {
               "anyOf": [
@@ -1856,6 +993,26 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "thinking": {
+                "values": [
+                  "true"
+                ]
+              },
+              "context": {
+                "values": [
+                  "300k"
+                ]
+              },
+              "effort": {
+                "values": [
+                  "high"
+                ]
+              },
+              "fast": {
+                "values": [
+                  "false"
+                ]
               }
             },
             "status": "active",
@@ -1864,11 +1021,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "claude-opus-4-8[thinking=true,context=300k,effort=high,fast=false]"
+              ]
             }
           },
           {
-            "id": "gpt-5.5[context=272k,reasoning=medium,fast=false]",
+            "id": "gpt-5.5",
             "displayName": "gpt-5.5",
             "availability": {
               "anyOf": [
@@ -1884,6 +1044,21 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "context": {
+                "values": [
+                  "272k"
+                ]
+              },
+              "reasoning": {
+                "values": [
+                  "medium"
+                ]
+              },
+              "fast": {
+                "values": [
+                  "false"
+                ]
               }
             },
             "status": "active",
@@ -1892,11 +1067,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gpt-5.5[context=272k,reasoning=medium,fast=false]"
+              ]
             }
           },
           {
-            "id": "claude-sonnet-4-6[thinking=true,context=200k,effort=medium]",
+            "id": "claude-sonnet-4-6",
             "displayName": "claude-sonnet-4-6",
             "availability": {
               "anyOf": [
@@ -1912,6 +1090,21 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "thinking": {
+                "values": [
+                  "true"
+                ]
+              },
+              "context": {
+                "values": [
+                  "200k"
+                ]
+              },
+              "effort": {
+                "values": [
+                  "medium"
+                ]
               }
             },
             "status": "active",
@@ -1920,11 +1113,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "claude-sonnet-4-6[thinking=true,context=200k,effort=medium]"
+              ]
             }
           },
           {
-            "id": "gpt-5.3-codex[reasoning=medium,fast=false]",
+            "id": "gpt-5.3-codex",
             "displayName": "gpt-5.3-codex",
             "availability": {
               "anyOf": [
@@ -1940,6 +1136,16 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "reasoning": {
+                "values": [
+                  "medium"
+                ]
+              },
+              "fast": {
+                "values": [
+                  "false"
+                ]
               }
             },
             "status": "active",
@@ -1948,11 +1154,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gpt-5.3-codex[reasoning=medium,fast=false]"
+              ]
             }
           },
           {
-            "id": "claude-opus-4-7[thinking=true,context=300k,effort=xhigh,fast=false]",
+            "id": "claude-opus-4-7",
             "displayName": "claude-opus-4-7",
             "availability": {
               "anyOf": [
@@ -1968,6 +1177,26 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "thinking": {
+                "values": [
+                  "true"
+                ]
+              },
+              "context": {
+                "values": [
+                  "300k"
+                ]
+              },
+              "effort": {
+                "values": [
+                  "xhigh"
+                ]
+              },
+              "fast": {
+                "values": [
+                  "false"
+                ]
               }
             },
             "status": "active",
@@ -1976,11 +1205,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "claude-opus-4-7[thinking=true,context=300k,effort=xhigh,fast=false]"
+              ]
             }
           },
           {
-            "id": "grok-build-0.1[context=200k]",
+            "id": "grok-build-0.1",
             "displayName": "grok-build-0.1",
             "availability": {
               "anyOf": [
@@ -1996,6 +1228,11 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "context": {
+                "values": [
+                  "200k"
+                ]
               }
             },
             "status": "active",
@@ -2004,11 +1241,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "grok-build-0.1[context=200k]"
+              ]
             }
           },
           {
-            "id": "gpt-5.4[context=272k,reasoning=medium,fast=false]",
+            "id": "gpt-5.4",
             "displayName": "gpt-5.4",
             "availability": {
               "anyOf": [
@@ -2024,6 +1264,21 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "context": {
+                "values": [
+                  "272k"
+                ]
+              },
+              "reasoning": {
+                "values": [
+                  "medium"
+                ]
+              },
+              "fast": {
+                "values": [
+                  "false"
+                ]
               }
             },
             "status": "active",
@@ -2032,11 +1287,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gpt-5.4[context=272k,reasoning=medium,fast=false]"
+              ]
             }
           },
           {
-            "id": "claude-opus-4-6[thinking=true,context=200k,effort=high,fast=false]",
+            "id": "claude-opus-4-6",
             "displayName": "claude-opus-4-6",
             "availability": {
               "anyOf": [
@@ -2052,6 +1310,26 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "thinking": {
+                "values": [
+                  "true"
+                ]
+              },
+              "context": {
+                "values": [
+                  "200k"
+                ]
+              },
+              "effort": {
+                "values": [
+                  "high"
+                ]
+              },
+              "fast": {
+                "values": [
+                  "false"
+                ]
               }
             },
             "status": "active",
@@ -2060,11 +1338,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "claude-opus-4-6[thinking=true,context=200k,effort=high,fast=false]"
+              ]
             }
           },
           {
-            "id": "claude-opus-4-5[thinking=true]",
+            "id": "claude-opus-4-5",
             "displayName": "claude-opus-4-5",
             "availability": {
               "anyOf": [
@@ -2080,6 +1361,11 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "thinking": {
+                "values": [
+                  "true"
+                ]
               }
             },
             "status": "active",
@@ -2088,11 +1374,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "claude-opus-4-5[thinking=true]"
+              ]
             }
           },
           {
-            "id": "gpt-5.2[reasoning=medium,fast=false]",
+            "id": "gpt-5.2",
             "displayName": "gpt-5.2",
             "availability": {
               "anyOf": [
@@ -2108,6 +1397,16 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "reasoning": {
+                "values": [
+                  "medium"
+                ]
+              },
+              "fast": {
+                "values": [
+                  "false"
+                ]
               }
             },
             "status": "active",
@@ -2116,11 +1415,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gpt-5.2[reasoning=medium,fast=false]"
+              ]
             }
           },
           {
-            "id": "gemini-3.1-pro[]",
+            "id": "gemini-3.1-pro",
             "displayName": "gemini-3.1-pro",
             "availability": {
               "anyOf": [
@@ -2144,11 +1446,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gemini-3.1-pro[]"
+              ]
             }
           },
           {
-            "id": "gpt-5.4-mini[reasoning=medium]",
+            "id": "gpt-5.4-mini",
             "displayName": "gpt-5.4-mini",
             "availability": {
               "anyOf": [
@@ -2164,6 +1469,11 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "reasoning": {
+                "values": [
+                  "medium"
+                ]
               }
             },
             "status": "active",
@@ -2172,11 +1482,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gpt-5.4-mini[reasoning=medium]"
+              ]
             }
           },
           {
-            "id": "gpt-5.4-nano[reasoning=medium]",
+            "id": "gpt-5.4-nano",
             "displayName": "gpt-5.4-nano",
             "availability": {
               "anyOf": [
@@ -2192,6 +1505,11 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "reasoning": {
+                "values": [
+                  "medium"
+                ]
               }
             },
             "status": "active",
@@ -2200,11 +1518,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gpt-5.4-nano[reasoning=medium]"
+              ]
             }
           },
           {
-            "id": "claude-haiku-4-5[thinking=true]",
+            "id": "claude-haiku-4-5",
             "displayName": "claude-haiku-4-5",
             "availability": {
               "anyOf": [
@@ -2220,6 +1541,11 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "thinking": {
+                "values": [
+                  "true"
+                ]
               }
             },
             "status": "active",
@@ -2228,11 +1554,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "claude-haiku-4-5[thinking=true]"
+              ]
             }
           },
           {
-            "id": "grok-4.3[context=200k]",
+            "id": "grok-4.3",
             "displayName": "grok-4.3",
             "availability": {
               "anyOf": [
@@ -2248,6 +1577,11 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "context": {
+                "values": [
+                  "200k"
+                ]
               }
             },
             "status": "active",
@@ -2256,11 +1590,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "grok-4.3[context=200k]"
+              ]
             }
           },
           {
-            "id": "claude-sonnet-4-5[thinking=true,context=200k]",
+            "id": "claude-sonnet-4-5",
             "displayName": "claude-sonnet-4-5",
             "availability": {
               "anyOf": [
@@ -2276,6 +1613,16 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "thinking": {
+                "values": [
+                  "true"
+                ]
+              },
+              "context": {
+                "values": [
+                  "200k"
+                ]
               }
             },
             "status": "active",
@@ -2284,11 +1631,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "claude-sonnet-4-5[thinking=true,context=200k]"
+              ]
             }
           },
           {
-            "id": "gpt-5.2-codex[reasoning=medium,fast=false]",
+            "id": "gpt-5.2-codex",
             "displayName": "gpt-5.2-codex",
             "availability": {
               "anyOf": [
@@ -2304,6 +1654,16 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "reasoning": {
+                "values": [
+                  "medium"
+                ]
+              },
+              "fast": {
+                "values": [
+                  "false"
+                ]
               }
             },
             "status": "active",
@@ -2312,11 +1672,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gpt-5.2-codex[reasoning=medium,fast=false]"
+              ]
             }
           },
           {
-            "id": "gpt-5.1-codex-max[reasoning=medium,fast=false]",
+            "id": "gpt-5.1-codex-max",
             "displayName": "gpt-5.1-codex-max",
             "availability": {
               "anyOf": [
@@ -2332,6 +1695,16 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "reasoning": {
+                "values": [
+                  "medium"
+                ]
+              },
+              "fast": {
+                "values": [
+                  "false"
+                ]
               }
             },
             "status": "active",
@@ -2340,11 +1713,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gpt-5.1-codex-max[reasoning=medium,fast=false]"
+              ]
             }
           },
           {
-            "id": "gpt-5.1[reasoning=medium]",
+            "id": "gpt-5.1",
             "displayName": "gpt-5.1",
             "availability": {
               "anyOf": [
@@ -2360,6 +1736,11 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "reasoning": {
+                "values": [
+                  "medium"
+                ]
               }
             },
             "status": "active",
@@ -2368,11 +1749,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gpt-5.1[reasoning=medium]"
+              ]
             }
           },
           {
-            "id": "gemini-3-flash[]",
+            "id": "gemini-3-flash",
             "displayName": "gemini-3-flash",
             "availability": {
               "anyOf": [
@@ -2396,11 +1780,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gemini-3-flash[]"
+              ]
             }
           },
           {
-            "id": "gemini-3.5-flash[]",
+            "id": "gemini-3.5-flash",
             "displayName": "gemini-3.5-flash",
             "availability": {
               "anyOf": [
@@ -2424,11 +1811,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gemini-3.5-flash[]"
+              ]
             }
           },
           {
-            "id": "gpt-5.1-codex-mini[reasoning=medium]",
+            "id": "gpt-5.1-codex-mini",
             "displayName": "gpt-5.1-codex-mini",
             "availability": {
               "anyOf": [
@@ -2444,6 +1834,11 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "reasoning": {
+                "values": [
+                  "medium"
+                ]
               }
             },
             "status": "active",
@@ -2452,11 +1847,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gpt-5.1-codex-mini[reasoning=medium]"
+              ]
             }
           },
           {
-            "id": "claude-sonnet-4[thinking=false,context=200k]",
+            "id": "claude-sonnet-4",
             "displayName": "claude-sonnet-4",
             "availability": {
               "anyOf": [
@@ -2472,6 +1870,16 @@
                   "ask"
                 ],
                 "observedValue": "agent"
+              },
+              "thinking": {
+                "values": [
+                  "false"
+                ]
+              },
+              "context": {
+                "values": [
+                  "200k"
+                ]
               }
             },
             "status": "active",
@@ -2480,11 +1888,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "claude-sonnet-4[thinking=false,context=200k]"
+              ]
             }
           },
           {
-            "id": "gpt-5-mini[]",
+            "id": "gpt-5-mini",
             "displayName": "gpt-5-mini",
             "availability": {
               "anyOf": [
@@ -2508,11 +1919,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gpt-5-mini[]"
+              ]
             }
           },
           {
-            "id": "gemini-2.5-flash[]",
+            "id": "gemini-2.5-flash",
             "displayName": "gemini-2.5-flash",
             "availability": {
               "anyOf": [
@@ -2536,11 +1950,14 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "gemini-2.5-flash[]"
+              ]
             }
           },
           {
-            "id": "kimi-k2.5[]",
+            "id": "kimi-k2.5",
             "displayName": "kimi-k2.5",
             "availability": {
               "anyOf": [
@@ -2564,7 +1981,10 @@
                 "cursor.cursor-login"
               ],
               "observedInAllContexts": true,
-              "viaTrialOnly": false
+              "viaTrialOnly": false,
+              "variantIds": [
+                "kimi-k2.5[]"
+              ]
             }
           }
         ],
