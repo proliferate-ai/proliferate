@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "2026-06-09.1",
-  "generatedAt": "2026-06-09T23:58:34.580Z",
+  "catalogVersion": "2026-06-10.1",
+  "generatedAt": "2026-06-10T00:02:07.034Z",
   "agents": [
     {
       "kind": "claude",
@@ -58,7 +58,7 @@
         "models": [
           {
             "id": "sonnet",
-            "displayName": "Sonnet",
+            "displayName": "Sonnet 4.6",
             "description": "Sonnet 4.6 · Efficient for routine tasks · $3/$15 per Mtok",
             "availability": {
               "anyOf": [
@@ -98,7 +98,7 @@
           },
           {
             "id": "sonnet[1m]",
-            "displayName": "Sonnet (1M context)",
+            "displayName": "Sonnet 4.6 (1M context)",
             "description": "Sonnet 4.6 for long sessions · $3/$15 per Mtok",
             "availability": {
               "anyOf": [
@@ -138,7 +138,7 @@
           },
           {
             "id": "haiku",
-            "displayName": "Haiku",
+            "displayName": "Haiku 4.5",
             "description": "Haiku 4.5 · Fastest for quick answers · $1/$5 per Mtok",
             "availability": {
               "anyOf": [
@@ -170,7 +170,7 @@
           },
           {
             "id": "claude-fable-5",
-            "displayName": "Fable",
+            "displayName": "Fable 5",
             "availability": {
               "anyOf": [
                 "anthropic-api"

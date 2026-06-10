@@ -63,6 +63,24 @@ function matrixFrom(configOptions) {
   return matrix;
 }
 
+// Harnesses with floating model ids (claude: 'sonnet' = whatever Sonnet is
+// today) report unversioned display names and put the version in the
+// description ("Sonnet 4.6 · ..."). Lift the version into the display name so
+// the catalog never shows a bare "Sonnet". Curation can still override.
+function versionedDisplayName(name, description, modelId) {
+  if (!name) return modelId;
+  // Already versioned ("Opus 4.8", "Fable 5") — but "1M context" is not a version.
+  if (/\d+\.\d+/.test(name) || /\b\d+(?!\w)/.test(name)) return name;
+  const fromDescription = description?.match(/\b(\d+(?:\.\d+)+)\b/)?.[1];
+  const fromId = modelId.match(/(\d+(?:[-.]\d+)*)\s*(?:\[|$)/)?.[1]?.replaceAll("-", ".");
+  const version = fromDescription ?? fromId;
+  if (!version) return name;
+  const paren = name.indexOf(" (");
+  return paren === -1
+    ? `${name} ${version}`
+    : `${name.slice(0, paren)} ${version}${name.slice(paren)}`;
+}
+
 function matrixKey(matrix) {
   return JSON.stringify(
     Object.fromEntries(Object.entries(matrix).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, v.values])),
@@ -134,7 +152,7 @@ for (const [kind, runs] of byAgent) {
     const contexts = [...new Set(entry.observedIn.map((r) => r.split(".").slice(1).join(".")))];
     return {
       id: modelId,
-      displayName: entry.name,
+      displayName: versionedDisplayName(entry.name, entry.description, modelId),
       ...(entry.description ? { description: entry.description } : {}),
       availability: { anyOf: contexts },
       // On a harness menu somewhere -> advertised; trial-only -> available
