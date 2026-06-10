@@ -6,7 +6,7 @@ use crate::domains::sessions::prompt::render::{render, TurnPromptExtras};
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::live::sessions::actor::command::PromptAcceptError;
 use crate::live::sessions::actor::state::SessionActor;
-use crate::live::sessions::actor::turn::handle::first_prompt_system_prompt_append_for_codex_prompt;
+use crate::domains::agents::model::AgentKind;
 
 pub(in crate::live::sessions::actor) struct StartedPromptTurn {
     pub acp_blocks: Vec<acp::schema::ContentBlock>,
@@ -127,4 +127,22 @@ impl SessionActor {
             turn_id,
         })
     }
+}
+
+/// Codex inlines its first-prompt system append as a leading text block; all
+/// other harnesses (and every later turn) receive nothing here.
+pub(in crate::live::sessions::actor) fn first_prompt_system_prompt_append_for_codex_prompt<'a>(
+    source_agent_kind: &str,
+    first_prompt_system_prompt_append: Option<&'a str>,
+    has_turn_started: bool,
+) -> Option<&'a str> {
+    if source_agent_kind != AgentKind::Codex.as_str() || has_turn_started {
+        return None;
+    }
+
+    let append = first_prompt_system_prompt_append?.trim();
+    if append.is_empty() {
+        return None;
+    }
+    Some(append)
 }
