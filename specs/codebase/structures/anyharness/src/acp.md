@@ -6,7 +6,7 @@ mapping.
 
 Live ACP-backed session runtime now lives under `live/sessions/**`. This legacy
 subsystem doc maps the old "ACP runtime" concepts to current implementation
-paths: manager, handle, actor, connection, event sink, interactions, background
+paths: manager, handle, actor, driver, sink, rendezvous, background
 work, and replay are all under `live/sessions/**`.
 
 ## Core Concepts
@@ -34,7 +34,7 @@ installation.
 It owns:
 
 - the in-memory `session_id -> LiveSessionHandle` map
-- the shared `InteractionBroker`
+- the shared `InteractionRendezvous`
 - the start/inject sequencing critical section for session events
 
 Its main jobs are:
@@ -74,14 +74,16 @@ It includes:
 - workspace env
 - session launch env
 - session store
-- shared interaction broker
+- shared interaction rendezvous
 - resume metadata such as startup strategy and `last_seq`
 
 This is the handoff from durable orchestration into live execution.
 
-### `RuntimeClient` (`anyharness/crates/anyharness-lib/src/live/sessions/driver/runtime_client/**`)
+### `InboundDoor` (`anyharness/crates/anyharness-lib/src/live/sessions/driver/inbound/**`)
 
-`RuntimeClient` is the AnyHarness ACP client implementation.
+`InboundDoor` (formerly `RuntimeClient`) is the agent-initiated direction of
+the AnyHarness ACP client: the connection (`driver/connection.rs`) registers
+its handlers for inbound requests and notifications.
 
 It handles:
 
@@ -95,14 +97,14 @@ It handles:
 
 It does not own the actor loop. It translates ACP protocol callbacks into:
 
-- interaction broker requests
+- interaction rendezvous requests
 - internal notification messages
 - normalized runtime events through the event sink
 
-### `SessionEventSink` (`anyharness/crates/anyharness-lib/src/live/sessions/event_sink/**`)
+### `SessionEventSink` (`anyharness/crates/anyharness-lib/src/live/sessions/sink/**`)
 
 `SessionEventSink` is the canonical normalization layer from ACP updates into
-AnyHarness `SessionEventEnvelope`.
+AnyHarness `SessionEventEnvelope`, with one ingestion entry: `sink.ingest`.
 
 It owns:
 
@@ -112,10 +114,10 @@ It owns:
 - transcript item coalescing
 - plan, tool, usage, config, interaction, and session event emission
 
-### `InteractionBroker` (`anyharness/crates/anyharness-lib/src/live/sessions/interactions/broker.rs`)
+### `InteractionRendezvous` (`anyharness/crates/anyharness-lib/src/live/sessions/rendezvous/broker.rs`)
 
-`InteractionBroker` owns live pending interaction waits behind the normalized
-interaction contract.
+`InteractionRendezvous` owns live pending interaction waits behind the
+normalized interaction contract.
 
 It stores:
 
@@ -146,7 +148,8 @@ The live start flow is:
    needed.
 5. The actor launches the resolved agent-process executable with merged
    workspace and session env.
-6. The actor creates an ACP `ClientSideConnection` over child stdio.
+6. The actor establishes the ACP connection over child stdio
+   (`driver/connection.rs`), registering the `InboundDoor` handlers.
 7. The actor calls `initialize`.
 8. If the agent advertises auth methods, the actor attempts `authenticate`, but
    `new_session` or `load_session` is still the real startup gate.
@@ -229,14 +232,14 @@ The prompt flow is:
 
 The notification flow is:
 
-1. ACP sends `session_notification(...)` into `RuntimeClient`
-2. `RuntimeClient` forwards the notification into an internal channel
+1. ACP delivers `session_notification(...)` to the `InboundDoor`
+2. the `InboundDoor` forwards the notification into an internal channel
 3. the actor consumes notifications
 4. notification handlers in
    `anyharness/crates/anyharness-lib/src/live/sessions/actor/notifications/**`
    maps ACP updates into runtime behavior
 5. `SessionEventSink` converts ACP-native chunks and tool updates into
-   normalized transcript items and session events
+   normalized transcript items and session events (through `sink.ingest`)
 6. events are both:
    - appended durably through `SessionStore`
    - broadcast live through `tokio::broadcast`
@@ -259,13 +262,14 @@ Important normalization behaviors:
 The interaction flow is:
 
 1. ACP calls `request_permission(...)` or a supported extension method on
-   `RuntimeClient`
+   the `InboundDoor`
    - Codex extension methods use `experimental/codex/*`
    - Claude extension methods use `experimental/claude/*`
-2. `RuntimeClient` registers the broker wait before making the request visible
-3. `RuntimeClient` emits `interaction_requested` through the sink while
+2. the `InboundDoor` registers the rendezvous wait before making the request
+   visible
+3. the `InboundDoor` emits `interaction_requested` through the sink while
    publishing is locked against cleanup
-4. `InteractionBroker` stores the pending request and waits
+4. `InteractionRendezvous` stores the pending request and waits
 5. higher-level runtime resolves the request through the session actor by:
    - allow
    - deny
@@ -273,9 +277,9 @@ The interaction flow is:
    - submitted input
    - cancellation
    - dismissal
-6. the actor emits `interaction_resolved` exactly once and resumes the brokered
+6. the actor emits `interaction_resolved` exactly once and resumes the parked
    wait
-7. `RuntimeClient` converts that back into the ACP or extension-specific
+7. the `InboundDoor` converts that back into the ACP or extension-specific
    response
 
 ### Config Flow
@@ -314,7 +318,7 @@ Most of that logic lives in
 - live config application and queued config changes
 - notification handling
 - event normalization
-- interaction brokering
+- interaction rendezvous
 
 ### Live ACP Session Runtime Does Not Own
 

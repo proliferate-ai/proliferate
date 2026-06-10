@@ -15,7 +15,7 @@ Use these thresholds for Rust source under `anyharness/crates/**`:
 | `domains/**/runtime*.rs` | 500 | 900 | Split by workflow family. |
 | `live/**/actor/**/*.rs` | 500 | 900 | Split by command/startup/prompt/config/lifecycle concern. |
 | `live/**/driver/**/*.rs` | 500 | 900 | Split by external process/protocol/PTY lifecycle concern. |
-| `live/**/event_sink/**/*.rs` | 500 | 900 | Split by normalized event family. |
+| `live/**/sink/**/*.rs` | 500 | 900 | Split by normalized event family. |
 | `live/**/output_sink/**/*.rs` | 500 | 900 | Split by ordered output family. |
 | `adapters/**/*.rs` | 500 | 900 | Split by capability if the adapter grows. |
 | `integrations/**/*.rs` | 400 | 800 | Split by protocol concern. |
@@ -27,18 +27,18 @@ Current split shapes:
 - `domains/sessions/store/**` is the current split session store shape.
 - `domains/sessions/mcp_bindings/**` is the current split session MCP binding and
   launch assembly shape.
-- `live/sessions/event_sink/**` is the current split session event sink shape.
+- `live/sessions/sink/**` is the current split session event sink shape.
 - `domains/sessions/runtime/**` is the current split session runtime shape.
 - `live/sessions/manager/**`, `live/sessions/handle.rs`,
   `live/sessions/actor/**`, `live/sessions/driver/**`,
-  `live/sessions/event_sink/**`, `live/sessions/interactions/**`,
+  `live/sessions/sink/**`, `live/sessions/rendezvous/**`,
   `live/sessions/background_work/**`, and `live/sessions/replay/**` are the
-  current split live session shape. `RuntimeClient` is split under
-  `live/sessions/driver/runtime_client/**` as the current low-level ACP client
-  name inside the driver role.
+  current split live session shape. The `InboundDoor` is split under
+  `live/sessions/driver/inbound/**` as the agent-initiated inbound direction
+  inside the driver role.
 - Remaining `acp/**` files are shared ACP permission/payload/provider-error
-  helpers, not current owners for live session manager, event sink,
-  interactions, background work, or replay behavior.
+  helpers, not current owners for live session manager, sink, rendezvous,
+  background work, or replay behavior.
 
 ## Module Style
 
@@ -58,7 +58,7 @@ Split when a reader can name a real responsibility:
 store/events.rs
 runtime/prompt.rs
 actor/config.rs
-event_sink/tools.rs
+sink/tools.rs
 integrations/mcp/json_rpc.rs
 ```
 
@@ -71,7 +71,7 @@ files. The target is legibility by path at both levels:
 ```text
 domains/sessions/runtime/prompt.rs    # session workflow entrypoint
 live/sessions/actor/turn/active.rs    # active prompt turn loop
-live/sessions/event_sink/tools.rs     # transcript event normalization
+live/sessions/sink/tools.rs           # transcript event normalization
 ```
 
 Do not dump unrelated files into a newly-correct parent folder. A move into
@@ -86,7 +86,7 @@ owning spec or guide. For example:
 - app composition split by wiring family such as sessions, workspaces,
   product extensions, product MCP registration, and startup tasks.
 - live resources split by manager, handle, private actor, private driver,
-  sink, interactions, background work, snapshot, and replay roles.
+  sink, rendezvous, background work, snapshot, and replay roles.
 - live actors split by command surface, loop, startup, prompt turn, config,
   notifications, interactions, and shutdown.
 - event/output sinks split by normalized event or output family.

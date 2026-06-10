@@ -69,6 +69,7 @@ sessions/
   model.rs
   runtime_event.rs
   extensions.rs
+  live_ports.rs
   store/
   service/
   runtime/
@@ -369,6 +370,37 @@ domains/sessions/workspace_naming/session_extension.rs
 `app/` wires implementations into the core. The core domain depends only on the
 trait.
 
+The same define-here/implement-there pattern runs in both directions. A domain
+implements ports defined elsewhere in a dedicated `*_ports.rs` /
+`*_observer.rs` file — pure trait impls, no new behavior homes:
+
+```text
+domains/plans/session_ports.rs
+  implements sessions-defined plan-reference/interaction-link resolver traits
+
+domains/sessions/live_ports.rs
+  implements live's durable-capability traits (EventPersist, QueueDurable,
+  BackgroundWorkDurable, SessionStateDurable, AttachmentSource from
+  live/sessions/model.rs) as 1:1 delegation over SessionStore and the
+  attachment storage
+```
+
+Product reactions to a live session use the live-defined hook ports the same
+way (see `guides/live-runtime.md` for the mechanism decision table):
+
+```text
+domains/plans/session_observer.rs     SessionEventObserver: plan sniffing
+domains/reviews/session_observer.rs   SessionEventObserver: candidate plans
+                                      (registered after the plans observer)
+domains/plans/permission_advisor.rs   PermissionAdvisor: plan-linked
+                                      permissions, predecided answers
+domains/plans/decision_op.rs          SessionDomainOp: approve/reject,
+                                      serialized through the actor mailbox
+```
+
+`app/sessions.rs` wires these into `ActorCapabilities`; the live layer depends
+only on its own traits.
+
 ## MCP Placement
 
 MCP crosses several owners. Do not put all MCP code in one folder.
@@ -491,10 +523,10 @@ violations.
 
 Migration exceptions (the rule is the law; this is the debt):
 `domains/runtime_config` persists contract types as rows and uses them as its
-model; `domains/agents/auth_config` uses contract auth structs end-to-end;
-`domains/sessions/runtime/contract.rs` builds contract responses inside the
-domain via a fetching mapper. Targets: domain twins minted at the API seam and
-a runtime-composed view model with a dep-less mapper.
+model; `domains/agents/auth_config` uses contract auth structs end-to-end.
+Target: domain twins minted at the API seam. (The sessions runtime's former
+fetching response mapper is resolved: `runtime/view.rs` composes `SessionView`
+and the API maps it dep-lessly.)
 
 ## Errors
 
