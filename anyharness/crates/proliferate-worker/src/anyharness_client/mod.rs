@@ -1,4 +1,5 @@
 pub mod agent_auth;
+pub mod agents;
 pub mod auth;
 pub mod backfill;
 pub mod events;
