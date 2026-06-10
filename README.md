@@ -11,11 +11,11 @@
 
 <p>
   <a href="https://github.com/proliferate-ai/proliferate/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/proliferate-ai/proliferate?style=flat&amp;logo=github&amp;label=stars" /></a>
-  <a href="https://github.com/proliferate-ai/proliferate/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/proliferate-ai/proliferate?style=flat&amp;sort=semver&amp;label=release" /></a>
+  <a href="https://proliferate.com/changelog"><img alt="Latest release" src="https://img.shields.io/github/v/release/proliferate-ai/proliferate?style=flat&amp;sort=semver&amp;label=release" /></a>
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/github/license/proliferate-ai/proliferate?style=flat&amp;label=license" /></a>
   <a href="https://proliferate.com/docs"><img alt="Docs" src="https://img.shields.io/badge/docs-view-0969DA?style=flat" /></a>
   <a href="https://proliferate.com"><img alt="Website" src="https://img.shields.io/badge/website-visit-0969DA?style=flat" /></a>
-  <a href="https://proliferate.com/discord"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2?style=flat&amp;logo=discord&amp;logoColor=white" /></a>
+  <a href="https://discord.gg/wCEgUnEuF"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2?style=flat&amp;logo=discord&amp;logoColor=white" /></a>
 </p>
 
 <br />
@@ -32,7 +32,7 @@ Move running sessions between your machine and the cloud. Works solo or across a
   &nbsp;&bull;&nbsp;
   <a href="https://proliferate.com/changelog">Changelog</a>
   &nbsp;&bull;&nbsp;
-  <a href="https://proliferate.com/discord">Discord</a>
+  <a href="https://discord.gg/wCEgUnEuF">Discord</a>
 </p>
 
 <!-- LAUNCH BLOCKER: full-width product screenshot or demo GIF goes here. -->
@@ -180,7 +180,7 @@ Proliferate Cloud will be fully self-hostable and open source once it's out of b
 
 ## Community
 
-Join our open source community on [Discord](https://proliferate.com/discord)!
+Join our open source community on [Discord](https://discord.gg/wCEgUnEuF)!
 
 ## Contributing
 
