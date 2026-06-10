@@ -76,3 +76,4 @@ package-lock.json
 
 # Apple Sign in Keys / App Store Connect API keys
 *.p8
+.probe-secrets.env

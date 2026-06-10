@@ -52,6 +52,7 @@ fn log_path_for_command(command: &Commands) -> Option<PathBuf> {
             Some(runtime_home_from_install(args).join("logs/anyharness.log"))
         }
         Commands::PrintOpenapi => None,
+        Commands::CatalogProbe(_) => None,
     }
 }
 

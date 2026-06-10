@@ -1,0 +1,87 @@
+{
+  "probedAt": "2026-06-10T00:18:35.281128+00:00",
+  "agentKind": "gemini",
+  "authContext": "gemini-api",
+  "attestation": {
+    "name": "gemini-cli",
+    "version": "0.45.3",
+    "title": "Gemini CLI"
+  },
+  "modelSource": "acpModels",
+  "nativeCli": null,
+  "trials": [],
+  "currentModelId": "auto",
+  "currentModeId": "default",
+  "modes": {
+    "availableModes": [
+      {
+        "description": "Prompts for approval",
+        "id": "default",
+        "name": "Default"
+      },
+      {
+        "description": "Auto-approves edit tools",
+        "id": "autoEdit",
+        "name": "Auto Edit"
+      },
+      {
+        "description": "Auto-approves all tools",
+        "id": "yolo",
+        "name": "YOLO"
+      },
+      {
+        "description": "Read-only mode",
+        "id": "plan",
+        "name": "Plan"
+      }
+    ],
+    "currentModeId": "default"
+  },
+  "baselineConfigOptions": null,
+  "models": [
+    {
+      "modelId": "auto",
+      "name": "Auto",
+      "description": "Let Gemini CLI decide the best model for the task: gemini-3-pro-preview, gemini-3-flash-preview",
+      "configOptions": null
+    },
+    {
+      "modelId": "gemini-3-pro-preview",
+      "name": "gemini-3-pro-preview",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "gemini-3-flash-preview",
+      "name": "gemini-3-flash-preview",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "gemini-2.5-pro",
+      "name": "gemini-2.5-pro",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "gemini-2.5-flash",
+      "name": "gemini-2.5-flash",
+      "description": null,
+      "configOptions": null
+    },
+    {
+      "modelId": "gemini-3.1-flash-lite",
+      "name": "gemini-3.1-flash-lite",
+      "description": null,
+      "configOptions": null
+    }
+  ],
+  "warnings": [
+    "no ConfigOptionUpdate within 6s after switching to auto",
+    "no ConfigOptionUpdate within 6s after switching to gemini-3-pro-preview",
+    "no ConfigOptionUpdate within 6s after switching to gemini-3-flash-preview",
+    "no ConfigOptionUpdate within 6s after switching to gemini-2.5-pro",
+    "no ConfigOptionUpdate within 6s after switching to gemini-2.5-flash",
+    "no ConfigOptionUpdate within 6s after switching to gemini-3.1-flash-lite"
+  ]
+}
