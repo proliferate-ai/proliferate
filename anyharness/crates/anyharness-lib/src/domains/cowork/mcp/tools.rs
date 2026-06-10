@@ -278,7 +278,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkWorkspaceId": { "type": "string" }
+                    "coworkWorkspaceId": { "type": "string", "description": "Stable cowork workspace target id." }
                 }
             }),
         ),
@@ -288,7 +288,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkWorkspaceId": { "type": "string" },
+                    "coworkWorkspaceId": { "type": "string", "description": "Stable cowork workspace target id." },
                     "prompt": { "type": "string" },
                     "label": { "type": "string" },
                     "harnessId": { "type": "string" },
@@ -311,7 +311,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string" },
+                    "coworkAgentId": { "type": "string", "description": "Stable cowork agent target id." },
                     "prompt": { "type": "string" },
                     "wakeOnCompletion": { "type": "boolean" }
                 },
@@ -324,7 +324,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string" }
+                    "coworkAgentId": { "type": "string", "description": "Stable cowork agent target id." }
                 }
             }),
         ),
@@ -334,7 +334,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string" }
+                    "coworkAgentId": { "type": "string", "description": "Stable cowork agent target id." }
                 }
             }),
         ),
@@ -344,7 +344,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string" },
+                    "coworkAgentId": { "type": "string", "description": "Stable cowork agent target id." },
                     "sinceSeq": { "type": "integer" },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
                 }
@@ -356,7 +356,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string" },
+                    "coworkAgentId": { "type": "string", "description": "Stable cowork agent target id." },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 10 }
                 }
             }),
@@ -367,7 +367,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string" },
+                    "coworkAgentId": { "type": "string", "description": "Stable cowork agent target id." },
                     "query": { "type": "string" },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 25 }
                 },
@@ -380,7 +380,7 @@ fn delegation_tool_definitions() -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "coworkAgentId": { "type": "string" }
+                    "coworkAgentId": { "type": "string", "description": "Stable cowork agent target id." }
                 }
             }),
         ),

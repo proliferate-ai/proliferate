@@ -122,7 +122,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string" },
+                    "subagentId": { "type": "string", "description": "Stable subagent target id." },
                     "prompt": { "type": "string" },
                     "wakeOnCompletion": { "type": "boolean" }
                 },
@@ -135,7 +135,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string" }
+                    "subagentId": { "type": "string", "description": "Stable subagent target id." }
                 }
             }),
         ),
@@ -145,7 +145,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string" }
+                    "subagentId": { "type": "string", "description": "Stable subagent target id." }
                 }
             }),
         ),
@@ -155,7 +155,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string" },
+                    "subagentId": { "type": "string", "description": "Stable subagent target id." },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 10 }
                 }
             }),
@@ -166,7 +166,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string" },
+                    "subagentId": { "type": "string", "description": "Stable subagent target id." },
                     "query": { "type": "string" },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 25 }
                 },
@@ -179,7 +179,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string" },
+                    "subagentId": { "type": "string", "description": "Stable subagent target id." },
                     "sinceSeq": { "type": "integer" },
                     "limit": {
                         "type": "integer",
@@ -195,7 +195,7 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
             json!({
                 "type": "object",
                 "properties": {
-                    "subagentId": { "type": "string" }
+                    "subagentId": { "type": "string", "description": "Stable subagent target id." }
                 }
             }),
         ),
