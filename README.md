@@ -46,7 +46,6 @@ Proliferate is a desktop and web app for running coding agents in parallel, loca
 
 - **Run any mix of agents in parallel**, each in its own isolated worktree or sandbox, with native tools, auth, and config intact
 - **Let your agents manage each other**, like having Codex hand design work to Claude Code
-- **Move running work between local and cloud** mid-task, with every change and message intact
 - **Set up MCPs and skills once**, shared across every agent
 
 ## Bring Your Agent
@@ -94,26 +93,6 @@ Each agent runs through its native harness, so auth, tools, models, permissions,
 - 🧩 **[Plugins](https://proliferate.com/docs/concepts/plugins)** — MCPs, skills, Computer Use, Browser Use, and custom tools, configured once and shared by every agent
 - ⏰ **[Automations](https://proliferate.com/docs/concepts/automations)** — run any agent on any schedule
 - 🖼️ **[Artifacts](https://proliferate.com/docs/concepts/artifacts)** — docs, UI, demos, and components rendered inline as agents produce them
-
-## Proliferate Cloud <sup>Beta</sup>
-
-> Proliferate Cloud is in beta and rolling out in waves — request access at
-> [proliferate.com](https://proliferate.com). Everything local above is fully
-> open and available today.
-
-- ☁️ **Cloud sandboxes** — isolated cloud environments that keep working after you close your laptop
-- 🔁 **Workspace mobility** — move a running workspace between your machine and the cloud, mid-task, with changes and history intact
-- 👥 **Multiplayer cloud chats** — live sessions your team can inspect, claim, and continue
-- 💬 **Team Slackbot** — turn a Slack message into shared agent work for the whole team
-- 🤝 **Team automations** — shared recurring fixes and reviews the whole team can run
-- 🛰️ **Remote dispatch** — kick off and steer work on your own machine from the web
-- 🔑 **SSH access** — drop into any cloud sandbox from your terminal
-- 🔐 **Credential gateway** — your keys and subscriptions never touch the sandbox; sandboxes only get short-lived tokens
-- 🏢 **Organizations** — team seats, shared settings, cloud limits, and governance controls
-- 📱 **Mobile** — coming soon: dispatch work, approve actions, and follow runs from your phone
-- 🏗️ **Self-hosted Proliferate Cloud** — coming soon: run the full cloud control plane yourself
-
-Proliferate Cloud will be fully self-hostable and open source once it's out of beta.
 
 ## Open Source
 
@@ -178,6 +157,26 @@ that want an early self-hosted deployment can reach out through
 [proliferate.com](https://proliferate.com) for access and deployment support.
 
 </details>
+
+## Proliferate Cloud (Beta)
+
+> Proliferate Cloud is in beta and rolling out in waves — request access at
+> [proliferate.com](https://proliferate.com). Everything local above is fully
+> open and available today.
+
+- ☁️ **Cloud sandboxes** — isolated cloud environments that keep working after you close your laptop
+- 🔁 **Workspace mobility** — move a running workspace between your machine and the cloud, mid-task, with changes and history intact
+- 👥 **Multiplayer cloud chats** — live sessions your team can inspect, claim, and continue
+- 💬 **Team Slackbot** — turn a Slack message into shared agent work for the whole team
+- 🤝 **Team automations** — shared recurring fixes and reviews the whole team can run
+- 🛰️ **Remote dispatch** — kick off and steer work on your own machine from the web
+- 🔑 **SSH access** — drop into any cloud sandbox from your terminal
+- 🔐 **Credential gateway** — your keys and subscriptions never touch the sandbox; sandboxes only get short-lived tokens
+- 🏢 **Organizations** — team seats, shared settings, cloud limits, and governance controls
+- 📱 **Mobile** — coming soon: dispatch work, approve actions, and follow runs from your phone
+- 🏗️ **Self-hosted Proliferate Cloud** — coming soon: run the full cloud control plane yourself
+
+Proliferate Cloud will be fully self-hostable and open source once it's out of beta.
 
 ## Community
 
