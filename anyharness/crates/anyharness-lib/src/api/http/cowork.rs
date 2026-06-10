@@ -13,6 +13,7 @@ use axum::{
 
 use super::blocking::run_blocking;
 use super::error::ApiError;
+use super::sessions_contract::session_to_contract;
 use super::workspaces_contract::workspace_to_contract_with_summary;
 use crate::app::AppState;
 use crate::domains::cowork::artifacts::{CoworkArtifactDetail, CoworkArtifactManifest};
@@ -117,11 +118,7 @@ pub async fn create_cowork_thread(
     Ok(Json(CreateCoworkThreadResponse {
         thread: cowork_thread_to_contract(result.thread),
         workspace: workspace_to_contract(&state, result.workspace).await?,
-        session: state
-            .session_runtime
-            .session_to_contract(&result.session)
-            .await
-            .map_err(|error| ApiError::internal(error.to_string()))?,
+        session: session_to_contract(&state, &result.session).await?,
     }))
 }
 

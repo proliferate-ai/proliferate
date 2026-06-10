@@ -12,6 +12,7 @@ use anyharness_contract::v1::SessionEventEnvelope;
 mod assistant;
 mod background_work;
 mod config;
+mod ingest;
 mod interactions;
 mod lifecycle;
 mod metadata;
@@ -31,6 +32,8 @@ mod tests;
 pub use state::{
     AcpChunkPayload, AcpToolPayload, CompletedAssistantMessage, SessionEventSinkDebugSnapshot,
 };
+
+pub(in crate::live::sessions) use ingest::{ActorBoundUpdate, SinkObservation};
 
 pub struct SessionEventSink {
     session_id: String,

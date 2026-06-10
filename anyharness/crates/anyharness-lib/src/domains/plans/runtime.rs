@@ -192,9 +192,10 @@ impl PlanRuntime {
                 .map_err(HandoffPlanError::CreateSession)?;
             let session = self
                 .session_runtime
-                .session_to_contract(&record)
+                .session_view(&record)
                 .await
-                .map_err(HandoffPlanError::Store)?;
+                .map_err(HandoffPlanError::Store)?
+                .into_contract();
             (record.id, Some(session))
         };
         let instruction = input

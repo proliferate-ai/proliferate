@@ -1,5 +1,5 @@
 //! The observer dispatch pass: feeds the special observations collected by
-//! `normalize_notification` to the registered [`SessionEventObserver`]s.
+//! the sink's `ingest` to the registered [`SessionEventObserver`]s.
 //!
 //! Scoping decision (deliberate): observers receive ONLY the collected
 //! special observations (non-transcript chunks, tool payloads, completed
@@ -15,39 +15,21 @@ use anyharness_contract::v1::SessionEventEnvelope;
 use tokio::sync::Mutex;
 
 use crate::live::sessions::model::{
-    AcpChunkPayload, AcpToolPayload, CompletedAssistantMessage, SessionEventObserver,
-    SessionObservation, SessionObserverContext,
+    SessionEventObserver, SessionObservation, SessionObserverContext,
 };
-use crate::live::sessions::sink::SessionEventSink;
+use crate::live::sessions::sink::{SessionEventSink, SinkObservation};
 
-/// An observation input collected (owned) during notification normalization,
-/// to be offered to observers after the sink finished its own handling.
-pub(in crate::live::sessions::actor) enum CollectedObservation {
-    /// Protocol chunk the dispatcher kept out of the transcript
-    /// (anyharness adapter meta tag).
-    NonTranscriptChunk(AcpChunkPayload),
-    /// Normalized tool traffic, after the sink recorded it.
-    ToolCall {
-        turn_id: Option<String>,
-        payload: AcpToolPayload,
-    },
-    /// An assistant message that just completed assembly in the sink.
-    AssistantMessageCompleted(CompletedAssistantMessage),
-}
-
-impl CollectedObservation {
-    fn as_observation(&self) -> SessionObservation<'_> {
-        match self {
-            CollectedObservation::NonTranscriptChunk(payload) => {
-                SessionObservation::NonTranscriptChunk(payload)
-            }
-            CollectedObservation::ToolCall { turn_id, payload } => SessionObservation::ToolCall {
-                turn_id: turn_id.clone(),
-                payload,
-            },
-            CollectedObservation::AssistantMessageCompleted(completed) => {
-                SessionObservation::AssistantMessageCompleted(completed)
-            }
+fn as_observation(collected: &SinkObservation) -> SessionObservation<'_> {
+    match collected {
+        SinkObservation::NonTranscriptChunk(payload) => {
+            SessionObservation::NonTranscriptChunk(payload)
+        }
+        SinkObservation::ToolCall { turn_id, payload } => SessionObservation::ToolCall {
+            turn_id: turn_id.clone(),
+            payload,
+        },
+        SinkObservation::AssistantMessageCompleted(completed) => {
+            SessionObservation::AssistantMessageCompleted(completed)
         }
     }
 }
@@ -69,7 +51,7 @@ pub(in crate::live::sessions::actor) async fn dispatch_observations(
     session_id: &str,
     workspace_id: &str,
     agent_kind: &str,
-    observations: Vec<CollectedObservation>,
+    observations: Vec<SinkObservation>,
 ) {
     if observations.is_empty() || observers.is_empty() {
         return;
@@ -77,7 +59,7 @@ pub(in crate::live::sessions::actor) async fn dispatch_observations(
     let mut sink = event_sink.lock().await;
     for collected in &observations {
         {
-            let obs = collected.as_observation();
+            let obs = as_observation(collected);
             if observers
                 .iter()
                 .any(|observer| observer.needs_transcript_boundary(&obs))
@@ -99,7 +81,7 @@ pub(in crate::live::sessions::actor) async fn dispatch_observations(
                 }
             }
             let ctx = observation_ctx(&sink, session_id, workspace_id, agent_kind);
-            let effects = observer.observe(&ctx, collected.as_observation());
+            let effects = observer.observe(&ctx, as_observation(collected));
             if !effects.persisted_events.is_empty() {
                 emissions.extend(effects.persisted_events.iter().cloned());
                 sink.publish_persisted_events(effects.persisted_events);

@@ -4,14 +4,14 @@ use anyharness_contract::v1::{
     PendingInteractionPayloadSummary, PendingInteractionSource, PendingInteractionSummary,
 };
 
-use super::{raw_ext_response, RuntimeClient};
+use super::{raw_ext_response, InboundDoor};
 use crate::live::sessions::rendezvous::mcp_elicitation::{
     claude_ext_response_from_outcome, normalize_claude_mcp_elicitation,
     normalize_standard_mcp_elicitation, standard_elicitation_response_from_outcome,
     ClaudeMcpElicitationExtParams,
 };
 
-impl RuntimeClient {
+impl InboundDoor {
     pub(crate) async fn standard_mcp_elicitation(
         &self,
         request: acp::schema::CreateElicitationRequest,
