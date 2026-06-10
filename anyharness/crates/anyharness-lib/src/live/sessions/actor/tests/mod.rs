@@ -18,7 +18,6 @@ use super::interactions::cleanup::resolve_pending_interactions;
 use super::notifications::handle::{
     handle_notification, handle_notification_with_resume_replay_filter,
 };
-use super::notifications::plans::{extract_tagged_proposed_plan, title_from_markdown};
 use super::notifications::replay_filter::{ResumeReplayFilter, IDLE_RESUME_REPLAY_QUIET_WINDOW};
 use super::shutdown::handle::finalize_established_actor_exit;
 use super::shutdown::types::ActorExitDisposition;
@@ -29,7 +28,6 @@ use super::turn::handle::first_prompt_system_prompt_append_for_codex_prompt;
 use super::turn::start::prepend_system_prompt_append_to_acp_blocks;
 use crate::app::test_support;
 use crate::domains::agents::model::AgentKind;
-use crate::domains::plans::{service::PlanService, store::PlanStore};
 use crate::domains::sessions::live_config::{
     normalized_key_rank, snapshot_to_record, NormalizedControlKind, SessionModelOption,
 };
@@ -50,13 +48,10 @@ use anyharness_contract::v1::{
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 
 mod config;
+mod domain_ops;
 mod notifications;
 mod prompt;
 mod shutdown;
-
-fn test_plan_service(db: &Db) -> Arc<PlanService> {
-    Arc::new(PlanService::new(PlanStore::new(db.clone())))
-}
 
 async fn actor_exit_test_context(
     pending_interaction: Option<PendingInteractionSummary>,

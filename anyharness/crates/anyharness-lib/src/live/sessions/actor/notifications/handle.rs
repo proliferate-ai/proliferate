@@ -4,13 +4,13 @@ use std::time::Instant;
 use agent_client_protocol as acp;
 use tokio::sync::Mutex;
 
-use crate::domains::plans::service::PlanService;
-use crate::domains::reviews::service::ReviewService;
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
 use crate::live::sessions::actor::notifications::dispatch::{
     normalize_notification, persist_raw_notification,
 };
+use crate::live::sessions::actor::notifications::observations::dispatch_observations;
+use crate::live::sessions::model::SessionEventObserver;
 use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilter;
 use crate::live::sessions::actor::state::SessionStartupState;
 use crate::live::sessions::background_work::BackgroundWorkRegistry;
@@ -25,8 +25,7 @@ pub(in crate::live::sessions::actor) async fn handle_notification(
     session_id: &str,
     workspace_id: &str,
     source_agent_kind: &str,
-    plan_service: Arc<PlanService>,
-    review_service: Option<Arc<ReviewService>>,
+    observers: &[Arc<dyn SessionEventObserver>],
     persisted_config_state: &mut PersistedSessionConfigState,
     startup_state: &mut SessionStartupState,
 ) {
@@ -40,8 +39,7 @@ pub(in crate::live::sessions::actor) async fn handle_notification(
         session_id,
         workspace_id,
         source_agent_kind,
-        plan_service,
-        review_service,
+        observers,
         persisted_config_state,
         startup_state,
     )
@@ -57,8 +55,7 @@ pub(in crate::live::sessions::actor) async fn handle_notification_with_resume_re
     session_id: &str,
     workspace_id: &str,
     source_agent_kind: &str,
-    plan_service: Arc<PlanService>,
-    review_service: Option<Arc<ReviewService>>,
+    observers: &[Arc<dyn SessionEventObserver>],
     persisted_config_state: &mut PersistedSessionConfigState,
     startup_state: &mut SessionStartupState,
 ) {
@@ -91,18 +88,24 @@ pub(in crate::live::sessions::actor) async fn handle_notification_with_resume_re
         return;
     }
 
-    normalize_notification(
+    let observations = normalize_notification(
         notif,
         event_sink,
         background_work_registry,
         session_store,
         session_id,
-        workspace_id,
         source_agent_kind,
-        plan_service,
-        review_service,
         persisted_config_state,
         startup_state,
+    )
+    .await;
+    dispatch_observations(
+        event_sink,
+        observers,
+        session_id,
+        workspace_id,
+        source_agent_kind,
+        observations,
     )
     .await;
 }

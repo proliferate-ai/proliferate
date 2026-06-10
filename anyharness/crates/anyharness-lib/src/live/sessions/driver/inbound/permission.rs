@@ -2,15 +2,15 @@ use agent_client_protocol as acp;
 use anyharness_contract::v1::{
     InteractionKind, InteractionPayload, InteractionRequestedEvent, InteractionSource,
     PendingInteractionPayloadSummary, PendingInteractionSource, PendingInteractionSummary,
-    PermissionInteractionPayload, ProposedPlanDecisionState, ProposedPlanNativeResolutionState,
+    PermissionInteractionPayload,
 };
 
 use super::RuntimeClient;
 use crate::acp::permission_context::permission_context_from_meta;
-use crate::acp::permission_payload::{
-    bound_raw_json, permission_option_mappings, permission_options,
+use crate::acp::permission_payload::{bound_raw_json, permission_options};
+use crate::live::sessions::model::{
+    PermissionAdvice, PermissionQuestionView, SessionObserverContext,
 };
-use crate::domains::plans::model::PlanRecord;
 use crate::live::sessions::rendezvous::broker::PermissionOutcome;
 
 impl RuntimeClient {
@@ -62,38 +62,55 @@ impl RuntimeClient {
             .map(bound_raw_json);
 
         let options = permission_options(&args.options);
-        let option_mappings = permission_option_mappings(&options);
         let context = permission_context_from_meta(args.meta.as_ref());
-        let linked_plan = match tool_call_id.as_deref() {
-            Some(tool_call_id) => self
-                .plan_service
-                .find_by_session_tool_call(&self.session_id, tool_call_id)
-                .ok()
-                .flatten(),
-            None => None,
-        };
-        if let (Some(plan), Some(tool_call_id)) = (linked_plan.as_ref(), tool_call_id.as_deref()) {
-            let _ = self.plan_service.register_interaction_link(
-                plan,
-                &request_id,
-                tool_call_id,
-                option_mappings.clone(),
-            );
-            if let Some(predecided) = predecided_plan_permission(plan, &option_mappings) {
-                self.publish_plan_native_resolution(
-                    &plan.id,
-                    predecided.native_state,
-                    predecided.error_message,
-                )
-                .await;
-                return Ok(acp::schema::RequestPermissionResponse::new(predecided.outcome));
+
+        // Consult the permission advisor (a domain port) BEFORE parking,
+        // under the sink lock: any event rows it commits (predecided plan
+        // resolutions) allocate from the locked counter and are published
+        // here under the same lock hold.
+        let mut linked_plan_id: Option<String> = None;
+        if let Some(advisor) = self.permission_advisor.as_ref() {
+            let mut sink = self.event_sink.lock().await;
+            let ctx = SessionObserverContext {
+                session_id: self.session_id.clone(),
+                workspace_id: self.workspace_id.clone(),
+                agent_kind: self.agent_kind.clone(),
+                turn_id: sink.current_turn_id(),
+                next_seq: sink.next_seq(),
+            };
+            let question = PermissionQuestionView {
+                session_id: &self.session_id,
+                request_id: &request_id,
+                tool_call_id: tool_call_id.as_deref(),
+                options: &args.options,
+            };
+            match advisor.advise(&ctx, &question) {
+                PermissionAdvice::Park {
+                    pending_interaction,
+                } => {
+                    linked_plan_id =
+                        pending_interaction.and_then(|link| link.linked_plan_id);
+                }
+                PermissionAdvice::Predecided {
+                    selected_option_id,
+                    persisted_events,
+                } => {
+                    sink.publish_persisted_events(persisted_events);
+                    let outcome = match selected_option_id {
+                        Some(option_id) => acp::schema::RequestPermissionOutcome::Selected(
+                            acp::schema::SelectedPermissionOutcome::new(option_id),
+                        ),
+                        None => acp::schema::RequestPermissionOutcome::Cancelled,
+                    };
+                    return Ok(acp::schema::RequestPermissionResponse::new(outcome));
+                }
             }
         }
         let source = InteractionSource {
             tool_call_id: tool_call_id.clone(),
             tool_kind: tool_kind.clone(),
             tool_status: tool_status.clone(),
-            linked_plan_id: linked_plan.as_ref().map(|plan| plan.id.clone()),
+            linked_plan_id: linked_plan_id.clone(),
             source_metadata: None,
         };
         let payload = InteractionPayload::Permission(PermissionInteractionPayload {
@@ -120,7 +137,7 @@ impl RuntimeClient {
                         tool_call_id,
                         tool_kind,
                         tool_status,
-                        linked_plan_id: linked_plan.as_ref().map(|plan| plan.id.clone()),
+                        linked_plan_id: linked_plan_id.clone(),
                     },
                     payload: PendingInteractionPayloadSummary::Permission { options, context },
                 })
@@ -152,103 +169,4 @@ impl RuntimeClient {
         Ok(acp::schema::RequestPermissionResponse::new(acp_outcome))
     }
 
-    async fn publish_plan_native_resolution(
-        &self,
-        plan_id: &str,
-        native_state: ProposedPlanNativeResolutionState,
-        error_message: Option<String>,
-    ) {
-        let mut sink = self.event_sink.lock().await;
-        let context = sink.plan_event_context();
-        match self.plan_service.update_native_resolution_with_context(
-            plan_id,
-            native_state,
-            context,
-            error_message,
-        ) {
-            Ok((_plan, envelopes)) => sink.publish_persisted_events(envelopes),
-            Err(error) => {
-                tracing::warn!(
-                    session_id = %self.session_id,
-                    plan_id = %plan_id,
-                    error = ?error,
-                    "failed to update predecided native plan resolution"
-                );
-            }
-        }
-    }
-}
-
-struct PredecidedPlanPermission {
-    outcome: acp::schema::RequestPermissionOutcome,
-    native_state: ProposedPlanNativeResolutionState,
-    error_message: Option<String>,
-}
-
-fn predecided_plan_permission(
-    plan: &PlanRecord,
-    option_mappings: &serde_json::Value,
-) -> Option<PredecidedPlanPermission> {
-    match &plan.decision_state {
-        ProposedPlanDecisionState::Approved => Some(predecided_selected_or_failed(
-            option_mappings,
-            "approve",
-            "Approved plan could not map to a native approval option.",
-        )),
-        ProposedPlanDecisionState::Rejected => {
-            Some(predecided_selected_or_cancelled(option_mappings, "reject"))
-        }
-        ProposedPlanDecisionState::Pending | ProposedPlanDecisionState::Superseded => None,
-    }
-}
-
-fn predecided_selected_or_failed(
-    option_mappings: &serde_json::Value,
-    key: &str,
-    error_message: &str,
-) -> PredecidedPlanPermission {
-    match mapped_option_id(option_mappings, key) {
-        Some(option_id) => PredecidedPlanPermission {
-            outcome: selected_permission_outcome(option_id),
-            native_state: ProposedPlanNativeResolutionState::Finalized,
-            error_message: None,
-        },
-        None => PredecidedPlanPermission {
-            outcome: acp::schema::RequestPermissionOutcome::Cancelled,
-            native_state: ProposedPlanNativeResolutionState::Failed,
-            error_message: Some(error_message.to_string()),
-        },
-    }
-}
-
-fn predecided_selected_or_cancelled(
-    option_mappings: &serde_json::Value,
-    key: &str,
-) -> PredecidedPlanPermission {
-    match mapped_option_id(option_mappings, key) {
-        Some(option_id) => PredecidedPlanPermission {
-            outcome: selected_permission_outcome(option_id),
-            native_state: ProposedPlanNativeResolutionState::Finalized,
-            error_message: None,
-        },
-        None => PredecidedPlanPermission {
-            outcome: acp::schema::RequestPermissionOutcome::Cancelled,
-            native_state: ProposedPlanNativeResolutionState::Finalized,
-            error_message: None,
-        },
-    }
-}
-
-fn selected_permission_outcome(option_id: &str) -> acp::schema::RequestPermissionOutcome {
-    acp::schema::RequestPermissionOutcome::Selected(acp::schema::SelectedPermissionOutcome::new(
-        option_id.to_string(),
-    ))
-}
-
-fn mapped_option_id<'a>(mappings: &'a serde_json::Value, key: &str) -> Option<&'a str> {
-    mappings
-        .get(key)
-        .and_then(serde_json::Value::as_str)
-        .map(str::trim)
-        .filter(|option_id| !option_id.is_empty())
 }

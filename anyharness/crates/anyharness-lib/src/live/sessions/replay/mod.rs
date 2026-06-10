@@ -8,7 +8,6 @@ use anyharness_contract::v1::{
 };
 use tokio::sync::{broadcast, mpsc};
 
-use crate::domains::plans::service::PlanDecisionError;
 use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::runtime_event::RuntimeEventInjectionError;
 use crate::domains::sessions::store::SessionStore;
@@ -368,8 +367,10 @@ async fn handle_non_replay_command(
             let _ = respond_to.send(Err(ResolveInteractionCommandError::NotFound));
             None
         }
-        SessionCommand::ApplyPlanDecision { respond_to, .. } => {
-            let _ = respond_to.send(Err(PlanDecisionError::NotFound));
+        SessionCommand::RunDomainOp { respond_to, .. } => {
+            // Replay sessions carry no live domain state; dropping the
+            // responder surfaces ResponseDropped to the submitter.
+            drop(respond_to);
             None
         }
         SessionCommand::VerifyForkReady { respond_to } => {

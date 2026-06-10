@@ -1,3 +1,4 @@
+pub mod model;
 mod actor;
 mod background_work;
 mod driver;
