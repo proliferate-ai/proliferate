@@ -24,7 +24,8 @@ use crate::domains::mobility::service::MobilityError;
 use crate::domains::workspaces::access_gate::WorkspaceAccessError;
 use crate::domains::workspaces::access_model::WorkspaceAccessMode;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::observability::latency::FlowHeaders;
+use tracing::Instrument;
 
 pub const MAX_MOBILITY_ARCHIVE_BODY_BYTES: usize =
     crate::domains::mobility::model::MAX_MOBILITY_ARCHIVE_BODY_BYTES;
@@ -44,43 +45,38 @@ pub async fn preflight_workspace_mobility(
     Path(workspace_id): Path<String>,
     headers: HeaderMap,
 ) -> Result<Json<WorkspaceMobilityPreflightResponse>, ApiError> {
-    let latency = LatencyRequestContext::from_headers(&headers);
-    let latency_fields = latency_trace_fields(latency.as_ref());
-    let started = Instant::now();
-    tracing::info!(
-        session_id = tracing::field::Empty,
-        workspace_id = %workspace_id,
-        flow_id = ?latency_fields.flow_id,
-        flow_kind = ?latency_fields.flow_kind,
-        flow_source = ?latency_fields.flow_source,
-        prompt_id = ?latency_fields.prompt_id,
-        "[workspace-latency] mobility.http.preflight.request_received"
-    );
-    let _operation = state
-        .workspace_operation_gate
-        .acquire_shared(&workspace_id, WorkspaceOperationKind::MaterializationRead)
-        .await;
-    assert_workspace_not_retired(&state, &workspace_id)?;
-    let result = state
-        .mobility_service
-        .preflight_workspace(&workspace_id, &[])
-        .await
-        .map_err(map_mobility_error)?;
-    tracing::info!(
-        session_id = tracing::field::Empty,
-        workspace_id = %workspace_id,
-        can_move = result.can_move,
-        blocker_count = result.blockers.len(),
-        warning_count = result.warnings.len(),
-        archive_estimated_bytes = result.archive_estimated_bytes.unwrap_or_default(),
-        elapsed_ms = started.elapsed().as_millis() as u64,
-        flow_id = ?latency_fields.flow_id,
-        flow_kind = ?latency_fields.flow_kind,
-        flow_source = ?latency_fields.flow_source,
-        prompt_id = ?latency_fields.prompt_id,
-        "[workspace-latency] mobility.http.preflight.completed"
-    );
-    Ok(Json(to_contract_preflight(result)))
+    let span = FlowHeaders::from_headers(&headers).span();
+    async move {
+        let started = Instant::now();
+        tracing::info!(
+            session_id = tracing::field::Empty,
+            workspace_id = %workspace_id,
+            "[workspace-latency] mobility.http.preflight.request_received"
+        );
+        let _operation = state
+            .workspace_operation_gate
+            .acquire_shared(&workspace_id, WorkspaceOperationKind::MaterializationRead)
+            .await;
+        assert_workspace_not_retired(&state, &workspace_id)?;
+        let result = state
+            .mobility_service
+            .preflight_workspace(&workspace_id, &[])
+            .await
+            .map_err(map_mobility_error)?;
+        tracing::info!(
+            session_id = tracing::field::Empty,
+            workspace_id = %workspace_id,
+            can_move = result.can_move,
+            blocker_count = result.blockers.len(),
+            warning_count = result.warnings.len(),
+            archive_estimated_bytes = result.archive_estimated_bytes.unwrap_or_default(),
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            "[workspace-latency] mobility.http.preflight.completed"
+        );
+        Ok(Json(to_contract_preflight(result)))
+    }
+    .instrument(span)
+    .await
 }
 
 #[utoipa::path(

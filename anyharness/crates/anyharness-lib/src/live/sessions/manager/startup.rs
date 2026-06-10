@@ -12,7 +12,6 @@ use crate::live::sessions::actor::spawn::{
 use crate::live::sessions::actor::state::SessionActorConfig;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::model::{SessionHooks, SessionLaunch};
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 
 impl LiveSessionManager {
     #[tracing::instrument(skip_all, fields(session_id = %launch.session.id))]
@@ -23,17 +22,12 @@ impl LiveSessionManager {
     ) -> anyhow::Result<(Arc<LiveSessionHandle>, ActorReadyResult)> {
         let session_id = launch.session.id.clone();
         let started = Instant::now();
-        let latency_fields = latency_trace_fields(hooks.latency.as_ref());
         let startup_strategy_label = launch.startup.as_str();
         tracing::info!(
             session_id = %session_id,
             workspace_id = %launch.session.workspace_id,
             agent_kind = %launch.session.agent_kind,
             startup_strategy = startup_strategy_label,
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.acp_manager.start.start"
         );
 
@@ -45,10 +39,6 @@ impl LiveSessionManager {
             tracing::info!(
                 session_id = %session_id,
                 elapsed_ms = started.elapsed().as_millis(),
-                flow_id = latency_fields.flow_id,
-                flow_kind = latency_fields.flow_kind,
-                flow_source = latency_fields.flow_source,
-                prompt_id = latency_fields.prompt_id,
                 "[workspace-latency] session.acp_manager.start.reused_existing_handle"
             );
             if let Some(native_session_id) = ready_native_session_id {
@@ -97,7 +87,6 @@ impl LiveSessionManager {
         });
         hooks.on_exit = Some(on_exit);
 
-        let actor_latency = hooks.latency.clone();
         let config = SessionActorConfig {
             launch,
             caps: self.caps.clone(),
@@ -128,7 +117,6 @@ impl LiveSessionManager {
             startup_strategy_label.to_string(),
             actor_start_started,
             started,
-            actor_latency,
         )
         .await?;
 
@@ -145,7 +133,6 @@ async fn wait_for_new_startup_readiness(
     startup_strategy_label: String,
     actor_start_started: Instant,
     manager_started: Instant,
-    latency: Option<LatencyRequestContext>,
 ) -> anyhow::Result<ActorReadyResult> {
     let session_id = handle.session_id.clone();
     tokio::task::spawn_blocking(move || {
@@ -153,17 +140,12 @@ async fn wait_for_new_startup_readiness(
 
         match &ready_result {
             Ok(ready) => {
-                let latency_fields = latency_trace_fields(latency.as_ref());
                 tracing::info!(
                     session_id = %session_id,
                     native_session_id = %ready.native_session_id.as_str(),
                     startup_strategy = %startup_strategy_label,
                     elapsed_ms = actor_start_started.elapsed().as_millis(),
                     total_elapsed_ms = manager_started.elapsed().as_millis(),
-                    flow_id = latency_fields.flow_id,
-                    flow_kind = latency_fields.flow_kind,
-                    flow_source = latency_fields.flow_source,
-                    prompt_id = latency_fields.prompt_id,
                     "[workspace-latency] session.acp_manager.start.actor_ready"
                 );
 

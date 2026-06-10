@@ -9,7 +9,6 @@ use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 
 use super::{SessionLifecycleError, SessionRuntime};
 
@@ -200,22 +199,17 @@ impl SessionRuntime {
             .ok_or_else(|| SessionLifecycleError::SessionNotFound(session_id.to_string()))
     }
 
+    #[tracing::instrument(skip_all, fields(workspace_id = %workspace_id))]
     pub async fn restore_dismissed_session(
         &self,
         workspace_id: &str,
-        latency: Option<&LatencyRequestContext>,
     ) -> Result<Option<SessionRecord>, SessionLifecycleError> {
         self.access_gate
             .assert_can_mutate_for_workspace(workspace_id)
             .map_err(|error| SessionLifecycleError::Internal(anyhow::anyhow!(error.to_string())))?;
         let started = Instant::now();
-        let latency_fields = latency_trace_fields(latency);
         tracing::info!(
             workspace_id = %workspace_id,
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.runtime.restore.start"
         );
         let now = chrono::Utc::now().to_rfc3339();
@@ -228,10 +222,6 @@ impl SessionRuntime {
             tracing::info!(
                 workspace_id = %workspace_id,
                 elapsed_ms = started.elapsed().as_millis(),
-                flow_id = latency_fields.flow_id,
-                flow_kind = latency_fields.flow_kind,
-                flow_source = latency_fields.flow_source,
-                prompt_id = latency_fields.prompt_id,
                 "[workspace-latency] session.runtime.restore.empty"
             );
             return Ok(None);
@@ -241,20 +231,12 @@ impl SessionRuntime {
             session_id = %restored.id,
             workspace_id = %workspace_id,
             total_elapsed_ms = started.elapsed().as_millis(),
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.runtime.restore.dismissed_cleared"
         );
         tracing::info!(
             session_id = %restored.id,
             workspace_id = %workspace_id,
             total_elapsed_ms = started.elapsed().as_millis(),
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
             "[workspace-latency] session.runtime.restore.completed"
         );
 

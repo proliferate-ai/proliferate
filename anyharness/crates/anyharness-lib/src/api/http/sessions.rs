@@ -16,7 +16,8 @@ use crate::api::auth::AuthContext;
 use crate::app::AppState;
 use crate::domains::sessions::mcp_bindings::summaries::validate_binding_summaries;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::observability::latency::FlowHeaders;
+use tracing::Instrument;
 
 #[derive(Debug, Deserialize)]
 pub struct ListSessionsQuery {
@@ -44,92 +45,86 @@ pub async fn create_session(
     headers: HeaderMap,
     Json(req): Json<CreateSessionRequest>,
 ) -> Result<Json<Session>, ApiError> {
-    let latency = LatencyRequestContext::from_headers(&headers);
-    let latency_fields = latency_trace_fields(latency.as_ref());
-    let started = Instant::now();
-    let workspace_id = req.workspace_id.clone();
-    let agent_kind = req.agent_kind.clone();
-    let model_id = req.model_id.clone();
-    let mode_id = req.mode_id.clone();
-    let origin = request_origin_or_api_default(req.origin.clone(), "create_session");
-    assert_workspace_auth_scope(&auth, &workspace_id)?;
-    let runtime_inputs = if let Some(expected) = req.expected_runtime_config_revision.as_ref() {
-        Some(
-            state
-                .runtime_config_service
-                .session_inputs_for_expected(expected)
-                .map_err(super::runtime_config::map_runtime_config_error)?,
-        )
-    } else {
-        None
-    };
-    let mcp_servers = runtime_inputs
-        .as_ref()
-        .map(|inputs| inputs.mcp_servers.clone())
-        .unwrap_or_default();
-    let mcp_binding_summaries = runtime_inputs
-        .as_ref()
-        .and_then(|inputs| inputs.mcp_binding_summaries.clone())
-        .filter(|summaries| !summaries.is_empty());
-    if let Some(summaries) = mcp_binding_summaries.as_deref() {
-        validate_binding_summaries(summaries)
-            .map_err(|error| ApiError::bad_request(error.to_string(), "INVALID_MCP_SUMMARY"))?;
+    let span = FlowHeaders::from_headers(&headers).span();
+    async move {
+        let started = Instant::now();
+        let workspace_id = req.workspace_id.clone();
+        let agent_kind = req.agent_kind.clone();
+        let model_id = req.model_id.clone();
+        let mode_id = req.mode_id.clone();
+        let origin = request_origin_or_api_default(req.origin.clone(), "create_session");
+        assert_workspace_auth_scope(&auth, &workspace_id)?;
+        let runtime_inputs = if let Some(expected) = req.expected_runtime_config_revision.as_ref() {
+            Some(
+                state
+                    .runtime_config_service
+                    .session_inputs_for_expected(expected)
+                    .map_err(super::runtime_config::map_runtime_config_error)?,
+            )
+        } else {
+            None
+        };
+        let mcp_servers = runtime_inputs
+            .as_ref()
+            .map(|inputs| inputs.mcp_servers.clone())
+            .unwrap_or_default();
+        let mcp_binding_summaries = runtime_inputs
+            .as_ref()
+            .and_then(|inputs| inputs.mcp_binding_summaries.clone())
+            .filter(|summaries| !summaries.is_empty());
+        if let Some(summaries) = mcp_binding_summaries.as_deref() {
+            validate_binding_summaries(summaries)
+                .map_err(|error| ApiError::bad_request(error.to_string(), "INVALID_MCP_SUMMARY"))?;
+        }
+        let system_prompt_append_count = req
+            .system_prompt_append
+            .as_ref()
+            .map(|entries| entries.len())
+            .unwrap_or(0);
+        let mcp_server_count = mcp_servers.len();
+        tracing::info!(
+            workspace_id = %workspace_id,
+            agent_kind = %agent_kind,
+            model_id = ?model_id,
+            mode_id = ?mode_id,
+            system_prompt_append_count,
+            mcp_server_count,
+            "[workspace-latency] session.http.create.request_received"
+        );
+        let _lease = state
+            .workspace_operation_gate
+            .acquire_shared(&workspace_id, WorkspaceOperationKind::SessionStart)
+            .await;
+        let record = state
+            .session_runtime
+            .create_and_start_session(
+                &workspace_id,
+                &agent_kind,
+                model_id.as_deref(),
+                mode_id.as_deref(),
+                req.system_prompt_append,
+                Vec::new(),
+                None,
+                req.expected_runtime_config_revision.clone(),
+                req.subagents_enabled.unwrap_or(true),
+                req.agent_auth_scope,
+                req.required_agent_auth_revision,
+                origin,
+            )
+            .await
+            .map_err(map_create_session_error)?;
+
+        tracing::info!(
+            workspace_id = %workspace_id,
+            session_id = %record.id,
+            elapsed_ms = started.elapsed().as_millis(),
+            "[workspace-latency] session.http.create.completed"
+        );
+
+        Ok(Json(session_to_contract(&state, &record).await?))
     }
-    let system_prompt_append_count = req
-        .system_prompt_append
-        .as_ref()
-        .map(|entries| entries.len())
-        .unwrap_or(0);
-    let mcp_server_count = mcp_servers.len();
-    tracing::info!(
-        workspace_id = %workspace_id,
-        agent_kind = %agent_kind,
-        model_id = ?model_id,
-        mode_id = ?mode_id,
-        system_prompt_append_count,
-        mcp_server_count,
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
-        "[workspace-latency] session.http.create.request_received"
-    );
-    let _lease = state
-        .workspace_operation_gate
-        .acquire_shared(&workspace_id, WorkspaceOperationKind::SessionStart)
-        .await;
-    let record = state
-        .session_runtime
-        .create_and_start_session(
-            &workspace_id,
-            &agent_kind,
-            model_id.as_deref(),
-            mode_id.as_deref(),
-            req.system_prompt_append,
-            Vec::new(),
-            None,
-            req.expected_runtime_config_revision.clone(),
-            req.subagents_enabled.unwrap_or(true),
-            req.agent_auth_scope,
-            req.required_agent_auth_revision,
-            origin,
-            latency.as_ref(),
-        )
-        .await
-        .map_err(map_create_session_error)?;
-
-    tracing::info!(
-        workspace_id = %workspace_id,
-        session_id = %record.id,
-        elapsed_ms = started.elapsed().as_millis(),
-            flow_id = latency_fields.flow_id,
-            flow_kind = latency_fields.flow_kind,
-            flow_source = latency_fields.flow_source,
-            prompt_id = latency_fields.prompt_id,
-        "[workspace-latency] session.http.create.completed"
-    );
-
-    Ok(Json(session_to_contract(&state, &record).await?))
+    .instrument(span)
+    .await
 }
 
 #[utoipa::path(

@@ -24,7 +24,7 @@ pub struct SessionActorConfig {
     pub launch: SessionLaunch,
     /// The never-varies durable capabilities + product reactors.
     pub caps: ActorCapabilities,
-    /// Per-call powers (turn-finish callback, exit callback, latency context).
+    /// Per-call powers (turn-finish callback, exit callback).
     pub hooks: SessionHooks,
     pub interaction_broker: Arc<InteractionRendezvous>,
     pub event_tx: broadcast::Sender<SessionEventEnvelope>,

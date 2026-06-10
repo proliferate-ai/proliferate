@@ -50,7 +50,6 @@ use crate::domains::sessions::prompt::{PromptPayload, PromptValidationError, Res
 use crate::live::sessions::actor::command::{Resolution, ResolveInteractionCommandError};
 use crate::live::sessions::actor::turn::types::SessionTurnFinishResult;
 use crate::live::sessions::sink::SessionEventSink;
-use crate::observability::latency::LatencyRequestContext;
 // Re-exported: the normalized-payload vocabulary observers consume. The sink
 // module itself stays private to live; these shapes are part of the doorstep.
 pub use crate::live::sessions::sink::{AcpChunkPayload, AcpToolPayload, CompletedAssistantMessage};
@@ -307,8 +306,6 @@ pub struct SessionHooks {
     /// Called after the actor loop exits (normal or error). The bool indicates
     /// whether the actor exited with an error (true = errored).
     pub on_exit: Option<Box<dyn FnOnce(bool) + Send>>,
-    /// Dies in PR-3b (latency → spans); carried here meanwhile.
-    pub latency: Option<LatencyRequestContext>,
 }
 
 /// Where in the session's event stream an observation (or op phase) is

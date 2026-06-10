@@ -285,7 +285,7 @@ async fn create_subagent(
         false
     };
 
-    let started = match session_runtime.start_persisted_session(&child, None).await {
+    let started = match session_runtime.start_persisted_session(&child).await {
         Ok(started) => started,
         Err(error) => {
             if args.wake_on_completion {

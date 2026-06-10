@@ -41,7 +41,7 @@ impl SessionRuntime {
         validate_fork_parent(&parent, &self.session_link_service)?;
 
         let handle = self
-            .ensure_live_session_handle(&parent, None, None)
+            .ensure_live_session_handle(&parent, None)
             .await
             .map_err(map_start_error_to_fork)?;
         let parent = self
@@ -179,12 +179,7 @@ impl SessionRuntime {
         };
 
         match self
-            .start_live_session(
-                &child,
-                startup_strategy,
-                child.system_prompt_append.clone(),
-                None,
-            )
+            .start_live_session(&child, startup_strategy, child.system_prompt_append.clone())
             .await
         {
             Ok((_handle, native_session_id)) => {

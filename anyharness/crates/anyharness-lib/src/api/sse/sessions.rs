@@ -15,8 +15,9 @@ use tokio_stream::wrappers::BroadcastStream;
 use crate::api::http::error::ApiError;
 use crate::api::{auth::AuthContext, http::access::assert_session_auth_scope};
 use crate::app::AppState;
-use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
+use crate::observability::latency::FlowHeaders;
 use anyharness_contract::v1::{SessionEvent, SessionEventEnvelope};
+use tracing::Instrument;
 
 const LIVE_HANDLE_ATTACH_TIMEOUT: Duration = Duration::from_secs(30);
 const LIVE_HANDLE_ATTACH_INTERVAL: Duration = Duration::from_millis(100);
@@ -44,184 +45,162 @@ pub async fn stream_session(
     Query(query): Query<StreamSessionQuery>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
-    let latency = LatencyRequestContext::from_headers(&headers);
-    let latency_fields = latency_trace_fields(latency.as_ref());
-    let started = Instant::now();
-    let after_seq = query.after_seq.unwrap_or(0).max(0);
-    tracing::info!(
-        session_id = %session_id,
-        after_seq,
-        flow_id = latency_fields.flow_id,
-        flow_kind = latency_fields.flow_kind,
-        flow_source = latency_fields.flow_source,
-        prompt_id = latency_fields.prompt_id,
-        measurement_operation_id = latency_fields.measurement_operation_id,
-        "[workspace-latency] session.sse.request_received"
-    );
-    let session_record = state
-        .session_service
-        .get_session(&session_id)
-        .map_err(|e| ApiError::internal(e.to_string()))?
-        .ok_or_else(|| {
-            ApiError::not_found(
-                format!("Session not found: {session_id}"),
-                "SESSION_NOT_FOUND",
-            )
-        })?;
-    let acp_manager = state.acp_manager.clone();
-    let live_handle_started = Instant::now();
-    let live_handle = acp_manager.get_handle(&session_id).await;
-    let live_rx = live_handle.as_ref().map(|handle| handle.subscribe());
-    tracing::info!(
-        session_id = %session_id,
-        has_live_handle = live_handle.is_some(),
-        elapsed_ms = live_handle_started.elapsed().as_millis(),
-        total_elapsed_ms = started.elapsed().as_millis(),
-        flow_id = latency_fields.flow_id,
-        flow_kind = latency_fields.flow_kind,
-        flow_source = latency_fields.flow_source,
-        prompt_id = latency_fields.prompt_id,
-        measurement_operation_id = latency_fields.measurement_operation_id,
-        "[anyharness-latency] session.sse.live_handle_checked"
-    );
-
-    let backlog_query_started = Instant::now();
-    let backlog_records = state
-        .session_service
-        .list_session_event_records(&session_id, Some(after_seq), None, None, None, false)
-        .map_err(|e| ApiError::internal(e.to_string()))?
-        .ok_or_else(|| {
-            ApiError::not_found(
-                format!("Session not found: {session_id}"),
-                "SESSION_NOT_FOUND",
-            )
-        })?;
-    tracing::info!(
-        session_id = %session_id,
-        after_seq,
-        backlog_record_count = backlog_records.len(),
-        elapsed_ms = backlog_query_started.elapsed().as_millis(),
-        total_elapsed_ms = started.elapsed().as_millis(),
-        flow_id = latency_fields.flow_id,
-        flow_kind = latency_fields.flow_kind,
-        flow_source = latency_fields.flow_source,
-        prompt_id = latency_fields.prompt_id,
-        measurement_operation_id = latency_fields.measurement_operation_id,
-        "[anyharness-latency] session.sse.backlog_records_loaded"
-    );
-
-    let backlog_map_started = Instant::now();
-    let backlog = backlog_records
-        .into_iter()
-        .filter_map(event_record_to_envelope)
-        .collect::<Vec<_>>();
-    tracing::info!(
-        session_id = %session_id,
-        after_seq,
-        backlog_count = backlog.len(),
-        elapsed_ms = backlog_map_started.elapsed().as_millis(),
-        total_elapsed_ms = started.elapsed().as_millis(),
-        flow_id = latency_fields.flow_id,
-        flow_kind = latency_fields.flow_kind,
-        flow_source = latency_fields.flow_source,
-        prompt_id = latency_fields.prompt_id,
-        measurement_operation_id = latency_fields.measurement_operation_id,
-        "[anyharness-latency] session.sse.backlog_mapped"
-    );
-    tracing::info!(
-        session_id = %session_id,
-        after_seq,
-        backlog_count = backlog.len(),
-        has_live_handle = live_handle.is_some(),
-        session_status = %session_record.status,
-        elapsed_ms = started.elapsed().as_millis(),
-        flow_id = latency_fields.flow_id,
-        flow_kind = latency_fields.flow_kind,
-        flow_source = latency_fields.flow_source,
-        prompt_id = latency_fields.prompt_id,
-        measurement_operation_id = latency_fields.measurement_operation_id,
-        "[workspace-latency] session.sse.open"
-    );
-    let max_sent_seq = Arc::new(AtomicI64::new(
-        backlog.last().map(|env| env.seq).unwrap_or(after_seq),
-    ));
-    let backlog_stream = stream::iter(backlog.into_iter().filter_map(envelope_to_event));
-
-    let live_stream: BoxStream<'static, Result<Event, Infallible>> = if let Some(rx) = live_rx {
-        live_receiver_stream(rx, max_sent_seq.clone())
-    } else if should_wait_for_live_handle_attach(&session_record.status) {
-        let session_service = state.session_service.clone();
+    let span = FlowHeaders::from_headers(&headers).span();
+    async move {
+        let started = Instant::now();
+        let after_seq = query.after_seq.unwrap_or(0).max(0);
         tracing::info!(
             session_id = %session_id,
             after_seq,
-            session_status = %session_record.status,
-            timeout_ms = LIVE_HANDLE_ATTACH_TIMEOUT.as_millis(),
-            "[workspace-latency] session.sse.await_live_handle.start"
+            "[workspace-latency] session.sse.request_received"
         );
-        stream::once(wait_for_live_receiver(acp_manager, session_id.clone()))
-            .flat_map(move |rx| {
-                let Some(rx) = rx else {
-                    return stream::empty().boxed();
-                };
-                let after_seq = max_sent_seq.load(Ordering::Acquire);
-                let replay_started = Instant::now();
-                let replay = match session_service.list_session_event_records(
-                    &session_id,
-                    Some(after_seq),
-                    None,
-                    None,
-                    None,
-                    false,
-                ) {
-                    Ok(Some(records)) => records
-                        .into_iter()
-                        .filter_map(event_record_to_envelope)
-                        .collect::<Vec<_>>(),
-                    Ok(None) => Vec::new(),
-                    Err(error) => {
-                        tracing::warn!(
-                            session_id = %session_id,
-                            error = %error,
-                            "[workspace-latency] session.sse.await_live_handle.replay_failed"
-                        );
-                        Vec::new()
-                    }
-                };
-                tracing::info!(
-                    session_id = %session_id,
-                    after_seq,
-                    replay_count = replay.len(),
-                    elapsed_ms = replay_started.elapsed().as_millis(),
-                    "[workspace-latency] session.sse.await_live_handle.replay"
-                );
-                let replay_stream = stream::iter(replay.into_iter().filter_map({
-                    let max_sent_seq = max_sent_seq.clone();
-                    move |envelope| {
-                        let last_sent = max_sent_seq.load(Ordering::Acquire);
-                        if envelope.seq <= last_sent {
-                            return None;
+        let session_record = state
+            .session_service
+            .get_session(&session_id)
+            .map_err(|e| ApiError::internal(e.to_string()))?
+            .ok_or_else(|| {
+                ApiError::not_found(
+                    format!("Session not found: {session_id}"),
+                    "SESSION_NOT_FOUND",
+                )
+            })?;
+        let acp_manager = state.acp_manager.clone();
+        let live_handle_started = Instant::now();
+        let live_handle = acp_manager.get_handle(&session_id).await;
+        let live_rx = live_handle.as_ref().map(|handle| handle.subscribe());
+        tracing::info!(
+            session_id = %session_id,
+            has_live_handle = live_handle.is_some(),
+            elapsed_ms = live_handle_started.elapsed().as_millis(),
+            total_elapsed_ms = started.elapsed().as_millis(),
+            "[anyharness-latency] session.sse.live_handle_checked"
+        );
+
+        let backlog_query_started = Instant::now();
+        let backlog_records = state
+            .session_service
+            .list_session_event_records(&session_id, Some(after_seq), None, None, None, false)
+            .map_err(|e| ApiError::internal(e.to_string()))?
+            .ok_or_else(|| {
+                ApiError::not_found(
+                    format!("Session not found: {session_id}"),
+                    "SESSION_NOT_FOUND",
+                )
+            })?;
+        tracing::info!(
+            session_id = %session_id,
+            after_seq,
+            backlog_record_count = backlog_records.len(),
+            elapsed_ms = backlog_query_started.elapsed().as_millis(),
+            total_elapsed_ms = started.elapsed().as_millis(),
+            "[anyharness-latency] session.sse.backlog_records_loaded"
+        );
+
+        let backlog_map_started = Instant::now();
+        let backlog = backlog_records
+            .into_iter()
+            .filter_map(event_record_to_envelope)
+            .collect::<Vec<_>>();
+        tracing::info!(
+            session_id = %session_id,
+            after_seq,
+            backlog_count = backlog.len(),
+            elapsed_ms = backlog_map_started.elapsed().as_millis(),
+            total_elapsed_ms = started.elapsed().as_millis(),
+            "[anyharness-latency] session.sse.backlog_mapped"
+        );
+        tracing::info!(
+            session_id = %session_id,
+            after_seq,
+            backlog_count = backlog.len(),
+            has_live_handle = live_handle.is_some(),
+            session_status = %session_record.status,
+            elapsed_ms = started.elapsed().as_millis(),
+            "[workspace-latency] session.sse.open"
+        );
+        let max_sent_seq = Arc::new(AtomicI64::new(
+            backlog.last().map(|env| env.seq).unwrap_or(after_seq),
+        ));
+        let backlog_stream = stream::iter(backlog.into_iter().filter_map(envelope_to_event));
+
+        let live_stream: BoxStream<'static, Result<Event, Infallible>> = if let Some(rx) = live_rx {
+            live_receiver_stream(rx, max_sent_seq.clone())
+        } else if should_wait_for_live_handle_attach(&session_record.status) {
+            let session_service = state.session_service.clone();
+            tracing::info!(
+                session_id = %session_id,
+                after_seq,
+                session_status = %session_record.status,
+                timeout_ms = LIVE_HANDLE_ATTACH_TIMEOUT.as_millis(),
+                "[workspace-latency] session.sse.await_live_handle.start"
+            );
+            stream::once(wait_for_live_receiver(acp_manager, session_id.clone()))
+                .flat_map(move |rx| {
+                    let Some(rx) = rx else {
+                        return stream::empty().boxed();
+                    };
+                    let after_seq = max_sent_seq.load(Ordering::Acquire);
+                    let replay_started = Instant::now();
+                    let replay = match session_service.list_session_event_records(
+                        &session_id,
+                        Some(after_seq),
+                        None,
+                        None,
+                        None,
+                        false,
+                    ) {
+                        Ok(Some(records)) => records
+                            .into_iter()
+                            .filter_map(event_record_to_envelope)
+                            .collect::<Vec<_>>(),
+                        Ok(None) => Vec::new(),
+                        Err(error) => {
+                            tracing::warn!(
+                                session_id = %session_id,
+                                error = %error,
+                                "[workspace-latency] session.sse.await_live_handle.replay_failed"
+                            );
+                            Vec::new()
                         }
-                        max_sent_seq.store(envelope.seq, Ordering::Release);
-                        envelope_to_event(envelope)
-                    }
-                }));
-                replay_stream
-                    .chain(live_receiver_stream(rx, max_sent_seq.clone()))
-                    .boxed()
-            })
-            .boxed()
-    } else {
-        tracing::info!(
-            session_id = %session_id,
-            after_seq,
-            session_status = %session_record.status,
-            "[workspace-latency] session.sse.await_live_handle.skipped"
-        );
-        stream::empty().boxed()
-    };
-    let stream = backlog_stream.chain(live_stream).boxed();
+                    };
+                    tracing::info!(
+                        session_id = %session_id,
+                        after_seq,
+                        replay_count = replay.len(),
+                        elapsed_ms = replay_started.elapsed().as_millis(),
+                        "[workspace-latency] session.sse.await_live_handle.replay"
+                    );
+                    let replay_stream = stream::iter(replay.into_iter().filter_map({
+                        let max_sent_seq = max_sent_seq.clone();
+                        move |envelope| {
+                            let last_sent = max_sent_seq.load(Ordering::Acquire);
+                            if envelope.seq <= last_sent {
+                                return None;
+                            }
+                            max_sent_seq.store(envelope.seq, Ordering::Release);
+                            envelope_to_event(envelope)
+                        }
+                    }));
+                    replay_stream
+                        .chain(live_receiver_stream(rx, max_sent_seq.clone()))
+                        .boxed()
+                })
+                .boxed()
+        } else {
+            tracing::info!(
+                session_id = %session_id,
+                after_seq,
+                session_status = %session_record.status,
+                "[workspace-latency] session.sse.await_live_handle.skipped"
+            );
+            stream::empty().boxed()
+        };
+        let stream = backlog_stream.chain(live_stream).boxed();
 
-    Ok(Sse::new(stream))
+        Ok(Sse::new(stream))
+    }
+    .instrument(span)
+    .await
 }
 
 async fn wait_for_live_receiver(

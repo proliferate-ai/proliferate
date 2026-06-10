@@ -15,7 +15,8 @@ use crate::api::auth::AuthContext;
 use crate::app::AppState;
 use crate::domains::sessions::runtime::SessionMcpRefresh;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
-use crate::observability::latency::LatencyRequestContext;
+use crate::observability::latency::FlowHeaders;
+use tracing::Instrument;
 
 #[utoipa::path(
     post,
@@ -37,39 +38,46 @@ pub async fn resume_session(
     body: Bytes,
 ) -> Result<Json<Session>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
-    let latency = LatencyRequestContext::from_headers(&headers);
+    let span = FlowHeaders::from_headers(&headers).span();
     let req = parse_optional_resume_request(body)?;
-    let has_live_session = state.session_runtime.has_live_session(&session_id).await;
-    if req.expected_runtime_config_revision.is_some() && has_live_session {
-        return Err(ApiError::conflict(
-            "runtime config changes require restarting the session",
-            "RUNTIME_CONFIG_RESUME_UNSUPPORTED",
-        ));
-    }
-    if let Some(expected) = req.expected_runtime_config_revision.as_ref() {
-        state
-            .runtime_config_service
-            .assert_session_context_matches(&session_id, expected)
-            .map_err(super::runtime_config::map_runtime_config_error)?;
-    }
-    let mcp_refresh = if has_live_session {
-        None
-    } else {
-        Some(SessionMcpRefresh {
-            mcp_servers: Vec::new(),
-            mcp_binding_summaries: None,
-        })
-    };
-    let _lease =
-        acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SessionResume)
-            .await?;
-    let updated = state
-        .session_runtime
-        .ensure_live_session(&session_id, mcp_refresh, latency.as_ref())
-        .await
-        .map_err(map_ensure_live_session_error)?;
+    async move {
+        let has_live_session = state.session_runtime.has_live_session(&session_id).await;
+        if req.expected_runtime_config_revision.is_some() && has_live_session {
+            return Err(ApiError::conflict(
+                "runtime config changes require restarting the session",
+                "RUNTIME_CONFIG_RESUME_UNSUPPORTED",
+            ));
+        }
+        if let Some(expected) = req.expected_runtime_config_revision.as_ref() {
+            state
+                .runtime_config_service
+                .assert_session_context_matches(&session_id, expected)
+                .map_err(super::runtime_config::map_runtime_config_error)?;
+        }
+        let mcp_refresh = if has_live_session {
+            None
+        } else {
+            Some(SessionMcpRefresh {
+                mcp_servers: Vec::new(),
+                mcp_binding_summaries: None,
+            })
+        };
+        let _lease = acquire_session_operation_lease(
+            &state,
+            &session_id,
+            WorkspaceOperationKind::SessionResume,
+        )
+        .await?;
+        let updated = state
+            .session_runtime
+            .ensure_live_session(&session_id, mcp_refresh)
+            .await
+            .map_err(map_ensure_live_session_error)?;
 
-    Ok(Json(session_to_contract(&state, &updated).await?))
+        Ok(Json(session_to_contract(&state, &updated).await?))
+    }
+    .instrument(span)
+    .await
 }
 
 fn parse_optional_resume_request(body: Bytes) -> Result<ResumeSessionRequest, ApiError> {
