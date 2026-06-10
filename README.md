@@ -47,7 +47,6 @@ Proliferate is a desktop and web app for running coding agents in parallel, loca
 - **Run any mix of agents in parallel**, each in its own isolated worktree or sandbox, with native tools, auth, and config intact
 - **Let your agents manage each other**, like having Codex hand design work to Claude Code
 - **Move running work between local and cloud** mid-task, with every change and message intact
-- **Hand off live sessions to teammates** and trigger agent work from Slack
 - **Set up MCPs and skills once**, shared across every agent
 
 ## Bring Your Agent
