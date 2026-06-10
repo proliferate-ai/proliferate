@@ -2,8 +2,6 @@ use std::fmt;
 
 use accept::accept_form;
 use agent_client_protocol as acp;
-#[cfg(test)]
-use anyharness_contract::v1::McpElicitationSubmittedValue;
 use anyharness_contract::v1::{McpElicitationInteractionPayload, McpElicitationSubmittedField};
 pub use ext_response::{
     claude_ext_response_from_outcome, standard_elicitation_response_from_outcome,

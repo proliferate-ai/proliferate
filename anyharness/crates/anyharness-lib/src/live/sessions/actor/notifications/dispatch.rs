@@ -19,8 +19,19 @@ use crate::live::sessions::actor::notifications::observations::CollectedObservat
 use crate::live::sessions::actor::state::SessionStartupState;
 use crate::live::sessions::background_work::BackgroundWorkRegistry;
 use crate::live::sessions::model::{EventPersist, SessionStateDurable};
+use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::sink::{AcpChunkPayload, AcpToolPayload, SessionEventSink};
 use crate::live::sessions::handle::LiveSessionHandle;
+
+impl SessionActor {
+    pub(in crate::live::sessions::actor) async fn inject_runtime_event(
+        &self,
+        event: RuntimeInjectedSessionEvent,
+    ) -> RuntimeEventInjectionResult {
+        inject_runtime_event(&self.event_sink, &self.handle, event).await
+    }
+}
+
 pub(in crate::live::sessions::actor) async fn inject_runtime_event(
     event_sink: &Arc<Mutex<SessionEventSink>>,
     handle: &Arc<LiveSessionHandle>,

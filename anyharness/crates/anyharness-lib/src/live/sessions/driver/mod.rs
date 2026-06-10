@@ -1,8 +1,9 @@
+pub(in crate::live::sessions) mod connection;
 pub mod native_session;
 pub mod process;
 pub(in crate::live::sessions) mod inbound;
+pub mod session_lifecycle;
 pub mod shutdown;
-pub mod start;
 pub mod stderr;
 pub mod types;
 
