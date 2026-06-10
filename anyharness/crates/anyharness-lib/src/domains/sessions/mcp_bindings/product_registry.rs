@@ -11,13 +11,6 @@ use crate::integrations::mcp::product_server::{
     ProductMcpServer, ProductMcpTokenValidation,
 };
 
-pub mod legacy_route_aliases {
-    pub const COWORK: &str = "legacy:cowork";
-    pub const REVIEWS: &str = "legacy:reviews";
-    pub const SUBAGENTS: &str = "legacy:subagents";
-    pub const WORKSPACE_NAMING: &str = "legacy:workspace_naming";
-}
-
 #[async_trait]
 pub trait ProductMcpEndpointHandler: Send + Sync {
     fn definition(&self) -> &'static ProductMcpDefinition;
@@ -26,8 +19,6 @@ pub trait ProductMcpEndpointHandler: Send + Sync {
         &self,
         operation: ProductMcpEndpointOperation,
     ) -> Option<WorkspaceOperationKind>;
-
-    fn legacy_header_names(&self) -> &'static [&'static str];
 
     fn validate_capability_token(
         &self,
@@ -45,25 +36,11 @@ pub trait ProductMcpEndpointHandler: Send + Sync {
 #[derive(Clone)]
 pub struct ProductMcpEndpointRegistration {
     handler: Arc<dyn ProductMcpEndpointHandler>,
-    route_aliases: &'static [&'static str],
 }
 
 impl ProductMcpEndpointRegistration {
     pub fn new(handler: Arc<dyn ProductMcpEndpointHandler>) -> Self {
-        Self {
-            handler,
-            route_aliases: &[],
-        }
-    }
-
-    pub fn with_route_aliases(
-        handler: Arc<dyn ProductMcpEndpointHandler>,
-        route_aliases: &'static [&'static str],
-    ) -> Self {
-        Self {
-            handler,
-            route_aliases,
-        }
+        Self { handler }
     }
 }
 
@@ -113,10 +90,6 @@ where
         }
     }
 
-    fn legacy_header_names(&self) -> &'static [&'static str] {
-        self.server.legacy_header_names()
-    }
-
     fn validate_capability_token(
         &self,
         header: ProductMcpAuthHeader<'_>,
@@ -159,14 +132,6 @@ impl ProductMcpEndpointRegistry {
                 registration.handler.clone(),
                 "product MCP route slug",
             )?;
-            for alias in registration.route_aliases {
-                insert_unique(
-                    &mut by_slug,
-                    alias,
-                    registration.handler.clone(),
-                    "product MCP route alias",
-                )?;
-            }
         }
 
         Ok(Self {
@@ -231,20 +196,6 @@ mod tests {
 
     static TEST_DEFINITION_DUPLICATE_ID: ProductMcpDefinition = ProductMcpDefinition {
         id: "test_a",
-        route_slug: "test-b",
-        acp_server_name: "test_b",
-        server_info_name: "proliferate-test-b",
-        display_name: "Test B",
-        description: "Test B",
-        visibility: ProductMcpVisibility::Internal,
-        instructions: "Test B",
-        unauthorized_code: "TEST_B_UNAUTHORIZED",
-        request_invalid_code: "TEST_B_INVALID",
-        prompt_policy: ProductMcpPromptPolicy::System,
-    };
-
-    static TEST_DEFINITION_B: ProductMcpDefinition = ProductMcpDefinition {
-        id: "test_b",
         route_slug: "test-b",
         acp_server_name: "test_b",
         server_info_name: "proliferate-test-b",
@@ -326,10 +277,6 @@ mod tests {
             None
         }
 
-        fn legacy_header_names(&self) -> &'static [&'static str] {
-            &[]
-        }
-
         fn validate_capability_token(
             &self,
             _header: ProductMcpAuthHeader<'_>,
@@ -386,24 +333,6 @@ mod tests {
     }
 
     #[test]
-    fn registry_indexes_route_aliases_to_the_registered_handler() {
-        let handler = Arc::new(TestEndpointHandler(&TEST_DEFINITION_A));
-        let registry = ProductMcpEndpointRegistry::new(vec![
-            ProductMcpEndpointRegistration::with_route_aliases(handler, &["legacy:test-a"]),
-        ])
-        .expect("registry");
-
-        assert_eq!(
-            registry
-                .get_by_route_slug("legacy:test-a")
-                .expect("alias")
-                .definition()
-                .id,
-            "test_a"
-        );
-    }
-
-    #[test]
     fn registry_rejects_duplicate_product_ids() {
         let error = ProductMcpEndpointRegistry::new(vec![
             ProductMcpEndpointRegistration::new(Arc::new(TestEndpointHandler(&TEST_DEFINITION_A))),
@@ -431,25 +360,5 @@ mod tests {
         assert!(error
             .to_string()
             .contains("duplicate product MCP route slug"));
-    }
-
-    #[test]
-    fn registry_rejects_route_alias_collisions() {
-        let error = ProductMcpEndpointRegistry::new(vec![
-            ProductMcpEndpointRegistration::with_route_aliases(
-                Arc::new(TestEndpointHandler(&TEST_DEFINITION_A)),
-                &["alias"],
-            ),
-            ProductMcpEndpointRegistration::with_route_aliases(
-                Arc::new(TestEndpointHandler(&TEST_DEFINITION_B)),
-                &["alias"],
-            ),
-        ])
-        .err()
-        .expect("duplicate route alias should fail");
-
-        assert!(error
-            .to_string()
-            .contains("duplicate product MCP route alias"));
     }
 }

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::Value;
 
-use self::auth::{ReviewMcpAuth, LEGACY_CAPABILITY_HEADER_NAME};
+use self::auth::ReviewMcpAuth;
 use self::context::ReviewMcpContext;
 use crate::domains::reviews::runtime::ReviewRuntime;
 use crate::integrations::mcp::product_server::{
@@ -35,10 +35,6 @@ impl ProductMcpServer for ReviewProductMcpServer {
 
     fn definition(&self) -> &'static ProductMcpDefinition {
         &definition::DEFINITION
-    }
-
-    fn legacy_header_names(&self) -> &'static [&'static str] {
-        &[LEGACY_CAPABILITY_HEADER_NAME]
     }
 
     fn validate_capability_token(

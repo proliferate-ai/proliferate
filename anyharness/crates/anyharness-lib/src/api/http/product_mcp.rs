@@ -9,9 +9,6 @@ use serde_json::Value;
 use super::access::assert_workspace_mutable;
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::domains::sessions::mcp_bindings::product_registry::{
-    legacy_route_aliases, ProductMcpEndpointHandler,
-};
 use crate::integrations::mcp::product_server::{
     ProductMcpAuthHeader, ProductMcpContextError, ProductMcpDispatchError,
     ProductMcpEndpointOperation, ProductMcpRequestContext, PRODUCT_MCP_TOKEN_HEADER_NAME,
@@ -41,102 +38,6 @@ pub async fn post_product_mcp_endpoint(
     .await
 }
 
-pub async fn get_subagents_legacy_mcp_endpoint(
-    State(_state): State<AppState>,
-    Path((_workspace_id, _session_id)): Path<(String, String)>,
-) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
-}
-
-pub async fn post_subagents_legacy_mcp_endpoint(
-    State(state): State<AppState>,
-    Path((workspace_id, session_id)): Path<(String, String)>,
-    headers: HeaderMap,
-    Json(body): Json<Value>,
-) -> Result<Response, ApiError> {
-    dispatch_product_mcp(
-        &state,
-        &workspace_id,
-        &session_id,
-        legacy_route_aliases::SUBAGENTS,
-        headers,
-        body,
-    )
-    .await
-}
-
-pub async fn get_reviews_legacy_mcp_endpoint(
-    State(_state): State<AppState>,
-    Path((_workspace_id, _session_id)): Path<(String, String)>,
-) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
-}
-
-pub async fn post_reviews_legacy_mcp_endpoint(
-    State(state): State<AppState>,
-    Path((workspace_id, session_id)): Path<(String, String)>,
-    headers: HeaderMap,
-    Json(body): Json<Value>,
-) -> Result<Response, ApiError> {
-    dispatch_product_mcp(
-        &state,
-        &workspace_id,
-        &session_id,
-        legacy_route_aliases::REVIEWS,
-        headers,
-        body,
-    )
-    .await
-}
-
-pub async fn get_workspace_naming_legacy_mcp_endpoint(
-    State(_state): State<AppState>,
-    Path((_workspace_id, _session_id)): Path<(String, String)>,
-) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
-}
-
-pub async fn post_workspace_naming_legacy_mcp_endpoint(
-    State(state): State<AppState>,
-    Path((workspace_id, session_id)): Path<(String, String)>,
-    headers: HeaderMap,
-    Json(body): Json<Value>,
-) -> Result<Response, ApiError> {
-    dispatch_product_mcp(
-        &state,
-        &workspace_id,
-        &session_id,
-        legacy_route_aliases::WORKSPACE_NAMING,
-        headers,
-        body,
-    )
-    .await
-}
-
-pub async fn get_cowork_legacy_mcp_endpoint(
-    State(_state): State<AppState>,
-    Path((_workspace_id, _session_id)): Path<(String, String)>,
-) -> impl IntoResponse {
-    StatusCode::NO_CONTENT
-}
-
-pub async fn post_cowork_legacy_mcp_endpoint(
-    State(state): State<AppState>,
-    Path((workspace_id, session_id)): Path<(String, String)>,
-    headers: HeaderMap,
-    Json(body): Json<Value>,
-) -> Result<Response, ApiError> {
-    dispatch_product_mcp(
-        &state,
-        &workspace_id,
-        &session_id,
-        legacy_route_aliases::COWORK,
-        headers,
-        body,
-    )
-    .await
-}
-
 pub async fn dispatch_product_mcp(
     state: &AppState,
     workspace_id: &str,
@@ -152,7 +53,7 @@ pub async fn dispatch_product_mcp(
     let definition = server.definition();
     let request = ProductMcpRequestContext::new(workspace_id, session_id, definition.id);
     let endpoint_operation = ProductMcpEndpointOperation::from_request_body(&body);
-    let auth_header = read_auth_header(server, &headers).ok_or_else(|| {
+    let auth_header = read_auth_header(&headers).ok_or_else(|| {
         ApiError::unauthorized(
             "Missing product MCP capability token.",
             definition.unauthorized_code,
@@ -208,23 +109,11 @@ fn map_dispatch_error(error: ProductMcpDispatchError, request_invalid_code: &str
     }
 }
 
-fn read_auth_header<'a>(
-    server: &dyn ProductMcpEndpointHandler,
-    headers: &'a HeaderMap,
-) -> Option<ProductMcpAuthHeader<'a>> {
-    if let Some(value) = headers
+fn read_auth_header(headers: &HeaderMap) -> Option<ProductMcpAuthHeader<'_>> {
+    headers
         .get(PRODUCT_MCP_TOKEN_HEADER_NAME)
         .and_then(|value| value.to_str().ok())
-    {
-        return Some(ProductMcpAuthHeader::Product { value });
-    }
-
-    server.legacy_header_names().iter().find_map(|name| {
-        headers
-            .get(*name)
-            .and_then(|value| value.to_str().ok())
-            .map(|value| ProductMcpAuthHeader::Legacy { name, value })
-    })
+        .map(|value| ProductMcpAuthHeader::Product { value })
 }
 
 #[cfg(test)]

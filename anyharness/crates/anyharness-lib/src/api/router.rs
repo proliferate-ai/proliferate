@@ -168,26 +168,6 @@ pub fn build_router(state: AppState) -> Router {
             get(cowork::get_cowork_artifact),
         )
         .route(
-            "/workspaces/{workspace_id}/cowork/sessions/{session_id}/mcp",
-            get(product_mcp::get_cowork_legacy_mcp_endpoint)
-                .post(product_mcp::post_cowork_legacy_mcp_endpoint),
-        )
-        .route(
-            "/workspaces/{workspace_id}/sessions/{session_id}/subagents/mcp",
-            get(product_mcp::get_subagents_legacy_mcp_endpoint)
-                .post(product_mcp::post_subagents_legacy_mcp_endpoint),
-        )
-        .route(
-            "/workspaces/{workspace_id}/sessions/{session_id}/reviews/mcp",
-            get(product_mcp::get_reviews_legacy_mcp_endpoint)
-                .post(product_mcp::post_reviews_legacy_mcp_endpoint),
-        )
-        .route(
-            "/workspaces/{workspace_id}/sessions/{session_id}/workspace-naming/mcp",
-            get(product_mcp::get_workspace_naming_legacy_mcp_endpoint)
-                .post(product_mcp::post_workspace_naming_legacy_mcp_endpoint),
-        )
-        .route(
             "/workspaces/{workspace_id}/sessions/{session_id}/mcp/{product_mcp_slug}",
             get(product_mcp::get_product_mcp_endpoint).post(product_mcp::post_product_mcp_endpoint),
         )

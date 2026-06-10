@@ -10,7 +10,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::Value;
 
-use self::auth::{SubagentMcpAuth, LEGACY_CAPABILITY_HEADER_NAME};
+use self::auth::SubagentMcpAuth;
 use self::context::SubagentMcpContext;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::subagents::service::SubagentService;
@@ -50,10 +50,6 @@ impl ProductMcpServer for SubagentProductMcpServer {
 
     fn definition(&self) -> &'static ProductMcpDefinition {
         &definition::DEFINITION
-    }
-
-    fn legacy_header_names(&self) -> &'static [&'static str] {
-        &[LEGACY_CAPABILITY_HEADER_NAME]
     }
 
     fn validate_capability_token(

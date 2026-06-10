@@ -75,31 +75,6 @@ pub(super) fn initial_config_string(config: Option<&Value>, keys: &[&str]) -> Op
     })
 }
 
-pub(super) fn resolve_preferred_string(
-    preferred: Option<&str>,
-    legacy: Option<&str>,
-    preferred_name: &str,
-    legacy_name: &str,
-) -> anyhow::Result<Option<String>> {
-    let preferred = preferred.map(str::trim).filter(|value| !value.is_empty());
-    let legacy = legacy.map(str::trim).filter(|value| !value.is_empty());
-    if let (Some(left), Some(right)) = (preferred, legacy) {
-        if left != right {
-            anyhow::bail!("{preferred_name} conflicts with deprecated {legacy_name}");
-        }
-    }
-    Ok(preferred.or(legacy).map(ToString::to_string))
-}
-
-pub(super) fn non_empty(value: String) -> Option<String> {
-    let value = value.trim().to_string();
-    if value.is_empty() {
-        None
-    } else {
-        Some(value)
-    }
-}
-
 pub(super) fn coding_session_workspace_id(
     cowork_runtime: &CoworkRuntime,
     coding_session_id: &str,

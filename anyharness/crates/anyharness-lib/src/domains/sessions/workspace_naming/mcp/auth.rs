@@ -6,7 +6,6 @@ use crate::integrations::mcp::product_server::{
 };
 
 const SECRET_FILE_NAME: &str = "workspace-naming-mcp-token.key";
-pub const LEGACY_CAPABILITY_HEADER_NAME: &str = "x-workspace-naming-session-token";
 
 #[derive(Clone)]
 pub struct WorkspaceNamingMcpAuth {
@@ -20,9 +19,7 @@ impl WorkspaceNamingMcpAuth {
                 runtime_home,
                 SECRET_FILE_NAME,
                 McpCapabilityTokenSignature::HmacSha256,
-                McpCapabilityTokenSignature::HmacSha256,
                 super::definition::DEFINITION.id,
-                LEGACY_CAPABILITY_HEADER_NAME,
             ),
         }
     }
