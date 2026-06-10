@@ -76,11 +76,11 @@
           background:var(--n100); color:var(--n700); margin:1px 3px 1px 0; white-space:nowrap; }
   .trial { font-size:11px; font-weight:500; color:var(--n700); background:var(--n100);
            border:1px solid var(--n200); border-radius:999px; padding:1px 9px; margin-left:8px; cursor:help; }
-  .controls .row { margin:2px 0; color:var(--n700); }
-  .controls .k { font-size:11px; font-weight:600; color:var(--n600); margin-right:4px; }
-  .val { display:inline-block; background:var(--n100); color:var(--n700);
-         border-radius:6px; padding:0 7px; font-size:11.5px; margin:1px 2px; }
-  .val.obs { background:var(--b100); color:var(--b700); }
+  .controls { display:grid; grid-template-columns:max-content 1fr; gap:3px 14px; }
+  .controls .ck { font-size:11px; font-weight:600; color:var(--n500); padding-top:1px; }
+  .controls .cv { font-size:12.5px; color:var(--n700); }
+  .controls .sep { color:var(--n300); padding:0 5px; }
+  .controls .obs { color:var(--b700); font-weight:600; }
   .legend { color:var(--n500); font-size:12px; margin-top:26px; max-width:860px; }
   .legend b { color:var(--n700); }
 </style>
@@ -117,10 +117,11 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&l
 
 function controlCells(controls) {
   const rows = Object.entries(controls).map(([k, c]) =>
-    '<div class="row"><span class="k">' + esc(k) + '</span>' +
-    c.values.map(v => '<span class="val' + (v === c.observedValue ? ' obs' : '') + ' mono">' + esc(v) + '</span>').join('') +
-    '</div>');
-  return rows.join('') || '<span style="color:var(--n500)">none reported</span>';
+    '<span class="ck">' + esc(k) + '</span><span class="cv mono">' +
+    c.values.map(v => '<span' + (v === c.observedValue ? ' class="obs"' : '') + '>' + esc(v) + '</span>')
+      .join('<span class="sep">·</span>') +
+    '</span>');
+  return rows.join('') || '<span class="cv" style="color:var(--n500)">none reported</span>';
 }
 
 function hay(m) {
