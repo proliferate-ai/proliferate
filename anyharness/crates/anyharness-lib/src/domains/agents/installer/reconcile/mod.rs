@@ -2,8 +2,8 @@ use std::path::Path;
 
 pub mod execution;
 
-use super::installer::{self, InstallError, InstallOptions, InstalledArtifactResult};
-use super::model::{AgentDescriptor, AgentKind};
+use crate::domains::agents::installer::{self, InstallError, InstallOptions, InstalledArtifactResult};
+use crate::domains::agents::model::{AgentDescriptor, AgentKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentReconcileOutcome {

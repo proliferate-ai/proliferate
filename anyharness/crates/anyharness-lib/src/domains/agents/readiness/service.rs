@@ -8,7 +8,7 @@ use super::artifacts::{
 use super::compatibility::detect_runtime_compatibility_issue;
 use super::overrides::resolve_agent_process_override;
 use super::status::compute_readiness;
-use crate::domains::agents::credentials::{detect_auth_slots, detect_auth_slots_with_env};
+use crate::domains::agents::auth::credentials::{detect_auth_slots, detect_auth_slots_with_env};
 use crate::domains::agents::model::*;
 
 #[cfg(test)]
@@ -99,7 +99,7 @@ pub fn resolve_agent_with_env(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domains::agents::credentials::detect_credentials_with_env;
+    use crate::domains::agents::auth::credentials::detect_credentials_with_env;
     use crate::domains::agents::registry::built_in_registry;
     use crate::integrations::agent_cli::executable::make_executable;
 

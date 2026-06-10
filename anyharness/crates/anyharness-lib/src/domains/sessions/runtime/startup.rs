@@ -535,13 +535,13 @@ fn map_start_session_error_to_create(error: StartSessionError) -> CreateAndStart
 }
 
 fn map_agent_auth_launch_error_to_start(
-    error: crate::domains::agents::auth_config::AgentAuthLaunchOverlayError,
+    error: crate::domains::agents::auth::AgentAuthLaunchOverlayError,
 ) -> StartSessionError {
     match error {
-        crate::domains::agents::auth_config::AgentAuthLaunchOverlayError::SelectionRequired(
+        crate::domains::agents::auth::AgentAuthLaunchOverlayError::SelectionRequired(
             required,
         ) => StartSessionError::AgentAuthSelectionRequired(required),
-        crate::domains::agents::auth_config::AgentAuthLaunchOverlayError::Internal(error) => {
+        crate::domains::agents::auth::AgentAuthLaunchOverlayError::Internal(error) => {
             StartSessionError::Internal(error)
         }
     }

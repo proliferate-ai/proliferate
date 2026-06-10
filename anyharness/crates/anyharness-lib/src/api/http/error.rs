@@ -3,7 +3,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 
-use crate::domains::agents::auth_config::AgentAuthSelectionRequired;
+use crate::domains::agents::auth::AgentAuthSelectionRequired;
 
 pub struct ApiError(StatusCode, ProblemDetails);
 

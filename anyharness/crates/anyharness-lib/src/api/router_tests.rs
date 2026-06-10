@@ -26,7 +26,7 @@ use crate::{
     },
     domains::terminals::model::{CreateTerminalOptions, TerminalPurpose},
     domains::{
-        agents::seed::AgentSeedStore,
+        agents::installer::seed::AgentSeedStore,
         cowork::mcp::auth::{LEGACY_CAPABILITY_HEADER_NAME, SECRET_FILE_NAME},
         sessions::{model::SessionRecord, store::SessionStore},
         workspaces::{

@@ -10,7 +10,7 @@ use tower_http::trace::TraceLayer;
 
 use anyharness_lib::api::router::build_router;
 use anyharness_lib::app::{default_runtime_home, ensure_runtime_home, AppState};
-use anyharness_lib::domains::agents::seed::{
+use anyharness_lib::domains::agents::installer::seed::{
     configured_agent_seed_store, hydrate_configured_agent_seed,
 };
 use anyharness_lib::persistence::Db;
@@ -135,7 +135,7 @@ mod tests {
     };
     use tower::Service;
 
-    use anyharness_lib::{app::AppState, domains::agents::seed::AgentSeedStore, persistence::Db};
+    use anyharness_lib::{app::AppState, domains::agents::installer::seed::AgentSeedStore, persistence::Db};
 
     use super::build_app;
 

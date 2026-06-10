@@ -4,6 +4,8 @@ mod lock;
 pub(crate) mod managed_npm;
 mod native;
 mod npm;
+pub mod reconcile;
+pub mod seed;
 mod service;
 #[cfg(test)]
 mod test_support;

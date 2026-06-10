@@ -5,7 +5,7 @@ use axum::{extract::State, Json};
 
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
-use crate::domains::agents::auth_config::{
+use crate::domains::agents::auth::{
     AgentAuthConfigApplyOutcome, AgentAuthConfigInput, AgentAuthConfigStatus,
 };
 

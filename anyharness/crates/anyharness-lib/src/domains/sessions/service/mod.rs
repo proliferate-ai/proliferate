@@ -3,7 +3,7 @@ use std::sync::Arc;
 use super::attachment_storage::PromptAttachmentStorage;
 use super::deletion::SessionDeleteWorkflow;
 use super::store::SessionStore;
-use crate::domains::agents::auth_config::{AgentAuthConfigService, AgentAuthSelectionRequired};
+use crate::domains::agents::auth::{AgentAuthConfigService, AgentAuthSelectionRequired};
 use crate::domains::agents::model_registry::store::DynamicModelRegistryStore;
 use crate::domains::workspaces::store::WorkspaceStore;
 

@@ -13,7 +13,7 @@ use axum::{
 
 use crate::app::AppState;
 use crate::domains::agents::installer::{InstallError, InstalledArtifactResult};
-use crate::domains::agents::auth_config::login_terminal::{
+use crate::domains::agents::auth::login_terminal::{
     close_agent_login_terminal as close_agent_login_terminal_session,
     get_agent_login_terminal as get_agent_login_terminal_session,
     start_agent_login_terminal_session,
@@ -21,10 +21,10 @@ use crate::domains::agents::auth_config::login_terminal::{
     AgentLoginTerminalStatus as InternalAgentLoginTerminalStatus,
 };
 use crate::domains::agents::model::*;
-use crate::domains::agents::reconcile::execution::{
+use crate::domains::agents::installer::reconcile::execution::{
     AgentReconcileJobSnapshot, AgentReconcileJobStatus,
 };
-use crate::domains::agents::reconcile::{
+use crate::domains::agents::installer::reconcile::{
     AgentReconcileOutcome, AgentReconcileResult as InternalAgentReconcileResult,
 };
 use crate::domains::agents::runtime::{

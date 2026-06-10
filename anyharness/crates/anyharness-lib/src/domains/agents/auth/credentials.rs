@@ -5,7 +5,7 @@ use anyharness_credential_discovery::{
     detect_local_auth_state as discover_local_auth_state, LocalAuthState, ProviderId,
 };
 
-use super::model::{
+use crate::domains::agents::model::{
     AuthReadinessPolicy, AuthSlotSpec, AuthSpec, CredentialDiscoveryKind, CredentialState,
     ResolvedAuthSlot,
 };

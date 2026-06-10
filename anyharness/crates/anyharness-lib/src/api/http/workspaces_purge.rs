@@ -216,7 +216,7 @@ mod tests {
 
     use super::*;
     use crate::app::test_support;
-    use crate::domains::agents::seed::AgentSeedStore;
+    use crate::domains::agents::installer::seed::AgentSeedStore;
     use crate::domains::workspaces::model::{
         WorkspaceCleanupOperation, WorkspaceCleanupState, WorkspaceKind, WorkspaceLifecycleState,
         WorkspaceRecord, WorkspaceSurface,
