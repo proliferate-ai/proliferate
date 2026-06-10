@@ -62,7 +62,7 @@ $(error PROFILE is required. Example: make dev PROFILE=main)
 endif
 endif
 
-.PHONY: dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth server-db-up server-db-wait \
+.PHONY: catalog-view catalog-update dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth server-db-up server-db-wait \
         server-db-down server-db-ready db db-local db-ah server-migrate serve install \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
@@ -811,3 +811,14 @@ clean:
 	rm -rf anyharness/sdk/dist anyharness/sdk/src/generated anyharness/sdk/generated/openapi.json
 	rm -f server/openapi.json
 	rm -rf apps/desktop/dist
+
+# ── agent catalog ────────────────────────────────────────────────────────────
+# View the current catalog draft (rebuild from committed snapshots + open viewer).
+catalog-view:
+	cd scripts/agent-catalog && node build-catalog.mjs && node render-catalog.mjs && open catalog.html
+
+# Re-run the full probe matrix (skips contexts missing credentials; reads
+# .probe-secrets.env at the repo root), then rebuild and open the viewer.
+catalog-update:
+	./scripts/agent-catalog/run-probes.sh
+	$(MAKE) catalog-view

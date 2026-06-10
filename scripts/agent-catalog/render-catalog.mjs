@@ -7,9 +7,75 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { execSync } from "node:child_process";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const catalog = JSON.parse(readFileSync(join(here, "catalog.draft.json"), "utf8"));
+
+// ── diff vs baseline (default: the draft committed on origin/main) ─────────
+let DIFF_BASE = null;
+let baseline = null;
+// Default: diff against origin/main's committed draft; before it exists
+// there (pre-merge), fall back to HEAD so local re-probes still diff.
+for (const ref of [process.env.CATALOG_DIFF_BASE, "origin/main", "HEAD"].filter(Boolean)) {
+  try {
+    baseline = JSON.parse(execSync(
+      `git show ${ref}:scripts/agent-catalog/catalog.draft.json`,
+      { cwd: here, stdio: ["ignore", "pipe", "ignore"] },
+    ).toString());
+    DIFF_BASE = ref;
+    break;
+  } catch { /* try next ref */ }
+}
+
+function modelFingerprint(m) {
+  return JSON.stringify({
+    a: [...(m.availability.anyOf ?? [])].sort(),
+    v: m.defaultVisible,
+    c: Object.fromEntries(Object.entries(m.controls).map(([k, c]) => [k, [...c.values].sort()])),
+  });
+}
+
+function describeChange(prev, cur) {
+  const parts = [];
+  const pa = new Set(prev.availability.anyOf ?? []), ca = new Set(cur.availability.anyOf ?? []);
+  const aAdd = [...ca].filter((x) => !pa.has(x)), aDel = [...pa].filter((x) => !ca.has(x));
+  if (aAdd.length || aDel.length)
+    parts.push("availability " + [...aAdd.map((x) => "+" + x), ...aDel.map((x) => "−" + x)].join(" "));
+  if (prev.defaultVisible !== cur.defaultVisible)
+    parts.push(cur.defaultVisible ? "now on menu" : "left the menu");
+  for (const key of new Set([...Object.keys(prev.controls), ...Object.keys(cur.controls)])) {
+    const pv = new Set(prev.controls[key]?.values ?? []), cv = new Set(cur.controls[key]?.values ?? []);
+    const add = [...cv].filter((x) => !pv.has(x)), del = [...pv].filter((x) => !cv.has(x));
+    if (add.length || del.length)
+      parts.push(key + " " + [...add.map((x) => "+" + x), ...del.map((x) => "−" + x)].join(" "));
+  }
+  return parts.join("; ");
+}
+
+// Annotate the catalog in place: m.diff = {status: 'new'|'changed', detail?}
+// and agent.removedModels = rows present on the baseline but gone now.
+if (baseline) {
+  const baseAgents = new Map(baseline.agents.map((a) => [a.kind, a]));
+  for (const agent of catalog.agents) {
+    const baseModels = new Map((baseAgents.get(agent.kind)?.session.models ?? []).map((m) => [m.id, m]));
+    for (const m of agent.session.models) {
+      const prev = baseModels.get(m.id);
+      if (!prev) m.diff = { status: "new" };
+      else if (modelFingerprint(prev) !== modelFingerprint(m))
+        m.diff = { status: "changed", detail: describeChange(prev, m) };
+      baseModels.delete(m.id);
+    }
+    agent.removedModels = [...baseModels.values()];
+  }
+  for (const [kind, baseAgent] of baseAgents) {
+    if (!catalog.agents.some((a) => a.kind === kind)) {
+      catalog.agents.push({ ...baseAgent, session: { ...baseAgent.session, models: [] },
+        removedModels: baseAgent.session.models, removedAgent: true });
+    }
+  }
+}
+const DIFF_INFO = baseline ? DIFF_BASE : null;
 
 const html = `<!doctype html>
 <html lang="en">
@@ -100,7 +166,7 @@ const html = `<!doctype html>
 <div class="wrap">
 <header>
   <h1>Agent Catalog</h1>
-  <div class="sub">${catalog.catalogVersion} · schema v${catalog.schemaVersion} · generated ${catalog.generatedAt.slice(0, 16).replace("T", " ")}</div>
+  <div class="sub">${catalog.catalogVersion} · schema v${catalog.schemaVersion} · generated ${catalog.generatedAt.slice(0, 16).replace("T", " ")}${DIFF_INFO ? ` · diffed against ${DIFF_INFO}` : ""}</div>
   <div class="stats">
     <div class="s"><b>${catalog.agents.length}</b><span>harnesses</span></div>
     <div class="s"><b>${catalog.agents.reduce((n, a) => n + a.session.models.length, 0)}</b><span>model rows</span></div>
@@ -110,6 +176,7 @@ const html = `<!doctype html>
 <div class="toolbar">
   <input id="search" type="search" placeholder="Search models, ids, controls, contexts…">
   <label class="toggle"><input type="checkbox" id="visonly"> on-menu only</label>
+  <label class="toggle" id="diffonlywrap" style="display:none"><input type="checkbox" id="diffonly"> changes only</label>
   <span class="stat" id="stat"></span>
 </div>
 <div id="agents"></div>
@@ -137,9 +204,18 @@ function hay(m) {
     Object.entries(m.controls).map(([k, c]) => k + ' ' + c.values.join(' ')).join(' ')].join(' ').toLowerCase();
 }
 
+function diffChip(m) {
+  if (m.removed) return '<span class="dchip removed">removed</span>';
+  if (m.diff?.status === 'new') return '<span class="dchip new">new</span>';
+  if (m.diff?.status === 'changed')
+    return '<span class="dchip changed" title="' + esc(m.diff.detail || '') + '">changed</span>';
+  return '';
+}
+
 function modelRow(agent, m) {
-  return '<tr class="model" data-visible="' + m.defaultVisible + '" data-hay="' + esc(hay(m)) + '">' +
-    '<td><span class="name">' + esc(m.displayName) + '</span>' +
+  return '<tr class="model' + (m.removed ? ' removedrow' : '') + '" data-visible="' + m.defaultVisible +
+    '" data-diff="' + (m.removed ? 'removed' : (m.diff?.status ?? '')) + '" data-hay="' + esc(hay(m)) + '">' +
+    '<td><span class="name">' + esc(m.displayName) + '</span>' + diffChip(m) +
     (m.provenance?.viaTrialOnly ? '<span class="trial" title="' + TRIAL_TIP + '">trial-verified</span>' : '') +
     '<div class="id mono">' + esc(m.id) + '</div>' +
     (m.description ? '<div class="desc">' + esc(m.description) + '</div>' : '') + '</td>' +
@@ -154,6 +230,7 @@ function render() {
     const models = agent.session.models;
     const onMenu = models.filter(m => m.defaultVisible);
     const hidden = models.filter(m => !m.defaultVisible);
+    const removed = (agent.removedModels ?? []).map(m => ({ ...m, removed: true }));
     const det = document.createElement('details');
     det.className = 'agent';
     det.innerHTML =
@@ -163,6 +240,13 @@ function render() {
       '<span class="counts"><span data-count></span>' +
       '<span><b>' + onMenu.length + '</b> on menu</span>' +
       (hidden.length ? '<span><b>' + hidden.length + '</b> hidden</span>' : '') +
+      (function(){
+        const n = models.filter(m => m.diff?.status === 'new').length;
+        const c = models.filter(m => m.diff?.status === 'changed').length;
+        const r = removed.length;
+        return (n || c || r) ? '<span class="dsum">' +
+          [n && ('+' + n), c && ('~' + c), r && ('−' + r)].filter(Boolean).join(' ') + '</span>' : '';
+      })() +
       '</span></summary>' +
       '<div class="cardmeta">' +
       '<div class="metarow"><span class="lbl">Auth contexts</span><span>' +
@@ -178,6 +262,8 @@ function render() {
       onMenu.map(m => modelRow(agent, m)).join('') +
       (hidden.length ? '<tr class="divider"><td colspan="3">Hidden — available but not advertised</td></tr>' : '') +
       hidden.map(m => modelRow(agent, m)).join('') +
+      (removed.length ? '<tr class="divider"><td colspan="3">Removed since baseline</td></tr>' : '') +
+      removed.map(m => modelRow(agent, m)).join('') +
       '</tbody></table>';
     root.appendChild(det);
   }
@@ -187,12 +273,15 @@ function render() {
 function applyFilter() {
   const q = document.getElementById('search').value.trim().toLowerCase();
   const visOnly = document.getElementById('visonly').checked;
+  const diffOnly = document.getElementById('diffonly')?.checked;
   let shownTotal = 0, total = 0;
   for (const det of document.querySelectorAll('details.agent')) {
     let shown = 0, count = 0, hiddenShown = 0;
     for (const row of det.querySelectorAll('tr.model')) {
       count++;
-      const ok = (!q || row.dataset.hay.includes(q)) && (!visOnly || row.dataset.visible === 'true');
+      const ok = (!q || row.dataset.hay.includes(q))
+        && (!visOnly || row.dataset.visible === 'true')
+        && (!diffOnly || row.dataset.diff !== '');
       row.classList.toggle('hidden', !ok);
       if (ok) { shown++; if (row.dataset.visible !== 'true') hiddenShown++; }
     }
@@ -201,7 +290,7 @@ function applyFilter() {
     det.querySelector('[data-count]').textContent =
       shown === count ? count + ' models' : shown + ' of ' + count;
     det.style.display = shown ? '' : 'none';
-    det.open = (q || visOnly) ? shown > 0 : false;
+    det.open = (q || visOnly || diffOnly) ? shown > 0 : false;
     shownTotal += shown; total += count;
   }
   document.getElementById('stat').textContent =
@@ -210,6 +299,12 @@ function applyFilter() {
 
 document.getElementById('search').addEventListener('input', applyFilter);
 document.getElementById('visonly').addEventListener('change', applyFilter);
+const hasDiff = CATALOG.agents.some(a => (a.removedModels?.length) || a.session.models.some(m => m.diff));
+if (${DIFF_INFO ? "true" : "false"}) {
+  document.getElementById('diffonlywrap').style.display = '';
+  document.getElementById('diffonly').addEventListener('change', applyFilter);
+  if (hasDiff) document.getElementById('diffonly').checked = true;
+}
 render();
 </script>
 </body>
