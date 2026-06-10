@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use anyharness_contract::v1::{
-    ConfigApplyState, PendingInteractionSummary, ProposedPlanDecisionState, SessionEventEnvelope,
+    ConfigApplyState, PendingInteractionSummary, SessionEventEnvelope,
     SessionExecutionPhase, SessionExecutionSummary,
 };
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
@@ -13,8 +13,6 @@ pub use crate::live::sessions::actor::command::{
     SetConfigOptionCommandError,
 };
 
-use crate::domains::plans::model::PlanRecord;
-use crate::domains::plans::service::PlanDecisionError;
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionError, RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
@@ -149,7 +147,10 @@ impl LiveSessionHandle {
         execution.updated_at = chrono::Utc::now().to_rfc3339();
     }
 
-    pub(in crate::live::sessions) async fn link_pending_interaction_to_plan(
+    /// Mirror a plan linkage into the pending-interaction snapshot. Safe to
+    /// call after resolution (no-op when the interaction is gone); used by
+    /// the plans runtime after a decision op reports a (re)link.
+    pub async fn link_pending_interaction_to_plan(
         &self,
         request_id: &str,
         plan_id: &str,
@@ -300,19 +301,19 @@ impl LiveSessionHandle {
         })
     }
 
-    pub async fn apply_plan_decision(
+    /// Submit a [`SessionDomainOp`](crate::live::sessions::model::SessionDomainOp)
+    /// to run serialized through the actor loop. The caller downcasts the
+    /// boxed reply to the op's concrete output type.
+    pub async fn run_domain_op(
         &self,
-        plan_id: String,
-        expected_version: i64,
-        decision: ProposedPlanDecisionState,
-    ) -> Result<PlanRecord, LiveSessionCommandError<PlanDecisionError>> {
-        self.send_request(|respond_to| SessionCommand::ApplyPlanDecision {
-            plan_id,
-            expected_version,
-            decision,
-            respond_to,
-        })
-        .await
+        op: Box<dyn crate::live::sessions::model::SessionDomainOp>,
+    ) -> Result<Box<dyn std::any::Any + Send>, LiveSessionCommandError<std::convert::Infallible>> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.command_tx
+            .send(SessionCommand::RunDomainOp { op, respond_to: tx })
+            .await
+            .map_err(|_| LiveSessionCommandError::ActorUnavailable)?;
+        rx.await.map_err(|_| LiveSessionCommandError::ResponseDropped)
     }
 
     pub async fn verify_fork_ready(

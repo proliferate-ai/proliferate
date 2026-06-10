@@ -5,7 +5,7 @@ use serde::Serialize;
 use serde_json::value::RawValue;
 use tokio::sync::{mpsc, Mutex};
 
-use crate::domains::plans::service::PlanService;
+use crate::live::sessions::model::PermissionAdvisor;
 use crate::live::sessions::sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::live::sessions::rendezvous::broker::InteractionRendezvous;
@@ -24,7 +24,9 @@ pub struct RuntimeClient {
     pub interaction_broker: Arc<InteractionRendezvous>,
     pub event_sink: Arc<Mutex<SessionEventSink>>,
     pub live_session_handle: Arc<LiveSessionHandle>,
-    pub plan_service: Arc<PlanService>,
+    pub workspace_id: String,
+    pub agent_kind: String,
+    pub permission_advisor: Option<Arc<dyn PermissionAdvisor>>,
 }
 
 impl RuntimeClient {
@@ -34,7 +36,9 @@ impl RuntimeClient {
         interaction_broker: Arc<InteractionRendezvous>,
         event_sink: Arc<Mutex<SessionEventSink>>,
         live_session_handle: Arc<LiveSessionHandle>,
-        plan_service: Arc<PlanService>,
+        workspace_id: String,
+        agent_kind: String,
+        permission_advisor: Option<Arc<dyn PermissionAdvisor>>,
     ) -> Self {
         Self {
             session_id,
@@ -42,7 +46,9 @@ impl RuntimeClient {
             interaction_broker,
             event_sink,
             live_session_handle,
-            plan_service,
+            workspace_id,
+            agent_kind,
+            permission_advisor,
         }
     }
 

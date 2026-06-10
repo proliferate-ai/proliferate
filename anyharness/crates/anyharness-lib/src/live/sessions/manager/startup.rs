@@ -117,12 +117,8 @@ impl LiveSessionManager {
             agent_auth_env,
             protected_agent_auth_env,
             interaction_broker: self.interaction_broker.clone(),
-            plan_service: self.plan_service.clone(),
-            review_service: self
-                .review_service
-                .read()
-                .ok()
-                .and_then(|guard| guard.clone()),
+            observers: self.observers.clone(),
+            permission_advisor: self.permission_advisor.clone(),
             event_tx,
             session_store,
             attachment_storage,

@@ -14,7 +14,6 @@ use crate::domains::agents::model::{
     AgentKind, ArtifactRole, CredentialState, ResolvedAgent, ResolvedAgentStatus, ResolvedArtifact,
 };
 use crate::domains::agents::registry::built_in_registry;
-use crate::domains::plans::{service::PlanService, store::PlanStore};
 use crate::domains::sessions::attachment_storage::PromptAttachmentStorage;
 use crate::domains::sessions::model::{SessionEventRecord, SessionRecord};
 use crate::domains::sessions::runtime_event::RuntimeInjectedSessionEvent;
@@ -115,8 +114,7 @@ fn subagent_turn_completed_event() -> RuntimeInjectedSessionEvent {
 
 #[tokio::test]
 async fn reused_live_handle_reports_the_live_native_session_id() {
-    let plan_db = Db::open_in_memory().expect("open plan db");
-    let manager = LiveSessionManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+    let manager = LiveSessionManager::new(Vec::new(), None);
     let (command_tx, _command_rx) = mpsc::channel(4);
     let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
     let handle = Arc::new(LiveSessionHandle::new_for_test(
@@ -159,8 +157,7 @@ async fn reused_live_handle_reports_the_live_native_session_id() {
 
 #[tokio::test]
 async fn reused_pending_live_handle_waits_for_shared_startup_readiness() {
-    let plan_db = Db::open_in_memory().expect("open plan db");
-    let manager = LiveSessionManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+    let manager = LiveSessionManager::new(Vec::new(), None);
     let (command_tx, _command_rx) = mpsc::channel(4);
     let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
     let handle = Arc::new(LiveSessionHandle::new_for_test(
@@ -224,8 +221,7 @@ async fn reused_pending_live_handle_waits_for_shared_startup_readiness() {
 
 #[tokio::test]
 async fn blocking_remove_discards_live_and_pending_handles() {
-    let plan_db = Db::open_in_memory().expect("open plan db");
-    let manager = LiveSessionManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+    let manager = LiveSessionManager::new(Vec::new(), None);
     let (command_tx, _command_rx) = mpsc::channel(4);
     let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);
     let handle = Arc::new(LiveSessionHandle::new_for_test(
@@ -270,8 +266,7 @@ async fn blocking_remove_discards_live_and_pending_handles() {
 
 #[tokio::test]
 async fn offline_runtime_event_injection_appends_with_next_sequence() {
-    let plan_db = Db::open_in_memory().expect("open plan db");
-    let manager = LiveSessionManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+    let manager = LiveSessionManager::new(Vec::new(), None);
     let store = seeded_session_store();
     store
         .append_event(&SessionEventRecord {
@@ -314,8 +309,7 @@ async fn offline_runtime_event_injection_appends_with_next_sequence() {
 
 #[tokio::test]
 async fn offline_runtime_activity_event_touches_session_updated_at() {
-    let plan_db = Db::open_in_memory().expect("open plan db");
-    let manager = LiveSessionManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+    let manager = LiveSessionManager::new(Vec::new(), None);
     let store = seeded_session_store();
 
     let envelope = manager
@@ -335,8 +329,7 @@ async fn offline_runtime_activity_event_touches_session_updated_at() {
 
 #[tokio::test]
 async fn offline_runtime_event_injection_serializes_concurrent_appends() {
-    let plan_db = Db::open_in_memory().expect("open plan db");
-    let manager = LiveSessionManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+    let manager = LiveSessionManager::new(Vec::new(), None);
     let store = seeded_session_store();
 
     let first = manager.emit_runtime_event(
@@ -373,8 +366,7 @@ async fn offline_runtime_event_injection_serializes_concurrent_appends() {
 
 #[tokio::test]
 async fn runtime_event_injection_falls_back_when_live_handle_is_stale() {
-    let plan_db = Db::open_in_memory().expect("open plan db");
-    let manager = LiveSessionManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+    let manager = LiveSessionManager::new(Vec::new(), None);
     let store = seeded_session_store();
     let (command_tx, command_rx) = mpsc::channel(1);
     drop(command_rx);
@@ -418,8 +410,7 @@ async fn runtime_event_injection_falls_back_when_live_handle_is_stale() {
 
 #[tokio::test]
 async fn live_runtime_event_injection_routes_through_actor_command() {
-    let plan_db = Db::open_in_memory().expect("open plan db");
-    let manager = LiveSessionManager::new(Arc::new(PlanService::new(PlanStore::new(plan_db))));
+    let manager = LiveSessionManager::new(Vec::new(), None);
     let store = seeded_session_store();
     let (command_tx, mut command_rx) = mpsc::channel(4);
     let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(4);

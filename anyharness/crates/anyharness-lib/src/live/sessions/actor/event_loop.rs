@@ -8,8 +8,7 @@ use crate::live::sessions::actor::command::{Resolution, SessionCommand};
 use crate::live::sessions::actor::config::handle::handle_idle_config_command;
 use crate::live::sessions::actor::fork::handle::handle_idle_fork_lifecycle_command;
 use crate::live::sessions::actor::interactions::cleanup::resolve_pending_interactions;
-use crate::live::sessions::actor::interactions::handle::handle_resolve_interaction;
-use crate::live::sessions::actor::interactions::plan_decisions::handle_apply_plan_decision;
+use crate::live::sessions::actor::interactions::handle::{handle_resolve_interaction, run_domain_op};
 use crate::live::sessions::actor::notifications::dispatch::inject_runtime_event;
 use crate::live::sessions::actor::notifications::handle::handle_notification_with_resume_replay_filter;
 use crate::live::sessions::actor::shutdown::handle::finalize_established_actor_exit;
@@ -107,16 +106,15 @@ pub(in crate::live::sessions::actor) async fn run_actor(
                         .await;
                         let _ = respond_to.send(result);
                     }
-                    Some(SessionCommand::ApplyPlanDecision { plan_id, expected_version, decision, respond_to }) => {
-                        let result = handle_apply_plan_decision(
+                    Some(SessionCommand::RunDomainOp { op, respond_to }) => {
+                        let result = run_domain_op(
                             &handle,
                             &event_sink,
                             &config.interaction_broker,
-                            config.plan_service.as_ref(),
                             &session_id,
-                            &plan_id,
-                            expected_version,
-                            decision,
+                            &workspace_id,
+                            &source_agent_kind,
+                            op,
                         )
                         .await;
                         let _ = respond_to.send(result);
@@ -216,8 +214,7 @@ pub(in crate::live::sessions::actor) async fn run_actor(
                         &session_id,
                         &workspace_id,
                         &source_agent_kind,
-                        config.plan_service.clone(),
-                        config.review_service.clone(),
+                        &config.observers,
                         &mut persisted_config_state,
                         &mut startup_state,
                     ).await;
