@@ -372,7 +372,7 @@ async fn run_enumeration(
                 ))
                 .await
             {
-                Ok(response) => Some(serde_json::to_value(&response.config_options)?),
+                Ok(response) => Some(elided(serde_json::to_value(&response.config_options)?)),
                 Err(error) => {
                     warnings.push(format!(
                         "set_session_config_option({config_id}={model_id}) failed: {error}"
@@ -392,7 +392,9 @@ async fn run_enumeration(
                     match await_config_option_update(notification_rx, options.model_switch_timeout)
                         .await
                     {
-                        Some(config_options) => Some(serde_json::to_value(&config_options)?),
+                        Some(config_options) => {
+                            Some(elided(serde_json::to_value(&config_options)?))
+                        }
                         None => {
                             warnings.push(format!(
                                 "no ConfigOptionUpdate within {:?} after switching to {model_id}",
@@ -463,6 +465,27 @@ async fn run_enumeration(
 
 fn drain_pending(notification_rx: &mut mpsc::UnboundedReceiver<acp::SessionNotification>) {
     while notification_rx.try_recv().is_ok() {}
+}
+
+/// Per-model captures repeat the self-referential `model` select with the
+/// FULL model list as values — quadratic snapshot bloat with zero
+/// information (the baseline capture keeps the complete list). Elide those
+/// values in per-model captures, keeping the option + currentValue for
+/// switch verification.
+fn elided(mut config_options: serde_json::Value) -> serde_json::Value {
+    if let Some(options) = config_options.as_array_mut() {
+        for option in options {
+            let is_model = option.get("id").and_then(|v| v.as_str()) == Some("model")
+                || option.get("category").and_then(|v| v.as_str()) == Some("model");
+            if is_model {
+                if let Some(object) = option.as_object_mut() {
+                    object.insert("options".to_string(), serde_json::Value::Array(Vec::new()));
+                    object.insert("valuesElided".to_string(), serde_json::Value::Bool(true));
+                }
+            }
+        }
+    }
+    config_options
 }
 
 /// Extract (config_id, [(model_id, name, description)]) from a `model`

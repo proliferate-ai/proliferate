@@ -229,39 +229,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -371,39 +341,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -513,39 +453,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -655,39 +565,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -797,39 +677,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -939,39 +789,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -1081,39 +901,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -1223,39 +1013,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -1365,39 +1125,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -1507,39 +1237,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -1649,39 +1349,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -1791,39 +1461,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -1933,39 +1573,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -2075,39 +1685,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -2217,39 +1797,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -2359,39 +1909,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -2501,39 +2021,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -2643,39 +2133,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -2785,39 +2245,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -2927,39 +2357,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -3069,39 +2469,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -3211,39 +2581,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -3353,39 +2693,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -3495,39 +2805,9 @@
           "description": "Choose which model Codex should use",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "description": "Coding-optimized model.",
-              "name": "gpt-5.3-codex",
-              "value": "gpt-5.3-codex"
-            },
-            {
-              "description": "Frontier model for complex coding, research, and real-world work.",
-              "name": "GPT-5.5",
-              "value": "gpt-5.5"
-            },
-            {
-              "description": "Optimized for professional work and long-running agents.",
-              "name": "gpt-5.2",
-              "value": "gpt-5.2"
-            },
-            {
-              "description": "Strong model for everyday coding.",
-              "name": "GPT-5.4",
-              "value": "gpt-5.4"
-            },
-            {
-              "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
-              "name": "GPT-5.4-Mini",
-              "value": "gpt-5.4-mini"
-            },
-            {
-              "description": "Ultra-fast coding model.",
-              "name": "GPT-5.3-Codex-Spark",
-              "value": "gpt-5.3-codex-spark"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",

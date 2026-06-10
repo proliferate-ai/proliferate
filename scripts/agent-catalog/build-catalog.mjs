@@ -43,9 +43,13 @@ for (const { name, data } of snapshots) {
 // ---- helpers ---------------------------------------------------------------
 function selectValues(option) {
   const raw = option.options;
-  if (Array.isArray(raw)) return raw.map((v) => v.value);
-  if (raw && Array.isArray(raw.grouped)) return raw.grouped.flatMap((g) => g.options.map((v) => v.value));
-  return [];
+  if (!Array.isArray(raw)) return [];
+  // Untagged enum: entries are select options ({value, name}) or groups
+  // ({..., options: [...]}); flatten both shapes.
+  return raw.flatMap((entry) =>
+    entry?.value !== undefined ? [entry.value]
+    : Array.isArray(entry?.options) ? entry.options.map((v) => v.value)
+    : []);
 }
 
 function isModelOption(option) {

@@ -72,29 +72,9 @@
           "currentValue": "opencode/big-pickle",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "name": "OpenCode Zen/Big Pickle",
-              "value": "opencode/big-pickle"
-            },
-            {
-              "name": "OpenCode Zen/DeepSeek V4 Flash Free",
-              "value": "opencode/deepseek-v4-flash-free"
-            },
-            {
-              "name": "OpenCode Zen/MiMo V2.5 Free",
-              "value": "opencode/mimo-v2.5-free"
-            },
-            {
-              "name": "OpenCode Zen/MiniMax M3 Free",
-              "value": "opencode/minimax-m3-free"
-            },
-            {
-              "name": "OpenCode Zen/Nemotron 3 Ultra Free",
-              "value": "opencode/nemotron-3-ultra-free"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "mode",
@@ -127,29 +107,9 @@
           "currentValue": "opencode/deepseek-v4-flash-free",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "name": "OpenCode Zen/Big Pickle",
-              "value": "opencode/big-pickle"
-            },
-            {
-              "name": "OpenCode Zen/DeepSeek V4 Flash Free",
-              "value": "opencode/deepseek-v4-flash-free"
-            },
-            {
-              "name": "OpenCode Zen/MiMo V2.5 Free",
-              "value": "opencode/mimo-v2.5-free"
-            },
-            {
-              "name": "OpenCode Zen/MiniMax M3 Free",
-              "value": "opencode/minimax-m3-free"
-            },
-            {
-              "name": "OpenCode Zen/Nemotron 3 Ultra Free",
-              "value": "opencode/nemotron-3-ultra-free"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -208,29 +168,9 @@
           "currentValue": "opencode/mimo-v2.5-free",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "name": "OpenCode Zen/Big Pickle",
-              "value": "opencode/big-pickle"
-            },
-            {
-              "name": "OpenCode Zen/DeepSeek V4 Flash Free",
-              "value": "opencode/deepseek-v4-flash-free"
-            },
-            {
-              "name": "OpenCode Zen/MiMo V2.5 Free",
-              "value": "opencode/mimo-v2.5-free"
-            },
-            {
-              "name": "OpenCode Zen/MiniMax M3 Free",
-              "value": "opencode/minimax-m3-free"
-            },
-            {
-              "name": "OpenCode Zen/Nemotron 3 Ultra Free",
-              "value": "opencode/nemotron-3-ultra-free"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",
@@ -285,29 +225,9 @@
           "currentValue": "opencode/minimax-m3-free",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "name": "OpenCode Zen/Big Pickle",
-              "value": "opencode/big-pickle"
-            },
-            {
-              "name": "OpenCode Zen/DeepSeek V4 Flash Free",
-              "value": "opencode/deepseek-v4-flash-free"
-            },
-            {
-              "name": "OpenCode Zen/MiMo V2.5 Free",
-              "value": "opencode/mimo-v2.5-free"
-            },
-            {
-              "name": "OpenCode Zen/MiniMax M3 Free",
-              "value": "opencode/minimax-m3-free"
-            },
-            {
-              "name": "OpenCode Zen/Nemotron 3 Ultra Free",
-              "value": "opencode/nemotron-3-ultra-free"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "mode",
@@ -340,29 +260,9 @@
           "currentValue": "opencode/nemotron-3-ultra-free",
           "id": "model",
           "name": "Model",
-          "options": [
-            {
-              "name": "OpenCode Zen/Big Pickle",
-              "value": "opencode/big-pickle"
-            },
-            {
-              "name": "OpenCode Zen/DeepSeek V4 Flash Free",
-              "value": "opencode/deepseek-v4-flash-free"
-            },
-            {
-              "name": "OpenCode Zen/MiMo V2.5 Free",
-              "value": "opencode/mimo-v2.5-free"
-            },
-            {
-              "name": "OpenCode Zen/MiniMax M3 Free",
-              "value": "opencode/minimax-m3-free"
-            },
-            {
-              "name": "OpenCode Zen/Nemotron 3 Ultra Free",
-              "value": "opencode/nemotron-3-ultra-free"
-            }
-          ],
-          "type": "select"
+          "options": [],
+          "type": "select",
+          "valuesElided": true
         },
         {
           "category": "thought_level",

@@ -121,7 +121,7 @@ const html = `<!doctype html>
 </div>
 </div>
 <script>
-const CATALOG = ${JSON.stringify(catalog)};
+const CATALOG = ${JSON.stringify(catalog).replace(/<\//g, '<\\/')};
 const TRIAL_TIP = 'Not on any advertised menu — availability proven by seeding the harness config with this id and completing a real inference turn.';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));

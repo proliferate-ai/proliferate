@@ -45,8 +45,13 @@ pub struct CatalogProbeArgs {
 pub async fn run(args: CatalogProbeArgs) -> Result<()> {
     let agent_kind = AgentKind::parse(&args.agent)
         .ok_or_else(|| anyhow!("unknown agent kind `{}`", args.agent))?;
+    if !args.trial_models.is_empty() && agent_kind != AgentKind::Claude {
+        anyhow::bail!("--trial-model is currently supported for claude only");
+    }
     let secrets = ProbeSecrets::capture_and_scrub();
-    let auth_env = auth_env_for_context(&secrets, &agent_kind, &args.auth_context)?;
+    let mut isolation_dirs = IsolationDirs::default();
+    let auth_env =
+        auth_env_for_context(&secrets, &agent_kind, &args.auth_context, &mut isolation_dirs)?;
 
     let runtime_home = args
         .runtime_home
@@ -72,10 +77,8 @@ pub async fn run(args: CatalogProbeArgs) -> Result<()> {
     // the harness config seeded to select it. Accepted = the harness lists
     // or selects the id; the menu-read in `snapshot` is unaffected.
     for trial_id in &args.trial_models {
-        if agent_kind != AgentKind::Claude {
-            anyhow::bail!("--trial-model is currently supported for claude only");
-        }
-        let mut trial_env = auth_env_for_context(&secrets, &agent_kind, &args.auth_context)?;
+        let mut trial_env =
+            auth_env_for_context(&secrets, &agent_kind, &args.auth_context, &mut isolation_dirs)?;
         let config_dir = trial_env
             .get("CLAUDE_CONFIG_DIR")
             .cloned()
@@ -167,17 +170,31 @@ fn print_summary(snapshot: &ProbeSnapshot, out_path: &std::path::Path) {
     println!("wrote {}", out_path.display());
 }
 
+/// Isolation roots created for this invocation; removed on drop (any exit
+/// path) so credential copies never persist in temp dirs.
+#[derive(Default)]
+struct IsolationDirs(Vec<PathBuf>);
+
+impl Drop for IsolationDirs {
+    fn drop(&mut self) {
+        for dir in &self.0 {
+            let _ = std::fs::remove_dir_all(dir);
+        }
+    }
+}
+
 fn auth_env_for_context(
     secrets: &ProbeSecrets,
     agent_kind: &AgentKind,
     auth_context: &str,
+    isolation_dirs: &mut IsolationDirs,
 ) -> Result<BTreeMap<String, String>> {
     match (agent_kind, auth_context) {
         (AgentKind::Claude, "anthropic-api") => {
             // Isolate the Claude config dir so machine-local settings
             // (default model, effort preference) can't pollute observed
             // values; mirrors production's gateway CLAUDE_CONFIG_DIR usage.
-            let mut env = isolation_env(auth_context, &[("CLAUDE_CONFIG_DIR", "claude-config")])?;
+            let mut env = isolation_env(auth_context, &[("CLAUDE_CONFIG_DIR", "claude-config")], isolation_dirs)?;
             // Optional config preset: seed the isolated config dir with a
             // settings.json (experiments / future per-context config presets).
             if let Ok(settings_json) = std::env::var("PROBE_CLAUDE_SETTINGS_JSON") {
@@ -195,7 +212,7 @@ fn auth_env_for_context(
         // ~/.claude/.credentials.json). We copy it into an isolated config
         // dir so nothing else from the machine leaks in.
         (AgentKind::Claude, "anthropic-oauth") => {
-            let mut env = isolation_env(auth_context, &[("CLAUDE_CONFIG_DIR", "claude-config")])?;
+            let mut env = isolation_env(auth_context, &[("CLAUDE_CONFIG_DIR", "claude-config")], isolation_dirs)?;
             if let Ok(token) = secrets.require("CLAUDE_CODE_OAUTH_TOKEN") {
                 // Long-lived token from `claude setup-token`.
                 env.insert("CLAUDE_CODE_OAUTH_TOKEN".to_string(), token);
@@ -219,20 +236,20 @@ fn auth_env_for_context(
         // storage (XDG dirs), so every opencode context isolates those dirs —
         // otherwise machine-local opencode.jsonc / auth.json would pollute the
         // auth attribution.
-        (AgentKind::OpenCode, "baseline") => opencode_isolation_env(auth_context),
+        (AgentKind::OpenCode, "baseline") => opencode_isolation_env(auth_context, isolation_dirs),
         (AgentKind::OpenCode, "anthropic-api") => {
-            let mut env = opencode_isolation_env(auth_context)?;
+            let mut env = opencode_isolation_env(auth_context, isolation_dirs)?;
             env.insert("ANTHROPIC_API_KEY".to_string(), secrets.require("ANTHROPIC_API_KEY")?);
             Ok(env)
         }
         (AgentKind::OpenCode, "openai-api") => {
-            let mut env = opencode_isolation_env(auth_context)?;
+            let mut env = opencode_isolation_env(auth_context, isolation_dirs)?;
             env.insert("OPENAI_API_KEY".to_string(), secrets.require("OPENAI_API_KEY")?);
             Ok(env)
         }
         (AgentKind::OpenCode, "gemini-api") => {
             let key = secrets.require("GEMINI_API_KEY")?;
-            let mut env = opencode_isolation_env(auth_context)?;
+            let mut env = opencode_isolation_env(auth_context, isolation_dirs)?;
             // opencode's google provider scans either var; set both.
             env.insert("GEMINI_API_KEY".to_string(), key.clone());
             env.insert("GOOGLE_GENERATIVE_AI_API_KEY".to_string(), key);
@@ -242,7 +259,7 @@ fn auth_env_for_context(
         // isolated CODEX_HOME the same way production launch_env does.
         (AgentKind::Codex, "openai-api") => {
             let key = secrets.require("OPENAI_API_KEY")?;
-            let mut env = isolation_env(auth_context, &[("CODEX_HOME", "codex-home")])?;
+            let mut env = isolation_env(auth_context, &[("CODEX_HOME", "codex-home")], isolation_dirs)?;
             let codex_home = env.get("CODEX_HOME").expect("codex isolation dir");
             std::fs::write(
                 std::path::Path::new(codex_home).join("auth.json"),
@@ -263,7 +280,7 @@ fn auth_env_for_context(
             if !std::path::Path::new(&source).exists() {
                 bail!("openai-oauth requires a logged-in codex auth.json (run `codex login`); not found at {source}");
             }
-            let env = isolation_env(auth_context, &[("CODEX_HOME", "codex-home")])?;
+            let env = isolation_env(auth_context, &[("CODEX_HOME", "codex-home")], isolation_dirs)?;
             let codex_home = env.get("CODEX_HOME").expect("codex isolation dir");
             std::fs::copy(&source, std::path::Path::new(codex_home).join("auth.json"))
                 .with_context(|| format!("failed to copy {source}"))?;
@@ -273,7 +290,7 @@ fn auth_env_for_context(
         // auth-type selection so ACP mode starts non-interactively.
         (AgentKind::Gemini, "gemini-api") => {
             let key = secrets.require("GEMINI_API_KEY")?;
-            let mut env = isolation_env(auth_context, &[("HOME", "home")])?;
+            let mut env = isolation_env(auth_context, &[("HOME", "home")], isolation_dirs)?;
             seed_gemini_settings(env.get("HOME").expect("home"), "gemini-api-key", None)?;
             env.insert("GEMINI_API_KEY".to_string(), key);
             Ok(env)
@@ -288,7 +305,7 @@ fn auth_env_for_context(
             if !std::path::Path::new(&source).exists() {
                 bail!("google-oauth requires gemini oauth creds (run `gemini` and log in); not found at {source}");
             }
-            let env = isolation_env(auth_context, &[("HOME", "home")])?;
+            let env = isolation_env(auth_context, &[("HOME", "home")], isolation_dirs)?;
             seed_gemini_settings(env.get("HOME").expect("home"), "oauth-personal", Some(&source))?;
             Ok(env)
         }
@@ -357,15 +374,28 @@ fn trial_model_name(baseline_config_options: &serde_json::Value, model_id: &str)
         option.get("id").and_then(|v| v.as_str()) == Some("model")
             || option.get("category").and_then(|v| v.as_str()) == Some("model")
     })?;
-    let values = model_option.get("options")?.as_array()?;
-    values
+    let raw = model_option.get("options")?.as_array()?;
+    // Entries are either select options ({value, name}) or groups
+    // ({..., options: [...]}); flatten both shapes.
+    let mut entries: Vec<&serde_json::Value> = Vec::new();
+    for entry in raw {
+        if entry.get("value").is_some() {
+            entries.push(entry);
+        } else if let Some(group) = entry.get("options").and_then(|v| v.as_array()) {
+            entries.extend(group.iter());
+        }
+    }
+    entries
         .iter()
         .find(|value| value.get("value").and_then(|v| v.as_str()) == Some(model_id))
         .and_then(|value| value.get("name").and_then(|v| v.as_str()))
         .map(str::to_string)
 }
 
-fn opencode_isolation_env(auth_context: &str) -> Result<BTreeMap<String, String>> {
+fn opencode_isolation_env(
+    auth_context: &str,
+    isolation_dirs: &mut IsolationDirs,
+) -> Result<BTreeMap<String, String>> {
     isolation_env(
         auth_context,
         &[
@@ -374,6 +404,7 @@ fn opencode_isolation_env(auth_context: &str) -> Result<BTreeMap<String, String>
             ("XDG_CACHE_HOME", "cache"),
             ("XDG_STATE_HOME", "state"),
         ],
+        isolation_dirs,
     )
 }
 
@@ -393,7 +424,11 @@ fn seed_gemini_settings(home: &str, auth_type: &str, oauth_creds: Option<&str>) 
     Ok(())
 }
 
-fn isolation_env(auth_context: &str, vars: &[(&str, &str)]) -> Result<BTreeMap<String, String>> {
+fn isolation_env(
+    auth_context: &str,
+    vars: &[(&str, &str)],
+    isolation_dirs: &mut IsolationDirs,
+) -> Result<BTreeMap<String, String>> {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_nanos())
@@ -402,6 +437,7 @@ fn isolation_env(auth_context: &str, vars: &[(&str, &str)]) -> Result<BTreeMap<S
         "anyharness-probe-iso-{auth_context}-{}-{nanos}",
         std::process::id()
     ));
+    isolation_dirs.0.push(base.clone());
     let mut env = BTreeMap::new();
     for (var, dir) in vars {
         let path = base.join(dir);
