@@ -5,7 +5,7 @@ use anyharness_contract::v1::{
 };
 
 use super::{raw_ext_response, RuntimeClient};
-use crate::live::sessions::interactions::mcp_elicitation::{
+use crate::live::sessions::rendezvous::mcp_elicitation::{
     claude_ext_response_from_outcome, normalize_claude_mcp_elicitation,
     normalize_standard_mcp_elicitation, standard_elicitation_response_from_outcome,
     ClaudeMcpElicitationExtParams,

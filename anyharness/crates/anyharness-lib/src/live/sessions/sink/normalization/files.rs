@@ -9,7 +9,7 @@ use super::synthesized_patch::{extract_diff_start_line, synthesize_patch};
 use super::text::{count_lines, extract_preview};
 use anyharness_contract::v1::{ContentPart, FileChangeOperation, FileOpenTarget};
 
-pub(in crate::live::sessions::event_sink) fn normalize_file_parts(
+pub(in crate::live::sessions::sink) fn normalize_file_parts(
     payload: &AcpToolPayload,
     tool_kind: Option<&str>,
     native_tool_name: Option<String>,

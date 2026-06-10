@@ -1,6 +1,6 @@
 pub mod native_session;
 pub mod process;
-pub(in crate::live::sessions) mod runtime_client;
+pub(in crate::live::sessions) mod inbound;
 pub mod shutdown;
 pub mod start;
 pub mod stderr;

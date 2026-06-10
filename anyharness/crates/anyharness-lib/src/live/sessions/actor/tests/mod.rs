@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use super::command::{InteractionResolution, SessionCommand};
+use super::command::{Resolution, SessionCommand};
 use super::config::apply::{
     select_option_current_value_matches, should_apply_model_via_direct_setter,
 };
@@ -36,9 +36,9 @@ use crate::domains::sessions::live_config::{
 use crate::domains::sessions::{model::SessionRecord, store::SessionStore};
 use crate::live::sessions::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
 use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
-use crate::live::sessions::event_sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
+use crate::live::sessions::sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
 use crate::live::sessions::handle::{LiveSessionExecutionSnapshot, LiveSessionHandle};
-use crate::live::sessions::interactions::broker::{InteractionBroker, PermissionOutcome};
+use crate::live::sessions::rendezvous::broker::{InteractionRendezvous, PermissionOutcome};
 use crate::persistence::Db;
 use agent_client_protocol as acp;
 use anyharness_contract::v1::{
@@ -63,7 +63,7 @@ async fn actor_exit_test_context(
 ) -> (
     SessionStore,
     Arc<Mutex<SessionEventSink>>,
-    Arc<InteractionBroker>,
+    Arc<InteractionRendezvous>,
     Arc<LiveSessionHandle>,
 ) {
     let db = Db::open_in_memory().expect("open db");
@@ -110,7 +110,7 @@ async fn actor_exit_test_context(
         SessionExecutionPhase::Running
     };
     let mut execution = LiveSessionExecutionSnapshot::new(phase);
-    let interaction_broker = Arc::new(InteractionBroker::new());
+    let interaction_broker = Arc::new(InteractionRendezvous::new());
     if let Some(pending_interaction) = pending_interaction {
         let request_id = pending_interaction.request_id.clone();
         execution.pending_interactions.push(pending_interaction);

@@ -5,7 +5,7 @@ use tokio::sync::Mutex;
 
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
-use crate::live::sessions::event_sink::SessionEventSink;
+use crate::live::sessions::sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
 
 pub(in crate::live::sessions::actor) async fn persist_exit_disposition(

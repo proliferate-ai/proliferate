@@ -17,7 +17,7 @@ use crate::live::sessions::actor::command::{
     SessionCommand, SetConfigOptionCommandError,
 };
 use crate::live::sessions::actor::spawn::ActorReadyResult;
-use crate::live::sessions::event_sink::publish::publish_session_event;
+use crate::live::sessions::sink::publish::publish_session_event;
 use crate::live::sessions::handle::LiveSessionHandle;
 
 const MAX_REPLAY_GAP: Duration = Duration::from_millis(1500);

@@ -1,4 +1,4 @@
-pub(in crate::live::sessions::event_sink) fn synthesize_patch(
+pub(in crate::live::sessions::sink) fn synthesize_patch(
     path: Option<&str>,
     old_text: Option<&str>,
     new_text: Option<&str>,
@@ -69,7 +69,7 @@ pub(in crate::live::sessions::event_sink) fn synthesize_patch(
 }
 
 #[derive(Debug, Clone)]
-pub(in crate::live::sessions::event_sink) struct SynthesizedPatch {
+pub(in crate::live::sessions::sink) struct SynthesizedPatch {
     pub patch: String,
     pub additions: i64,
     pub deletions: i64,
@@ -286,7 +286,7 @@ fn hunk_new_start(hunk: &[NumberedLineDiffOp<'_>]) -> i64 {
         .max(0)
 }
 
-pub(in crate::live::sessions::event_sink) fn extract_diff_start_line(
+pub(in crate::live::sessions::sink) fn extract_diff_start_line(
     diff_item: &serde_json::Value,
     raw_input: Option<&serde_json::Value>,
     locations: Option<&Vec<serde_json::Value>>,

@@ -15,7 +15,7 @@ use crate::live::sessions::actor::config::selection::{
 };
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
 use crate::live::sessions::actor::state::SessionStartupState;
-use crate::live::sessions::event_sink::SessionEventSink;
+use crate::live::sessions::sink::SessionEventSink;
 pub(in crate::live::sessions::actor) fn queue_pending_config_change(
     store: &SessionStore,
     session_id: &str,

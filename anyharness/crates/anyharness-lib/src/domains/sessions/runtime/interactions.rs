@@ -1,12 +1,12 @@
 use anyharness_contract::v1::InteractionKind;
 
 use crate::live::sessions::{
-    InteractionResolution, PermissionDecision, ResolveInteractionCommandError,
+    Resolution, PermissionDecision, ResolveInteractionCommandError,
     RevealMcpElicitationUrlError,
 };
 
 use super::{
-    InteractionPermissionDecision, InteractionResolutionRequest, McpElicitationUrlReveal,
+    InteractionPermissionDecision, ResolutionRequest, McpElicitationUrlReveal,
     ResolveInteractionError, SessionRuntime,
 };
 
@@ -15,7 +15,7 @@ impl SessionRuntime {
         &self,
         session_id: &str,
         request_id: &str,
-        resolution: InteractionResolutionRequest,
+        resolution: ResolutionRequest,
     ) -> Result<(), ResolveInteractionError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
@@ -49,22 +49,22 @@ impl SessionRuntime {
         let kind_matches = matches!(
             (&resolution, pending_kind),
             (
-                InteractionResolutionRequest::Decision(_),
+                ResolutionRequest::Decision(_),
                 InteractionKind::Permission
             ) | (
-                InteractionResolutionRequest::OptionId(_),
+                ResolutionRequest::OptionId(_),
                 InteractionKind::Permission
             ) | (
-                InteractionResolutionRequest::Submitted { .. },
+                ResolutionRequest::Submitted { .. },
                 InteractionKind::UserInput
             ) | (
-                InteractionResolutionRequest::Accepted { .. },
+                ResolutionRequest::Accepted { .. },
                 InteractionKind::McpElicitation
             ) | (
-                InteractionResolutionRequest::Declined,
+                ResolutionRequest::Declined,
                 InteractionKind::McpElicitation
-            ) | (InteractionResolutionRequest::Cancelled, _)
-                | (InteractionResolutionRequest::Dismissed, _)
+            ) | (ResolutionRequest::Cancelled, _)
+                | (ResolutionRequest::Dismissed, _)
         );
         if !kind_matches {
             return Err(ResolveInteractionError::InteractionKindMismatch(
@@ -73,24 +73,24 @@ impl SessionRuntime {
         }
 
         let actor_resolution = match resolution {
-            InteractionResolutionRequest::Decision(decision) => {
-                InteractionResolution::Decision(match decision {
+            ResolutionRequest::Decision(decision) => {
+                Resolution::Decision(match decision {
                     InteractionPermissionDecision::Allow => PermissionDecision::Allow,
                     InteractionPermissionDecision::Deny => PermissionDecision::Deny,
                 })
             }
-            InteractionResolutionRequest::OptionId(option_id) => {
-                InteractionResolution::Selected { option_id }
+            ResolutionRequest::OptionId(option_id) => {
+                Resolution::Selected { option_id }
             }
-            InteractionResolutionRequest::Submitted { answers } => {
-                InteractionResolution::Submitted { answers }
+            ResolutionRequest::Submitted { answers } => {
+                Resolution::Submitted { answers }
             }
-            InteractionResolutionRequest::Accepted { fields } => {
-                InteractionResolution::Accepted { fields }
+            ResolutionRequest::Accepted { fields } => {
+                Resolution::Accepted { fields }
             }
-            InteractionResolutionRequest::Declined => InteractionResolution::Declined,
-            InteractionResolutionRequest::Cancelled => InteractionResolution::Cancelled,
-            InteractionResolutionRequest::Dismissed => InteractionResolution::Dismissed,
+            ResolutionRequest::Declined => Resolution::Declined,
+            ResolutionRequest::Cancelled => Resolution::Cancelled,
+            ResolutionRequest::Dismissed => Resolution::Dismissed,
         };
 
         handle

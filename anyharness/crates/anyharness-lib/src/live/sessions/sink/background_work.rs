@@ -78,7 +78,7 @@ impl SessionEventSink {
     }
 }
 
-pub(in crate::live::sessions::event_sink) fn extract_background_work_metadata(
+pub(in crate::live::sessions::sink) fn extract_background_work_metadata(
     raw_input: Option<&serde_json::Value>,
     meta: &ParsedMeta,
 ) -> Option<BackgroundWorkMetadata> {
@@ -122,7 +122,7 @@ pub(in crate::live::sessions::event_sink) fn extract_background_work_metadata(
     })
 }
 
-pub(in crate::live::sessions::event_sink) fn extract_existing_background_work_metadata(
+pub(in crate::live::sessions::sink) fn extract_existing_background_work_metadata(
     raw_output: Option<&serde_json::Value>,
 ) -> Option<BackgroundWorkMetadata> {
     let raw_output = raw_output?.as_object()?;
@@ -153,7 +153,7 @@ pub(in crate::live::sessions::event_sink) fn extract_existing_background_work_me
     })
 }
 
-pub(in crate::live::sessions::event_sink) fn background_work_raw_output(
+pub(in crate::live::sessions::sink) fn background_work_raw_output(
     existing: Option<serde_json::Value>,
     metadata: BackgroundWorkMetadata,
 ) -> serde_json::Value {

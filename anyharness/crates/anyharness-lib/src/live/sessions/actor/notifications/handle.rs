@@ -14,8 +14,8 @@ use crate::live::sessions::actor::notifications::dispatch::{
 use crate::live::sessions::actor::notifications::replay_filter::ResumeReplayFilter;
 use crate::live::sessions::actor::state::SessionStartupState;
 use crate::live::sessions::background_work::BackgroundWorkRegistry;
-use crate::live::sessions::driver::runtime_client;
-use crate::live::sessions::event_sink::SessionEventSink;
+use crate::live::sessions::driver::inbound;
+use crate::live::sessions::sink::SessionEventSink;
 #[cfg(test)]
 pub(in crate::live::sessions::actor) async fn handle_notification(
     notif: &acp::schema::SessionNotification,
@@ -62,7 +62,7 @@ pub(in crate::live::sessions::actor) async fn handle_notification_with_resume_re
     persisted_config_state: &mut PersistedSessionConfigState,
     startup_state: &mut SessionStartupState,
 ) {
-    let kind = runtime_client::session_update_kind(&notif.update);
+    let kind = inbound::session_update_kind(&notif.update);
     tracing::info!(
         session_id = %session_id,
         agent = %source_agent_kind,

@@ -167,7 +167,7 @@ pub enum InteractionPermissionDecision {
 }
 
 #[derive(Clone)]
-pub enum InteractionResolutionRequest {
+pub enum ResolutionRequest {
     Decision(InteractionPermissionDecision),
     OptionId(String),
     Submitted {
@@ -181,7 +181,7 @@ pub enum InteractionResolutionRequest {
     Dismissed,
 }
 
-impl fmt::Debug for InteractionResolutionRequest {
+impl fmt::Debug for ResolutionRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Decision(decision) => f.debug_tuple("Decision").field(decision).finish(),

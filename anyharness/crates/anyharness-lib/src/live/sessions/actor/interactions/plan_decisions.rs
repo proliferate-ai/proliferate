@@ -5,17 +5,17 @@ use tokio::sync::Mutex;
 
 use crate::domains::plans::model::PlanRecord;
 use crate::domains::plans::service::{PlanDecisionError, PlanService};
-use crate::live::sessions::actor::command::InteractionResolution;
+use crate::live::sessions::actor::command::Resolution;
 use crate::live::sessions::actor::interactions::handle::handle_resolve_interaction;
 use crate::live::sessions::actor::interactions::plan_links::link_plan_to_pending_permission;
-use crate::live::sessions::event_sink::SessionEventSink;
+use crate::live::sessions::sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
-use crate::live::sessions::interactions::broker::InteractionBroker;
+use crate::live::sessions::rendezvous::broker::InteractionRendezvous;
 
 pub(in crate::live::sessions::actor) async fn handle_apply_plan_decision(
     handle: &Arc<LiveSessionHandle>,
     event_sink: &Arc<Mutex<SessionEventSink>>,
-    interaction_broker: &Arc<InteractionBroker>,
+    interaction_broker: &Arc<InteractionRendezvous>,
     plan_service: &PlanService,
     session_id: &str,
     plan_id: &str,
@@ -126,11 +126,11 @@ pub(in crate::live::sessions::actor) async fn handle_apply_plan_decision(
 pub(in crate::live::sessions::actor) enum PlanNativeResolution {
     Resolve {
         request_id: String,
-        resolution: InteractionResolution,
+        resolution: Resolution,
     },
     FailAfterResolve {
         request_id: String,
-        resolution: InteractionResolution,
+        resolution: Resolution,
         error_message: String,
     },
 }
@@ -157,13 +157,13 @@ pub(in crate::live::sessions::actor) fn plan_decision_native_resolution(
             match option_id {
                 Some(option_id) => Some(PlanNativeResolution::Resolve {
                     request_id: link.request_id,
-                    resolution: InteractionResolution::Selected {
+                    resolution: Resolution::Selected {
                         option_id: option_id.to_string(),
                     },
                 }),
                 None => Some(PlanNativeResolution::FailAfterResolve {
                     request_id: link.request_id,
-                    resolution: InteractionResolution::Cancelled,
+                    resolution: Resolution::Cancelled,
                     error_message: "Approved plan could not map to a native approval option."
                         .to_string(),
                 }),
@@ -176,13 +176,13 @@ pub(in crate::live::sessions::actor) fn plan_decision_native_resolution(
             match option_id {
                 Some(option_id) => Some(PlanNativeResolution::Resolve {
                     request_id: link.request_id,
-                    resolution: InteractionResolution::Selected {
+                    resolution: Resolution::Selected {
                         option_id: option_id.to_string(),
                     },
                 }),
                 None => Some(PlanNativeResolution::FailAfterResolve {
                     request_id: link.request_id,
-                    resolution: InteractionResolution::Cancelled,
+                    resolution: Resolution::Cancelled,
                     error_message: "Rejected plan could not map to a native rejection option."
                         .to_string(),
                 }),
@@ -225,9 +225,9 @@ mod tests {
     use crate::domains::plans::store::PlanStore;
     use crate::domains::sessions::store::SessionStore;
     use crate::live::sessions::actor::command::SessionCommand;
-    use crate::live::sessions::event_sink::SessionEventSink;
+    use crate::live::sessions::sink::SessionEventSink;
     use crate::live::sessions::handle::LiveSessionHandle;
-    use crate::live::sessions::interactions::broker::{InteractionBroker, PermissionOutcome};
+    use crate::live::sessions::rendezvous::broker::{InteractionRendezvous, PermissionOutcome};
     use crate::persistence::Db;
 
     fn seed_plan_service_with_link(
@@ -317,9 +317,9 @@ mod tests {
         PlanService,
         PlanRecord,
         Arc<Mutex<SessionEventSink>>,
-        Arc<InteractionBroker>,
+        Arc<InteractionRendezvous>,
         Arc<LiveSessionHandle>,
-        crate::live::sessions::interactions::broker::PendingPermissionWait,
+        crate::live::sessions::rendezvous::broker::PendingPermissionWait,
     ) {
         let (db, service, plan) = seed_plan_service_with_link(option_mappings);
         let session_store = SessionStore::new(db);
@@ -339,7 +339,7 @@ mod tests {
         handle
             .add_pending_interaction(pending_permission_summary())
             .await;
-        let broker = Arc::new(InteractionBroker::new());
+        let broker = Arc::new(InteractionRendezvous::new());
         let wait = broker
             .register_permission(
                 "session-1",
@@ -377,7 +377,7 @@ mod tests {
             ),
             Some(PlanNativeResolution::Resolve {
                 request_id: "request-1".to_string(),
-                resolution: InteractionResolution::Selected {
+                resolution: Resolution::Selected {
                     option_id: "allow-once".to_string(),
                 },
             }),
@@ -399,7 +399,7 @@ mod tests {
             ),
             Some(PlanNativeResolution::Resolve {
                 request_id: "request-1".to_string(),
-                resolution: InteractionResolution::Selected {
+                resolution: Resolution::Selected {
                     option_id: "reject-once".to_string(),
                 },
             }),
@@ -420,7 +420,7 @@ mod tests {
             ),
             Some(PlanNativeResolution::FailAfterResolve {
                 request_id: "request-1".to_string(),
-                resolution: InteractionResolution::Cancelled,
+                resolution: Resolution::Cancelled,
                 error_message: "Rejected plan could not map to a native rejection option."
                     .to_string(),
             }),
@@ -441,7 +441,7 @@ mod tests {
             ),
             Some(PlanNativeResolution::FailAfterResolve {
                 request_id: "request-1".to_string(),
-                resolution: InteractionResolution::Cancelled,
+                resolution: Resolution::Cancelled,
                 error_message: "Approved plan could not map to a native approval option."
                     .to_string(),
             }),

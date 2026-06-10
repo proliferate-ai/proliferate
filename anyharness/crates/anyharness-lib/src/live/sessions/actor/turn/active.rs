@@ -10,7 +10,7 @@ use crate::domains::sessions::prompt::PromptPayload;
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::actor::background_work::handle_background_work_update;
 use crate::live::sessions::actor::command::{
-    ForkSessionCommandError, InteractionResolution, PromptAcceptError, PromptAcceptance,
+    ForkSessionCommandError, Resolution, PromptAcceptError, PromptAcceptance,
     SessionCommand,
 };
 use crate::live::sessions::actor::config::handle::handle_busy_config_command;
@@ -32,7 +32,7 @@ use crate::live::sessions::actor::turn::queue::{
 };
 use crate::live::sessions::actor::turn::start::{begin_prompt_turn, StartedPromptTurn};
 use crate::live::sessions::background_work::{BackgroundWorkRegistry, BackgroundWorkUpdate};
-use crate::live::sessions::event_sink::SessionEventSink;
+use crate::live::sessions::sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
 use crate::observability::latency::{latency_trace_fields, LatencyRequestContext};
 
@@ -258,7 +258,7 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
                                 event_sink,
                                 &config.interaction_broker,
                                 session_id,
-                                InteractionResolution::Cancelled,
+                                Resolution::Cancelled,
                             )
                             .await;
                             let _ = conn
@@ -270,7 +270,7 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
                                 event_sink,
                                 &config.interaction_broker,
                                 session_id,
-                                InteractionResolution::Dismissed,
+                                Resolution::Dismissed,
                             )
                             .await;
                             let _ = conn
@@ -336,7 +336,7 @@ pub(in crate::live::sessions::actor) async fn handle_active_prompt(
                                 event_sink,
                                 &config.interaction_broker,
                                 session_id,
-                                InteractionResolution::Cancelled,
+                                Resolution::Cancelled,
                             )
                             .await;
                             let _ = respond_to.send(Ok(()));

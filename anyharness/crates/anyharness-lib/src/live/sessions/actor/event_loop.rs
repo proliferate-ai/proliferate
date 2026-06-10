@@ -4,7 +4,7 @@ use agent_client_protocol as acp;
 use tokio::sync::mpsc;
 
 use crate::live::sessions::actor::background_work::handle_background_work_update;
-use crate::live::sessions::actor::command::{InteractionResolution, SessionCommand};
+use crate::live::sessions::actor::command::{Resolution, SessionCommand};
 use crate::live::sessions::actor::config::handle::handle_idle_config_command;
 use crate::live::sessions::actor::fork::handle::handle_idle_fork_lifecycle_command;
 use crate::live::sessions::actor::interactions::cleanup::resolve_pending_interactions;
@@ -163,7 +163,7 @@ pub(in crate::live::sessions::actor) async fn run_actor(
                             &event_sink,
                             &config.interaction_broker,
                             &session_id,
-                            InteractionResolution::Dismissed,
+                            Resolution::Dismissed,
                         )
                         .await;
                         let _ = respond_to.send(Ok(()));
@@ -176,7 +176,7 @@ pub(in crate::live::sessions::actor) async fn run_actor(
                             &event_sink,
                             &config.interaction_broker,
                             &session_id,
-                            InteractionResolution::Cancelled,
+                            Resolution::Cancelled,
                         )
                         .await;
                         let _ = respond_to.send(Ok(()));
