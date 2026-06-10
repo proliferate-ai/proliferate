@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use crate::domains::agents::model::AgentKind;
 use crate::domains::agents::readiness::service::resolve_agent_with_env;
-use crate::domains::agents::registry::built_in_registry;
+use crate::domains::agents::registry;
 use crate::domains::sessions::extensions::SessionTurnFinishedContext;
 use crate::domains::sessions::links::model::SessionLinkRelation;
 use crate::domains::sessions::mcp_bindings::assembly::{
@@ -339,10 +339,7 @@ impl SessionRuntime {
         );
 
         let descriptor_lookup_started = Instant::now();
-        let registry = built_in_registry();
-        let descriptor = registry
-            .iter()
-            .find(|descriptor| descriptor.kind.as_str() == record.agent_kind)
+        let descriptor = registry::descriptor(&record.agent_kind)
             .ok_or_else(|| StartSessionError::AgentDescriptorNotFound(record.agent_kind.clone()))?;
         tracing::info!(
             session_id = %record.id,
@@ -372,7 +369,7 @@ impl SessionRuntime {
         readiness_env.extend(agent_auth_overlay.support_env.clone());
         readiness_env.extend(agent_auth_overlay.protected_env.clone());
         let agent_resolution_started = Instant::now();
-        let resolved_agent = resolve_agent_with_env(descriptor, &self.runtime_home, &readiness_env);
+        let resolved_agent = resolve_agent_with_env(&descriptor, &self.runtime_home, &readiness_env);
         tracing::info!(
             session_id = %record.id,
             agent_kind = %record.agent_kind,

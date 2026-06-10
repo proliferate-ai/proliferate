@@ -1,10 +1,12 @@
 pub mod bundled;
+pub mod service;
 pub mod projection;
 pub mod schema;
 pub mod validation;
 
 use super::model::AgentDescriptor;
 use projection::bundled_agent_descriptors;
+pub use service::descriptor;
 
 /// Returns the built-in registry of supported agent descriptors for v1.
 ///

@@ -226,8 +226,5 @@ impl AgentRuntime {
 }
 
 fn descriptor_for_kind(kind: &str) -> Result<AgentDescriptor, AgentRuntimeError> {
-    built_in_registry()
-        .into_iter()
-        .find(|descriptor| descriptor.kind.as_str() == kind)
-        .ok_or_else(|| AgentRuntimeError::NotFound(kind.to_string()))
+    super::registry::descriptor(kind).ok_or_else(|| AgentRuntimeError::NotFound(kind.to_string()))
 }

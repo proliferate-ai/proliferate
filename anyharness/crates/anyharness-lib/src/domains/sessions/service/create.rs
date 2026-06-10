@@ -12,7 +12,7 @@ use crate::domains::agents::model_registry::resolution::{
     resolve_launch_model_id, ModelResolutionError,
 };
 use crate::domains::agents::readiness::service::resolve_agent_with_env;
-use crate::domains::agents::registry::built_in_registry;
+use crate::domains::agents::registry;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::workspaces::env::read_materialized_session_env;
 use crate::domains::workspaces::model::WorkspaceSurface;
@@ -71,13 +71,9 @@ impl SessionService {
         }
 
         let registry_lookup_started = Instant::now();
-        let registry = built_in_registry();
-        let descriptor = registry
-            .iter()
-            .find(|d| d.kind.as_str() == agent_kind)
-            .ok_or_else(|| {
-                CreateSessionError::Invalid(format!("unknown agent kind: {agent_kind}"))
-            })?;
+        let descriptor = registry::descriptor(agent_kind).ok_or_else(|| {
+            CreateSessionError::Invalid(format!("unknown agent kind: {agent_kind}"))
+        })?;
         tracing::info!(
             workspace_id = %workspace_id,
             agent_kind = %agent_kind,
@@ -103,7 +99,7 @@ impl SessionService {
         readiness_env.extend(agent_auth_overlay.support_env);
         readiness_env.extend(agent_auth_overlay.protected_env);
         let agent_resolution_started = Instant::now();
-        let resolved = resolve_agent_with_env(descriptor, &self.runtime_home, &readiness_env);
+        let resolved = resolve_agent_with_env(&descriptor, &self.runtime_home, &readiness_env);
         if resolved.status != ResolvedAgentStatus::Ready {
             tracing::warn!(
                 workspace_id = %workspace_id,
