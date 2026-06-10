@@ -57,14 +57,6 @@ impl PendingSessionActor {
     }
 }
 
-pub fn spawn_session_actor(
-    config: SessionActorConfig,
-) -> anyhow::Result<(Arc<LiveSessionHandle>, ActorReadyResult)> {
-    let pending = spawn_session_actor_pending(config)?;
-    let handle = pending.handle.clone();
-    let ready = pending.wait_ready()?;
-    Ok((handle, ready))
-}
 
 pub fn spawn_session_actor_pending(
     mut config: SessionActorConfig,
