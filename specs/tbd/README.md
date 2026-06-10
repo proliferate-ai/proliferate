@@ -10,6 +10,7 @@ They are not operating law until they are promoted into `specs/codebase/**` or
 
 | Draft | Use |
 | --- | --- |
+| [anyharness-grammar-adoption-backlog.md](anyharness-grammar-adoption-backlog.md) | Audit backlog for adopting the AnyHarness domain grammar (guides/mental-model.md): 144 findings in recommended wave order. |
 | [anyharness-structure-alignment-swarms.md](anyharness-structure-alignment-swarms.md) | Planning notes for AnyHarness structure-alignment agent work. |
 | [cloud-worker-control-loop.md](cloud-worker-control-loop.md) | Cloud worker control-loop load-reduction planning. |
 | [frontend-structure-alignment-migration.md](frontend-structure-alignment-migration.md) | Frontend structure-alignment notes. |

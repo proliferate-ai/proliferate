@@ -102,19 +102,51 @@ api/http/
   *_contract.rs
 ```
 
-Handler files should read in this order:
+Every handler is the same stanza, and nothing else:
 
-```text
-extract request
-authenticate/authorize at transport boundary
-map contract input to internal input
-call one owning service/runtime/live handle
-map internal result to contract response
-map errors
+```rust
+assert_<scope>_auth(&auth, ...)?;                   // 1. authorize: ONE named assertion
+let input = <usecase>_input(req)?;                  // 2. translate in — OPTIONAL, earned at
+                                                    //    >3 fields; otherwise pass plain args
+let result = state.<domain>.<usecase>(input).await?; // 3. call ONE use case; errors ride `?`
+Ok(Json(<resource>_response(result)))               // 4. translate out (dep-less seam fn)
 ```
 
+`result` is usually the plain domain record; it is a composed view model only
+when the response needs composition — and assembling that view is the use
+case's job, never the handler's or the mapper's.
+
+Litmus rules (greppable):
+
+- no `if`/`match`/loop beyond the `?`s
+- no second domain/service call, no fetches, no business validation
+- no `tracing::` calls (the middleware span owns the request)
+- no `.map_err` (a `From` impl in `<resource>_errors.rs` makes errors flow)
+- no inline auth matches — named assertions from `access.rs` only
+- no imports from `domains/**` beyond the called surface and its input/view
+  types
+
+One sanctioned addition to the stanza: a route-scoped workspace operation
+gate (see Operation Gates below) may precede step 3 when it wraps exactly one
+call — it counts as transport admission, not a second domain call. If the
+lease must span a multi-step workflow, the workflow and the lease both belong
+in the domain runtime.
+
+Authorization here answers "who is asking". Business preconditions ("is this
+workspace mutable right now") belong inside the domain use case — a flow
+checking both is correct; the edge checking preconditions is not.
+
+Proportionality: the `*_input()` constructor is earned at >3 fields or when
+defaults/grouping logic exists; below that, passing `&req.name` as a plain
+argument IS the translation — the invariant is "no contract type crosses into
+`domains/`", not "a constructor function exists". GET handlers drop step 2
+entirely (`Path(id)` is already the input). The outbound `*_response()`
+constructor always exists — that is where wire stability lives.
+
 If a handler contains product sequencing, move that sequence to the owning
-domain `runtime.rs` or `service.rs`.
+domain `runtime.rs` or `service.rs`. Migration exception:
+`workspaces_lifecycle.rs` implements the retire/cleanup state machine inline
+(three copies with retention); target is a workspaces lifecycle service.
 
 ### `sse/**`
 
@@ -170,13 +202,30 @@ api/http/<resource>.rs
 
 api/http/<resource>_contract.rs
   internal <-> contract mappers when the mapping is large
+
+api/http/<resource>_errors.rs
+  one From<DomainError> for ApiError impl per domain error type
 ```
+
+Seam-file law: mappers are **sync, dep-less, and decisionless** — no
+`&AppState`, no store reads, no live lookups, no clock, no business branches.
+A mapper that needs to fetch means the use case returned too little; fix the
+use case's return type (a view model composed by the runtime), never the
+mapper. Each type pair has exactly one mapper.
 
 Do not pass contract request/response types deep into domains or live runtime
 code.
 
 Exception: normalized session event payloads may be contract types below
 `api/` when they are explicitly the durable event-log payload.
+
+Migration exceptions: `sessions_contract.rs::session_to_contract` delegates to
+an async fetching mapper on the session runtime (store reads + live lookups
+per record, called in a loop on list paths); `api/http/agents.rs` carries a
+second error mechanism (`ProblemResponse`) alongside `ApiError`; `cowork.rs`
+and `mobility.rs` carry duplicate copies of mappers owned elsewhere. Targets:
+runtime-composed `SessionView` + dep-less mapper; one `ApiError` mechanism;
+one mapper per type pair.
 
 ## AppState Use
 

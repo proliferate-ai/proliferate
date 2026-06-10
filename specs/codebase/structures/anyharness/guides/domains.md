@@ -2,6 +2,10 @@
 
 Status: authoritative for durable/product code under `anyharness-lib/src/domains/**`.
 
+Read [mental-model.md](mental-model.md) first: it owns the eight jobs, the
+use-case pipeline, the mapping/error doctrines, and the placement algorithm
+this guide applies to domains.
+
 Product domains live under `domains/**`. Core session, workspace, agent, and
 repo-root domains use the same root as product surfaces, with dependency
 direction enforced by domain tier.
@@ -167,6 +171,28 @@ Do not add broad `helpers.rs`, `utils.rs`, or `misc.rs`. Name the concept:
 `prompt`, `events`, `retention`, `materialization`, `mcp_bindings`,
 `extensions`, `catalog`, `readiness`.
 
+## The Root Is A Table Of Contents
+
+A domain's root may contain only the canonical files above plus named concern
+folders. Every other file lives inside the concern it serves; each concern
+folder repeats the identical internal grammar (exports-only `mod.rs`,
+`service.rs`, policy, helpers — each earned, not mandatory).
+
+If a file cannot say which concern it belongs to, that is an unnamed concern —
+name it. A root holds roughly 5–9 entries. Shrink a table of contents by
+naming concerns, never by merging files. The rule applies recursively: a
+concern folder (or a `runtime/` folder) that accumulates 10+ files is several
+concerns wearing one name.
+
+Single-concern domains stay flat (`repo_roots`, `mobility`). The trigger for
+folders is a root crossing ~8 files or containing two nameable concerns.
+
+Migration exception: `domains/workspaces` currently has ~25 root files
+(gates, worktrees, lifecycle, setup, and files concerns all flattened) and two
+parallel entry surfaces (`WorkspaceService`, `WorkspaceRuntime`) with
+duplicated bodies. Target: concern folders (`access/`, `lifecycle/`,
+`worktrees/`, `setup/`, `files/`) behind one entry surface.
+
 ## Store vs Service vs Runtime
 
 Stores:
@@ -200,6 +226,42 @@ SessionStore   = SQL access for session rows/events/config/pending prompts
 SessionService = durable session rules
 SessionRuntime = session workflows that may start/prompt/resume live sessions
 ```
+
+## Use-Case Shape
+
+Complex use cases — service or runtime — follow one pipeline (see
+[mental-model.md](mental-model.md) for the full law):
+
+```text
+preconditions -> idempotency -> pre-flight repairs -> resolve -> decide -> execute/record
+```
+
+The grammar per use case is a pair of files:
+
+```text
+service/create.rs          # the pipeline fn, resolve_create_context(), the
+                           # private Context struct, the effects fn
+service/create_policy.rs   # pure rules: (Context, Input) -> Plan
+```
+
+Rules:
+
+- The **Context** (all fetched truths, one per line) is private to the
+  use-case file. It is never exported, stored, or shared between use cases.
+- **Policy files are pure**: no `&self`, no IO, no `Utc::now()`, no
+  `Uuid::new_v4()`. Identity and clock are effects, minted in the
+  execute/record step. Policy may read static bundled truth; dynamic truth
+  arrives via the Context.
+- A rule shared by several use cases graduates to one named domain-level home
+  (the access gate pattern). The same rule decided in two places is the
+  highest-priority smell.
+- Inputs with more than 3 fields become one input struct in `model.rs`,
+  replacing positional relays through service/runtime layers.
+- Below the thresholds, everything collapses inline: one fetch is a `let`, one
+  rule is an `if`. Ceremony is earned.
+
+In-repo exemplar: `domains/artifacts` (typed `ArtifactCreatePlan` /
+`ArtifactUpdatePlan` produced by plan functions, effects owned by the runtime).
 
 ## Growth Rules
 
@@ -426,8 +488,30 @@ forking transport or protocol machinery:
 
 ## Contract Types
 
-Avoid importing contract request/response types into domains. Use internal
-domain models and API mappers.
+Do not import contract request/response types into domains. Use internal
+domain models and API mappers. Domain models are the lingua franca between
+domains: cross-domain composition passes domain models as-is and never
+translates them.
 
 Exception: session event payloads may use contract event types when those types
-are the durable event-log payload.
+are the durable event-log payload. The exception is for event payloads only —
+contract types as a domain's working model or as persisted rows are
+violations.
+
+Migration exceptions (the rule is the law; this is the debt):
+`domains/runtime_config` persists contract types as rows and uses them as its
+model; `domains/agents/auth_config` uses contract auth structs end-to-end;
+`domains/sessions/runtime/contract.rs` builds contract responses inside the
+domain via a fetching mapper. Targets: domain twins minted at the API seam and
+a runtime-composed view model with a dep-less mapper.
+
+## Errors
+
+One error enum per public surface (thiserror). Each layer adds only the
+variants it introduces and absorbs lower errors with `#[from]` /
+`#[error(transparent)]`. Banned: twin enums joined by hand-written
+variant-copying mappers; `.to_string()` / `anyhow::anyhow!` applied to typed
+errors; control flow on `message.contains(...)`. Expected outcomes
+(not-found, needs-selection, already-done) are data in the `Ok` type, not
+error strings. The HTTP mapping for a domain's errors lives in exactly one
+`api/http/<resource>_errors.rs` `From` impl.
