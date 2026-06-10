@@ -5,7 +5,7 @@ use anyharness_contract::v1::AgentAuthExternalScope;
 use uuid::Uuid;
 
 use super::{CreateSessionError, SessionService};
-use crate::domains::agents::auth_config::AgentAuthLaunchOverlayError;
+use crate::domains::agents::auth::AgentAuthLaunchOverlayError;
 use crate::domains::agents::catalog::projection::models::bundled_create_mode_ids;
 use crate::domains::agents::model::ResolvedAgentStatus;
 use crate::domains::agents::model_registry::resolution::{

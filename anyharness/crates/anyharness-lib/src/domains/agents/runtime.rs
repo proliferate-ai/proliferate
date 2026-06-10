@@ -8,10 +8,10 @@ use super::readiness::paths::{
     artifact_root, managed_registry_binary_for_names, managed_registry_npm_binary_for_names,
 };
 use super::readiness::service::resolve_agent;
-use super::reconcile::execution::{AgentReconcileJobSnapshot, AgentReconcileService};
+use super::installer::reconcile::execution::{AgentReconcileJobSnapshot, AgentReconcileService};
 use super::registry::built_in_registry;
-use super::seed::AgentSeedStore;
-use crate::domains::agents::seed;
+use super::installer::seed::AgentSeedStore;
+use crate::domains::agents::installer::seed;
 use crate::integrations::agent_cli::executable::{find_in_path, is_valid_executable};
 
 #[derive(Clone)]

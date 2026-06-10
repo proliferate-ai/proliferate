@@ -1,12 +1,9 @@
-pub mod auth_config;
+pub mod auth;
 pub mod catalog;
-pub mod credentials;
 pub mod installer;
 pub mod model;
 pub mod model_registry;
 pub mod portability;
 pub mod readiness;
-pub mod reconcile;
 pub mod registry;
 pub mod runtime;
-pub mod seed;

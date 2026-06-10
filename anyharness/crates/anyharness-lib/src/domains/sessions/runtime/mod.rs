@@ -14,7 +14,7 @@ use super::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use super::model::SessionRecord;
 use super::plan_references::{PlanInteractionLinkResolver, PlanReferenceResolver};
 use super::service::SessionService;
-use crate::domains::agents::auth_config::{AgentAuthConfigService, AgentAuthSelectionRequired};
+use crate::domains::agents::auth::{AgentAuthConfigService, AgentAuthSelectionRequired};
 use crate::domains::runtime_config::service::RuntimeConfigService;
 use crate::domains::sessions::extensions::SessionExtension;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;

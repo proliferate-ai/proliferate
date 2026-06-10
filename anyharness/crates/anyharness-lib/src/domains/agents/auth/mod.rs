@@ -14,6 +14,7 @@ use crate::domains::sessions::mcp_bindings::crypto::{
 };
 
 mod codex_config;
+pub mod credentials;
 mod launch;
 pub mod login_terminal;
 mod scope;

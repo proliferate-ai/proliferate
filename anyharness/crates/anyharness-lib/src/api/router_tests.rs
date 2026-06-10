@@ -26,7 +26,7 @@ use crate::{
     },
     domains::terminals::model::{CreateTerminalOptions, TerminalPurpose},
     domains::{
-        agents::seed::AgentSeedStore,
+        agents::installer::seed::AgentSeedStore,
         sessions::{model::SessionRecord, store::SessionStore},
         workspaces::{
             access_model::{WorkspaceAccessMode, WorkspaceAccessRecord},

@@ -3,7 +3,7 @@ use clap::Args;
 
 use anyharness_lib::app::{default_runtime_home, ensure_runtime_home};
 use anyharness_lib::domains::agents::model::{AgentDescriptor, AgentKind};
-use anyharness_lib::domains::agents::reconcile::{
+use anyharness_lib::domains::agents::installer::reconcile::{
     reconcile_agents, AgentReconcileOutcome, AgentReconcileResult,
 };
 use anyharness_lib::domains::agents::registry::built_in_registry;
