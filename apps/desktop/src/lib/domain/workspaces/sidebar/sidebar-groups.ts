@@ -86,6 +86,9 @@ export function buildSidebarGroupStates(args: {
   activeSessionTitle: string | null;
   lastViewedAt: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
+  sessionWorkspaceIds?: Record<string, string | null>;
+  sessionLastInteracted?: Record<string, string>;
+  sessionLastViewedAt?: Record<string, string>;
   targetAppearanceById?: Record<string, ComputeTargetAppearance>;
   suppressActiveNeedsReview?: boolean;
 }): SidebarGroupState[] {
@@ -154,6 +157,9 @@ export function buildSidebarGroupStates(args: {
         activeSessionTitle: args.activeSessionTitle,
         lastViewedAt: args.lastViewedAt,
         workspaceLastInteracted: args.workspaceLastInteracted,
+        sessionWorkspaceIds: args.sessionWorkspaceIds,
+        sessionLastInteracted: args.sessionLastInteracted,
+        sessionLastViewedAt: args.sessionLastViewedAt,
         targetAppearanceById: args.targetAppearanceById,
         suppressActiveNeedsReview: args.suppressActiveNeedsReview,
       });

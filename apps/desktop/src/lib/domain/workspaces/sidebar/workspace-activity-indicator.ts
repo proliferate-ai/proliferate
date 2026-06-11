@@ -140,7 +140,7 @@ function logicalWorkspaceHasAttentionSessionActivity(
   return false;
 }
 
-function logicalWorkspaceHasUnreadSessionActivity(
+export function logicalWorkspaceHasUnreadSessionActivity(
   relatedIds: ReadonlySet<string>,
   args: Pick<
     BuildWorkspaceActivityIndicatorSnapshotArgs,
