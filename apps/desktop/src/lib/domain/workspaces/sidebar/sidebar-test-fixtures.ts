@@ -285,6 +285,9 @@ export function buildGroups(args: {
   pendingPromptCounts?: Record<string, number>;
   lastViewedAt?: Record<string, string>;
   workspaceLastInteracted?: Record<string, string>;
+  sessionWorkspaceIds?: Record<string, string | null>;
+  sessionLastInteracted?: Record<string, string>;
+  sessionLastViewedAt?: Record<string, string>;
   suppressActiveNeedsReview?: boolean;
 }) {
   return buildSidebarGroupStates({
@@ -303,6 +306,9 @@ export function buildGroups(args: {
     activeSessionTitle: null,
     lastViewedAt: args.lastViewedAt ?? {},
     workspaceLastInteracted: args.workspaceLastInteracted ?? {},
+    sessionWorkspaceIds: args.sessionWorkspaceIds,
+    sessionLastInteracted: args.sessionLastInteracted,
+    sessionLastViewedAt: args.sessionLastViewedAt,
     suppressActiveNeedsReview: args.suppressActiveNeedsReview,
   });
 }

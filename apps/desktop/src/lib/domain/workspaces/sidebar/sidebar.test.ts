@@ -350,6 +350,35 @@ describe("sidebar workspace filters", () => {
     ]);
   });
 
+  it("marks the row needs_review when a related session has unseen activity, even when active", () => {
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "ws-with-unseen-session",
+          repoKey: "/tmp/repo-a",
+          repoName: "repo-a",
+          kind: "worktree",
+          updatedAt: "2026-04-13T12:00:00.000Z",
+        }),
+      ],
+      selectedLogicalWorkspaceId: "ws-with-unseen-session",
+      selectedWorkspaceId: "ws-with-unseen-session",
+      // The workspace itself was just viewed (active + focused window), so
+      // the workspace-recency rule alone would render nothing — but a
+      // related session finished unseen, which must mirror the session
+      // tab's blue dot on the sidebar row.
+      lastViewedAt: { "ws-with-unseen-session": "2026-04-13T12:05:00.000Z" },
+      workspaceLastInteracted: { "ws-with-unseen-session": "2026-04-13T12:04:00.000Z" },
+      sessionWorkspaceIds: { "session-1": "ws-with-unseen-session" },
+      sessionLastInteracted: { "session-1": "2026-04-13T12:04:00.000Z" },
+      sessionLastViewedAt: { "session-1": "2026-04-13T12:00:00.000Z" },
+      suppressActiveNeedsReview: true,
+    });
+
+    expect(groups[0]?.items[0]?.needsReview).toBe(true);
+    expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("needs_review");
+  });
+
   it("falls back to record recency when a workspace has no interaction timestamp", () => {
     const groups = buildGroups({
       logicalWorkspaces: [

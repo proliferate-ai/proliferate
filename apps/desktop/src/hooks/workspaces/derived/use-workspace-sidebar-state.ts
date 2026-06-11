@@ -76,12 +76,16 @@ export function useWorkspaceSidebarState({
     archivedWorkspaceIds,
     hiddenRepoRootIds,
     lastViewedAt,
+    sessionLastInteracted,
+    sessionLastViewedAt,
     workspaceLastInteracted,
     workspaceTypes,
   } = useWorkspaceUiStore(useShallow((state) => ({
     archivedWorkspaceIds: state.archivedWorkspaceIds,
     hiddenRepoRootIds: state.hiddenRepoRootIds,
     lastViewedAt: state.lastViewedAt,
+    sessionLastInteracted: state.sessionLastInteracted,
+    sessionLastViewedAt: state.sessionLastViewedAt,
     workspaceLastInteracted: state.workspaceLastInteracted,
     workspaceTypes: state.workspaceTypes,
   })));
@@ -100,6 +104,13 @@ export function useWorkspaceSidebarState({
   const { data: gitStatus } = useWorkspaceMetadataSync();
   const computeTargets = useComputeTargetOptions();
 
+  const sessionWorkspaceIds = useSessionDirectoryStore(useShallow((state) => {
+    const ids: Record<string, string | null> = {};
+    for (const [sessionId, entry] of Object.entries(state.entriesById)) {
+      ids[sessionId] = entry.workspaceId;
+    }
+    return ids;
+  }));
   const archivedSet = useMemo(
     () => new Set(archivedWorkspaceIds),
     [archivedWorkspaceIds],
@@ -153,6 +164,9 @@ export function useWorkspaceSidebarState({
       activeSessionTitle,
       lastViewedAt,
       workspaceLastInteracted,
+      sessionWorkspaceIds,
+      sessionLastInteracted,
+      sessionLastViewedAt,
       targetAppearanceById: computeTargets.targetAppearanceById,
       suppressActiveNeedsReview: windowFocused,
     })), [
@@ -169,6 +183,9 @@ export function useWorkspaceSidebarState({
     workspaceTypes,
     selectedLogicalWorkspaceId,
     selectedWorkspaceId,
+    sessionLastInteracted,
+    sessionLastViewedAt,
+    sessionWorkspaceIds,
     showArchived,
     windowFocused,
     workspaceActivities,

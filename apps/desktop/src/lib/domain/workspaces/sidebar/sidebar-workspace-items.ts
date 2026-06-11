@@ -20,6 +20,7 @@ import {
 } from "@/lib/domain/workspaces/sidebar/sidebar-indicators";
 import { detailIndicatorsForWorkspace } from "@/lib/domain/workspaces/sidebar/sidebar-detail-indicators";
 import { isWorkspaceNeedsReview } from "@/lib/domain/workspaces/sidebar/sidebar-review";
+import { logicalWorkspaceHasUnreadSessionActivity } from "@/lib/domain/workspaces/sidebar/workspace-activity-indicator";
 import { workspaceCopyMetadataForLogicalWorkspace } from "@/lib/domain/workspaces/workspace-copy-metadata";
 import { resolveLogicalWorkspaceRecency } from "@/lib/domain/workspaces/sidebar/recency";
 
@@ -41,6 +42,9 @@ export function buildSidebarWorkspaceItems(args: {
   activeSessionTitle: string | null;
   lastViewedAt: Record<string, string>;
   workspaceLastInteracted: Record<string, string>;
+  sessionWorkspaceIds?: Record<string, string | null>;
+  sessionLastInteracted?: Record<string, string>;
+  sessionLastViewedAt?: Record<string, string>;
   targetAppearanceById?: Record<string, ComputeTargetAppearance>;
   suppressActiveNeedsReview?: boolean;
 }): SidebarWorkspaceItemState[] {
@@ -80,6 +84,9 @@ function buildSidebarWorkspaceItem(
     activeSessionTitle: string | null;
     lastViewedAt: Record<string, string>;
     workspaceLastInteracted: Record<string, string>;
+    sessionWorkspaceIds?: Record<string, string | null>;
+    sessionLastInteracted?: Record<string, string>;
+    sessionLastViewedAt?: Record<string, string>;
     targetAppearanceById?: Record<string, ComputeTargetAppearance>;
     suppressActiveNeedsReview?: boolean;
   },
@@ -113,15 +120,24 @@ function buildSidebarWorkspaceItem(
         workspace: preferredCloudWorkspace,
       })
       : entry.displayName;
+  // The session tabs' blue dot and the sidebar row must agree: a related
+  // session with unseen activity marks the row even when the workspace is
+  // the active one (the user may be on a different tab).
+  const hasUnreadSessions = !archived
+    && logicalWorkspaceHasUnreadSessionActivity(
+      new Set(logicalWorkspaceRelatedIds(entry)),
+      args,
+    );
   // A workspace the user is actively viewing in a focused window has nothing
   // pending review, even when the viewed timestamp briefly trails the latest
   // interaction (e.g. right after a new session bootstraps).
-  const needsReview = !(active && args.suppressActiveNeedsReview)
-    && isWorkspaceNeedsReview({
-      isArchived: archived,
-      lastInteracted: activityLastInteracted,
-      lastViewedAt: latestLogicalWorkspaceTimestamp(args.lastViewedAt, entry),
-    });
+  const needsReview = hasUnreadSessions
+    || (!(active && args.suppressActiveNeedsReview)
+      && isWorkspaceNeedsReview({
+        isArchived: archived,
+        lastInteracted: activityLastInteracted,
+        lastViewedAt: latestLogicalWorkspaceTimestamp(args.lastViewedAt, entry),
+      }));
   const activity = activeWorkspaceActivity(entry, args.workspaceActivities);
   const copyMetadata = workspaceCopyMetadataForLogicalWorkspace(entry);
   const sshTargetId = variant === "ssh" ? logicalWorkspaceSshTargetId(entry) : null;
