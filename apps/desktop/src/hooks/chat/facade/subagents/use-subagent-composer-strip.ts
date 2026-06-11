@@ -7,6 +7,8 @@ import {
 } from "@/hooks/chat/derived/use-active-session-identity";
 import { recordSubagentChildRelationshipHint } from "@/hooks/sessions/workflows/session-relationship-hints";
 import { useWorkspaceShellActivation } from "@/hooks/workspaces/workflows/tabs/use-workspace-shell-activation";
+import { isPendingSessionId } from "@/stores/sessions/session-records";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { formatSubagentLabel } from "@proliferate/product-domain/chats/subagents/provenance";
 import type {
   DelegatedAgentIdentity,
@@ -54,8 +56,14 @@ export function useSubagentComposerStrip(): SubagentComposerStripViewModel | nul
   const activeSessionId = useActiveSessionId();
   const activeWorkspaceId = useActiveSessionWorkspaceId();
   const { activateChatTab } = useWorkspaceShellActivation();
-  const subagentsQuery = useSessionSubagentsQuery(activeSessionId, {
-    enabled: !!activeSessionId,
+  // Hot client-keyed session ids never resolve on the runtime; query with
+  // the materialized id (404-retry loop otherwise).
+  const materializedSessionId = useSessionDirectoryStore((state) =>
+    activeSessionId
+      ? state.entriesById[activeSessionId]?.materializedSessionId ?? activeSessionId
+      : null);
+  const subagentsQuery = useSessionSubagentsQuery(materializedSessionId, {
+    enabled: !!materializedSessionId && !isPendingSessionId(materializedSessionId),
     workspaceId: activeWorkspaceId,
   });
   const parentSessionId = subagentsQuery.data?.parent?.parentSessionId ?? null;
